@@ -1,0 +1,68 @@
+name: Backup Check
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  backup-check:
+    name: Syntax and sync check
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Enable pnpm
+        run: |
+          corepack enable
+          corepack prepare pnpm@9.15.9 --activate
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Check JavaScript syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t files < <(git ls-files '*.js' '*.mjs')
+          if [ "${#files[@]}" -eq 0 ]; then
+            echo "No JavaScript files found."
+            exit 0
+          fi
+          for file in "${files[@]}"; do
+            node --check "$file"
+          done
+
+      - name: Run project check
+        run: pnpm run check
+
+      - name: Ensure no uncommitted files
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -n "$(git status --short)" ]; then
+            git status --short
+            echo "Uncommitted files were generated during the check."
+            exit 1
+          fi
+
+      - name: Confirm push reached origin
+        if: github.event_name == 'push'
+        shell: bash
+        run: |
+          set -euo pipefail
+          remote_sha="$(git ls-remote origin "refs/heads/${GITHUB_REF_NAME}" | awk '{print $1}')"
+          echo "Workflow commit: ${GITHUB_SHA}"
+          echo "Remote commit: ${remote_sha}"
+          test "${remote_sha}" = "${GITHUB_SHA}"
