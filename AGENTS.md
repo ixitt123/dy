@@ -1,37 +1,91 @@
-# AGENTS.md
+# 项目协作规则
 
-## Project Goal
+## Git同步规则
 
-This project is a local Douyin video batch processing and education enrollment copywriting tool. It supports local WebUI workflows for parsing Douyin share links, downloading videos, extracting transcripts, analyzing content, managing task queues, exporting task data, and producing rewritten enrollment copy.
+每次完成代码修改后：
 
-## Technical Boundaries
+1. 运行测试
+2. 确认无报错
+3. git add .
+4. git commit -m "功能名称+时间"
+5. git push origin main
 
-- Do not break existing download, transcript extraction, AI analysis, task queue, SQLite storage, CSV/XLSX export, or downloaded-file management.
-- Preserve backward compatibility with existing `settings.json` and `.data/tasks.sqlite`.
-- Never clear, recreate, or reset the existing SQLite database during migrations.
-- API keys must remain local in `settings.json`; do not write keys to logs, exports, generated rewrite files, or desktop source packages.
-- Generated files should stay inside project-managed folders such as `downloads/` and `rewrites/`.
+## 开始工作前
 
-## Rewrite Module Principles
+任何开发任务开始前：
 
-- Do not perform direct one-shot "original text to rewrite" generation.
-- The rewrite workflow must analyze structure first, then rewrite, then remove AI flavor, then output multiple versions.
-- Load reusable instructions from `skills/` and reusable prompt templates from `prompts/`.
-- Inject user parameters, reference examples, direction, style profile, and AI analysis into templates.
-- Reference examples are used to learn rhythm, tone, and structure, not to copy wording.
-- Rewrites should fit education training, enrollment conversion, parents' decision contexts, short-video speech, and local-business communication.
+1. 先执行 git pull origin main
+2. 检查远程是否有更新
+3. 如果存在冲突，先解决冲突再开发
 
-## Safety Principles
+## 开发原则
 
-- Avoid false promises, exaggerated score guarantees, "包过", "保过", "百分百", "稳赚不赔", and similar absolute claims.
-- Do not over-manufacture fear or exploit parents' anxiety.
-- Keep claims concrete, grounded, and usable for education enrollment communication.
-- Errors should return clear user-facing messages instead of crashing the local service.
+* 不允许直接删除核心代码
+* 修改前先分析影响范围
+* 优先保持向后兼容
+* 每次功能开发必须提交到GitHub
 
-## Code Principles
+## 自动备份
 
-- Make small, compatible changes.
-- Prefer existing project patterns and plain Node.js APIs.
-- Keep frontend controls simple and visible; advanced settings should not block the main workflow.
-- Add SQLite columns with `ALTER TABLE` only when missing.
-- Keep exports stable and additive.
+所有代码修改完成后必须推送GitHub。
+
+禁止出现本地已修改但未同步情况。
+
+## 输出要求
+
+每次任务完成后输出：
+
+* 修改文件列表
+* Git提交信息
+* Push结果
+* 是否同步成功
+
+## 多电脑协作规则
+
+我有两台电脑（家里和公司）。
+
+GitHub是唯一代码源。
+
+开发规则：
+
+1. 每次开始工作前自动执行：
+   git pull origin main
+
+2. 每次完成任务后自动执行：
+   git add .
+   git commit -m "自动备份"
+   git push origin main
+
+3. 如果push失败：
+   先git pull
+   自动处理可解决冲突
+   再push
+
+4. 所有开发记录保存在GitHub。
+
+5. 不允许只保存在本地。
+
+6. 每次完成任务后告诉我：
+
+   * 是否已提交
+   * Commit ID
+   * Push是否成功
+
+## 项目架构优先规则
+
+这个项目采用：
+
+* AGENTS.md
+* SKILLS/
+* PROMPTS/
+* MCP/
+
+架构优先。
+
+禁止直接堆代码。
+
+先设计Skill。
+
+再设计Prompt。
+
+最后开发功能。
