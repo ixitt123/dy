@@ -1,0 +1,25 @@
+{
+  "activeProvider": "dashscope",
+  "providers": {
+    "dashscope": {
+      "label": "阿里云百炼 DashScope",
+      "apiKey": "",
+      "applyUrl": "https://help.aliyun.com/zh/model-studio/get-api-key/",
+      "docsUrl": "https://www.alibabacloud.com/help/zh/model-studio/paraformer-recorded-speech-recognition-restful-api"
+    }
+  },
+  "rewrite": {
+    "defaultProvider": "dashscope",
+    "defaultDirection": "招生引流",
+    "defaultStyle": "老板风格",
+    "referenceStyle": "痞里带刺、幽默自嘲、生活化观察、少说废话、有冲突、有观点、适合教育招生、让家长有感觉、不要像官方通稿、不要像AI作文。"
+  },
+  "rewriteProviders": {},
+  "batch": {
+    "concurrency": 3,
+    "limit": 10,
+    "skipDownloaded": true,
+    "aiModel": "qwen-plus"
+  },
+  "downloadsDir": ""
+}

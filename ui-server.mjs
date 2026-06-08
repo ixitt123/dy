@@ -1,0 +1,3140 @@
+import http from "node:http";
+import fs from "node:fs";
+import path from "node:path";
+import { spawn } from "node:child_process";
+import { createHash, randomUUID } from "node:crypto";
+import { once } from "node:events";
+import { fileURLToPath } from "node:url";
+import * as XLSX from "xlsx";
+import ffmpegPath from "ffmpeg-static";
+import WebSocket from "ws";
+import { openTaskStore, TASK_STATUS } from "./task-store.mjs";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const uiDir = path.join(__dirname, "ui");
+const skillsDir = path.join(__dirname, "skills");
+const promptsDir = path.join(__dirname, "prompts");
+const rewritesDir = path.join(__dirname, "rewrites");
+const referenceExamplesPath = path.join(__dirname, "reference_examples.json");
+const defaultDownloadsDir = path.join(__dirname, "downloads");
+const pidPath = path.join(__dirname, "ui-server.pid");
+const urlPath = path.join(__dirname, "ui-server.url");
+const settingsPath = path.join(__dirname, "settings.json");
+const mcpEntry = path.join(
+  __dirname,
+  "node_modules",
+  "@yc-w-cn",
+  "douyin-mcp-server",
+  "dist",
+  "index.js"
+);
+const autoClose = process.argv.includes("--auto-close");
+const pageSessions = new Map();
+const activeChildProcesses = new Set();
+const runningBatchTasks = new Set();
+const activeBatchControllers = new Map();
+let shutdownTimer = null;
+let downloadsDir = defaultDownloadsDir;
+const DEFAULT_REWRITE_REFERENCE = "痞里带刺、幽默自嘲、生活化观察、少说废话、有冲突、有观点、适合教育招生、让家长有感觉、不要像官方通稿、不要像AI作文。";
+const REWRITE_DIRECTIONS = ["招生引流", "家长焦虑", "单招升学", "暑假班转化", "英语提分", "朋友圈文案", "短视频口播"];
+const REWRITE_STYLES = ["老板风格", "痞里带刺", "接地气", "温和专业", "强冲突", "强转化"];
+const REWRITE_VERSION_DEFS = [
+  ["strongHook", "强钩子版"],
+  ["parentAnxiety", "家长焦虑版"],
+  ["shortVideoScript", "短视频口播版"],
+  ["moments", "朋友圈版"],
+  ["conversion", "成交转化版"],
+];
+const REWRITE_VERSION_DEFAULTS = {
+  strongHook: { direction: "招生引流", wordCount: "150字左右" },
+  parentAnxiety: { direction: "家长焦虑", wordCount: "150字左右" },
+  shortVideoScript: { direction: "短视频口播", wordCount: "220字左右" },
+  moments: { direction: "朋友圈文案", wordCount: "220字左右" },
+  conversion: { direction: "暑假班转化", wordCount: "150字左右" },
+};
+const REWRITE_PROVIDER_ORDER = [
+  "dashscope",
+  "deepseek",
+  "openai",
+  "moonshot",
+  "zhipu",
+  "siliconflow",
+  "volcengine",
+  "qianfan",
+  "hunyuan",
+  "minimax",
+  "xiaomi",
+  "openrouter",
+  "custom",
+];
+const AUTO_MODEL_VALUE = "__auto_latest__";
+const REWRITE_PROVIDER_PRESETS = {
+  dashscope: {
+    label: "DashScope 通义千问",
+    baseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1",
+    model: "qwen-plus",
+    models: ["qwen-plus", "qwen-max", "qwen-turbo", "qwen-long"],
+    applyUrl: "https://help.aliyun.com/zh/model-studio/get-api-key/",
+    balanceUrl: "https://bailian.console.aliyun.com/",
+  },
+  deepseek: {
+    label: "DeepSeek",
+    baseUrl: "https://api.deepseek.com",
+    model: "deepseek-chat",
+    models: ["deepseek-chat", "deepseek-reasoner"],
+    applyUrl: "https://platform.deepseek.com/api_keys",
+    balanceUrl: "https://platform.deepseek.com/usage",
+  },
+  openai: {
+    label: "OpenAI",
+    baseUrl: "https://api.openai.com/v1",
+    model: "gpt-4o-mini",
+    models: ["gpt-4o-mini", "gpt-4o", "gpt-4.1-mini"],
+    applyUrl: "https://platform.openai.com/api-keys",
+    balanceUrl: "https://platform.openai.com/settings/organization/billing/overview",
+  },
+  moonshot: {
+    label: "Kimi / Moonshot",
+    baseUrl: "https://api.moonshot.cn/v1",
+    model: "moonshot-v1-8k",
+    models: ["moonshot-v1-8k", "moonshot-v1-32k", "moonshot-v1-128k", "kimi-k2-turbo-preview"],
+    applyUrl: "https://platform.moonshot.cn/console/api-keys",
+    balanceUrl: "https://platform.moonshot.cn/console/account",
+  },
+  zhipu: {
+    label: "智谱 GLM",
+    baseUrl: "https://open.bigmodel.cn/api/paas/v4",
+    model: "glm-4-flash",
+    models: ["glm-4-flash", "glm-4-plus", "glm-4-air", "glm-4.5-flash"],
+    applyUrl: "https://bigmodel.cn/usercenter/proj-mgmt/apikeys",
+    balanceUrl: "https://bigmodel.cn/usercenter/overview",
+  },
+  siliconflow: {
+    label: "硅基流动 SiliconFlow",
+    baseUrl: "https://api.siliconflow.cn/v1",
+    model: "Qwen/Qwen2.5-72B-Instruct",
+    models: ["Qwen/Qwen2.5-72B-Instruct", "deepseek-ai/DeepSeek-V3", "deepseek-ai/DeepSeek-R1"],
+    applyUrl: "https://cloud.siliconflow.cn/account/ak",
+    balanceUrl: "https://cloud.siliconflow.cn/account/bill",
+  },
+  volcengine: {
+    label: "火山方舟 / 豆包",
+    baseUrl: "https://ark.cn-beijing.volces.com/api/v3",
+    model: "doubao-seed-1-6-250615",
+    models: ["doubao-seed-1-6-250615", "doubao-seed-1-6-flash-250615", "doubao-pro-32k"],
+    applyUrl: "https://console.volcengine.com/ark/region:ark+cn-beijing/apiKey",
+    balanceUrl: "https://console.volcengine.com/finance",
+  },
+  qianfan: {
+    label: "百度千帆",
+    baseUrl: "https://qianfan.baidubce.com/v2",
+    model: "ernie-4.0-turbo-8k",
+    models: ["ernie-4.0-turbo-8k", "ernie-4.0-8k", "ernie-speed-8k"],
+    applyUrl: "https://console.bce.baidu.com/qianfan/ais/console/applicationConsole/application",
+    balanceUrl: "https://console.bce.baidu.com/finance/",
+  },
+  hunyuan: {
+    label: "腾讯混元",
+    baseUrl: "https://api.hunyuan.cloud.tencent.com/v1",
+    model: "hunyuan-turbos-latest",
+    models: ["hunyuan-turbos-latest", "hunyuan-large", "hunyuan-standard"],
+    applyUrl: "https://console.cloud.tencent.com/hunyuan/api-key",
+    balanceUrl: "https://console.cloud.tencent.com/expense/overview",
+  },
+  minimax: {
+    label: "MiniMax",
+    baseUrl: "https://api.minimax.io/v1",
+    model: "MiniMax-M2.5",
+    models: ["MiniMax-M2.5", "MiniMax-M2", "MiniMax-Text-01"],
+    applyUrl: "https://platform.minimax.io/",
+    balanceUrl: "https://platform.minimax.io/",
+  },
+  xiaomi: {
+    label: "小米 MiMo",
+    baseUrl: "https://api.xiaomimimo.com/v1",
+    model: "mimo-v2.5-pro",
+    models: ["mimo-v2.5-pro", "mimo-v2.5", "mimo-v2.5-omni"],
+    applyUrl: "https://platform.xiaomimimo.com",
+    balanceUrl: "https://platform.xiaomimimo.com",
+  },
+  openrouter: {
+    label: "OpenRouter",
+    baseUrl: "https://openrouter.ai/api/v1",
+    model: "openrouter/auto",
+    models: ["openrouter/auto", "openai/gpt-4o-mini", "deepseek/deepseek-chat", "qwen/qwen-plus"],
+    applyUrl: "https://openrouter.ai/settings/keys",
+    balanceUrl: "https://openrouter.ai/settings/credits",
+  },
+  custom: {
+    label: "自定义 OpenAI 兼容接口",
+    baseUrl: "http://127.0.0.1:11434/v1",
+    model: "",
+    models: [],
+    applyUrl: "",
+    balanceUrl: "",
+    custom: true,
+  },
+};
+
+downloadsDir = setDownloadsDir(readSettings().downloadsDir);
+fs.mkdirSync(downloadsDir, { recursive: true });
+fs.mkdirSync(rewritesDir, { recursive: true });
+const taskStore = openTaskStore(__dirname);
+taskStore.resetActiveTasks();
+
+const mimeTypes = new Map([
+  [".html", "text/html; charset=utf-8"],
+  [".css", "text/css; charset=utf-8"],
+  [".js", "application/javascript; charset=utf-8"],
+  [".json", "application/json; charset=utf-8"],
+  [".svg", "image/svg+xml"],
+]);
+const downloadJobs = new Map();
+const transcriptJobs = new Map();
+
+function sendJson(res, status, value) {
+  const body = JSON.stringify(value);
+  res.writeHead(status, {
+    "content-type": "application/json; charset=utf-8",
+    "content-length": Buffer.byteLength(body),
+  });
+  res.end(body);
+}
+
+function sendText(res, status, body, contentType, fileName = "") {
+  const headers = {
+    "content-type": `${contentType}; charset=utf-8`,
+    "content-length": Buffer.byteLength(body),
+  };
+  if (fileName) {
+    headers["content-disposition"] = `attachment; filename*=UTF-8''${encodeURIComponent(fileName)}`;
+  }
+  res.writeHead(status, headers);
+  res.end(body);
+}
+
+function sendBuffer(res, status, buffer, contentType, fileName = "") {
+  const headers = {
+    "content-type": contentType,
+    "content-length": buffer.length,
+  };
+  if (fileName) {
+    headers["content-disposition"] = `attachment; filename*=UTF-8''${encodeURIComponent(fileName)}`;
+  }
+  res.writeHead(status, headers);
+  res.end(buffer);
+}
+
+function readBody(req) {
+  return new Promise((resolve, reject) => {
+    let body = "";
+    req.on("data", (chunk) => {
+      body += chunk;
+      if (body.length > 2 * 1024 * 1024) {
+        reject(new Error("内容太长了"));
+        req.destroy();
+      }
+    });
+    req.on("end", () => resolve(body));
+    req.on("error", reject);
+  });
+}
+
+function getFirstUrl(text) {
+  return String(text || "").match(/https?:\/\/\S+/)?.[0] || "";
+}
+
+function isLikelyDouyinUrl(value) {
+  try {
+    const url = new URL(value);
+    return /(^|\.)douyin\.com$/i.test(url.hostname) || /(^|\.)iesdouyin\.com$/i.test(url.hostname);
+  } catch {
+    return false;
+  }
+}
+
+function cleanUrlToken(value) {
+  return String(value || "")
+    .trim()
+    .replace(/[)"'，。；、！？!?\]]+$/g, "")
+    .replace(/&amp;/g, "&");
+}
+
+function normalizeTaskUrl(value) {
+  try {
+    const url = new URL(cleanUrlToken(value));
+    url.hash = "";
+    return url.toString().replace(/\/$/, "");
+  } catch {
+    return "";
+  }
+}
+
+function inferTaskKind(value, fallback = "video") {
+  if (fallback && fallback !== "auto") return fallback;
+  try {
+    const url = new URL(value);
+    const pathname = url.pathname.toLowerCase();
+    if (pathname.includes("/user/") || pathname.includes("/share/user/")) return "account";
+    if (pathname.includes("collection") || pathname.includes("mix") || pathname.includes("playlist")) return "collection";
+    if (pathname.includes("comment")) return "comment";
+  } catch {
+    // Keep video as the conservative default.
+  }
+  return "video";
+}
+
+function extractDouyinUrls(text, { limit = 1000, kind = "video", taskAction = "download", transcriptEnabled = false, analysisEnabled = false, onlyTranscript = false } = {}) {
+  const matches = String(text || "").match(/https?:\/\/[^\s"'<>]+/g) || [];
+  const seen = new Set();
+  const items = [];
+
+  for (const match of matches) {
+    const url = cleanUrlToken(match);
+    const normalizedUrl = normalizeTaskUrl(url);
+    if (!normalizedUrl || seen.has(normalizedUrl) || !isLikelyDouyinUrl(normalizedUrl)) continue;
+    seen.add(normalizedUrl);
+    items.push({
+      url,
+      normalizedUrl,
+      kind: inferTaskKind(normalizedUrl, kind),
+      taskAction,
+      sourceText: url,
+      transcriptEnabled,
+      analysisEnabled,
+      onlyTranscript,
+    });
+    if (items.length >= limit) break;
+  }
+
+  return {
+    items,
+    discovered: seen.size,
+    overflow: Math.max(0, matches.length - items.length),
+  };
+}
+
+function readSettings() {
+  try {
+    return normalizeSettings(JSON.parse(fs.readFileSync(settingsPath, "utf8")));
+  } catch {
+    return normalizeSettings({});
+  }
+}
+
+function writeSettings(settings) {
+  fs.writeFileSync(settingsPath, JSON.stringify(normalizeSettings(settings), null, 2), "utf8");
+}
+
+function saveDownloadsDir(nextDir) {
+  const resolved = setDownloadsDir(nextDir);
+  const settings = readSettings();
+  settings.downloadsDir = resolved;
+  writeSettings(settings);
+  downloadsDir = resolved;
+  return downloadsDir;
+}
+
+function chooseDownloadDir() {
+  return new Promise((resolve, reject) => {
+    const script = [
+      "$shell = New-Object -ComObject Shell.Application",
+      "$folder = $shell.BrowseForFolder(0, '选择下载文件夹', 0, 17)",
+      "if ($folder) { [Console]::OutputEncoding = [System.Text.Encoding]::UTF8; Write-Output $folder.Self.Path }",
+    ].join("; ");
+    const child = spawn("powershell.exe", ["-NoProfile", "-STA", "-Command", script], {
+      windowsHide: false,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    let stdout = "";
+    let stderr = "";
+    child.stdout.on("data", (chunk) => {
+      stdout += chunk.toString("utf8");
+    });
+    child.stderr.on("data", (chunk) => {
+      stderr += chunk.toString("utf8");
+    });
+    child.on("error", reject);
+    child.on("close", (code) => {
+      if (code !== 0) {
+        reject(new Error(stderr.trim() || "选择文件夹失败"));
+        return;
+      }
+      resolve(stdout.trim());
+    });
+  });
+}
+
+function clampNumber(value, min, max, fallback) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return fallback;
+  return Math.max(min, Math.min(max, Math.round(number)));
+}
+
+function setDownloadsDir(value) {
+  const input = String(value || "").trim();
+  const resolved = path.resolve(input || defaultDownloadsDir);
+  fs.mkdirSync(resolved, { recursive: true });
+  const stat = fs.statSync(resolved);
+  if (!stat.isDirectory()) {
+    throw new Error("下载位置不是文件夹");
+  }
+  return resolved;
+}
+
+function normalizeSettings(settings) {
+  const next = settings && typeof settings === "object" ? { ...settings } : {};
+  const providers = next.providers && typeof next.providers === "object" ? { ...next.providers } : {};
+  const rewriteProviders = next.rewriteProviders && typeof next.rewriteProviders === "object" ? { ...next.rewriteProviders } : {};
+  const rewrite = next.rewrite && typeof next.rewrite === "object" ? { ...next.rewrite } : {};
+  const legacyKey = next.dashscopeApiKey || "";
+  const batch = next.batch && typeof next.batch === "object" ? { ...next.batch } : {};
+
+  providers.dashscope = {
+    label: "阿里云百炼 DashScope",
+    apiKey: providers.dashscope?.apiKey || legacyKey || "",
+    applyUrl: "https://help.aliyun.com/zh/model-studio/get-api-key/",
+    docsUrl: "https://www.alibabacloud.com/help/zh/model-studio/paraformer-recorded-speech-recognition-restful-api",
+  };
+
+  for (const id of REWRITE_PROVIDER_ORDER) {
+    const preset = REWRITE_PROVIDER_PRESETS[id];
+    const current = rewriteProviders[id] && typeof rewriteProviders[id] === "object" ? rewriteProviders[id] : {};
+    rewriteProviders[id] = {
+      label: preset.label,
+      baseUrl: String(current.baseUrl || preset.baseUrl || "").trim(),
+      model: String(current.model || (id === "dashscope" ? batch.aiModel : "") || preset.model || "").trim(),
+      apiKey: String(current.apiKey || (id === "dashscope" ? providers.dashscope.apiKey : "") || "").trim(),
+      applyUrl: preset.applyUrl || current.applyUrl || "",
+      balanceUrl: preset.balanceUrl || current.balanceUrl || preset.applyUrl || "",
+      models: Array.isArray(preset.models) ? preset.models : [],
+      autoModel: current.autoModel !== false && !preset.custom,
+      custom: Boolean(preset.custom),
+    };
+  }
+
+  delete next.dashscopeApiKey;
+  next.downloadsDir = setDownloadsDir(next.downloadsDir || defaultDownloadsDir);
+  next.activeProvider = next.activeProvider || "dashscope";
+  next.providers = providers;
+  next.rewriteProviders = rewriteProviders;
+  next.rewrite = {
+    defaultProvider: rewriteProviders[String(rewrite.defaultProvider || "dashscope")]
+      ? String(rewrite.defaultProvider || "dashscope")
+      : "dashscope",
+    defaultDirection: REWRITE_DIRECTIONS.includes(String(rewrite.defaultDirection || "招生引流"))
+      ? String(rewrite.defaultDirection || "招生引流")
+      : "招生引流",
+    defaultStyle: REWRITE_STYLES.includes(String(rewrite.defaultStyle || "痞里带刺"))
+      ? String(rewrite.defaultStyle || "痞里带刺")
+      : "痞里带刺",
+    referenceStyle: String(rewrite.referenceStyle || DEFAULT_REWRITE_REFERENCE).trim() || DEFAULT_REWRITE_REFERENCE,
+  };
+  next.batch = {
+    concurrency: clampNumber(batch.concurrency, 1, 5, 3),
+    limit: clampNumber(batch.limit, 1, 1000, 10),
+    skipDownloaded: batch.skipDownloaded !== false,
+    aiModel: String(batch.aiModel || "qwen-plus").trim() || "qwen-plus",
+  };
+  return next;
+}
+
+function maskApiKey(apiKey) {
+  if (!apiKey) return "";
+  if (apiKey.length <= 10) return "已保存";
+  return `${apiKey.slice(0, 6)}...${apiKey.slice(-4)}`;
+}
+
+function publicRewriteSettings(settings = readSettings()) {
+  return {
+    options: {
+      directions: REWRITE_DIRECTIONS,
+      styles: REWRITE_STYLES,
+      versions: REWRITE_VERSION_DEFS.map(([key, name]) => ({ key, name })),
+      defaultReference: DEFAULT_REWRITE_REFERENCE,
+    },
+    defaults: settings.rewrite,
+    providers: Object.fromEntries(
+      REWRITE_PROVIDER_ORDER
+        .filter((id) => settings.rewriteProviders[id])
+        .map((id) => {
+          const provider = settings.rewriteProviders[id];
+          return [
+            id,
+            {
+              label: provider.label,
+              baseUrl: provider.baseUrl || "",
+              model: provider.model || "",
+              models: Array.isArray(provider.models) ? provider.models : [],
+              applyUrl: provider.applyUrl || "",
+              balanceUrl: provider.balanceUrl || provider.applyUrl || "",
+              custom: Boolean(provider.custom),
+              autoModel: provider.autoModel !== false,
+              apiKeyConfigured: Boolean(provider.apiKey),
+              apiKeyMask: maskApiKey(provider.apiKey || ""),
+            },
+          ];
+        })
+    ),
+  };
+}
+
+function readTextFileSafe(filePath, fallback = "") {
+  try {
+    if (!fs.existsSync(filePath)) return fallback;
+    return fs.readFileSync(filePath, "utf8");
+  } catch {
+    return fallback;
+  }
+}
+
+function readSkill(name) {
+  return readTextFileSafe(path.join(skillsDir, name, "SKILL.md"));
+}
+
+function readPromptTemplate(name) {
+  return readTextFileSafe(path.join(promptsDir, name));
+}
+
+function renderTemplate(template, variables = {}) {
+  return String(template || "").replace(/\{\{([a-zA-Z0-9_]+)\}\}/g, (_, key) => {
+    const value = variables[key];
+    if (value === undefined || value === null) return "";
+    if (typeof value === "string") return value;
+    return JSON.stringify(value, null, 2);
+  });
+}
+
+function normalizeReferenceExamples(value) {
+  const rows = Array.isArray(value)
+    ? value
+    : String(value || "")
+      .split(/\n{2,}|---+/)
+      .map((item) => item.trim())
+      .filter(Boolean);
+  return rows
+    .map((item) => {
+      if (item && typeof item === "object") {
+        return {
+          title: String(item.title || "").trim(),
+          text: String(item.text || item.content || "").trim(),
+        };
+      }
+      return { title: "", text: String(item || "").trim() };
+    })
+    .filter((item) => item.text)
+    .slice(0, 10);
+}
+
+function readReferenceExamples() {
+  try {
+    if (!fs.existsSync(referenceExamplesPath)) return [];
+    return normalizeReferenceExamples(JSON.parse(fs.readFileSync(referenceExamplesPath, "utf8")));
+  } catch {
+    return [];
+  }
+}
+
+function writeReferenceExamples(examples) {
+  const normalized = normalizeReferenceExamples(examples);
+  fs.writeFileSync(referenceExamplesPath, JSON.stringify(normalized, null, 2), "utf8");
+  return normalized;
+}
+
+function loadRewriteAssets() {
+  return {
+    skills: {
+      rewriteEducation: readSkill("rewrite-douyin-education"),
+      humanizerZh: readSkill("humanizer-zh"),
+      bossStyle: readSkill("boss-style"),
+    },
+    prompts: {
+      rewritePipeline: readPromptTemplate("rewrite_pipeline.md"),
+      humanizeZh: readPromptTemplate("humanize_zh.md"),
+      scoreRewrite: readPromptTemplate("score_rewrite.md"),
+    },
+    referenceExamples: readReferenceExamples(),
+  };
+}
+
+function normalizeModelRows(data) {
+  const rows = Array.isArray(data?.data) ? data.data : Array.isArray(data?.models) ? data.models : [];
+  return rows
+    .map((item, index) => {
+      const id = String(item.id || item.name || item.model || "").trim();
+      if (!id) return null;
+      const createdRaw = item.created || item.created_at || item.update_time || item.updated_at || 0;
+      const created = Number(createdRaw) || Date.parse(createdRaw) || 0;
+      return { id, created, index };
+    })
+    .filter(Boolean);
+}
+
+function pickLatestChatModel(models, fallback = "") {
+  const blocked = /(embedding|embed|rerank|bge|whisper|tts|speech|audio|image|vision|vl|ocr|moderation)/i;
+  const preferred = /(chat|instruct|turbo|plus|max|pro|flash|qwen|deepseek|kimi|moonshot|glm|doubao|ernie|hunyuan|gpt)/i;
+  const candidates = models.filter((model) => !blocked.test(model.id));
+  if (candidates.length === 0) return fallback || models[0]?.id || "";
+  candidates.sort((left, right) => {
+    const scoreLeft = (preferred.test(left.id) ? 1000 : 0) + (left.created || 0) / 1000000000 - left.index / 1000;
+    const scoreRight = (preferred.test(right.id) ? 1000 : 0) + (right.created || 0) / 1000000000 - right.index / 1000;
+    return scoreRight - scoreLeft;
+  });
+  return candidates[0]?.id || fallback || "";
+}
+
+async function resolveLatestModel(provider) {
+  const baseUrl = String(provider.baseUrl || "").replace(/\/+$/, "");
+  if (!baseUrl || !String(provider.apiKey || "").trim()) {
+    return provider.model || "";
+  }
+
+  try {
+    const response = await fetch(`${baseUrl}/models`, {
+      headers: {
+        Authorization: `Bearer ${provider.apiKey}`,
+        "Content-Type": "application/json",
+      },
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) return provider.model || "";
+    return pickLatestChatModel(normalizeModelRows(data), provider.model || "") || provider.model || "";
+  } catch {
+    return provider.model || "";
+  }
+}
+
+async function refreshProviderModel(settings, providerId) {
+  const provider = settings.rewriteProviders[providerId];
+  if (!provider || provider.autoModel === false) return provider;
+  const latestModel = await resolveLatestModel(provider);
+  if (latestModel) provider.model = latestModel;
+  return provider;
+}
+
+function sanitizeFileName(value) {
+  return String(value || "")
+    .replace(/[\\/:*?"<>|]/g, "_")
+    .replace(/[\r\n\t]+/g, " ")
+    .replace(/\s+/g, " ")
+    .replace(/[. ]+$/g, "")
+    .trim();
+}
+
+function makeUniquePath(baseName, extension) {
+  const safeBase = (sanitizeFileName(baseName) || `douyin_${Date.now()}`).slice(0, 120);
+  let filePath = path.join(downloadsDir, `${safeBase}${extension}`);
+  let index = 2;
+  while (fs.existsSync(filePath)) {
+    filePath = path.join(downloadsDir, `${safeBase}_${index}${extension}`);
+    index += 1;
+  }
+  return filePath;
+}
+
+function parseVideoInfoFromToolText(text) {
+  const title = text.match(/视频标题:\s*(.+)/)?.[1]?.trim() || "";
+  const videoId = text.match(/视频ID:\s*(.+)/)?.[1]?.trim() || "";
+  const downloadUrl = text.match(/下载链接:\s*(https?:\/\/[^\r\n]+)/)?.[1]?.trim() || "";
+  return { title, videoId, downloadUrl };
+}
+
+function createPauseError() {
+  const error = new Error("任务已暂停");
+  error.name = "AbortError";
+  return error;
+}
+
+function isPauseError(error) {
+  return error?.name === "AbortError" || error?.message === "任务已暂停";
+}
+
+function errorMessage(error) {
+  const message = error instanceof Error ? error.message : String(error);
+  const cause = error?.cause;
+  if (cause?.code && !message.includes(cause.code)) {
+    return `${message}（${cause.code}）`;
+  }
+  return message;
+}
+
+function isRemoteFileFetchError(error) {
+  return /fetch failed|downloadfailed|cannot be downloaded|audio file cannot be downloaded|invalidfile/i.test(errorMessage(error));
+}
+
+function throwIfPaused(signal) {
+  if (signal?.aborted) throw createPauseError();
+}
+
+function delay(ms, signal) {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(createPauseError());
+      return;
+    }
+    const timer = setTimeout(() => {
+      signal?.removeEventListener("abort", onAbort);
+      resolve();
+    }, ms);
+    const onAbort = () => {
+      clearTimeout(timer);
+      reject(createPauseError());
+    };
+    signal?.addEventListener("abort", onAbort, { once: true });
+  });
+}
+
+function isInsideDownloads(filePath) {
+  const resolved = path.resolve(filePath);
+  const root = path.resolve(downloadsDir);
+  return resolved === root || resolved.startsWith(`${root}${path.sep}`);
+}
+
+function isInsideManagedFilePath(filePath) {
+  const resolved = path.resolve(filePath);
+  const roots = [downloadsDir, rewritesDir].map((item) => path.resolve(item));
+  return roots.some((root) => resolved === root || resolved.startsWith(`${root}${path.sep}`));
+}
+
+function cancelShutdown() {
+  if (shutdownTimer) {
+    clearTimeout(shutdownTimer);
+    shutdownTimer = null;
+  }
+}
+
+function shutdownNow() {
+  for (const child of activeChildProcesses) {
+    try {
+      child.kill();
+    } catch {
+      // Best effort only.
+    }
+  }
+  cleanupRuntimeFiles();
+  process.exit(0);
+}
+
+function scheduleShutdownIfIdle() {
+  const hasRunningJobs = [...downloadJobs.values(), ...transcriptJobs.values()].some((job) => job.status === "running");
+  if (!autoClose || pageSessions.size > 0 || hasRunningJobs || runningBatchTasks.size > 0 || taskStore.hasPendingWork()) {
+    return;
+  }
+  cancelShutdown();
+  shutdownTimer = setTimeout(shutdownNow, 5000);
+}
+
+function touchPageSession(id) {
+  if (!id) return;
+  pageSessions.set(id, Date.now());
+  cancelShutdown();
+}
+
+function closePageSession(id) {
+  if (id) pageSessions.delete(id);
+  scheduleShutdownIfIdle();
+}
+
+setInterval(() => {
+  if (!autoClose) return;
+  const now = Date.now();
+  for (const [id, lastSeen] of pageSessions) {
+    if (now - lastSeen > 12000) pageSessions.delete(id);
+  }
+  scheduleShutdownIfIdle();
+}, 5000).unref();
+
+function runMcpTool(name, shareLink, onProgress = () => {}, options = {}) {
+  return new Promise((resolve, reject) => {
+    const { signal } = options;
+    if (signal?.aborted) {
+      reject(createPauseError());
+      return;
+    }
+    const nodePath = process.execPath;
+    const child = spawn(nodePath, [mcpEntry], {
+      cwd: __dirname,
+      env: {
+        ...process.env,
+        WORK_DIR: downloadsDir,
+      },
+      windowsHide: true,
+      stdio: ["pipe", "pipe", "pipe"],
+    });
+    activeChildProcesses.add(child);
+
+    let stdout = "";
+    let stderr = "";
+    let lastPercent = 0;
+    let settled = false;
+    const finish = (fn, value) => {
+      if (settled) return;
+      settled = true;
+      signal?.removeEventListener("abort", onAbort);
+      clearTimeout(timer);
+      fn(value);
+    };
+    const onAbort = () => {
+      try {
+        child.kill();
+      } catch {
+        // Best effort only.
+      }
+      finish(reject, createPauseError());
+    };
+    const timer = setTimeout(() => {
+      try {
+        child.kill();
+      } catch {
+        // Best effort only.
+      }
+      finish(reject, new Error("处理超时，请换个链接再试"));
+    }, 5 * 60 * 1000);
+    signal?.addEventListener("abort", onAbort, { once: true });
+
+    child.stdout.on("data", (chunk) => {
+      stdout += chunk.toString("utf8");
+    });
+    child.stderr.on("data", (chunk) => {
+      const text = chunk.toString("utf8");
+      stderr += text;
+
+      if (text.includes("解析")) {
+        onProgress({ percent: Math.max(lastPercent, 5), message: "正在解析视频" });
+      }
+      if (text.includes("下载")) {
+        onProgress({ percent: Math.max(lastPercent, 10), message: "正在下载视频" });
+      }
+
+      const matches = [...text.matchAll(/([0-9]+(?:\.[0-9]+)?)%/g)];
+      if (matches.length > 0) {
+        const percent = Math.max(...matches.map((match) => Number(match[1])).filter(Number.isFinite));
+        if (Number.isFinite(percent) && percent >= lastPercent) {
+          lastPercent = Math.min(99, percent);
+          onProgress({
+            percent: lastPercent,
+            message: `正在下载 ${lastPercent.toFixed(1)}%`,
+          });
+        }
+      }
+    });
+    child.on("error", (error) => {
+      finish(reject, error);
+    });
+    child.on("close", () => {
+      activeChildProcesses.delete(child);
+      const lines = stdout
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter(Boolean);
+
+      const responses = [];
+      for (const line of lines) {
+        try {
+          responses.push(JSON.parse(line));
+        } catch {
+          // The MCP channel should be JSON lines; ignore anything else.
+        }
+      }
+
+      const toolResponse = responses.find((item) => item.id === 2);
+      if (!toolResponse) {
+        finish(reject, new Error(stderr.trim() || "没有收到工具返回结果"));
+        return;
+      }
+
+      if (toolResponse.error) {
+        finish(reject, new Error(toolResponse.error.message || "工具调用失败"));
+        return;
+      }
+
+      const text = toolResponse.result?.content?.map((item) => item.text).join("\n") || "";
+      onProgress({ percent: toolResponse.result?.isError ? lastPercent : 100, message: toolResponse.result?.isError ? "下载失败" : "下载完成" });
+      finish(resolve, {
+        isError: Boolean(toolResponse.result?.isError),
+        text,
+        raw: toolResponse.result,
+        log: stderr.trim(),
+      });
+    });
+
+    const input = [
+      {
+        jsonrpc: "2.0",
+        id: 1,
+        method: "initialize",
+        params: {
+          protocolVersion: "2024-11-05",
+          capabilities: {},
+          clientInfo: { name: "douyin-local-page", version: "1.0.0" },
+        },
+      },
+      {
+        jsonrpc: "2.0",
+        method: "notifications/initialized",
+        params: {},
+      },
+      {
+        jsonrpc: "2.0",
+        id: 2,
+        method: "tools/call",
+        params: {
+          name,
+          arguments: { share_link: shareLink },
+        },
+      },
+    ]
+      .map((item) => JSON.stringify(item))
+      .join("\n");
+
+    child.stdin.end(`${input}\n`);
+  });
+}
+
+function validateShareLink(shareLink) {
+  const firstUrl = getFirstUrl(shareLink);
+  if (!firstUrl) {
+    return "请先粘贴抖音分享链接";
+  }
+  if (!isLikelyDouyinUrl(firstUrl)) {
+    return "这个不像抖音分享链接，请重新复制抖音里的分享内容";
+  }
+  return "";
+}
+
+function createDownloadJob(shareLink) {
+  const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const job = {
+    id,
+    status: "running",
+    percent: 0,
+    message: "准备下载",
+    text: "",
+    files: listDownloads(),
+    startedAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+  downloadJobs.set(id, job);
+
+  const updateJob = (changes) => {
+    Object.assign(job, changes, { updatedAt: new Date().toISOString() });
+  };
+
+  runMcpTool("download_douyin_video", shareLink, (progress) => {
+    updateJob({
+      percent: Math.max(job.percent, Math.round(Number(progress.percent || 0))),
+      message: progress.message || job.message,
+    });
+  })
+    .then((result) => {
+      updateJob({
+        status: result.isError ? "error" : "done",
+        percent: result.isError ? job.percent : 100,
+        message: result.isError ? "下载失败" : "下载完成",
+        text: result.text,
+        files: listDownloads(),
+      });
+    })
+    .catch((error) => {
+      updateJob({
+        status: "error",
+        message: error instanceof Error ? error.message : String(error),
+        text: error instanceof Error ? error.message : String(error),
+        files: listDownloads(),
+      });
+    })
+    .finally(() => {
+      setTimeout(() => downloadJobs.delete(id), 30 * 60 * 1000);
+      scheduleShutdownIfIdle();
+    });
+
+  return job;
+}
+
+async function submitDashScopeTask(apiKey, fileUrl) {
+  const response = await fetch("https://dashscope.aliyuncs.com/api/v1/services/audio/asr/transcription", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+      "X-DashScope-Async": "enable",
+    },
+    body: JSON.stringify({
+      model: "paraformer-v2",
+      input: { file_urls: [fileUrl] },
+      parameters: {
+        channel_id: [0],
+        language_hints: ["zh", "en"],
+      },
+    }),
+  });
+
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data.message || data.code || "语音识别任务提交失败");
+  }
+
+  const taskId = data.output?.task_id;
+  if (!taskId) {
+    throw new Error("没有收到语音识别任务ID");
+  }
+  return taskId;
+}
+
+async function fetchDashScopeTask(apiKey, taskId) {
+  const response = await fetch(`https://dashscope.aliyuncs.com/api/v1/tasks/${encodeURIComponent(taskId)}`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+    },
+  });
+
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data.message || data.code || "查询语音识别任务失败");
+  }
+  return data;
+}
+
+async function fetchTranscriptionJson(url) {
+  const response = await fetch(url);
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data.message || "读取识别结果失败");
+  }
+  return data;
+}
+
+function extractTranscriptText(resultJson) {
+  const transcripts = resultJson.transcripts || resultJson.transcript || [];
+  if (Array.isArray(transcripts) && transcripts.length > 0) {
+    const text = transcripts.map((item) => item.text || item.transcript || "").filter(Boolean).join("\n");
+    if (text.trim()) return text.trim();
+  }
+
+  if (typeof resultJson.text === "string" && resultJson.text.trim()) {
+    return resultJson.text.trim();
+  }
+
+  const sentences = resultJson.sentences || transcripts[0]?.sentences || [];
+  if (Array.isArray(sentences) && sentences.length > 0) {
+    const text = sentences.map((item) => item.text || "").filter(Boolean).join("");
+    if (text.trim()) return text.trim();
+  }
+
+  return "";
+}
+
+function saveTranscript(videoInfo, transcriptText) {
+  const title = videoInfo.title || videoInfo.videoId || `douyin_${Date.now()}`;
+  const filePath = makeUniquePath(`${title}_文案`, ".txt");
+  fs.writeFileSync(filePath, `${transcriptText}\n`, "utf8");
+  return filePath;
+}
+
+function findExistingFile(videoInfo, extensions, marker = "") {
+  const videoId = String(videoInfo.videoId || "").toLowerCase();
+  const safeTitle = sanitizeFileName(videoInfo.title || "").slice(0, 120).toLowerCase();
+  const candidates = listDownloads().filter((file) => {
+    const lower = file.name.toLowerCase();
+    return extensions.some((extension) => lower.endsWith(extension)) && (!marker || lower.includes(marker));
+  });
+
+  for (const file of candidates) {
+    const lower = file.name.toLowerCase();
+    if ((videoId && lower.includes(videoId)) || (safeTitle && lower.startsWith(safeTitle))) {
+      const filePath = path.join(downloadsDir, file.name);
+      if (fs.existsSync(filePath) && fs.statSync(filePath).size > 0) return filePath;
+    }
+  }
+  return "";
+}
+
+function findExistingVideo(videoInfo) {
+  return findExistingFile(videoInfo, [".mp4", ".mov", ".mkv"]);
+}
+
+function findExistingTranscript(videoInfo) {
+  return findExistingFile(videoInfo, [".txt"], "文案");
+}
+
+async function hashFile(filePath) {
+  const hash = createHash("sha256");
+  const stream = fs.createReadStream(filePath);
+  stream.on("data", (chunk) => hash.update(chunk));
+  await once(stream, "end");
+  return hash.digest("hex");
+}
+
+async function downloadVideoFile(videoInfo, onProgress = () => {}, signal) {
+  throwIfPaused(signal);
+  if (!videoInfo.downloadUrl) {
+    throw new Error("没有可用的视频下载链接");
+  }
+
+  const baseName = `${videoInfo.title || videoInfo.videoId || "douyin"}_${videoInfo.videoId || Date.now()}`;
+  const filePath = makeUniquePath(baseName, ".mp4");
+  const partialPath = `${filePath}.download`;
+  const response = await fetch(videoInfo.downloadUrl, {
+    headers: {
+      "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_2 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
+    },
+    signal,
+  });
+
+  if (!response.ok || !response.body) {
+    throw new Error(`视频下载请求失败：HTTP ${response.status}`);
+  }
+
+  const total = Number(response.headers.get("content-length") || 0);
+  let downloaded = 0;
+  const writer = fs.createWriteStream(partialPath);
+
+  try {
+    for await (const chunk of response.body) {
+      throwIfPaused(signal);
+      const buffer = Buffer.from(chunk);
+      downloaded += buffer.length;
+      if (!writer.write(buffer)) {
+        await once(writer, "drain");
+      }
+      if (total > 0) {
+        onProgress({
+          percent: Math.min(99, downloaded / total * 100),
+          downloaded,
+          total,
+          message: `正在下载 ${(downloaded / total * 100).toFixed(1)}%`,
+        });
+      } else {
+        onProgress({
+          percent: 20,
+          downloaded,
+          total,
+          message: `正在下载 ${(downloaded / 1024 / 1024).toFixed(1)}MB`,
+        });
+      }
+    }
+    writer.end();
+    await once(writer, "finish");
+
+    const stat = fs.statSync(partialPath);
+    if (stat.size <= 1024) {
+      throw new Error("下载文件过小，可能不是完整视频");
+    }
+    if (total > 0 && stat.size !== total) {
+      throw new Error(`下载完整性校验失败：${stat.size}/${total} 字节`);
+    }
+
+    fs.renameSync(partialPath, filePath);
+    return {
+      filePath,
+      fileSize: stat.size,
+      fileHash: await hashFile(filePath),
+    };
+  } catch (error) {
+    writer.destroy();
+    try {
+      if (fs.existsSync(partialPath)) fs.unlinkSync(partialPath);
+    } catch {
+      // Ignore cleanup errors for partial downloads.
+    }
+    throw error;
+  }
+}
+
+function runFfmpeg(args, signal) {
+  return new Promise((resolve, reject) => {
+    if (!ffmpegPath) {
+      reject(new Error("未找到音频转码组件，请重新运行安装依赖"));
+      return;
+    }
+
+    const child = spawn(ffmpegPath, args, {
+      cwd: __dirname,
+      windowsHide: true,
+      stdio: ["ignore", "ignore", "pipe"],
+    });
+    activeChildProcesses.add(child);
+
+    let stderr = "";
+    let settled = false;
+    const finish = (fn, value) => {
+      if (settled) return;
+      settled = true;
+      signal?.removeEventListener("abort", onAbort);
+      activeChildProcesses.delete(child);
+      fn(value);
+    };
+    const onAbort = () => {
+      try {
+        child.kill();
+      } catch {
+        // Best effort only.
+      }
+      finish(reject, createPauseError());
+    };
+
+    signal?.addEventListener("abort", onAbort, { once: true });
+    child.stderr.on("data", (chunk) => {
+      stderr = `${stderr}${chunk.toString("utf8")}`.slice(-6000);
+    });
+    child.on("error", (error) => finish(reject, error));
+    child.on("close", (code) => {
+      if (code === 0) {
+        finish(resolve);
+        return;
+      }
+      finish(reject, new Error(`音频转码失败：${stderr.trim() || `ffmpeg exited with ${code}`}`));
+    });
+  });
+}
+
+async function convertMediaToAsrWav(mediaPath, signal) {
+  const wavPath = makeUniquePath(`${path.basename(mediaPath, path.extname(mediaPath))}_asr`, ".wav");
+  await runFfmpeg([
+    "-y",
+    "-i",
+    mediaPath,
+    "-vn",
+    "-ac",
+    "1",
+    "-ar",
+    "16000",
+    "-acodec",
+    "pcm_s16le",
+    wavPath,
+  ], signal);
+
+  const stat = fs.statSync(wavPath);
+  if (stat.size <= 44) {
+    throw new Error("音频转码后为空，无法识别文案");
+  }
+  return wavPath;
+}
+
+function sendDashScopeWsJson(ws, value) {
+  ws.send(JSON.stringify(value));
+}
+
+function transcribeWavWithDashScopeRealtime(apiKey, wavPath, onProgress = () => {}, signal) {
+  return new Promise((resolve, reject) => {
+    const taskId = randomUUID().replace(/-/g, "").slice(0, 32);
+    const ws = new WebSocket("wss://dashscope.aliyuncs.com/api-ws/v1/inference", {
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+      },
+    });
+    const stat = fs.statSync(wavPath);
+    const parts = [];
+    let latestPartial = "";
+    let lastEndedText = "";
+    let stream = null;
+    let settled = false;
+    let sentBytes = 0;
+
+    const cleanup = () => {
+      clearTimeout(timeout);
+      signal?.removeEventListener("abort", onAbort);
+      if (stream) stream.destroy();
+    };
+    const finish = (fn, value) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      try {
+        if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) ws.close();
+      } catch {
+        // Best effort only.
+      }
+      fn(value);
+    };
+    const onAbort = () => finish(reject, createPauseError());
+    const timeout = setTimeout(() => {
+      finish(reject, new Error("本地流式识别超时，请稍后重试"));
+    }, 30 * 60 * 1000);
+
+    signal?.addEventListener("abort", onAbort, { once: true });
+
+    const sendFinishTask = () => {
+      sendDashScopeWsJson(ws, {
+        header: {
+          action: "finish-task",
+          task_id: taskId,
+          streaming: "duplex",
+        },
+        payload: {
+          input: {},
+        },
+      });
+    };
+
+    const sendAudioStream = () => {
+      stream = fs.createReadStream(wavPath, { highWaterMark: 32 * 1024 });
+      stream.on("data", (chunk) => {
+        throwIfPaused(signal);
+        stream.pause();
+        ws.send(chunk, (error) => {
+          if (error) {
+            finish(reject, error);
+            return;
+          }
+          sentBytes += chunk.length;
+          onProgress({
+            percent: Math.min(88, 45 + (sentBytes / stat.size) * 35),
+            message: "正在本地流式识别",
+          });
+          setTimeout(() => {
+            if (!settled) stream.resume();
+          }, 60);
+        });
+      });
+      stream.on("end", () => {
+        onProgress({ percent: 90, message: "正在整理识别结果" });
+        sendFinishTask();
+      });
+      stream.on("error", (error) => finish(reject, error));
+    };
+
+    ws.on("open", () => {
+      onProgress({ percent: 38, message: "正在连接本地流式识别" });
+      sendDashScopeWsJson(ws, {
+        header: {
+          action: "run-task",
+          task_id: taskId,
+          streaming: "duplex",
+        },
+        payload: {
+          task_group: "audio",
+          task: "asr",
+          function: "recognition",
+          model: "paraformer-realtime-v2",
+          parameters: {
+            format: "wav",
+            sample_rate: 16000,
+            language_hints: ["zh", "en"],
+            punctuation_prediction_enabled: true,
+            semantic_punctuation_enabled: false,
+          },
+          input: {},
+        },
+      });
+    });
+
+    ws.on("message", (data) => {
+      let message;
+      try {
+        message = JSON.parse(data.toString("utf8"));
+      } catch {
+        return;
+      }
+
+      const event = message.header?.event;
+      if (event === "task-started") {
+        onProgress({ percent: 42, message: "正在发送本地音频" });
+        sendAudioStream();
+        return;
+      }
+
+      if (event === "result-generated") {
+        const sentence = message.payload?.output?.sentence || {};
+        if (sentence.heartbeat) return;
+        const text = String(sentence.text || "").trim();
+        if (!text) return;
+        if (sentence.sentence_end) {
+          if (text !== lastEndedText) {
+            parts.push(text);
+            lastEndedText = text;
+          }
+          latestPartial = "";
+        } else {
+          latestPartial = text;
+        }
+        return;
+      }
+
+      if (event === "task-finished") {
+        if (latestPartial && latestPartial !== lastEndedText) parts.push(latestPartial);
+        const transcript = parts.join("\n").trim();
+        if (!transcript) {
+          finish(reject, new Error("没有识别到可用文案"));
+          return;
+        }
+        onProgress({ percent: 95, message: "文案识别完成" });
+        finish(resolve, transcript);
+        return;
+      }
+
+      if (event === "task-failed") {
+        finish(reject, new Error(message.header?.error_message || "本地流式识别失败"));
+      }
+    });
+
+    ws.on("error", (error) => finish(reject, error));
+    ws.on("close", () => {
+      if (!settled) finish(reject, new Error("本地流式识别连接已关闭"));
+    });
+  });
+}
+
+async function transcribeLocalMediaWithDashScope(apiKey, mediaPath, onProgress = () => {}, signal) {
+  let wavPath = "";
+  try {
+    onProgress({ percent: 28, message: "正在转换本地音频" });
+    wavPath = await convertMediaToAsrWav(mediaPath, signal);
+    return await transcribeWavWithDashScopeRealtime(apiKey, wavPath, onProgress, signal);
+  } finally {
+    if (wavPath) {
+      try {
+        if (fs.existsSync(wavPath)) fs.unlinkSync(wavPath);
+      } catch {
+        // Best effort cleanup only.
+      }
+    }
+  }
+}
+
+async function extractTranscriptForVideoInfo(videoInfo, apiKey, onProgress = () => {}, signal, options = {}) {
+  throwIfPaused(signal);
+  if (!videoInfo.downloadUrl) {
+    throw new Error("没有解析到可识别的视频地址");
+  }
+
+  try {
+    onProgress({ percent: 18, message: "正在提交语音识别" });
+    const taskId = await submitDashScopeTask(apiKey, videoInfo.downloadUrl);
+    let pollCount = 0;
+
+    while (true) {
+      throwIfPaused(signal);
+      pollCount += 1;
+      await delay(3000, signal);
+      const task = await fetchDashScopeTask(apiKey, taskId);
+      const status = task.output?.task_status || task.task_status || "";
+      onProgress({
+        percent: Math.min(88, 25 + pollCount * 4),
+        message: "语音识别中",
+      });
+
+      if (status === "SUCCEEDED") {
+        const firstResult = task.output?.results?.find((item) => item.transcription_url) || task.output?.results?.[0];
+        if (!firstResult?.transcription_url) {
+          throw new Error(firstResult?.message || "识别完成但没有返回文案地址");
+        }
+
+        onProgress({ percent: 92, message: "正在读取文案" });
+        const resultJson = await fetchTranscriptionJson(firstResult.transcription_url);
+        const transcriptText = extractTranscriptText(resultJson);
+        if (!transcriptText) {
+          throw new Error("没有识别到可用文案");
+        }
+        return transcriptText;
+      }
+
+      if (status === "FAILED" || status === "CANCELED") {
+        const failedResult = task.output?.results?.find((item) => item.subtask_status === "FAILED");
+        throw new Error(failedResult?.message || task.output?.message || "语音识别失败");
+      }
+    }
+  } catch (error) {
+    if (!isRemoteFileFetchError(error)) throw error;
+
+    onProgress({ percent: 20, message: "云端拉取失败，改用本地识别" });
+    let localVideoPath = options.localVideoPath && fs.existsSync(options.localVideoPath) ? options.localVideoPath : "";
+    let temporaryVideoPath = "";
+    try {
+      if (!localVideoPath) {
+        const downloaded = await downloadVideoFile(videoInfo, (progress) => {
+          const raw = Number(progress.percent || 0);
+          onProgress({
+            percent: Math.min(45, 20 + raw * 0.25),
+            message: progress.message || "正在本地下载视频",
+          });
+        }, signal);
+        localVideoPath = downloaded.filePath;
+        temporaryVideoPath = localVideoPath;
+      }
+
+      return await transcribeLocalMediaWithDashScope(apiKey, localVideoPath, onProgress, signal);
+    } finally {
+      if (temporaryVideoPath) {
+        try {
+          if (fs.existsSync(temporaryVideoPath)) fs.unlinkSync(temporaryVideoPath);
+        } catch {
+          // Best effort cleanup only.
+        }
+      }
+    }
+  }
+}
+
+function splitChineseSentences(text) {
+  return String(text || "")
+    .replace(/\s+/g, " ")
+    .split(/[。！？!?；;\n]/)
+    .map((item) => item.trim())
+    .filter((item) => item.length >= 4);
+}
+
+function pickSentence(sentences, patterns, fallback = "") {
+  return sentences.find((sentence) => patterns.some((pattern) => pattern.test(sentence))) || sentences[0] || fallback;
+}
+
+function analyzeTranscriptText(text) {
+  const sentences = splitChineseSentences(text);
+  const tagRules = [
+    ["高考", /高考|志愿|分数线|录取|本科|专科/],
+    ["单招", /单招|综评|春考|职教/],
+    ["学习方法", /学习方法|背单词|复习|刷题|提分|效率/],
+    ["英语", /英语|口语|单词|听力|语法|雅思|托福/],
+    ["家长教育", /家长|孩子|父母|家庭教育|陪伴/],
+    ["AI", /AI|人工智能|提示词|模型|自动化/],
+    ["职业规划", /就业|职业|简历|面试|规划|岗位/],
+  ];
+  const tags = tagRules.filter(([, pattern]) => pattern.test(text)).map(([tag]) => tag);
+  const hook = pickSentence(sentences, [/你知道|很多人|为什么|别再|一定要|普通人|关键是|只要/], "开头需要补充更明确的钩子");
+  const painPoint = pickSentence(sentences, [/不会|不知道|困难|焦虑|问题|失败|浪费|瓶颈|卡住|痛点/], "痛点不明显，建议补一句目标人群正在遇到的问题");
+  const emotionPoint = pickSentence(sentences, [/焦虑|希望|害怕|惊喜|后悔|轻松|自信|坚持|改变|逆袭/], "情绪点偏弱，可强化焦虑、希望或成就感");
+  const callToAction = pickSentence(sentences, [/关注|收藏|评论|私信|点赞|转发|马上|现在|试试|点击/], "行动号召不明显，可补充收藏、评论或私信引导");
+
+  return {
+    hook,
+    emotionPoints: [emotionPoint],
+    painPoints: [painPoint],
+    callToAction,
+    tags: tags.length > 0 ? tags : ["未分类"],
+    summary: sentences.slice(0, 3).join("。").slice(0, 240),
+  };
+}
+
+function normalizeAnalysis(value, fallbackText = "") {
+  const analysis = value && typeof value === "object" ? value : {};
+  const arrayValue = (key, fallback = []) => {
+    const current = analysis[key];
+    if (Array.isArray(current)) return current.map((item) => String(item || "").trim()).filter(Boolean);
+    if (typeof current === "string" && current.trim()) return [current.trim()];
+    return fallback;
+  };
+
+  const fallback = analyzeTranscriptText(fallbackText || [
+    analysis.summary,
+    analysis.hook,
+    ...arrayValue("emotionPoints"),
+    ...arrayValue("painPoints"),
+    analysis.callToAction,
+  ].filter(Boolean).join("。"));
+
+  return {
+    hook: String(analysis.hook || fallback.hook || "").trim(),
+    emotionPoints: arrayValue("emotionPoints", fallback.emotionPoints),
+    painPoints: arrayValue("painPoints", fallback.painPoints),
+    callToAction: String(analysis.callToAction || fallback.callToAction || "").trim(),
+    tags: arrayValue("tags", fallback.tags),
+    category: String(analysis.category || analysis.primaryCategory || (Array.isArray(analysis.tags) ? analysis.tags[0] : "") || fallback.tags?.[0] || "未分类").trim(),
+    summary: String(analysis.summary || fallback.summary || "").trim(),
+    source: String(analysis.source || "dashscope-qwen").trim(),
+  };
+}
+
+function parseJsonFromModelText(text) {
+  const value = String(text || "").trim();
+  try {
+    return JSON.parse(value);
+  } catch {
+    const start = value.indexOf("{");
+    const end = value.lastIndexOf("}");
+    if (start >= 0 && end > start) {
+      return JSON.parse(value.slice(start, end + 1));
+    }
+    throw new Error("AI 分析没有返回 JSON");
+  }
+}
+
+async function analyzeTranscriptWithDashScope(apiKey, transcriptText, videoInfo, signal) {
+  throwIfPaused(signal);
+  const model = getBatchSettings().aiModel || "qwen-plus";
+  const response = await fetch("https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model,
+      temperature: 0.2,
+      messages: [
+        {
+          role: "system",
+          content: [
+            "你是短视频内容分析师。请只输出 JSON，不要 Markdown。",
+            "字段必须包含：hook, emotionPoints, painPoints, callToAction, tags, category, summary。",
+            "tags 必须是中文数组，自动分类要贴合内容，例如：高考、单招、学习方法、英语、家长教育、AI。",
+          ].join("\n"),
+        },
+        {
+          role: "user",
+          content: [
+            `标题：${videoInfo.title || ""}`,
+            "文案：",
+            String(transcriptText || "").slice(0, 12000),
+          ].join("\n"),
+        },
+      ],
+    }),
+    signal,
+  });
+
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data.message || data.error?.message || `AI 分析请求失败：HTTP ${response.status}`);
+  }
+
+  const content = data.choices?.[0]?.message?.content || "";
+  const parsed = parseJsonFromModelText(content);
+  return normalizeAnalysis({ ...parsed, source: model }, transcriptText);
+}
+
+function normalizeRewriteVersionContent(value) {
+  if (Array.isArray(value)) return value.map((item) => String(item || "").trim()).filter(Boolean).join("\n");
+  if (value && typeof value === "object") {
+    return Object.entries(value)
+      .map(([key, item]) => `${key}：${item}`)
+      .join("\n")
+      .trim();
+  }
+  return String(value || "").trim();
+}
+
+function normalizeWordCount(input, fallback = "150字左右") {
+  const value = String(input || "").trim().replace(/\s+/g, " ");
+  return value ? value.slice(0, 32) : fallback;
+}
+
+function normalizeVersionSpecs(input = [], fallbackDirection = "招生引流") {
+  const defs = new Map(REWRITE_VERSION_DEFS.map(([key, name]) => [key, { key, name }]));
+  const rows = Array.isArray(input) && input.length > 0
+    ? input
+    : REWRITE_VERSION_DEFS.map(([key, name]) => ({ key, name }));
+  const seen = new Set();
+  return rows
+    .map((item, index) => {
+      const rawKey = String(item?.key || "").trim();
+      const known = defs.get(rawKey);
+      const key = (known?.key || rawKey || `custom${index + 1}`).replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 48) || `custom${index + 1}`;
+      if (seen.has(key)) return null;
+      seen.add(key);
+      const defaults = REWRITE_VERSION_DEFAULTS[key] || {};
+      const direction = REWRITE_DIRECTIONS.includes(String(item?.direction || "")) ? String(item.direction) : defaults.direction || fallbackDirection;
+      const wordCount = normalizeWordCount(item?.wordCount, defaults.wordCount || "150字左右");
+      return {
+        key,
+        name: String(item?.name || known?.name || `版本 ${index + 1}`).trim().slice(0, 40) || `版本 ${index + 1}`,
+        direction,
+        wordCount,
+      };
+    })
+    .filter(Boolean)
+    .slice(0, 8);
+}
+
+function readVersionValue(source, spec) {
+  if (Array.isArray(source.versions)) {
+    const match = source.versions.find((item) => item?.key === spec.key || item?.name === spec.name);
+    return match?.content || match?.text || "";
+  }
+  return source[spec.key] ?? source[spec.name] ?? source.versions?.[spec.key] ?? source.versions?.[spec.name] ?? "";
+}
+
+function normalizeRewrite(raw, meta = {}) {
+  const source = raw && typeof raw === "object" ? raw : {};
+  const versionSpecs = normalizeVersionSpecs(meta.versionSpecs, meta.direction || "招生引流");
+  const versions = versionSpecs.map((spec) => {
+    const value = readVersionValue(source, spec);
+    return {
+      ...spec,
+      content: normalizeRewriteVersionContent(value),
+    };
+  });
+
+  return {
+    provider: meta.provider || "",
+    model: meta.model || "",
+    direction: meta.direction || "招生引流",
+    style: meta.style || "痞里带刺",
+    referenceStyle: meta.referenceStyle || DEFAULT_REWRITE_REFERENCE,
+    params: meta.params || {},
+    humanizeLevel: meta.humanizeLevel || "普通",
+    referenceExamples: normalizeReferenceExamples(meta.referenceExamples || []),
+    structure: meta.structure || source.structure || {},
+    humanizerNotes: Array.isArray(meta.humanizerNotes) ? meta.humanizerNotes : [],
+    generatedAt: meta.generatedAt || new Date().toISOString(),
+    versions,
+  };
+}
+
+function rewriteFromBody(body = {}, task = {}) {
+  const versionsInput = Array.isArray(body.versions) ? body.versions : [];
+  const params = body.params && typeof body.params === "object" ? body.params : safeJsonParse(task.rewrite_params_json);
+  const versionSpecs = normalizeVersionSpecs(versionsInput, body.direction || task.rewrite_direction || "招生引流");
+  return normalizeRewrite({
+    versions: Object.fromEntries(
+      versionsInput.map((item) => [
+        item.key || item.name,
+        item.content,
+      ])
+    ),
+  }, {
+    provider: body.provider || task.rewrite_model || "",
+    model: body.model || task.rewrite_model || "",
+    direction: body.direction || task.rewrite_direction || "招生引流",
+    style: body.style || task.rewrite_style || "痞里带刺",
+    referenceStyle: body.referenceStyle || DEFAULT_REWRITE_REFERENCE,
+    params,
+    humanizeLevel: body.humanizeLevel || task.humanize_level || params.humanizeLevel || "普通",
+    referenceExamples: body.referenceExamples || safeJsonParse(task.reference_examples_json),
+    versionSpecs,
+    generatedAt: body.generatedAt || new Date().toISOString(),
+  });
+}
+
+function rewriteToText(task, rewrite, format = "txt") {
+  const title = task.title || task.video_id || `任务 ${task.id}`;
+  const header = [
+    `# ${title} AI改写`,
+    "",
+    `- 模型：${rewrite.model || rewrite.provider || "-"}`,
+    `- 改写方向：${rewrite.direction || "-"}`,
+    `- 语气风格：${rewrite.style || "-"}`,
+    `- 去AI味强度：${rewrite.humanizeLevel || "-"}`,
+    `- 生成时间：${rewrite.generatedAt || ""}`,
+    `- 参考案例：${Array.isArray(rewrite.referenceExamples) ? rewrite.referenceExamples.length : 0} 条`,
+    "",
+    "## 原文结构分析",
+    "",
+    `- hook：${rewrite.structure?.hook || ""}`,
+    `- pain：${rewrite.structure?.pain || ""}`,
+    `- emotion：${rewrite.structure?.emotion || ""}`,
+    `- reverse：${rewrite.structure?.reverse || ""}`,
+    `- solution：${rewrite.structure?.solution || ""}`,
+    `- cta：${rewrite.structure?.cta || ""}`,
+    "",
+    "## 改写参数",
+    "",
+    `- 口语化：${rewrite.params?.toneLevel || ""}`,
+    `- 冲突度：${rewrite.params?.conflictLevel || ""}`,
+    `- 情绪强度：${rewrite.params?.emotionLevel || ""}`,
+    `- 销售感：${rewrite.params?.salesLevel || ""}`,
+    "",
+    "## 参考风格",
+    "",
+    rewrite.referenceStyle || DEFAULT_REWRITE_REFERENCE,
+    "",
+  ];
+  const body = rewrite.versions
+    .map((version) => [
+      `## ${version.name}`,
+      "",
+      `- 方向：${version.direction || rewrite.direction || "-"}`,
+      `- 字数：${version.wordCount || "-"}`,
+      "",
+      version.content || "",
+    ].join("\n"))
+    .join("\n\n");
+
+  if (format === "md") return `${header.join("\n")}${body}\n`;
+  return `${title} AI改写\n\n${header.slice(2).join("\n")}${body.replace(/^## /gm, "")}\n`;
+}
+
+function saveRewriteForTask(task, rewrite, format = "txt") {
+  fs.mkdirSync(rewritesDir, { recursive: true });
+  const safeFormat = format === "txt" ? "txt" : "md";
+  const filePath = path.join(rewritesDir, `${task.id}_rewrite.${safeFormat}`);
+  fs.writeFileSync(filePath, rewriteToText(task, rewrite, safeFormat), "utf8");
+  return taskStore.updateTask(task.id, {
+    rewrite_path: filePath,
+    rewrite_json: JSON.stringify(rewrite),
+    rewrite_model: rewrite.model || rewrite.provider || "",
+    rewrite_style: rewrite.style || "",
+    rewrite_direction: rewrite.direction || "",
+    rewrite_params_json: JSON.stringify(rewrite.params || {}),
+    reference_examples_json: JSON.stringify(rewrite.referenceExamples || []),
+    humanize_level: rewrite.humanizeLevel || "",
+    message: task.message || "AI 改写已保存",
+  });
+}
+
+async function getRewriteProvider(providerId) {
+  const settings = readSettings();
+  const requested = String(providerId || settings.rewrite.defaultProvider || "dashscope");
+  const id = settings.rewriteProviders[requested] ? requested : "dashscope";
+  const provider = await refreshProviderModel(settings, id);
+  if (!provider) throw new Error("未知改写模型");
+  if (!String(provider.apiKey || "").trim()) {
+    throw new Error(`请先保存 ${provider.label} API Key`);
+  }
+  if (!String(provider.baseUrl || "").trim()) {
+    throw new Error(`请先填写 ${provider.label} base_url`);
+  }
+  if (!String(provider.model || "").trim()) {
+    throw new Error(`请先填写 ${provider.label} model`);
+  }
+  if (provider.autoModel !== false) writeSettings(settings);
+  return { id, ...provider };
+}
+
+async function chatCompletion(provider, messages, signal) {
+  const baseUrl = String(provider.baseUrl || "").replace(/\/+$/, "");
+  const response = await fetch(`${baseUrl}/chat/completions`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${provider.apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: provider.model,
+      temperature: 0.78,
+      messages,
+    }),
+    signal,
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const rawMessage = data.message || data.error?.message || data.error || `HTTP ${response.status}`;
+    const message = String(rawMessage);
+    const balancePattern = /余额|额度|欠费|充值|quota|credit|billing|insufficient|exceeded|payment|balance/i;
+    const balanceTip = balancePattern.test(message)
+      ? `\n可能是 ${provider.label} 余额/额度不足，请去后台查看：${provider.balanceUrl || provider.applyUrl || "平台控制台"}`
+      : "";
+    throw new Error(`AI 改写请求失败：${message}${balanceTip}`);
+  }
+  return data.choices?.[0]?.message?.content || "";
+}
+
+async function rewriteTranscriptWithProvider({ providerId, transcriptText, analysis, direction, style, referenceStyle, params = {}, humanizeLevel: requestedHumanizeLevel = "", referenceExamples: inputReferenceExamples = [], versionSpecs: inputVersionSpecs = [], task, signal }) {
+  const provider = await getRewriteProvider(providerId);
+  const safeDirection = REWRITE_DIRECTIONS.includes(direction) ? direction : "招生引流";
+  const safeStyle = REWRITE_STYLES.includes(style) ? style : "老板风格";
+  const safeReference = String(referenceStyle || DEFAULT_REWRITE_REFERENCE).trim() || DEFAULT_REWRITE_REFERENCE;
+  const safeParams = params && typeof params === "object" ? params : {};
+  const versionSpecs = normalizeVersionSpecs(inputVersionSpecs, safeDirection);
+  const humanizeLevel = String(requestedHumanizeLevel || safeParams.humanizeLevel || "普通");
+  const referenceExamples = normalizeReferenceExamples(
+    inputReferenceExamples?.length ? inputReferenceExamples : readReferenceExamples()
+  );
+  const assets = loadRewriteAssets();
+  if (!assets.prompts.rewritePipeline) throw new Error("缺少 prompts/rewrite_pipeline.md");
+  if (humanizeLevel !== "关闭" && !assets.prompts.humanizeZh) throw new Error("缺少 prompts/humanize_zh.md");
+  const analysisText = analysis && Object.keys(analysis).length > 0
+    ? JSON.stringify(analysis, null, 2)
+    : "暂无 AI 分析结果。";
+
+  const styleProfile = [
+    `当前风格：${safeStyle}`,
+    `参考风格：${safeReference}`,
+  ].join("\n");
+  const referenceExamplesText = referenceExamples.length
+    ? referenceExamples.map((item, index) => `案例 ${index + 1}：\n${item.text}`).join("\n\n---\n\n")
+    : "暂无参考案例。";
+
+  const pipelinePrompt = renderTemplate(assets.prompts.rewritePipeline, {
+    original_text: String(transcriptText || "").slice(0, 12000),
+    analysis_json: analysisText.slice(0, 6000),
+    style_profile: styleProfile,
+    reference_examples: referenceExamplesText,
+    rewrite_direction: safeDirection,
+    tone_level: safeParams.toneLevel || 8,
+    conflict_level: safeParams.conflictLevel || 7,
+    emotion_level: safeParams.emotionLevel || 7,
+    sales_level: safeParams.salesLevel || 6,
+    humanize_level: humanizeLevel,
+    version_specs: JSON.stringify(versionSpecs, null, 2),
+    skill_rewrite_douyin_education: assets.skills.rewriteEducation,
+    skill_boss_style: assets.skills.bossStyle,
+  });
+
+  const draftContent = await chatCompletion(provider, [
+    {
+      role: "system",
+      content: [
+        "你是本地招生文案改写实验室的 rewrite pipeline 执行器。",
+        "必须遵守注入的 Skill 和 Prompt 模板。",
+        "只输出 JSON，不要 Markdown，不要解释。",
+      ].join("\n"),
+    },
+    {
+      role: "user",
+      content: pipelinePrompt,
+    },
+  ], signal);
+
+  const draft = parseJsonFromModelText(draftContent);
+  let rewrite = normalizeRewrite(draft.versions ? { ...draft.versions, structure: draft.structure } : draft, {
+    provider: provider.id,
+    model: provider.model,
+    direction: safeDirection,
+    style: safeStyle,
+    referenceStyle: safeReference,
+    params: { ...safeParams, humanizeLevel },
+    humanizeLevel,
+    referenceExamples,
+    versionSpecs,
+    structure: draft.structure || {},
+  });
+
+  if (humanizeLevel !== "关闭") {
+    const humanizePrompt = renderTemplate(assets.prompts.humanizeZh, {
+      skill_humanizer_zh: assets.skills.humanizerZh,
+      humanize_level: humanizeLevel,
+      rewrite_direction: safeDirection,
+      style_profile: styleProfile,
+      tone_level: safeParams.toneLevel || 8,
+      conflict_level: safeParams.conflictLevel || 7,
+      emotion_level: safeParams.emotionLevel || 7,
+      sales_level: safeParams.salesLevel || 6,
+      version_specs: JSON.stringify(versionSpecs, null, 2),
+      draft_json: JSON.stringify({
+        versions: Object.fromEntries(rewrite.versions.map((item) => [item.key, item.content])),
+      }, null, 2),
+    });
+    const humanizedContent = await chatCompletion(provider, [
+      {
+        role: "system",
+        content: "你是中文去 AI 味二次处理器。只输出 JSON，不要 Markdown，不要解释。",
+      },
+      {
+        role: "user",
+        content: humanizePrompt,
+      },
+    ], signal);
+    const humanized = parseJsonFromModelText(humanizedContent);
+    rewrite = normalizeRewrite(humanized.versions || humanized, {
+      provider: provider.id,
+      model: provider.model,
+      direction: safeDirection,
+      style: safeStyle,
+      referenceStyle: safeReference,
+      params: { ...safeParams, humanizeLevel },
+      humanizeLevel,
+      referenceExamples,
+      versionSpecs,
+      structure: rewrite.structure,
+      humanizerNotes: Array.isArray(humanized.humanizerNotes) ? humanized.humanizerNotes : [],
+    });
+  }
+
+  const emptyCount = rewrite.versions.filter((version) => !version.content).length;
+  if (emptyCount === rewrite.versions.length) {
+    throw new Error("AI 改写没有返回可用内容");
+  }
+  return rewrite;
+}
+
+function saveAnalysis(videoInfo, analysis) {
+  const title = videoInfo.title || videoInfo.videoId || `douyin_${Date.now()}`;
+  const filePath = makeUniquePath(`${title}_AI分析`, ".txt");
+  const body = [
+    `爆款钩子：${analysis.hook}`,
+    `情绪点：${analysis.emotionPoints.join("；")}`,
+    `痛点：${analysis.painPoints.join("；")}`,
+    `行动号召：${analysis.callToAction}`,
+    `自动分类：${analysis.category || "未分类"}`,
+    `标签：${analysis.tags.join("、")}`,
+    `分析模型：${analysis.source || "dashscope-qwen"}`,
+    "",
+    `摘要：${analysis.summary}`,
+  ].join("\n");
+  fs.writeFileSync(filePath, `${body}\n`, "utf8");
+  return filePath;
+}
+
+function createTranscriptJob(shareLink, apiKey) {
+  const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const job = {
+    id,
+    status: "running",
+    percent: 0,
+    message: "准备提取文案",
+    text: "",
+    transcriptPath: "",
+    files: listDownloads(),
+    startedAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+  transcriptJobs.set(id, job);
+
+  const updateJob = (changes) => {
+    Object.assign(job, changes, { updatedAt: new Date().toISOString() });
+  };
+
+  (async () => {
+    updateJob({ percent: 5, message: "正在解析视频" });
+    const linkResult = await runMcpTool("get_douyin_download_link", shareLink);
+    if (linkResult.isError) {
+      throw new Error(linkResult.text || "解析视频失败");
+    }
+
+    const videoInfo = parseVideoInfoFromToolText(linkResult.text);
+    if (!videoInfo.downloadUrl) {
+      throw new Error("没有解析到可识别的视频地址");
+    }
+
+    const transcriptText = await extractTranscriptForVideoInfo(videoInfo, apiKey, updateJob);
+    const transcriptPath = saveTranscript(videoInfo, transcriptText);
+    updateJob({ percent: 96, message: "正在进行 AI 分析" });
+    const analysis = await analyzeTranscriptWithDashScope(apiKey, transcriptText, videoInfo);
+    const analysisPath = saveAnalysis(videoInfo, analysis);
+    updateJob({
+      status: "done",
+      percent: 100,
+      message: "文案和 AI 分析完成",
+      text: transcriptText,
+      transcriptPath,
+      analysisPath,
+      files: listDownloads(),
+    });
+  })()
+    .catch((error) => {
+      updateJob({
+        status: "error",
+        message: error instanceof Error ? error.message : String(error),
+        text: error instanceof Error ? error.message : String(error),
+        files: listDownloads(),
+      });
+    })
+    .finally(() => {
+      setTimeout(() => transcriptJobs.delete(id), 30 * 60 * 1000);
+      scheduleShutdownIfIdle();
+    });
+
+  return job;
+}
+
+function getBatchSettings() {
+  return readSettings().batch;
+}
+
+function saveBatchSettings(changes) {
+  const settings = readSettings();
+  settings.batch = {
+    ...settings.batch,
+    ...changes,
+  };
+  writeSettings(settings);
+  return readSettings().batch;
+}
+
+function getActiveProviderApiKey() {
+  const settings = readSettings();
+  const provider = settings.providers[settings.activeProvider] || settings.providers.dashscope;
+  return String(provider?.apiKey || "").trim();
+}
+
+function queueState(extra = {}) {
+  return {
+    ...extra,
+    running: runningBatchTasks.size,
+    concurrency: getBatchSettings().concurrency,
+    dbPath: taskStore.dbPath,
+    summary: taskStore.summary(),
+  };
+}
+
+async function parseVideoInfoForTask(task, signal) {
+  const linkResult = await runMcpTool("get_douyin_download_link", task.url, (progress) => {
+    taskStore.updateTask(task.id, {
+      progress: Math.max(3, Math.min(9, Math.round(Number(progress.percent || 0)))),
+      message: progress.message || "正在解析视频",
+    });
+  }, { signal });
+
+  if (linkResult.isError) {
+    throw new Error(linkResult.text || "解析视频失败");
+  }
+
+  const videoInfo = parseVideoInfoFromToolText(linkResult.text);
+  if (!videoInfo.downloadUrl) {
+    throw new Error("没有解析到可下载视频地址");
+  }
+  return videoInfo;
+}
+
+async function completeTaskWithTranscript(task, videoInfo, messagePrefix = "", signal) {
+  throwIfPaused(signal);
+  const apiKey = getActiveProviderApiKey();
+  const updates = {};
+  let transcriptText = "";
+  let txtPath = findExistingTranscript(videoInfo);
+
+  if (txtPath) {
+    transcriptText = fs.readFileSync(txtPath, "utf8").trim();
+    updates.txt_path = txtPath;
+  }
+
+  if (task.transcript_enabled && !txtPath) {
+    if (!apiKey) {
+      updates.message = `${messagePrefix}视频已完成；未配置 DashScope API Key，已跳过文案和 AI 分析`;
+      return updates;
+    }
+
+    taskStore.updateTask(task.id, {
+      status: TASK_STATUS.TRANSCRIBING,
+      progress: 72,
+      message: "准备提取文案",
+    });
+    const localVideoPath = task.video_path && fs.existsSync(task.video_path)
+      ? task.video_path
+      : findExistingVideo(videoInfo);
+    transcriptText = await extractTranscriptForVideoInfo(videoInfo, apiKey, (progress) => {
+      const raw = Number(progress.percent || 0);
+      taskStore.updateTask(task.id, {
+        status: TASK_STATUS.TRANSCRIBING,
+        progress: Math.max(72, Math.min(96, Math.round(72 + raw * 0.24))),
+        message: progress.message || "正在提取文案",
+      });
+    }, signal, { localVideoPath });
+    txtPath = saveTranscript(videoInfo, transcriptText);
+    updates.txt_path = txtPath;
+  }
+
+  if (task.analysis_enabled && transcriptText) {
+    if (!apiKey) {
+      updates.message = `${messagePrefix}视频和文案已完成；未配置 DashScope API Key，已跳过 AI 分析`;
+      return updates;
+    }
+    taskStore.updateTask(task.id, {
+      status: TASK_STATUS.TRANSCRIBING,
+      progress: 97,
+      message: "正在进行 AI 分析",
+    });
+    const analysis = await analyzeTranscriptWithDashScope(apiKey, transcriptText, videoInfo, signal);
+    const analysisPath = saveAnalysis(videoInfo, analysis);
+    updates.analysis_path = analysisPath;
+    updates.ai_json = JSON.stringify(analysis);
+  }
+
+  updates.message = `${messagePrefix}${txtPath ? (updates.analysis_path ? "视频、文案和 AI 分析已完成" : "视频和文案已完成") : "视频已完成"}`;
+  return updates;
+}
+
+async function processBatchTask(task, signal) {
+  try {
+    throwIfPaused(signal);
+    if (task.kind !== "video") {
+      throw new Error("当前版本先支持作品链接批量下载；账号、合集、评论和统计采集已预留任务类型，需接入 TikTokDownloader 后启用");
+    }
+
+    taskStore.updateTask(task.id, {
+      status: TASK_STATUS.DOWNLOADING,
+      progress: 3,
+      message: "正在解析视频",
+      error: "",
+    });
+
+    const videoInfo = await parseVideoInfoForTask(task, signal);
+    taskStore.updateTask(task.id, {
+      title: videoInfo.title,
+      video_id: videoInfo.videoId,
+      progress: 10,
+      message: "解析完成",
+    });
+
+    const taskAction = task.task_action || (task.only_transcript ? "transcript" : "download");
+    if (taskAction === "parse") {
+      taskStore.updateTask(task.id, {
+        status: TASK_STATUS.DONE,
+        progress: 100,
+        message: `解析完成：${videoInfo.title || videoInfo.videoId}`,
+        stats_json: JSON.stringify({ downloadUrl: videoInfo.downloadUrl }),
+        completed_at: new Date().toISOString(),
+      });
+      return;
+    }
+
+    if (taskAction === "link") {
+      taskStore.updateTask(task.id, {
+        status: TASK_STATUS.DONE,
+        progress: 100,
+        message: `下载链接：${videoInfo.downloadUrl}`,
+        stats_json: JSON.stringify({ downloadUrl: videoInfo.downloadUrl }),
+        completed_at: new Date().toISOString(),
+      });
+      return;
+    }
+
+    if (taskAction === "transcript" || task.only_transcript) {
+      const transcriptUpdates = await completeTaskWithTranscript(
+        { ...taskStore.getTask(task.id), transcript_enabled: true, analysis_enabled: false },
+        videoInfo,
+        "仅提取文案：",
+        signal
+      );
+      taskStore.updateTask(task.id, {
+        ...transcriptUpdates,
+        video_path: "",
+        file_size: 0,
+        file_hash: "",
+        status: TASK_STATUS.DONE,
+        progress: 100,
+        completed_at: new Date().toISOString(),
+      });
+      return;
+    }
+
+    taskStore.updateTask(task.id, {
+      progress: 10,
+      message: "检查是否已下载",
+    });
+
+    const completedTask = taskStore.findCompletedByVideoId(videoInfo.videoId);
+    const completedPath = completedTask?.video_path && fs.existsSync(completedTask.video_path)
+      ? completedTask.video_path
+      : "";
+    const existingVideoPath = completedPath || findExistingVideo(videoInfo);
+
+    let videoPath = existingVideoPath;
+    let fileSize = 0;
+    let fileHash = "";
+    let messagePrefix = "";
+
+    if (videoPath && getBatchSettings().skipDownloaded) {
+      const stat = fs.statSync(videoPath);
+      fileSize = stat.size;
+      fileHash = await hashFile(videoPath);
+      messagePrefix = "已跳过下载：";
+      taskStore.updateTask(task.id, {
+        video_path: videoPath,
+        file_size: fileSize,
+        file_hash: fileHash,
+        progress: 70,
+        message: "检测到已下载视频，跳过下载",
+      });
+    } else {
+      const downloaded = await downloadVideoFile(videoInfo, (progress) => {
+        const raw = Number(progress.percent || 0);
+        taskStore.updateTask(task.id, {
+          status: TASK_STATUS.DOWNLOADING,
+          progress: Math.max(10, Math.min(70, Math.round(10 + raw * 0.6))),
+          message: progress.message || "正在下载视频",
+        });
+      }, signal);
+      videoPath = downloaded.filePath;
+      fileSize = downloaded.fileSize;
+      fileHash = downloaded.fileHash;
+      taskStore.updateTask(task.id, {
+        video_path: videoPath,
+        file_size: fileSize,
+        file_hash: fileHash,
+        progress: 70,
+        message: "下载完成，准备文案",
+      });
+    }
+
+    const transcriptUpdates = await completeTaskWithTranscript(taskStore.getTask(task.id), videoInfo, messagePrefix, signal);
+    taskStore.updateTask(task.id, {
+      ...transcriptUpdates,
+      status: TASK_STATUS.DONE,
+      progress: 100,
+      completed_at: new Date().toISOString(),
+    });
+  } catch (error) {
+    if (isPauseError(error)) {
+      taskStore.updateTask(task.id, {
+        status: TASK_STATUS.PAUSED,
+        progress: Math.max(taskStore.getTask(task.id)?.progress || task.progress || 0, 1),
+        message: "已暂停，可删除或稍后重新导入",
+        error: "",
+      });
+      return;
+    }
+    const currentTask = taskStore.getTask(task.id);
+    taskStore.updateTask(task.id, {
+      status: TASK_STATUS.FAILED,
+      progress: Math.max(currentTask?.progress || task.progress || 0, 1),
+      message: "任务失败",
+      error: errorMessage(error),
+      completed_at: new Date().toISOString(),
+    });
+  }
+}
+
+function startTaskQueue() {
+  cancelShutdown();
+  const concurrency = getBatchSettings().concurrency;
+  while (runningBatchTasks.size < concurrency) {
+    const task = taskStore.claimNextTask();
+    if (!task) break;
+
+    const controller = new AbortController();
+    activeBatchControllers.set(task.id, controller);
+    const promise = processBatchTask(task, controller.signal);
+    runningBatchTasks.add(promise);
+    promise.finally(() => {
+      runningBatchTasks.delete(promise);
+      activeBatchControllers.delete(task.id);
+      startTaskQueue();
+      scheduleShutdownIfIdle();
+    });
+  }
+}
+
+function listDownloads() {
+  return fs
+    .readdirSync(downloadsDir, { withFileTypes: true })
+    .filter((entry) => entry.isFile())
+    .map((entry) => {
+      const filePath = path.join(downloadsDir, entry.name);
+      const stat = fs.statSync(filePath);
+      return {
+        name: entry.name,
+        size: stat.size,
+        updatedAt: stat.mtime.toISOString(),
+      };
+    })
+    .sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
+}
+
+function safeJsonParse(value) {
+  try {
+    return JSON.parse(value || "{}");
+  } catch {
+    return {};
+  }
+}
+
+function taskExportRows() {
+  return taskStore.allTasks().map((task) => {
+    const ai = safeJsonParse(task.ai_json);
+    const rewrite = safeJsonParse(task.rewrite_json);
+    const stats = safeJsonParse(task.stats_json);
+    const rewriteVersions = Array.isArray(rewrite.versions) ? rewrite.versions : [];
+    return {
+      id: task.id,
+      type: task.kind,
+      action: task.task_action,
+      url: task.url,
+      status: task.status,
+      progress: task.progress,
+      title: task.title,
+      video_id: task.video_id,
+      video_path: task.video_path,
+      txt_path: task.txt_path,
+      analysis_path: task.analysis_path,
+      rewrite_path: task.rewrite_path,
+      comment_path: task.comment_path,
+      like_count: stats.like_count || stats.digg_count || "",
+      favorite_count: stats.favorite_count || stats.collect_count || "",
+      comment_count: stats.comment_count || "",
+      ai_hook: ai.hook || "",
+      ai_emotion_points: Array.isArray(ai.emotionPoints) ? ai.emotionPoints.join("；") : "",
+      ai_pain_points: Array.isArray(ai.painPoints) ? ai.painPoints.join("；") : "",
+      ai_call_to_action: ai.callToAction || "",
+      ai_tags: Array.isArray(ai.tags) ? ai.tags.join("、") : "",
+      rewrite_model: task.rewrite_model || rewrite.model || "",
+      rewrite_direction: task.rewrite_direction || rewrite.direction || "",
+      rewrite_style: task.rewrite_style || rewrite.style || "",
+      humanize_level: task.humanize_level || rewrite.humanizeLevel || "",
+      rewrite_params_json: task.rewrite_params_json,
+      reference_examples_json: task.reference_examples_json,
+      rewrite_versions: rewriteVersions.map((item) => `${item.name || item.key}：${item.content || ""}`).join("\n\n"),
+      message: task.message,
+      error: task.error,
+      file_hash: task.file_hash,
+      file_size: task.file_size,
+      created_at: task.created_at,
+      updated_at: task.updated_at,
+      completed_at: task.completed_at,
+    };
+  });
+}
+
+function transcriptRows() {
+  return taskStore
+    .allTasks()
+    .filter((task) => task.txt_path && fs.existsSync(task.txt_path))
+    .map((task) => ({
+      id: task.id,
+      title: task.title || task.video_id || `任务 ${task.id}`,
+      url: task.url,
+      txtPath: task.txt_path,
+      analysisPath: task.analysis_path,
+      rewritePath: task.rewrite_path,
+      text: fs.readFileSync(task.txt_path, "utf8"),
+      ai: safeJsonParse(task.ai_json),
+      rewrite: safeJsonParse(task.rewrite_json),
+      rewriteModel: task.rewrite_model,
+      rewriteStyle: task.rewrite_style,
+      rewriteDirection: task.rewrite_direction,
+      rewriteParams: safeJsonParse(task.rewrite_params_json),
+      referenceExamples: safeJsonParse(task.reference_examples_json),
+      humanizeLevel: task.humanize_level,
+      updatedAt: task.updated_at,
+    }));
+}
+
+function saveAnalysisForTask(task, transcriptText, analysis) {
+  const videoInfo = {
+    title: task.title,
+    videoId: task.video_id || `task_${task.id}`,
+  };
+  const analysisPath = saveAnalysis(videoInfo, analysis);
+  return taskStore.updateTask(task.id, {
+    analysis_path: analysisPath,
+    ai_json: JSON.stringify(analysis),
+    message: task.video_path ? "视频、文案和 AI 分析已完成" : "文案和 AI 分析已完成",
+  });
+}
+
+function escapeCsvCell(value) {
+  const text = String(value ?? "");
+  if (!/[",\r\n]/.test(text)) return text;
+  return `"${text.replace(/"/g, '""')}"`;
+}
+
+function tasksToCsv(rows) {
+  const headers = Object.keys(rows[0] || {
+    id: "",
+    type: "",
+    url: "",
+    status: "",
+    progress: "",
+  });
+  const lines = [
+    headers.join(","),
+    ...rows.map((row) => headers.map((header) => escapeCsvCell(row[header])).join(",")),
+  ];
+  return `\uFEFF${lines.join("\r\n")}`;
+}
+
+function tasksToXlsx(rows) {
+  const workbook = XLSX.utils.book_new();
+  const worksheet = XLSX.utils.json_to_sheet(rows);
+  XLSX.utils.book_append_sheet(workbook, worksheet, "tasks");
+  return XLSX.write(workbook, { bookType: "xlsx", type: "buffer" });
+}
+
+function serveStatic(req, res) {
+  const url = new URL(req.url, "http://127.0.0.1");
+  const pathname = decodeURIComponent(url.pathname === "/" ? "/index.html" : url.pathname);
+  const requested = path.normalize(path.join(uiDir, pathname));
+
+  if (!requested.startsWith(uiDir)) {
+    res.writeHead(403);
+    res.end("Forbidden");
+    return;
+  }
+
+  fs.readFile(requested, (error, data) => {
+    if (error) {
+      res.writeHead(404);
+      res.end("Not found");
+      return;
+    }
+    const type = mimeTypes.get(path.extname(requested)) || "application/octet-stream";
+    res.writeHead(200, { "content-type": type });
+    res.end(data);
+  });
+}
+
+const server = http.createServer(async (req, res) => {
+  const url = new URL(req.url, "http://127.0.0.1");
+
+  try {
+    if (req.method === "GET" && url.pathname === "/api/status") {
+      sendJson(res, 200, { ok: true, downloadsDir, tasks: queueState() });
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/downloads-dir") {
+      const body = JSON.parse(await readBody(req) || "{}");
+      const selected = String(body.path || "").trim();
+      if (!selected) {
+        sendJson(res, 400, { ok: false, message: "请先输入下载位置" });
+        return;
+      }
+      const nextDir = saveDownloadsDir(selected);
+      sendJson(res, 200, { ok: true, downloadsDir: nextDir, files: listDownloads() });
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/downloads-dir/choose") {
+      const selected = await chooseDownloadDir();
+      if (!selected) {
+        sendJson(res, 200, { ok: false, message: "已取消选择" });
+        return;
+      }
+      const nextDir = saveDownloadsDir(selected);
+      sendJson(res, 200, { ok: true, downloadsDir: nextDir, files: listDownloads() });
+      return;
+    }
+
+    if (req.method === "GET" && url.pathname === "/api/files") {
+      sendJson(res, 200, { files: listDownloads() });
+      return;
+    }
+
+    if (req.method === "GET" && url.pathname === "/api/tasks") {
+      const limit = clampNumber(url.searchParams.get("limit"), 1, 1000, 200);
+      const status = url.searchParams.get("status") || "";
+      sendJson(res, 200, {
+        ok: true,
+        tasks: taskStore.listTasks({ limit, status }),
+        ...queueState(),
+      });
+      return;
+    }
+
+    if (req.method === "GET" && url.pathname === "/api/transcripts") {
+      sendJson(res, 200, {
+        ok: true,
+        transcripts: transcriptRows(),
+      });
+      return;
+    }
+
+    if (req.method === "GET" && url.pathname === "/api/reference-examples") {
+      sendJson(res, 200, {
+        ok: true,
+        examples: readReferenceExamples(),
+      });
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/reference-examples") {
+      const body = JSON.parse(await readBody(req) || "{}");
+      const examples = writeReferenceExamples(body.examples || []);
+      sendJson(res, 200, {
+        ok: true,
+        examples,
+      });
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/tasks/analyze") {
+      const body = JSON.parse(await readBody(req) || "{}");
+      const id = Number(body.id || 0);
+      const task = taskStore.getTask(id);
+      if (!task || !task.txt_path || !fs.existsSync(task.txt_path)) {
+        sendJson(res, 404, { ok: false, message: "没有找到可分析的文案" });
+        return;
+      }
+      const apiKey = getActiveProviderApiKey();
+      if (!apiKey) {
+        sendJson(res, 400, { ok: false, message: "请先保存 DashScope API Key" });
+        return;
+      }
+      const transcriptText = String(body.text || fs.readFileSync(task.txt_path, "utf8")).trim();
+      if (!transcriptText) {
+        sendJson(res, 400, { ok: false, message: "文案为空，无法分析" });
+        return;
+      }
+      fs.writeFileSync(task.txt_path, `${transcriptText}\n`, "utf8");
+      const analysis = await analyzeTranscriptWithDashScope(apiKey, transcriptText, {
+        title: task.title,
+        videoId: task.video_id,
+      });
+      const updatedTask = saveAnalysisForTask(task, transcriptText, analysis);
+      sendJson(res, 200, {
+        ok: true,
+        analysis,
+        task: updatedTask,
+        transcripts: transcriptRows(),
+      });
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/tasks/analysis") {
+      const body = JSON.parse(await readBody(req) || "{}");
+      const id = Number(body.id || 0);
+      const task = taskStore.getTask(id);
+      if (!task) {
+        sendJson(res, 404, { ok: false, message: "任务不存在" });
+        return;
+      }
+      const analysis = normalizeAnalysis({
+        hook: body.hook,
+        emotionPoints: Array.isArray(body.emotionPoints) ? body.emotionPoints : String(body.emotionPoints || "").split(/[；;\n]/),
+        painPoints: Array.isArray(body.painPoints) ? body.painPoints : String(body.painPoints || "").split(/[；;\n]/),
+        callToAction: body.callToAction,
+        tags: Array.isArray(body.tags) ? body.tags : String(body.tags || "").split(/[、,，\n]/),
+        category: body.category,
+        summary: body.summary,
+        source: "edited",
+      }, body.summary || "");
+      const updatedTask = saveAnalysisForTask(task, "", analysis);
+      sendJson(res, 200, {
+        ok: true,
+        analysis,
+        task: updatedTask,
+        transcripts: transcriptRows(),
+      });
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/tasks/rewrite") {
+      const body = JSON.parse(await readBody(req) || "{}");
+      const id = Number(body.id || 0);
+      const task = taskStore.getTask(id);
+      if (!task || !task.txt_path || !fs.existsSync(task.txt_path)) {
+        sendJson(res, 404, { ok: false, message: "没有找到可改写的文案" });
+        return;
+      }
+      const transcriptText = String(body.text || fs.readFileSync(task.txt_path, "utf8")).trim();
+      if (!transcriptText) {
+        sendJson(res, 400, { ok: false, message: "文案为空，无法改写" });
+        return;
+      }
+      const rewrite = await rewriteTranscriptWithProvider({
+        providerId: body.provider,
+        transcriptText,
+        analysis: safeJsonParse(task.ai_json),
+        direction: String(body.direction || ""),
+        style: String(body.style || ""),
+        referenceStyle: String(body.referenceStyle || ""),
+        params: body.params && typeof body.params === "object" ? body.params : {},
+        humanizeLevel: String(body.humanizeLevel || ""),
+        referenceExamples: body.referenceExamples || [],
+        versionSpecs: body.versionSpecs || body.versions || [],
+        task,
+      });
+      const updatedTask = saveRewriteForTask(task, rewrite, "md");
+      sendJson(res, 200, {
+        ok: true,
+        rewrite,
+        task: updatedTask,
+        transcripts: transcriptRows(),
+      });
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/tasks/rewrite/save") {
+      const body = JSON.parse(await readBody(req) || "{}");
+      const id = Number(body.id || 0);
+      const task = taskStore.getTask(id);
+      if (!task) {
+        sendJson(res, 404, { ok: false, message: "任务不存在" });
+        return;
+      }
+      const rewrite = rewriteFromBody(body, task);
+      const updatedTask = saveRewriteForTask(task, rewrite, body.format === "md" ? "md" : "txt");
+      sendJson(res, 200, {
+        ok: true,
+        rewrite,
+        task: updatedTask,
+        filePath: updatedTask.rewrite_path,
+        transcripts: transcriptRows(),
+      });
+      return;
+    }
+
+    if (req.method === "GET" && url.pathname === "/api/tasks/export") {
+      const format = (url.searchParams.get("format") || "csv").toLowerCase();
+      const rows = taskExportRows();
+      const stamp = new Date().toISOString().slice(0, 10);
+      if (format === "xlsx") {
+        const buffer = tasksToXlsx(rows);
+        sendBuffer(
+          res,
+          200,
+          buffer,
+          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+          `douyin-tasks-${stamp}.xlsx`
+        );
+        return;
+      }
+      sendText(res, 200, tasksToCsv(rows), "text/csv", `douyin-tasks-${stamp}.csv`);
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/tasks/import") {
+      const body = JSON.parse(await readBody(req) || "{}");
+      const limit = clampNumber(body.limit, 1, 1000, getBatchSettings().limit || 10);
+      const concurrency = clampNumber(body.concurrency, 1, 5, getBatchSettings().concurrency);
+      const taskAction = ["parse", "link", "download", "transcript"].includes(String(body.action || "download"))
+        ? String(body.action || "download")
+        : "download";
+      const batchSettings = saveBatchSettings({
+        concurrency,
+        limit,
+        skipDownloaded: body.skipDownloaded !== false,
+      });
+      const extracted = extractDouyinUrls(String(body.text || ""), {
+        limit,
+        kind: String(body.kind || "video"),
+        taskAction,
+        transcriptEnabled: taskAction === "transcript",
+        analysisEnabled: false,
+        onlyTranscript: taskAction === "transcript",
+      });
+
+      if (extracted.items.length === 0) {
+        sendJson(res, 400, { ok: false, message: "没有识别到抖音链接" });
+        return;
+      }
+
+      const imported = taskStore.importTasks(extracted.items);
+      startTaskQueue();
+      sendJson(res, 200, {
+        ok: true,
+        imported,
+        overflow: extracted.overflow,
+        tasks: taskStore.listTasks({ limit: 200 }),
+        ...queueState(),
+      });
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/tasks/pause") {
+      const body = JSON.parse(await readBody(req) || "{}");
+      const id = Number(body.id || 0);
+      const controller = activeBatchControllers.get(id);
+      const task = taskStore.getTask(id);
+      if (!task) {
+        sendJson(res, 404, { ok: false, message: "任务不存在" });
+        return;
+      }
+      if (!controller) {
+        const paused = taskStore.updateTask(id, {
+          status: TASK_STATUS.PAUSED,
+          message: "已暂停，可删除或稍后重新导入",
+          error: "",
+        });
+        sendJson(res, 200, { ok: true, task: paused, tasks: taskStore.listTasks({ limit: 200 }), ...queueState() });
+        return;
+      }
+      controller.abort();
+      taskStore.updateTask(id, {
+        status: TASK_STATUS.PAUSED,
+        message: "已暂停，可删除或稍后重新导入",
+        error: "",
+      });
+      sendJson(res, 200, { ok: true, message: "已暂停任务", tasks: taskStore.listTasks({ limit: 200 }), ...queueState() });
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/tasks/delete") {
+      const body = JSON.parse(await readBody(req) || "{}");
+      const ids = Array.isArray(body.ids) ? body.ids : [body.id];
+      const deleted = taskStore.deleteTasks(ids);
+      sendJson(res, 200, {
+        ok: true,
+        deleted,
+        tasks: taskStore.listTasks({ limit: 200 }),
+        ...queueState(),
+      });
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/tasks/start") {
+      const body = JSON.parse(await readBody(req) || "{}");
+      if (body.concurrency) {
+        saveBatchSettings({ concurrency: clampNumber(body.concurrency, 1, 5, getBatchSettings().concurrency) });
+      }
+      startTaskQueue();
+      sendJson(res, 200, {
+        ok: true,
+        tasks: taskStore.listTasks({ limit: 200 }),
+        ...queueState(),
+      });
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/tasks/clear-finished") {
+      const deleted = taskStore.clearDoneAndFailed();
+      sendJson(res, 200, {
+        ok: true,
+        deleted,
+        tasks: taskStore.listTasks({ limit: 200 }),
+        ...queueState(),
+      });
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/tasks/clear-all") {
+      const deleted = taskStore.clearTaskList();
+      sendJson(res, 200, {
+        ok: true,
+        deleted,
+        tasks: taskStore.listTasks({ limit: 200 }),
+        ...queueState(),
+      });
+      return;
+    }
+
+    if (req.method === "GET" && url.pathname === "/api/settings") {
+      const settings = readSettings();
+      const provider = settings.providers[settings.activeProvider] || settings.providers.dashscope;
+      sendJson(res, 200, {
+        ok: true,
+        activeProvider: settings.activeProvider,
+        providers: Object.fromEntries(
+          Object.entries(settings.providers).map(([id, item]) => [
+            id,
+            {
+              label: item.label,
+              apiKeyConfigured: Boolean(item.apiKey),
+              apiKeyMask: maskApiKey(item.apiKey || ""),
+              applyUrl: item.applyUrl,
+              docsUrl: item.docsUrl,
+            },
+          ])
+        ),
+        apiKeyConfigured: Boolean(provider.apiKey),
+        apiKeyMask: maskApiKey(provider.apiKey || ""),
+        rewrite: publicRewriteSettings(settings),
+        batch: settings.batch,
+        downloadsDir,
+      });
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/settings") {
+      const body = JSON.parse(await readBody(req) || "{}");
+      const providerId = String(body.provider || "dashscope").trim();
+      const apiKey = String(body.apiKey || "").trim();
+      if (!apiKey) {
+        sendJson(res, 400, { ok: false, message: "请先输入 API Key" });
+        return;
+      }
+      const settings = readSettings();
+      if (!settings.providers[providerId]) {
+        sendJson(res, 400, { ok: false, message: "未知 API 平台" });
+        return;
+      }
+      settings.activeProvider = providerId;
+      settings.providers[providerId].apiKey = apiKey;
+      writeSettings(settings);
+      sendJson(res, 200, { ok: true, apiKeyMask: maskApiKey(apiKey) });
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/rewrite-settings") {
+      const body = JSON.parse(await readBody(req) || "{}");
+      const settings = readSettings();
+      const rewriteProviders = settings.rewriteProviders;
+      const selectedProvider = rewriteProviders[String(body.provider || "")]
+        ? String(body.provider)
+        : "";
+
+      if (selectedProvider) {
+        const provider = rewriteProviders[selectedProvider];
+        const apiKey = String(body.apiKey || "").trim();
+        if (apiKey) provider.apiKey = apiKey;
+        provider.autoModel = body.autoModel !== false && !provider.custom;
+        if (body.model !== undefined && provider.autoModel === false) {
+          provider.model = String(body.model || provider.model || "").trim();
+        }
+        if (body.baseUrl !== undefined && provider.custom) {
+          provider.baseUrl = String(body.baseUrl || "").trim();
+        }
+        settings.rewrite.defaultProvider = selectedProvider;
+        if (selectedProvider === "dashscope" && apiKey) {
+          settings.providers.dashscope.apiKey = apiKey;
+        }
+      }
+
+      const dashscopeApiKey = String(body.dashscopeApiKey || "").trim();
+      if (dashscopeApiKey) {
+        settings.providers.dashscope.apiKey = dashscopeApiKey;
+        rewriteProviders.dashscope.apiKey = dashscopeApiKey;
+      }
+
+      const deepseekApiKey = String(body.deepseekApiKey || "").trim();
+      if (deepseekApiKey) rewriteProviders.deepseek.apiKey = deepseekApiKey;
+      if (body.deepseekModel !== undefined) {
+        rewriteProviders.deepseek.model = String(body.deepseekModel || "deepseek-chat").trim() || "deepseek-chat";
+      }
+
+      if (body.customBaseUrl !== undefined) {
+        rewriteProviders.custom.baseUrl = String(body.customBaseUrl || "").trim();
+      }
+      if (body.customModel !== undefined) {
+        rewriteProviders.custom.model = String(body.customModel || "").trim();
+      }
+      const customApiKey = String(body.customApiKey || "").trim();
+      if (customApiKey) rewriteProviders.custom.apiKey = customApiKey;
+
+      const defaultProvider = String(body.defaultProvider || settings.rewrite.defaultProvider || "dashscope");
+      if (rewriteProviders[defaultProvider]) {
+        settings.rewrite.defaultProvider = defaultProvider;
+      }
+      settings.rewrite.referenceStyle = String(body.referenceStyle || settings.rewrite.referenceStyle || DEFAULT_REWRITE_REFERENCE).trim() || DEFAULT_REWRITE_REFERENCE;
+
+      if (selectedProvider) {
+        await refreshProviderModel(settings, selectedProvider);
+      }
+
+      writeSettings(settings);
+      sendJson(res, 200, {
+        ok: true,
+        rewrite: publicRewriteSettings(readSettings()),
+      });
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/open-folder") {
+      spawn("explorer.exe", [downloadsDir], { detached: true, stdio: "ignore" }).unref();
+      sendJson(res, 200, { ok: true });
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/open-transcript") {
+      const body = JSON.parse(await readBody(req) || "{}");
+      const filePath = String(body.filePath || "").trim();
+      if (!filePath || !isInsideDownloads(filePath) || !fs.existsSync(filePath)) {
+        sendJson(res, 400, { ok: false, message: "没有找到可打开的文案文件" });
+        return;
+      }
+      spawn("notepad.exe", [filePath], { detached: true, stdio: "ignore" }).unref();
+      sendJson(res, 200, { ok: true });
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/open-file") {
+      const body = JSON.parse(await readBody(req) || "{}");
+      const fileName = String(body.fileName || "").trim();
+      const filePath = path.join(downloadsDir, fileName);
+      if (!fileName || !isInsideDownloads(filePath) || !fs.existsSync(filePath)) {
+        sendJson(res, 400, { ok: false, message: "没有找到可打开的文件" });
+        return;
+      }
+      spawn("explorer.exe", ["/select,", filePath], { detached: true, stdio: "ignore" }).unref();
+      sendJson(res, 200, { ok: true });
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/open-path") {
+      const body = JSON.parse(await readBody(req) || "{}");
+      const filePath = String(body.filePath || "").trim();
+      if (!filePath || !isInsideManagedFilePath(filePath) || !fs.existsSync(filePath)) {
+        sendJson(res, 400, { ok: false, message: "没有找到可打开的文件位置" });
+        return;
+      }
+      spawn("explorer.exe", ["/select,", filePath], { detached: true, stdio: "ignore" }).unref();
+      sendJson(res, 200, { ok: true });
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/delete-files") {
+      const body = JSON.parse(await readBody(req) || "{}");
+      const fileNames = Array.isArray(body.fileNames) ? body.fileNames : [body.fileName];
+      const deleted = [];
+
+      for (const name of fileNames) {
+        const fileName = String(name || "").trim();
+        if (!fileName) continue;
+        const filePath = path.join(downloadsDir, fileName);
+        if (!isInsideDownloads(filePath) || !fs.existsSync(filePath)) continue;
+        const stat = fs.statSync(filePath);
+        if (!stat.isFile()) continue;
+        fs.unlinkSync(filePath);
+        deleted.push(fileName);
+      }
+
+      sendJson(res, 200, { ok: true, deleted, files: listDownloads() });
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/page-open") {
+      const body = JSON.parse(await readBody(req) || "{}");
+      touchPageSession(String(body.sessionId || ""));
+      sendJson(res, 200, { ok: true });
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/heartbeat") {
+      const body = JSON.parse(await readBody(req) || "{}");
+      touchPageSession(String(body.sessionId || ""));
+      sendJson(res, 200, { ok: true });
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/page-close") {
+      const body = JSON.parse(await readBody(req) || "{}");
+      closePageSession(String(body.sessionId || ""));
+      sendJson(res, 200, { ok: true });
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/download/start") {
+      const body = JSON.parse(await readBody(req) || "{}");
+      const shareLink = String(body.shareLink || "").trim();
+      const validationMessage = validateShareLink(shareLink);
+      if (validationMessage) {
+        sendJson(res, 400, { ok: false, message: validationMessage });
+        return;
+      }
+
+      const job = createDownloadJob(shareLink);
+      sendJson(res, 200, { ok: true, job });
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/transcript/start") {
+      const body = JSON.parse(await readBody(req) || "{}");
+      const shareLink = String(body.shareLink || "").trim();
+      const settings = readSettings();
+      const providerId = String(body.provider || settings.activeProvider || "dashscope").trim();
+      const provider = settings.providers[providerId];
+      if (!provider) {
+        sendJson(res, 400, { ok: false, message: "未知 API 平台" });
+        return;
+      }
+      const apiKey = String(body.apiKey || provider.apiKey || "").trim();
+      const validationMessage = validateShareLink(shareLink);
+      if (validationMessage) {
+        sendJson(res, 400, { ok: false, message: validationMessage });
+        return;
+      }
+      if (!apiKey) {
+        sendJson(res, 400, { ok: false, message: "请先填写阿里云百炼 DashScope API Key" });
+        return;
+      }
+
+      if (String(body.apiKey || "").trim()) {
+        const newSettings = readSettings();
+        newSettings.activeProvider = providerId;
+        newSettings.providers[providerId].apiKey = apiKey;
+        writeSettings(newSettings);
+      }
+
+      const job = createTranscriptJob(shareLink, apiKey);
+      sendJson(res, 200, { ok: true, job });
+      return;
+    }
+
+    if (req.method === "GET" && url.pathname === "/api/transcript/status") {
+      const id = url.searchParams.get("id") || "";
+      const job = transcriptJobs.get(id);
+      if (!job) {
+        sendJson(res, 404, { ok: false, message: "没有找到文案任务，请重新点击提取" });
+        return;
+      }
+      sendJson(res, 200, { ok: true, job });
+      return;
+    }
+
+    if (req.method === "GET" && url.pathname === "/api/download/status") {
+      const id = url.searchParams.get("id") || "";
+      const job = downloadJobs.get(id);
+      if (!job) {
+        sendJson(res, 404, { ok: false, message: "没有找到下载任务，请重新点击下载" });
+        return;
+      }
+      sendJson(res, 200, { ok: true, job });
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/tool") {
+      const body = JSON.parse(await readBody(req) || "{}");
+      const shareLink = String(body.shareLink || "").trim();
+      const action = String(body.action || "").trim();
+
+      const firstUrl = getFirstUrl(shareLink);
+      if (!firstUrl) {
+        sendJson(res, 400, { ok: false, message: "请先粘贴抖音分享链接" });
+        return;
+      }
+      if (!isLikelyDouyinUrl(firstUrl)) {
+        sendJson(res, 400, { ok: false, message: "这个不像抖音分享链接，请重新复制抖音里的分享内容" });
+        return;
+      }
+
+      const tools = {
+        parse: "parse_douyin_video_info",
+        link: "get_douyin_download_link",
+        download: "download_douyin_video",
+      };
+      const toolName = tools[action];
+      if (!toolName) {
+        sendJson(res, 400, { ok: false, message: "未知操作" });
+        return;
+      }
+
+      const result = await runMcpTool(toolName, shareLink);
+      sendJson(res, result.isError ? 400 : 200, {
+        ok: !result.isError,
+        text: result.text,
+        files: listDownloads(),
+      });
+      return;
+    }
+
+    if (req.method === "GET") {
+      serveStatic(req, res);
+      return;
+    }
+
+    res.writeHead(405);
+    res.end("Method not allowed");
+  } catch (error) {
+    sendJson(res, 500, {
+      ok: false,
+      message: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
+function listen(port) {
+  return new Promise((resolve, reject) => {
+    const onError = (error) => {
+      server.off("listening", onListening);
+      reject(error);
+    };
+    const onListening = () => {
+      server.off("error", onError);
+      resolve(port);
+    };
+    server.once("error", onError);
+    server.once("listening", onListening);
+    server.listen(port, "127.0.0.1");
+  });
+}
+
+async function start() {
+  let port = 8787;
+  while (port < 8800) {
+    try {
+      await listen(port);
+      break;
+    } catch (error) {
+      if (error.code !== "EADDRINUSE") throw error;
+      port += 1;
+    }
+  }
+
+  const url = `http://127.0.0.1:${port}`;
+  fs.writeFileSync(pidPath, String(process.pid), "utf8");
+  fs.writeFileSync(urlPath, url, "utf8");
+  console.log(`Douyin page: ${url}`);
+  console.log(`Download folder: ${downloadsDir}`);
+  console.log("Keep this window open while using the page.");
+  startTaskQueue();
+
+  if (process.argv.includes("--open")) {
+    spawn("cmd", ["/c", "start", "", url], { detached: true, stdio: "ignore" }).unref();
+  }
+}
+
+function cleanupRuntimeFiles() {
+  for (const filePath of [pidPath, urlPath]) {
+    try {
+      if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+    } catch {
+      // Best effort cleanup only.
+    }
+  }
+}
+
+process.on("exit", cleanupRuntimeFiles);
+process.on("SIGINT", () => {
+  cleanupRuntimeFiles();
+  process.exit(0);
+});
+process.on("SIGTERM", () => {
+  cleanupRuntimeFiles();
+  process.exit(0);
+});
+
+start().catch((error) => {
+  console.error(error instanceof Error ? error.message : String(error));
+  process.exit(1);
+});

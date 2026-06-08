@@ -1,0 +1,376 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>抖音视频工具</title>
+    <link rel="stylesheet" href="/app.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <section class="topbar">
+        <div>
+          <h1>抖音视频工具</h1>
+          <p id="savePath">下载位置正在读取...</p>
+        </div>
+        <div class="download-settings">
+          <input id="downloadDirInput" type="text" placeholder="下载位置" />
+          <button class="ghost" id="chooseDownloadDir" type="button">选择文件夹</button>
+          <button class="ghost" id="saveDownloadDir" type="button">保存位置</button>
+          <button class="ghost" id="openFolder" type="button">打开下载文件夹</button>
+        </div>
+      </section>
+
+      <section class="workspace">
+        <label for="shareLink">抖音分享链接 / 批量导入链接</label>
+        <textarea id="shareLink" rows="8" placeholder="粘贴 1 条或多条抖音分享内容；有 1 条就处理 1 条，有多条会自动识别并加入队列"></textarea>
+
+        <div class="api-panel">
+          <div class="settings-grid">
+            <div class="settings-card">
+              <label for="apiProvider">语音识别平台</label>
+              <select id="apiProvider">
+                <option value="dashscope">阿里云百炼 DashScope</option>
+              </select>
+              <label for="apiKey">DashScope API Key</label>
+              <div class="api-row">
+                <input id="apiKey" type="password" placeholder="提取文案 / AI分析 / DashScope改写" autocomplete="off" />
+                <button class="ghost" id="saveApiKey" type="button">保存</button>
+              </div>
+              <p id="apiStatus">提取文案时需要填写，下载视频不需要。</p>
+              <p class="api-links">
+                <a href="https://help.aliyun.com/zh/model-studio/get-api-key/" target="_blank" rel="noopener">申请/查看 API Key</a>
+                <span>·</span>
+                <a href="https://www.alibabacloud.com/help/zh/model-studio/paraformer-recorded-speech-recognition-restful-api" target="_blank" rel="noopener">语音识别说明</a>
+              </p>
+            </div>
+            <div class="settings-card">
+              <label>AI改写模型设置</label>
+              <div class="rewrite-quick-grid">
+                <select id="rewriteSettingsProvider"></select>
+                <input id="rewriteUnifiedKey" type="password" placeholder="粘贴所选平台的 API Key" autocomplete="off" />
+                <input id="rewriteModelInput" type="text" list="rewriteModelOptions" placeholder="模型，已自动推荐" />
+                <datalist id="rewriteModelOptions"></datalist>
+                <label class="check-row rewrite-auto-row">
+                  <input id="rewriteAutoModel" type="checkbox" checked />
+                  自动最新模型
+                </label>
+                <button class="ghost" id="saveRewriteSettings" type="button">保存</button>
+                <a class="provider-apply-link" id="rewriteApplyLink" href="#" target="_blank" rel="noopener">申请 API Key</a>
+                <a class="provider-apply-link" id="rewriteBalanceLink" href="#" target="_blank" rel="noopener">余额/控制台</a>
+              </div>
+              <details class="rewrite-advanced">
+                <summary>高级：base_url</summary>
+                <input id="rewriteBaseUrlInput" type="text" placeholder="选择平台后自动填写；自定义接口可修改" />
+              </details>
+              <p id="rewriteSettingsStatus">选择平台，粘贴 API Key，保存即可。</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="actions">
+          <button id="parseBtn" type="button">解析信息</button>
+          <button id="linkBtn" type="button">获取下载链接</button>
+          <button class="primary" id="downloadBtn" type="button">下载视频</button>
+          <button class="accent" id="transcriptBtn" type="button">提取文案</button>
+        </div>
+
+        <div class="progress-panel" id="progressPanel" hidden>
+          <div class="progress-line">
+            <span id="progressLabel">准备下载</span>
+            <strong id="progressPercent">0%</strong>
+          </div>
+          <div class="progress-track" aria-hidden="true">
+            <div class="progress-bar" id="progressBar"></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="batch-area">
+        <div class="result-head">
+          <h2>批量任务</h2>
+          <div class="result-tools">
+            <button class="ghost small" id="exportCsv" type="button">导出 CSV</button>
+            <button class="ghost small" id="exportXlsx" type="button">导出 XLSX</button>
+            <button class="ghost small danger-action" id="clearFinished" type="button">清理完成/失败</button>
+          </div>
+        </div>
+        <div class="batch-body">
+          <div class="batch-controls">
+            <label>
+              类型
+              <select id="batchKind">
+                <option value="video" selected>作品链接</option>
+                <option value="auto">自动识别</option>
+                <option value="account">账号</option>
+                <option value="collection">合集</option>
+                <option value="comment">评论采集</option>
+              </select>
+            </label>
+            <label>
+              单次上限
+              <input id="batchLimit" type="number" value="10" min="1" max="1000" list="batchLimitOptions" />
+              <datalist id="batchLimitOptions">
+                <option value="10"></option>
+                <option value="100"></option>
+                <option value="500"></option>
+                <option value="1000"></option>
+              </datalist>
+            </label>
+            <label>
+              并发
+              <select id="batchConcurrency">
+                <option value="1">1</option>
+                <option value="3" selected>3</option>
+                <option value="5">5</option>
+              </select>
+            </label>
+            <label class="check-row">
+              <input id="skipDownloaded" type="checkbox" checked />
+              跳过已下载
+            </label>
+          </div>
+          <div class="actions batch-actions">
+            <button class="ghost" id="startQueue" type="button">继续队列</button>
+            <button class="ghost" id="refreshTasks" type="button">刷新任务</button>
+            <button class="ghost danger-action" id="clearTaskList" type="button">清空列表</button>
+            <span id="batchStatus">队列待刷新</span>
+          </div>
+          <div class="task-stats" id="taskStats"></div>
+          <div class="task-table-tools">
+            <label>
+              每页
+              <select id="taskPageSize">
+                <option value="5">5</option>
+                <option value="10" selected>10</option>
+                <option value="20">20</option>
+                <option value="50">50</option>
+              </select>
+            </label>
+            <label>
+              显示
+              <select id="taskDensity">
+                <option value="normal">普通</option>
+                <option value="small" selected>小字</option>
+                <option value="compact">压缩</option>
+              </select>
+            </label>
+          </div>
+          <div class="tasks-table" id="tasksTable"></div>
+          <div class="task-pager" id="taskPager">
+            <button class="ghost small" id="prevTaskPage" type="button">上一页</button>
+            <span id="taskPageInfo">第 1 / 1 页</span>
+            <button class="ghost small" id="nextTaskPage" type="button">下一页</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="result-area">
+        <div class="result-head">
+          <h2>结果</h2>
+          <div class="result-tools">
+            <button class="ghost small" id="copyTranscript" type="button" hidden>复制文案</button>
+            <button class="ghost small" id="openTranscript" type="button" hidden>打开文案</button>
+            <span id="statusText">待操作</span>
+          </div>
+        </div>
+        <pre id="resultBox">粘贴链接后点击按钮。</pre>
+        <div class="transcript-list" id="transcriptList"></div>
+      </section>
+
+      <section class="analysis-area" id="analysisPanel" hidden>
+        <div class="result-head">
+          <h2>AI 分析</h2>
+          <div class="result-tools">
+            <button class="ghost small" id="runAnalysis" type="button">生成/重新分析</button>
+            <button class="ghost small" id="saveAnalysis" type="button">保存分析</button>
+            <button class="ghost small" id="closeAnalysis" type="button">关闭</button>
+          </div>
+        </div>
+        <div class="analysis-body">
+          <input id="analysisTaskId" type="hidden" />
+          <label for="analysisTranscript">文案</label>
+          <textarea id="analysisTranscript" rows="8"></textarea>
+          <div class="analysis-grid">
+            <label>
+              爆款钩子
+              <textarea id="analysisHook" rows="3"></textarea>
+            </label>
+            <label>
+              情绪点
+              <textarea id="analysisEmotion" rows="3"></textarea>
+            </label>
+            <label>
+              痛点
+              <textarea id="analysisPain" rows="3"></textarea>
+            </label>
+            <label>
+              行动号召
+              <textarea id="analysisCta" rows="3"></textarea>
+            </label>
+            <label>
+              标签
+              <input id="analysisTags" type="text" placeholder="高考、单招、学习方法" />
+            </label>
+            <label>
+              自动分类
+              <input id="analysisCategory" type="text" placeholder="学习方法" />
+            </label>
+          </div>
+          <p id="analysisStatus">选择一条文案后开始分析。</p>
+        </div>
+      </section>
+
+      <section class="rewrite-area" id="rewritePanel" hidden>
+        <div class="result-head">
+          <h2>AI 改写工作台</h2>
+          <div class="result-tools">
+            <button class="ghost small" id="runRewrite" type="button">生成改写</button>
+            <button class="ghost small" id="saveRewrite" type="button">保存</button>
+            <button class="ghost small" id="saveRewriteTxt" type="button">另存 TXT</button>
+            <button class="ghost small" id="saveRewriteMd" type="button">另存 MD</button>
+            <button class="ghost small" id="openRewriteFile" type="button">打开文件位置</button>
+            <button class="ghost small" id="closeRewrite" type="button">关闭</button>
+          </div>
+        </div>
+        <div class="rewrite-body">
+          <input id="rewriteTaskId" type="hidden" />
+          <div class="rewrite-grid">
+            <div class="rewrite-column">
+              <label for="rewriteOriginal">原始文案展示区</label>
+              <textarea id="rewriteOriginal" rows="8"></textarea>
+              <label for="rewriteAnalysisView">AI分析结果展示区</label>
+              <pre id="rewriteAnalysisView" class="compact-pre">未生成 AI 分析。</pre>
+            </div>
+            <div class="rewrite-column">
+              <div class="rewrite-controls">
+                <label>
+                  模型选择
+                  <select id="rewriteProvider">
+                    <option value="dashscope">DashScope</option>
+                    <option value="deepseek">DeepSeek</option>
+                    <option value="custom">自定义 OpenAI 兼容接口</option>
+                  </select>
+                </label>
+                <label>
+                  改写方向
+                  <select id="rewriteDirection">
+                    <option>招生引流</option>
+                    <option>家长焦虑</option>
+                    <option>单招升学</option>
+                    <option>暑假班转化</option>
+                    <option>英语提分</option>
+                    <option>朋友圈文案</option>
+                    <option>短视频口播</option>
+                  </select>
+                </label>
+                <label>
+                  语气风格
+                  <select id="rewriteStyle">
+                    <option>老板风格</option>
+                    <option>痞里带刺</option>
+                    <option>接地气</option>
+                    <option>温和专业</option>
+                    <option>强冲突</option>
+                    <option>强转化</option>
+                  </select>
+                </label>
+              </div>
+              <div class="rewrite-param-grid">
+                <label>
+                  口语化 <span id="rewriteToneValue">8</span>
+                  <input id="rewriteToneLevel" type="range" min="1" max="10" value="8" />
+                </label>
+                <label>
+                  冲突度 <span id="rewriteConflictValue">7</span>
+                  <input id="rewriteConflictLevel" type="range" min="1" max="10" value="7" />
+                </label>
+                <label>
+                  情绪强度 <span id="rewriteEmotionValue">7</span>
+                  <input id="rewriteEmotionLevel" type="range" min="1" max="10" value="7" />
+                </label>
+                <label>
+                  销售感 <span id="rewriteSalesValue">6</span>
+                  <input id="rewriteSalesLevel" type="range" min="1" max="10" value="6" />
+                </label>
+                <label>
+                  去AI味强度
+                  <select id="rewriteHumanizeLevel">
+                    <option>关闭</option>
+                    <option selected>普通</option>
+                    <option>强</option>
+                    <option>极强</option>
+                  </select>
+                </label>
+              </div>
+              <label for="rewriteReference">参考风格输入区</label>
+              <textarea id="rewriteReference" rows="6">痞里带刺、幽默自嘲、生活化观察、少说废话、有冲突、有观点、适合教育招生、让家长有感觉、不要像官方通稿、不要像AI作文。</textarea>
+              <div class="reference-head">
+                <label for="rewriteReferenceExamples">参考案例输入区</label>
+                <div class="reference-actions">
+                  <button class="ghost small" id="loadReferenceExamples" type="button">加载案例</button>
+                  <button class="ghost small" id="saveReferenceExamples" type="button">保存案例</button>
+                </div>
+              </div>
+              <textarea id="rewriteReferenceExamples" rows="7" placeholder="粘贴 3-10 条优秀文案；每条用空行或 --- 分隔。系统学习节奏、口吻、结构，不照抄内容。"></textarea>
+            </div>
+          </div>
+          <div class="rewrite-result-head" id="rewriteAnchorName1" data-anchor-name="名称1">
+            <div>
+              <h3>名称1</h3>
+              <p id="rewriteStatus">选择一条文案后开始改写。</p>
+            </div>
+            <div class="rewrite-result-meta">
+              <label class="rewrite-count-control" for="rewriteVersionCountInput">
+                <span>输出框数量</span>
+                <input id="rewriteVersionCountInput" type="number" min="1" max="5" value="5" />
+              </label>
+              <span id="rewriteVersionCount">0 个输出框</span>
+            </div>
+          </div>
+          <div class="rewrite-version-planner">
+            <div class="rewrite-planner-head">
+              <strong>选择版本类型</strong>
+              <span>勾选哪几个类型，就生成哪几个文案框</span>
+            </div>
+            <div class="rewrite-version-picker" id="rewriteVersionPicker"></div>
+          </div>
+          <div class="rewrite-progress" id="rewriteProgress" hidden>
+            <div class="rewrite-progress-line">
+              <span id="rewriteProgressLabel">准备生成</span>
+              <strong id="rewriteProgressPercent">0%</strong>
+            </div>
+            <div class="progress-track" aria-hidden="true">
+              <div class="progress-bar" id="rewriteProgressBar"></div>
+            </div>
+          </div>
+          <div class="rewrite-versions" id="rewriteVersions"></div>
+        </div>
+      </section>
+
+      <section class="files-area">
+        <div class="result-head">
+          <h2>已下载</h2>
+          <div class="files-tools">
+            <label for="pageSize">每页</label>
+            <select id="pageSize">
+              <option value="5" selected>5</option>
+              <option value="10">10</option>
+              <option value="20">20</option>
+              <option value="50">50</option>
+            </select>
+            <button class="ghost small danger-action" id="deleteSelected" type="button" disabled>删除所选</button>
+            <button class="ghost small" id="refreshFiles" type="button">刷新</button>
+          </div>
+        </div>
+        <div id="filesList" class="files-list"></div>
+        <div class="pager" id="filesPager" hidden>
+          <button class="ghost small" id="prevPage" type="button">上一页</button>
+          <span id="pageInfo">第 1 / 1 页</span>
+          <button class="ghost small" id="nextPage" type="button">下一页</button>
+        </div>
+      </section>
+    </main>
+    <script src="/app.js"></script>
+  </body>
+</html>

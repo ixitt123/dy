@@ -1,0 +1,17 @@
+{
+  "name": "douyin-mcp-local-runner",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node node_modules/@yc-w-cn/douyin-mcp-server/dist/index.js",
+    "check": "node check-install.mjs",
+    "patch-output": "node patch-mcp-output.mjs",
+    "postinstall": "node patch-mcp-output.mjs"
+  },
+  "dependencies": {
+    "@yc-w-cn/douyin-mcp-server": "1.0.4",
+    "ffmpeg-static": "^5.2.0",
+    "ws": "^8.18.0",
+    "xlsx": "^0.18.5"
+  }
+}

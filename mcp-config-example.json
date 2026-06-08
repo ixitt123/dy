@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "douyin-mcp-server": {
+      "command": "C:\\Program Files\\nodejs\\node.exe",
+      "args": [
+        "C:\\Users\\Admin\\Documents\\短视频\\douyin-mcp-local\\node_modules\\@yc-w-cn\\douyin-mcp-server\\dist\\index.js"
+      ],
+      "env": {
+        "WORK_DIR": "C:\\Users\\Admin\\Documents\\短视频\\douyin-mcp-local\\downloads"
+      }
+    }
+  }
+}
