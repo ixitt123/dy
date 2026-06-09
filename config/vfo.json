@@ -1,0 +1,72 @@
+{
+  "version": 1,
+  "defaults": {
+    "platform": "douyin",
+    "quality_threshold": 80,
+    "ai_flavor_limit": 35
+  },
+  "asset_types": [
+    "ai_image",
+    "stock_video",
+    "chart",
+    "infographic",
+    "text_motion",
+    "screenshot",
+    "ui_demo",
+    "real_photo",
+    "document",
+    "mixed"
+  ],
+  "platforms": [
+    {
+      "id": "douyin",
+      "label": "抖音",
+      "ratio": "9:16",
+      "resolution": "1080x1920",
+      "fps": 30,
+      "information_density": "high",
+      "subtitle_size": "large",
+      "shot_duration": "1.5-4.5s",
+      "hook_window": "0-3s"
+    },
+    {
+      "id": "video-account",
+      "label": "视频号",
+      "ratio": "9:16",
+      "resolution": "1080x1920",
+      "fps": 30,
+      "information_density": "medium",
+      "subtitle_size": "medium-large",
+      "shot_duration": "2.5-6s",
+      "hook_window": "0-5s"
+    },
+    {
+      "id": "xiaohongshu",
+      "label": "小红书",
+      "ratio": "3:4",
+      "resolution": "1080x1440",
+      "fps": 30,
+      "information_density": "medium-high",
+      "subtitle_size": "medium",
+      "shot_duration": "2-5s",
+      "hook_window": "0-3s"
+    },
+    {
+      "id": "bilibili",
+      "label": "B站",
+      "ratio": "16:9",
+      "resolution": "1920x1080",
+      "fps": 30,
+      "information_density": "medium",
+      "subtitle_size": "medium",
+      "shot_duration": "3-8s",
+      "hook_window": "0-8s"
+    }
+  ],
+  "director_platform_aliases": {
+    "douyin": "douyin",
+    "wechat-video": "video-account",
+    "xiaohongshu": "xiaohongshu",
+    "landscape": "bilibili"
+  }
+}

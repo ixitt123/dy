@@ -13,6 +13,7 @@ import { createTtsService } from "./server/tts/tts-service.js";
 import { TTS_PROVIDER_LABELS } from "./server/tts/providers/index.js";
 import { createVoiceAssetService } from "./server/voices/voice-asset-service.js";
 import { createDirectorService } from "./server/director/director-service.js";
+import { createVfoService } from "./server/vfo/vfo-service.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const uiDir = path.join(__dirname, "ui");
@@ -202,6 +203,13 @@ const directorService = createDirectorService({
   baseDir: __dirname,
   taskStore,
   generateJson: generateDirectorJson,
+  onIdle: scheduleShutdownIfIdle,
+});
+const vfoService = createVfoService({
+  baseDir: __dirname,
+  taskStore,
+  directorService,
+  generateJson: generateStructuredJson,
   onIdle: scheduleShutdownIfIdle,
 });
 
@@ -690,10 +698,23 @@ function normalizeModelRows(data) {
     .filter(Boolean);
 }
 
-function pickLatestChatModel(models, fallback = "") {
-  const blocked = /(embedding|embed|rerank|bge|whisper|tts|speech|audio|image|vision|vl|ocr|moderation)/i;
+const BLOCKED_CHAT_MODEL_PATTERN = /(embedding|embed|rerank|bge|whisper|tts|speech|audio|image|vision|vl|ocr|moderation|dingtalk|qwentype|paraformer|cosyvoice|wanx|wan-|video)/i;
+
+function pickLatestChatModel(models, fallback = "", providerId = "") {
   const preferred = /(chat|instruct|turbo|plus|max|pro|flash|qwen|deepseek|kimi|moonshot|glm|doubao|ernie|hunyuan|gpt)/i;
-  const candidates = models.filter((model) => !blocked.test(model.id));
+  const providerPattern = {
+    dashscope: /^qwen(?:[-_.0-9]|$)/i,
+    deepseek: /^deepseek/i,
+    moonshot: /^(moonshot|kimi)/i,
+    zhipu: /^glm/i,
+    volcengine: /^doubao/i,
+    qianfan: /^ernie/i,
+    hunyuan: /^hunyuan/i,
+    xiaomi: /^mimo/i,
+  }[providerId];
+  const candidates = models.filter((model) => (
+    !BLOCKED_CHAT_MODEL_PATTERN.test(model.id) && (!providerPattern || providerPattern.test(model.id))
+  ));
   if (candidates.length === 0) return fallback || models[0]?.id || "";
   candidates.sort((left, right) => {
     const scoreLeft = (preferred.test(left.id) ? 1000 : 0) + (left.created || 0) / 1000000000 - left.index / 1000;
@@ -703,10 +724,14 @@ function pickLatestChatModel(models, fallback = "") {
   return candidates[0]?.id || fallback || "";
 }
 
-async function resolveLatestModel(provider) {
+async function resolveLatestModel(provider, providerId = "") {
   const baseUrl = String(provider.baseUrl || "").replace(/\/+$/, "");
+  const presetFallback = REWRITE_PROVIDER_PRESETS[providerId]?.model || "";
+  const safeCurrentModel = BLOCKED_CHAT_MODEL_PATTERN.test(String(provider.model || ""))
+    ? presetFallback
+    : provider.model || presetFallback;
   if (!baseUrl || !String(provider.apiKey || "").trim()) {
-    return provider.model || "";
+    return safeCurrentModel;
   }
 
   try {
@@ -717,17 +742,18 @@ async function resolveLatestModel(provider) {
       },
     });
     const data = await response.json().catch(() => ({}));
-    if (!response.ok) return provider.model || "";
-    return pickLatestChatModel(normalizeModelRows(data), provider.model || "") || provider.model || "";
+    if (!response.ok) return safeCurrentModel;
+    const fallback = safeCurrentModel;
+    return pickLatestChatModel(normalizeModelRows(data), fallback, providerId) || fallback;
   } catch {
-    return provider.model || "";
+    return safeCurrentModel;
   }
 }
 
 async function refreshProviderModel(settings, providerId) {
   const provider = settings.rewriteProviders[providerId];
   if (!provider || provider.autoModel === false) return provider;
-  const latestModel = await resolveLatestModel(provider);
+  const latestModel = await resolveLatestModel(provider, providerId);
   if (latestModel) provider.model = latestModel;
   return provider;
 }
@@ -818,6 +844,9 @@ function isInsideManagedFilePath(filePath) {
     directorService.outputDirs.storyboardsDir,
     directorService.outputDirs.scenePromptsDir,
     directorService.outputDirs.referenceStylesDir,
+    vfoService.outputDirs.assetPlansDir,
+    vfoService.outputDirs.assetPackagesDir,
+    vfoService.outputDirs.vfoDir,
   ].map((item) => path.resolve(item));
   return roots.some((root) => resolved === root || resolved.startsWith(`${root}${path.sep}`));
 }
@@ -850,6 +879,7 @@ function scheduleShutdownIfIdle() {
     || runningBatchTasks.size > 0
     || taskStore.hasPendingWork()
     || directorService.isBusy()
+    || vfoService.isBusy()
   ) {
     return;
   }
@@ -1949,39 +1979,60 @@ async function chatCompletion(provider, messages, signal, {
   return data.choices?.[0]?.message?.content || "";
 }
 
-async function generateDirectorJson({ providerId, messages, temperature }) {
+async function generateStructuredJson({
+  providerId,
+  messages,
+  temperature,
+  requestName = "结构化 AI",
+  maxTokens = 12000,
+}) {
   const provider = await getRewriteProvider(providerId);
-  for (let attempt = 0; attempt < 2; attempt += 1) {
+  let lastError = null;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
     const retryInstruction = {
       role: "user",
       content: [
-        "上一轮返回格式无法解析。请从头重新生成。",
+        attempt === 1
+          ? "请直接返回严格 JSON。不要依赖平台 JSON Mode。"
+          : "上一轮返回格式无法解析。请从头重新生成。",
         "只输出一个完整 JSON 对象，不要 Markdown、代码围栏、注释或解释。",
         "保持字段完整，但文字要紧凑，确保 JSON 在一次响应内完整结束。",
       ].join("\n"),
     };
-    const content = await chatCompletion(
-      provider,
-      attempt === 0 ? messages : [...messages, retryInstruction],
-      undefined,
-      {
-        temperature: attempt === 0 ? temperature : 0.1,
-        requestName: "AI 导演",
-        maxTokens: 12000,
-        jsonMode: true,
-      },
-    );
     try {
+      const content = await chatCompletion(
+        provider,
+        attempt === 0 ? messages : [...messages, retryInstruction],
+        undefined,
+        {
+          temperature: attempt === 0 ? temperature : 0.1,
+          requestName: `${requestName}（${provider.label} / ${provider.model}）`,
+          maxTokens,
+          jsonMode: attempt !== 1,
+        },
+      );
       return {
         data: parseJsonFromModelText(content),
         provider: provider.id,
         model: provider.model,
       };
-    } catch {
-      // Retry once with stricter compact JSON instructions.
+    } catch (error) {
+      lastError = error;
     }
   }
-  throw new Error("AI 导演连续两次没有返回完整 JSON。");
+  throw new Error(
+    lastError instanceof Error
+      ? lastError.message
+      : `${requestName}（${provider.label} / ${provider.model}）连续三次生成失败。`,
+  );
+}
+
+async function generateDirectorJson(options) {
+  return generateStructuredJson({
+    ...options,
+    requestName: "AI 导演",
+    maxTokens: 12000,
+  });
 }
 
 function chunkRowsByWordCount(rows, maxCharacters = 2600) {
@@ -3078,6 +3129,68 @@ const server = http.createServer(async (req, res) => {
       const buffer = fs.readFileSync(filePath);
       const contentType = format === "json" ? "application/json" : "text/markdown";
       sendBuffer(res, 200, buffer, contentType, path.basename(filePath));
+      return;
+    }
+
+    if (req.method === "GET" && url.pathname === "/api/vfo/config") {
+      const settings = readSettings();
+      const rewrite = publicRewriteSettings(settings);
+      sendJson(res, 200, {
+        ok: true,
+        config: vfoService.config,
+        providers: rewrite.providers,
+        default_provider: rewrite.defaults.defaultProvider,
+      });
+      return;
+    }
+
+    if (req.method === "GET" && url.pathname === "/api/vfo/sources") {
+      sendJson(res, 200, {
+        ok: true,
+        sources: vfoService.listDirectorSources(100),
+      });
+      return;
+    }
+
+    if (req.method === "GET" && url.pathname === "/api/vfo/projects") {
+      const limit = clampNumber(url.searchParams.get("limit"), 1, 500, 50);
+      sendJson(res, 200, {
+        ok: true,
+        projects: vfoService.listProjects(limit),
+      });
+      return;
+    }
+
+    if (req.method === "GET" && url.pathname === "/api/vfo/project") {
+      const project = vfoService.getProject(Number(url.searchParams.get("id") || 0));
+      if (!project) {
+        sendJson(res, 404, { ok: false, message: "没有找到 VFO 项目。" });
+        return;
+      }
+      sendJson(res, 200, { ok: true, project });
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/vfo/generate") {
+      const body = JSON.parse(await readBody(req) || "{}");
+      const result = vfoService.enqueue(body);
+      if (result.error) {
+        sendJson(res, 400, { ok: false, message: result.error });
+        return;
+      }
+      sendJson(res, 202, { ok: true, project: result.project });
+      return;
+    }
+
+    if (req.method === "GET" && url.pathname === "/api/vfo/export") {
+      const type = String(url.searchParams.get("type") || "render-plan").toLowerCase();
+      const filePath = vfoService.resolveExportPath(Number(url.searchParams.get("id") || 0), type);
+      if (!filePath) {
+        sendJson(res, 404, { ok: false, message: "VFO 文件不存在或尚未生成。" });
+        return;
+      }
+      const buffer = fs.readFileSync(filePath);
+      sendBuffer(res, 200, buffer, "application/json", path.basename(filePath));
       return;
     }
 

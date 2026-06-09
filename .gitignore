@@ -16,6 +16,12 @@ reference-styles/*
 !storyboards/.gitkeep
 !scene_prompts/.gitkeep
 !reference-styles/.gitkeep
+asset-plans/*
+asset-packages/*
+vfo/*
+!asset-plans/.gitkeep
+!asset-packages/.gitkeep
+!vfo/.gitkeep
 
 settings.json
 ui-server.pid

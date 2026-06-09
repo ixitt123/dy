@@ -126,3 +126,16 @@ GitHub是唯一代码源。
 8. Director Skill、风格库、镜头语言和审美规则必须放在 `skills/`。
 9. Director 项目、镜头、状态和评分必须写入 SQLite，并通过独立队列处理。
 10. 不允许破坏现有下载、文案提取、AI 分析、AI 改写、TTS、声音资产中心和 SQLite 功能。
+
+## APS 与 VFO 规则
+
+1. Asset Planning System 只负责素材规划，不生成图片或视频，不调用图片 Provider。
+2. VFO 只负责决策、调度、规划和质量控制，不直接生成图片或视频。
+3. 工作流固定为：Storyboard → APS → VFO → Image Provider → Video Renderer → QA → Export。
+4. 每个镜头必须说明素材类型、选择原因、生成或获取方式、渲染策略和质量检查项。
+5. 素材分类、平台策略、渲染策略和 QA 规则必须来自 `skills/`、`prompts/` 和 `config/`，不得写死在前端。
+6. APS 必须输出 Asset Package、Asset Review 和 Render Readiness。
+7. VFO 第一阶段只输出 `render_plan.json`，不接图片 Provider、视频 Renderer 或自动导出成片。
+8. 抖音、视频号、小红书和 B 站必须使用各自的平台信息密度、字幕、镜头时长和画幅策略。
+9. APS 与 VFO 项目、镜头、评分和状态必须写入 SQLite，并通过独立队列处理。
+10. 不允许破坏现有下载、提取文案、AI 改写、Director、TTS、声音资产中心及其 SQLite 数据。

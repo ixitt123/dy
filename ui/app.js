@@ -103,6 +103,23 @@ const directorResultTitle = document.querySelector("#directorResultTitle");
 const directorResultMeta = document.querySelector("#directorResultMeta");
 const directorResultTabs = document.querySelector("#directorResultTabs");
 const directorResultView = document.querySelector("#directorResultView");
+const vfoSourceMode = document.querySelector("#vfoSourceMode");
+const vfoDirectorSourceField = document.querySelector("#vfoDirectorSourceField");
+const vfoDirectorSource = document.querySelector("#vfoDirectorSource");
+const vfoManualTitleField = document.querySelector("#vfoManualTitleField");
+const vfoManualTitle = document.querySelector("#vfoManualTitle");
+const vfoManualJsonField = document.querySelector("#vfoManualJsonField");
+const vfoManualJson = document.querySelector("#vfoManualJson");
+const vfoSourceSummary = document.querySelector("#vfoSourceSummary");
+const vfoProvider = document.querySelector("#vfoProvider");
+const vfoPlatform = document.querySelector("#vfoPlatform");
+const vfoStatus = document.querySelector("#vfoStatus");
+const vfoProjects = document.querySelector("#vfoProjects");
+const vfoResult = document.querySelector("#vfoResult");
+const vfoResultTitle = document.querySelector("#vfoResultTitle");
+const vfoResultMeta = document.querySelector("#vfoResultMeta");
+const vfoResultTabs = document.querySelector("#vfoResultTabs");
+const vfoResultView = document.querySelector("#vfoResultView");
 const ttsProvider = document.querySelector("#ttsProvider");
 const ttsApiKey = document.querySelector("#ttsApiKey");
 const ttsWorkspaceField = document.querySelector("#ttsWorkspaceField");
@@ -179,6 +196,12 @@ let activeDirectorProject = null;
 let activeDirectorTab = "shot-list";
 let directorSourceContext = { taskId: 0, rewriteId: 0, sourceKey: "", sourceType: "manual" };
 let directorPollTimer = 0;
+let vfoConfig = null;
+let vfoSources = [];
+let vfoProjectsState = [];
+let activeVfoProject = null;
+let activeVfoTab = "overview";
+let vfoPollTimer = 0;
 let ttsProviderConfigs = [];
 let ttsPresetVoices = [];
 let ttsPollTimer = 0;
@@ -2028,6 +2051,375 @@ async function openDirectorFile() {
   directorStatus.textContent = "已打开导演稿文件位置。";
 }
 
+function vfoStatusLabel(status) {
+  return {
+    waiting: "等待",
+    processing: "规划中",
+    completed: "已完成",
+    failed: "失败",
+  }[status] || status || "未知";
+}
+
+function selectedVfoSource() {
+  return vfoSources.find((source) => Number(source.id) === Number(vfoDirectorSource.value || 0));
+}
+
+function renderVfoSourceSummary() {
+  if (vfoSourceMode.value === "manual") {
+    try {
+      const value = JSON.parse(vfoManualJson.value || "{}");
+      const scenes = Array.isArray(value.storyboard) ? value.storyboard : Array.isArray(value.scenes) ? value.scenes : [];
+      const title = vfoManualTitle.value.trim() || value.video_meta?.title || "手动 Storyboard";
+      vfoSourceSummary.innerHTML = scenes.length
+        ? `<strong>${escapeHtml(title)}</strong><span>${scenes.length} 个镜头 · ${escapeHtml(value.video_meta?.platform || vfoPlatform.value || "待选择平台")}</span>`
+        : "<strong>等待有效 Storyboard JSON</strong><span>必须包含 storyboard 或 scenes 数组。</span>";
+    } catch {
+      vfoSourceSummary.innerHTML = "<strong>Storyboard JSON 尚未解析</strong><span>请检查 JSON 格式。</span>";
+    }
+    return;
+  }
+  const source = selectedVfoSource();
+  vfoSourceSummary.innerHTML = source
+    ? `<strong>${escapeHtml(source.title)}</strong><span>${Number(source.scene_count || 0)} 个镜头 · ${escapeHtml(source.platform || "")} · 导演评分 ${Number(source.score || 0)}</span>`
+    : "<strong>暂无可用 Director 项目</strong><span>请先生成一份已完成的专业导演稿。</span>";
+}
+
+function updateVfoSourceMode() {
+  const manual = vfoSourceMode.value === "manual";
+  vfoDirectorSourceField.hidden = manual;
+  vfoManualTitleField.hidden = !manual;
+  vfoManualJsonField.hidden = !manual;
+  renderVfoSourceSummary();
+}
+
+async function loadVfoConfig() {
+  const data = await fetchJson("/api/vfo/config");
+  vfoConfig = data.config;
+  vfoPlatform.innerHTML = directorOptions(vfoConfig.platforms, vfoConfig.defaults?.platform || "douyin");
+  renderProviderOptions(vfoProvider, data.providers || {}, data.default_provider || "dashscope", {
+    disableUnconfigured: true,
+  });
+}
+
+async function loadVfoSources({ preferredId = 0 } = {}) {
+  const data = await fetchJson("/api/vfo/sources");
+  vfoSources = Array.isArray(data.sources) ? data.sources : [];
+  vfoDirectorSource.innerHTML = vfoSources.length
+    ? vfoSources.map((source) => `<option value="${source.id}">#${source.id} ${escapeHtml(source.title)} · ${Number(source.scene_count || 0)} 镜头</option>`).join("")
+    : '<option value="">当前没有已完成的 Director 项目</option>';
+  if (preferredId && vfoSources.some((source) => Number(source.id) === Number(preferredId))) {
+    vfoDirectorSource.value = String(preferredId);
+  }
+  const selected = selectedVfoSource();
+  const mappedPlatform = vfoConfig?.director_platform_aliases?.[selected?.platform] || selected?.platform;
+  if (mappedPlatform && vfoConfig?.platforms?.some((platform) => platform.id === mappedPlatform)) {
+    vfoPlatform.value = mappedPlatform;
+  }
+  renderVfoSourceSummary();
+}
+
+function renderVfoProjects() {
+  if (!vfoProjectsState.length) {
+    vfoProjects.innerHTML = '<div class="vfo-empty">还没有 VFO 调度项目。</div>';
+    return;
+  }
+  vfoProjects.innerHTML = vfoProjectsState.map((project) => `
+    <div class="vfo-project-row" data-vfo-project-id="${project.id}">
+      <strong>#${project.id}</strong>
+      <div class="vfo-project-title">
+        <strong>${escapeHtml(project.title)}</strong>
+        <span>Director #${project.director_project_id || "-"} · APS #${project.asset_project_id || "-"}</span>
+      </div>
+      <span>${escapeHtml(project.platform)}</span>
+      <span>${project.metadata?.scene_count || 0} 镜头</span>
+      <span>${project.score || 0} 分</span>
+      <span>${escapeHtml(formatVoiceTime(project.updated_at))}</span>
+      <div>
+        <span class="vfo-project-status ${escapeHtml(project.status)}">${escapeHtml(vfoStatusLabel(project.status))}</span>
+        <button class="ghost small vfo-project-open" type="button">查看</button>
+      </div>
+    </div>
+  `).join("");
+}
+
+async function loadVfoProjects() {
+  const data = await fetchJson("/api/vfo/projects?limit=50");
+  vfoProjectsState = Array.isArray(data.projects) ? data.projects : [];
+  renderVfoProjects();
+}
+
+function vfoList(items) {
+  return (items || []).length
+    ? items.map((item) => `<li>${escapeHtml(item)}</li>`).join("")
+    : "<li>无</li>";
+}
+
+function vfoOverviewMarkup(project) {
+  const plan = project.result?.render_plan || {};
+  const review = plan.qa_review || {};
+  const readiness = plan.render_readiness || {};
+  const assets = plan.asset_review || {};
+  return `
+    <div class="vfo-metrics">
+      <div class="vfo-metric"><span>镜头数量</span><strong>${plan.scenes?.length || 0}</strong></div>
+      <div class="vfo-metric"><span>素材规划</span><strong>${Number(assets.score || 0)}</strong></div>
+      <div class="vfo-metric"><span>渲染条件</span><strong>${Number(readiness.score || 0)}</strong></div>
+      <div class="vfo-metric"><span>最终 QA</span><strong>${Number(review.score || 0)}</strong></div>
+      <div class="vfo-metric"><span>进入 Provider</span><strong class="${review.ready ? "vfo-ready" : "vfo-blocked"}">${review.ready ? "可以" : "暂缓"}</strong></div>
+    </div>
+    <div class="vfo-table-wrap">
+      <table class="vfo-table">
+        <thead><tr><th>镜头</th><th>素材</th><th>为什么</th><th>如何准备</th><th>如何渲染</th><th>QA</th></tr></thead>
+        <tbody>
+          ${(plan.scenes || []).map((scene) => `
+            <tr>
+              <td>${scene.scene}</td>
+              <td><strong>${escapeHtml(scene.asset_type)}</strong><small>${escapeHtml(scene.asset_subtype || "")}</small></td>
+              <td>${escapeHtml(scene.reason)}</td>
+              <td>${escapeHtml(scene.generation_strategy?.method)}</td>
+              <td>${escapeHtml(scene.render_strategy?.ratio)} · ${escapeHtml(scene.render_strategy?.motion)}</td>
+              <td class="${scene.qa?.ready ? "vfo-ready" : "vfo-blocked"}">${Number(scene.qa?.score || 0)} · ${scene.qa?.ready ? "就绪" : "阻塞"}</td>
+            </tr>
+          `).join("")}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+function vfoAssetMarkup(project) {
+  const assets = project.asset_project?.result?.asset_package || [];
+  return `
+    <div class="vfo-table-wrap">
+      <table class="vfo-table">
+        <thead><tr><th>镜头</th><th>素材类型</th><th>选择原因</th><th>准备方式</th><th>提示词 / 搜索要求</th><th>平台适配</th><th>Ready</th></tr></thead>
+        <tbody>
+          ${assets.map((asset) => `
+            <tr>
+              <td>${asset.scene}</td>
+              <td><strong>${escapeHtml(asset.asset_type)}</strong><small>${escapeHtml(asset.asset_subtype || "")}</small></td>
+              <td>${escapeHtml(asset.reason)}</td>
+              <td>${escapeHtml(asset.generation_method)}</td>
+              <td>${escapeHtml(asset.image_prompt || asset.negative_prompt || "无需图片提示词")}</td>
+              <td>抖音 ${Number(asset.platform_fit?.douyin || 0)} · 视频号 ${Number(asset.platform_fit?.video_account || 0)}<br>小红书 ${Number(asset.platform_fit?.xiaohongshu || 0)} · B站 ${Number(asset.platform_fit?.bilibili || 0)}</td>
+              <td class="${asset.render_ready ? "vfo-ready" : "vfo-blocked"}">${Number(asset.readiness_score || 0)} · ${asset.render_ready ? "是" : "否"}</td>
+            </tr>
+          `).join("")}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+function vfoRenderMarkup(project) {
+  const scenes = project.result?.render_plan?.scenes || [];
+  return `
+    <div class="vfo-table-wrap">
+      <table class="vfo-table">
+        <thead><tr><th>镜头</th><th>画布</th><th>时长</th><th>构图 / 裁切</th><th>运动</th><th>字幕</th><th>转场</th><th>备选</th></tr></thead>
+        <tbody>
+          ${scenes.map((scene) => {
+            const render = scene.render_strategy || {};
+            return `
+              <tr>
+                <td>${scene.scene}</td>
+                <td>${escapeHtml(render.ratio)}<br><small>${escapeHtml(render.resolution)}</small></td>
+                <td>${Number(render.duration || 0)}s</td>
+                <td>${escapeHtml(render.composition)}<br><small>${escapeHtml(render.crop)}</small></td>
+                <td>${escapeHtml(render.motion)}</td>
+                <td>${escapeHtml(render.subtitle?.position)} · ${escapeHtml(render.subtitle?.size)}<br><small>${escapeHtml((render.subtitle?.highlight_words || []).join("、"))}</small></td>
+                <td>${escapeHtml(render.transition)} · ${Number(render.transition_duration || 0)}s</td>
+                <td>${escapeHtml(render.fallback)}</td>
+              </tr>
+            `;
+          }).join("")}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+function vfoQaMarkup(project) {
+  const review = project.result?.render_plan?.qa_review || {};
+  return `
+    <div class="vfo-qa-grid">
+      <div class="vfo-qa-score">
+        <strong>${Number(review.score || 0)}</strong>
+        <span>/ 100 · ${review.ready ? "可以进入 Provider" : "暂不进入 Provider"}</span>
+      </div>
+      <div class="vfo-qa-lists">
+        <div><h3>阻塞项</h3><ul>${vfoList(review.blockers)}</ul></div>
+        <div><h3>发现问题</h3><ul>${vfoList(review.problems)}</ul></div>
+        <div><h3>修复建议</h3><ul>${vfoList(review.fixes)}</ul></div>
+      </div>
+    </div>
+  `;
+}
+
+function renderVfoResultView() {
+  if (!activeVfoProject?.result) {
+    vfoResultView.innerHTML = '<div class="vfo-empty">Render Plan 尚未生成完成。</div>';
+    return;
+  }
+  const markup = {
+    overview: () => vfoOverviewMarkup(activeVfoProject),
+    assets: () => vfoAssetMarkup(activeVfoProject),
+    render: () => vfoRenderMarkup(activeVfoProject),
+    qa: () => vfoQaMarkup(activeVfoProject),
+    json: () => `<pre>${escapeHtml(JSON.stringify(activeVfoProject.result, null, 2))}</pre>`,
+  }[activeVfoTab];
+  vfoResultView.innerHTML = markup ? markup() : vfoOverviewMarkup(activeVfoProject);
+  [...vfoResultTabs.querySelectorAll("button")].forEach((button) => {
+    button.classList.toggle("active", button.dataset.vfoTab === activeVfoTab);
+  });
+}
+
+function renderVfoProject(project) {
+  activeVfoProject = project;
+  if (project.status !== "completed" || !project.result) {
+    vfoResult.hidden = true;
+    vfoStatus.textContent = project.status === "failed"
+      ? `生成失败：${project.metadata?.error || "未知错误"}`
+      : `VFO 项目 #${project.id} ${vfoStatusLabel(project.status)}。`;
+    return;
+  }
+  const plan = project.result.render_plan || {};
+  vfoResult.hidden = false;
+  vfoResultTitle.textContent = plan.project?.title || project.title;
+  vfoResultMeta.textContent = [
+    `${plan.scenes?.length || 0} 个镜头`,
+    plan.project?.platform_label || project.platform,
+    plan.project?.ratio || project.metadata?.ratio,
+    `${project.score || 0} 分`,
+    project.metadata?.ready ? "可以进入 Provider" : "需要修正",
+    project.metadata?.model || project.metadata?.provider,
+  ].filter(Boolean).join(" · ");
+  vfoStatus.textContent = `VFO 项目 #${project.id} 已完成并保存 Render Plan。`;
+  renderVfoResultView();
+  vfoResult.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+async function openVfoProject(id) {
+  const data = await fetchJson(`/api/vfo/project?id=${encodeURIComponent(id)}`);
+  renderVfoProject(data.project);
+  return data.project;
+}
+
+async function pollVfoProject(id) {
+  if (vfoPollTimer) clearTimeout(vfoPollTimer);
+  const project = await openVfoProject(id);
+  await loadVfoProjects();
+  if (["waiting", "processing"].includes(project.status)) {
+    vfoPollTimer = setTimeout(() => {
+      pollVfoProject(id).catch((error) => {
+        vfoStatus.textContent = error instanceof Error ? error.message : String(error);
+      });
+    }, 1500);
+  }
+}
+
+async function generateVfoProject() {
+  const manual = vfoSourceMode.value === "manual";
+  if (!manual && !Number(vfoDirectorSource.value || 0)) {
+    vfoStatus.textContent = "请先选择已完成的 Director 项目。";
+    return;
+  }
+  if (manual) {
+    try {
+      const parsed = JSON.parse(vfoManualJson.value || "");
+      const scenes = Array.isArray(parsed.storyboard) ? parsed.storyboard : Array.isArray(parsed.scenes) ? parsed.scenes : [];
+      if (!scenes.length) throw new Error("缺少镜头数组");
+    } catch {
+      vfoStatus.textContent = "请粘贴有效的 Storyboard JSON。";
+      return;
+    }
+  }
+  const button = document.querySelector("#generateVfo");
+  button.disabled = true;
+  vfoStatus.textContent = "正在创建 APS 与 VFO 调度任务...";
+  try {
+    const data = await fetchJson("/api/vfo/generate", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        director_project_id: manual ? 0 : Number(vfoDirectorSource.value || 0),
+        storyboard_json: manual ? vfoManualJson.value : "",
+        title: manual ? vfoManualTitle.value.trim() : "",
+        provider: vfoProvider.value,
+        platform: vfoPlatform.value,
+      }),
+    });
+    vfoStatus.textContent = `VFO 项目 #${data.project.id} 已进入队列。`;
+    await loadVfoProjects();
+    await pollVfoProject(data.project.id);
+  } catch (error) {
+    vfoStatus.textContent = error instanceof Error ? error.message : String(error);
+  } finally {
+    button.disabled = false;
+  }
+}
+
+function sendDirectorProjectToVfo() {
+  if (!activeDirectorProject?.id || activeDirectorProject.status !== "completed") {
+    directorStatus.textContent = "请先生成或打开一份已完成的导演稿。";
+    return;
+  }
+  vfoSourceMode.value = "director";
+  updateVfoSourceMode();
+  loadVfoSources({ preferredId: activeDirectorProject.id })
+    .then(() => {
+      vfoStatus.textContent = `已载入 Director 项目 #${activeDirectorProject.id}，可以生成 Render Plan。`;
+      document.querySelector("#vfoSystem").scrollIntoView({ behavior: "smooth", block: "start" });
+    })
+    .catch((error) => {
+      directorStatus.textContent = error instanceof Error ? error.message : String(error);
+    });
+}
+
+function vfoExport(type) {
+  if (!activeVfoProject?.id || activeVfoProject.status !== "completed") {
+    vfoStatus.textContent = "请先生成或打开一份已完成的 Render Plan。";
+    return;
+  }
+  const anchor = document.createElement("a");
+  anchor.href = `/api/vfo/export?id=${activeVfoProject.id}&type=${encodeURIComponent(type)}`;
+  anchor.download = "";
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+}
+
+async function copyVfoResult() {
+  if (!activeVfoProject?.result) return;
+  const text = activeVfoTab === "json"
+    ? JSON.stringify(activeVfoProject.result, null, 2)
+    : vfoResultView.innerText;
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch {
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    document.body.appendChild(textarea);
+    textarea.select();
+    document.execCommand("copy");
+    textarea.remove();
+  }
+  vfoStatus.textContent = "当前 VFO 结果已复制。";
+}
+
+async function openVfoFile() {
+  if (!activeVfoProject?.render_plan_path) {
+    vfoStatus.textContent = "没有可打开的 Render Plan 文件。";
+    return;
+  }
+  await fetchJson("/api/open-path", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ filePath: activeVfoProject.render_plan_path }),
+  });
+  vfoStatus.textContent = "已打开 Render Plan 文件位置。";
+}
+
 async function loadSettings() {
   const data = await fetchJson("/api/settings");
   if (data.providers) {
@@ -3065,9 +3457,92 @@ document.querySelector("#exportDirectorPrompts").addEventListener("click", () =>
   directorExport("prompts");
 });
 
+document.querySelector("#sendDirectorToVfo").addEventListener("click", () => {
+  sendDirectorProjectToVfo();
+});
+
 document.querySelector("#openDirectorFile").addEventListener("click", () => {
   openDirectorFile().catch((error) => {
     directorStatus.textContent = error instanceof Error ? error.message : String(error);
+  });
+});
+
+vfoSourceMode.addEventListener("change", () => {
+  updateVfoSourceMode();
+});
+
+vfoDirectorSource.addEventListener("change", () => {
+  const selected = selectedVfoSource();
+  const mappedPlatform = vfoConfig?.director_platform_aliases?.[selected?.platform] || selected?.platform;
+  if (mappedPlatform && vfoConfig?.platforms?.some((platform) => platform.id === mappedPlatform)) {
+    vfoPlatform.value = mappedPlatform;
+  }
+  renderVfoSourceSummary();
+});
+
+vfoManualJson.addEventListener("input", () => {
+  renderVfoSourceSummary();
+});
+
+vfoManualTitle.addEventListener("input", () => {
+  renderVfoSourceSummary();
+});
+
+document.querySelector("#refreshVfoSources").addEventListener("click", () => {
+  loadVfoSources()
+    .then(() => {
+      vfoStatus.textContent = `已刷新 ${vfoSources.length} 份可用 Storyboard。`;
+    })
+    .catch((error) => {
+      vfoStatus.textContent = error instanceof Error ? error.message : String(error);
+    });
+});
+
+document.querySelector("#generateVfo").addEventListener("click", () => {
+  generateVfoProject();
+});
+
+document.querySelector("#refreshVfoProjects").addEventListener("click", () => {
+  loadVfoProjects().catch((error) => {
+    vfoStatus.textContent = error instanceof Error ? error.message : String(error);
+  });
+});
+
+vfoProjects.addEventListener("click", (event) => {
+  const button = event.target.closest(".vfo-project-open");
+  const row = event.target.closest(".vfo-project-row");
+  if (!button || !row) return;
+  openVfoProject(Number(row.dataset.vfoProjectId || 0)).catch((error) => {
+    vfoStatus.textContent = error instanceof Error ? error.message : String(error);
+  });
+});
+
+vfoResultTabs.addEventListener("click", (event) => {
+  const button = event.target.closest("button[data-vfo-tab]");
+  if (!button) return;
+  activeVfoTab = button.dataset.vfoTab;
+  renderVfoResultView();
+});
+
+document.querySelector("#copyVfoResult").addEventListener("click", () => {
+  copyVfoResult();
+});
+
+document.querySelector("#exportRenderPlan").addEventListener("click", () => {
+  vfoExport("render-plan");
+});
+
+document.querySelector("#exportAssetPlan").addEventListener("click", () => {
+  vfoExport("asset-plan");
+});
+
+document.querySelector("#exportAssetPackage").addEventListener("click", () => {
+  vfoExport("asset-package");
+});
+
+document.querySelector("#openVfoFile").addEventListener("click", () => {
+  openVfoFile().catch((error) => {
+    vfoStatus.textContent = error instanceof Error ? error.message : String(error);
   });
 });
 
@@ -3195,6 +3670,10 @@ async function init() {
     await loadDirectorConfig();
     await loadDirectorSources({ preserveText: true });
     await loadDirectorProjects();
+    await loadVfoConfig();
+    await loadVfoSources();
+    updateVfoSourceMode();
+    await loadVfoProjects();
     await loadVoiceAssets({ applyDefault: true });
     updateTtsVoiceSource();
     updateTtsEmotionField();

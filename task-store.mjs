@@ -169,6 +169,102 @@ const DIRECTOR_SCENE_COLUMNS = [
   "metadata_json",
 ];
 
+const ASSET_PROJECT_COLUMNS = [
+  "id",
+  "director_project_id",
+  "vfo_project_id",
+  "title",
+  "platform",
+  "storyboard_path",
+  "asset_plan_path",
+  "package_path",
+  "status",
+  "score",
+  "created_at",
+  "updated_at",
+  "metadata_json",
+];
+
+const ASSET_SCENE_COLUMNS = [
+  "id",
+  "project_id",
+  "scene_index",
+  "purpose",
+  "asset_type",
+  "asset_subtype",
+  "reason",
+  "generation_method",
+  "image_prompt",
+  "negative_prompt",
+  "motion_prompt",
+  "platform_fit_json",
+  "aesthetic_score",
+  "readiness_score",
+  "render_ready",
+  "metadata_json",
+];
+
+const ASSET_REVIEW_COLUMNS = [
+  "id",
+  "project_id",
+  "review_type",
+  "score",
+  "material_score",
+  "shot_score",
+  "communication_score",
+  "aesthetic_risk_score",
+  "ai_risk_score",
+  "problems_json",
+  "fixes_json",
+  "created_at",
+  "updated_at",
+  "metadata_json",
+];
+
+const VFO_PROJECT_COLUMNS = [
+  "id",
+  "director_project_id",
+  "asset_project_id",
+  "title",
+  "platform",
+  "storyboard_path",
+  "render_plan_path",
+  "status",
+  "score",
+  "created_at",
+  "updated_at",
+  "metadata_json",
+];
+
+const VFO_SCENE_COLUMNS = [
+  "id",
+  "project_id",
+  "scene_index",
+  "asset_type",
+  "generation_strategy",
+  "render_strategy",
+  "qa_checks_json",
+  "platform_fit_json",
+  "readiness_score",
+  "metadata_json",
+];
+
+const VFO_REVIEW_COLUMNS = [
+  "id",
+  "project_id",
+  "score",
+  "communication_score",
+  "aesthetic_score",
+  "information_density_score",
+  "platform_fit_score",
+  "ai_flavor_score",
+  "problems_json",
+  "fixes_json",
+  "created_at",
+  "updated_at",
+  "metadata_json",
+];
+
 function nowIso() {
   return new Date().toISOString();
 }
@@ -370,6 +466,120 @@ export function openTaskStore(baseDir) {
 
     CREATE UNIQUE INDEX IF NOT EXISTS idx_director_scenes_project_scene
       ON director_scenes(project_id, scene_index);
+
+    CREATE TABLE IF NOT EXISTS asset_projects (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      director_project_id INTEGER NOT NULL DEFAULT 0,
+      vfo_project_id INTEGER NOT NULL DEFAULT 0,
+      title TEXT NOT NULL DEFAULT '',
+      platform TEXT NOT NULL DEFAULT '',
+      storyboard_path TEXT NOT NULL DEFAULT '',
+      asset_plan_path TEXT NOT NULL DEFAULT '',
+      package_path TEXT NOT NULL DEFAULT '',
+      status TEXT NOT NULL DEFAULT 'waiting',
+      score INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      metadata_json TEXT NOT NULL DEFAULT '{}'
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_asset_projects_status_created
+      ON asset_projects(status, created_at, id);
+
+    CREATE TABLE IF NOT EXISTS asset_scenes (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      project_id INTEGER NOT NULL,
+      scene_index INTEGER NOT NULL,
+      purpose TEXT NOT NULL DEFAULT '',
+      asset_type TEXT NOT NULL DEFAULT '',
+      asset_subtype TEXT NOT NULL DEFAULT '',
+      reason TEXT NOT NULL DEFAULT '',
+      generation_method TEXT NOT NULL DEFAULT '',
+      image_prompt TEXT NOT NULL DEFAULT '',
+      negative_prompt TEXT NOT NULL DEFAULT '',
+      motion_prompt TEXT NOT NULL DEFAULT '',
+      platform_fit_json TEXT NOT NULL DEFAULT '{}',
+      aesthetic_score INTEGER NOT NULL DEFAULT 0,
+      readiness_score INTEGER NOT NULL DEFAULT 0,
+      render_ready INTEGER NOT NULL DEFAULT 0,
+      metadata_json TEXT NOT NULL DEFAULT '{}'
+    );
+
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_asset_scenes_project_scene
+      ON asset_scenes(project_id, scene_index);
+
+    CREATE TABLE IF NOT EXISTS asset_reviews (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      project_id INTEGER NOT NULL,
+      review_type TEXT NOT NULL DEFAULT 'asset_review',
+      score INTEGER NOT NULL DEFAULT 0,
+      material_score INTEGER NOT NULL DEFAULT 0,
+      shot_score INTEGER NOT NULL DEFAULT 0,
+      communication_score INTEGER NOT NULL DEFAULT 0,
+      aesthetic_risk_score INTEGER NOT NULL DEFAULT 0,
+      ai_risk_score INTEGER NOT NULL DEFAULT 0,
+      problems_json TEXT NOT NULL DEFAULT '[]',
+      fixes_json TEXT NOT NULL DEFAULT '[]',
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      metadata_json TEXT NOT NULL DEFAULT '{}'
+    );
+
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_asset_reviews_project_type
+      ON asset_reviews(project_id, review_type);
+
+    CREATE TABLE IF NOT EXISTS vfo_projects (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      director_project_id INTEGER NOT NULL DEFAULT 0,
+      asset_project_id INTEGER NOT NULL DEFAULT 0,
+      title TEXT NOT NULL DEFAULT '',
+      platform TEXT NOT NULL DEFAULT '',
+      storyboard_path TEXT NOT NULL DEFAULT '',
+      render_plan_path TEXT NOT NULL DEFAULT '',
+      status TEXT NOT NULL DEFAULT 'waiting',
+      score INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      metadata_json TEXT NOT NULL DEFAULT '{}'
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_vfo_projects_status_created
+      ON vfo_projects(status, created_at, id);
+
+    CREATE TABLE IF NOT EXISTS vfo_scenes (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      project_id INTEGER NOT NULL,
+      scene_index INTEGER NOT NULL,
+      asset_type TEXT NOT NULL DEFAULT '',
+      generation_strategy TEXT NOT NULL DEFAULT '',
+      render_strategy TEXT NOT NULL DEFAULT '',
+      qa_checks_json TEXT NOT NULL DEFAULT '[]',
+      platform_fit_json TEXT NOT NULL DEFAULT '{}',
+      readiness_score INTEGER NOT NULL DEFAULT 0,
+      metadata_json TEXT NOT NULL DEFAULT '{}'
+    );
+
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_vfo_scenes_project_scene
+      ON vfo_scenes(project_id, scene_index);
+
+    CREATE TABLE IF NOT EXISTS vfo_reviews (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      project_id INTEGER NOT NULL,
+      score INTEGER NOT NULL DEFAULT 0,
+      communication_score INTEGER NOT NULL DEFAULT 0,
+      aesthetic_score INTEGER NOT NULL DEFAULT 0,
+      information_density_score INTEGER NOT NULL DEFAULT 0,
+      platform_fit_score INTEGER NOT NULL DEFAULT 0,
+      ai_flavor_score INTEGER NOT NULL DEFAULT 0,
+      problems_json TEXT NOT NULL DEFAULT '[]',
+      fixes_json TEXT NOT NULL DEFAULT '[]',
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      metadata_json TEXT NOT NULL DEFAULT '{}'
+    );
+
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_vfo_reviews_project
+      ON vfo_reviews(project_id);
   `);
 
   const taskColumns = new Set(db.prepare("PRAGMA table_info(tasks)").all().map((column) => column.name));
@@ -577,6 +787,101 @@ export function openTaskStore(baseDir) {
       camera, composition, image_prompt, motion_prompt, bgm, sfx, transition, asset_type, metadata_json
     )
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+  const getAssetProjectStmt = db.prepare(`
+    SELECT ${ASSET_PROJECT_COLUMNS.join(", ")}
+    FROM asset_projects
+    WHERE id = ?
+  `);
+  const listAssetProjectsStmt = db.prepare(`
+    SELECT ${ASSET_PROJECT_COLUMNS.join(", ")}
+    FROM asset_projects
+    ORDER BY datetime(created_at) DESC, id DESC
+    LIMIT ?
+  `);
+  const insertAssetProjectStmt = db.prepare(`
+    INSERT INTO asset_projects (
+      director_project_id, vfo_project_id, title, platform, storyboard_path,
+      asset_plan_path, package_path, status, score, created_at, updated_at, metadata_json
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+  const listAssetScenesStmt = db.prepare(`
+    SELECT ${ASSET_SCENE_COLUMNS.join(", ")}
+    FROM asset_scenes
+    WHERE project_id = ?
+    ORDER BY scene_index ASC, id ASC
+  `);
+  const insertAssetSceneStmt = db.prepare(`
+    INSERT INTO asset_scenes (
+      project_id, scene_index, purpose, asset_type, asset_subtype, reason,
+      generation_method, image_prompt, negative_prompt, motion_prompt,
+      platform_fit_json, aesthetic_score, readiness_score, render_ready, metadata_json
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+  const getAssetReviewStmt = db.prepare(`
+    SELECT ${ASSET_REVIEW_COLUMNS.join(", ")}
+    FROM asset_reviews
+    WHERE project_id = ? AND review_type = ?
+  `);
+  const listAssetReviewsStmt = db.prepare(`
+    SELECT ${ASSET_REVIEW_COLUMNS.join(", ")}
+    FROM asset_reviews
+    WHERE project_id = ?
+    ORDER BY datetime(updated_at) DESC, id DESC
+  `);
+  const insertAssetReviewStmt = db.prepare(`
+    INSERT INTO asset_reviews (
+      project_id, review_type, score, material_score, shot_score, communication_score,
+      aesthetic_risk_score, ai_risk_score, problems_json, fixes_json,
+      created_at, updated_at, metadata_json
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+  const getVfoProjectStmt = db.prepare(`
+    SELECT ${VFO_PROJECT_COLUMNS.join(", ")}
+    FROM vfo_projects
+    WHERE id = ?
+  `);
+  const listVfoProjectsStmt = db.prepare(`
+    SELECT ${VFO_PROJECT_COLUMNS.join(", ")}
+    FROM vfo_projects
+    ORDER BY datetime(created_at) DESC, id DESC
+    LIMIT ?
+  `);
+  const insertVfoProjectStmt = db.prepare(`
+    INSERT INTO vfo_projects (
+      director_project_id, asset_project_id, title, platform, storyboard_path,
+      render_plan_path, status, score, created_at, updated_at, metadata_json
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+  const listVfoScenesStmt = db.prepare(`
+    SELECT ${VFO_SCENE_COLUMNS.join(", ")}
+    FROM vfo_scenes
+    WHERE project_id = ?
+    ORDER BY scene_index ASC, id ASC
+  `);
+  const insertVfoSceneStmt = db.prepare(`
+    INSERT INTO vfo_scenes (
+      project_id, scene_index, asset_type, generation_strategy, render_strategy,
+      qa_checks_json, platform_fit_json, readiness_score, metadata_json
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+  const getVfoReviewStmt = db.prepare(`
+    SELECT ${VFO_REVIEW_COLUMNS.join(", ")}
+    FROM vfo_reviews
+    WHERE project_id = ?
+  `);
+  const insertVfoReviewStmt = db.prepare(`
+    INSERT INTO vfo_reviews (
+      project_id, score, communication_score, aesthetic_score, information_density_score,
+      platform_fit_score, ai_flavor_score, problems_json, fixes_json,
+      created_at, updated_at, metadata_json
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
 
   function updateTask(id, changes) {
@@ -1047,6 +1352,290 @@ export function openTaskStore(baseDir) {
     return listDirectorScenesStmt.all(Number(projectId || 0)).map(normalizeDirectorScene);
   }
 
+  function normalizeAssetProject(row) {
+    if (!row) return null;
+    return {
+      ...row,
+      director_project_id: Number(row.director_project_id || 0),
+      vfo_project_id: Number(row.vfo_project_id || 0),
+      score: Number(row.score || 0),
+    };
+  }
+
+  function normalizeAssetScene(row) {
+    if (!row) return null;
+    return {
+      ...row,
+      project_id: Number(row.project_id || 0),
+      scene_index: Number(row.scene_index || 0),
+      aesthetic_score: Number(row.aesthetic_score || 0),
+      readiness_score: Number(row.readiness_score || 0),
+      render_ready: Boolean(row.render_ready),
+    };
+  }
+
+  function normalizeAssetReview(row) {
+    if (!row) return null;
+    return {
+      ...row,
+      project_id: Number(row.project_id || 0),
+      score: Number(row.score || 0),
+      material_score: Number(row.material_score || 0),
+      shot_score: Number(row.shot_score || 0),
+      communication_score: Number(row.communication_score || 0),
+      aesthetic_risk_score: Number(row.aesthetic_risk_score || 0),
+      ai_risk_score: Number(row.ai_risk_score || 0),
+    };
+  }
+
+  function createAssetProject(input) {
+    const timestamp = nowIso();
+    const result = insertAssetProjectStmt.run(
+      Number(input.director_project_id || 0),
+      Number(input.vfo_project_id || 0),
+      String(input.title || ""),
+      String(input.platform || ""),
+      String(input.storyboard_path || ""),
+      String(input.asset_plan_path || ""),
+      String(input.package_path || ""),
+      String(input.status || "waiting"),
+      Number(input.score || 0),
+      timestamp,
+      timestamp,
+      String(input.metadata_json || "{}")
+    );
+    return getAssetProject(Number(result.lastInsertRowid));
+  }
+
+  function getAssetProject(id) {
+    return normalizeAssetProject(getAssetProjectStmt.get(Number(id)));
+  }
+
+  function updateAssetProject(id, changes) {
+    const entries = Object.entries(changes).filter(([key]) => (
+      ASSET_PROJECT_COLUMNS.includes(key) && !["id", "created_at", "updated_at"].includes(key)
+    ));
+    if (entries.length === 0) return getAssetProject(id);
+    const sql = entries.map(([key]) => `${key} = ?`).join(", ");
+    const values = entries.map(([, value]) => value ?? "");
+    values.push(nowIso(), Number(id));
+    db.prepare(`UPDATE asset_projects SET ${sql}, updated_at = ? WHERE id = ?`).run(...values);
+    return getAssetProject(id);
+  }
+
+  function listAssetProjects({ limit = 50 } = {}) {
+    const safeLimit = Math.max(1, Math.min(500, Number(limit) || 50));
+    return listAssetProjectsStmt.all(safeLimit).map(normalizeAssetProject);
+  }
+
+  function replaceAssetScenes(projectId, scenes = []) {
+    const id = Number(projectId || 0);
+    db.exec("BEGIN IMMEDIATE");
+    try {
+      db.prepare("DELETE FROM asset_scenes WHERE project_id = ?").run(id);
+      for (const scene of scenes) {
+        insertAssetSceneStmt.run(
+          id,
+          Number(scene.scene_index || scene.scene || 0),
+          String(scene.purpose || ""),
+          String(scene.asset_type || ""),
+          String(scene.asset_subtype || ""),
+          String(scene.reason || ""),
+          String(scene.generation_method || ""),
+          String(scene.image_prompt || ""),
+          String(scene.negative_prompt || ""),
+          String(scene.motion_prompt || ""),
+          String(scene.platform_fit_json || "{}"),
+          Number(scene.aesthetic_score || 0),
+          Number(scene.readiness_score || 0),
+          scene.render_ready ? 1 : 0,
+          String(scene.metadata_json || "{}")
+        );
+      }
+      db.exec("COMMIT");
+    } catch (error) {
+      db.exec("ROLLBACK");
+      throw error;
+    }
+    return listAssetScenes(id);
+  }
+
+  function listAssetScenes(projectId) {
+    return listAssetScenesStmt.all(Number(projectId || 0)).map(normalizeAssetScene);
+  }
+
+  function saveAssetReview(input) {
+    const projectId = Number(input.project_id || 0);
+    const reviewType = String(input.review_type || "asset_review");
+    const existing = getAssetReviewStmt.get(projectId, reviewType);
+    const timestamp = nowIso();
+    const values = [
+      Number(input.score || 0),
+      Number(input.material_score || 0),
+      Number(input.shot_score || 0),
+      Number(input.communication_score || 0),
+      Number(input.aesthetic_risk_score || 0),
+      Number(input.ai_risk_score || 0),
+      String(input.problems_json || "[]"),
+      String(input.fixes_json || "[]"),
+      timestamp,
+      String(input.metadata_json || "{}"),
+    ];
+    if (existing) {
+      db.prepare(`
+        UPDATE asset_reviews
+        SET score = ?, material_score = ?, shot_score = ?, communication_score = ?,
+            aesthetic_risk_score = ?, ai_risk_score = ?, problems_json = ?, fixes_json = ?,
+            updated_at = ?, metadata_json = ?
+        WHERE id = ?
+      `).run(...values, existing.id);
+    } else {
+      insertAssetReviewStmt.run(projectId, reviewType, ...values.slice(0, 8), timestamp, timestamp, values[9]);
+    }
+    return normalizeAssetReview(getAssetReviewStmt.get(projectId, reviewType));
+  }
+
+  function listAssetReviews(projectId) {
+    return listAssetReviewsStmt.all(Number(projectId || 0)).map(normalizeAssetReview);
+  }
+
+  function normalizeVfoProject(row) {
+    if (!row) return null;
+    return {
+      ...row,
+      director_project_id: Number(row.director_project_id || 0),
+      asset_project_id: Number(row.asset_project_id || 0),
+      score: Number(row.score || 0),
+    };
+  }
+
+  function normalizeVfoScene(row) {
+    if (!row) return null;
+    return {
+      ...row,
+      project_id: Number(row.project_id || 0),
+      scene_index: Number(row.scene_index || 0),
+      readiness_score: Number(row.readiness_score || 0),
+    };
+  }
+
+  function normalizeVfoReview(row) {
+    if (!row) return null;
+    return {
+      ...row,
+      project_id: Number(row.project_id || 0),
+      score: Number(row.score || 0),
+      communication_score: Number(row.communication_score || 0),
+      aesthetic_score: Number(row.aesthetic_score || 0),
+      information_density_score: Number(row.information_density_score || 0),
+      platform_fit_score: Number(row.platform_fit_score || 0),
+      ai_flavor_score: Number(row.ai_flavor_score || 0),
+    };
+  }
+
+  function createVfoProject(input) {
+    const timestamp = nowIso();
+    const result = insertVfoProjectStmt.run(
+      Number(input.director_project_id || 0),
+      Number(input.asset_project_id || 0),
+      String(input.title || ""),
+      String(input.platform || ""),
+      String(input.storyboard_path || ""),
+      String(input.render_plan_path || ""),
+      String(input.status || "waiting"),
+      Number(input.score || 0),
+      timestamp,
+      timestamp,
+      String(input.metadata_json || "{}")
+    );
+    return getVfoProject(Number(result.lastInsertRowid));
+  }
+
+  function getVfoProject(id) {
+    return normalizeVfoProject(getVfoProjectStmt.get(Number(id)));
+  }
+
+  function updateVfoProject(id, changes) {
+    const entries = Object.entries(changes).filter(([key]) => (
+      VFO_PROJECT_COLUMNS.includes(key) && !["id", "created_at", "updated_at"].includes(key)
+    ));
+    if (entries.length === 0) return getVfoProject(id);
+    const sql = entries.map(([key]) => `${key} = ?`).join(", ");
+    const values = entries.map(([, value]) => value ?? "");
+    values.push(nowIso(), Number(id));
+    db.prepare(`UPDATE vfo_projects SET ${sql}, updated_at = ? WHERE id = ?`).run(...values);
+    return getVfoProject(id);
+  }
+
+  function listVfoProjects({ limit = 50 } = {}) {
+    const safeLimit = Math.max(1, Math.min(500, Number(limit) || 50));
+    return listVfoProjectsStmt.all(safeLimit).map(normalizeVfoProject);
+  }
+
+  function replaceVfoScenes(projectId, scenes = []) {
+    const id = Number(projectId || 0);
+    db.exec("BEGIN IMMEDIATE");
+    try {
+      db.prepare("DELETE FROM vfo_scenes WHERE project_id = ?").run(id);
+      for (const scene of scenes) {
+        insertVfoSceneStmt.run(
+          id,
+          Number(scene.scene_index || scene.scene || 0),
+          String(scene.asset_type || ""),
+          String(scene.generation_strategy || ""),
+          String(scene.render_strategy || ""),
+          String(scene.qa_checks_json || "[]"),
+          String(scene.platform_fit_json || "{}"),
+          Number(scene.readiness_score || 0),
+          String(scene.metadata_json || "{}")
+        );
+      }
+      db.exec("COMMIT");
+    } catch (error) {
+      db.exec("ROLLBACK");
+      throw error;
+    }
+    return listVfoScenes(id);
+  }
+
+  function listVfoScenes(projectId) {
+    return listVfoScenesStmt.all(Number(projectId || 0)).map(normalizeVfoScene);
+  }
+
+  function saveVfoReview(input) {
+    const projectId = Number(input.project_id || 0);
+    const existing = getVfoReviewStmt.get(projectId);
+    const timestamp = nowIso();
+    const values = [
+      Number(input.score || 0),
+      Number(input.communication_score || 0),
+      Number(input.aesthetic_score || 0),
+      Number(input.information_density_score || 0),
+      Number(input.platform_fit_score || 0),
+      Number(input.ai_flavor_score || 0),
+      String(input.problems_json || "[]"),
+      String(input.fixes_json || "[]"),
+      timestamp,
+      String(input.metadata_json || "{}"),
+    ];
+    if (existing) {
+      db.prepare(`
+        UPDATE vfo_reviews
+        SET score = ?, communication_score = ?, aesthetic_score = ?,
+            information_density_score = ?, platform_fit_score = ?, ai_flavor_score = ?,
+            problems_json = ?, fixes_json = ?, updated_at = ?, metadata_json = ?
+        WHERE id = ?
+      `).run(...values, existing.id);
+    } else {
+      insertVfoReviewStmt.run(projectId, ...values.slice(0, 8), timestamp, timestamp, values[9]);
+    }
+    return normalizeVfoReview(getVfoReviewStmt.get(projectId));
+  }
+
+  function getVfoReview(projectId) {
+    return normalizeVfoReview(getVfoReviewStmt.get(Number(projectId || 0)));
+  }
+
   function deleteTasks(ids) {
     const values = ids.map((id) => Number(id)).filter(Number.isFinite);
     if (values.length === 0) return 0;
@@ -1111,5 +1700,21 @@ export function openTaskStore(baseDir) {
     listDirectorProjects,
     replaceDirectorScenes,
     listDirectorScenes,
+    createAssetProject,
+    getAssetProject,
+    updateAssetProject,
+    listAssetProjects,
+    replaceAssetScenes,
+    listAssetScenes,
+    saveAssetReview,
+    listAssetReviews,
+    createVfoProject,
+    getVfoProject,
+    updateVfoProject,
+    listVfoProjects,
+    replaceVfoScenes,
+    listVfoScenes,
+    saveVfoReview,
+    getVfoReview,
   };
 }
