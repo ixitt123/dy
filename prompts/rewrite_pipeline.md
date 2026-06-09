@@ -55,6 +55,10 @@ Step 5: Remove AI-flavored phrasing, official tone, fake grand words, and mechan
 Step 6: Output exactly the selected versions in Output boxes.
 - Use each selected version key exactly.
 - Follow each selected version's direction and wordCount.
+- Treat wordCount as a hard delivery requirement, not a suggestion.
+- Count Chinese characters after removing spaces and line breaks.
+- For "N字左右", keep the final text within N +/- 5%, with a minimum tolerance of 8 characters.
+- For a numeric range, keep the final text inside that range.
 - Do not create unselected versions.
 
 ## Output Format

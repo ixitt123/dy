@@ -224,14 +224,6 @@
       <section class="rewrite-area" id="rewritePanel" hidden>
         <div class="result-head">
           <h2>AI 改写工作台</h2>
-          <div class="result-tools">
-            <button class="ghost small" id="runRewrite" type="button">生成改写</button>
-            <button class="ghost small" id="saveRewrite" type="button">保存</button>
-            <button class="ghost small" id="saveRewriteTxt" type="button">另存 TXT</button>
-            <button class="ghost small" id="saveRewriteMd" type="button">另存 MD</button>
-            <button class="ghost small" id="openRewriteFile" type="button">打开文件位置</button>
-            <button class="ghost small" id="closeRewrite" type="button">关闭</button>
-          </div>
         </div>
         <div class="rewrite-body">
           <input id="rewriteTaskId" type="hidden" />
@@ -319,21 +311,21 @@
             <div>
               <h3>名称1</h3>
               <p id="rewriteStatus">选择一条文案后开始改写。</p>
+              <div class="rewrite-unified-actions">
+                <button class="ghost small" id="runRewrite" type="button">全部生成</button>
+                <button class="ghost small" id="saveRewrite" type="button">全部保存</button>
+                <button class="ghost small" id="saveRewriteTxt" type="button">全部另存 TXT</button>
+                <button class="ghost small" id="saveRewriteMd" type="button">全部另存 MD</button>
+                <button class="ghost small" id="openRewriteFile" type="button">打开文件位置</button>
+                <button class="ghost small" id="closeRewrite" type="button">关闭</button>
+              </div>
             </div>
             <div class="rewrite-result-meta">
               <label class="rewrite-count-control" for="rewriteVersionCountInput">
                 <span>输出框数量</span>
-                <input id="rewriteVersionCountInput" type="number" min="1" max="5" value="5" />
+                <input id="rewriteVersionCountInput" type="number" min="1" max="50" value="5" />
               </label>
-              <span id="rewriteVersionCount">0 个输出框</span>
             </div>
-          </div>
-          <div class="rewrite-version-planner">
-            <div class="rewrite-planner-head">
-              <strong>选择版本类型</strong>
-              <span>勾选哪几个类型，就生成哪几个文案框</span>
-            </div>
-            <div class="rewrite-version-picker" id="rewriteVersionPicker"></div>
           </div>
           <div class="rewrite-progress" id="rewriteProgress" hidden>
             <div class="rewrite-progress-line">

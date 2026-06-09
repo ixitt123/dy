@@ -1633,7 +1633,7 @@ function normalizeVersionSpecs(input = [], fallbackDirection = "招生引流") {
       };
     })
     .filter(Boolean)
-    .slice(0, 8);
+    .slice(0, 50);
 }
 
 function readVersionValue(source, spec) {
@@ -1781,7 +1781,7 @@ async function getRewriteProvider(providerId) {
   return { id, ...provider };
 }
 
-async function chatCompletion(provider, messages, signal) {
+async function chatCompletion(provider, messages, signal, { temperature = 0.78 } = {}) {
   const baseUrl = String(provider.baseUrl || "").replace(/\/+$/, "");
   const response = await fetch(`${baseUrl}/chat/completions`, {
     method: "POST",
@@ -1791,7 +1791,7 @@ async function chatCompletion(provider, messages, signal) {
     },
     body: JSON.stringify({
       model: provider.model,
-      temperature: 0.78,
+      temperature,
       messages,
     }),
     signal,
@@ -1807,6 +1807,86 @@ async function chatCompletion(provider, messages, signal) {
     throw new Error(`AI 改写请求失败：${message}${balanceTip}`);
   }
   return data.choices?.[0]?.message?.content || "";
+}
+
+function chunkRows(rows, size = 8) {
+  const chunks = [];
+  for (let index = 0; index < rows.length; index += size) chunks.push(rows.slice(index, index + size));
+  return chunks;
+}
+
+function rewriteCharacterCount(value) {
+  return Array.from(String(value || "").replace(/\s+/g, "")).length;
+}
+
+function requestedWordCountRange(input) {
+  const value = String(input || "").trim();
+  if (!value || /不限/.test(value)) return null;
+  const range = value.match(/(\d+)\s*(?:-|—|~|～|至|到)\s*(\d+)/);
+  if (range) {
+    const first = Number(range[1]);
+    const second = Number(range[2]);
+    return { min: Math.min(first, second), max: Math.max(first, second) };
+  }
+  const number = Number(value.match(/\d+/)?.[0] || 0);
+  if (!number) return null;
+  if (/以内|以下|最多|不超过/.test(value)) return { min: 0, max: number };
+  if (/以上|至少|不少于/.test(value)) return { min: number, max: Number.POSITIVE_INFINITY };
+  const tolerance = Math.max(8, Math.round(number * 0.05));
+  return { min: Math.max(1, number - tolerance), max: number + tolerance };
+}
+
+function wordCountIssues(versions, specs) {
+  const byKey = new Map(versions.map((item) => [item.key, item]));
+  return specs
+    .map((spec) => {
+      const range = requestedWordCountRange(spec.wordCount);
+      if (!range) return null;
+      const version = byKey.get(spec.key) || { ...spec, content: "" };
+      const count = rewriteCharacterCount(version.content);
+      if (count >= range.min && count <= range.max) return null;
+      return { spec, version, count, range };
+    })
+    .filter(Boolean);
+}
+
+async function repairRewriteWordCounts(provider, versions, specs, signal) {
+  let repaired = versions.map((item) => ({ ...item }));
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const issues = wordCountIssues(repaired, specs);
+    if (issues.length === 0) break;
+    const requirements = issues.map(({ spec, version, count, range }) => ({
+      key: spec.key,
+      direction: spec.direction,
+      requestedWordCount: spec.wordCount,
+      allowedCharacters: `${range.min}-${Number.isFinite(range.max) ? range.max : "不限"}`,
+      currentCharacters: count,
+      currentText: version.content,
+    }));
+    const correctedContent = await chatCompletion(provider, [
+      {
+        role: "system",
+        content: "你是中文文案字数校准器。只输出 JSON，不要 Markdown，不要解释。",
+      },
+      {
+        role: "user",
+        content: [
+          "以下文案字数不合格，请在保留原意、方向、口语感和行动号召的前提下补写或压缩。",
+          "字数按删除空格和换行后的字符数计算，必须落在 allowedCharacters 范围内。",
+          "必须保留原 key，只返回需要修正的 versions。",
+          JSON.stringify(requirements, null, 2),
+          '输出格式：{"versions":{"key":"修正后的文案"}}',
+        ].join("\n\n"),
+      },
+    ], signal, { temperature: 0.35 });
+    const corrected = parseJsonFromModelText(correctedContent);
+    const source = corrected.versions || corrected;
+    repaired = repaired.map((version) => {
+      const replacement = normalizeRewriteVersionContent(readVersionValue({ versions: source }, version));
+      return replacement ? { ...version, content: replacement } : version;
+    });
+  }
+  return repaired;
 }
 
 async function rewriteTranscriptWithProvider({ providerId, transcriptText, analysis, direction, style, referenceStyle, params = {}, humanizeLevel: requestedHumanizeLevel = "", referenceExamples: inputReferenceExamples = [], versionSpecs: inputVersionSpecs = [], task, signal }) {
@@ -1834,40 +1914,103 @@ async function rewriteTranscriptWithProvider({ providerId, transcriptText, analy
   const referenceExamplesText = referenceExamples.length
     ? referenceExamples.map((item, index) => `案例 ${index + 1}：\n${item.text}`).join("\n\n---\n\n")
     : "暂无参考案例。";
+  const generatedVersions = [];
+  const humanizerNotes = [];
+  let structure = {};
 
-  const pipelinePrompt = renderTemplate(assets.prompts.rewritePipeline, {
-    original_text: String(transcriptText || "").slice(0, 12000),
-    analysis_json: analysisText.slice(0, 6000),
-    style_profile: styleProfile,
-    reference_examples: referenceExamplesText,
-    rewrite_direction: safeDirection,
-    tone_level: safeParams.toneLevel || 8,
-    conflict_level: safeParams.conflictLevel || 7,
-    emotion_level: safeParams.emotionLevel || 7,
-    sales_level: safeParams.salesLevel || 6,
-    humanize_level: humanizeLevel,
-    version_specs: JSON.stringify(versionSpecs, null, 2),
-    skill_rewrite_douyin_education: assets.skills.rewriteEducation,
-    skill_boss_style: assets.skills.bossStyle,
-  });
+  for (const specBatch of chunkRows(versionSpecs, 8)) {
+    throwIfPaused(signal);
+    const pipelinePrompt = renderTemplate(assets.prompts.rewritePipeline, {
+      original_text: String(transcriptText || "").slice(0, 12000),
+      analysis_json: analysisText.slice(0, 6000),
+      style_profile: styleProfile,
+      reference_examples: referenceExamplesText,
+      rewrite_direction: safeDirection,
+      tone_level: safeParams.toneLevel || 8,
+      conflict_level: safeParams.conflictLevel || 7,
+      emotion_level: safeParams.emotionLevel || 7,
+      sales_level: safeParams.salesLevel || 6,
+      humanize_level: humanizeLevel,
+      version_specs: JSON.stringify(specBatch, null, 2),
+      skill_rewrite_douyin_education: assets.skills.rewriteEducation,
+      skill_boss_style: assets.skills.bossStyle,
+    });
+    const draftContent = await chatCompletion(provider, [
+      {
+        role: "system",
+        content: [
+          "你是本地招生文案改写实验室的 rewrite pipeline 执行器。",
+          "必须遵守注入的 Skill 和 Prompt 模板。",
+          "只输出 JSON，不要 Markdown，不要解释。",
+        ].join("\n"),
+      },
+      {
+        role: "user",
+        content: pipelinePrompt,
+      },
+    ], signal);
+    const draft = parseJsonFromModelText(draftContent);
+    let batchRewrite = normalizeRewrite(draft.versions ? { versions: draft.versions } : draft, {
+      provider: provider.id,
+      model: provider.model,
+      direction: safeDirection,
+      style: safeStyle,
+      referenceStyle: safeReference,
+      params: { ...safeParams, humanizeLevel },
+      humanizeLevel,
+      referenceExamples,
+      versionSpecs: specBatch,
+      structure: draft.structure || {},
+    });
+    if (Object.keys(structure).length === 0) structure = batchRewrite.structure;
 
-  const draftContent = await chatCompletion(provider, [
-    {
-      role: "system",
-      content: [
-        "你是本地招生文案改写实验室的 rewrite pipeline 执行器。",
-        "必须遵守注入的 Skill 和 Prompt 模板。",
-        "只输出 JSON，不要 Markdown，不要解释。",
-      ].join("\n"),
-    },
-    {
-      role: "user",
-      content: pipelinePrompt,
-    },
-  ], signal);
+    if (humanizeLevel !== "关闭") {
+      const humanizePrompt = renderTemplate(assets.prompts.humanizeZh, {
+        skill_humanizer_zh: assets.skills.humanizerZh,
+        humanize_level: humanizeLevel,
+        rewrite_direction: safeDirection,
+        style_profile: styleProfile,
+        tone_level: safeParams.toneLevel || 8,
+        conflict_level: safeParams.conflictLevel || 7,
+        emotion_level: safeParams.emotionLevel || 7,
+        sales_level: safeParams.salesLevel || 6,
+        version_specs: JSON.stringify(specBatch, null, 2),
+        draft_json: JSON.stringify({
+          versions: Object.fromEntries(batchRewrite.versions.map((item) => [item.key, item.content])),
+        }, null, 2),
+      });
+      const humanizedContent = await chatCompletion(provider, [
+        {
+          role: "system",
+          content: "你是中文去 AI 味二次处理器。只输出 JSON，不要 Markdown，不要解释。",
+        },
+        {
+          role: "user",
+          content: humanizePrompt,
+        },
+      ], signal);
+      const humanized = parseJsonFromModelText(humanizedContent);
+      batchRewrite = normalizeRewrite(humanized.versions || humanized, {
+        provider: provider.id,
+        model: provider.model,
+        direction: safeDirection,
+        style: safeStyle,
+        referenceStyle: safeReference,
+        params: { ...safeParams, humanizeLevel },
+        humanizeLevel,
+        referenceExamples,
+        versionSpecs: specBatch,
+        structure: batchRewrite.structure,
+        humanizerNotes: Array.isArray(humanized.humanizerNotes) ? humanized.humanizerNotes : [],
+      });
+      humanizerNotes.push(...batchRewrite.humanizerNotes);
+    }
 
-  const draft = parseJsonFromModelText(draftContent);
-  let rewrite = normalizeRewrite(draft.versions ? { ...draft.versions, structure: draft.structure } : draft, {
+    const repairedVersions = await repairRewriteWordCounts(provider, batchRewrite.versions, specBatch, signal);
+    generatedVersions.push(...repairedVersions);
+  }
+
+  const rewrite = normalizeRewrite({ versions: generatedVersions }, {
     provider: provider.id,
     model: provider.model,
     direction: safeDirection,
@@ -1877,49 +2020,9 @@ async function rewriteTranscriptWithProvider({ providerId, transcriptText, analy
     humanizeLevel,
     referenceExamples,
     versionSpecs,
-    structure: draft.structure || {},
+    structure,
+    humanizerNotes,
   });
-
-  if (humanizeLevel !== "关闭") {
-    const humanizePrompt = renderTemplate(assets.prompts.humanizeZh, {
-      skill_humanizer_zh: assets.skills.humanizerZh,
-      humanize_level: humanizeLevel,
-      rewrite_direction: safeDirection,
-      style_profile: styleProfile,
-      tone_level: safeParams.toneLevel || 8,
-      conflict_level: safeParams.conflictLevel || 7,
-      emotion_level: safeParams.emotionLevel || 7,
-      sales_level: safeParams.salesLevel || 6,
-      version_specs: JSON.stringify(versionSpecs, null, 2),
-      draft_json: JSON.stringify({
-        versions: Object.fromEntries(rewrite.versions.map((item) => [item.key, item.content])),
-      }, null, 2),
-    });
-    const humanizedContent = await chatCompletion(provider, [
-      {
-        role: "system",
-        content: "你是中文去 AI 味二次处理器。只输出 JSON，不要 Markdown，不要解释。",
-      },
-      {
-        role: "user",
-        content: humanizePrompt,
-      },
-    ], signal);
-    const humanized = parseJsonFromModelText(humanizedContent);
-    rewrite = normalizeRewrite(humanized.versions || humanized, {
-      provider: provider.id,
-      model: provider.model,
-      direction: safeDirection,
-      style: safeStyle,
-      referenceStyle: safeReference,
-      params: { ...safeParams, humanizeLevel },
-      humanizeLevel,
-      referenceExamples,
-      versionSpecs,
-      structure: rewrite.structure,
-      humanizerNotes: Array.isArray(humanized.humanizerNotes) ? humanized.humanizerNotes : [],
-    });
-  }
 
   const emptyCount = rewrite.versions.filter((version) => !version.content).length;
   if (emptyCount === rewrite.versions.length) {
@@ -2595,7 +2698,7 @@ const server = http.createServer(async (req, res) => {
         versionSpecs: body.versionSpecs || body.versions || [],
         task,
       });
-      const updatedTask = saveRewriteForTask(task, rewrite, "md");
+      const updatedTask = body.previewOnly ? task : saveRewriteForTask(task, rewrite, "md");
       sendJson(res, 200, {
         ok: true,
         rewrite,
@@ -2613,7 +2716,22 @@ const server = http.createServer(async (req, res) => {
         sendJson(res, 404, { ok: false, message: "任务不存在" });
         return;
       }
-      const rewrite = rewriteFromBody(body, task);
+      let rewrite = rewriteFromBody(body, task);
+      if (body.mergeExisting) {
+        const existingRewrite = safeJsonParse(task.rewrite_json);
+        const existingVersions = Array.isArray(existingRewrite.versions) ? existingRewrite.versions : [];
+        const incomingByKey = new Map(rewrite.versions.map((version) => [version.key, version]));
+        const mergedVersions = existingVersions.map((version) => incomingByKey.get(version.key) || version);
+        for (const version of rewrite.versions) {
+          if (!existingVersions.some((existing) => existing.key === version.key)) mergedVersions.push(version);
+        }
+        rewrite = normalizeRewrite({ versions: mergedVersions }, {
+          ...existingRewrite,
+          ...rewrite,
+          versionSpecs: mergedVersions,
+          structure: rewrite.structure || existingRewrite.structure || {},
+        });
+      }
       const updatedTask = saveRewriteForTask(task, rewrite, body.format === "md" ? "md" : "txt");
       sendJson(res, 200, {
         ok: true,

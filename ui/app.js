@@ -65,8 +65,6 @@ const rewriteSalesLevel = document.querySelector("#rewriteSalesLevel");
 const rewriteSalesValue = document.querySelector("#rewriteSalesValue");
 const rewriteHumanizeLevel = document.querySelector("#rewriteHumanizeLevel");
 const rewriteVersions = document.querySelector("#rewriteVersions");
-const rewriteVersionPicker = document.querySelector("#rewriteVersionPicker");
-const rewriteVersionCount = document.querySelector("#rewriteVersionCount");
 const rewriteVersionCountInput = document.querySelector("#rewriteVersionCountInput");
 const rewriteStatus = document.querySelector("#rewriteStatus");
 const rewriteProgress = document.querySelector("#rewriteProgress");
@@ -114,6 +112,7 @@ const rewriteVersionOptions = [
   { key: "moments", name: "朋友圈版", direction: "朋友圈文案", wordCount: "220字左右" },
   { key: "conversion", name: "成交转化版", direction: "暑假班转化", wordCount: "150字左右" },
 ];
+const maxRewriteVersionCount = 50;
 
 function setBusy(label) {
   statusText.textContent = label;
@@ -333,17 +332,21 @@ function selectOptionsMarkup(options, selected) {
 
 function clampRewriteVersionCount(value) {
   const parsed = Number.parseInt(value, 10);
-  return Math.max(1, Math.min(rewriteVersionOptions.length, Number.isFinite(parsed) ? parsed : 1));
+  return Math.max(1, Math.min(maxRewriteVersionCount, Number.isFinite(parsed) ? parsed : 5));
 }
 
-function rewriteVersionsFromKeys(keys) {
-  return keys
-    .map((key) => {
-      const base = rewriteVersionOptions.find((option) => option.key === key);
-      if (!base) return null;
-      return rewriteVersionDrafts.get(key) || { ...base, content: "" };
-    })
-    .filter(Boolean);
+function rewriteVersionAt(index) {
+  const base = rewriteVersionOptions[index] || {
+    key: `version-${index + 1}`,
+    name: `版本 ${index + 1}`,
+    direction: rewriteDirection.value || "招生引流",
+    wordCount: "150字左右",
+  };
+  return rewriteVersionDrafts.get(base.key) || { ...base, content: "" };
+}
+
+function countRewriteCharacters(value) {
+  return Array.from(String(value || "").replace(/\s+/g, "")).length;
 }
 
 function normalizeRewriteVersions(rewrite = {}, allowDefaults = true) {
@@ -370,37 +373,14 @@ function normalizeRewriteVersions(rewrite = {}, allowDefaults = true) {
   });
 }
 
-function renderRewriteVersionPicker(versions = currentRewriteSpecs) {
-  const selectedKeys = new Set(versions.map((item) => item.key));
-  rewriteVersionPicker.innerHTML = rewriteVersionOptions
-    .map((option) => `
-      <label class="rewrite-version-choice${selectedKeys.has(option.key) ? " is-selected" : ""}">
-        <input
-          class="rewrite-version-toggle"
-          type="checkbox"
-          data-version-key="${escapeHtml(option.key)}"
-          ${selectedKeys.has(option.key) ? "checked" : ""}
-        />
-        <span>
-          <strong>${escapeHtml(option.name)}</strong>
-          <small>${escapeHtml(option.direction)}</small>
-        </span>
-      </label>
-    `)
-    .join("");
-  rewriteVersionCount.textContent = `${versions.length} 个输出框`;
-  rewriteVersionCountInput.value = String(Math.max(1, versions.length));
-  rewriteVersionCountInput.max = String(rewriteVersionOptions.length);
-}
-
 function renderRewriteVersions(rewrite = {}, { allowDefaults = true } = {}) {
   const versions = normalizeRewriteVersions(rewrite, allowDefaults);
   currentRewriteSpecs = versions.map(({ content, ...spec }) => spec);
   for (const version of versions) rewriteVersionDrafts.set(version.key, { ...version });
-  renderRewriteVersionPicker(currentRewriteSpecs);
+  rewriteVersionCountInput.value = String(Math.max(1, versions.length));
 
   if (versions.length === 0) {
-    rewriteVersions.innerHTML = '<div class="rewrite-empty">请至少勾选一个输出版本。</div>';
+    rewriteVersions.innerHTML = '<div class="rewrite-empty">请至少保留一个输出框。</div>';
     return;
   }
 
@@ -408,10 +388,8 @@ function renderRewriteVersions(rewrite = {}, { allowDefaults = true } = {}) {
     .map((version) => `
       <div class="rewrite-version" data-version-key="${escapeHtml(version.key)}">
         <div class="rewrite-version-head">
-          <div>
-            <strong>${escapeHtml(version.name)}</strong>
-            <span>独立设置此版本</span>
-          </div>
+          <button class="ghost small rewrite-generate-one" type="button" data-version-key="${escapeHtml(version.key)}">生成</button>
+          <button class="ghost small rewrite-save-one" type="button" data-version-key="${escapeHtml(version.key)}">保存</button>
           <button class="ghost small rewrite-copy" type="button" data-version-key="${escapeHtml(version.key)}">复制</button>
         </div>
         <div class="rewrite-version-options">
@@ -428,7 +406,7 @@ function renderRewriteVersions(rewrite = {}, { allowDefaults = true } = {}) {
         </div>
         <textarea class="rewrite-version-text" rows="8" data-version-key="${escapeHtml(version.key)}" placeholder="生成后可继续手动编辑">${escapeHtml(version.content)}</textarea>
         <div class="rewrite-version-foot">
-          <span class="rewrite-char-count">当前 ${version.content.length} 字</span>
+          <span class="rewrite-char-count">当前 ${countRewriteCharacters(version.content)} 字</span>
         </div>
       </div>
     `)
@@ -436,10 +414,11 @@ function renderRewriteVersions(rewrite = {}, { allowDefaults = true } = {}) {
 }
 
 function collectRewriteVersions() {
-  const versions = [...rewriteVersions.querySelectorAll(".rewrite-version")].map((card) => {
+  const versions = [...rewriteVersions.querySelectorAll(".rewrite-version")].map((card, index) => {
+    const cached = rewriteVersionDrafts.get(card.dataset.versionKey) || currentRewriteSpecs[index] || {};
     const version = {
       key: card.dataset.versionKey,
-      name: card.querySelector(".rewrite-version-head strong")?.textContent || "",
+      name: cached.name || `版本 ${index + 1}`,
       direction: card.querySelector(".rewrite-version-direction")?.value || rewriteDirection.value,
       wordCount: card.querySelector(".rewrite-version-word-count")?.value.trim() || "150字左右",
       content: card.querySelector(".rewrite-version-text")?.value || "",
@@ -448,39 +427,17 @@ function collectRewriteVersions() {
     return version;
   });
   currentRewriteSpecs = versions.map(({ content, ...spec }) => spec);
-  rewriteVersionCount.textContent = `${versions.length} 个输出框`;
   return versions;
 }
 
-function syncRewriteVersionSelection(event) {
-  collectRewriteVersions();
-  let selectedKeys = [...rewriteVersionPicker.querySelectorAll(".rewrite-version-toggle:checked")]
-    .map((checkbox) => checkbox.dataset.versionKey);
-  if (selectedKeys.length === 0) {
-    const lastChanged = event?.target?.closest(".rewrite-version-toggle");
-    selectedKeys = [lastChanged?.dataset.versionKey || rewriteVersionOptions[0].key];
-  }
-  const versions = rewriteVersionsFromKeys(selectedKeys);
-  renderRewriteVersions({ versions }, { allowDefaults: false });
-  rewriteStatus.textContent = versions.length
-    ? `已选择 ${versions.length} 个输出框，可分别设置方向和字数。`
-    : "请至少勾选一个输出版本。";
-}
-
 function syncRewriteVersionCount() {
-  collectRewriteVersions();
+  const existingVersions = collectRewriteVersions();
   const count = clampRewriteVersionCount(rewriteVersionCountInput.value);
   rewriteVersionCountInput.value = String(count);
-  const selectedKeys = [...rewriteVersionPicker.querySelectorAll(".rewrite-version-toggle:checked")]
-    .map((checkbox) => checkbox.dataset.versionKey);
-  const nextKeys = selectedKeys.slice(0, count);
-  for (const option of rewriteVersionOptions) {
-    if (nextKeys.length >= count) break;
-    if (!nextKeys.includes(option.key)) nextKeys.push(option.key);
-  }
-  const versions = rewriteVersionsFromKeys(nextKeys);
+  const versions = existingVersions.slice(0, count);
+  while (versions.length < count) versions.push(rewriteVersionAt(versions.length));
   renderRewriteVersions({ versions }, { allowDefaults: false });
-  rewriteStatus.textContent = `已设置 ${versions.length} 个输出框，可继续选择版本类型。`;
+  rewriteStatus.textContent = `已设置 ${versions.length} 个输出框，可分别设置方向和字数。`;
 }
 
 function collectReferenceExamplesText() {
@@ -599,7 +556,7 @@ async function openRewriteEditor(taskId) {
   renderRewriteVersions(rewrite);
   rewriteStatus.textContent = rewrite.versions?.length
     ? `已加载 ${rewrite.versions.length} 个历史版本，可编辑后保存或重新生成。`
-    : `已准备 ${currentRewriteSpecs.length} 个输出框，可勾选数量并分别设置方向和字数。`;
+    : `已准备 ${currentRewriteSpecs.length} 个输出框，可调整数量、方向和字数。`;
   rewritePanel.hidden = false;
   rewritePanel.scrollIntoView({ behavior: "smooth", block: "start" });
 }
@@ -1090,7 +1047,7 @@ async function generateRewrite() {
   if (document.activeElement === rewriteVersionCountInput) syncRewriteVersionCount();
   const versionSpecs = collectRewriteVersions();
   if (versionSpecs.length === 0) {
-    rewriteStatus.textContent = "请至少勾选一个输出版本。";
+    rewriteStatus.textContent = "请至少保留一个输出框。";
     return;
   }
   rewriteStatus.textContent = `正在生成 ${versionSpecs.length} 个改写版本...`;
@@ -1122,6 +1079,80 @@ async function generateRewrite() {
     rewriteStatus.textContent = `改写已生成并写入 SQLite：${data.task?.rewrite_path || ""}`;
   } catch (error) {
     stopRewriteProgress("生成失败", 100);
+    rewriteStatus.textContent = error instanceof Error ? error.message : String(error);
+  }
+}
+
+async function generateSingleRewrite(versionKey) {
+  const id = rewriteTaskId.value;
+  if (!id) return;
+  const versions = collectRewriteVersions();
+  const target = versions.find((version) => version.key === versionKey);
+  if (!target) return;
+  rewriteStatus.textContent = "正在生成当前输出框...";
+  startRewriteProgress(1);
+  try {
+    const data = await fetchJson("/api/tasks/rewrite", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        id,
+        provider: rewriteProvider.value,
+        direction: rewriteDirection.value,
+        style: rewriteStyle.value,
+        referenceStyle: rewriteReference.value,
+        params: rewriteParams(),
+        humanizeLevel: rewriteHumanizeLevel.value,
+        referenceExamples: collectReferenceExamplesText(),
+        versionSpecs: [target],
+        text: rewriteOriginal.value,
+        previewOnly: true,
+      }),
+    });
+    const generated = data.rewrite?.versions?.[0];
+    if (!generated) throw new Error("当前输出框没有生成内容");
+    const mergedVersions = versions.map((version) => version.key === versionKey
+      ? { ...version, ...generated }
+      : version);
+    renderRewriteVersions({ versions: mergedVersions }, { allowDefaults: false });
+    stopRewriteProgress("当前输出框生成完成", 100);
+    rewriteStatus.textContent = "当前输出框已生成，可单独保存或继续编辑。";
+  } catch (error) {
+    stopRewriteProgress("生成失败", 100);
+    rewriteStatus.textContent = error instanceof Error ? error.message : String(error);
+  }
+}
+
+async function saveSingleRewrite(versionKey) {
+  const id = rewriteTaskId.value;
+  if (!id) return;
+  const target = collectRewriteVersions().find((version) => version.key === versionKey);
+  if (!target) return;
+  rewriteStatus.textContent = "正在保存当前输出框...";
+  try {
+    const data = await fetchJson("/api/tasks/rewrite/save", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        id,
+        provider: rewriteProvider.value,
+        direction: rewriteDirection.value,
+        style: rewriteStyle.value,
+        referenceStyle: rewriteReference.value,
+        params: rewriteParams(),
+        humanizeLevel: rewriteHumanizeLevel.value,
+        referenceExamples: collectReferenceExamplesText(),
+        versions: [target],
+        format: "md",
+        mergeExisting: true,
+      }),
+    });
+    renderTranscripts(data.transcripts);
+    await refreshTasks();
+    await refreshFiles();
+    lastRewritePath = data.filePath || data.task?.rewrite_path || lastRewritePath;
+    rewriteStatus.textContent = "当前输出框已保存。";
+  } catch (error) {
     rewriteStatus.textContent = error instanceof Error ? error.message : String(error);
   }
 }
@@ -1561,8 +1592,26 @@ transcriptList.addEventListener("click", (event) => {
 });
 
 rewriteVersions.addEventListener("click", async (event) => {
-  const button = event.target.closest(".rewrite-copy");
+  const button = event.target.closest(".rewrite-generate-one, .rewrite-save-one, .rewrite-copy");
   if (!button) return;
+  if (button.classList.contains("rewrite-generate-one")) {
+    button.disabled = true;
+    try {
+      await generateSingleRewrite(button.dataset.versionKey);
+    } finally {
+      button.disabled = false;
+    }
+    return;
+  }
+  if (button.classList.contains("rewrite-save-one")) {
+    button.disabled = true;
+    try {
+      await saveSingleRewrite(button.dataset.versionKey);
+    } finally {
+      button.disabled = false;
+    }
+    return;
+  }
   const textarea = rewriteVersions.querySelector(`.rewrite-version-text[data-version-key="${button.dataset.versionKey}"]`);
   if (!textarea) return;
   try {
@@ -1576,16 +1625,12 @@ rewriteVersions.addEventListener("click", async (event) => {
   }
 });
 
-rewriteVersionPicker.addEventListener("change", (event) => {
-  if (!event.target.closest(".rewrite-version-toggle")) return;
-  syncRewriteVersionSelection(event);
-});
-
 rewriteVersionCountInput.addEventListener("change", () => {
   syncRewriteVersionCount();
 });
 
 rewriteVersionCountInput.addEventListener("input", () => {
+  if (rewriteVersionCountInput.value === "") return;
   syncRewriteVersionCount();
 });
 
@@ -1593,7 +1638,7 @@ rewriteVersions.addEventListener("input", (event) => {
   const textarea = event.target.closest(".rewrite-version-text");
   if (textarea) {
     const count = textarea.closest(".rewrite-version")?.querySelector(".rewrite-char-count");
-    if (count) count.textContent = `当前 ${textarea.value.length} 字`;
+    if (count) count.textContent = `当前 ${countRewriteCharacters(textarea.value)} 字`;
     return;
   }
   if (event.target.closest(".rewrite-version-word-count")) collectRewriteVersions();

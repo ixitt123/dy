@@ -560,6 +560,13 @@ button:disabled {
   margin-top: 4px;
 }
 
+.rewrite-unified-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
 .rewrite-result-meta {
   display: flex;
   flex: 0 0 auto;
@@ -598,110 +605,10 @@ button:disabled {
   font-weight: 700;
 }
 
-#rewriteVersionCount {
-  display: inline-flex;
-  min-height: 38px;
-  align-items: center;
-  border: 1px solid #e1e7e9;
-  border-radius: 7px;
-  padding: 0 10px;
-  color: var(--muted);
-  background: #ffffff;
-  white-space: nowrap;
-}
-
 #rewriteStatus,
 #rewriteSettingsStatus {
   color: var(--muted);
   font-size: 13px;
-}
-
-.rewrite-version-planner {
-  margin-top: 2px;
-  border: 1px solid #e1e9e6;
-  border-radius: 8px;
-  padding: 14px;
-  background: #f8fbfa;
-}
-
-.rewrite-planner-head {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 10px;
-}
-
-.rewrite-planner-head strong {
-  font-size: 14px;
-}
-
-.rewrite-planner-head span {
-  color: var(--muted);
-  font-size: 13px;
-}
-
-.rewrite-version-picker {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(178px, 1fr));
-  gap: 9px;
-}
-
-.rewrite-version-choice {
-  display: flex;
-  min-height: 66px;
-  align-items: center;
-  gap: 11px;
-  margin: 0;
-  border: 1px solid #dfe6e8;
-  border-radius: 7px;
-  padding: 11px 12px;
-  color: var(--ink);
-  background: #ffffff;
-  cursor: pointer;
-  font-weight: 400;
-}
-
-.rewrite-version-choice:hover {
-  border-color: #a9c9bd;
-  background: #f8fcfa;
-}
-
-.rewrite-version-choice.is-selected {
-  border-color: rgba(31, 122, 91, 0.52);
-  background: #eef8f4;
-}
-
-.rewrite-version-choice input {
-  flex: 0 0 auto;
-  width: 17px;
-  height: 17px;
-  min-height: auto;
-  padding: 0;
-  box-shadow: none;
-  accent-color: var(--primary);
-}
-
-.rewrite-version-choice span {
-  min-width: 0;
-}
-
-.rewrite-version-choice strong,
-.rewrite-version-choice small {
-  display: block;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.rewrite-version-choice strong {
-  font-size: 13px;
-}
-
-.rewrite-version-choice small {
-  margin-top: 3px;
-  color: var(--muted);
-  font-size: 12px;
 }
 
 .rewrite-versions {
@@ -721,29 +628,11 @@ button:disabled {
 
 .rewrite-version-head {
   display: flex;
+  min-height: 34px;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: 10px;
   margin-bottom: 9px;
-}
-
-.rewrite-version-head > div {
-  min-width: 0;
-}
-
-.rewrite-version-head strong,
-.rewrite-version-head span {
-  display: block;
-}
-
-.rewrite-version-head strong {
-  font-size: 15px;
-}
-
-.rewrite-version-head span {
-  margin-top: 2px;
-  color: var(--muted);
-  font-size: 12px;
 }
 
 .rewrite-version-options {
@@ -1254,9 +1143,6 @@ pre {
     padding-left: 0;
   }
 
-  .rewrite-version-picker {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
 }
 
 @media (max-width: 680px) {
@@ -1295,7 +1181,6 @@ pre {
   .rewrite-controls,
   .rewrite-param-grid,
   .rewrite-version-options,
-  .rewrite-version-picker,
   .rewrite-versions {
     grid-template-columns: 1fr;
   }
@@ -1304,10 +1189,13 @@ pre {
     padding: 14px;
   }
 
-  .rewrite-result-head,
-  .rewrite-planner-head {
+  .rewrite-result-head {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .rewrite-unified-actions {
+    width: 100%;
   }
 
   .rewrite-result-meta {
@@ -1318,10 +1206,6 @@ pre {
   .rewrite-count-control {
     flex: 1;
     justify-content: space-between;
-  }
-
-  #rewriteVersionCount {
-    flex: 0 0 auto;
   }
 
   .transcript-card {

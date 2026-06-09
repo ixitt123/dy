@@ -34,6 +34,7 @@ Rewrite the selected versions again to remove AI flavor.
 
 Keep meaning and conversion intent. Make the text more oral, more specific, more uneven, and more human. Avoid fake promises and absolute claims.
 Keep the same version keys and keep each version inside its selected direction and wordCount.
+Word count is a hard requirement. Count Chinese characters after removing spaces and line breaks. Do not shorten the copy below the requested range while humanizing it.
 
 ## Output Format
 
