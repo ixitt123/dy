@@ -80,6 +80,29 @@ const rewriteBaseUrlInput = document.querySelector("#rewriteBaseUrlInput");
 const rewriteApplyLink = document.querySelector("#rewriteApplyLink");
 const rewriteBalanceLink = document.querySelector("#rewriteBalanceLink");
 const rewriteSettingsStatus = document.querySelector("#rewriteSettingsStatus");
+const directorSourceMode = document.querySelector("#directorSourceMode");
+const directorSourceSelectField = document.querySelector("#directorSourceSelectField");
+const directorSourceSelect = document.querySelector("#directorSourceSelect");
+const directorTitle = document.querySelector("#directorTitle");
+const directorSourceText = document.querySelector("#directorSourceText");
+const directorCharacterCount = document.querySelector("#directorCharacterCount");
+const directorProvider = document.querySelector("#directorProvider");
+const directorTtsDuration = document.querySelector("#directorTtsDuration");
+const directorVideoType = document.querySelector("#directorVideoType");
+const directorVisualStyle = document.querySelector("#directorVisualStyle");
+const directorPlatform = document.querySelector("#directorPlatform");
+const directorPace = document.querySelector("#directorPace");
+const directorShotCount = document.querySelector("#directorShotCount");
+const directorEstimatedDuration = document.querySelector("#directorEstimatedDuration");
+const directorReferenceStyle = document.querySelector("#directorReferenceStyle");
+const directorSaveReference = document.querySelector("#directorSaveReference");
+const directorStatus = document.querySelector("#directorStatus");
+const directorProjects = document.querySelector("#directorProjects");
+const directorResult = document.querySelector("#directorResult");
+const directorResultTitle = document.querySelector("#directorResultTitle");
+const directorResultMeta = document.querySelector("#directorResultMeta");
+const directorResultTabs = document.querySelector("#directorResultTabs");
+const directorResultView = document.querySelector("#directorResultView");
 const ttsProvider = document.querySelector("#ttsProvider");
 const ttsApiKey = document.querySelector("#ttsApiKey");
 const ttsWorkspaceField = document.querySelector("#ttsWorkspaceField");
@@ -149,6 +172,13 @@ let activeResultTaskIds = new Set();
 let rewriteProviderConfigs = {};
 let currentRewriteSpecs = [];
 let rewriteVersionDrafts = new Map();
+let directorConfig = null;
+let directorSources = [];
+let directorProjectsState = [];
+let activeDirectorProject = null;
+let activeDirectorTab = "shot-list";
+let directorSourceContext = { taskId: 0, rewriteId: 0, sourceKey: "", sourceType: "manual" };
+let directorPollTimer = 0;
 let ttsProviderConfigs = [];
 let ttsPresetVoices = [];
 let ttsPollTimer = 0;
@@ -453,6 +483,7 @@ function renderRewriteVersions(rewrite = {}, { allowDefaults = true } = {}) {
           <button class="ghost small rewrite-generate-one" type="button" data-version-key="${escapeHtml(version.key)}">生成</button>
           <button class="ghost small rewrite-save-one" type="button" data-version-key="${escapeHtml(version.key)}">保存</button>
           <button class="ghost small rewrite-tts-one" type="button" data-version-key="${escapeHtml(version.key)}">生成语音</button>
+          <button class="ghost small rewrite-director-one" type="button" data-version-key="${escapeHtml(version.key)}">导演稿</button>
           <button class="ghost small rewrite-copy" type="button" data-version-key="${escapeHtml(version.key)}">复制</button>
         </div>
         <div class="rewrite-version-options">
@@ -1610,6 +1641,393 @@ async function generateDefaultVoiceFromRewrite(versionKey) {
   }
 }
 
+function directorStatusLabel(status) {
+  return {
+    waiting: "等待",
+    processing: "生成中",
+    completed: "已完成",
+    failed: "失败",
+  }[status] || status || "未知";
+}
+
+function directorOptions(rows = [], selected = "") {
+  return rows.map((item) => `
+    <option value="${escapeHtml(item.id)}"${item.id === selected ? " selected" : ""}>${escapeHtml(item.label)}</option>
+  `).join("");
+}
+
+function conciseDirectorTitle(value) {
+  const cleaned = String(value || "")
+    .split("·")[0]
+    .replace(/#[^\s#]+/g, "")
+    .split(/[。！？!?\n]/)[0]
+    .replace(/\s+/g, " ")
+    .trim();
+  return cleaned.slice(0, 36);
+}
+
+function updateDirectorCharacterCount() {
+  directorCharacterCount.textContent = `${directorSourceText.value.replace(/\s/g, "").length} 字`;
+}
+
+function updateDirectorSourceOptions({ preserveText = false } = {}) {
+  const mode = directorSourceMode.value;
+  directorSourceSelectField.hidden = mode === "manual";
+  if (mode === "manual") {
+    directorSourceContext = { taskId: 0, rewriteId: 0, sourceKey: "", sourceType: "manual" };
+    if (!preserveText) {
+      directorTitle.value = "";
+      directorSourceText.value = "";
+      updateDirectorCharacterCount();
+    }
+    return;
+  }
+  const sources = directorSources.filter((item) => item.kind === mode);
+  directorSourceSelect.innerHTML = sources.length
+    ? sources.map((item) => `<option value="${escapeHtml(item.source_key)}">${escapeHtml(item.title)}</option>`).join("")
+    : '<option value="">当前没有可用文案</option>';
+  applySelectedDirectorSource();
+}
+
+function applySelectedDirectorSource() {
+  const source = directorSources.find((item) => item.source_key === directorSourceSelect.value);
+  if (!source) return;
+  directorTitle.value = conciseDirectorTitle(source.title);
+  directorSourceText.value = source.text || "";
+  directorSourceContext = {
+    taskId: Number(source.task_id || 0),
+    rewriteId: Number(source.rewrite_id || 0),
+    sourceKey: source.source_key || "",
+    sourceType: source.kind || "manual",
+  };
+  updateDirectorCharacterCount();
+}
+
+async function loadDirectorConfig() {
+  const data = await fetchJson("/api/director/config");
+  directorConfig = data.config;
+  const defaults = directorConfig.defaults || {};
+  directorVideoType.innerHTML = directorOptions(directorConfig.video_types, defaults.video_type);
+  directorVisualStyle.innerHTML = directorOptions(directorConfig.visual_styles, defaults.visual_style);
+  directorPlatform.innerHTML = directorOptions(directorConfig.platforms, defaults.platform);
+  directorPace.innerHTML = directorOptions(directorConfig.paces, defaults.pace);
+  directorShotCount.innerHTML = directorOptions(directorConfig.shot_counts, defaults.shot_count);
+  directorEstimatedDuration.value = String(defaults.estimated_duration || 60);
+  renderProviderOptions(directorProvider, data.providers || {}, data.default_provider || "dashscope", {
+    disableUnconfigured: true,
+  });
+}
+
+async function loadDirectorSources({ preserveText = true } = {}) {
+  const data = await fetchJson("/api/director/sources");
+  directorSources = Array.isArray(data.sources) ? data.sources : [];
+  updateDirectorSourceOptions({ preserveText });
+}
+
+function renderDirectorProjects() {
+  if (!directorProjectsState.length) {
+    directorProjects.innerHTML = '<div class="director-empty">还没有导演项目。</div>';
+    return;
+  }
+  directorProjects.innerHTML = directorProjectsState.map((project) => `
+    <div class="director-project-row" data-director-project-id="${project.id}">
+      <strong>#${project.id}</strong>
+      <div class="director-project-title">
+        <strong>${escapeHtml(project.title)}</strong>
+        <span>${escapeHtml(project.video_type)} · ${escapeHtml(project.visual_style)}</span>
+      </div>
+      <span>${escapeHtml(project.platform)}</span>
+      <span>${project.metadata?.scene_count || 0} 镜头</span>
+      <span>${project.score || 0} 分</span>
+      <span>${escapeHtml(formatVoiceTime(project.updated_at))}</span>
+      <div>
+        <span class="director-project-status ${escapeHtml(project.status)}">${escapeHtml(directorStatusLabel(project.status))}</span>
+        <button class="ghost small director-project-open" type="button">查看</button>
+      </div>
+    </div>
+  `).join("");
+}
+
+async function loadDirectorProjects() {
+  const data = await fetchJson("/api/director/projects?limit=50");
+  directorProjectsState = Array.isArray(data.projects) ? data.projects : [];
+  renderDirectorProjects();
+}
+
+function directorShotListMarkup(result) {
+  const scenes = Array.isArray(result?.storyboard) ? result.storyboard : [];
+  return `
+    <div class="director-table-wrap">
+      <table class="director-table">
+        <thead>
+          <tr>
+            <th>镜头</th><th>时长</th><th>目的</th><th>情绪</th><th>口播</th><th>字幕</th>
+            <th>镜头语言</th><th>构图</th><th>BGM</th><th>转场</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${scenes.map((scene) => `
+            <tr>
+              <td>${scene.scene}</td>
+              <td>${scene.duration}s</td>
+              <td>${escapeHtml(scene.purpose)}</td>
+              <td>${escapeHtml(scene.emotion)}</td>
+              <td>${escapeHtml(scene.voice_text)}</td>
+              <td>${escapeHtml(scene.subtitle)}</td>
+              <td>${escapeHtml(scene.camera)}</td>
+              <td>${escapeHtml(scene.composition)}</td>
+              <td>${escapeHtml(scene.bgm)}</td>
+              <td>${escapeHtml(scene.transition)}</td>
+            </tr>
+          `).join("")}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+function directorSubtitleMarkup(result) {
+  const timeline = Array.isArray(result?.subtitle_timeline) ? result.subtitle_timeline : [];
+  return `
+    <div class="director-table-wrap">
+      <table class="director-table">
+        <thead><tr><th>开始</th><th>结束</th><th>字幕</th><th>高亮词</th></tr></thead>
+        <tbody>
+          ${timeline.map((item) => `
+            <tr>
+              <td>${Number(item.start || 0).toFixed(2)}s</td>
+              <td>${Number(item.end || 0).toFixed(2)}s</td>
+              <td>${escapeHtml(item.text)}</td>
+              <td>${escapeHtml((item.highlight || []).join("、"))}</td>
+            </tr>
+          `).join("")}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+function directorPromptMarkup(result) {
+  const scenes = Array.isArray(result?.storyboard) ? result.storyboard : [];
+  return scenes.map((scene) => `
+    <div class="director-prompt-row">
+      <strong>Scene ${scene.scene}</strong>
+      <div>
+        <strong>Visual Prompt</strong>
+        <p>${escapeHtml(scene.image_prompt)}</p>
+      </div>
+      <div>
+        <strong>Motion Prompt</strong>
+        <p>${escapeHtml(scene.motion_prompt)}</p>
+      </div>
+    </div>
+  `).join("");
+}
+
+function directorBgmMarkup(result) {
+  const plan = result?.bgm_plan || {};
+  return `
+    <div class="director-table-wrap">
+      <table class="director-table">
+        <thead><tr><th>Mood</th><th>Tempo</th><th>Volume</th><th>Entry</th><th>Exit</th></tr></thead>
+        <tbody><tr>
+          <td>${escapeHtml(plan.mood)}</td>
+          <td>${escapeHtml(plan.tempo)}</td>
+          <td>${escapeHtml(plan.volume)}</td>
+          <td>${escapeHtml(plan.entry)}</td>
+          <td>${escapeHtml(plan.exit)}</td>
+        </tr></tbody>
+      </table>
+    </div>
+  `;
+}
+
+function directorReviewMarkup(result) {
+  const review = result?.aesthetic_review || {};
+  const list = (items) => (items || []).length
+    ? items.map((item) => `<li>${escapeHtml(item)}</li>`).join("")
+    : "<li>无</li>";
+  return `
+    <div class="director-review-score"><strong>${Number(review.score || 0)}</strong><span>/ 100</span></div>
+    <div class="director-review-columns">
+      <div><h3>发现的问题</h3><ul>${list(review.problems)}</ul></div>
+      <div><h3>修复与建议</h3><ul>${list(review.fixes)}</ul></div>
+    </div>
+  `;
+}
+
+function renderDirectorResultView() {
+  const result = activeDirectorProject?.result;
+  if (!result) {
+    directorResultView.innerHTML = '<div class="director-empty">导演稿尚未生成完成。</div>';
+    return;
+  }
+  const markup = {
+    "shot-list": () => directorShotListMarkup(result),
+    "storyboard-json": () => `<pre>${escapeHtml(JSON.stringify(result, null, 2))}</pre>`,
+    subtitle: () => directorSubtitleMarkup(result),
+    visual: () => directorPromptMarkup(result),
+    bgm: () => directorBgmMarkup(result),
+    review: () => directorReviewMarkup(result),
+  }[activeDirectorTab];
+  directorResultView.innerHTML = markup ? markup() : directorShotListMarkup(result);
+  [...directorResultTabs.querySelectorAll("button")].forEach((button) => {
+    button.classList.toggle("active", button.dataset.directorTab === activeDirectorTab);
+  });
+}
+
+function renderDirectorProject(project) {
+  activeDirectorProject = project;
+  const meta = project.metadata || {};
+  if (project.status !== "completed" || !project.result) {
+    directorResult.hidden = true;
+    directorStatus.textContent = project.status === "failed"
+      ? `生成失败：${meta.error || "未知错误"}`
+      : `项目 #${project.id} ${directorStatusLabel(project.status)}。`;
+    return;
+  }
+  directorResult.hidden = false;
+  directorResultTitle.textContent = project.result.video_meta?.title || project.title;
+  directorResultMeta.textContent = [
+    `${meta.scene_count || project.scenes?.length || 0} 个镜头`,
+    `${project.result.video_meta?.estimated_duration || project.estimated_duration} 秒`,
+    project.result.video_meta?.ratio || meta.ratio,
+    `${project.score} 分`,
+    meta.model || meta.provider,
+  ].filter(Boolean).join(" · ");
+  directorStatus.textContent = `导演稿 #${project.id} 已完成并保存。`;
+  renderDirectorResultView();
+  directorResult.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+async function openDirectorProject(id) {
+  const data = await fetchJson(`/api/director/project?id=${encodeURIComponent(id)}`);
+  renderDirectorProject(data.project);
+  return data.project;
+}
+
+async function pollDirectorProject(id) {
+  if (directorPollTimer) clearTimeout(directorPollTimer);
+  const project = await openDirectorProject(id);
+  await loadDirectorProjects();
+  if (["waiting", "processing"].includes(project.status)) {
+    directorPollTimer = setTimeout(() => {
+      pollDirectorProject(id).catch((error) => {
+        directorStatus.textContent = error instanceof Error ? error.message : String(error);
+      });
+    }, 1500);
+  }
+}
+
+async function generateDirectorProject() {
+  const sourceText = directorSourceText.value.trim();
+  if (!sourceText) {
+    directorStatus.textContent = "请先选择或输入导演文案。";
+    return;
+  }
+  const button = document.querySelector("#generateDirector");
+  button.disabled = true;
+  directorStatus.textContent = "正在创建导演任务...";
+  try {
+    const data = await fetchJson("/api/director/generate", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        task_id: directorSourceContext.taskId,
+        rewrite_id: directorSourceContext.rewriteId,
+        source_key: directorSourceContext.sourceKey,
+        source_type: directorSourceContext.sourceType,
+        title: directorTitle.value.trim(),
+        source_text: sourceText,
+        provider: directorProvider.value,
+        tts_duration: directorTtsDuration.value,
+        estimated_duration: directorEstimatedDuration.value,
+        video_type: directorVideoType.value,
+        visual_style: directorVisualStyle.value,
+        platform: directorPlatform.value,
+        pace: directorPace.value,
+        shot_count: directorShotCount.value,
+        reference_style: directorReferenceStyle.value.trim(),
+        save_reference_style: directorSaveReference.checked,
+      }),
+    });
+    directorStatus.textContent = `导演任务 #${data.project.id} 已进入队列。`;
+    await loadDirectorProjects();
+    await pollDirectorProject(data.project.id);
+  } catch (error) {
+    directorStatus.textContent = error instanceof Error ? error.message : String(error);
+  } finally {
+    button.disabled = false;
+  }
+}
+
+function sendRewriteToDirector(versionKey) {
+  const card = rewriteVersions.querySelector(`.rewrite-version[data-version-key="${versionKey}"]`);
+  const text = card?.querySelector(".rewrite-version-text")?.value.trim() || "";
+  if (!text) {
+    rewriteStatus.textContent = "当前输出框没有文案，请先生成文案。";
+    return;
+  }
+  const version = collectRewriteVersions().find((item) => item.key === versionKey);
+  directorSourceMode.value = "manual";
+  updateDirectorSourceOptions({ preserveText: true });
+  directorSourceText.value = text;
+  directorTitle.value = `${version?.name || "AI 改写"}导演稿`;
+  directorSourceContext = {
+    taskId: Number(rewriteTaskId.value || 0),
+    rewriteId: 0,
+    sourceKey: `task-${rewriteTaskId.value || 0}-rewrite-${versionKey}`,
+    sourceType: "rewrite",
+  };
+  updateDirectorCharacterCount();
+  directorStatus.textContent = "已从 AI 改写载入文案，请设置导演参数。";
+  document.querySelector("#directorSystem").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function directorExport(format) {
+  if (!activeDirectorProject?.id || activeDirectorProject.status !== "completed") {
+    directorStatus.textContent = "请先生成或打开一份已完成的导演稿。";
+    return;
+  }
+  const anchor = document.createElement("a");
+  anchor.href = `/api/director/export?id=${activeDirectorProject.id}&format=${encodeURIComponent(format)}`;
+  anchor.download = "";
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+}
+
+async function copyDirectorResult() {
+  if (!activeDirectorProject?.result) return;
+  const text = activeDirectorTab === "storyboard-json"
+    ? JSON.stringify(activeDirectorProject.result, null, 2)
+    : directorResultView.innerText;
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch {
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    document.body.appendChild(textarea);
+    textarea.select();
+    document.execCommand("copy");
+    textarea.remove();
+  }
+  directorStatus.textContent = "当前结果已复制。";
+}
+
+async function openDirectorFile() {
+  if (!activeDirectorProject?.storyboard_path) {
+    directorStatus.textContent = "没有可打开的导演稿文件。";
+    return;
+  }
+  await fetchJson("/api/open-path", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ filePath: activeDirectorProject.storyboard_path }),
+  });
+  directorStatus.textContent = "已打开导演稿文件位置。";
+}
+
 async function loadSettings() {
   const data = await fetchJson("/api/settings");
   if (data.providers) {
@@ -2474,7 +2892,7 @@ transcriptList.addEventListener("click", (event) => {
 });
 
 rewriteVersions.addEventListener("click", async (event) => {
-  const button = event.target.closest(".rewrite-generate-one, .rewrite-save-one, .rewrite-revise-one, .rewrite-tts-one, .rewrite-copy");
+  const button = event.target.closest(".rewrite-generate-one, .rewrite-save-one, .rewrite-revise-one, .rewrite-tts-one, .rewrite-director-one, .rewrite-copy");
   if (!button) return;
   if (button.classList.contains("rewrite-generate-one")) {
     button.disabled = true;
@@ -2505,6 +2923,10 @@ rewriteVersions.addEventListener("click", async (event) => {
   }
   if (button.classList.contains("rewrite-tts-one")) {
     await generateDefaultVoiceFromRewrite(button.dataset.versionKey);
+    return;
+  }
+  if (button.classList.contains("rewrite-director-one")) {
+    sendRewriteToDirector(button.dataset.versionKey);
     return;
   }
   const textarea = rewriteVersions.querySelector(`.rewrite-version-text[data-version-key="${button.dataset.versionKey}"]`);
@@ -2574,6 +2996,79 @@ document.querySelector("#openRewriteFile").addEventListener("click", () => {
 
 document.querySelector("#closeRewrite").addEventListener("click", () => {
   rewritePanel.hidden = true;
+});
+
+directorSourceMode.addEventListener("change", () => {
+  updateDirectorSourceOptions();
+});
+
+directorSourceSelect.addEventListener("change", () => {
+  applySelectedDirectorSource();
+});
+
+directorSourceText.addEventListener("input", () => {
+  updateDirectorCharacterCount();
+  if (directorSourceMode.value === "manual") {
+    directorSourceContext = { taskId: 0, rewriteId: 0, sourceKey: "", sourceType: "manual" };
+  }
+});
+
+document.querySelector("#refreshDirectorSources").addEventListener("click", () => {
+  loadDirectorSources({ preserveText: true })
+    .then(() => {
+      directorStatus.textContent = `已刷新 ${directorSources.length} 条可用文案。`;
+    })
+    .catch((error) => {
+      directorStatus.textContent = error instanceof Error ? error.message : String(error);
+    });
+});
+
+document.querySelector("#generateDirector").addEventListener("click", () => {
+  generateDirectorProject();
+});
+
+document.querySelector("#refreshDirectorProjects").addEventListener("click", () => {
+  loadDirectorProjects().catch((error) => {
+    directorStatus.textContent = error instanceof Error ? error.message : String(error);
+  });
+});
+
+directorProjects.addEventListener("click", (event) => {
+  const button = event.target.closest(".director-project-open");
+  const row = event.target.closest(".director-project-row");
+  if (!button || !row) return;
+  openDirectorProject(Number(row.dataset.directorProjectId || 0)).catch((error) => {
+    directorStatus.textContent = error instanceof Error ? error.message : String(error);
+  });
+});
+
+directorResultTabs.addEventListener("click", (event) => {
+  const button = event.target.closest("button[data-director-tab]");
+  if (!button) return;
+  activeDirectorTab = button.dataset.directorTab;
+  renderDirectorResultView();
+});
+
+document.querySelector("#copyDirectorResult").addEventListener("click", () => {
+  copyDirectorResult();
+});
+
+document.querySelector("#exportDirectorJson").addEventListener("click", () => {
+  directorExport("json");
+});
+
+document.querySelector("#exportDirectorMd").addEventListener("click", () => {
+  directorExport("md");
+});
+
+document.querySelector("#exportDirectorPrompts").addEventListener("click", () => {
+  directorExport("prompts");
+});
+
+document.querySelector("#openDirectorFile").addEventListener("click", () => {
+  openDirectorFile().catch((error) => {
+    directorStatus.textContent = error instanceof Error ? error.message : String(error);
+  });
 });
 
 document.querySelector("#runAnalysis").addEventListener("click", async () => {
@@ -2697,6 +3192,9 @@ async function init() {
     savePath.textContent = `下载位置：${status.downloadsDir}`;
     downloadDirInput.value = status.downloadsDir || "";
     await loadSettings();
+    await loadDirectorConfig();
+    await loadDirectorSources({ preserveText: true });
+    await loadDirectorProjects();
     await loadVoiceAssets({ applyDefault: true });
     updateTtsVoiceSource();
     updateTtsEmotionField();

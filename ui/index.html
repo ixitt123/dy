@@ -340,6 +340,134 @@
         </div>
       </section>
 
+      <section class="director-system" id="directorSystem">
+        <div class="result-head director-head">
+          <div>
+            <h2>AI 导演系统</h2>
+            <p>先完成故事弧、分镜、视觉、字幕和声音设计，只生成专业导演稿。</p>
+          </div>
+          <span class="director-stage-badge">Storyboard First</span>
+        </div>
+
+        <div class="director-workbench">
+          <div class="director-script-panel">
+            <div class="director-source-tools">
+              <label>
+                文案来源
+                <select id="directorSourceMode">
+                  <option value="manual">手动输入</option>
+                  <option value="rewrite">从 AI 改写结果选择</option>
+                  <option value="transcript">从任务文案选择</option>
+                </select>
+              </label>
+              <label id="directorSourceSelectField" hidden>
+                选择文案
+                <select id="directorSourceSelect"></select>
+              </label>
+              <button class="ghost" id="refreshDirectorSources" type="button">刷新来源</button>
+            </div>
+            <label>
+              项目标题
+              <input id="directorTitle" type="text" maxlength="100" placeholder="例如：半年说好英语的正确方法" />
+            </label>
+            <label for="directorSourceText">导演文案</label>
+            <textarea id="directorSourceText" rows="14" placeholder="输入文案，或从 AI 改写结果、任务文案中选择。"></textarea>
+            <div class="director-script-meta">
+              <span id="directorCharacterCount">0 字</span>
+              <span>不会生成图片或视频</span>
+            </div>
+          </div>
+
+          <div class="director-control-panel">
+            <div class="director-params">
+              <label>
+                AI 模型
+                <select id="directorProvider"></select>
+              </label>
+              <label>
+                TTS 音频时长（秒，可选）
+                <input id="directorTtsDuration" type="number" min="0" max="7200" step="0.1" placeholder="未生成语音可留空" />
+              </label>
+              <label>
+                视频类型
+                <select id="directorVideoType"></select>
+              </label>
+              <label>
+                视觉风格
+                <select id="directorVisualStyle"></select>
+              </label>
+              <label>
+                目标平台
+                <select id="directorPlatform"></select>
+              </label>
+              <label>
+                节奏
+                <select id="directorPace"></select>
+              </label>
+              <label>
+                镜头数量
+                <select id="directorShotCount"></select>
+              </label>
+              <label>
+                预计时长（秒）
+                <input id="directorEstimatedDuration" type="number" min="10" max="7200" value="60" />
+              </label>
+            </div>
+            <label for="directorReferenceStyle">参考风格</label>
+            <textarea id="directorReferenceStyle" rows="5" placeholder="可粘贴参考视频的构图、色调、字幕、节奏和镜头说明。"></textarea>
+            <div class="director-reference-reserved">
+              <label>
+                参考截图（第二阶段预留）
+                <input type="file" accept="image/*" disabled />
+              </label>
+              <label>
+                参考视频（第二阶段预留）
+                <input type="file" accept="video/*" disabled />
+              </label>
+            </div>
+            <label class="check-row director-save-reference">
+              <input id="directorSaveReference" type="checkbox" checked />
+              保存参考说明到 reference-styles
+            </label>
+            <div class="director-generate-row">
+              <button class="primary" id="generateDirector" type="button">生成专业导演稿</button>
+              <span id="directorStatus" role="status">等待生成。</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="director-history-head">
+          <h2>导演项目</h2>
+          <button class="ghost small" id="refreshDirectorProjects" type="button">刷新</button>
+        </div>
+        <div class="director-projects" id="directorProjects"></div>
+
+        <section class="director-result" id="directorResult" hidden>
+          <div class="director-result-head">
+            <div>
+              <h2 id="directorResultTitle">导演稿</h2>
+              <p id="directorResultMeta"></p>
+            </div>
+            <div class="director-result-actions">
+              <button class="ghost small" id="copyDirectorResult" type="button">复制当前结果</button>
+              <button class="ghost small" id="exportDirectorJson" type="button">导出 JSON</button>
+              <button class="ghost small" id="exportDirectorMd" type="button">导出 MD</button>
+              <button class="ghost small" id="exportDirectorPrompts" type="button">导出 Prompts</button>
+              <button class="ghost small" id="openDirectorFile" type="button">打开文件位置</button>
+            </div>
+          </div>
+          <div class="director-result-tabs" id="directorResultTabs" role="tablist" aria-label="导演稿结果">
+            <button class="active" type="button" data-director-tab="shot-list">Shot List</button>
+            <button type="button" data-director-tab="storyboard-json">Storyboard JSON</button>
+            <button type="button" data-director-tab="subtitle">Subtitle Timeline</button>
+            <button type="button" data-director-tab="visual">Visual / Motion Prompts</button>
+            <button type="button" data-director-tab="bgm">BGM Plan</button>
+            <button type="button" data-director-tab="review">Aesthetic Review</button>
+          </div>
+          <div class="director-result-view" id="directorResultView"></div>
+        </section>
+      </section>
+
       <section class="tts-area" id="ttsLab">
         <div class="result-head tts-head">
           <div>

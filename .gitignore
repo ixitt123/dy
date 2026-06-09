@@ -10,6 +10,12 @@ voices/previews/*
 !voices/samples/.gitkeep
 !voices/clones/.gitkeep
 !voices/previews/.gitkeep
+storyboards/*
+scene_prompts/*
+reference-styles/*
+!storyboards/.gitkeep
+!scene_prompts/.gitkeep
+!reference-styles/.gitkeep
 
 settings.json
 ui-server.pid

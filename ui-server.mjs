@@ -12,6 +12,7 @@ import { openTaskStore, TASK_STATUS } from "./task-store.mjs";
 import { createTtsService } from "./server/tts/tts-service.js";
 import { TTS_PROVIDER_LABELS } from "./server/tts/providers/index.js";
 import { createVoiceAssetService } from "./server/voices/voice-asset-service.js";
+import { createDirectorService } from "./server/director/director-service.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const uiDir = path.join(__dirname, "ui");
@@ -196,6 +197,12 @@ const voiceAssetService = createVoiceAssetService({
   ttsService,
   getSettings: readSettings,
   ffmpegPath,
+});
+const directorService = createDirectorService({
+  baseDir: __dirname,
+  taskStore,
+  generateJson: generateDirectorJson,
+  onIdle: scheduleShutdownIfIdle,
 });
 
 const mimeTypes = new Map([
@@ -805,7 +812,13 @@ function isInsideDownloads(filePath) {
 
 function isInsideManagedFilePath(filePath) {
   const resolved = path.resolve(filePath);
-  const roots = [downloadsDir, rewritesDir].map((item) => path.resolve(item));
+  const roots = [
+    downloadsDir,
+    rewritesDir,
+    directorService.outputDirs.storyboardsDir,
+    directorService.outputDirs.scenePromptsDir,
+    directorService.outputDirs.referenceStylesDir,
+  ].map((item) => path.resolve(item));
   return roots.some((root) => resolved === root || resolved.startsWith(`${root}${path.sep}`));
 }
 
@@ -830,7 +843,14 @@ function shutdownNow() {
 
 function scheduleShutdownIfIdle() {
   const hasRunningJobs = [...downloadJobs.values(), ...transcriptJobs.values()].some((job) => job.status === "running");
-  if (!autoClose || pageSessions.size > 0 || hasRunningJobs || runningBatchTasks.size > 0 || taskStore.hasPendingWork()) {
+  if (
+    !autoClose
+    || pageSessions.size > 0
+    || hasRunningJobs
+    || runningBatchTasks.size > 0
+    || taskStore.hasPendingWork()
+    || directorService.isBusy()
+  ) {
     return;
   }
   cancelShutdown();
@@ -1894,7 +1914,12 @@ async function getRewriteProvider(providerId) {
   return { id, ...provider };
 }
 
-async function chatCompletion(provider, messages, signal, { temperature = 0.78 } = {}) {
+async function chatCompletion(provider, messages, signal, {
+  temperature = 0.78,
+  requestName = "AI 改写",
+  maxTokens = 0,
+  jsonMode = false,
+} = {}) {
   const baseUrl = String(provider.baseUrl || "").replace(/\/+$/, "");
   const response = await fetch(`${baseUrl}/chat/completions`, {
     method: "POST",
@@ -1906,6 +1931,8 @@ async function chatCompletion(provider, messages, signal, { temperature = 0.78 }
       model: provider.model,
       temperature,
       messages,
+      ...(maxTokens > 0 ? { max_tokens: maxTokens } : {}),
+      ...(jsonMode ? { response_format: { type: "json_object" } } : {}),
     }),
     signal,
   });
@@ -1917,9 +1944,44 @@ async function chatCompletion(provider, messages, signal, { temperature = 0.78 }
     const balanceTip = balancePattern.test(message)
       ? `\n可能是 ${provider.label} 余额/额度不足，请去后台查看：${provider.balanceUrl || provider.applyUrl || "平台控制台"}`
       : "";
-    throw new Error(`AI 改写请求失败：${message}${balanceTip}`);
+    throw new Error(`${requestName}请求失败：${message}${balanceTip}`);
   }
   return data.choices?.[0]?.message?.content || "";
+}
+
+async function generateDirectorJson({ providerId, messages, temperature }) {
+  const provider = await getRewriteProvider(providerId);
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const retryInstruction = {
+      role: "user",
+      content: [
+        "上一轮返回格式无法解析。请从头重新生成。",
+        "只输出一个完整 JSON 对象，不要 Markdown、代码围栏、注释或解释。",
+        "保持字段完整，但文字要紧凑，确保 JSON 在一次响应内完整结束。",
+      ].join("\n"),
+    };
+    const content = await chatCompletion(
+      provider,
+      attempt === 0 ? messages : [...messages, retryInstruction],
+      undefined,
+      {
+        temperature: attempt === 0 ? temperature : 0.1,
+        requestName: "AI 导演",
+        maxTokens: 12000,
+        jsonMode: true,
+      },
+    );
+    try {
+      return {
+        data: parseJsonFromModelText(content),
+        provider: provider.id,
+        model: provider.model,
+      };
+    } catch {
+      // Retry once with stricter compact JSON instructions.
+    }
+  }
+  throw new Error("AI 导演连续两次没有返回完整 JSON。");
 }
 
 function chunkRowsByWordCount(rows, maxCharacters = 2600) {
@@ -2657,6 +2719,34 @@ function transcriptRows() {
     }));
 }
 
+function directorSourceRows() {
+  const sources = [];
+  for (const item of transcriptRows()) {
+    sources.push({
+      kind: "transcript",
+      task_id: item.id,
+      rewrite_id: 0,
+      source_key: `task-${item.id}-transcript`,
+      title: `${item.title} · 任务文案`,
+      text: item.text,
+    });
+    const versions = Array.isArray(item.rewrite?.versions) ? item.rewrite.versions : [];
+    versions.forEach((version, index) => {
+      const text = String(version.content || "").trim();
+      if (!text) return;
+      sources.push({
+        kind: "rewrite",
+        task_id: item.id,
+        rewrite_id: 0,
+        source_key: `task-${item.id}-rewrite-${version.key || index + 1}`,
+        title: `${item.title} · ${version.name || version.key || `改写 ${index + 1}`}`,
+        text,
+      });
+    });
+  }
+  return sources;
+}
+
 function saveAnalysisForTask(task, transcriptText, analysis) {
   const videoInfo = {
     title: task.title,
@@ -2925,6 +3015,69 @@ const server = http.createServer(async (req, res) => {
         filePath: updatedTask.rewrite_path,
         transcripts: transcriptRows(),
       });
+      return;
+    }
+
+    if (req.method === "GET" && url.pathname === "/api/director/config") {
+      const settings = readSettings();
+      const rewrite = publicRewriteSettings(settings);
+      sendJson(res, 200, {
+        ok: true,
+        config: directorService.config,
+        providers: rewrite.providers,
+        default_provider: rewrite.defaults.defaultProvider,
+      });
+      return;
+    }
+
+    if (req.method === "GET" && url.pathname === "/api/director/sources") {
+      sendJson(res, 200, {
+        ok: true,
+        sources: directorSourceRows(),
+      });
+      return;
+    }
+
+    if (req.method === "GET" && url.pathname === "/api/director/projects") {
+      const limit = clampNumber(url.searchParams.get("limit"), 1, 500, 50);
+      sendJson(res, 200, {
+        ok: true,
+        projects: directorService.listProjects(limit),
+      });
+      return;
+    }
+
+    if (req.method === "GET" && url.pathname === "/api/director/project") {
+      const project = directorService.getProject(Number(url.searchParams.get("id") || 0));
+      if (!project) {
+        sendJson(res, 404, { ok: false, message: "没有找到导演项目。" });
+        return;
+      }
+      sendJson(res, 200, { ok: true, project });
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/director/generate") {
+      const body = JSON.parse(await readBody(req) || "{}");
+      const result = directorService.enqueue(body);
+      if (result.error) {
+        sendJson(res, 400, { ok: false, message: result.error });
+        return;
+      }
+      sendJson(res, 202, { ok: true, project: result.project });
+      return;
+    }
+
+    if (req.method === "GET" && url.pathname === "/api/director/export") {
+      const format = String(url.searchParams.get("format") || "json").toLowerCase();
+      const filePath = directorService.resolveExportPath(Number(url.searchParams.get("id") || 0), format);
+      if (!filePath) {
+        sendJson(res, 404, { ok: false, message: "导演稿文件不存在或尚未生成。" });
+        return;
+      }
+      const buffer = fs.readFileSync(filePath);
+      const contentType = format === "json" ? "application/json" : "text/markdown";
+      sendBuffer(res, 200, buffer, contentType, path.basename(filePath));
       return;
     }
 

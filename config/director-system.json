@@ -1,0 +1,84 @@
+{
+  "version": 1,
+  "defaults": {
+    "video_type": "douyin-knowledge",
+    "visual_style": "knowledge-blogger",
+    "platform": "douyin",
+    "pace": "standard",
+    "shot_count": "10-20",
+    "estimated_duration": 60
+  },
+  "video_types": [
+    { "id": "education-enrollment", "label": "教育招生", "audience": "学生家长" },
+    { "id": "parent-anxiety", "label": "家长焦虑", "audience": "学生家长" },
+    { "id": "learning-method", "label": "学习方法", "audience": "学生与家长" },
+    { "id": "admission-planning", "label": "升学规划", "audience": "升学家庭" },
+    { "id": "english-improvement", "label": "英语提分", "audience": "英语学习者与家长" },
+    { "id": "event-promotion", "label": "活动促销", "audience": "潜在客户" },
+    { "id": "moments-talking", "label": "朋友圈口播", "audience": "微信好友与家长" },
+    { "id": "douyin-knowledge", "label": "抖音知识短视频", "audience": "短视频知识用户" }
+  ],
+  "visual_styles": [
+    { "id": "education-premium", "label": "高级教育机构风" },
+    { "id": "parent-anxiety", "label": "家长焦虑情绪风" },
+    { "id": "knowledge-blogger", "label": "抖音知识博主风" },
+    { "id": "apple-keynote", "label": "苹果发布会极简风" },
+    { "id": "documentary", "label": "纪录片风" },
+    { "id": "cinematic", "label": "电影感" },
+    { "id": "clean-commercial", "label": "干净商业广告风" },
+    { "id": "warm-campus", "label": "温暖校区生活风" }
+  ],
+  "platforms": [
+    { "id": "douyin", "label": "抖音 9:16", "ratio": "9:16" },
+    { "id": "wechat-video", "label": "视频号 9:16", "ratio": "9:16" },
+    { "id": "xiaohongshu", "label": "小红书 3:4", "ratio": "3:4" },
+    { "id": "landscape", "label": "横版 16:9", "ratio": "16:9" }
+  ],
+  "paces": [
+    { "id": "slow", "label": "慢节奏" },
+    { "id": "standard", "label": "标准" },
+    { "id": "fast", "label": "快节奏" },
+    { "id": "hook-fast-cut", "label": "强钩子快剪" }
+  ],
+  "shot_counts": [
+    { "id": "auto", "label": "自动", "min": 10, "max": 16 },
+    { "id": "8-12", "label": "8-12个镜头", "min": 8, "max": 12 },
+    { "id": "10-20", "label": "10-20个镜头", "min": 10, "max": 20 },
+    { "id": "20-30", "label": "20-30个镜头", "min": 20, "max": 30 }
+  ],
+  "camera_types": [
+    "static",
+    "push_in",
+    "pull_out",
+    "pan_left",
+    "pan_right",
+    "tracking",
+    "close_up",
+    "medium_shot",
+    "wide_shot",
+    "top_down",
+    "over_shoulder",
+    "rack_focus",
+    "cutaway",
+    "montage",
+    "text_card",
+    "screen_recording",
+    "detail_shot"
+  ],
+  "transitions": [
+    "straight_cut",
+    "match_cut",
+    "fade",
+    "dip_to_black",
+    "whip_pan",
+    "none"
+  ],
+  "asset_types": [
+    "ai_image",
+    "real_footage",
+    "stock_footage",
+    "screen_recording",
+    "text_card",
+    "graphic"
+  ]
+}

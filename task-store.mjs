@@ -129,6 +129,46 @@ const VOICE_RATING_COLUMNS = [
   "updated_at",
 ];
 
+const DIRECTOR_PROJECT_COLUMNS = [
+  "id",
+  "task_id",
+  "rewrite_id",
+  "title",
+  "source_text",
+  "video_type",
+  "visual_style",
+  "platform",
+  "pace",
+  "estimated_duration",
+  "storyboard_path",
+  "status",
+  "score",
+  "created_at",
+  "updated_at",
+  "metadata_json",
+];
+
+const DIRECTOR_SCENE_COLUMNS = [
+  "id",
+  "project_id",
+  "scene_index",
+  "duration",
+  "purpose",
+  "emotion",
+  "voice_text",
+  "subtitle",
+  "visual_style",
+  "camera",
+  "composition",
+  "image_prompt",
+  "motion_prompt",
+  "bgm",
+  "sfx",
+  "transition",
+  "asset_type",
+  "metadata_json",
+];
+
 function nowIso() {
   return new Date().toISOString();
 }
@@ -284,6 +324,52 @@ export function openTaskStore(baseDir) {
 
     CREATE UNIQUE INDEX IF NOT EXISTS idx_voice_ratings_asset_test
       ON voice_ratings(voice_asset_id, voice_test_id);
+
+    CREATE TABLE IF NOT EXISTS director_projects (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      task_id INTEGER NOT NULL DEFAULT 0,
+      rewrite_id INTEGER NOT NULL DEFAULT 0,
+      title TEXT NOT NULL DEFAULT '',
+      source_text TEXT NOT NULL,
+      video_type TEXT NOT NULL DEFAULT '',
+      visual_style TEXT NOT NULL DEFAULT '',
+      platform TEXT NOT NULL DEFAULT '',
+      pace TEXT NOT NULL DEFAULT '',
+      estimated_duration REAL NOT NULL DEFAULT 60,
+      storyboard_path TEXT NOT NULL DEFAULT '',
+      status TEXT NOT NULL DEFAULT 'waiting',
+      score INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      metadata_json TEXT NOT NULL DEFAULT '{}'
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_director_projects_status_created
+      ON director_projects(status, created_at, id);
+
+    CREATE TABLE IF NOT EXISTS director_scenes (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      project_id INTEGER NOT NULL,
+      scene_index INTEGER NOT NULL,
+      duration REAL NOT NULL DEFAULT 0,
+      purpose TEXT NOT NULL DEFAULT '',
+      emotion TEXT NOT NULL DEFAULT '',
+      voice_text TEXT NOT NULL DEFAULT '',
+      subtitle TEXT NOT NULL DEFAULT '',
+      visual_style TEXT NOT NULL DEFAULT '',
+      camera TEXT NOT NULL DEFAULT '',
+      composition TEXT NOT NULL DEFAULT '',
+      image_prompt TEXT NOT NULL DEFAULT '',
+      motion_prompt TEXT NOT NULL DEFAULT '',
+      bgm TEXT NOT NULL DEFAULT '',
+      sfx TEXT NOT NULL DEFAULT '',
+      transition TEXT NOT NULL DEFAULT '',
+      asset_type TEXT NOT NULL DEFAULT '',
+      metadata_json TEXT NOT NULL DEFAULT '{}'
+    );
+
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_director_scenes_project_scene
+      ON director_scenes(project_id, scene_index);
   `);
 
   const taskColumns = new Set(db.prepare("PRAGMA table_info(tasks)").all().map((column) => column.name));
@@ -460,6 +546,37 @@ export function openTaskStore(baseDir) {
       voice_asset_id, voice_test_id, score, stars, notes, created_at, updated_at
     )
     VALUES (?, ?, ?, ?, ?, ?, ?)
+  `);
+  const getDirectorProjectStmt = db.prepare(`
+    SELECT ${DIRECTOR_PROJECT_COLUMNS.join(", ")}
+    FROM director_projects
+    WHERE id = ?
+  `);
+  const listDirectorProjectsStmt = db.prepare(`
+    SELECT ${DIRECTOR_PROJECT_COLUMNS.join(", ")}
+    FROM director_projects
+    ORDER BY datetime(created_at) DESC, id DESC
+    LIMIT ?
+  `);
+  const insertDirectorProjectStmt = db.prepare(`
+    INSERT INTO director_projects (
+      task_id, rewrite_id, title, source_text, video_type, visual_style, platform, pace,
+      estimated_duration, storyboard_path, status, score, created_at, updated_at, metadata_json
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+  const listDirectorScenesStmt = db.prepare(`
+    SELECT ${DIRECTOR_SCENE_COLUMNS.join(", ")}
+    FROM director_scenes
+    WHERE project_id = ?
+    ORDER BY scene_index ASC, id ASC
+  `);
+  const insertDirectorSceneStmt = db.prepare(`
+    INSERT INTO director_scenes (
+      project_id, scene_index, duration, purpose, emotion, voice_text, subtitle, visual_style,
+      camera, composition, image_prompt, motion_prompt, bgm, sfx, transition, asset_type, metadata_json
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
 
   function updateTask(id, changes) {
@@ -828,6 +945,108 @@ export function openTaskStore(baseDir) {
     return listVoiceRatingsStmt.all(id, id);
   }
 
+  function normalizeDirectorProject(row) {
+    if (!row) return null;
+    return {
+      ...row,
+      task_id: Number(row.task_id || 0),
+      rewrite_id: Number(row.rewrite_id || 0),
+      estimated_duration: Number(row.estimated_duration || 0),
+      score: Number(row.score || 0),
+    };
+  }
+
+  function normalizeDirectorScene(row) {
+    if (!row) return null;
+    return {
+      ...row,
+      project_id: Number(row.project_id || 0),
+      scene_index: Number(row.scene_index || 0),
+      duration: Number(row.duration || 0),
+    };
+  }
+
+  function createDirectorProject(input) {
+    const timestamp = nowIso();
+    const result = insertDirectorProjectStmt.run(
+      Number(input.task_id || 0),
+      Number(input.rewrite_id || 0),
+      String(input.title || ""),
+      String(input.source_text || ""),
+      String(input.video_type || ""),
+      String(input.visual_style || ""),
+      String(input.platform || ""),
+      String(input.pace || ""),
+      Number(input.estimated_duration || 60),
+      String(input.storyboard_path || ""),
+      String(input.status || "waiting"),
+      Number(input.score || 0),
+      timestamp,
+      timestamp,
+      String(input.metadata_json || "{}")
+    );
+    return getDirectorProject(Number(result.lastInsertRowid));
+  }
+
+  function getDirectorProject(id) {
+    return normalizeDirectorProject(getDirectorProjectStmt.get(Number(id)));
+  }
+
+  function updateDirectorProject(id, changes) {
+    const entries = Object.entries(changes).filter(([key]) => (
+      DIRECTOR_PROJECT_COLUMNS.includes(key) && !["id", "created_at", "updated_at"].includes(key)
+    ));
+    if (entries.length === 0) return getDirectorProject(id);
+    const sql = entries.map(([key]) => `${key} = ?`).join(", ");
+    const values = entries.map(([, value]) => value ?? "");
+    values.push(nowIso(), Number(id));
+    db.prepare(`UPDATE director_projects SET ${sql}, updated_at = ? WHERE id = ?`).run(...values);
+    return getDirectorProject(id);
+  }
+
+  function listDirectorProjects({ limit = 50 } = {}) {
+    const safeLimit = Math.max(1, Math.min(500, Number(limit) || 50));
+    return listDirectorProjectsStmt.all(safeLimit).map(normalizeDirectorProject);
+  }
+
+  function replaceDirectorScenes(projectId, scenes = []) {
+    const id = Number(projectId || 0);
+    db.exec("BEGIN IMMEDIATE");
+    try {
+      db.prepare("DELETE FROM director_scenes WHERE project_id = ?").run(id);
+      for (const scene of scenes) {
+        insertDirectorSceneStmt.run(
+          id,
+          Number(scene.scene_index || scene.scene || 0),
+          Number(scene.duration || 0),
+          String(scene.purpose || ""),
+          String(scene.emotion || ""),
+          String(scene.voice_text || ""),
+          String(scene.subtitle || ""),
+          String(scene.visual_style || ""),
+          String(scene.camera || ""),
+          String(scene.composition || ""),
+          String(scene.image_prompt || ""),
+          String(scene.motion_prompt || ""),
+          String(scene.bgm || ""),
+          String(scene.sfx || ""),
+          String(scene.transition || ""),
+          String(scene.asset_type || ""),
+          String(scene.metadata_json || "{}")
+        );
+      }
+      db.exec("COMMIT");
+    } catch (error) {
+      db.exec("ROLLBACK");
+      throw error;
+    }
+    return listDirectorScenes(id);
+  }
+
+  function listDirectorScenes(projectId) {
+    return listDirectorScenesStmt.all(Number(projectId || 0)).map(normalizeDirectorScene);
+  }
+
   function deleteTasks(ids) {
     const values = ids.map((id) => Number(id)).filter(Number.isFinite);
     if (values.length === 0) return 0;
@@ -886,5 +1105,11 @@ export function openTaskStore(baseDir) {
     listVoiceTests,
     saveVoiceRating,
     listVoiceRatings,
+    createDirectorProject,
+    getDirectorProject,
+    updateDirectorProject,
+    listDirectorProjects,
+    replaceDirectorScenes,
+    listDirectorScenes,
   };
 }
