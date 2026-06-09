@@ -89,3 +89,16 @@ GitHub是唯一代码源。
 再设计Prompt。
 
 最后开发功能。
+
+## TTS 国内供应商优先规则
+
+1. 本项目 TTS 默认优先使用国内供应商。
+2. 第一优先级为阿里云百炼 CosyVoice / Qwen-TTS。
+3. 火山引擎豆包语音、腾讯云 TTS 依次作为国内扩展；海外 Provider 只作为扩展，不作为默认方案。
+4. API Key、Secret 只允许保存在本地 `settings.json`。
+5. 不允许在日志、导出文件、错误信息中暴露 API Key 或 Secret。
+6. 语音克隆必须要求用户确认拥有声音授权。
+7. 所有 TTS Provider 必须通过统一 Adapter 接口调用。
+8. 不允许把某个平台 API 调用逻辑写死在前端。
+9. 不允许破坏现有下载、文案提取、AI 改写、任务队列、SQLite 功能。
+10. TTS 文案必须先经过 Prompt 约束的清洗、切句、情绪和停顿处理，再交给 Provider。

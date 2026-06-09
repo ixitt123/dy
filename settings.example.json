@@ -21,5 +21,36 @@
     "skipDownloaded": true,
     "aiModel": "qwen-plus"
   },
+  "tts": {
+    "aliyun_bailian": {
+      "api_key": "",
+      "workspace_id": "",
+      "default_model": "cosyvoice-v2",
+      "default_voice": ""
+    },
+    "volcengine_doubao": {
+      "api_key": "",
+      "app_id": "",
+      "access_key_id": "",
+      "secret_access_key": "",
+      "default_model": "",
+      "default_voice": ""
+    },
+    "tencent_tts": {
+      "secret_id": "",
+      "secret_key": "",
+      "region": "ap-shanghai",
+      "default_voice": ""
+    },
+    "custom_tts": {
+      "base_url": "",
+      "api_key": "",
+      "model": "",
+      "voice": ""
+    },
+    "default_provider": "aliyun_bailian",
+    "default_speed": 1,
+    "default_format": "mp3"
+  },
   "downloadsDir": ""
 }

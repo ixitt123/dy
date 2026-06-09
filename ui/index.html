@@ -340,6 +340,156 @@
         </div>
       </section>
 
+      <section class="tts-area" id="ttsLab">
+        <div class="result-head tts-head">
+          <div>
+            <h2>语音克隆与 TTS 语音实验室</h2>
+            <p>国内供应商优先 · 当前可用：阿里云百炼 CosyVoice / Qwen-TTS</p>
+          </div>
+          <span class="tts-stage-badge">第一阶段</span>
+        </div>
+
+        <div class="tts-settings">
+          <label>
+            语音平台
+            <select id="ttsProvider"></select>
+          </label>
+          <label>
+            API Key / Secret
+            <input id="ttsApiKey" type="password" placeholder="仅保存在本机 settings.json" autocomplete="off" />
+          </label>
+          <label id="ttsWorkspaceField">
+            Workspace ID
+            <input id="ttsWorkspaceId" type="text" placeholder="可选" />
+          </label>
+          <label id="ttsBaseUrlField" hidden>
+            Base URL
+            <input id="ttsBaseUrl" type="text" placeholder="https://..." />
+          </label>
+          <label>
+            模型
+            <input id="ttsModel" type="text" list="ttsModelOptions" placeholder="cosyvoice-v2" />
+            <datalist id="ttsModelOptions">
+              <option value="cosyvoice-v2"></option>
+              <option value="cosyvoice-v3-flash"></option>
+              <option value="qwen3-tts-flash"></option>
+              <option value="qwen3-tts-instruct-flash"></option>
+              <option value="qwen-tts-latest"></option>
+            </datalist>
+          </label>
+          <button class="ghost" id="saveTtsSettings" type="button">保存平台设置</button>
+          <p id="ttsSettingsStatus">API Key 只保存在本机，并以脱敏形式显示。</p>
+        </div>
+
+        <div class="tts-workbench">
+          <div class="tts-script-column">
+            <label for="ttsText">配音文案</label>
+            <textarea id="ttsText" rows="12" placeholder="输入或粘贴文案。系统会先清洗、切句、处理情绪和停顿，再交给语音平台。"></textarea>
+            <div class="tts-script-foot">
+              <span id="ttsCharacterCount">0 字</span>
+              <span>支持 mp3 / wav</span>
+            </div>
+          </div>
+
+          <div class="tts-control-column">
+            <div class="tts-control-grid">
+              <label>
+                声音来源
+                <select id="ttsVoiceSource">
+                  <option value="preset" selected>预设音色</option>
+                  <option value="manual">手动填写 voice_id</option>
+                  <option value="cloned" disabled>我的克隆音色（第二阶段）</option>
+                </select>
+              </label>
+              <label id="ttsPresetVoiceField">
+                预设音色
+                <select id="ttsPresetVoice"></select>
+              </label>
+              <label id="ttsManualVoiceField" hidden>
+                voice_id
+                <input id="ttsManualVoice" type="text" placeholder="填写平台提供的 voice_id" />
+              </label>
+              <label>
+                倍速
+                <select id="ttsSpeed">
+                  <option value="0.75">0.75x</option>
+                  <option value="0.9">0.9x</option>
+                  <option value="1" selected>1.0x</option>
+                  <option value="1.1">1.1x</option>
+                  <option value="1.25">1.25x</option>
+                  <option value="1.5">1.5x</option>
+                  <option value="2">2.0x</option>
+                </select>
+              </label>
+              <label>
+                情绪
+                <select id="ttsEmotion">
+                  <option>自然</option>
+                  <option>兴奋</option>
+                  <option>严肃</option>
+                  <option>亲切</option>
+                  <option>焦急</option>
+                  <option>震惊</option>
+                  <option>温柔</option>
+                  <option>痞里带刺</option>
+                  <option>家长劝告</option>
+                  <option>招生转化</option>
+                  <option value="custom">自定义情绪描述</option>
+                </select>
+              </label>
+              <label id="ttsCustomEmotionField" hidden>
+                自定义情绪
+                <input id="ttsCustomEmotion" type="text" placeholder="例如：克制但有紧迫感" />
+              </label>
+              <label>
+                输出格式
+                <select id="ttsFormat">
+                  <option value="mp3" selected>MP3</option>
+                  <option value="wav">WAV</option>
+                </select>
+              </label>
+              <label class="tts-range-field">
+                音量 <output id="ttsVolumeValue">50</output>
+                <input id="ttsVolume" type="range" min="0" max="100" value="50" />
+              </label>
+              <label class="tts-range-field">
+                音高 <output id="ttsPitchValue">1.00</output>
+                <input id="ttsPitch" type="range" min="0.5" max="2" step="0.05" value="1" />
+              </label>
+            </div>
+            <label for="ttsStylePrompt">情绪 / 风格补充</label>
+            <textarea id="ttsStylePrompt" class="tts-style-prompt" rows="3" placeholder="例如：像有经验的老师耐心解释，重点词稍微加重。"></textarea>
+            <div class="tts-generate-row">
+              <button class="primary" id="generateTts" type="button">生成语音</button>
+              <span id="ttsStatus">等待生成</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="tts-preview" id="ttsPreview" hidden>
+          <div>
+            <strong id="ttsPreviewTitle">最新语音</strong>
+            <span id="ttsPreviewMeta"></span>
+          </div>
+          <audio id="ttsAudio" controls preload="metadata"></audio>
+        </div>
+
+        <details class="tts-clone-panel">
+          <summary>声音复刻（第二阶段）</summary>
+          <label class="check-row">
+            <input id="ttsConsent" type="checkbox" />
+            我确认拥有该声音的合法授权
+          </label>
+          <button class="ghost" type="button" disabled>声音复刻将在第二阶段开放</button>
+        </details>
+
+        <div class="tts-history-head">
+          <h2>生成记录</h2>
+          <button class="ghost small" id="refreshTtsJobs" type="button">刷新</button>
+        </div>
+        <div class="tts-history" id="ttsHistory"></div>
+      </section>
+
       <section class="files-area">
         <div class="result-head">
           <h2>已下载</h2>

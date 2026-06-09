@@ -57,6 +57,40 @@ const COLUMNS = [
   "completed_at",
 ];
 
+const TTS_JOB_COLUMNS = [
+  "id",
+  "task_id",
+  "rewrite_id",
+  "provider",
+  "voice_id",
+  "voice_name",
+  "text",
+  "emotion",
+  "style_prompt",
+  "speed",
+  "volume",
+  "pitch",
+  "format",
+  "audio_path",
+  "status",
+  "error",
+  "metadata_json",
+  "created_at",
+  "completed_at",
+];
+
+const VOICE_COLUMNS = [
+  "id",
+  "provider",
+  "voice_id",
+  "voice_name",
+  "voice_type",
+  "sample_path",
+  "created_at",
+  "updated_at",
+  "metadata_json",
+];
+
 function nowIso() {
   return new Date().toISOString();
 }
@@ -128,6 +162,46 @@ export function openTaskStore(baseDir) {
       ON tasks(status, created_at, id);
     CREATE INDEX IF NOT EXISTS idx_tasks_video_id
       ON tasks(video_id);
+
+    CREATE TABLE IF NOT EXISTS voices (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      provider TEXT NOT NULL,
+      voice_id TEXT NOT NULL,
+      voice_name TEXT NOT NULL DEFAULT '',
+      voice_type TEXT NOT NULL DEFAULT 'preset',
+      sample_path TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      metadata_json TEXT NOT NULL DEFAULT '{}'
+    );
+
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_voices_provider_voice
+      ON voices(provider, voice_id);
+
+    CREATE TABLE IF NOT EXISTS tts_jobs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      task_id INTEGER NOT NULL DEFAULT 0,
+      rewrite_id INTEGER NOT NULL DEFAULT 0,
+      provider TEXT NOT NULL,
+      voice_id TEXT NOT NULL DEFAULT '',
+      voice_name TEXT NOT NULL DEFAULT '',
+      text TEXT NOT NULL,
+      emotion TEXT NOT NULL DEFAULT '',
+      style_prompt TEXT NOT NULL DEFAULT '',
+      speed REAL NOT NULL DEFAULT 1.0,
+      volume REAL NOT NULL DEFAULT 50,
+      pitch REAL NOT NULL DEFAULT 1.0,
+      format TEXT NOT NULL DEFAULT 'mp3',
+      audio_path TEXT NOT NULL DEFAULT '',
+      status TEXT NOT NULL DEFAULT 'waiting',
+      error TEXT NOT NULL DEFAULT '',
+      metadata_json TEXT NOT NULL DEFAULT '{}',
+      created_at TEXT NOT NULL,
+      completed_at TEXT NOT NULL DEFAULT ''
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_tts_jobs_status_created
+      ON tts_jobs(status, created_at, id);
   `);
 
   const taskColumns = new Set(db.prepare("PRAGMA table_info(tasks)").all().map((column) => column.name));
@@ -214,6 +288,43 @@ export function openTaskStore(baseDir) {
     WHERE video_id = ? AND status = ? AND video_path != ''
     ORDER BY datetime(updated_at) DESC, id DESC
     LIMIT 1
+  `);
+  const insertTtsJobStmt = db.prepare(`
+    INSERT INTO tts_jobs (
+      task_id, rewrite_id, provider, voice_id, voice_name, text, emotion, style_prompt,
+      speed, volume, pitch, format, audio_path, status, error, metadata_json, created_at, completed_at
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+  const getTtsJobStmt = db.prepare(`SELECT ${TTS_JOB_COLUMNS.join(", ")} FROM tts_jobs WHERE id = ?`);
+  const listTtsJobsStmt = db.prepare(`
+    SELECT ${TTS_JOB_COLUMNS.join(", ")}
+    FROM tts_jobs
+    ORDER BY datetime(created_at) DESC, id DESC
+    LIMIT ?
+  `);
+  const getVoiceStmt = db.prepare(`
+    SELECT ${VOICE_COLUMNS.join(", ")}
+    FROM voices
+    WHERE provider = ? AND voice_id = ?
+  `);
+  const listVoicesStmt = db.prepare(`
+    SELECT ${VOICE_COLUMNS.join(", ")}
+    FROM voices
+    WHERE (? = '' OR provider = ?)
+    ORDER BY datetime(updated_at) DESC, id DESC
+  `);
+  const upsertVoiceStmt = db.prepare(`
+    INSERT INTO voices (
+      provider, voice_id, voice_name, voice_type, sample_path, created_at, updated_at, metadata_json
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(provider, voice_id) DO UPDATE SET
+      voice_name = excluded.voice_name,
+      voice_type = excluded.voice_type,
+      sample_path = excluded.sample_path,
+      updated_at = excluded.updated_at,
+      metadata_json = excluded.metadata_json
   `);
 
   function updateTask(id, changes) {
@@ -346,6 +457,81 @@ export function openTaskStore(baseDir) {
     return normalizeRow(completedByVideoStmt.get(videoId, TASK_STATUS.DONE));
   }
 
+  function normalizeTtsJob(row) {
+    if (!row) return null;
+    return {
+      ...row,
+      task_id: Number(row.task_id || 0),
+      rewrite_id: Number(row.rewrite_id || 0),
+      speed: Number(row.speed || 1),
+      volume: Number(row.volume ?? 50),
+      pitch: Number(row.pitch || 1),
+    };
+  }
+
+  function createTtsJob(input) {
+    const createdAt = nowIso();
+    const result = insertTtsJobStmt.run(
+      Number(input.task_id || 0),
+      Number(input.rewrite_id || 0),
+      String(input.provider || ""),
+      String(input.voice_id || ""),
+      String(input.voice_name || ""),
+      String(input.text || ""),
+      String(input.emotion || ""),
+      String(input.style_prompt || ""),
+      Number(input.speed || 1),
+      Number(input.volume ?? 50),
+      Number(input.pitch || 1),
+      String(input.format || "mp3"),
+      String(input.audio_path || ""),
+      String(input.status || "waiting"),
+      String(input.error || ""),
+      String(input.metadata_json || "{}"),
+      createdAt,
+      String(input.completed_at || "")
+    );
+    return getTtsJob(Number(result.lastInsertRowid));
+  }
+
+  function getTtsJob(id) {
+    return normalizeTtsJob(getTtsJobStmt.get(Number(id)));
+  }
+
+  function updateTtsJob(id, changes) {
+    const entries = Object.entries(changes).filter(([key]) => TTS_JOB_COLUMNS.includes(key) && key !== "id");
+    if (entries.length === 0) return getTtsJob(id);
+    const sql = entries.map(([key]) => `${key} = ?`).join(", ");
+    const values = entries.map(([, value]) => value ?? "");
+    db.prepare(`UPDATE tts_jobs SET ${sql} WHERE id = ?`).run(...values, Number(id));
+    return getTtsJob(id);
+  }
+
+  function listTtsJobs({ limit = 50 } = {}) {
+    const safeLimit = Math.max(1, Math.min(500, Number(limit) || 50));
+    return listTtsJobsStmt.all(safeLimit).map(normalizeTtsJob);
+  }
+
+  function upsertVoice(input) {
+    const timestamp = nowIso();
+    upsertVoiceStmt.run(
+      String(input.provider || ""),
+      String(input.voice_id || ""),
+      String(input.voice_name || ""),
+      String(input.voice_type || "preset"),
+      String(input.sample_path || ""),
+      timestamp,
+      timestamp,
+      String(input.metadata_json || "{}")
+    );
+    return getVoiceStmt.get(String(input.provider || ""), String(input.voice_id || ""));
+  }
+
+  function listVoices({ provider = "" } = {}) {
+    const selectedProvider = String(provider || "");
+    return listVoicesStmt.all(selectedProvider, selectedProvider);
+  }
+
   function deleteTasks(ids) {
     const values = ids.map((id) => Number(id)).filter(Number.isFinite);
     if (values.length === 0) return 0;
@@ -386,5 +572,11 @@ export function openTaskStore(baseDir) {
     deleteTasks,
     clearDoneAndFailed,
     clearTaskList,
+    createTtsJob,
+    getTtsJob,
+    updateTtsJob,
+    listTtsJobs,
+    upsertVoice,
+    listVoices,
   };
 }

@@ -9,6 +9,8 @@ import * as XLSX from "xlsx";
 import ffmpegPath from "ffmpeg-static";
 import WebSocket from "ws";
 import { openTaskStore, TASK_STATUS } from "./task-store.mjs";
+import { createTtsService } from "./server/tts/tts-service.js";
+import { TTS_PROVIDER_LABELS } from "./server/tts/providers/index.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const uiDir = path.join(__dirname, "ui");
@@ -181,6 +183,12 @@ fs.mkdirSync(downloadsDir, { recursive: true });
 fs.mkdirSync(rewritesDir, { recursive: true });
 const taskStore = openTaskStore(__dirname);
 taskStore.resetActiveTasks();
+const ttsService = createTtsService({
+  baseDir: __dirname,
+  taskStore,
+  getSettings: readSettings,
+  ffmpegPath,
+});
 
 const mimeTypes = new Map([
   [".html", "text/html; charset=utf-8"],
@@ -371,6 +379,12 @@ function clampNumber(value, min, max, fallback) {
   return Math.max(min, Math.min(max, Math.round(number)));
 }
 
+function clampDecimal(value, min, max, fallback) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return fallback;
+  return Math.max(min, Math.min(max, number));
+}
+
 function setDownloadsDir(value) {
   const input = String(value || "").trim();
   const resolved = path.resolve(input || defaultDownloadsDir);
@@ -389,6 +403,7 @@ function normalizeSettings(settings) {
   const rewrite = next.rewrite && typeof next.rewrite === "object" ? { ...next.rewrite } : {};
   const legacyKey = next.dashscopeApiKey || "";
   const batch = next.batch && typeof next.batch === "object" ? { ...next.batch } : {};
+  const tts = next.tts && typeof next.tts === "object" ? { ...next.tts } : {};
 
   providers.dashscope = {
     label: "阿里云百炼 DashScope",
@@ -436,6 +451,39 @@ function normalizeSettings(settings) {
     skipDownloaded: batch.skipDownloaded !== false,
     aiModel: String(batch.aiModel || "qwen-plus").trim() || "qwen-plus",
   };
+  next.tts = {
+    aliyun_bailian: {
+      api_key: String(tts.aliyun_bailian?.api_key || "").trim(),
+      workspace_id: String(tts.aliyun_bailian?.workspace_id || "").trim(),
+      default_model: String(tts.aliyun_bailian?.default_model || "cosyvoice-v2").trim() || "cosyvoice-v2",
+      default_voice: String(tts.aliyun_bailian?.default_voice || "").trim(),
+    },
+    volcengine_doubao: {
+      api_key: String(tts.volcengine_doubao?.api_key || "").trim(),
+      app_id: String(tts.volcengine_doubao?.app_id || "").trim(),
+      access_key_id: String(tts.volcengine_doubao?.access_key_id || "").trim(),
+      secret_access_key: String(tts.volcengine_doubao?.secret_access_key || "").trim(),
+      default_model: String(tts.volcengine_doubao?.default_model || "").trim(),
+      default_voice: String(tts.volcengine_doubao?.default_voice || "").trim(),
+    },
+    tencent_tts: {
+      secret_id: String(tts.tencent_tts?.secret_id || "").trim(),
+      secret_key: String(tts.tencent_tts?.secret_key || "").trim(),
+      region: String(tts.tencent_tts?.region || "ap-shanghai").trim() || "ap-shanghai",
+      default_voice: String(tts.tencent_tts?.default_voice || "").trim(),
+    },
+    custom_tts: {
+      base_url: String(tts.custom_tts?.base_url || "").trim(),
+      api_key: String(tts.custom_tts?.api_key || "").trim(),
+      model: String(tts.custom_tts?.model || "").trim(),
+      voice: String(tts.custom_tts?.voice || "").trim(),
+    },
+    default_provider: TTS_PROVIDER_LABELS[String(tts.default_provider || "")]
+      ? String(tts.default_provider)
+      : "aliyun_bailian",
+    default_speed: clampDecimal(tts.default_speed, 0.5, 2, 1),
+    default_format: tts.default_format === "wav" ? "wav" : "mp3",
+  };
   return next;
 }
 
@@ -443,6 +491,63 @@ function maskApiKey(apiKey) {
   if (!apiKey) return "";
   if (apiKey.length <= 10) return "已保存";
   return `${apiKey.slice(0, 6)}...${apiKey.slice(-4)}`;
+}
+
+function publicTtsSettings(settings = readSettings()) {
+  const tts = settings.tts;
+  const providers = [
+    {
+      id: "aliyun_bailian",
+      label: TTS_PROVIDER_LABELS.aliyun_bailian,
+      phase: "第一阶段",
+      enabled: true,
+      configured: Boolean(tts.aliyun_bailian.api_key),
+      secret_mask: maskApiKey(tts.aliyun_bailian.api_key),
+      default_model: tts.aliyun_bailian.default_model,
+      default_voice: tts.aliyun_bailian.default_voice,
+      workspace_id: tts.aliyun_bailian.workspace_id,
+    },
+    {
+      id: "volcengine_doubao",
+      label: TTS_PROVIDER_LABELS.volcengine_doubao,
+      phase: "第二阶段预留",
+      enabled: false,
+      configured: Boolean(tts.volcengine_doubao.api_key || tts.volcengine_doubao.secret_access_key),
+      secret_mask: maskApiKey(tts.volcengine_doubao.api_key || tts.volcengine_doubao.secret_access_key),
+      default_model: tts.volcengine_doubao.default_model,
+      default_voice: tts.volcengine_doubao.default_voice,
+    },
+    {
+      id: "tencent_tts",
+      label: TTS_PROVIDER_LABELS.tencent_tts,
+      phase: "第三阶段预留",
+      enabled: false,
+      configured: Boolean(tts.tencent_tts.secret_id && tts.tencent_tts.secret_key),
+      secret_mask: maskApiKey(tts.tencent_tts.secret_key),
+      region: tts.tencent_tts.region,
+      default_voice: tts.tencent_tts.default_voice,
+    },
+    {
+      id: "custom_tts",
+      label: TTS_PROVIDER_LABELS.custom_tts,
+      phase: "扩展",
+      enabled: true,
+      configured: Boolean(tts.custom_tts.base_url),
+      secret_mask: maskApiKey(tts.custom_tts.api_key),
+      base_url: tts.custom_tts.base_url,
+      default_model: tts.custom_tts.model,
+      default_voice: tts.custom_tts.voice,
+    },
+    { id: "minimax", label: TTS_PROVIDER_LABELS.minimax, phase: "扩展预留", enabled: false, configured: false },
+    { id: "fish_audio", label: TTS_PROVIDER_LABELS.fish_audio, phase: "扩展预留", enabled: false, configured: false },
+    { id: "elevenlabs", label: TTS_PROVIDER_LABELS.elevenlabs, phase: "扩展预留", enabled: false, configured: false },
+  ];
+  return {
+    providers,
+    default_provider: tts.default_provider,
+    default_speed: tts.default_speed,
+    default_format: tts.default_format,
+  };
 }
 
 function publicRewriteSettings(settings = readSettings()) {
@@ -2970,9 +3075,101 @@ const server = http.createServer(async (req, res) => {
         apiKeyConfigured: Boolean(provider.apiKey),
         apiKeyMask: maskApiKey(provider.apiKey || ""),
         rewrite: publicRewriteSettings(settings),
+        tts: publicTtsSettings(settings),
         batch: settings.batch,
         downloadsDir,
       });
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/tts/settings") {
+      const body = JSON.parse(await readBody(req) || "{}");
+      const providerId = String(body.provider || "aliyun_bailian");
+      const settings = readSettings();
+      const target = settings.tts[providerId];
+      if (!target || !TTS_PROVIDER_LABELS[providerId]) {
+        sendJson(res, 400, { ok: false, message: "未知 TTS Provider。" });
+        return;
+      }
+      const allowedFields = {
+        aliyun_bailian: ["api_key", "workspace_id", "default_model", "default_voice"],
+        volcengine_doubao: ["api_key", "app_id", "access_key_id", "secret_access_key", "default_model", "default_voice"],
+        tencent_tts: ["secret_id", "secret_key", "region", "default_voice"],
+        custom_tts: ["base_url", "api_key", "model", "voice"],
+      }[providerId] || [];
+      const secretFields = new Set(["api_key", "secret_id", "secret_key", "access_key_id", "secret_access_key"]);
+      for (const field of allowedFields) {
+        if (body[field] === undefined) continue;
+        const value = String(body[field] || "").trim();
+        if (secretFields.has(field) && !value) continue;
+        target[field] = value;
+      }
+      settings.tts.default_provider = providerId;
+      if (body.default_speed !== undefined) {
+        settings.tts.default_speed = clampDecimal(body.default_speed, 0.5, 2, settings.tts.default_speed);
+      }
+      if (body.default_format !== undefined) {
+        settings.tts.default_format = body.default_format === "wav" ? "wav" : "mp3";
+      }
+      writeSettings(settings);
+      sendJson(res, 200, { ok: true, tts: publicTtsSettings(readSettings()) });
+      return;
+    }
+
+    if (req.method === "GET" && url.pathname === "/api/tts/voices") {
+      const settings = readSettings();
+      const provider = String(url.searchParams.get("provider") || settings.tts.default_provider);
+      sendJson(res, 200, {
+        ok: true,
+        provider,
+        voices: ttsService.listVoices(provider),
+      });
+      return;
+    }
+
+    if (req.method === "GET" && url.pathname === "/api/tts/jobs") {
+      const limit = clampNumber(url.searchParams.get("limit"), 1, 500, 50);
+      sendJson(res, 200, { ok: true, jobs: ttsService.listJobs(limit) });
+      return;
+    }
+
+    if (req.method === "GET" && url.pathname === "/api/tts/job") {
+      const job = ttsService.getJob(Number(url.searchParams.get("id") || 0));
+      if (!job) {
+        sendJson(res, 404, { ok: false, message: "没有找到这条语音任务。" });
+        return;
+      }
+      sendJson(res, 200, { ok: true, job });
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/tts/generate") {
+      const body = JSON.parse(await readBody(req) || "{}");
+      const result = ttsService.enqueue(body);
+      if (result.error) {
+        sendJson(res, 400, { ok: false, message: result.error });
+        return;
+      }
+      sendJson(res, 202, { ok: true, job: result.job });
+      return;
+    }
+
+    if (req.method === "GET" && url.pathname === "/api/tts/audio") {
+      const job = taskStore.getTtsJob(Number(url.searchParams.get("id") || 0));
+      const audioPath = job?.audio_path ? path.resolve(job.audio_path) : "";
+      const allowedRoot = path.resolve(ttsService.outputDir);
+      if (!job || job.status !== "completed" || !audioPath.startsWith(`${allowedRoot}${path.sep}`) || !fs.existsSync(audioPath)) {
+        sendJson(res, 404, { ok: false, message: "音频文件不存在或尚未生成。" });
+        return;
+      }
+      const type = job.format === "wav" ? "audio/wav" : "audio/mpeg";
+      const stat = fs.statSync(audioPath);
+      res.writeHead(200, {
+        "content-type": type,
+        "content-length": stat.size,
+        "cache-control": "no-store",
+      });
+      fs.createReadStream(audioPath).pipe(res);
       return;
     }
 

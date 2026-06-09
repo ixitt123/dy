@@ -80,6 +80,38 @@ const rewriteBaseUrlInput = document.querySelector("#rewriteBaseUrlInput");
 const rewriteApplyLink = document.querySelector("#rewriteApplyLink");
 const rewriteBalanceLink = document.querySelector("#rewriteBalanceLink");
 const rewriteSettingsStatus = document.querySelector("#rewriteSettingsStatus");
+const ttsProvider = document.querySelector("#ttsProvider");
+const ttsApiKey = document.querySelector("#ttsApiKey");
+const ttsWorkspaceField = document.querySelector("#ttsWorkspaceField");
+const ttsWorkspaceId = document.querySelector("#ttsWorkspaceId");
+const ttsBaseUrlField = document.querySelector("#ttsBaseUrlField");
+const ttsBaseUrl = document.querySelector("#ttsBaseUrl");
+const ttsModel = document.querySelector("#ttsModel");
+const ttsSettingsStatus = document.querySelector("#ttsSettingsStatus");
+const ttsText = document.querySelector("#ttsText");
+const ttsCharacterCount = document.querySelector("#ttsCharacterCount");
+const ttsVoiceSource = document.querySelector("#ttsVoiceSource");
+const ttsPresetVoiceField = document.querySelector("#ttsPresetVoiceField");
+const ttsPresetVoice = document.querySelector("#ttsPresetVoice");
+const ttsManualVoiceField = document.querySelector("#ttsManualVoiceField");
+const ttsManualVoice = document.querySelector("#ttsManualVoice");
+const ttsSpeed = document.querySelector("#ttsSpeed");
+const ttsEmotion = document.querySelector("#ttsEmotion");
+const ttsCustomEmotionField = document.querySelector("#ttsCustomEmotionField");
+const ttsCustomEmotion = document.querySelector("#ttsCustomEmotion");
+const ttsFormat = document.querySelector("#ttsFormat");
+const ttsVolume = document.querySelector("#ttsVolume");
+const ttsVolumeValue = document.querySelector("#ttsVolumeValue");
+const ttsPitch = document.querySelector("#ttsPitch");
+const ttsPitchValue = document.querySelector("#ttsPitchValue");
+const ttsStylePrompt = document.querySelector("#ttsStylePrompt");
+const generateTtsButton = document.querySelector("#generateTts");
+const ttsStatus = document.querySelector("#ttsStatus");
+const ttsPreview = document.querySelector("#ttsPreview");
+const ttsPreviewTitle = document.querySelector("#ttsPreviewTitle");
+const ttsPreviewMeta = document.querySelector("#ttsPreviewMeta");
+const ttsAudio = document.querySelector("#ttsAudio");
+const ttsHistory = document.querySelector("#ttsHistory");
 const pageSessionId = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 let lastTranscriptText = "";
 let lastTranscriptPath = "";
@@ -96,6 +128,9 @@ let activeResultTaskIds = new Set();
 let rewriteProviderConfigs = {};
 let currentRewriteSpecs = [];
 let rewriteVersionDrafts = new Map();
+let ttsProviderConfigs = [];
+let ttsPresetVoices = [];
+let ttsPollTimer = 0;
 const selectedFiles = new Set();
 const taskActionLabels = {
   parse: "解析信息",
@@ -957,6 +992,236 @@ function updateRewritePresetFields() {
   }
 }
 
+function selectedTtsProviderConfig() {
+  return ttsProviderConfigs.find((provider) => provider.id === ttsProvider.value) || {};
+}
+
+function renderTtsProviderOptions(tts = {}) {
+  ttsProviderConfigs = Array.isArray(tts.providers) ? tts.providers : [];
+  ttsProvider.innerHTML = ttsProviderConfigs
+    .map((provider) => {
+      const suffix = provider.enabled ? "" : `（${provider.phase || "预留"}）`;
+      return `<option value="${escapeHtml(provider.id)}" ${provider.enabled ? "" : "disabled"}>${escapeHtml(provider.label)}${escapeHtml(suffix)}</option>`;
+    })
+    .join("");
+  const requested = tts.default_provider || "aliyun_bailian";
+  ttsProvider.value = ttsProviderConfigs.some((provider) => provider.id === requested && provider.enabled)
+    ? requested
+    : "aliyun_bailian";
+  ttsSpeed.value = String(tts.default_speed || 1);
+  ttsFormat.value = tts.default_format === "wav" ? "wav" : "mp3";
+}
+
+function updateTtsProviderFields() {
+  const provider = selectedTtsProviderConfig();
+  const isAliyun = provider.id === "aliyun_bailian";
+  const isCustom = provider.id === "custom_tts";
+  ttsWorkspaceField.hidden = !isAliyun;
+  ttsBaseUrlField.hidden = !isCustom;
+  ttsWorkspaceId.value = isAliyun ? provider.workspace_id || "" : "";
+  ttsBaseUrl.value = isCustom ? provider.base_url || "" : "";
+  ttsModel.value = provider.default_model || "";
+  ttsApiKey.value = "";
+  ttsApiKey.placeholder = provider.configured
+    ? `已保存：${provider.secret_mask || "已脱敏"}，留空则不修改`
+    : "仅保存在本机 settings.json";
+  ttsSettingsStatus.textContent = provider.configured
+    ? `${provider.label} 已配置：${provider.secret_mask || "密钥已脱敏"}`
+    : `${provider.label || "当前平台"}尚未配置。`;
+}
+
+function renderTtsVoices() {
+  const model = ttsModel.value.trim();
+  const matching = ttsPresetVoices.filter((voice) => !model || voice.model === model);
+  const voices = matching.length ? matching : ttsPresetVoices;
+  ttsPresetVoice.innerHTML = voices.length
+    ? voices
+        .map((voice) => `<option value="${escapeHtml(voice.id)}">${escapeHtml(voice.name)} · ${escapeHtml(voice.description || voice.id)}</option>`)
+        .join("")
+    : '<option value="">当前平台暂无预设音色</option>';
+  const configuredDefault = selectedTtsProviderConfig().default_voice || "";
+  if (voices.some((voice) => voice.id === configuredDefault)) ttsPresetVoice.value = configuredDefault;
+}
+
+async function loadTtsVoices() {
+  const provider = selectedTtsProviderConfig();
+  if (!provider.enabled) {
+    ttsPresetVoices = [];
+    renderTtsVoices();
+    return;
+  }
+  const data = await fetchJson(`/api/tts/voices?provider=${encodeURIComponent(provider.id)}`);
+  ttsPresetVoices = Array.isArray(data.voices) ? data.voices : [];
+  renderTtsVoices();
+  if (ttsPresetVoices.length === 0 && provider.id === "custom_tts") {
+    ttsVoiceSource.value = "manual";
+    updateTtsVoiceSource();
+  }
+}
+
+function updateTtsVoiceSource() {
+  const manual = ttsVoiceSource.value === "manual";
+  ttsPresetVoiceField.hidden = manual;
+  ttsManualVoiceField.hidden = !manual;
+}
+
+function updateTtsEmotionField() {
+  ttsCustomEmotionField.hidden = ttsEmotion.value !== "custom";
+}
+
+function updateTtsRangeLabels() {
+  ttsVolumeValue.textContent = ttsVolume.value;
+  ttsPitchValue.textContent = Number(ttsPitch.value || 1).toFixed(2);
+}
+
+async function saveTtsProviderSettings() {
+  const provider = selectedTtsProviderConfig();
+  ttsSettingsStatus.textContent = "正在保存平台设置...";
+  const body = {
+    provider: provider.id,
+    api_key: ttsApiKey.value.trim(),
+    default_speed: Number(ttsSpeed.value || 1),
+    default_format: ttsFormat.value,
+  };
+  if (provider.id === "aliyun_bailian") {
+    body.workspace_id = ttsWorkspaceId.value.trim();
+    body.default_model = ttsModel.value.trim() || "cosyvoice-v2";
+    body.default_voice = ttsVoiceSource.value === "manual" ? ttsManualVoice.value.trim() : ttsPresetVoice.value;
+  }
+  if (provider.id === "custom_tts") {
+    body.base_url = ttsBaseUrl.value.trim();
+    body.model = ttsModel.value.trim();
+    body.voice = ttsVoiceSource.value === "manual" ? ttsManualVoice.value.trim() : ttsPresetVoice.value;
+  }
+  try {
+    const data = await fetchJson("/api/tts/settings", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    renderTtsProviderOptions(data.tts || {});
+    updateTtsProviderFields();
+    await loadTtsVoices();
+    const current = selectedTtsProviderConfig();
+    ttsSettingsStatus.textContent = current.configured
+      ? `平台设置已保存，密钥显示为：${current.secret_mask || "已脱敏"}`
+      : "平台基础设置已保存；生成前仍需填写 API Key。";
+  } catch (error) {
+    ttsSettingsStatus.textContent = error instanceof Error ? error.message : String(error);
+  }
+}
+
+function ttsStatusLabel(status) {
+  return {
+    waiting: "等待中",
+    processing: "生成中",
+    completed: "已完成",
+    failed: "失败",
+  }[status] || status;
+}
+
+function renderTtsJobs(jobs = []) {
+  if (!jobs.length) {
+    ttsHistory.innerHTML = '<div class="tts-empty">还没有生成记录。</div>';
+    return;
+  }
+  const labels = Object.fromEntries(ttsProviderConfigs.map((provider) => [provider.id, provider.label]));
+  ttsHistory.innerHTML = jobs
+    .map((job) => {
+      const audio = job.audio_url
+        ? `<audio controls preload="none" src="${escapeHtml(job.audio_url)}"></audio>`
+        : `<span title="${escapeHtml(job.error || "")}">${escapeHtml(job.error || "等待生成")}</span>`;
+      return `
+        <div class="tts-history-row">
+          <strong>#${job.id}</strong>
+          <span>${escapeHtml(labels[job.provider] || job.provider)}</span>
+          <span class="tts-history-text" title="${escapeHtml(job.text)}">${escapeHtml(job.text)}</span>
+          <span>${escapeHtml(job.voice_name || job.voice_id || "-")}</span>
+          <span class="tts-job-status ${escapeHtml(job.status)}">${escapeHtml(ttsStatusLabel(job.status))}</span>
+          ${audio}
+        </div>
+      `;
+    })
+    .join("");
+}
+
+async function refreshTtsJobs() {
+  const data = await fetchJson("/api/tts/jobs?limit=30");
+  renderTtsJobs(data.jobs || []);
+}
+
+function showTtsPreview(job) {
+  ttsPreview.hidden = false;
+  ttsPreviewTitle.textContent = `语音 #${job.id}`;
+  ttsPreviewMeta.textContent = `${job.voice_name || job.voice_id || "音色"} · ${job.speed}x · ${String(job.format || "").toUpperCase()}`;
+  ttsAudio.src = `${job.audio_url}&t=${Date.now()}`;
+  ttsAudio.load();
+}
+
+async function waitForTtsJob(jobId) {
+  if (ttsPollTimer) clearTimeout(ttsPollTimer);
+  const data = await fetchJson(`/api/tts/job?id=${encodeURIComponent(jobId)}`);
+  const job = data.job;
+  if (job.status === "completed") {
+    generateTtsButton.disabled = false;
+    ttsStatus.textContent = "生成完成，可以试听。";
+    showTtsPreview(job);
+    await refreshTtsJobs();
+    return;
+  }
+  if (job.status === "failed") {
+    generateTtsButton.disabled = false;
+    ttsStatus.textContent = job.error || "生成失败。";
+    await refreshTtsJobs();
+    return;
+  }
+  ttsStatus.textContent = job.status === "processing" ? "正在生成音频..." : "任务已进入队列...";
+  ttsPollTimer = setTimeout(() => {
+    waitForTtsJob(jobId).catch((error) => {
+      generateTtsButton.disabled = false;
+      ttsStatus.textContent = error instanceof Error ? error.message : String(error);
+    });
+  }, 1000);
+}
+
+async function generateTts() {
+  const text = ttsText.value.trim();
+  const voiceId = ttsVoiceSource.value === "manual" ? ttsManualVoice.value.trim() : ttsPresetVoice.value;
+  if (!text) {
+    ttsStatus.textContent = "请先输入配音文案。";
+    return;
+  }
+  if (!voiceId) {
+    ttsStatus.textContent = "请选择音色或填写 voice_id。";
+    return;
+  }
+  generateTtsButton.disabled = true;
+  ttsStatus.textContent = "正在提交生成任务...";
+  try {
+    const selectedVoice = ttsPresetVoices.find((voice) => voice.id === voiceId);
+    const data = await fetchJson("/api/tts/generate", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        provider: ttsProvider.value,
+        text,
+        voice_id: voiceId,
+        voice_name: selectedVoice?.name || voiceId,
+        speed: Number(ttsSpeed.value || 1),
+        emotion: ttsEmotion.value === "custom" ? ttsCustomEmotion.value.trim() : ttsEmotion.value,
+        style_prompt: ttsStylePrompt.value.trim(),
+        volume: Number(ttsVolume.value || 50),
+        pitch: Number(ttsPitch.value || 1),
+        format: ttsFormat.value,
+      }),
+    });
+    await waitForTtsJob(data.job.id);
+  } catch (error) {
+    generateTtsButton.disabled = false;
+    ttsStatus.textContent = error instanceof Error ? error.message : String(error);
+  }
+}
+
 async function loadSettings() {
   const data = await fetchJson("/api/settings");
   if (data.providers) {
@@ -995,6 +1260,11 @@ async function loadSettings() {
     rewriteSettingsStatus.textContent = statusParts.length
       ? `已配置：${statusParts.join("；")}`
       : "选择平台，粘贴 API Key，保存即可。";
+  }
+  if (data.tts) {
+    renderTtsProviderOptions(data.tts);
+    updateTtsProviderFields();
+    await loadTtsVoices();
   }
 }
 
@@ -1454,6 +1724,36 @@ rewriteAutoModel.addEventListener("change", () => {
   }
 });
 
+document.querySelector("#saveTtsSettings").addEventListener("click", () => {
+  saveTtsProviderSettings();
+});
+
+ttsProvider.addEventListener("change", () => {
+  updateTtsProviderFields();
+  loadTtsVoices().catch((error) => {
+    ttsSettingsStatus.textContent = error instanceof Error ? error.message : String(error);
+  });
+});
+
+ttsModel.addEventListener("change", renderTtsVoices);
+ttsVoiceSource.addEventListener("change", updateTtsVoiceSource);
+ttsEmotion.addEventListener("change", updateTtsEmotionField);
+ttsVolume.addEventListener("input", updateTtsRangeLabels);
+ttsPitch.addEventListener("input", updateTtsRangeLabels);
+ttsText.addEventListener("input", () => {
+  ttsCharacterCount.textContent = `${ttsText.value.replace(/\s/g, "").length} 字`;
+});
+
+generateTtsButton.addEventListener("click", () => {
+  generateTts();
+});
+
+document.querySelector("#refreshTtsJobs").addEventListener("click", () => {
+  refreshTtsJobs().catch((error) => {
+    ttsStatus.textContent = error instanceof Error ? error.message : String(error);
+  });
+});
+
 [rewriteToneLevel, rewriteConflictLevel, rewriteEmotionLevel, rewriteSalesLevel].forEach((input) => {
   input.addEventListener("input", syncRewriteSliderLabels);
 });
@@ -1869,6 +2169,10 @@ async function init() {
     savePath.textContent = `下载位置：${status.downloadsDir}`;
     downloadDirInput.value = status.downloadsDir || "";
     await loadSettings();
+    updateTtsVoiceSource();
+    updateTtsEmotionField();
+    updateTtsRangeLabels();
+    await refreshTtsJobs();
     await refreshFiles();
     await refreshTasks();
     await refreshTranscripts();
