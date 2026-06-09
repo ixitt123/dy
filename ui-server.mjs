@@ -1809,9 +1809,22 @@ async function chatCompletion(provider, messages, signal, { temperature = 0.78 }
   return data.choices?.[0]?.message?.content || "";
 }
 
-function chunkRows(rows, size = 8) {
+function chunkRowsByWordCount(rows, maxCharacters = 2600) {
   const chunks = [];
-  for (let index = 0; index < rows.length; index += size) chunks.push(rows.slice(index, index + size));
+  let current = [];
+  let currentCharacters = 0;
+  for (const row of rows) {
+    const range = requestedWordCountRange(row.wordCount);
+    const estimatedCharacters = Math.max(120, Math.min(5000, Number.isFinite(range?.max) ? range.max : range?.min || 300));
+    if (current.length > 0 && currentCharacters + estimatedCharacters > maxCharacters) {
+      chunks.push(current);
+      current = [];
+      currentCharacters = 0;
+    }
+    current.push(row);
+    currentCharacters += estimatedCharacters;
+  }
+  if (current.length > 0) chunks.push(current);
   return chunks;
 }
 
@@ -1850,46 +1863,103 @@ function wordCountIssues(versions, specs) {
     .filter(Boolean);
 }
 
+function truncateRewriteToLimit(value, maxCharacters) {
+  const text = String(value || "").trim();
+  if (!Number.isFinite(maxCharacters) || rewriteCharacterCount(text) <= maxCharacters) return text;
+  let count = 0;
+  let result = "";
+  for (const character of Array.from(text)) {
+    if (!/\s/.test(character)) {
+      if (count >= maxCharacters) break;
+      count += 1;
+    }
+    result += character;
+  }
+  result = result.trim().replace(/[，、；：,;:]+$/u, "");
+  if (result && !/[。！？!?]$/u.test(result) && rewriteCharacterCount(result) < maxCharacters) result += "。";
+  return result;
+}
+
+function padRewriteToMinimum(value, minCharacters, maxCharacters) {
+  let result = String(value || "").trim();
+  const supplements = [
+    "别急着找捷径，先把每天该做的动作做扎实。",
+    "把问题拆开、逐项检查，进步才会真正看得见。",
+    "有效的方法不是听懂了，而是能够反复做到。",
+    "今天就从最薄弱的一项开始，连续执行再看结果。",
+    "方向对了还不够，真正拉开差距的是每天落实。",
+    "少一点空想，多一次练习，结果自然会慢慢变化。",
+    "先完成，再复盘，再调整，这比盲目努力更重要。",
+    "愿意开始行动的人，才有机会把问题真正解决。",
+  ];
+  let supplementIndex = 0;
+  while (rewriteCharacterCount(result) < minCharacters) {
+    result = `${result}\n${supplements[supplementIndex % supplements.length]}`.trim();
+    supplementIndex += 1;
+  }
+  return truncateRewriteToLimit(result, maxCharacters);
+}
+
 async function repairRewriteWordCounts(provider, versions, specs, signal) {
   let repaired = versions.map((item) => ({ ...item }));
-  for (let attempt = 0; attempt < 2; attempt += 1) {
-    const issues = wordCountIssues(repaired, specs);
-    if (issues.length === 0) break;
-    const requirements = issues.map(({ spec, version, count, range }) => ({
-      key: spec.key,
-      direction: spec.direction,
-      requestedWordCount: spec.wordCount,
-      allowedCharacters: `${range.min}-${Number.isFinite(range.max) ? range.max : "不限"}`,
-      currentCharacters: count,
-      currentText: version.content,
-    }));
-    const correctedContent = await chatCompletion(provider, [
-      {
-        role: "system",
-        content: "你是中文文案字数校准器。只输出 JSON，不要 Markdown，不要解释。",
-      },
-      {
-        role: "user",
-        content: [
-          "以下文案字数不合格，请在保留原意、方向、口语感和行动号召的前提下补写或压缩。",
-          "字数按删除空格和换行后的字符数计算，必须落在 allowedCharacters 范围内。",
-          "必须保留原 key，只返回需要修正的 versions。",
-          JSON.stringify(requirements, null, 2),
-          '输出格式：{"versions":{"key":"修正后的文案"}}',
-        ].join("\n\n"),
-      },
-    ], signal, { temperature: 0.35 });
-    const corrected = parseJsonFromModelText(correctedContent);
-    const source = corrected.versions || corrected;
-    repaired = repaired.map((version) => {
-      const replacement = normalizeRewriteVersionContent(readVersionValue({ versions: source }, version));
-      return replacement ? { ...version, content: replacement } : version;
-    });
+  for (const spec of specs) {
+    const range = requestedWordCountRange(spec.wordCount);
+    if (!range) continue;
+    const versionIndex = repaired.findIndex((item) => item.key === spec.key);
+    if (versionIndex < 0) continue;
+    let version = repaired[versionIndex];
+    for (let attempt = 0; attempt < 4; attempt += 1) {
+      const count = rewriteCharacterCount(version.content);
+      if (count >= range.min && count <= range.max) break;
+      const target = Number.isFinite(range.max)
+        ? Math.round((range.min + range.max) / 2)
+        : Math.max(range.min, count + Math.max(100, range.min - count));
+      const correctedContent = await chatCompletion(provider, [
+        {
+          role: "system",
+          content: "你是中文文案字数校准器。只输出 JSON，不要 Markdown，不要解释。",
+        },
+        {
+          role: "user",
+          content: [
+            `只修正 key 为 ${spec.key} 的这一篇文案。`,
+            `改写方向：${spec.direction}`,
+            `用户要求：${spec.wordCount}`,
+            `硬性合格范围：${range.min}-${Number.isFinite(range.max) ? range.max : "不限"} 字`,
+            `本次目标：${target} 字`,
+            `当前实际字数：${count} 字`,
+            "字数按删除空格和换行后的字符数计算。",
+            count < range.min
+              ? `当前少 ${range.min - count} 字。必须补充具体细节、场景、痛点、解决办法和行动号召，不能只改几个词。`
+              : `当前多 ${count - range.max} 字。必须压缩重复内容，但保留核心观点和行动号召。`,
+            "返回前必须自行重新计数，不在合格范围内就继续调整。",
+            `原文：\n${version.content}`,
+            `输出格式：{"versions":{"${spec.key}":"修正后的完整文案"}}`,
+          ].join("\n\n"),
+        },
+      ], signal, { temperature: 0.25 });
+      const corrected = parseJsonFromModelText(correctedContent);
+      const replacement = normalizeRewriteVersionContent(
+        readVersionValue({ versions: corrected.versions || corrected }, spec)
+      );
+      if (replacement) version = { ...version, content: replacement };
+    }
+    if (Number.isFinite(range.max) && rewriteCharacterCount(version.content) > range.max) {
+      version = { ...version, content: truncateRewriteToLimit(version.content, range.max) };
+    }
+    if (rewriteCharacterCount(version.content) < range.min && Number.isFinite(range.max)) {
+      version = { ...version, content: padRewriteToMinimum(version.content, range.min, range.max) };
+    }
+    const finalCount = rewriteCharacterCount(version.content);
+    if (finalCount < range.min || finalCount > range.max) {
+      throw new Error(`${spec.name || spec.key} 字数校验失败：要求 ${spec.wordCount}，实际 ${finalCount} 字，请重新生成`);
+    }
+    repaired[versionIndex] = version;
   }
   return repaired;
 }
 
-async function rewriteTranscriptWithProvider({ providerId, transcriptText, analysis, direction, style, referenceStyle, params = {}, humanizeLevel: requestedHumanizeLevel = "", referenceExamples: inputReferenceExamples = [], versionSpecs: inputVersionSpecs = [], task, signal }) {
+async function rewriteTranscriptWithProvider({ providerId, transcriptText, analysis, direction, style, referenceStyle, params = {}, humanizeLevel: requestedHumanizeLevel = "", referenceExamples: inputReferenceExamples = [], versionSpecs: inputVersionSpecs = [], revisionInstruction = "", task, signal }) {
   const provider = await getRewriteProvider(providerId);
   const safeDirection = REWRITE_DIRECTIONS.includes(direction) ? direction : "招生引流";
   const safeStyle = REWRITE_STYLES.includes(style) ? style : "老板风格";
@@ -1918,7 +1988,7 @@ async function rewriteTranscriptWithProvider({ providerId, transcriptText, analy
   const humanizerNotes = [];
   let structure = {};
 
-  for (const specBatch of chunkRows(versionSpecs, 8)) {
+  for (const specBatch of chunkRowsByWordCount(versionSpecs)) {
     throwIfPaused(signal);
     const pipelinePrompt = renderTemplate(assets.prompts.rewritePipeline, {
       original_text: String(transcriptText || "").slice(0, 12000),
@@ -1931,6 +2001,7 @@ async function rewriteTranscriptWithProvider({ providerId, transcriptText, analy
       emotion_level: safeParams.emotionLevel || 7,
       sales_level: safeParams.salesLevel || 6,
       humanize_level: humanizeLevel,
+      revision_instruction: String(revisionInstruction || "").trim() || "无，按正常改写要求生成。",
       version_specs: JSON.stringify(specBatch, null, 2),
       skill_rewrite_douyin_education: assets.skills.rewriteEducation,
       skill_boss_style: assets.skills.bossStyle,
@@ -2696,6 +2767,7 @@ const server = http.createServer(async (req, res) => {
         humanizeLevel: String(body.humanizeLevel || ""),
         referenceExamples: body.referenceExamples || [],
         versionSpecs: body.versionSpecs || body.versions || [],
+        revisionInstruction: String(body.revisionInstruction || ""),
         task,
       });
       const updatedTask = body.previewOnly ? task : saveRewriteForTask(task, rewrite, "md");

@@ -369,6 +369,7 @@ function normalizeRewriteVersions(rewrite = {}, allowDefaults = true) {
       direction: item.direction || cached.direction || base.direction || rewriteDirection.value || "招生引流",
       wordCount: item.wordCount || cached.wordCount || base.wordCount || "150字左右",
       content: typeof item.content === "string" ? item.content : cached.content || "",
+      revisionInstruction: item.revisionInstruction || cached.revisionInstruction || "",
     };
   });
 }
@@ -405,6 +406,13 @@ function renderRewriteVersions(rewrite = {}, { allowDefaults = true } = {}) {
           </label>
         </div>
         <textarea class="rewrite-version-text" rows="8" data-version-key="${escapeHtml(version.key)}" placeholder="生成后可继续手动编辑">${escapeHtml(version.content)}</textarea>
+        <div class="rewrite-revision-box">
+          <label>
+            修改建议
+            <textarea class="rewrite-version-suggestion" rows="2" placeholder="例如：开头更强烈、增加家长焦虑、语气更口语、结尾加强行动号召">${escapeHtml(version.revisionInstruction || "")}</textarea>
+          </label>
+          <button class="ghost small rewrite-revise-one" type="button" data-version-key="${escapeHtml(version.key)}">按建议二次改写</button>
+        </div>
         <div class="rewrite-version-foot">
           <span class="rewrite-char-count">当前 ${countRewriteCharacters(version.content)} 字</span>
         </div>
@@ -422,6 +430,7 @@ function collectRewriteVersions() {
       direction: card.querySelector(".rewrite-version-direction")?.value || rewriteDirection.value,
       wordCount: card.querySelector(".rewrite-version-word-count")?.value.trim() || "150字左右",
       content: card.querySelector(".rewrite-version-text")?.value || "",
+      revisionInstruction: card.querySelector(".rewrite-version-suggestion")?.value.trim() || "",
     };
     rewriteVersionDrafts.set(version.key, { ...version });
     return version;
@@ -1123,6 +1132,55 @@ async function generateSingleRewrite(versionKey) {
   }
 }
 
+async function reviseSingleRewrite(versionKey) {
+  const id = rewriteTaskId.value;
+  if (!id) return;
+  const versions = collectRewriteVersions();
+  const target = versions.find((version) => version.key === versionKey);
+  if (!target) return;
+  if (!target.revisionInstruction) {
+    rewriteStatus.textContent = "请先填写当前输出框的修改建议。";
+    return;
+  }
+  if (!target.content.trim()) {
+    rewriteStatus.textContent = "当前输出框没有文案，请先生成一次。";
+    return;
+  }
+  rewriteStatus.textContent = "正在按修改建议二次改写...";
+  startRewriteProgress(1);
+  try {
+    const data = await fetchJson("/api/tasks/rewrite", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        id,
+        provider: rewriteProvider.value,
+        direction: target.direction,
+        style: rewriteStyle.value,
+        referenceStyle: rewriteReference.value,
+        params: rewriteParams(),
+        humanizeLevel: rewriteHumanizeLevel.value,
+        referenceExamples: collectReferenceExamplesText(),
+        versionSpecs: [target],
+        text: target.content,
+        revisionInstruction: target.revisionInstruction,
+        previewOnly: true,
+      }),
+    });
+    const generated = data.rewrite?.versions?.[0];
+    if (!generated) throw new Error("二次改写没有返回内容");
+    const mergedVersions = versions.map((version) => version.key === versionKey
+      ? { ...version, ...generated, revisionInstruction: target.revisionInstruction }
+      : version);
+    renderRewriteVersions({ versions: mergedVersions }, { allowDefaults: false });
+    stopRewriteProgress("二次改写完成", 100);
+    rewriteStatus.textContent = "已按修改建议完成二次改写。";
+  } catch (error) {
+    stopRewriteProgress("二次改写失败", 100);
+    rewriteStatus.textContent = error instanceof Error ? error.message : String(error);
+  }
+}
+
 async function saveSingleRewrite(versionKey) {
   const id = rewriteTaskId.value;
   if (!id) return;
@@ -1592,12 +1650,21 @@ transcriptList.addEventListener("click", (event) => {
 });
 
 rewriteVersions.addEventListener("click", async (event) => {
-  const button = event.target.closest(".rewrite-generate-one, .rewrite-save-one, .rewrite-copy");
+  const button = event.target.closest(".rewrite-generate-one, .rewrite-save-one, .rewrite-revise-one, .rewrite-copy");
   if (!button) return;
   if (button.classList.contains("rewrite-generate-one")) {
     button.disabled = true;
     try {
       await generateSingleRewrite(button.dataset.versionKey);
+    } finally {
+      button.disabled = false;
+    }
+    return;
+  }
+  if (button.classList.contains("rewrite-revise-one")) {
+    button.disabled = true;
+    try {
+      await reviseSingleRewrite(button.dataset.versionKey);
     } finally {
       button.disabled = false;
     }
@@ -1641,7 +1708,7 @@ rewriteVersions.addEventListener("input", (event) => {
     if (count) count.textContent = `当前 ${countRewriteCharacters(textarea.value)} 字`;
     return;
   }
-  if (event.target.closest(".rewrite-version-word-count")) collectRewriteVersions();
+  if (event.target.closest(".rewrite-version-word-count, .rewrite-version-suggestion")) collectRewriteVersions();
 });
 
 rewriteVersions.addEventListener("change", (event) => {

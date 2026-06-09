@@ -34,6 +34,12 @@ You are running a Skill-driven rewrite workflow for education enrollment copy.
 - Humanize level: {{humanize_level}}
 - Output boxes: {{version_specs}}
 
+## Revision Instruction
+
+{{revision_instruction}}
+
+When a revision instruction is provided, treat Original Text as the current draft. Follow the revision instruction first while preserving the selected direction and hard word-count requirement.
+
 ## Workflow
 
 Step 1: Extract the original structure:

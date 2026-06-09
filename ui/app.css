@@ -644,6 +644,30 @@ button:disabled {
   background: #f7f9f9;
 }
 
+.rewrite-revision-box {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 10px;
+  margin-top: 10px;
+  border-top: 1px solid #edf1f2;
+  padding-top: 10px;
+}
+
+.rewrite-revision-box label {
+  margin: 0;
+}
+
+.rewrite-revision-box textarea {
+  min-height: 64px;
+  margin-top: 5px;
+}
+
+.rewrite-revision-box button {
+  min-height: 38px;
+  margin-bottom: 1px;
+}
+
 .rewrite-version-options label {
   margin: 0;
   font-size: 12px;
@@ -1181,8 +1205,13 @@ pre {
   .rewrite-controls,
   .rewrite-param-grid,
   .rewrite-version-options,
+  .rewrite-revision-box,
   .rewrite-versions {
     grid-template-columns: 1fr;
+  }
+
+  .rewrite-revision-box button {
+    width: 100%;
   }
 
   .rewrite-body {
