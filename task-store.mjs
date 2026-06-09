@@ -85,10 +85,48 @@ const VOICE_COLUMNS = [
   "voice_id",
   "voice_name",
   "voice_type",
+  "description",
+  "tags_json",
   "sample_path",
+  "preview_path",
+  "is_favorite",
+  "is_default",
+  "use_count",
+  "last_used_at",
+  "version",
+  "parent_voice_id",
+  "status",
+  "archived",
   "created_at",
   "updated_at",
   "metadata_json",
+];
+
+const VOICE_TEST_COLUMNS = [
+  "id",
+  "voice_asset_id",
+  "test_type",
+  "test_name",
+  "script",
+  "emotion",
+  "tts_job_id",
+  "audio_path",
+  "status",
+  "error",
+  "metadata_json",
+  "created_at",
+  "completed_at",
+];
+
+const VOICE_RATING_COLUMNS = [
+  "id",
+  "voice_asset_id",
+  "voice_test_id",
+  "score",
+  "stars",
+  "notes",
+  "created_at",
+  "updated_at",
 ];
 
 function nowIso() {
@@ -169,13 +207,24 @@ export function openTaskStore(baseDir) {
       voice_id TEXT NOT NULL,
       voice_name TEXT NOT NULL DEFAULT '',
       voice_type TEXT NOT NULL DEFAULT 'preset',
+      description TEXT NOT NULL DEFAULT '',
+      tags_json TEXT NOT NULL DEFAULT '[]',
       sample_path TEXT NOT NULL DEFAULT '',
+      preview_path TEXT NOT NULL DEFAULT '',
+      is_favorite INTEGER NOT NULL DEFAULT 0,
+      is_default INTEGER NOT NULL DEFAULT 0,
+      use_count INTEGER NOT NULL DEFAULT 0,
+      last_used_at TEXT NOT NULL DEFAULT '',
+      version INTEGER NOT NULL DEFAULT 1,
+      parent_voice_id INTEGER NOT NULL DEFAULT 0,
+      status TEXT NOT NULL DEFAULT 'active',
+      archived INTEGER NOT NULL DEFAULT 0,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL,
       metadata_json TEXT NOT NULL DEFAULT '{}'
     );
 
-    CREATE UNIQUE INDEX IF NOT EXISTS idx_voices_provider_voice
+    CREATE INDEX IF NOT EXISTS idx_voices_provider_voice
       ON voices(provider, voice_id);
 
     CREATE TABLE IF NOT EXISTS tts_jobs (
@@ -202,6 +251,39 @@ export function openTaskStore(baseDir) {
 
     CREATE INDEX IF NOT EXISTS idx_tts_jobs_status_created
       ON tts_jobs(status, created_at, id);
+
+    CREATE TABLE IF NOT EXISTS voice_tests (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      voice_asset_id INTEGER NOT NULL,
+      test_type TEXT NOT NULL,
+      test_name TEXT NOT NULL DEFAULT '',
+      script TEXT NOT NULL,
+      emotion TEXT NOT NULL DEFAULT '自然',
+      tts_job_id INTEGER NOT NULL DEFAULT 0,
+      audio_path TEXT NOT NULL DEFAULT '',
+      status TEXT NOT NULL DEFAULT 'waiting',
+      error TEXT NOT NULL DEFAULT '',
+      metadata_json TEXT NOT NULL DEFAULT '{}',
+      created_at TEXT NOT NULL,
+      completed_at TEXT NOT NULL DEFAULT ''
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_voice_tests_asset_created
+      ON voice_tests(voice_asset_id, created_at, id);
+
+    CREATE TABLE IF NOT EXISTS voice_ratings (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      voice_asset_id INTEGER NOT NULL,
+      voice_test_id INTEGER NOT NULL DEFAULT 0,
+      score INTEGER NOT NULL DEFAULT 0,
+      stars INTEGER NOT NULL DEFAULT 0,
+      notes TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_voice_ratings_asset_test
+      ON voice_ratings(voice_asset_id, voice_test_id);
   `);
 
   const taskColumns = new Set(db.prepare("PRAGMA table_info(tasks)").all().map((column) => column.name));
@@ -235,10 +317,33 @@ export function openTaskStore(baseDir) {
   if (!taskColumns.has("humanize_level")) {
     db.exec("ALTER TABLE tasks ADD COLUMN humanize_level TEXT NOT NULL DEFAULT '普通'");
   }
+
+  const voiceColumns = new Set(db.prepare("PRAGMA table_info(voices)").all().map((column) => column.name));
+  const voiceMigrations = [
+    ["description", "TEXT NOT NULL DEFAULT ''"],
+    ["tags_json", "TEXT NOT NULL DEFAULT '[]'"],
+    ["preview_path", "TEXT NOT NULL DEFAULT ''"],
+    ["is_favorite", "INTEGER NOT NULL DEFAULT 0"],
+    ["is_default", "INTEGER NOT NULL DEFAULT 0"],
+    ["use_count", "INTEGER NOT NULL DEFAULT 0"],
+    ["last_used_at", "TEXT NOT NULL DEFAULT ''"],
+    ["version", "INTEGER NOT NULL DEFAULT 1"],
+    ["parent_voice_id", "INTEGER NOT NULL DEFAULT 0"],
+    ["status", "TEXT NOT NULL DEFAULT 'active'"],
+    ["archived", "INTEGER NOT NULL DEFAULT 0"],
+  ];
+  for (const [column, definition] of voiceMigrations) {
+    if (!voiceColumns.has(column)) db.exec(`ALTER TABLE voices ADD COLUMN ${column} ${definition}`);
+  }
   db.exec(`
     DROP INDEX IF EXISTS idx_tasks_kind_url;
     CREATE UNIQUE INDEX IF NOT EXISTS idx_tasks_kind_action_url
       ON tasks(kind, task_action, normalized_url);
+    DROP INDEX IF EXISTS idx_voices_provider_voice;
+    CREATE INDEX IF NOT EXISTS idx_voices_provider_voice
+      ON voices(provider, voice_id);
+    CREATE INDEX IF NOT EXISTS idx_voices_default_recent
+      ON voices(is_default, last_used_at, updated_at);
   `);
 
   const getByKindUrl = db.prepare("SELECT * FROM tasks WHERE kind = ? AND task_action = ? AND normalized_url = ?");
@@ -307,24 +412,54 @@ export function openTaskStore(baseDir) {
     SELECT ${VOICE_COLUMNS.join(", ")}
     FROM voices
     WHERE provider = ? AND voice_id = ?
+    ORDER BY version DESC, id DESC
+    LIMIT 1
   `);
+  const getVoiceByIdStmt = db.prepare(`SELECT ${VOICE_COLUMNS.join(", ")} FROM voices WHERE id = ?`);
   const listVoicesStmt = db.prepare(`
     SELECT ${VOICE_COLUMNS.join(", ")}
     FROM voices
-    WHERE (? = '' OR provider = ?)
+    WHERE archived = 0 AND (? = '' OR provider = ?)
+    ORDER BY is_default DESC, datetime(last_used_at) DESC, datetime(updated_at) DESC, id DESC
+  `);
+  const insertVoiceStmt = db.prepare(`
+    INSERT INTO voices (
+      provider, voice_id, voice_name, voice_type, description, tags_json, sample_path, preview_path,
+      is_favorite, is_default, use_count, last_used_at, version, parent_voice_id, status, archived,
+      created_at, updated_at, metadata_json
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+  const listVoiceTestsStmt = db.prepare(`
+    SELECT ${VOICE_TEST_COLUMNS.join(", ")}
+    FROM voice_tests
+    WHERE (? = 0 OR voice_asset_id = ?)
+    ORDER BY datetime(created_at) DESC, id DESC
+  `);
+  const getVoiceTestStmt = db.prepare(`SELECT ${VOICE_TEST_COLUMNS.join(", ")} FROM voice_tests WHERE id = ?`);
+  const insertVoiceTestStmt = db.prepare(`
+    INSERT INTO voice_tests (
+      voice_asset_id, test_type, test_name, script, emotion, tts_job_id, audio_path,
+      status, error, metadata_json, created_at, completed_at
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+  const listVoiceRatingsStmt = db.prepare(`
+    SELECT ${VOICE_RATING_COLUMNS.join(", ")}
+    FROM voice_ratings
+    WHERE (? = 0 OR voice_asset_id = ?)
     ORDER BY datetime(updated_at) DESC, id DESC
   `);
-  const upsertVoiceStmt = db.prepare(`
-    INSERT INTO voices (
-      provider, voice_id, voice_name, voice_type, sample_path, created_at, updated_at, metadata_json
+  const getVoiceRatingStmt = db.prepare(`
+    SELECT ${VOICE_RATING_COLUMNS.join(", ")}
+    FROM voice_ratings
+    WHERE voice_asset_id = ? AND voice_test_id = ?
+  `);
+  const insertVoiceRatingStmt = db.prepare(`
+    INSERT INTO voice_ratings (
+      voice_asset_id, voice_test_id, score, stars, notes, created_at, updated_at
     )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    ON CONFLICT(provider, voice_id) DO UPDATE SET
-      voice_name = excluded.voice_name,
-      voice_type = excluded.voice_type,
-      sample_path = excluded.sample_path,
-      updated_at = excluded.updated_at,
-      metadata_json = excluded.metadata_json
+    VALUES (?, ?, ?, ?, ?, ?, ?)
   `);
 
   function updateTask(id, changes) {
@@ -512,24 +647,185 @@ export function openTaskStore(baseDir) {
     return listTtsJobsStmt.all(safeLimit).map(normalizeTtsJob);
   }
 
-  function upsertVoice(input) {
+  function normalizeVoice(row) {
+    if (!row) return null;
+    return {
+      ...row,
+      is_favorite: Boolean(row.is_favorite),
+      is_default: Boolean(row.is_default),
+      archived: Boolean(row.archived),
+      use_count: Number(row.use_count || 0),
+      version: Number(row.version || 1),
+      parent_voice_id: Number(row.parent_voice_id || 0),
+    };
+  }
+
+  function createVoiceAsset(input) {
     const timestamp = nowIso();
-    upsertVoiceStmt.run(
+    const result = insertVoiceStmt.run(
       String(input.provider || ""),
       String(input.voice_id || ""),
       String(input.voice_name || ""),
-      String(input.voice_type || "preset"),
+      String(input.voice_type || "clone"),
+      String(input.description || ""),
+      String(input.tags_json || "[]"),
       String(input.sample_path || ""),
+      String(input.preview_path || ""),
+      input.is_favorite ? 1 : 0,
+      input.is_default ? 1 : 0,
+      Number(input.use_count || 0),
+      String(input.last_used_at || ""),
+      Math.max(1, Number(input.version || 1)),
+      Number(input.parent_voice_id || 0),
+      String(input.status || "active"),
+      input.archived ? 1 : 0,
       timestamp,
       timestamp,
       String(input.metadata_json || "{}")
     );
-    return getVoiceStmt.get(String(input.provider || ""), String(input.voice_id || ""));
+    if (input.is_default) setDefaultVoice(Number(result.lastInsertRowid));
+    return getVoiceAsset(Number(result.lastInsertRowid));
+  }
+
+  function getVoiceAsset(id) {
+    return normalizeVoice(getVoiceByIdStmt.get(Number(id)));
+  }
+
+  function upsertVoice(input) {
+    const provider = String(input.provider || "");
+    const voiceId = String(input.voice_id || "");
+    const existing = normalizeVoice(getVoiceStmt.get(provider, voiceId));
+    if (existing && existing.voice_type === "preset") {
+      return updateVoiceAsset(existing.id, {
+        voice_name: String(input.voice_name || existing.voice_name),
+        metadata_json: String(input.metadata_json || existing.metadata_json || "{}"),
+        status: String(input.status || existing.status || "active"),
+      });
+    }
+    return createVoiceAsset(input);
   }
 
   function listVoices({ provider = "" } = {}) {
     const selectedProvider = String(provider || "");
-    return listVoicesStmt.all(selectedProvider, selectedProvider);
+    return listVoicesStmt.all(selectedProvider, selectedProvider).map(normalizeVoice);
+  }
+
+  function updateVoiceAsset(id, changes) {
+    const entries = Object.entries(changes).filter(([key]) => VOICE_COLUMNS.includes(key) && !["id", "created_at"].includes(key));
+    if (entries.length === 0) return getVoiceAsset(id);
+    const sql = entries.map(([key]) => `${key} = ?`).join(", ");
+    const values = entries.map(([key, value]) => {
+      if (["is_favorite", "is_default", "archived"].includes(key)) return value ? 1 : 0;
+      return value ?? "";
+    });
+    values.push(nowIso(), Number(id));
+    db.prepare(`UPDATE voices SET ${sql}, updated_at = ? WHERE id = ?`).run(...values);
+    return getVoiceAsset(id);
+  }
+
+  function setDefaultVoice(id) {
+    const voiceId = Number(id);
+    const timestamp = nowIso();
+    db.exec("BEGIN IMMEDIATE");
+    try {
+      db.prepare("UPDATE voices SET is_default = 0, updated_at = ? WHERE is_default != 0").run(timestamp);
+      if (voiceId > 0) {
+        db.prepare("UPDATE voices SET is_default = 1, archived = 0, updated_at = ? WHERE id = ?").run(timestamp, voiceId);
+      }
+      db.exec("COMMIT");
+    } catch (error) {
+      db.exec("ROLLBACK");
+      throw error;
+    }
+    return voiceId > 0 ? getVoiceAsset(voiceId) : null;
+  }
+
+  function getDefaultVoice() {
+    return normalizeVoice(db.prepare(`
+      SELECT ${VOICE_COLUMNS.join(", ")}
+      FROM voices
+      WHERE is_default = 1 AND archived = 0
+      ORDER BY datetime(updated_at) DESC, id DESC
+      LIMIT 1
+    `).get());
+  }
+
+  function recordVoiceUse(id) {
+    const voiceId = Number(id);
+    db.prepare(`
+      UPDATE voices
+      SET use_count = use_count + 1, last_used_at = ?, updated_at = ?
+      WHERE id = ?
+    `).run(nowIso(), nowIso(), voiceId);
+    return getVoiceAsset(voiceId);
+  }
+
+  function createVoiceTest(input) {
+    const createdAt = nowIso();
+    const result = insertVoiceTestStmt.run(
+      Number(input.voice_asset_id || 0),
+      String(input.test_type || ""),
+      String(input.test_name || ""),
+      String(input.script || ""),
+      String(input.emotion || "自然"),
+      Number(input.tts_job_id || 0),
+      String(input.audio_path || ""),
+      String(input.status || "waiting"),
+      String(input.error || ""),
+      String(input.metadata_json || "{}"),
+      createdAt,
+      String(input.completed_at || "")
+    );
+    return getVoiceTest(Number(result.lastInsertRowid));
+  }
+
+  function getVoiceTest(id) {
+    return getVoiceTestStmt.get(Number(id)) || null;
+  }
+
+  function updateVoiceTest(id, changes) {
+    const entries = Object.entries(changes).filter(([key]) => VOICE_TEST_COLUMNS.includes(key) && !["id", "created_at"].includes(key));
+    if (entries.length === 0) return getVoiceTest(id);
+    const sql = entries.map(([key]) => `${key} = ?`).join(", ");
+    db.prepare(`UPDATE voice_tests SET ${sql} WHERE id = ?`).run(...entries.map(([, value]) => value ?? ""), Number(id));
+    return getVoiceTest(id);
+  }
+
+  function listVoiceTests({ voiceAssetId = 0 } = {}) {
+    const id = Number(voiceAssetId || 0);
+    return listVoiceTestsStmt.all(id, id);
+  }
+
+  function saveVoiceRating(input) {
+    const voiceAssetId = Number(input.voice_asset_id || 0);
+    const voiceTestId = Number(input.voice_test_id || 0);
+    const score = Math.max(0, Math.min(100, Math.round(Number(input.score || 0))));
+    const stars = Math.max(1, Math.min(5, Math.round(Number(input.stars || 1))));
+    const existing = getVoiceRatingStmt.get(voiceAssetId, voiceTestId);
+    const timestamp = nowIso();
+    if (existing) {
+      db.prepare(`
+        UPDATE voice_ratings
+        SET score = ?, stars = ?, notes = ?, updated_at = ?
+        WHERE id = ?
+      `).run(score, stars, String(input.notes || ""), timestamp, existing.id);
+      return getVoiceRatingStmt.get(voiceAssetId, voiceTestId);
+    }
+    insertVoiceRatingStmt.run(
+      voiceAssetId,
+      voiceTestId,
+      score,
+      stars,
+      String(input.notes || ""),
+      timestamp,
+      timestamp
+    );
+    return getVoiceRatingStmt.get(voiceAssetId, voiceTestId);
+  }
+
+  function listVoiceRatings({ voiceAssetId = 0 } = {}) {
+    const id = Number(voiceAssetId || 0);
+    return listVoiceRatingsStmt.all(id, id);
   }
 
   function deleteTasks(ids) {
@@ -576,7 +872,19 @@ export function openTaskStore(baseDir) {
     getTtsJob,
     updateTtsJob,
     listTtsJobs,
+    createVoiceAsset,
+    getVoiceAsset,
     upsertVoice,
     listVoices,
+    updateVoiceAsset,
+    setDefaultVoice,
+    getDefaultVoice,
+    recordVoiceUse,
+    createVoiceTest,
+    getVoiceTest,
+    updateVoiceTest,
+    listVoiceTests,
+    saveVoiceRating,
+    listVoiceRatings,
   };
 }

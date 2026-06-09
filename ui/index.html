@@ -398,7 +398,7 @@
                 <select id="ttsVoiceSource">
                   <option value="preset" selected>预设音色</option>
                   <option value="manual">手动填写 voice_id</option>
-                  <option value="cloned" disabled>我的克隆音色（第二阶段）</option>
+                  <option value="cloned">我的克隆音色</option>
                 </select>
               </label>
               <label id="ttsPresetVoiceField">
@@ -474,20 +474,108 @@
           <audio id="ttsAudio" controls preload="metadata"></audio>
         </div>
 
-        <details class="tts-clone-panel">
-          <summary>声音复刻（第二阶段）</summary>
-          <label class="check-row">
-            <input id="ttsConsent" type="checkbox" />
-            我确认拥有该声音的合法授权
-          </label>
-          <button class="ghost" type="button" disabled>声音复刻将在第二阶段开放</button>
-        </details>
-
         <div class="tts-history-head">
           <h2>生成记录</h2>
           <button class="ghost small" id="refreshTtsJobs" type="button">刷新</button>
         </div>
         <div class="tts-history" id="ttsHistory"></div>
+      </section>
+
+      <section class="voice-center" id="voiceAssetCenter">
+        <div class="result-head voice-center-head">
+          <div>
+            <h2>声音资产中心</h2>
+            <p>管理预设音色、克隆音色、测试样音、评分、默认音色和历史版本。</p>
+          </div>
+          <button class="primary" id="newVoiceAsset" type="button">新建声音资产</button>
+        </div>
+
+        <form class="voice-asset-form" id="voiceAssetForm" hidden>
+          <input id="voiceAssetEditId" type="hidden" />
+          <div class="voice-form-head">
+            <div>
+              <h2 id="voiceAssetFormTitle">创建克隆声音</h2>
+              <p>上传 10-20 秒清晰人声；已有 voice_id 时也可以直接登记。</p>
+            </div>
+            <button class="ghost small" id="cancelVoiceAsset" type="button">取消</button>
+          </div>
+          <div class="voice-form-grid">
+            <label>
+              声音名称
+              <input id="voiceAssetName" type="text" placeholder="例如：老板本人" maxlength="60" required />
+            </label>
+            <label>
+              Provider
+              <select id="voiceAssetProvider">
+                <option value="aliyun_bailian">阿里云百炼 CosyVoice / Qwen-TTS</option>
+                <option value="custom_tts">自定义 Provider</option>
+              </select>
+            </label>
+            <label>
+              已有 voice_id
+              <input id="voiceAssetVoiceId" type="text" placeholder="没有可留空，系统将调用百炼复刻" />
+            </label>
+            <label>
+              复刻目标模型
+              <select id="voiceAssetTargetModel">
+                <option value="qwen3-tts-vc-2026-01-22">Qwen3-TTS VC</option>
+                <option value="qwen3-tts-vc-realtime-2026-01-15">Qwen3-TTS VC Realtime</option>
+              </select>
+            </label>
+            <label class="voice-form-wide">
+              声音描述
+              <input id="voiceAssetDescription" type="text" placeholder="例如：沉稳、可信、适合招生和家长沟通" />
+            </label>
+            <label class="voice-form-wide">
+              标签
+              <input id="voiceAssetTags" type="text" placeholder="老板本人、招生老师、严肃、转化" />
+            </label>
+            <label>
+              参考音频
+              <input id="voiceAssetSample" type="file" accept=".wav,.mp3,.m4a,audio/wav,audio/mpeg,audio/mp4" />
+            </label>
+            <label>
+              参考音频对应文字
+              <input id="voiceAssetTranscript" type="text" placeholder="可选，填写后有助于复刻准确度" />
+            </label>
+          </div>
+          <label class="check-row voice-consent-row">
+            <input id="voiceAssetConsent" type="checkbox" />
+            我确认拥有该声音的合法授权
+          </label>
+          <div class="voice-form-actions">
+            <button class="primary" id="saveVoiceAsset" type="submit">保存并创建声音</button>
+            <span id="voiceAssetFormStatus">参考音频和资产记录只保存在本机。</span>
+          </div>
+        </form>
+
+        <div class="voice-summary" id="voiceSummary"></div>
+
+        <div class="voice-filter-tabs" id="voiceFilterTabs" role="tablist" aria-label="声音资产分类">
+          <button class="active" type="button" data-voice-filter="preset">预设音色</button>
+          <button type="button" data-voice-filter="clone">克隆音色</button>
+          <button type="button" data-voice-filter="favorite">收藏音色</button>
+          <button type="button" data-voice-filter="recent">最近使用</button>
+          <button type="button" data-voice-filter="default">我的默认音色</button>
+        </div>
+        <p id="voiceCenterStatus" role="status">声音资产已加载。</p>
+
+        <div class="voice-assets-grid" id="voiceAssetsGrid"></div>
+
+        <section class="voice-tests-panel" id="voiceTestsPanel" hidden>
+          <div class="voice-tests-head">
+            <div>
+              <h2 id="voiceTestsTitle">声音测试</h2>
+              <p>自动生成日常对话、招生话术、情绪表达、长文本和短视频口播五段样音。</p>
+            </div>
+            <div>
+              <button class="primary" id="runVoiceTests" type="button">生成 5 段测试样音</button>
+              <button class="ghost" id="closeVoiceTests" type="button">关闭</button>
+            </div>
+          </div>
+          <p id="voiceTestsStatus">等待测试。</p>
+          <div class="voice-tests-list" id="voiceTestsList"></div>
+        </section>
       </section>
 
       <section class="files-area">

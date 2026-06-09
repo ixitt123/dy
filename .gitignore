@@ -4,6 +4,12 @@ downloads/*
 !downloads/.gitkeep
 rewrites/*
 !rewrites/.gitkeep
+voices/samples/*
+voices/clones/*
+voices/previews/*
+!voices/samples/.gitkeep
+!voices/clones/.gitkeep
+!voices/previews/.gitkeep
 
 settings.json
 ui-server.pid

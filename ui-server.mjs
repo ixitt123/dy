@@ -11,6 +11,7 @@ import WebSocket from "ws";
 import { openTaskStore, TASK_STATUS } from "./task-store.mjs";
 import { createTtsService } from "./server/tts/tts-service.js";
 import { TTS_PROVIDER_LABELS } from "./server/tts/providers/index.js";
+import { createVoiceAssetService } from "./server/voices/voice-asset-service.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const uiDir = path.join(__dirname, "ui");
@@ -189,6 +190,13 @@ const ttsService = createTtsService({
   getSettings: readSettings,
   ffmpegPath,
 });
+const voiceAssetService = createVoiceAssetService({
+  baseDir: __dirname,
+  taskStore,
+  ttsService,
+  getSettings: readSettings,
+  ffmpegPath,
+});
 
 const mimeTypes = new Map([
   [".html", "text/html; charset=utf-8"],
@@ -233,12 +241,12 @@ function sendBuffer(res, status, buffer, contentType, fileName = "") {
   res.end(buffer);
 }
 
-function readBody(req) {
+function readBody(req, maxBytes = 2 * 1024 * 1024) {
   return new Promise((resolve, reject) => {
     let body = "";
     req.on("data", (chunk) => {
       body += chunk;
-      if (body.length > 2 * 1024 * 1024) {
+      if (body.length > maxBytes) {
         reject(new Error("内容太长了"));
         req.destroy();
       }
@@ -3170,6 +3178,135 @@ const server = http.createServer(async (req, res) => {
         "cache-control": "no-store",
       });
       fs.createReadStream(audioPath).pipe(res);
+      return;
+    }
+
+    if (req.method === "GET" && url.pathname === "/api/voice-assets") {
+      sendJson(res, 200, {
+        ok: true,
+        assets: voiceAssetService.listAssets(),
+        default_voice: voiceAssetService.getDefault(),
+        test_scripts: voiceAssetService.testScripts.map(({ type, name, emotion }) => ({ type, name, emotion })),
+      });
+      return;
+    }
+
+    if (req.method === "GET" && url.pathname === "/api/voice-assets/tests") {
+      const voiceAssetId = Number(url.searchParams.get("voiceAssetId") || 0);
+      sendJson(res, 200, {
+        ok: true,
+        tests: voiceAssetService.listTests(voiceAssetId),
+      });
+      return;
+    }
+
+    if (req.method === "GET" && url.pathname === "/api/voice-assets/audio") {
+      const filePath = voiceAssetService.resolveSamplePath(Number(url.searchParams.get("id") || 0));
+      if (!filePath) {
+        sendJson(res, 404, { ok: false, message: "参考音频不存在。" });
+        return;
+      }
+      const extension = path.extname(filePath).toLowerCase();
+      const contentType = extension === ".wav" ? "audio/wav" : extension === ".m4a" ? "audio/mp4" : "audio/mpeg";
+      const stat = fs.statSync(filePath);
+      res.writeHead(200, {
+        "content-type": contentType,
+        "content-length": stat.size,
+        "cache-control": "no-store",
+      });
+      fs.createReadStream(filePath).pipe(res);
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/voice-assets/create") {
+      const body = JSON.parse(await readBody(req, 15 * 1024 * 1024) || "{}");
+      const result = await voiceAssetService.createAsset(body);
+      if (result.error && !result.asset) {
+        sendJson(res, 400, { ok: false, message: result.error });
+        return;
+      }
+      sendJson(res, result.clone_error ? 202 : 201, {
+        ok: true,
+        asset: result.asset,
+        message: result.clone_error ? `声音资产已保存，但平台复刻失败：${result.clone_error}` : "声音资产已创建。",
+      });
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/voice-assets/update") {
+      const body = JSON.parse(await readBody(req) || "{}");
+      const result = voiceAssetService.updateAsset(Number(body.id || 0), body);
+      if (result.error) {
+        sendJson(res, 400, { ok: false, message: result.error });
+        return;
+      }
+      sendJson(res, 200, { ok: true, asset: result.asset });
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/voice-assets/retry-clone") {
+      const body = JSON.parse(await readBody(req) || "{}");
+      const result = await voiceAssetService.retryClone(Number(body.id || 0), body);
+      if (result.error) {
+        sendJson(res, 400, { ok: false, message: result.error, asset: result.asset || null });
+        return;
+      }
+      sendJson(res, 200, { ok: true, asset: result.asset });
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/voice-assets/version") {
+      const body = JSON.parse(await readBody(req) || "{}");
+      const result = voiceAssetService.createVersion(Number(body.id || 0));
+      if (result.error) {
+        sendJson(res, 400, { ok: false, message: result.error });
+        return;
+      }
+      sendJson(res, 201, { ok: true, asset: result.asset });
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/voice-assets/default") {
+      const body = JSON.parse(await readBody(req) || "{}");
+      const result = voiceAssetService.setDefault(Number(body.id || 0));
+      if (result.error) {
+        sendJson(res, 400, { ok: false, message: result.error });
+        return;
+      }
+      sendJson(res, 200, { ok: true, asset: result.asset });
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/voice-assets/archive") {
+      const body = JSON.parse(await readBody(req) || "{}");
+      const result = voiceAssetService.archive(Number(body.id || 0));
+      if (result.error) {
+        sendJson(res, 400, { ok: false, message: result.error });
+        return;
+      }
+      sendJson(res, 200, { ok: true, asset: result.asset });
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/voice-assets/tests") {
+      const body = JSON.parse(await readBody(req) || "{}");
+      const result = voiceAssetService.createTests(Number(body.id || 0));
+      if (result.error) {
+        sendJson(res, 400, { ok: false, message: result.error, tests: result.tests || [] });
+        return;
+      }
+      sendJson(res, 202, { ok: true, tests: result.tests });
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/voice-assets/rating") {
+      const body = JSON.parse(await readBody(req) || "{}");
+      const result = voiceAssetService.saveRating(body);
+      if (result.error) {
+        sendJson(res, 400, { ok: false, message: result.error });
+        return;
+      }
+      sendJson(res, 200, { ok: true, rating: result.rating, asset: result.asset });
       return;
     }
 

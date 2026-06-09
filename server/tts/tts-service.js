@@ -128,6 +128,7 @@ export function createTtsService({ baseDir, taskStore, getSettings, ffmpegPath }
 
     taskStore.updateTtsJob(job.id, { status: "processing", error: "" });
     const prepared = prepareScript(job.text);
+    const jobMetadata = safeJson(job.metadata_json, {});
     const outputPath = path.join(outputDir, `tts-${job.id}.${job.format === "wav" ? "wav" : "mp3"}`);
     const result = await provider.generateSpeech({
       text: prepared.text,
@@ -140,6 +141,7 @@ export function createTtsService({ baseDir, taskStore, getSettings, ffmpegPath }
       pitch: job.pitch,
       format: job.format,
       outputPath,
+      model: jobMetadata.model || "",
     });
 
     if (!result.success) {
@@ -147,6 +149,7 @@ export function createTtsService({ baseDir, taskStore, getSettings, ffmpegPath }
         status: "failed",
         error: redactSecrets(result.error || result.detail || "语音生成失败。", Object.values(provider.config || {})),
         metadata_json: JSON.stringify({
+          ...jobMetadata,
           ...prepared.metadata,
           provider_detail: result.detail || "",
         }),
@@ -160,6 +163,7 @@ export function createTtsService({ baseDir, taskStore, getSettings, ffmpegPath }
       status: "completed",
       error: "",
       metadata_json: JSON.stringify({
+        ...jobMetadata,
         ...prepared.metadata,
         ...(result.metadata || {}),
       }),
@@ -199,8 +203,13 @@ export function createTtsService({ baseDir, taskStore, getSettings, ffmpegPath }
       pitch: Number(input.pitch || 1),
       format: input.format === "wav" ? "wav" : "mp3",
       status: "waiting",
-      metadata_json: JSON.stringify({ queued: true }),
+      metadata_json: JSON.stringify({
+        queued: true,
+        model: String(input.model || ""),
+        voice_asset_id: Number(input.voice_asset_id || 0),
+      }),
     });
+    if (Number(input.voice_asset_id || 0) > 0) taskStore.recordVoiceUse(Number(input.voice_asset_id));
     pending.push(job.id);
     drain().catch(() => {});
     return { job: publicJob(job) };

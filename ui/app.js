@@ -112,6 +112,27 @@ const ttsPreviewTitle = document.querySelector("#ttsPreviewTitle");
 const ttsPreviewMeta = document.querySelector("#ttsPreviewMeta");
 const ttsAudio = document.querySelector("#ttsAudio");
 const ttsHistory = document.querySelector("#ttsHistory");
+const voiceAssetForm = document.querySelector("#voiceAssetForm");
+const voiceAssetEditId = document.querySelector("#voiceAssetEditId");
+const voiceAssetFormTitle = document.querySelector("#voiceAssetFormTitle");
+const voiceAssetName = document.querySelector("#voiceAssetName");
+const voiceAssetProvider = document.querySelector("#voiceAssetProvider");
+const voiceAssetVoiceId = document.querySelector("#voiceAssetVoiceId");
+const voiceAssetTargetModel = document.querySelector("#voiceAssetTargetModel");
+const voiceAssetDescription = document.querySelector("#voiceAssetDescription");
+const voiceAssetTags = document.querySelector("#voiceAssetTags");
+const voiceAssetSample = document.querySelector("#voiceAssetSample");
+const voiceAssetTranscript = document.querySelector("#voiceAssetTranscript");
+const voiceAssetConsent = document.querySelector("#voiceAssetConsent");
+const voiceAssetFormStatus = document.querySelector("#voiceAssetFormStatus");
+const voiceSummary = document.querySelector("#voiceSummary");
+const voiceFilterTabs = document.querySelector("#voiceFilterTabs");
+const voiceCenterStatus = document.querySelector("#voiceCenterStatus");
+const voiceAssetsGrid = document.querySelector("#voiceAssetsGrid");
+const voiceTestsPanel = document.querySelector("#voiceTestsPanel");
+const voiceTestsTitle = document.querySelector("#voiceTestsTitle");
+const voiceTestsStatus = document.querySelector("#voiceTestsStatus");
+const voiceTestsList = document.querySelector("#voiceTestsList");
 const pageSessionId = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 let lastTranscriptText = "";
 let lastTranscriptPath = "";
@@ -131,6 +152,11 @@ let rewriteVersionDrafts = new Map();
 let ttsProviderConfigs = [];
 let ttsPresetVoices = [];
 let ttsPollTimer = 0;
+let voiceAssets = [];
+let defaultVoiceAsset = null;
+let voiceAssetFilter = "preset";
+let selectedVoiceAssetId = 0;
+let voiceTestPollTimer = 0;
 const selectedFiles = new Set();
 const taskActionLabels = {
   parse: "解析信息",
@@ -426,6 +452,7 @@ function renderRewriteVersions(rewrite = {}, { allowDefaults = true } = {}) {
         <div class="rewrite-version-head">
           <button class="ghost small rewrite-generate-one" type="button" data-version-key="${escapeHtml(version.key)}">生成</button>
           <button class="ghost small rewrite-save-one" type="button" data-version-key="${escapeHtml(version.key)}">保存</button>
+          <button class="ghost small rewrite-tts-one" type="button" data-version-key="${escapeHtml(version.key)}">生成语音</button>
           <button class="ghost small rewrite-copy" type="button" data-version-key="${escapeHtml(version.key)}">复制</button>
         </div>
         <div class="rewrite-version-options">
@@ -1032,8 +1059,19 @@ function updateTtsProviderFields() {
 
 function renderTtsVoices() {
   const model = ttsModel.value.trim();
-  const matching = ttsPresetVoices.filter((voice) => !model || voice.model === model);
-  const voices = matching.length ? matching : ttsPresetVoices;
+  const cloned = ttsVoiceSource.value === "cloned";
+  const sourceVoices = cloned
+    ? voiceAssets
+        .filter((asset) => asset.voice_type === "clone" && asset.provider === ttsProvider.value && asset.status === "active")
+        .map((asset) => ({
+          id: asset.voice_id,
+          name: asset.voice_name,
+          model: asset.metadata?.target_model || "",
+          description: `克隆音色 v${asset.version}`,
+        }))
+    : ttsPresetVoices;
+  const matching = sourceVoices.filter((voice) => !model || !voice.model || voice.model === model);
+  const voices = matching.length ? matching : sourceVoices;
   ttsPresetVoice.innerHTML = voices.length
     ? voices
         .map((voice) => `<option value="${escapeHtml(voice.id)}">${escapeHtml(voice.name)} · ${escapeHtml(voice.description || voice.id)}</option>`)
@@ -1063,6 +1101,7 @@ function updateTtsVoiceSource() {
   const manual = ttsVoiceSource.value === "manual";
   ttsPresetVoiceField.hidden = manual;
   ttsManualVoiceField.hidden = !manual;
+  if (!manual) renderTtsVoices();
 }
 
 function updateTtsEmotionField() {
@@ -1187,6 +1226,9 @@ async function waitForTtsJob(jobId) {
 async function generateTts() {
   const text = ttsText.value.trim();
   const voiceId = ttsVoiceSource.value === "manual" ? ttsManualVoice.value.trim() : ttsPresetVoice.value;
+  const voiceAsset = voiceAssets.find((asset) =>
+    asset.provider === ttsProvider.value && asset.voice_id === voiceId && !asset.archived
+  ) || null;
   if (!text) {
     ttsStatus.textContent = "请先输入配音文案。";
     return;
@@ -1207,6 +1249,8 @@ async function generateTts() {
         text,
         voice_id: voiceId,
         voice_name: selectedVoice?.name || voiceId,
+        voice_asset_id: voiceAsset?.id || 0,
+        model: voiceAsset?.metadata?.target_model || voiceAsset?.metadata?.model || ttsModel.value.trim(),
         speed: Number(ttsSpeed.value || 1),
         emotion: ttsEmotion.value === "custom" ? ttsCustomEmotion.value.trim() : ttsEmotion.value,
         style_prompt: ttsStylePrompt.value.trim(),
@@ -1219,6 +1263,350 @@ async function generateTts() {
   } catch (error) {
     generateTtsButton.disabled = false;
     ttsStatus.textContent = error instanceof Error ? error.message : String(error);
+  }
+}
+
+function voiceStatusLabel(status) {
+  return {
+    active: "可用",
+    clone_failed: "复刻失败",
+    pending: "待处理",
+  }[status] || status || "可用";
+}
+
+function formatVoiceTime(value) {
+  if (!value) return "尚未使用";
+  return new Date(value).toLocaleString("zh-CN", { hour12: false });
+}
+
+function filteredVoiceAssets() {
+  const rows = [...voiceAssets];
+  if (voiceAssetFilter === "preset") return rows.filter((asset) => asset.voice_type === "preset");
+  if (voiceAssetFilter === "clone") return rows.filter((asset) => asset.voice_type === "clone");
+  if (voiceAssetFilter === "favorite") return rows.filter((asset) => asset.is_favorite);
+  if (voiceAssetFilter === "recent") {
+    return rows.filter((asset) => asset.use_count > 0).sort((a, b) => String(b.last_used_at).localeCompare(String(a.last_used_at)));
+  }
+  if (voiceAssetFilter === "default") return rows.filter((asset) => asset.is_default);
+  return rows;
+}
+
+function renderVoiceSummary() {
+  const presetCount = voiceAssets.filter((asset) => asset.voice_type === "preset").length;
+  const cloneCount = voiceAssets.filter((asset) => asset.voice_type === "clone").length;
+  const favoriteCount = voiceAssets.filter((asset) => asset.is_favorite).length;
+  const testedCount = voiceAssets.filter((asset) => asset.rating_count > 0 || asset.preview_url).length;
+  voiceSummary.innerHTML = [
+    [voiceAssets.length, "全部声音"],
+    [presetCount, "预设音色"],
+    [cloneCount, "克隆音色"],
+    [favoriteCount, "已收藏"],
+    [testedCount, "已测试"],
+  ].map(([value, label]) => `
+    <div class="voice-summary-item">
+      <strong>${value}</strong>
+      <span>${label}</span>
+    </div>
+  `).join("");
+}
+
+function renderVoiceAssets() {
+  renderVoiceSummary();
+  const rows = filteredVoiceAssets();
+  if (!rows.length) {
+    voiceAssetsGrid.innerHTML = '<div class="voice-empty">当前分类还没有声音资产。</div>';
+    return;
+  }
+  voiceAssetsGrid.innerHTML = rows.map((asset) => {
+    const provider = ttsProviderConfigs.find((item) => item.id === asset.provider);
+    const tags = Array.isArray(asset.tags) ? asset.tags : [];
+    const description = asset.description || asset.metadata?.description || "暂无声音描述";
+    const rating = asset.rating_count
+      ? `${asset.average_stars} 星 / ${asset.average_score} 分`
+      : "尚未评分";
+    const audio = asset.sample_url
+      ? `<audio class="voice-card-audio" controls preload="none" src="${escapeHtml(asset.sample_url)}"></audio>`
+      : asset.preview_url
+        ? `<audio class="voice-card-audio" controls preload="none" src="${escapeHtml(asset.preview_url)}"></audio>`
+        : "";
+    return `
+      <article class="voice-asset-card ${asset.is_default ? "default" : ""}" data-voice-asset-id="${asset.id}">
+        <div class="voice-card-head">
+          <div>
+            <h3>${escapeHtml(asset.voice_name || asset.voice_id)}</h3>
+            <p>${escapeHtml(asset.voice_id)} · v${asset.version}</p>
+          </div>
+          <div class="voice-card-badges">
+            <span>${asset.voice_type === "preset" ? "预设" : "克隆"}</span>
+            ${asset.is_default ? "<span>默认</span>" : ""}
+            ${asset.is_favorite ? "<span>收藏</span>" : ""}
+            <span>${escapeHtml(voiceStatusLabel(asset.status))}</span>
+          </div>
+        </div>
+        <p class="voice-card-description">${escapeHtml(description)}</p>
+        <div class="voice-card-tags">
+          ${tags.length ? tags.map((tag) => `<span>${escapeHtml(tag)}</span>`).join("") : "<span>未设置标签</span>"}
+        </div>
+        ${audio}
+        <div class="voice-card-meta">
+          <span>${escapeHtml(provider?.label || asset.provider)}</span>
+          <span>${escapeHtml(rating)}</span>
+        </div>
+        <div class="voice-card-meta">
+          <span>使用 ${asset.use_count || 0} 次</span>
+          <span>${escapeHtml(formatVoiceTime(asset.last_used_at))}</span>
+        </div>
+        <div class="voice-card-actions">
+          <button class="ghost voice-use" type="button">用于配音</button>
+          <button class="ghost voice-test" type="button">测试声音</button>
+          <button class="ghost voice-favorite" type="button">${asset.is_favorite ? "取消收藏" : "收藏"}</button>
+          <button class="ghost voice-default" type="button">${asset.is_default ? "当前默认" : "设为默认"}</button>
+          <button class="ghost voice-version" type="button">新版本</button>
+          <button class="ghost voice-edit" type="button">编辑</button>
+          ${asset.status === "clone_failed" ? '<button class="ghost voice-retry" type="button">重试复刻</button>' : ""}
+          ${asset.voice_type === "clone" ? '<button class="ghost danger-action voice-archive" type="button">归档</button>' : ""}
+        </div>
+      </article>
+    `;
+  }).join("");
+}
+
+async function loadVoiceAssets({ applyDefault = false } = {}) {
+  const data = await fetchJson("/api/voice-assets");
+  voiceAssets = Array.isArray(data.assets) ? data.assets : [];
+  defaultVoiceAsset = data.default_voice || voiceAssets.find((asset) => asset.is_default) || null;
+  renderVoiceAssets();
+  voiceCenterStatus.textContent = `已加载 ${voiceAssets.length} 个声音资产。`;
+  if (applyDefault && defaultVoiceAsset) await applyVoiceAssetToTts(defaultVoiceAsset);
+}
+
+function resetVoiceAssetForm() {
+  voiceAssetEditId.value = "";
+  voiceAssetFormTitle.textContent = "创建克隆声音";
+  voiceAssetName.value = "";
+  voiceAssetProvider.value = "aliyun_bailian";
+  voiceAssetVoiceId.value = "";
+  voiceAssetTargetModel.value = "qwen3-tts-vc-2026-01-22";
+  voiceAssetDescription.value = "";
+  voiceAssetTags.value = "";
+  voiceAssetSample.value = "";
+  voiceAssetTranscript.value = "";
+  voiceAssetConsent.checked = false;
+  voiceAssetFormStatus.textContent = "参考音频和资产记录只保存在本机。";
+  document.querySelector("#saveVoiceAsset").textContent = "保存并创建声音";
+}
+
+function openVoiceAssetForm(asset = null) {
+  resetVoiceAssetForm();
+  if (asset) {
+    voiceAssetEditId.value = String(asset.id);
+    voiceAssetFormTitle.textContent = `编辑声音：${asset.voice_name}`;
+    voiceAssetName.value = asset.voice_name || "";
+    voiceAssetProvider.value = asset.provider || "aliyun_bailian";
+    voiceAssetVoiceId.value = asset.voice_id || "";
+    voiceAssetTargetModel.value = asset.metadata?.target_model || "qwen3-tts-vc-2026-01-22";
+    voiceAssetDescription.value = asset.description || "";
+    voiceAssetTags.value = (asset.tags || []).join("、");
+    document.querySelector("#saveVoiceAsset").textContent = "保存修改";
+  }
+  voiceAssetForm.hidden = false;
+  voiceAssetForm.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function fileToDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(new Error("参考音频读取失败。"));
+    reader.readAsDataURL(file);
+  });
+}
+
+async function saveVoiceAssetForm() {
+  const editId = Number(voiceAssetEditId.value || 0);
+  voiceAssetFormStatus.textContent = editId ? "正在保存修改..." : "正在保存声音资产并执行复刻...";
+  try {
+    if (editId) {
+      const editingAsset = voiceAssets.find((asset) => asset.id === editId);
+      await fetchJson("/api/voice-assets/update", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          id: editId,
+          voice_name: voiceAssetName.value.trim(),
+          voice_id: voiceAssetVoiceId.value.trim(),
+          description: voiceAssetDescription.value.trim(),
+          tags: voiceAssetTags.value,
+        }),
+      });
+      if (editingAsset?.status === "clone_failed" && voiceAssetConsent.checked && !voiceAssetVoiceId.value.trim()) {
+        await fetchJson("/api/voice-assets/retry-clone", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            id: editId,
+            consent_confirmed: true,
+            target_model: voiceAssetTargetModel.value,
+          }),
+        });
+        voiceAssetFormStatus.textContent = "声音资产已更新并重新完成复刻。";
+      } else {
+        voiceAssetFormStatus.textContent = "声音资产已更新。";
+      }
+    } else {
+      const file = voiceAssetSample.files?.[0] || null;
+      const sampleData = file ? await fileToDataUrl(file) : "";
+      const data = await fetchJson("/api/voice-assets/create", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          voice_name: voiceAssetName.value.trim(),
+          provider: voiceAssetProvider.value,
+          voice_id: voiceAssetVoiceId.value.trim(),
+          target_model: voiceAssetTargetModel.value,
+          description: voiceAssetDescription.value.trim(),
+          tags: voiceAssetTags.value,
+          sample_data: sampleData,
+          sample_mime: file?.type || "",
+          sample_transcript: voiceAssetTranscript.value.trim(),
+          consent_confirmed: voiceAssetConsent.checked,
+        }),
+      });
+      voiceAssetFormStatus.textContent = data.message || "声音资产已创建。";
+    }
+    await loadVoiceAssets();
+    setTimeout(() => {
+      voiceAssetForm.hidden = true;
+      resetVoiceAssetForm();
+    }, 700);
+  } catch (error) {
+    voiceAssetFormStatus.textContent = error instanceof Error ? error.message : String(error);
+  }
+}
+
+async function updateVoiceAsset(id, changes) {
+  await fetchJson("/api/voice-assets/update", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ id, ...changes }),
+  });
+  await loadVoiceAssets();
+  voiceCenterStatus.textContent = "声音资产已更新。";
+}
+
+async function applyVoiceAssetToTts(asset) {
+  const providerOption = ttsProviderConfigs.find((provider) => provider.id === asset.provider && provider.enabled);
+  if (!providerOption) throw new Error("这个声音对应的平台当前不可用。");
+  ttsProvider.value = asset.provider;
+  updateTtsProviderFields();
+  const model = asset.metadata?.target_model || asset.metadata?.model || selectedTtsProviderConfig().default_model || "";
+  if (model) ttsModel.value = model;
+  await loadTtsVoices();
+  const presetExists = ttsPresetVoices.some((voice) => voice.id === asset.voice_id);
+  ttsVoiceSource.value = presetExists ? "preset" : asset.voice_type === "clone" ? "cloned" : "manual";
+  updateTtsVoiceSource();
+  if (presetExists) ttsPresetVoice.value = asset.voice_id;
+  else ttsManualVoice.value = asset.voice_id;
+  ttsStatus.textContent = `已选择声音：${asset.voice_name}`;
+}
+
+async function openVoiceTests(asset) {
+  selectedVoiceAssetId = asset.id;
+  voiceTestsTitle.textContent = `声音测试：${asset.voice_name} v${asset.version}`;
+  voiceTestsPanel.hidden = false;
+  voiceTestsStatus.textContent = "正在读取测试记录...";
+  voiceTestsPanel.scrollIntoView({ behavior: "smooth", block: "start" });
+  await refreshVoiceTests();
+}
+
+function renderVoiceTests(tests = []) {
+  if (!tests.length) {
+    voiceTestsList.innerHTML = '<div class="voice-empty">还没有测试记录，点击“生成 5 段测试样音”。</div>';
+    return;
+  }
+  voiceTestsList.innerHTML = tests.map((test) => {
+    const rating = test.rating || {};
+    const audio = test.audio_url
+      ? `<audio controls preload="none" src="${escapeHtml(test.audio_url)}"></audio>`
+      : `<span class="tts-job-status ${escapeHtml(test.status)}">${escapeHtml(ttsStatusLabel(test.status))}${test.error ? `：${escapeHtml(test.error)}` : ""}</span>`;
+    return `
+      <div class="voice-test-row" data-voice-test-id="${test.id}">
+        <div class="voice-test-title">
+          <strong>${escapeHtml(test.test_name)}</strong>
+          <span>${escapeHtml(test.emotion)} · ${escapeHtml(ttsStatusLabel(test.status))}</span>
+        </div>
+        <div>
+          <p class="voice-test-script">${escapeHtml(test.script)}</p>
+          <div class="voice-test-audio">${audio}</div>
+        </div>
+        <div class="voice-rating-grid">
+          <select class="voice-rating-stars" aria-label="星级">
+            ${[1, 2, 3, 4, 5].map((value) => `<option value="${value}" ${Number(rating.stars || 5) === value ? "selected" : ""}>${value} 星</option>`).join("")}
+          </select>
+          <input class="voice-rating-score" type="number" min="0" max="100" value="${Number(rating.score || 90)}" aria-label="评分" />
+          <input class="voice-rating-notes" type="text" value="${escapeHtml(rating.notes || "")}" placeholder="试听评价" aria-label="试听评价" />
+          <button class="ghost voice-rating-save" type="button">保存评分</button>
+        </div>
+      </div>
+    `;
+  }).join("");
+}
+
+async function refreshVoiceTests() {
+  if (!selectedVoiceAssetId) return;
+  const data = await fetchJson(`/api/voice-assets/tests?voiceAssetId=${encodeURIComponent(selectedVoiceAssetId)}`);
+  const tests = data.tests || [];
+  renderVoiceTests(tests);
+  const pending = tests.some((test) => ["waiting", "processing"].includes(test.status));
+  voiceTestsStatus.textContent = pending ? "测试样音正在队列中生成..." : tests.length ? "测试记录已更新。" : "等待测试。";
+  if (voiceTestPollTimer) clearTimeout(voiceTestPollTimer);
+  if (pending) {
+    voiceTestPollTimer = setTimeout(() => {
+      refreshVoiceTests().catch((error) => {
+        voiceTestsStatus.textContent = error instanceof Error ? error.message : String(error);
+      });
+    }, 1500);
+  } else {
+    await loadVoiceAssets();
+  }
+}
+
+async function runVoiceTests() {
+  if (!selectedVoiceAssetId) return;
+  voiceTestsStatus.textContent = "正在创建 5 段测试任务...";
+  try {
+    const data = await fetchJson("/api/voice-assets/tests", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ id: selectedVoiceAssetId }),
+    });
+    renderVoiceTests(data.tests || []);
+    await refreshVoiceTests();
+  } catch (error) {
+    voiceTestsStatus.textContent = error instanceof Error ? error.message : String(error);
+  }
+}
+
+async function generateDefaultVoiceFromRewrite(versionKey) {
+  const card = rewriteVersions.querySelector(`.rewrite-version[data-version-key="${versionKey}"]`);
+  const text = card?.querySelector(".rewrite-version-text")?.value.trim() || "";
+  if (!text) {
+    rewriteStatus.textContent = "当前输出框没有文案，请先生成文案。";
+    return;
+  }
+  if (!defaultVoiceAsset) {
+    rewriteStatus.textContent = "请先在声音资产中心设置默认音色。";
+    document.querySelector("#voiceAssetCenter").scrollIntoView({ behavior: "smooth", block: "start" });
+    return;
+  }
+  try {
+    await applyVoiceAssetToTts(defaultVoiceAsset);
+    ttsText.value = text;
+    ttsCharacterCount.textContent = `${text.replace(/\s/g, "").length} 字`;
+    document.querySelector("#ttsLab").scrollIntoView({ behavior: "smooth", block: "start" });
+    await generateTts();
+  } catch (error) {
+    rewriteStatus.textContent = error instanceof Error ? error.message : String(error);
   }
 }
 
@@ -1754,6 +2142,142 @@ document.querySelector("#refreshTtsJobs").addEventListener("click", () => {
   });
 });
 
+document.querySelector("#newVoiceAsset").addEventListener("click", () => {
+  openVoiceAssetForm();
+});
+
+document.querySelector("#cancelVoiceAsset").addEventListener("click", () => {
+  voiceAssetForm.hidden = true;
+  resetVoiceAssetForm();
+});
+
+voiceAssetForm.addEventListener("submit", (event) => {
+  event.preventDefault();
+  saveVoiceAssetForm();
+});
+
+voiceFilterTabs.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-voice-filter]");
+  if (!button) return;
+  voiceAssetFilter = button.dataset.voiceFilter;
+  voiceFilterTabs.querySelectorAll("[data-voice-filter]").forEach((item) => {
+    item.classList.toggle("active", item === button);
+  });
+  renderVoiceAssets();
+});
+
+voiceAssetsGrid.addEventListener("click", async (event) => {
+  const button = event.target.closest("button");
+  const card = event.target.closest(".voice-asset-card");
+  if (!button || !card) return;
+  const id = Number(card.dataset.voiceAssetId || 0);
+  const asset = voiceAssets.find((item) => item.id === id);
+  if (!asset) return;
+  try {
+    if (button.classList.contains("voice-use")) {
+      await applyVoiceAssetToTts(asset);
+      document.querySelector("#ttsLab").scrollIntoView({ behavior: "smooth", block: "start" });
+      return;
+    }
+    if (button.classList.contains("voice-test")) {
+      await openVoiceTests(asset);
+      return;
+    }
+    if (button.classList.contains("voice-favorite")) {
+      await updateVoiceAsset(id, { is_favorite: !asset.is_favorite });
+      voiceCenterStatus.textContent = asset.is_favorite ? "已取消收藏。" : "已加入收藏。";
+      return;
+    }
+    if (button.classList.contains("voice-default")) {
+      const data = await fetchJson("/api/voice-assets/default", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ id }),
+      });
+      defaultVoiceAsset = data.asset;
+      await loadVoiceAssets({ applyDefault: true });
+      voiceCenterStatus.textContent = `已将“${asset.voice_name}”设为默认音色。`;
+      return;
+    }
+    if (button.classList.contains("voice-version")) {
+      await fetchJson("/api/voice-assets/version", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ id }),
+      });
+      voiceAssetFilter = asset.voice_type;
+      await loadVoiceAssets();
+      renderVoiceAssets();
+      voiceCenterStatus.textContent = `已创建“${asset.voice_name}”的新版本。`;
+      return;
+    }
+    if (button.classList.contains("voice-edit")) {
+      openVoiceAssetForm(asset);
+      return;
+    }
+    if (button.classList.contains("voice-retry")) {
+      if (!voiceAssetConsent.checked) {
+        openVoiceAssetForm(asset);
+        voiceAssetFormStatus.textContent = "请勾选声音授权确认，再点击重试复刻。";
+        return;
+      }
+      await fetchJson("/api/voice-assets/retry-clone", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ id, consent_confirmed: true, target_model: asset.metadata?.target_model }),
+      });
+      await loadVoiceAssets();
+      voiceCenterStatus.textContent = "声音复刻已重新完成。";
+      return;
+    }
+    if (button.classList.contains("voice-archive")) {
+      await fetchJson("/api/voice-assets/archive", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ id }),
+      });
+      await loadVoiceAssets();
+      voiceCenterStatus.textContent = `已归档“${asset.voice_name}”。`;
+    }
+  } catch (error) {
+    voiceCenterStatus.textContent = error instanceof Error ? error.message : String(error);
+  }
+});
+
+document.querySelector("#runVoiceTests").addEventListener("click", () => {
+  runVoiceTests();
+});
+
+document.querySelector("#closeVoiceTests").addEventListener("click", () => {
+  voiceTestsPanel.hidden = true;
+  selectedVoiceAssetId = 0;
+  if (voiceTestPollTimer) clearTimeout(voiceTestPollTimer);
+});
+
+voiceTestsList.addEventListener("click", async (event) => {
+  const button = event.target.closest(".voice-rating-save");
+  const row = event.target.closest(".voice-test-row");
+  if (!button || !row || !selectedVoiceAssetId) return;
+  voiceTestsStatus.textContent = "正在保存评分...";
+  try {
+    await fetchJson("/api/voice-assets/rating", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        voice_asset_id: selectedVoiceAssetId,
+        voice_test_id: Number(row.dataset.voiceTestId || 0),
+        stars: Number(row.querySelector(".voice-rating-stars")?.value || 5),
+        score: Number(row.querySelector(".voice-rating-score")?.value || 90),
+        notes: row.querySelector(".voice-rating-notes")?.value.trim() || "",
+      }),
+    });
+    voiceTestsStatus.textContent = "评分已保存。";
+    await refreshVoiceTests();
+  } catch (error) {
+    voiceTestsStatus.textContent = error instanceof Error ? error.message : String(error);
+  }
+});
+
 [rewriteToneLevel, rewriteConflictLevel, rewriteEmotionLevel, rewriteSalesLevel].forEach((input) => {
   input.addEventListener("input", syncRewriteSliderLabels);
 });
@@ -1950,7 +2474,7 @@ transcriptList.addEventListener("click", (event) => {
 });
 
 rewriteVersions.addEventListener("click", async (event) => {
-  const button = event.target.closest(".rewrite-generate-one, .rewrite-save-one, .rewrite-revise-one, .rewrite-copy");
+  const button = event.target.closest(".rewrite-generate-one, .rewrite-save-one, .rewrite-revise-one, .rewrite-tts-one, .rewrite-copy");
   if (!button) return;
   if (button.classList.contains("rewrite-generate-one")) {
     button.disabled = true;
@@ -1977,6 +2501,10 @@ rewriteVersions.addEventListener("click", async (event) => {
     } finally {
       button.disabled = false;
     }
+    return;
+  }
+  if (button.classList.contains("rewrite-tts-one")) {
+    await generateDefaultVoiceFromRewrite(button.dataset.versionKey);
     return;
   }
   const textarea = rewriteVersions.querySelector(`.rewrite-version-text[data-version-key="${button.dataset.versionKey}"]`);
@@ -2169,6 +2697,7 @@ async function init() {
     savePath.textContent = `下载位置：${status.downloadsDir}`;
     downloadDirInput.value = status.downloadsDir || "";
     await loadSettings();
+    await loadVoiceAssets({ applyDefault: true });
     updateTtsVoiceSource();
     updateTtsEmotionField();
     updateTtsRangeLabels();

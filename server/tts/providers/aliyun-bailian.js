@@ -5,6 +5,7 @@ import { TtsProviderAdapter, clampNumber, redactSecrets } from "../provider-adap
 
 const COSYVOICE_ENDPOINT = "https://dashscope.aliyuncs.com/api/v1/services/audio/tts/SpeechSynthesizer";
 const QWEN_TTS_ENDPOINT = "https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation";
+const VOICE_CLONE_ENDPOINT = "https://dashscope.aliyuncs.com/api/v1/services/audio/tts/customization";
 
 const PRESET_VOICES = [
   { id: "longxiaochun_v2", name: "龙小淳", model: "cosyvoice-v2", description: "知性积极女声" },
@@ -68,6 +69,73 @@ export class AliyunBailianProvider extends TtsProviderAdapter {
     return PRESET_VOICES;
   }
 
+  async cloneVoice({
+    name,
+    audioPath,
+    consentConfirmed,
+    targetModel = "qwen3-tts-vc-2026-01-22",
+    mimeType = "audio/mpeg",
+    transcript = "",
+  }) {
+    const apiKey = String(this.config.api_key || "").trim();
+    if (!consentConfirmed) return this.failure("必须先确认拥有声音授权。");
+    if (!apiKey) return this.failure("请先在语音实验室保存阿里云百炼 API Key。");
+    if (!audioPath || !fs.existsSync(audioPath)) return this.failure("没有找到可用于复刻的参考音频。");
+    const safeMime = ["audio/wav", "audio/mpeg", "audio/mp4"].includes(mimeType) ? mimeType : "audio/mpeg";
+    const preferredName = String(name || "voice")
+      .replace(/[^a-zA-Z0-9_]/g, "")
+      .slice(0, 16) || `voice${Date.now().toString().slice(-6)}`;
+    const audioData = fs.readFileSync(audioPath).toString("base64");
+
+    try {
+      const response = await fetch(VOICE_CLONE_ENDPOINT, {
+        method: "POST",
+        headers: {
+          authorization: `Bearer ${apiKey}`,
+          "content-type": "application/json",
+          ...(this.config.workspace_id ? { "X-DashScope-WorkSpace": this.config.workspace_id } : {}),
+        },
+        body: JSON.stringify({
+          model: "qwen-voice-enrollment",
+          input: {
+            action: "create",
+            target_model: targetModel,
+            preferred_name: preferredName,
+            audio: { data: `data:${safeMime};base64,${audioData}` },
+            language: "zh",
+            ...(String(transcript || "").trim() ? { text: String(transcript).trim() } : {}),
+          },
+        }),
+      });
+      const raw = await response.text();
+      let data = {};
+      try {
+        data = raw ? JSON.parse(raw) : {};
+      } catch {
+        data = {};
+      }
+      if (!response.ok || data.code || data.status_code >= 400) {
+        return this.failure(data.message || data.code || `阿里云百炼声音复刻失败（${response.status}）`);
+      }
+      const voiceId = data.output?.voice || data.output?.voice_id || "";
+      if (!voiceId) return this.failure("阿里云百炼未返回 voice_id。");
+      return {
+        success: true,
+        provider: this.id,
+        voice_id: voiceId,
+        metadata: {
+          target_model: data.output?.target_model || targetModel,
+          preferred_name: preferredName,
+          request_id: data.request_id || "",
+          fallback_mode: Boolean(data.output?.fallback_mode),
+          fallback_reason: String(data.output?.fallback_reason || ""),
+        },
+      };
+    } catch (error) {
+      return this.failure("声音复刻失败。", redactSecrets(error instanceof Error ? error.message : error, [apiKey]));
+    }
+  }
+
   async generateSpeech({
     text,
     voiceId,
@@ -78,9 +146,10 @@ export class AliyunBailianProvider extends TtsProviderAdapter {
     pitch = 1,
     format = "mp3",
     outputPath,
+    model: requestedModel = "",
   }) {
     const apiKey = String(this.config.api_key || "").trim();
-    const model = String(this.config.default_model || "cosyvoice-v2").trim();
+    const model = String(requestedModel || this.config.default_model || "cosyvoice-v2").trim();
     const voice = String(voiceId || this.config.default_voice || "").trim();
     const safeFormat = format === "wav" ? "wav" : "mp3";
     if (!apiKey) return this.failure("请先在语音实验室保存阿里云百炼 API Key。");
