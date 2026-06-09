@@ -3,11 +3,201 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>抖音视频工具</title>
+    <title>短视频内容生产工厂</title>
     <link rel="stylesheet" href="/app.css" />
   </head>
   <body>
-    <main class="shell">
+    <div class="workbench-app">
+      <aside class="workbench-sidebar" aria-label="工作台导航">
+        <div class="workbench-brand">
+          <span class="brand-mark">VF</span>
+          <div>
+            <strong>短视频工厂</strong>
+            <small>Content Studio</small>
+          </div>
+        </div>
+
+        <nav class="workbench-nav">
+          <div class="nav-group">
+            <span class="nav-group-label">工作台</span>
+            <button class="nav-item active" type="button" data-nav="dashboard">
+              <span class="nav-index">01</span><span>首页总览</span>
+            </button>
+          </div>
+          <div class="nav-group">
+            <span class="nav-group-label">采集</span>
+            <button class="nav-item" type="button" data-nav="collector">
+              <span class="nav-index">02</span><span>抖音采集</span>
+            </button>
+          </div>
+          <div class="nav-group">
+            <span class="nav-group-label">文案</span>
+            <button class="nav-item" type="button" data-nav="transcript">
+              <span class="nav-index">03</span><span>文案提取</span>
+            </button>
+            <button class="nav-item" type="button" data-nav="analysis">
+              <span class="nav-index">04</span><span>AI分析</span>
+            </button>
+          </div>
+          <div class="nav-group">
+            <span class="nav-group-label">创作</span>
+            <button class="nav-item" type="button" data-nav="rewrite">
+              <span class="nav-index">05</span><span>AI改写</span>
+            </button>
+          </div>
+          <div class="nav-group">
+            <span class="nav-group-label">声音</span>
+            <button class="nav-item" type="button" data-nav="tts">
+              <span class="nav-index">06</span><span>TTS语音</span>
+            </button>
+            <button class="nav-item" type="button" data-nav="voices">
+              <span class="nav-index">07</span><span>声音资产</span>
+            </button>
+          </div>
+          <div class="nav-group">
+            <span class="nav-group-label">视频策划</span>
+            <button class="nav-item" type="button" data-nav="director">
+              <span class="nav-index">08</span><span>AI导演</span>
+            </button>
+            <button class="nav-item" type="button" data-nav="vfo">
+              <span class="nav-index">09</span><span>视频工厂</span>
+            </button>
+          </div>
+          <div class="nav-group">
+            <span class="nav-group-label">管理</span>
+            <button class="nav-item" type="button" data-nav="files">
+              <span class="nav-index">10</span><span>文件资产</span>
+            </button>
+            <button class="nav-item" type="button" data-nav="settings">
+              <span class="nav-index">11</span><span>设置</span>
+            </button>
+          </div>
+        </nav>
+
+        <div class="sidebar-progress">
+          <span>当前阶段</span>
+          <strong>前端工作台</strong>
+          <div class="stage-track"><i></i></div>
+          <small>下一步：成品视频 MVP</small>
+        </div>
+      </aside>
+
+      <div class="workbench-stage">
+        <header class="workbench-header">
+          <div class="header-title">
+            <span class="header-kicker">短视频内容生产工厂</span>
+            <h1 id="workbenchPageTitle">首页总览</h1>
+            <p id="workbenchPageDescription">查看任务进度、最近生成和生产流程。</p>
+          </div>
+          <div class="header-actions">
+            <span class="connection-status" id="workbenchConnectionStatus">
+              <i></i><span>正在连接</span>
+            </span>
+            <button class="secondary" id="headerOpenDownloads" type="button">打开下载目录</button>
+            <button class="secondary" id="headerOpenOutputs" type="button">打开输出目录</button>
+            <button class="primary" type="button" data-nav="settings">设置</button>
+          </div>
+        </header>
+
+        <div class="workbench-body">
+          <main class="shell" id="workbenchContent">
+            <section class="dashboard-page" id="dashboardPage">
+              <div class="dashboard-intro">
+                <div>
+                  <span class="section-eyebrow">Production Overview</span>
+                  <h2>今天从这里开始</h2>
+                  <p>采集、改写、配音、导演和视频策划按流程集中管理。</p>
+                </div>
+                <button class="primary" type="button" data-nav="collector">开始采集</button>
+              </div>
+
+              <div class="dashboard-metrics">
+                <article class="metric-card">
+                  <span>今日处理视频</span>
+                  <strong id="metricTodayVideos">0</strong>
+                  <small>采集任务</small>
+                </article>
+                <article class="metric-card">
+                  <span>已提取文案</span>
+                  <strong id="metricTranscripts">0</strong>
+                  <small>可进入分析</small>
+                </article>
+                <article class="metric-card">
+                  <span>已生成改写</span>
+                  <strong id="metricRewrites">0</strong>
+                  <small>多版本文案</small>
+                </article>
+                <article class="metric-card">
+                  <span>已生成音频</span>
+                  <strong id="metricAudio">0</strong>
+                  <small>TTS 成品</small>
+                </article>
+                <article class="metric-card">
+                  <span>导演稿</span>
+                  <strong id="metricDirectors">0</strong>
+                  <small>Storyboard</small>
+                </article>
+                <article class="metric-card">
+                  <span>渲染计划</span>
+                  <strong id="metricRenderPlans">0</strong>
+                  <small>VFO 项目</small>
+                </article>
+              </div>
+
+              <div class="dashboard-grid">
+                <section class="dashboard-panel">
+                  <div class="panel-heading">
+                    <div>
+                      <span class="section-eyebrow">Recent Tasks</span>
+                      <h2>最近任务</h2>
+                    </div>
+                    <button class="ghost small" type="button" data-nav="collector">查看全部</button>
+                  </div>
+                  <div class="dashboard-task-list" id="dashboardRecentTasks">
+                    <div class="empty">正在读取任务...</div>
+                  </div>
+                </section>
+
+                <section class="dashboard-panel">
+                  <div class="panel-heading">
+                    <div>
+                      <span class="section-eyebrow">Quick Start</span>
+                      <h2>快捷入口</h2>
+                    </div>
+                  </div>
+                  <div class="quick-entry-grid">
+                    <button type="button" data-nav="collector"><strong>粘贴抖音链接</strong><span>进入采集队列</span></button>
+                    <button type="button" data-nav="rewrite"><strong>打开AI改写</strong><span>生成多版本文案</span></button>
+                    <button type="button" data-nav="tts"><strong>生成TTS</strong><span>配音与试听</span></button>
+                    <button type="button" data-nav="director"><strong>进入AI导演</strong><span>生成专业分镜</span></button>
+                    <button type="button" data-nav="vfo"><strong>进入视频工厂</strong><span>素材与渲染计划</span></button>
+                  </div>
+                </section>
+              </div>
+
+              <section class="workflow-overview">
+                <div class="panel-heading">
+                  <div>
+                    <span class="section-eyebrow">Workflow</span>
+                    <h2>内容生产流程</h2>
+                  </div>
+                  <span class="phase-badge">当前到渲染计划</span>
+                </div>
+                <div class="workflow-steps">
+                  <button type="button" data-nav="collector"><span>1</span><strong>采集</strong><small>链接与视频</small></button>
+                  <i></i>
+                  <button type="button" data-nav="transcript"><span>2</span><strong>文案</strong><small>提取与分析</small></button>
+                  <i></i>
+                  <button type="button" data-nav="rewrite"><span>3</span><strong>改写</strong><small>多版本创作</small></button>
+                  <i></i>
+                  <button type="button" data-nav="tts"><span>4</span><strong>语音</strong><small>TTS 配音</small></button>
+                  <i></i>
+                  <button type="button" data-nav="director"><span>5</span><strong>导演</strong><small>Storyboard</small></button>
+                  <i></i>
+                  <button type="button" data-nav="vfo"><span>6</span><strong>计划</strong><small>APS + VFO</small></button>
+                </div>
+              </section>
+            </section>
       <section class="topbar">
         <div>
           <h1>抖音视频工具</h1>
@@ -487,9 +677,11 @@
           <strong>→</strong>
           <span class="active">VFO</span>
           <strong>→</strong>
-          <span class="reserved">Image Provider</span>
+          <span class="reserved">成品视频 MVP</span>
           <strong>→</strong>
-          <span class="reserved">Video Renderer</span>
+          <span class="reserved">AI 图片生成</span>
+          <strong>→</strong>
+          <span class="reserved">剪映草稿导出</span>
         </div>
 
         <div class="vfo-workbench">
@@ -844,7 +1036,48 @@
           <button class="ghost small" id="nextPage" type="button">下一页</button>
         </div>
       </section>
-    </main>
+          </main>
+
+          <aside class="status-rail" aria-label="状态面板">
+            <section class="rail-section">
+              <div class="rail-heading">
+                <span>当前任务</span>
+                <i class="live-dot"></i>
+              </div>
+              <div id="railCurrentTask" class="rail-content">
+                <strong>暂无运行任务</strong>
+                <small>新任务会显示在这里</small>
+              </div>
+            </section>
+
+            <section class="rail-section">
+              <div class="rail-heading"><span>最近生成</span></div>
+              <div id="railRecentOutput" class="rail-list">
+                <div class="rail-empty">还没有生成记录</div>
+              </div>
+            </section>
+
+            <section class="rail-section">
+              <div class="rail-heading"><span>错误提示</span></div>
+              <div id="railErrors" class="rail-list">
+                <div class="rail-empty success-text">当前没有错误</div>
+              </div>
+            </section>
+
+            <section class="rail-section">
+              <div class="rail-heading"><span>快捷操作</span></div>
+              <div class="rail-actions">
+                <button type="button" data-nav="collector">新建采集</button>
+                <button type="button" data-nav="rewrite">文案改写</button>
+                <button type="button" data-nav="tts">生成语音</button>
+                <button type="button" data-nav="director">生成导演稿</button>
+              </div>
+            </section>
+          </aside>
+        </div>
+      </div>
+    </div>
     <script src="/app.js"></script>
+    <script src="/workbench.js"></script>
   </body>
 </html>

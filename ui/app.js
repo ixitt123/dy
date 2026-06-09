@@ -646,6 +646,7 @@ async function openAnalysisEditor(taskId) {
   fillAnalysisFields(item.ai || {});
   analysisStatus.textContent = item.ai?.hook ? "已加载历史分析，可重新生成或编辑保存。" : "可点击生成/重新分析。";
   analysisPanel.hidden = false;
+  window.workbenchNavigate?.("analysis", { preserveScroll: true });
   analysisPanel.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
@@ -683,6 +684,7 @@ async function openRewriteEditor(taskId) {
     ? `已加载 ${rewrite.versions.length} 个历史版本，可编辑后保存或重新生成。`
     : `已准备 ${currentRewriteSpecs.length} 个输出框，可调整数量、方向和字数。`;
   rewritePanel.hidden = false;
+  window.workbenchNavigate?.("rewrite", { preserveScroll: true });
   rewritePanel.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
@@ -1650,6 +1652,7 @@ async function generateDefaultVoiceFromRewrite(versionKey) {
   }
   if (!defaultVoiceAsset) {
     rewriteStatus.textContent = "请先在声音资产中心设置默认音色。";
+    window.workbenchNavigate?.("voices", { preserveScroll: true });
     document.querySelector("#voiceAssetCenter").scrollIntoView({ behavior: "smooth", block: "start" });
     return;
   }
@@ -1657,6 +1660,7 @@ async function generateDefaultVoiceFromRewrite(versionKey) {
     await applyVoiceAssetToTts(defaultVoiceAsset);
     ttsText.value = text;
     ttsCharacterCount.textContent = `${text.replace(/\s/g, "").length} 字`;
+    window.workbenchNavigate?.("tts", { preserveScroll: true });
     document.querySelector("#ttsLab").scrollIntoView({ behavior: "smooth", block: "start" });
     await generateTts();
   } catch (error) {
@@ -2004,6 +2008,7 @@ function sendRewriteToDirector(versionKey) {
   };
   updateDirectorCharacterCount();
   directorStatus.textContent = "已从 AI 改写载入文案，请设置导演参数。";
+  window.workbenchNavigate?.("director", { preserveScroll: true });
   document.querySelector("#directorSystem").scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
@@ -2369,6 +2374,7 @@ function sendDirectorProjectToVfo() {
   loadVfoSources({ preferredId: activeDirectorProject.id })
     .then(() => {
       vfoStatus.textContent = `已载入 Director 项目 #${activeDirectorProject.id}，可以生成 Render Plan。`;
+      window.workbenchNavigate?.("vfo", { preserveScroll: true });
       document.querySelector("#vfoSystem").scrollIntoView({ behavior: "smooth", block: "start" });
     })
     .catch((error) => {
