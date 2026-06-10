@@ -1,0 +1,29 @@
+{
+  "modelMapping": {
+    "rewrite": { "provider": "deepseek", "model": "deepseek-chat" },
+    "director": { "provider": "deepseek", "model": "deepseek-chat" },
+    "storyboard": { "provider": "deepseek", "model": "deepseek-chat" },
+    "image": { "provider": "jimeng", "model": "" },
+    "video": { "provider": "kling", "model": "" },
+    "tts": { "provider": "fish-audio", "model": "fish-speech-1.5" }
+  },
+  "providers": {
+    "deepseek": { "apiKey": "", "baseUrl": "https://api.deepseek.com/v1" },
+    "openai": { "apiKey": "", "baseUrl": "https://api.openai.com/v1" },
+    "claude": { "apiKey": "", "baseUrl": "https://api.anthropic.com/v1" },
+    "gemini": { "apiKey": "", "baseUrl": "https://generativelanguage.googleapis.com" },
+    "qwen": { "apiKey": "", "baseUrl": "https://dashscope.aliyuncs.com/compatible-mode/v1" },
+    "siliconflow": { "apiKey": "", "baseUrl": "https://api.siliconflow.cn/v1" },
+    "volcengine": { "apiKey": "", "baseUrl": "https://ark.cn-beijing.volces.com/api/v3" },
+    "minimax": { "apiKey": "", "baseUrl": "https://api.minimax.chat/v1" },
+    "jimeng": { "apiKey": "" },
+    "kling": { "apiKey": "" }
+  },
+  "tts": {
+    "fish-audio": { "apiKey": "", "baseUrl": "https://api.fish.audio/v1" },
+    "elevenlabs": { "apiKey": "" },
+    "aliyun_bailian": { "apiKey": "" }
+  },
+  "streamingEnabled": true,
+  "downloadsDir": "D:\\douyin-video-tool-source-code\\douyin-video-tool-source-code\\douyin-mcp-local\\downloads"
+}

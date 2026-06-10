@@ -11,6 +11,7 @@ import WebSocket from "ws";
 import { openTaskStore, TASK_STATUS } from "./task-store.mjs";
 import { createTtsService } from "./server/tts/tts-service.js";
 import { createImageService } from "./server/image/image-service.js";
+import modelRouter from "./server/core/model-router/model-router.js";
 import { TTS_PROVIDER_LABELS } from "./server/tts/providers/index.js";
 import { createVoiceAssetService } from "./server/voices/voice-asset-service.js";
 import { createDirectorService } from "./server/director/director-service.js";
@@ -219,6 +220,9 @@ const imageService = createImageService({
   baseDir: __dirname,
   getSettings: () => { try { return JSON.parse(fs.readFileSync(settingsPath, "utf8") || "{}"); } catch { return {}; } },
 });
+
+// ModelRouter 统一模型路由
+modelRouter.init(readSettings());
 
 const mimeTypes = new Map([
   [".html", "text/html; charset=utf-8"],
@@ -3852,6 +3856,73 @@ const server = http.createServer(async (req, res) => {
         text: result.text,
         files: listDownloads(),
       });
+      return;
+    }
+
+    // ===== ModelRouter API =====
+    if (url.pathname.startsWith("/api/router/")) {
+      const route = url.pathname.replace("/api/router/", "");
+
+      // 统一生成
+      if (req.method === "POST" && route === "generate") {
+        const body = JSON.parse(await readBody(req) || "{}");
+        try {
+          const result = await modelRouter.generate({
+            taskType: body.taskType || "rewrite",
+            messages: body.messages || [],
+            options: body.options || {},
+          });
+          sendJson(res, 200, { ok: true, ...result });
+        } catch (e) {
+          sendJson(res, 400, { ok: false, error: e.message });
+        }
+        return;
+      }
+
+      // 流式生成 (SSE)
+      if (req.method === "POST" && route === "generate-stream") {
+        const body = JSON.parse(await readBody(req) || "{}");
+        res.writeHead(200, {
+          "Content-Type": "text/event-stream",
+          "Cache-Control": "no-cache",
+          "Connection": "keep-alive",
+        });
+        try {
+          await modelRouter.generateStream(
+            body.taskType || "rewrite",
+            body.messages || [],
+            body.options || {},
+            (chunk) => {
+              res.write(`data: ${JSON.stringify(chunk)}\n\n`);
+              if (chunk.done) res.end();
+            }
+          );
+        } catch (e) {
+          res.write(`data: ${JSON.stringify({ error: e.message })}\n\n`);
+          res.end();
+        }
+        return;
+      }
+
+      // 模型映射
+      if (req.method === "GET" && route === "map") {
+        sendJson(res, 200, { ok: true, map: modelRouter.getModelMap() });
+        return;
+      }
+
+      // Provider 列表
+      if (req.method === "GET" && route === "providers") {
+        sendJson(res, 200, { ok: true, providers: modelRouter.getProviders() });
+        return;
+      }
+
+      // 用量统计
+      if (req.method === "GET" && route === "stats") {
+        sendJson(res, 200, { ok: true, stats: modelRouter.getUsageStats() });
+        return;
+      }
+
+      sendJson(res, 404, { ok: false, message: "未知路由" });
       return;
     }
 
