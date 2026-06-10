@@ -3944,7 +3944,7 @@ broadcastProgress = (data) => {
 
       // 模型映射
       if (req.method === "GET" && route === "map") {
-        sendJson(res, 200, { ok: true, map: modelRouter.getModelMap() });
+        sendJson(res, 200, { ok: true, map: settingsCenter.getModelMapping() || modelRouter._modelMap || {} });
         return;
       }
 
