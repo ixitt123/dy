@@ -20,6 +20,7 @@ import { createJianyingExporter } from "./server/core/jianying-exporter.js";
 import { PipelineRunner } from "./server/core/pipeline-bus/PipelineRunner.js";
 import { PipelineState } from "./server/core/pipeline-bus/PipelineState.js";
 import { PIPELINE_EVENTS } from "./server/core/pipeline-bus/PipelineEvents.js";
+import { createProjectCenter } from "./server/core/project-center.js";
 import { TTS_PROVIDER_LABELS } from "./server/tts/providers/index.js";
 import { createVoiceAssetService } from "./server/voices/voice-asset-service.js";
 import { createDirectorService } from "./server/director/director-service.js";
@@ -260,6 +261,9 @@ const pipelineRunner = new PipelineRunner({
   state: pipelineState,
   handlers: {},
 });
+
+// 项目中心
+const projectCenter = createProjectCenter(__dirname);
 
 // 流水线事件 → WebSocket 广播
 for (const event of Object.values(PIPELINE_EVENTS)) {
@@ -3991,6 +3995,29 @@ broadcastProgress = (data) => {
       }
 
       sendJson(res, 404, { ok: false, message: "未知路由" });
+      return;
+    }
+
+    // ===== ProjectCenter API =====
+    if (url.pathname.startsWith("/api/projects/")) {
+      const route = url.pathname.replace("/api/projects/", "");
+      if (req.method === "POST" && route === "create") {
+        const body = JSON.parse(await readBody(req) || "{}");
+        sendJson(res, 200, { ok: true, project: projectCenter.create(body.name || "新项目", body.description || "") });
+        return;
+      }
+      if (req.method === "GET" && route === "list") { sendJson(res, 200, { ok: true, projects: projectCenter.list() }); return; }
+      if (req.method === "GET" && route === "stats") { sendJson(res, 200, { ok: true, ...projectCenter.getStats() }); return; }
+      if (req.method === "POST" && route === "link-asset") {
+        const body = JSON.parse(await readBody(req) || "{}");
+        sendJson(res, 200, { ok: true, id: projectCenter.linkAsset(body.projectId, body.assetType, body.assetId, body.name) });
+        return;
+      }
+      if (req.method === "GET" && route === "assets") {
+        sendJson(res, 200, { ok: true, assets: projectCenter.getAssets(url.searchParams.get("projectId") || "") });
+        return;
+      }
+      sendJson(res, 404, { ok: false });
       return;
     }
 
