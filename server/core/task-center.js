@@ -2,7 +2,7 @@
 import fs from "node:fs";
 import path from "node:path";
 
-export function createTaskCenter(baseDir) {
+export function createTaskCenter(baseDir, { onProgress } = {}) {
   const dataDir = path.join(baseDir, ".data", "tasks");
   fs.mkdirSync(dataDir, { recursive: true });
 
@@ -31,6 +31,7 @@ export function createTaskCenter(baseDir) {
     const task = JSON.parse(fs.readFileSync(filePath, "utf8"));
     Object.assign(task, updates, { updatedAt: new Date().toISOString() });
     fs.writeFileSync(filePath, JSON.stringify(task, null, 2));
+    if (onProgress) onProgress({ taskId: id, ...updates });
     return task;
   }
 

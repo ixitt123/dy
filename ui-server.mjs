@@ -230,8 +230,9 @@ modelRouter.init(readSettings());
 // 统一设置中心
 const settingsCenter = createSettingsCenter(__dirname, settingsPath);
 
-// 任务中心
-const taskCenter = createTaskCenter(__dirname);
+// 任务中心（WebSocket 回调稍后绑定）
+let broadcastProgress = () => {};
+const taskCenter = createTaskCenter(__dirname, { onProgress: (data) => broadcastProgress(data) });
 
 const mimeTypes = new Map([
   [".html", "text/html; charset=utf-8"],
@@ -2883,6 +2884,30 @@ function serveStatic(req, res) {
 }
 
 const server = http.createServer(async (req, res) => {
+
+// ===== WebSocket 进度推送 =====
+const wss = new WebSocket.Server({ noServer: true });
+const wsClients = new Set();
+
+server.on("upgrade", (request, socket, head) => {
+  if (request.url === "/ws/progress") {
+    wss.handleUpgrade(request, socket, head, (ws) => {
+      wsClients.add(ws);
+      ws.on("close", () => wsClients.delete(ws));
+      ws.send(JSON.stringify({ type: "connected", message: "已连接进度推送" }));
+    });
+  } else {
+    socket.destroy();
+  }
+});
+
+// 广播进度（赋值到前面声明的变量）
+broadcastProgress = (data) => {
+  const msg = JSON.stringify(data);
+  for (const ws of wsClients) {
+    try { ws.send(msg); } catch { wsClients.delete(ws); }
+  }
+}
   const url = new URL(req.url, "http://127.0.0.1");
 
   try {
