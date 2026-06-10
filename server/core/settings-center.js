@@ -15,7 +15,16 @@ export function createSettingsCenter(baseDir, settingsPath) {
   }
 
   function getModelMapping() {
-    return read().modelMapping || {};
+    const mapping = read().modelMapping || {};
+    // 提供默认值
+    return Object.keys(mapping).length > 0 ? mapping : {
+      rewrite: { provider: "deepseek", model: "deepseek-chat" },
+      director: { provider: "deepseek", model: "deepseek-chat" },
+      storyboard: { provider: "deepseek", model: "deepseek-chat" },
+      image: { provider: "jimeng", model: "" },
+      video: { provider: "kling", model: "" },
+      tts: { provider: "fish-audio", model: "fish-speech-1.5" },
+    };
   }
 
   function setModelMapping(mapping) {

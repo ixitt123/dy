@@ -228,6 +228,9 @@ const imageService = createImageService({
 // ModelRouter 统一模型路由
 modelRouter.init(readSettings());
 
+// ProviderRegistry 同步
+providerRegistry.initFromModelRouter();
+
 // 统一设置中心
 const settingsCenter = createSettingsCenter(__dirname, settingsPath);
 

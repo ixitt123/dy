@@ -15,6 +15,15 @@ class ProviderRegistry {
     this._health = new Map();
   }
 
+  initFromModelRouter() {
+    const providers = modelRouter.getProviders();
+    for (const id of providers) {
+      this._providers.set(id, { id, name: id, enabled: true });
+      this._health.set(id, { status: "unknown", latency: 0, lastCheck: new Date().toISOString() });
+    }
+    return this;
+  }
+
   register(id, config) {
     this._providers.set(id, { id, ...config, enabled: config.enabled !== false });
     this._health.set(id, { status: "online", latency: 0, lastCheck: new Date().toISOString() });
