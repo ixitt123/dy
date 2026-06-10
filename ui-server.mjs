@@ -13,7 +13,7 @@ import { createTtsService } from "./server/tts/tts-service.js";
 import { createImageService } from "./server/image/image-service.js";
 import modelRouter from "./server/core/model-router/model-router.js";
 import { createSettingsCenter } from "./server/core/settings-center.js";
-import { createTaskCenter } from "./server/core/task-center.js";
+import { createTaskCenterV2 } from "./server/core/task-center.js";
 import { providerRegistry } from "./server/core/provider-registry.js";
 import { createAnalysisEngine } from "./server/core/analysis-engine.js";
 import { createJianyingExporter } from "./server/core/jianying-exporter.js";
@@ -238,9 +238,14 @@ providerRegistry.initFromModelRouter();
 // 统一设置中心
 const settingsCenter = createSettingsCenter(__dirname, settingsPath);
 
-// 任务中心（WebSocket 回调稍后绑定）
+// 进度广播占位（WebSocket 初始化后赋值）
 let broadcastProgress = () => {};
-const taskCenter = createTaskCenter(__dirname, { onProgress: (data) => broadcastProgress(data) });
+
+// 任务中心 2.0
+const taskCenter = createTaskCenterV2(__dirname, {
+  maxConcurrency: 3,
+  onProgress: (data) => broadcastProgress({ type: "task", ...data }),
+});
 
 // 统一内容分析引擎
 const analysisEngine = createAnalysisEngine(__dirname);
