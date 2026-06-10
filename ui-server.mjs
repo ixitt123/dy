@@ -14,6 +14,7 @@ import { createImageService } from "./server/image/image-service.js";
 import modelRouter from "./server/core/model-router/model-router.js";
 import { createSettingsCenter } from "./server/core/settings-center.js";
 import { createTaskCenter } from "./server/core/task-center.js";
+import { providerRegistry } from "./server/core/provider-registry.js";
 import { TTS_PROVIDER_LABELS } from "./server/tts/providers/index.js";
 import { createVoiceAssetService } from "./server/voices/voice-asset-service.js";
 import { createDirectorService } from "./server/director/director-service.js";
@@ -3931,6 +3932,36 @@ const server = http.createServer(async (req, res) => {
       }
 
       sendJson(res, 404, { ok: false, message: "未知路由" });
+      return;
+    }
+
+    // ===== ProviderRegistry API =====
+    if (url.pathname.startsWith("/api/providers/")) {
+      const route = url.pathname.replace("/api/providers/", "");
+
+      if (req.method === "GET" && route === "list") {
+        sendJson(res, 200, { ok: true, providers: providerRegistry.getAll() });
+        return;
+      }
+
+      if (req.method === "POST" && route === "health") {
+        const body = JSON.parse(await readBody(req) || "{}");
+        const result = await providerRegistry.healthCheck(body.id || "");
+        sendJson(res, 200, { ok: true, ...result });
+        return;
+      }
+
+      if (req.method === "POST" && route === "health-all") {
+        const providers = providerRegistry.getAll();
+        const results = {};
+        for (const p of providers) {
+          results[p.id] = await providerRegistry.healthCheck(p.id);
+        }
+        sendJson(res, 200, { ok: true, results });
+        return;
+      }
+
+      sendJson(res, 404, { ok: false });
       return;
     }
 
