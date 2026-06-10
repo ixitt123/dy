@@ -3972,8 +3972,8 @@ broadcastProgress = (data) => {
     }
 
     // ===== 剪映导出 API =====
-    if (url.pathname.startsWith("/api/jianying/")) {
-      const route = url.pathname.replace("/api/jianying/", "");
+    if (url.pathname.startsWith("/api/jianying")) {
+      const route = url.pathname.replace("/api/jianying", "").replace(/^\//, "");
 
       if (req.method === "POST" && route === "export") {
         const body = JSON.parse(await readBody(req) || "{}");
