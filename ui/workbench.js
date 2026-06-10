@@ -43,6 +43,10 @@ const workbenchPages = {
     title: "设置",
     description: "管理下载目录、识别平台和 AI 模型连接。",
   },
+  imageStudio: {
+    title: "AI图片生产中心",
+    description: "输入 Prompt，调用即梦生成图片，管理图片资产。",
+  },
 };
 
 let activeWorkbenchPage = "dashboard";
@@ -217,6 +221,7 @@ function buildWorkbenchInformationArchitecture() {
     director: ["#directorSystem"],
     vfo: ["#vfoSystem"],
     files: [".files-area"],
+    imageStudio: ["#imageStudioPanel"],
   };
 
   const pages = [dashboard];
@@ -232,6 +237,7 @@ function buildWorkbenchInformationArchitecture() {
   setupTtsStudio();
   setupDirectorStudio();
   setupVfoFutureStep();
+  setupImageStudio();
 }
 
 function navigateWorkbench(pageId, options = {}) {
@@ -510,6 +516,130 @@ function initWorkbench() {
     workbenchPages[hashPage] ? hashPage : workbenchPages[saved] ? saved : "dashboard",
     { instant: true, fromHash: Boolean(workbenchPages[hashPage]) }
   );
+}
+
+function setupImageStudio() {
+  const panel = document.getElementById("imageStudioPanel");
+  if (!panel) return;
+
+  // 生成数量切换
+  panel.querySelectorAll(".btn-count").forEach(btn => {
+    btn.addEventListener("click", () => {
+      panel.querySelectorAll(".btn-count").forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+    });
+  });
+
+  // 结果/资产库标签切换
+  panel.querySelectorAll(".tab-link").forEach(tab => {
+    tab.addEventListener("click", () => {
+      panel.querySelectorAll(".tab-link").forEach(t => t.classList.remove("active"));
+      tab.classList.add("active");
+      const showAssets = tab.dataset.tab === "assets";
+      document.getElementById("imageResultsGrid").style.display = showAssets ? "none" : "grid";
+      document.getElementById("imageAssetsGrid").style.display = showAssets ? "grid" : "none";
+      if (showAssets) loadImageAssets();
+    });
+  });
+
+  // 生成按钮
+  document.getElementById("imageGenerateBtn").addEventListener("click", async () => {
+    const prompt = document.getElementById("imagePrompt").value.trim();
+    if (!prompt) { setStatus("请先输入图片描述"); return; }
+
+    const count = parseInt(panel.querySelector(".btn-count.active").dataset.count);
+    const aspectRatio = document.getElementById("imageAspectRatio").value;
+    const btn = document.getElementById("imageGenerateBtn");
+    const statusEl = document.getElementById("imageGenerateStatus");
+
+    btn.disabled = true;
+    btn.textContent = "⏳ 生成中...";
+    setStatus(`正在生成 ${count} 张图片...`);
+
+    try {
+      const res = await fetch("/api/image/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt, count, aspectRatio }),
+      });
+      const data = await res.json();
+      if (data.jobId) {
+        setStatus(`✅ 生成完成：成功 ${data.success} 张` + (data.failed > 0 ? `，失败 ${data.failed} 张` : ""));
+        renderResults(data.results || []);
+      } else {
+        setStatus("❌ " + (data.error || "生成失败"));
+      }
+    } catch (e) {
+      setStatus("❌ 请求失败: " + e.message);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "🎨 生成图片";
+    }
+  });
+
+  function setStatus(msg) {
+    const el = document.getElementById("imageGenerateStatus");
+    if (el) el.textContent = msg;
+  }
+
+  function renderResults(results) {
+    const grid = document.getElementById("imageResultsGrid");
+    if (!results.length) { grid.innerHTML = '<div class="empty-state">无结果</div>'; return; }
+    grid.innerHTML = results.map((r, i) => {
+      if (!r.success) return `<div class="img-card error">第${i+1}张: ${r.error || "失败"}</div>`;
+      return `<div class="img-card" data-asset-id="${r.assetId || ""}">
+        <div class="img-preview">
+          <img src="/api/image/file?path=${encodeURIComponent(r.imagePath || "")}" alt="生成图片" loading="lazy" />
+        </div>
+        <div class="img-actions">
+          <button class="btn-sm" onclick="window.open('/api/image/file?path=${encodeURIComponent(r.imagePath || "")}')">预览</button>
+          <button class="btn-sm" onclick="fetch('/api/image/assets/${r.assetId}/delete',{method:'POST'}).then(()=>this.closest('.img-card').remove())">删除</button>
+          <button class="btn-sm" onclick="document.getElementById('imagePrompt').value='${(prompt || "").replace(/'/g, "\\'")}';document.getElementById('imageGenerateBtn').click()">重新生成</button>
+        </div>
+      </div>`;
+    }).join("");
+  }
+
+  async function loadImageAssets() {
+    const grid = document.getElementById("imageAssetsGrid");
+    try {
+      const res = await fetch("/api/image/assets");
+      const data = await res.json();
+      const assets = data.assets || [];
+      if (!assets.length) { grid.innerHTML = '<div class="empty-state">暂无保存的图片资产</div>'; return; }
+      grid.innerHTML = assets.map(a => `
+        <div class="img-card">
+          <div class="img-preview">
+            <img src="/api/image/file?path=${encodeURIComponent(a.original_path || "")}" alt="asset" loading="lazy" />
+          </div>
+          <div class="img-meta">
+            <span>${(a.prompt || "").slice(0, 30)}</span>
+            <span class="text-xs text-secondary">${(a.created_at || "").slice(0, 10)}</span>
+          </div>
+          <div class="img-actions">
+            <button class="btn-sm" onclick="window.open('/api/image/file?path=${encodeURIComponent(a.original_path || "")}')">预览</button>
+            <button class="btn-sm" onclick="fetch('/api/image/assets/${a.id}/delete',{method:'POST'}).then(()=>this.closest('.img-card').remove())">删除</button>
+          </div>
+        </div>
+      `).join("");
+    } catch (e) {
+      grid.innerHTML = `<div class="empty-state">加载失败: ${e.message}</div>`;
+    }
+  }
+
+  // 页面切换到 imageStudio 时刷新资产
+  const origNavigate = window.navigateWorkbench;
+  const navInterceptor = (pageId) => {
+    if (pageId === "image-studio") {
+      loadImageAssets();
+    }
+  };
+  document.addEventListener("click", (e) => {
+    const nav = e.target.closest("[data-nav]");
+    if (nav && nav.dataset.nav === "image-studio") {
+      setTimeout(loadImageAssets, 100);
+    }
+  });
 }
 
 window.workbenchNavigate = navigateWorkbench;

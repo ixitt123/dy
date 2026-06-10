@@ -10,6 +10,7 @@ import ffmpegPath from "ffmpeg-static";
 import WebSocket from "ws";
 import { openTaskStore, TASK_STATUS } from "./task-store.mjs";
 import { createTtsService } from "./server/tts/tts-service.js";
+import { createImageService } from "./server/image/image-service.js";
 import { TTS_PROVIDER_LABELS } from "./server/tts/providers/index.js";
 import { createVoiceAssetService } from "./server/voices/voice-asset-service.js";
 import { createDirectorService } from "./server/director/director-service.js";
@@ -211,6 +212,12 @@ const vfoService = createVfoService({
   directorService,
   generateJson: generateStructuredJson,
   onIdle: scheduleShutdownIfIdle,
+});
+
+// Image Studio
+const imageService = createImageService({
+  baseDir: __dirname,
+  getSettings: () => { try { return JSON.parse(fs.readFileSync(settingsPath, "utf8") || "{}"); } catch { return {}; } },
 });
 
 const mimeTypes = new Map([
@@ -3845,6 +3852,58 @@ const server = http.createServer(async (req, res) => {
         text: result.text,
         files: listDownloads(),
       });
+      return;
+    }
+
+    // ===== Image Studio API =====
+    if (url.pathname.startsWith("/api/image/")) {
+      const route = url.pathname.replace("/api/image/", "");
+
+      if (req.method === "POST" && route === "generate") {
+        const body = JSON.parse(await readBody(req) || "{}");
+        try {
+          const result = await imageService.generateImage({
+            prompt: body.prompt || "",
+            aspectRatio: body.aspectRatio || "1:1",
+            count: Math.min(Math.max(Number(body.count) || 1, 1), 9),
+          });
+          sendJson(res, 200, result);
+        } catch (e) {
+          sendJson(res, 400, { ok: false, error: e.message });
+        }
+        return;
+      }
+
+      if (req.method === "GET" && route === "jobs") {
+        sendJson(res, 200, { jobs: imageService.getJobs({ limit: Number(url.searchParams.get("limit")) || 50 }) });
+        return;
+      }
+
+      if (req.method === "GET" && route === "assets") {
+        sendJson(res, 200, { assets: imageService.getAssets({ limit: Number(url.searchParams.get("limit")) || 50 }) });
+        return;
+      }
+
+      if (req.method === "POST" && route.endsWith("/delete")) {
+        const assetId = route.replace("/delete", "");
+        sendJson(res, 200, imageService.deleteAsset(assetId));
+        return;
+      }
+
+      if (req.method === "GET" && route === "file") {
+        const filePath = url.searchParams.get("path") || "";
+        if (!filePath || !fs.existsSync(filePath)) {
+          sendJson(res, 404, { ok: false, message: "文件不存在" });
+          return;
+        }
+        const ext = path.extname(filePath).toLowerCase();
+        const mime = { ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".gif": "image/gif", ".webp": "image/webp" };
+        const data = fs.readFileSync(filePath);
+        sendBuffer(res, 200, data, mime[ext] || "application/octet-stream");
+        return;
+      }
+
+      sendJson(res, 404, { ok: false, message: "未知路由" });
       return;
     }
 

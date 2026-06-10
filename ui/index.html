@@ -72,6 +72,12 @@
               <span class="nav-index">11</span><span>设置</span>
             </button>
           </div>
+          <div class="nav-group">
+            <span class="nav-group-label">图片</span>
+            <button class="nav-item" type="button" data-nav="image-studio">
+              <span class="nav-index">12</span><span>AI图片生产中心</span>
+            </button>
+          </div>
         </nav>
 
         <div class="sidebar-progress">
@@ -1077,6 +1083,56 @@
         </div>
       </div>
     </div>
+
+    <!-- Image Studio Panel -->
+    <section class="image-studio-page" id="imageStudioPanel" hidden>
+      <div class="image-studio-header">
+        <h2>AI 图片生产中心</h2>
+        <p class="text-secondary">输入 Prompt，调用即梦生成图片</p>
+      </div>
+      <div class="image-studio-body">
+        <div class="image-studio-input">
+          <label for="imagePrompt">图片描述（Prompt）</label>
+          <textarea id="imagePrompt" rows="4" placeholder="描述你想生成的图片内容，例如：一个阳光明媚的教室，老师在黑板上写英语单词，学生们认真听讲"></textarea>
+          <div class="image-studio-controls">
+            <div class="control-row">
+              <label>生成数量</label>
+              <div class="btn-group" id="imageCountGroup">
+                <button class="btn-count active" data-count="1">1张</button>
+                <button class="btn-count" data-count="4">4张</button>
+                <button class="btn-count" data-count="9">9张</button>
+              </div>
+            </div>
+            <div class="control-row">
+              <label>画面比例</label>
+              <select id="imageAspectRatio" class="input-select">
+                <option value="9:16">9:16 竖版</option>
+                <option value="16:9">16:9 横版</option>
+                <option value="1:1" selected>1:1 正方形</option>
+              </select>
+            </div>
+          </div>
+          <button class="primary" id="imageGenerateBtn" type="button">🎨 生成图片</button>
+          <div id="imageGenerateStatus" class="status-text"></div>
+        </div>
+        <div class="image-studio-results">
+          <div class="results-head">
+            <h3>生成结果</h3>
+            <div class="results-tabs">
+              <button class="tab-link active" data-tab="latest">最新</button>
+              <button class="tab-link" data-tab="assets">资产库</button>
+            </div>
+          </div>
+          <div class="results-grid" id="imageResultsGrid">
+            <div class="empty-state">输入 Prompt 后点击生成</div>
+          </div>
+          <div class="assets-grid" id="imageAssetsGrid" style="display:none">
+            <div class="empty-state">暂无保存的图片资产</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
     <script src="/app.js"></script>
     <script src="/workbench.js"></script>
   </body>
