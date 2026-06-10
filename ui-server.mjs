@@ -12,6 +12,7 @@ import { openTaskStore, TASK_STATUS } from "./task-store.mjs";
 import { createTtsService } from "./server/tts/tts-service.js";
 import { createImageService } from "./server/image/image-service.js";
 import modelRouter from "./server/core/model-router/model-router.js";
+import { createSettingsCenter } from "./server/core/settings-center.js";
 import { TTS_PROVIDER_LABELS } from "./server/tts/providers/index.js";
 import { createVoiceAssetService } from "./server/voices/voice-asset-service.js";
 import { createDirectorService } from "./server/director/director-service.js";
@@ -223,6 +224,9 @@ const imageService = createImageService({
 
 // ModelRouter 统一模型路由
 modelRouter.init(readSettings());
+
+// 统一设置中心
+const settingsCenter = createSettingsCenter(__dirname, settingsPath);
 
 const mimeTypes = new Map([
   [".html", "text/html; charset=utf-8"],
@@ -3923,6 +3927,55 @@ const server = http.createServer(async (req, res) => {
       }
 
       sendJson(res, 404, { ok: false, message: "未知路由" });
+      return;
+    }
+
+    // ===== 统一设置中心 API =====
+    if (url.pathname.startsWith("/api/settings/")) {
+      const route = url.pathname.replace("/api/settings/", "");
+
+      if (req.method === "GET" && route === "all") {
+        sendJson(res, 200, { ok: true, settings: settingsCenter.read() });
+        return;
+      }
+
+      if (req.method === "GET" && route === "model-mapping") {
+        sendJson(res, 200, { ok: true, mapping: settingsCenter.getModelMapping() });
+        return;
+      }
+
+      if (req.method === "POST" && route === "model-mapping") {
+        const body = JSON.parse(await readBody(req) || "{}");
+        settingsCenter.setModelMapping(body.mapping || {});
+        modelRouter.init(settingsCenter.read());
+        sendJson(res, 200, { ok: true });
+        return;
+      }
+
+      if (req.method === "GET" && route === "providers") {
+        sendJson(res, 200, { ok: true, providers: settingsCenter.getAllProviders() });
+        return;
+      }
+
+      if (req.method === "POST" && route === "provider") {
+        const body = JSON.parse(await readBody(req) || "{}");
+        if (!body.id) { sendJson(res, 400, { ok: false, error: "缺少 provider id" }); return; }
+        settingsCenter.setProviderConfig(body.id, {
+          apiKey: body.apiKey,
+          baseUrl: body.baseUrl,
+        });
+        modelRouter.init(settingsCenter.read());
+        sendJson(res, 200, { ok: true });
+        return;
+      }
+
+      if (req.method === "POST" && route === "test-provider") {
+        const body = JSON.parse(await readBody(req) || "{}");
+        sendJson(res, 200, settingsCenter.testProviderConnection(body.id || ""));
+        return;
+      }
+
+      sendJson(res, 404, { ok: false, message: "未知设置 API" });
       return;
     }
 
