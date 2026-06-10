@@ -682,7 +682,7 @@ function setupImageStudio() {
 }
 
 function setupV2Settings() {
-  const panel = document.getElementById("v2SettingsPanel");
+  const panel = document.getElementById("unifiedSettingsPanel");
   if (!panel) return;
 
   const providerList = document.getElementById("v2ProviderList");
@@ -695,38 +695,78 @@ function setupV2Settings() {
       const data = await res.json();
       const providers = data.providers || [];
       providerList.innerHTML = providers.map(p => `
-        <div class="settings-row">
-          <div class="settings-row-left">
-            <strong>${p.id}</strong>
-            <span class="text-xs text-secondary">${p.configured ? '✅ 已配置' : '⚠️ 未配置'}</span>
-          </div>
-          <div class="settings-row-right">
-            <input type="password" class="input-api-key" data-provider="${p.id}" placeholder="API Key" value="${p.apiKey || ''}" />
-            <input type="text" class="input-base-url" data-provider="${p.id}" placeholder="Base URL" value="${p.baseUrl || ''}" style="margin-left:4px" />
-            <button class="btn-sm" data-save-provider="${p.id}">保存</button>
-          </div>
+        <div class="settings-row" style="display:flex;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid #eee">
+          <strong style="width:100px">${p.id}</strong>
+          <span style="font-size:12px;color:${p.configured?'green':'#999'}">${p.configured ? '✅ 已配置' : '⚠️ 未配置'}</span>
+          <input type="password" style="flex:1;padding:4px 8px;border:1px solid #ccc;border-radius:4px" class="input-api-key" data-provider="${p.id}" placeholder="API Key" value="${p.apiKey || ''}" />
+          <input type="text" style="width:200px;padding:4px 8px;border:1px solid #ccc;border-radius:4px" class="input-base-url" data-provider="${p.id}" placeholder="Base URL" value="${p.baseUrl || ''}" />
+          <button class="btn-sm" style="padding:4px 12px;background:#6366f1;color:#fff;border:0;border-radius:4px;cursor:pointer" data-save-provider="${p.id}">保存</button>
         </div>
       `).join("");
 
-      // 绑定保存按钮
       providerList.querySelectorAll("[data-save-provider]").forEach(btn => {
         btn.addEventListener("click", async () => {
           const id = btn.dataset.saveProvider;
           const apiKey = providerList.querySelector(`[data-provider="${id}"].input-api-key`)?.value || "";
           const baseUrl = providerList.querySelector(`[data-provider="${id}"].input-base-url`)?.value || "";
           await fetch("/api/settings/provider", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
+            method: "POST", headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ id, apiKey, baseUrl }),
           });
-          btn.textContent = "✅ 已保存";
+          btn.textContent = "✅";
           setTimeout(() => { btn.textContent = "保存"; }, 2000);
         });
       });
     } catch (e) {
-      providerList.innerHTML = `<p class="error">加载失败: ${e.message}</p>`;
+      providerList.innerHTML = `<p style="color:#e00">加载失败: ${e.message}</p>`;
     }
   }
+
+  // 模型映射数据
+  const MODEL_DEFS = {
+    analyze: { label: "内容分析", options: [
+      { provider: "deepseek", model: "deepseek-chat", label: "DeepSeek V3" },
+      { provider: "deepseek", model: "deepseek-reasoner", label: "DeepSeek R1" },
+      { provider: "qwen", model: "qwen-plus", label: "通义千问 Qwen3" },
+      { provider: "openai", model: "gpt-4.1", label: "GPT-4.1" },
+      { provider: "claude", model: "claude-sonnet-4-20250514", label: "Claude Sonnet 4" },
+      { provider: "gemini", model: "gemini-2.5-pro", label: "Gemini 2.5 Pro" },
+    ]},
+    rewrite: { label: "AI改写", options: [
+      { provider: "deepseek", model: "deepseek-chat", label: "DeepSeek V3（默认）" },
+      { provider: "deepseek", model: "deepseek-reasoner", label: "DeepSeek R1" },
+      { provider: "openai", model: "gpt-4.1", label: "GPT-4.1" },
+      { provider: "claude", model: "claude-sonnet-4-20250514", label: "Claude Sonnet 4" },
+      { provider: "gemini", model: "gemini-2.5-pro", label: "Gemini 2.5 Pro" },
+    ]},
+    director: { label: "AI导演", options: [
+      { provider: "claude", model: "claude-sonnet-4-20250514", label: "Claude Sonnet 4（默认）" },
+      { provider: "openai", model: "gpt-4.1", label: "GPT-4.1" },
+      { provider: "deepseek", model: "deepseek-reasoner", label: "DeepSeek R1" },
+      { provider: "gemini", model: "gemini-2.5-pro", label: "Gemini 2.5 Pro" },
+    ]},
+    image_prompt: { label: "图片提示词", options: [
+      { provider: "openai", model: "gpt-4.1", label: "GPT-4.1" },
+      { provider: "claude", model: "claude-sonnet-4-20250514", label: "Claude Sonnet 4" },
+      { provider: "gemini", model: "gemini-2.5-pro", label: "Gemini 2.5 Pro" },
+      { provider: "deepseek", model: "deepseek-chat", label: "DeepSeek V3" },
+    ]},
+    image: { label: "图片生成", options: [
+      { provider: "jimeng", model: "flux-dev", label: "Flux Dev" },
+      { provider: "jimeng", model: "flux-pro", label: "Flux Pro" },
+      { provider: "openai", model: "dall-e-3", label: "GPT Image" },
+      { provider: "jimeng", model: "sdxl", label: "Stable Diffusion XL" },
+    ]},
+    video: { label: "视频生成", options: [
+      { provider: "kling", model: "kling", label: "Kling" },
+    ]},
+    tts: { label: "TTS语音", options: [
+      { provider: "fish-audio", model: "fish-speech-1.5", label: "Fish Audio" },
+      { provider: "minimax", model: "minimax-speech", label: "MiniMax Speech" },
+      { provider: "elevenlabs", model: "elevenlabs", label: "ElevenLabs" },
+      { provider: "qwen", model: "cosyvoice", label: "CosyVoice" },
+    ]},
+  };
 
   // 加载模型映射
   async function loadModelMap() {
@@ -734,52 +774,34 @@ function setupV2Settings() {
       const res = await fetch("/api/settings/model-mapping");
       const data = await res.json();
       const mapping = data.mapping || {};
-      const tasks = [
-        { key: "rewrite", label: "AI改写" },
-        { key: "director", label: "AI导演" },
-        { key: "storyboard", label: "分镜" },
-        { key: "image", label: "图片生成" },
-        { key: "video", label: "视频" },
-        { key: "tts", label: "TTS语音" },
-      ];
-      modelMapEl.innerHTML = tasks.map(t => {
-        const current = mapping[t.key] || {};
+      modelMapEl.innerHTML = Object.entries(MODEL_DEFS).map(([key, def]) => {
+        const current = mapping[key] || {};
         return `
-          <div class="settings-row">
-            <span class="settings-row-label">${t.label}</span>
-            <select class="input-select" data-map-task="${t.key}">
-              <option value="deepseek" ${current.provider === 'deepseek' ? 'selected' : ''}>DeepSeek</option>
-              <option value="openai" ${current.provider === 'openai' ? 'selected' : ''}>OpenAI</option>
-              <option value="claude" ${current.provider === 'claude' ? 'selected' : ''}>Claude</option>
-              <option value="qwen" ${current.provider === 'qwen' ? 'selected' : ''}>通义千问</option>
-              <option value="gemini" ${current.provider === 'gemini' ? 'selected' : ''}>Gemini</option>
-              <option value="siliconflow" ${current.provider === 'siliconflow' ? 'selected' : ''}>硅基流动</option>
-              <option value="jimeng" ${current.provider === 'jimeng' ? 'selected' : ''}>即梦</option>
-              <option value="fish-audio" ${current.provider === 'fish-audio' ? 'selected' : ''}>FishAudio</option>
+          <div class="model-row" style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid #eee">
+            <span style="min-width:90px;font-weight:600">${def.label}</span>
+            <select class="model-select" data-task="${key}" style="flex:1;padding:6px;border:1px solid #ccc;border-radius:4px">
+              ${def.options.map(o => `<option value="${o.provider}|${o.model}" ${current.provider===o.provider&&current.model===o.model?'selected':''}>${o.label}</option>`).join("")}
             </select>
-            <input type="text" class="input-model" data-map-task="${t.key}" placeholder="模型名" value="${current.model || ''}" style="margin-left:4px;width:160px" />
           </div>
         `;
       }).join("");
 
-      document.getElementById("v2SaveMapping").addEventListener("click", async () => {
-        const newMapping = {};
-        tasks.forEach(t => {
-          const provider = modelMapEl.querySelector(`[data-map-task="${t.key}"].input-select`)?.value || "deepseek";
-          const model = modelMapEl.querySelector(`[data-map-task="${t.key}"].input-model`)?.value || "";
-          newMapping[t.key] = { provider, model };
+      document.getElementById("v2SaveMapping").onclick = async () => {
+        const newMap = {};
+        modelMapEl.querySelectorAll(".model-select").forEach(sel => {
+          const task = sel.dataset.task;
+          const [provider, model] = sel.value.split("|");
+          newMap[task] = { provider, model };
         });
         await fetch("/api/settings/model-mapping", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ mapping: newMapping }),
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ mapping: newMap }),
         });
-        const btn = document.getElementById("v2SaveMapping");
-        btn.textContent = "✅ 已保存";
-        setTimeout(() => { btn.textContent = "保存模型映射"; }, 2000);
-      });
+        document.getElementById("saveMappingStatus").textContent = "✅ 已保存";
+        setTimeout(() => document.getElementById("saveMappingStatus").textContent = "", 3000);
+      };
     } catch (e) {
-      modelMapEl.innerHTML = `<p class="error">加载失败: ${e.message}</p>`;
+      modelMapEl.innerHTML = `<p style="color:#e00">加载失败: ${e.message}</p>`;
     }
   }
 

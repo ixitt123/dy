@@ -192,12 +192,13 @@
             </section>
       <section class="topbar">
         <div>
-          <h1>抖音视频工具</h1>
-          <p id="savePath">下载位置正在读取...</p>
+          <h1>系统设置</h1>
+          <p id="savePath">下载位置: 加载中...</p>
         </div>
         <div class="download-settings">
-          <input id="downloadDirInput" type="text" placeholder="下载位置" />
-          <button class="ghost" id="chooseDownloadDir" type="button">选择文件夹</button>
+          <input id="downloadDirInput" type="text" placeholder="下载位置" style="width:300px" />
+          <button class="ghost" id="chooseDownloadDir" type="button" onclick="document.getElementById('folderPicker').click()">选择文件夹</button>
+          <input type="file" id="folderPicker" webkitdirectory style="display:none" onchange="if(this.files[0]){var p=this.files[0].path||this.files[0].webkitRelativePath;var idx=p.indexOf('\\');if(idx>0)document.getElementById('downloadDirInput').value=p.substring(0,p.lastIndexOf('\\'))}" />
           <button class="ghost" id="saveDownloadDir" type="button">保存位置</button>
           <button class="ghost" id="openFolder" type="button">打开下载文件夹</button>
         </div>
@@ -207,45 +208,21 @@
         <label for="shareLink">抖音分享链接 / 批量导入链接</label>
         <textarea id="shareLink" rows="8" placeholder="粘贴 1 条或多条抖音分享内容；有 1 条就处理 1 条，有多条会自动识别并加入队列"></textarea>
 
-        <div class="api-panel">
-          <div class="settings-grid">
+        <div class="api-panel" id="unifiedSettingsPanel">
+          <div class="settings-sections">
+            <!-- Provider中心 -->
             <div class="settings-card">
-              <label for="apiProvider">语音识别平台</label>
-              <select id="apiProvider">
-                <option value="dashscope">阿里云百炼 DashScope</option>
-              </select>
-              <label for="apiKey">DashScope API Key</label>
-              <div class="api-row">
-                <input id="apiKey" type="password" placeholder="提取文案 / AI分析 / DashScope改写" autocomplete="off" />
-                <button class="ghost" id="saveApiKey" type="button">保存</button>
-              </div>
-              <p id="apiStatus">提取文案时需要填写，下载视频不需要。</p>
-              <p class="api-links">
-                <a href="https://help.aliyun.com/zh/model-studio/get-api-key/" target="_blank" rel="noopener">申请/查看 API Key</a>
-                <span>·</span>
-                <a href="https://www.alibabacloud.com/help/zh/model-studio/paraformer-recorded-speech-recognition-restful-api" target="_blank" rel="noopener">语音识别说明</a>
-              </p>
+              <h3>Provider 中心</h3>
+              <p class="text-secondary">统一管理所有 API Key</p>
+              <div id="v2ProviderList" class="settings-list"></div>
             </div>
+            <!-- 模型中心 -->
             <div class="settings-card">
-              <label>AI改写模型设置</label>
-              <div class="rewrite-quick-grid">
-                <select id="rewriteSettingsProvider"></select>
-                <input id="rewriteUnifiedKey" type="password" placeholder="粘贴所选平台的 API Key" autocomplete="off" />
-                <input id="rewriteModelInput" type="text" list="rewriteModelOptions" placeholder="模型，已自动推荐" />
-                <datalist id="rewriteModelOptions"></datalist>
-                <label class="check-row rewrite-auto-row">
-                  <input id="rewriteAutoModel" type="checkbox" checked />
-                  自动最新模型
-                </label>
-                <button class="ghost" id="saveRewriteSettings" type="button">保存</button>
-                <a class="provider-apply-link" id="rewriteApplyLink" href="#" target="_blank" rel="noopener">申请 API Key</a>
-                <a class="provider-apply-link" id="rewriteBalanceLink" href="#" target="_blank" rel="noopener">余额/控制台</a>
-              </div>
-              <details class="rewrite-advanced">
-                <summary>高级：base_url</summary>
-                <input id="rewriteBaseUrlInput" type="text" placeholder="选择平台后自动填写；自定义接口可修改" />
-              </details>
-              <p id="rewriteSettingsStatus">选择平台，粘贴 API Key，保存即可。</p>
+              <h3>模型中心</h3>
+              <p class="text-secondary">配置各任务使用的模型（配置一次全局生效）</p>
+              <div class="model-mapping-grid" id="v2ModelMap"></div>
+              <button class="primary" id="v2SaveMapping" type="button" style="margin-top:12px">保存模型映射</button>
+              <p id="saveMappingStatus" class="text-secondary" style="margin-top:8px"></p>
             </div>
           </div>
         </div>
