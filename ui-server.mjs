@@ -13,6 +13,7 @@ import { createTtsService } from "./server/tts/tts-service.js";
 import { createImageService } from "./server/image/image-service.js";
 import modelRouter from "./server/core/model-router/model-router.js";
 import { createSettingsCenter } from "./server/core/settings-center.js";
+import { createTaskCenter } from "./server/core/task-center.js";
 import { TTS_PROVIDER_LABELS } from "./server/tts/providers/index.js";
 import { createVoiceAssetService } from "./server/voices/voice-asset-service.js";
 import { createDirectorService } from "./server/director/director-service.js";
@@ -227,6 +228,9 @@ modelRouter.init(readSettings());
 
 // 统一设置中心
 const settingsCenter = createSettingsCenter(__dirname, settingsPath);
+
+// 任务中心
+const taskCenter = createTaskCenter(__dirname);
 
 const mimeTypes = new Map([
   [".html", "text/html; charset=utf-8"],
@@ -3927,6 +3931,16 @@ const server = http.createServer(async (req, res) => {
       }
 
       sendJson(res, 404, { ok: false, message: "未知路由" });
+      return;
+    }
+
+    // ===== 任务中心 API =====
+    if (url.pathname === "/api/task-center/stats") {
+      sendJson(res, 200, { ok: true, ...taskCenter.getStats() });
+      return;
+    }
+    if (url.pathname === "/api/task-center/list") {
+      sendJson(res, 200, { ok: true, tasks: taskCenter.getAllTasks() });
       return;
     }
 
