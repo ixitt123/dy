@@ -1,0 +1,65 @@
+// 端到端 API 测试
+// 运行: 先启动服务器 node ui-server.mjs，然后 node test-e2e.mjs
+
+const BASE = "http://127.0.0.1:8787";
+const tests = [];
+
+function test(name, fn) { tests.push({ name, fn }); }
+
+test("Status API", async () => {
+  const r = await fetch(`${BASE}/api/status`);
+  const d = await r.json();
+  if (!d.ok) throw new Error("Status not OK");
+});
+
+test("Provider List", async () => {
+  const r = await fetch(`${BASE}/api/providers/list`);
+  const d = await r.json();
+  if (!d.providers?.length) throw new Error("No providers");
+});
+
+test("Settings API", async () => {
+  const r = await fetch(`${BASE}/api/settings/all`);
+  const d = await r.json();
+  if (!d.ok) throw new Error("Settings not OK");
+});
+
+test("Model Mapping", async () => {
+  const r = await fetch(`${BASE}/api/settings/model-mapping`);
+  const d = await r.json();
+  if (!d.mapping) throw new Error("No mapping");
+});
+
+test("Router Model Map", async () => {
+  const r = await fetch(`${BASE}/api/router/map`);
+  const d = await r.json();
+  if (!d.map) throw new Error("No router map");
+});
+
+test("Image Stats", async () => {
+  const r = await fetch(`${BASE}/api/image/stats`);
+  const d = await r.json();
+  if (d.total === undefined) throw new Error("No image stats");
+});
+
+test("Task Center Stats", async () => {
+  const r = await fetch(`${BASE}/api/task-center/stats`);
+  const d = await r.json();
+  if (d.total === undefined) throw new Error("No task stats");
+});
+
+// Run all
+let passed = 0;
+let failed = 0;
+for (const t of tests) {
+  try {
+    await t.fn();
+    passed++;
+    console.log(`✅ ${t.name}`);
+  } catch (e) {
+    failed++;
+    console.error(`❌ ${t.name}: ${e.message}`);
+  }
+}
+console.log(`\n📊 ${passed} passed, ${failed} failed`);
+process.exit(failed > 0 ? 1 : 0);

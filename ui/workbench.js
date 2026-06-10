@@ -420,6 +420,27 @@ async function refreshWorkbenchOverview() {
   } catch {
     dashboardAudioJobs = [];
   }
+
+  // 加载 Provider 状态
+  try {
+    const pr = await fetch("/api/providers/list");
+    if (pr.ok) {
+      const data = await pr.json();
+      const statusEl = document.querySelector("#workbenchConnectionStatus span:last-child");
+      const online = data.providers?.filter(p => p.health?.status === "online").length || 0;
+      if (statusEl) statusEl.textContent = `${online} 模型在线`;
+    }
+  } catch {}
+
+  // 加载图片统计
+  try {
+    const ir = await fetch("/api/image/stats");
+    if (ir.ok) {
+      const data = await ir.json();
+      if (data.assets > 0) setMetric("metricImages", data.assets);
+    }
+  } catch {}
+
   renderWorkbenchOverview();
 }
 

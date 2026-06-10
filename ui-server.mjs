@@ -6,8 +6,8 @@ import { createHash, randomUUID } from "node:crypto";
 import { once } from "node:events";
 import { fileURLToPath } from "node:url";
 import * as XLSX from "xlsx";
+import WebSocket, { WebSocketServer } from "ws";
 import ffmpegPath from "ffmpeg-static";
-import WebSocket from "ws";
 import { openTaskStore, TASK_STATUS } from "./task-store.mjs";
 import { createTtsService } from "./server/tts/tts-service.js";
 import { createImageService } from "./server/image/image-service.js";
@@ -2890,7 +2890,7 @@ function serveStatic(req, res) {
 const server = http.createServer(async (req, res) => {
 
 // ===== WebSocket 进度推送 =====
-const wss = new WebSocket.Server({ noServer: true });
+const wss = new WebSocketServer({ noServer: true });
 const wsClients = new Set();
 
 server.on("upgrade", (request, socket, head) => {
@@ -4087,6 +4087,11 @@ broadcastProgress = (data) => {
 
       if (req.method === "GET" && route === "jobs") {
         sendJson(res, 200, { jobs: imageService.getJobs({ limit: Number(url.searchParams.get("limit")) || 50 }) });
+        return;
+      }
+
+      if (req.method === "GET" && route === "stats") {
+        sendJson(res, 200, { ok: true, ...imageService.getStats() });
         return;
       }
 
