@@ -509,6 +509,21 @@ function initWorkbench() {
   buildWorkbenchInformationArchitecture();
   bindWorkbenchInteractions();
   startWorkbenchObservers();
+
+  // WebSocket 进度监听
+  try {
+    const ws = new WebSocket(`ws://127.0.0.1:${location.port}/ws/progress`);
+    ws.onmessage = (e) => {
+      const data = JSON.parse(e.data);
+      if (data.taskId) {
+        const rail = document.getElementById("railRecentOutput");
+        if (rail) {
+          rail.innerHTML = `<div class="rail-item"><span class="task-status">${data.status || 'running'}</span> ${data.currentStep || data.taskId}</div>` + rail.innerHTML.replace(/<div class="rail-empty">.*<\/div>/, "");
+        }
+      }
+    };
+    ws.onerror = () => {}; // 静默处理
+  } catch {}
   window.addEventListener("hashchange", () => {
     const pageId = window.location.hash.replace(/^#/, "");
     if (workbenchPages[pageId]) navigateWorkbench(pageId, { instant: true, fromHash: true });
