@@ -1,15 +1,15 @@
 const workbenchPages = {
   dashboard: {
-    title: "首页总览",
+    title: "首页",
     description: "查看任务进度、最近生成和内容生产流程。",
   },
   collector: {
-    title: "抖音采集",
+    title: "视频下载",
     description: "粘贴链接、创建批量任务并管理下载队列。",
   },
   transcript: {
     title: "文案提取",
-    description: "查看提取结果，并将文案送入分析或改写。",
+    description: "查看提取结果，并将文案送入改写。",
   },
   analysis: {
     title: "AI分析",
@@ -17,15 +17,15 @@ const workbenchPages = {
   },
   rewrite: {
     title: "AI改写",
-    description: "原文、改写设置和多版本结果在同一工作台完成。",
+    description: "原文、改写设置和多版本结果。",
   },
   tts: {
     title: "TTS语音",
-    description: "选择声音、调整表达并生成可试听的配音。",
+    description: "选择声音、调整表达并生成配音。",
   },
   voices: {
     title: "声音资产",
-    description: "管理预设音色、克隆音色、评分和默认声音。",
+    description: "管理预设音色、克隆音色和默认声音。",
   },
   director: {
     title: "AI导演",
@@ -33,19 +33,19 @@ const workbenchPages = {
   },
   vfo: {
     title: "视频工厂",
-    description: "完成 APS 素材规划、VFO 调度和渲染准备检查。",
+    description: "视频策划、素材规划与渲染准备。",
   },
   files: {
     title: "文件资产",
-    description: "集中查看、打开和清理本地下载文件。",
+    description: "集中查看、打开和清理本地文件。",
   },
   settings: {
-    title: "设置",
-    description: "管理下载目录、识别平台和 AI 模型连接。",
+    title: "系统设置",
+    description: "API Key、模型映射和系统配置。",
   },
   imageStudio: {
-    title: "AI图片生产中心",
-    description: "输入 Prompt，调用即梦生成图片，管理图片资产。",
+    title: "图片生成",
+    description: "输入 Prompt 生成图片，管理图片资产。",
   },
 };
 
