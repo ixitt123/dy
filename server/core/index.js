@@ -19,3 +19,4 @@ export { createTaskCenter } from "./task-center.js";
 export { providerRegistry, FALLBACK_CHAIN } from "./provider-registry.js";
 export { ContentNormalizer, contentNormalizer } from "./content/content-normalizer.js";
 export { ContentAnalyzer, ContentAnalysisStore, createContentAnalyzer } from "./content/content-analyzer.js";
+export { createAnalysisEngine } from "./analysis-engine.js";
