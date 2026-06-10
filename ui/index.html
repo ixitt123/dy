@@ -1119,6 +1119,21 @@
       </div>
     </section>
 
+    <!-- V2 统一设置中心 -->
+    <section class="v2-settings-page" id="v2SettingsPanel" hidden>
+      <div class="settings-section">
+        <h3>API Key 管理</h3>
+        <p class="text-secondary">配置各模型的 API Key 和连接地址</p>
+        <div id="v2ProviderList" class="settings-list"></div>
+      </div>
+      <div class="settings-section">
+        <h3>模型映射</h3>
+        <p class="text-secondary">设置各任务使用的默认模型</p>
+        <div id="v2ModelMap" class="settings-list"></div>
+        <button class="primary" id="v2SaveMapping" type="button">保存模型映射</button>
+      </div>
+    </section>
+
     <script src="/app.js"></script>
     <script src="/workbench.js"></script>
   </body>
