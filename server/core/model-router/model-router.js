@@ -534,6 +534,14 @@ class ModelRouter {
   get providerCount() {
     return this._providers.size;
   }
+
+  getModelMap() {
+    return { ...this._modelMap };
+  }
+
+  getProviders() {
+    return Object.keys(PROVIDER_REGISTRY);
+  }
 }
 
 // ============================================================================
