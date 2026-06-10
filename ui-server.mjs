@@ -3872,15 +3872,15 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname.startsWith("/api/router/")) {
       const route = url.pathname.replace("/api/router/", "");
 
-      // 统一生成
+      // 统一生成（带自动降级）
       if (req.method === "POST" && route === "generate") {
         const body = JSON.parse(await readBody(req) || "{}");
         try {
-          const result = await modelRouter.generate({
-            taskType: body.taskType || "rewrite",
-            messages: body.messages || [],
-            options: body.options || {},
-          });
+          const result = await providerRegistry.generate(
+            body.taskType || "rewrite",
+            body.messages || [],
+            body.options || {},
+          );
           sendJson(res, 200, { ok: true, ...result });
         } catch (e) {
           sendJson(res, 400, { ok: false, error: e.message });
