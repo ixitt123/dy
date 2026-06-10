@@ -16,6 +16,7 @@ import { createSettingsCenter } from "./server/core/settings-center.js";
 import { createTaskCenter } from "./server/core/task-center.js";
 import { providerRegistry } from "./server/core/provider-registry.js";
 import { createAnalysisEngine } from "./server/core/analysis-engine.js";
+import { createJianyingExporter } from "./server/core/jianying-exporter.js";
 import { TTS_PROVIDER_LABELS } from "./server/tts/providers/index.js";
 import { createVoiceAssetService } from "./server/voices/voice-asset-service.js";
 import { createDirectorService } from "./server/director/director-service.js";
@@ -240,6 +241,9 @@ const taskCenter = createTaskCenter(__dirname, { onProgress: (data) => broadcast
 
 // 统一内容分析引擎
 const analysisEngine = createAnalysisEngine(__dirname);
+
+// 剪映导出器
+const jianyingExporter = createJianyingExporter(__dirname);
 
 const mimeTypes = new Map([
   [".html", "text/html; charset=utf-8"],
@@ -3964,6 +3968,36 @@ broadcastProgress = (data) => {
       }
 
       sendJson(res, 404, { ok: false, message: "未知路由" });
+      return;
+    }
+
+    // ===== 剪映导出 API =====
+    if (url.pathname.startsWith("/api/jianying/")) {
+      const route = url.pathname.replace("/api/jianying/", "");
+
+      if (req.method === "POST" && route === "export") {
+        const body = JSON.parse(await readBody(req) || "{}");
+        try {
+          const result = jianyingExporter.exportDraft(body);
+          sendJson(res, 200, { ok: true, ...result });
+        } catch (e) {
+          sendJson(res, 400, { ok: false, error: e.message });
+        }
+        return;
+      }
+
+      if (req.method === "GET" && route === "list") {
+        sendJson(res, 200, { ok: true, drafts: jianyingExporter.listDrafts() });
+        return;
+      }
+
+      if (req.method === "POST" && route === "delete") {
+        const body = JSON.parse(await readBody(req) || "{}");
+        sendJson(res, 200, jianyingExporter.deleteDraft(body.id || ""));
+        return;
+      }
+
+      sendJson(res, 404, { ok: false });
       return;
     }
 
