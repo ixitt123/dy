@@ -33,5 +33,9 @@ ui-server.url
 *.sqlite-shm
 *.sqlite-wal
 
+image-assets/generated/
+image-assets/review/
+jianying-exports/
+
 .DS_Store
 Thumbs.db
