@@ -197,8 +197,7 @@
         </div>
         <div class="download-settings">
           <input id="downloadDirInput" type="text" placeholder="下载位置" style="width:300px" />
-          <button class="ghost" id="chooseDownloadDir" type="button" onclick="document.getElementById('folderPicker').click()">选择文件夹</button>
-          <input type="file" id="folderPicker" webkitdirectory style="display:none" onchange="if(this.files[0]){var p=this.files[0].path||this.files[0].webkitRelativePath;var idx=p.indexOf('\\');if(idx>0)document.getElementById('downloadDirInput').value=p.substring(0,p.lastIndexOf('\\'))}" />
+          <button class="ghost" id="chooseDownloadDir" type="button">选择文件夹</button>
           <button class="ghost" id="saveDownloadDir" type="button">保存位置</button>
           <button class="ghost" id="openFolder" type="button">打开下载文件夹</button>
         </div>
