@@ -17,6 +17,9 @@ import { createTaskCenter } from "./server/core/task-center.js";
 import { providerRegistry } from "./server/core/provider-registry.js";
 import { createAnalysisEngine } from "./server/core/analysis-engine.js";
 import { createJianyingExporter } from "./server/core/jianying-exporter.js";
+import { PipelineRunner } from "./server/core/pipeline-bus/PipelineRunner.js";
+import { PipelineState } from "./server/core/pipeline-bus/PipelineState.js";
+import { PIPELINE_EVENTS } from "./server/core/pipeline-bus/PipelineEvents.js";
 import { TTS_PROVIDER_LABELS } from "./server/tts/providers/index.js";
 import { createVoiceAssetService } from "./server/voices/voice-asset-service.js";
 import { createDirectorService } from "./server/director/director-service.js";
@@ -244,6 +247,21 @@ const analysisEngine = createAnalysisEngine(__dirname);
 
 // 剪映导出器
 const jianyingExporter = createJianyingExporter(__dirname);
+
+// P0 流水线执行器
+const pipelineState = new PipelineState(__dirname);
+const pipelineRunner = new PipelineRunner({
+  baseDir: __dirname,
+  state: pipelineState,
+  handlers: {},
+});
+
+// 流水线事件 → WebSocket 广播
+for (const event of Object.values(PIPELINE_EVENTS)) {
+  pipelineRunner._bus.on(event, (data) => {
+    broadcastProgress({ type: "pipeline", event, ...data });
+  });
+}
 
 const mimeTypes = new Map([
   [".html", "text/html; charset=utf-8"],
@@ -3968,6 +3986,67 @@ broadcastProgress = (data) => {
       }
 
       sendJson(res, 404, { ok: false, message: "未知路由" });
+      return;
+    }
+
+    // ===== Pipeline API =====
+    if (url.pathname.startsWith("/api/pipeline/")) {
+      const route = url.pathname.replace("/api/pipeline/", "");
+
+      if (req.method === "GET" && route === "progress") {
+        const jobId = url.searchParams.get("jobId") || "";
+        sendJson(res, 200, { ok: true, ...pipelineState.getJobProgress(jobId) });
+        return;
+      }
+
+      if (req.method === "GET" && route === "stages") {
+        const { PIPELINE_STAGES } = await import("./server/core/pipeline-bus/PipelineEvents.js");
+        sendJson(res, 200, { ok: true, stages: PIPELINE_STAGES });
+        return;
+      }
+
+      if (req.method === "POST" && route === "run") {
+        const body = JSON.parse(await readBody(req) || "{}");
+        try {
+          const result = await pipelineRunner.start({
+            sourceId: body.sourceId || "",
+            inputData: body.inputData || {},
+            startFrom: body.startFrom || "collect",
+          });
+          sendJson(res, 200, { ok: true, ...result });
+        } catch (e) {
+          sendJson(res, 400, { ok: false, error: e.message });
+        }
+        return;
+      }
+
+      if (req.method === "POST" && route === "register-handler") {
+        const body = JSON.parse(await readBody(req) || "{}");
+        if (!body.stageId) { sendJson(res, 400, { ok: false, error: "missing stageId" }); return; }
+        // 注册内置 handler（各模块接入）
+        const builtin = {
+          rewrite: async (data, ctx) => {
+            ctx.onProgress(30, "AI改写中");
+            const result = await providerRegistry.generate("rewrite", [{ role: "user", content: data.text || JSON.stringify(data) }]);
+            ctx.onProgress(90, "改写完成");
+            return { ...data, rewrite: result.content };
+          },
+          director: async (data, ctx) => {
+            ctx.onProgress(50, "导演规划中");
+            const result = await providerRegistry.generate("director", [{ role: "user", content: data.rewrite || data.text || JSON.stringify(data) }]);
+            return { ...data, director: result.content };
+          },
+        };
+        if (builtin[body.stageId]) {
+          pipelineRunner.registerHandler(body.stageId, builtin[body.stageId]);
+          sendJson(res, 200, { ok: true, stageId: body.stageId });
+        } else {
+          sendJson(res, 400, { ok: false, error: `未内置handler: ${body.stageId}` });
+        }
+        return;
+      }
+
+      sendJson(res, 404, { ok: false });
       return;
     }
 
