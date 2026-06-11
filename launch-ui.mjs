@@ -15,6 +15,15 @@ function openUrl(url) {
   }).unref();
 }
 
+function startSyncWatcher() {
+  spawn(process.execPath, ["sync-project.mjs", "watch", "--quiet"], {
+    cwd: __dirname,
+    detached: true,
+    stdio: "ignore",
+    windowsHide: true,
+  }).unref();
+}
+
 async function existingServerUrl() {
   try {
     const url = fs.readFileSync(urlPath, "utf8").trim();
@@ -34,6 +43,8 @@ try {
 } catch {
   syncChanged = false;
 }
+
+startSyncWatcher();
 
 const url = syncChanged ? "" : await existingServerUrl();
 if (url) {

@@ -1,33 +1,59 @@
-# 项目协作规则
+# Codex 协作规则
 
-## Git同步规则
+## 工作方式
+
+- 这台电脑是主要编辑端，尽量在本机 Codex 中完成项目修改。
+- GitHub 仓库 `https://github.com/ixitt123/dy` 是唯一远程源。
+- 其他电脑可以同步和应急编辑，但不要让两台电脑长时间同时改同一个文件。
+- Codex 连接项目时，项目级 `SessionStart` hook 会先同步 GitHub 最新版本。
+- Codex 一轮编辑停止时，项目级 `Stop` hook 会自动提交并推送。
+- 如果同步失败、被跳过或发生冲突，先处理 Git 状态，再继续编辑。
+
+## 自动同步
+
+- `.codex/config.toml`：Codex 项目级 hooks 配置。
+- `.codex/hooks/session-start-sync.mjs`：Codex 连接项目时先同步 GitHub 最新版。
+- `.codex/hooks/stop-sync.mjs`：Codex 一轮编辑停止时自动上传。
+- `安装开机自动同步.bat`：注册 Windows 登录后自动同步任务。
+- `自动同步.vbs`：无窗口启动后台同步监控。
+- `同步项目.bat`：手动立即提交、拉取、推送。
+- `查看同步状态.bat`：查看 Git 状态和最近同步日志。
+- `卸载开机自动同步.bat`：关闭并移除开机自动同步。
+
+后台同步规则：
+
+- 本地改动稳定约 30 秒后自动提交并推送。
+- 每 1 分钟检查 GitHub 是否有新提交。
+- 遇到冲突会停止，避免覆盖另一台电脑的改动。
+
+## Git 同步规则
 
 每次完成代码修改后：
 
-1. 运行测试
-2. 确认无报错
-3. git add .
-4. git commit -m "功能名称+时间"
-5. git push origin main
+1. 运行测试。
+2. 确认无报错。
+3. `git add -A`
+4. `git commit -m "功能名称+时间"`
+5. `git push origin main`
 
 ## 开始工作前
 
 任何开发任务开始前：
 
-1. 先执行 git pull origin main
-2. 检查远程是否有更新
-3. 如果存在冲突，先解决冲突再开发
+1. 先执行 `git pull --ff-only origin main`。
+2. 检查远程是否有更新。
+3. 如果存在冲突，先解决冲突再开发。
 
 ## 开发原则
 
-* 不允许直接删除核心代码
-* 修改前先分析影响范围
-* 优先保持向后兼容
-* 每次功能开发必须提交到GitHub
+- 不允许直接删除核心代码。
+- 修改前先分析影响范围。
+- 优先保持向后兼容。
+- 每次功能开发必须提交到 GitHub。
 
 ## 自动备份
 
-所有代码修改完成后必须推送GitHub。
+所有代码修改完成后必须推送 GitHub。
 
 禁止出现本地已修改但未同步情况。
 
@@ -35,58 +61,68 @@
 
 每次任务完成后输出：
 
-* 修改文件列表
-* Git提交信息
-* Push结果
-* 是否同步成功
+- 修改文件列表。
+- Git 提交信息。
+- Push 结果。
+- 是否同步成功。
 
 ## 多电脑协作规则
 
 我有两台电脑（家里和公司）。
 
-GitHub是唯一代码源。
+GitHub 是唯一代码源。
 
 开发规则：
 
 1. 每次开始工作前自动执行：
-   git pull origin main
+   `git pull --ff-only origin main`
 
 2. 每次完成任务后自动执行：
-   git add .
-   git commit -m "自动备份"
-   git push origin main
+   `git add -A`
+   `git commit -m "自动备份"`
+   `git push origin main`
 
-3. 如果push失败：
-   先git pull
-   自动处理可解决冲突
-   再push
+3. 如果 push 失败：
+   先 git pull，再处理可解决冲突，再 push。
 
-4. 所有开发记录保存在GitHub。
+4. 所有开发记录保存在 GitHub。
 
 5. 不允许只保存在本地。
 
 6. 每次完成任务后告诉我：
+   是否已提交、Commit ID、Push 是否成功。
 
-   * 是否已提交
-   * Commit ID
-   * Push是否成功
+## 禁止上传的内容
+
+不要把这些内容提交到 GitHub：
+
+- `settings.json`
+- `.data/`
+- `downloads/`
+- `node_modules/`
+- SQLite 数据库和临时文件
+- API Key、Secret、Cookie、Token
+- 本地生成的大体积素材和导出文件
+
+这些内容应该保留在各自电脑本地。
 
 ## 项目架构优先规则
 
 这个项目采用：
 
-* AGENTS.md
-* SKILLS/
-* PROMPTS/
-* MCP/
+- `AGENTS.md`
+- `skills/`
+- `prompts/`
+- `config/`
+- MCP
 
 架构优先。
 
 禁止直接堆代码。
 
-先设计Skill。
+先设计 Skill。
 
-再设计Prompt。
+再设计 Prompt。
 
 最后开发功能。
 
