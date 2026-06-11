@@ -50,6 +50,7 @@ const workbenchPages = {
 };
 
 let activeWorkbenchPage = "dashboard";
+let activeRailTaskId = 0;
 let dashboardAudioJobs = [];
 let workbenchOverviewTimer = 0;
 
@@ -194,6 +195,96 @@ function setupVfoFutureStep() {
   system.appendChild(nextStage);
 }
 
+function createTranscriptVault() {
+  const transcriptListPanel = document.querySelector("#transcriptList");
+  if (!transcriptListPanel) return null;
+
+  const vault = document.createElement("section");
+  vault.className = "result-area transcript-vault";
+  vault.id = "transcriptVaultPanel";
+  vault.innerHTML = `
+    <div class="result-head">
+      <div>
+        <h2>文案库</h2>
+        <p>提取后的文案在这里集中查看，并继续进入分析或改写。</p>
+      </div>
+      <div class="result-tools">
+        <button class="ghost small" type="button" data-nav="collector">返回下载</button>
+      </div>
+    </div>
+  `;
+  vault.appendChild(transcriptListPanel);
+  return vault;
+}
+
+function setupCodexTaskWorkbench(settingsPage) {
+  const batchArea = document.querySelector(".batch-area");
+  if (!batchArea || !settingsPage) return;
+
+  const rail = document.querySelector(".status-rail");
+  const batchHead = batchArea.querySelector(".result-head");
+  const batchControls = batchArea.querySelector(".batch-controls");
+  const batchActions = batchArea.querySelector(".batch-actions");
+  const taskStatsPanel = batchArea.querySelector("#taskStats");
+  const taskTools = batchArea.querySelector(".task-table-tools");
+  const tasksTablePanel = batchArea.querySelector("#tasksTable");
+  const taskPagerPanel = batchArea.querySelector("#taskPager");
+
+  const settingsCard = document.createElement("section");
+  settingsCard.className = "settings-card batch-settings-card";
+  if (batchHead) {
+    const title = batchHead.querySelector("h2");
+    if (title) title.textContent = "批量默认设置";
+    settingsCard.appendChild(batchHead);
+  }
+  if (batchControls) settingsCard.appendChild(batchControls);
+  settingsPage.appendChild(settingsCard);
+
+  if (rail) {
+    const detailSection = document.createElement("section");
+    detailSection.className = "rail-section rail-task-detail-section";
+    detailSection.innerHTML = `
+      <div class="rail-heading"><span>任务内容</span></div>
+      <div id="railTaskDetail" class="rail-task-detail">
+        <div class="rail-empty">点击任务里的“查看”，文案、文件和消息会显示在这里。</div>
+      </div>
+    `;
+
+    const commandSection = document.createElement("section");
+    commandSection.className = "rail-section rail-command-section";
+    commandSection.innerHTML = `
+      <div class="rail-heading">
+        <span>队列控制</span>
+        <i class="live-dot"></i>
+      </div>
+      <div class="rail-command-body"></div>
+    `;
+    const commandBody = commandSection.querySelector(".rail-command-body");
+    if (batchActions) commandBody.appendChild(batchActions);
+
+    const currentSection = rail.querySelector(".rail-section");
+    if (currentSection) {
+      currentSection.after(detailSection);
+      detailSection.after(commandSection);
+    } else {
+      rail.prepend(commandSection);
+      rail.prepend(detailSection);
+    }
+  }
+
+  const plumbing = document.createElement("section");
+  plumbing.className = "codex-task-plumbing";
+  plumbing.hidden = true;
+  [
+    taskStatsPanel,
+    taskTools,
+    tasksTablePanel,
+    taskPagerPanel,
+  ].filter(Boolean).forEach((element) => plumbing.appendChild(element));
+  settingsPage.appendChild(plumbing);
+  batchArea.remove();
+}
+
 function buildWorkbenchInformationArchitecture() {
   const content = document.querySelector("#workbenchContent");
   const dashboard = document.querySelector("#dashboardPage");
@@ -209,13 +300,15 @@ function buildWorkbenchInformationArchitecture() {
     const title = settingsTopbar.querySelector("h1");
     if (title) title.textContent = "目录与存储";
   }
+  setupCodexTaskWorkbench(settingsPage);
   if (apiPanel) settingsPage.appendChild(apiPanel);
   const v2Settings = document.getElementById("v2SettingsPanel");
   if (v2Settings) settingsPage.appendChild(v2Settings);
+  const transcriptVault = createTranscriptVault();
 
   const pageMap = {
-    collector: [".workspace", ".batch-area"],
-    transcript: [".result-area"],
+    collector: [".workspace", ".result-area"],
+    transcript: [transcriptVault],
     analysis: ["#analysisPanel"],
     rewrite: ["#rewritePanel"],
     tts: ["#ttsLab"],
@@ -229,7 +322,11 @@ function buildWorkbenchInformationArchitecture() {
   const pages = [dashboard];
   Object.entries(pageMap).forEach(([pageId, selectors]) => {
     const page = createWorkbenchPage(pageId);
-    selectors.forEach((selector) => appendExisting(page, selector));
+    selectors.forEach((selector) => {
+      if (!selector) return;
+      if (typeof selector === "string") appendExisting(page, selector);
+      else page.appendChild(selector);
+    });
     pages.push(page);
   });
   pages.push(settingsPage);
@@ -379,8 +476,9 @@ function railTaskCard(task, variant = "normal") {
   const status = escapeHtml(task.status || "等待");
   const id = Number(task.id || 0);
   const fileName = escapeHtml(shortPath(task.video_path || task.txt_path || task.analysis_path || ""));
+  const selected = activeRailTaskId === id ? "selected" : "";
   return `
-    <article class="rail-task-card ${variant}">
+    <article class="rail-task-card ${variant} ${selected}">
       <div class="rail-task-top">
         <span class="rail-task-id">#${id}</span>
         <span class="status-badge ${workbenchStatusClass(task.status)}">${status}</span>
@@ -393,7 +491,7 @@ function railTaskCard(task, variant = "normal") {
         <span title="${fileName}">${fileName || "未生成文件"}</span>
       </div>
       <div class="rail-task-actions">
-        <button type="button" data-nav="collector">查看</button>
+        <button type="button" class="rail-task-view" data-task-id="${id}">查看</button>
         ${canPause ? `<button type="button" class="rail-task-pause" data-task-id="${id}">暂停</button>` : ""}
         ${canDelete ? `<button type="button" class="rail-task-delete" data-task-id="${id}">删除</button>` : ""}
       </div>
@@ -476,7 +574,7 @@ function renderRail(tasks, directors, vfoProjects, audioJobs) {
     const failed = tasks.filter((task) => ["失败", "failed"].includes(task.status)).slice(0, 3);
     errors.innerHTML = failed.length
       ? failed.map((task) => `
-        <button type="button" class="rail-list-item error-item" data-nav="collector">
+        <button type="button" class="rail-list-item error-item rail-task-view" data-task-id="${Number(task.id || 0)}">
           <span>任务 #${Number(task.id || 0)}</span>
           <strong>${escapeHtml(task.error || task.message || "处理失败")}</strong>
         </button>
@@ -573,10 +671,82 @@ async function openLatestOutputLocation() {
   }
 }
 
+async function viewRailTask(taskId) {
+  const id = Number(taskId || 0);
+  const task = (typeof allTasks === "undefined" ? [] : allTasks).find((item) => Number(item.id || 0) === id);
+  if (!task) return;
+  activeRailTaskId = id;
+  renderWorkbenchOverview();
+  const railDetail = document.querySelector("#railTaskDetail");
+
+  let transcript = null;
+  try {
+    const rows = await refreshTranscripts();
+    transcript = rows.find((row) => Number(row.id || 0) === id) || null;
+  } catch {
+    transcript = null;
+  }
+
+  const detail = [formatTaskResult(task, 0)];
+  if (transcript?.text) {
+    detail.push("文案内容：", transcript.text.trim());
+  } else if (task.txt_path) {
+    detail.push("文案内容：", "文案文件已生成，但暂时无法读取预览。可点击“打开文案”查看文件。");
+  } else {
+    detail.push("文案内容：", "暂未生成文案。");
+  }
+
+  if (transcript?.ai?.summary || transcript?.ai?.hook) {
+    const ai = transcript.ai;
+    const aiLines = [
+      ai.summary ? `摘要：${ai.summary}` : "",
+      ai.hook ? `钩子：${ai.hook}` : "",
+      Array.isArray(ai.painPoints) && ai.painPoints.length ? `痛点：${ai.painPoints.join("；")}` : "",
+      Array.isArray(ai.tags) && ai.tags.length ? `标签：${ai.tags.join("、")}` : "",
+    ].filter(Boolean);
+    if (aiLines.length) detail.push("AI 分析：", aiLines.join("\n"));
+  }
+
+  const previewText = transcript?.text?.trim()
+    || task.message
+    || task.error
+    || "暂时没有可预览的文案内容。";
+  if (railDetail) {
+    const meta = [
+      railTaskActionLabel(task),
+      task.status || "等待",
+      `${railTaskProgress(task)}%`,
+    ].filter(Boolean).join(" · ");
+    railDetail.innerHTML = `
+      <article class="rail-detail-card">
+        <div class="rail-task-top">
+          <span class="rail-task-id">#${Number(task.id || 0)}</span>
+          <span class="status-badge ${workbenchStatusClass(task.status)}">${escapeHtml(task.status || "等待")}</span>
+        </div>
+        <strong title="${escapeHtml(railTaskTitle(task))}">${escapeHtml(railTaskTitle(task))}</strong>
+        <small>${escapeHtml(meta)}</small>
+        <pre>${escapeHtml(previewText)}</pre>
+      </article>
+    `;
+  }
+
+  activeResultAction = "";
+  resultBox.textContent = detail.join("\n\n");
+  setTranscriptActions(transcript?.text || "", task.txt_path || "");
+}
+
 function bindWorkbenchInteractions() {
   document.addEventListener("click", (event) => {
+    const railView = event.target.closest(".rail-task-view");
     const railPause = event.target.closest(".rail-task-pause");
     const railDelete = event.target.closest(".rail-task-delete");
+    if (railView) {
+      event.preventDefault();
+      viewRailTask(railView.dataset.taskId).catch((error) => {
+        resultBox.textContent = error instanceof Error ? error.message : String(error);
+      });
+      return;
+    }
     if (railPause) {
       event.preventDefault();
       pauseTask(railPause.dataset.taskId).catch((error) => {
