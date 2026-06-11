@@ -479,8 +479,8 @@ function chooseDownloadDir() {
       "$folder = $shell.BrowseForFolder(0, '选择下载文件夹', 0, 17)",
       "if ($folder) { [Console]::OutputEncoding = [System.Text.Encoding]::UTF8; Write-Output $folder.Self.Path }",
     ].join("; ");
-    const child = spawn("powershell.exe", ["-NoProfile", "-STA", "-Command", script], {
-      windowsHide: false,
+    const child = spawn("powershell.exe", ["-NoProfile", "-STA", "-WindowStyle", "Hidden", "-Command", script], {
+      windowsHide: true,
       stdio: ["ignore", "pipe", "pipe"],
     });
     let stdout = "";
