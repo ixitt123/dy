@@ -332,21 +332,111 @@ function renderDashboardTasks(tasks) {
   `).join("");
 }
 
+function railTaskProgress(task) {
+  return Math.max(0, Math.min(100, Number(task?.progress || 0)));
+}
+
+function railTaskActionLabel(task) {
+  const action = task?.task_action || (task?.only_transcript ? "transcript" : "download");
+  return typeof taskActionLabels !== "undefined" ? taskActionLabels[action] || "任务" : "任务";
+}
+
+function railTaskTitle(task) {
+  return task?.title || task?.url || task?.message || `任务 #${Number(task?.id || 0)}`;
+}
+
+function railTaskDetail(task) {
+  const parts = [
+    railTaskActionLabel(task),
+    task?.status || "等待",
+    task?.message || task?.error || "",
+  ].filter(Boolean);
+  return parts.join(" · ");
+}
+
+function railStatusSummary(tasks) {
+  const counts = tasks.reduce((acc, task) => {
+    const key = task.status || "等待";
+    acc[key] = (acc[key] || 0) + 1;
+    return acc;
+  }, {});
+  return [
+    ["总数", tasks.length],
+    ["等待", counts["等待"] || 0],
+    ["运行", (counts["下载中"] || 0) + (counts["提取中"] || 0) + (counts.running || 0) + (counts.processing || 0)],
+    ["完成", counts["完成"] || counts.completed || 0],
+    ["失败", counts["失败"] || counts.failed || 0],
+  ];
+}
+
+function railTaskCard(task, variant = "normal") {
+  const progress = railTaskProgress(task);
+  const running = ["下载中", "提取中", "running", "processing"].includes(task.status);
+  const canPause = ["下载中", "提取中"].includes(task.status);
+  const canDelete = !running;
+  const title = escapeHtml(railTaskTitle(task));
+  const detail = escapeHtml(railTaskDetail(task));
+  const status = escapeHtml(task.status || "等待");
+  const id = Number(task.id || 0);
+  const fileName = escapeHtml(shortPath(task.video_path || task.txt_path || task.analysis_path || ""));
+  return `
+    <article class="rail-task-card ${variant}">
+      <div class="rail-task-top">
+        <span class="rail-task-id">#${id}</span>
+        <span class="status-badge ${workbenchStatusClass(task.status)}">${status}</span>
+      </div>
+      <strong title="${title}">${title}</strong>
+      <small title="${detail}">${detail}</small>
+      <div class="rail-progress rail-task-progress" aria-hidden="true"><i style="width:${progress}%"></i></div>
+      <div class="rail-task-meta">
+        <span>${progress}%</span>
+        <span title="${fileName}">${fileName || "未生成文件"}</span>
+      </div>
+      <div class="rail-task-actions">
+        <button type="button" data-nav="collector">查看</button>
+        ${canPause ? `<button type="button" class="rail-task-pause" data-task-id="${id}">暂停</button>` : ""}
+        ${canDelete ? `<button type="button" class="rail-task-delete" data-task-id="${id}">删除</button>` : ""}
+      </div>
+    </article>
+  `;
+}
+
 function renderRail(tasks, directors, vfoProjects, audioJobs) {
   const current = document.querySelector("#railCurrentTask");
   const recent = document.querySelector("#railRecentOutput");
   const errors = document.querySelector("#railErrors");
-  const running = tasks.find((task) => ["下载中", "提取中", "running", "processing"].includes(task.status));
+  const sortedTasks = [...tasks].sort((left, right) => Number(right.id || 0) - Number(left.id || 0));
+  const runningTasks = sortedTasks.filter((task) => ["下载中", "提取中", "running", "processing"].includes(task.status));
+  const waitingTasks = sortedTasks.filter((task) => ["等待", "waiting"].includes(task.status));
+  const failedTasks = sortedTasks.filter((task) => ["失败", "failed"].includes(task.status));
+  const latestTasks = sortedTasks.filter((task) => !runningTasks.includes(task)).slice(0, 10);
 
   if (current) {
-    current.innerHTML = running
-      ? `
-        <strong>${escapeHtml(running.title || `任务 #${running.id}`)}</strong>
-        <small>${escapeHtml(running.message || running.status)}</small>
-        <div class="rail-progress"><i style="width:${Math.max(0, Math.min(100, Number(running.progress || 0)))}%"></i></div>
-        <span>${Number(running.progress || 0)}%</span>
-      `
-      : "<strong>暂无运行任务</strong><small>新任务会显示在这里</small>";
+    const summary = railStatusSummary(tasks)
+      .map(([label, value]) => `<div><span>${label}</span><strong>${value}</strong></div>`)
+      .join("");
+    const activeList = runningTasks.length
+      ? runningTasks.slice(0, 4).map((task) => railTaskCard(task, "active")).join("")
+      : waitingTasks.length
+        ? waitingTasks.slice(0, 3).map((task) => railTaskCard(task, "waiting")).join("")
+        : '<div class="rail-empty success-text">当前没有运行或等待任务</div>';
+    const recentList = latestTasks.length
+      ? latestTasks.map((task) => railTaskCard(task)).join("")
+      : '<div class="rail-empty">暂无任务记录</div>';
+    current.innerHTML = `
+      <div class="rail-task-console">
+        <div class="rail-task-summary">${summary}</div>
+        <div class="rail-task-group">
+          <div class="rail-subheading"><span>运行 / 等待</span><em>${runningTasks.length + waitingTasks.length}</em></div>
+          <div class="rail-task-list">${activeList}</div>
+        </div>
+        <div class="rail-task-group">
+          <div class="rail-subheading"><span>最近任务</span><em>${latestTasks.length}${tasks.length > latestTasks.length ? " / " + tasks.length : ""}</em></div>
+          <div class="rail-task-list compact">${recentList}</div>
+        </div>
+        ${failedTasks.length ? `<div class="rail-failure-note">失败 ${failedTasks.length} 条，请看下方错误提示。</div>` : ""}
+      </div>
+    `;
   }
 
   if (recent) {
@@ -485,6 +575,23 @@ async function openLatestOutputLocation() {
 
 function bindWorkbenchInteractions() {
   document.addEventListener("click", (event) => {
+    const railPause = event.target.closest(".rail-task-pause");
+    const railDelete = event.target.closest(".rail-task-delete");
+    if (railPause) {
+      event.preventDefault();
+      pauseTask(railPause.dataset.taskId).catch((error) => {
+        if (typeof batchStatus !== "undefined") batchStatus.textContent = error instanceof Error ? error.message : String(error);
+      });
+      return;
+    }
+    if (railDelete) {
+      event.preventDefault();
+      deleteTask(railDelete.dataset.taskId).catch((error) => {
+        if (typeof batchStatus !== "undefined") batchStatus.textContent = error instanceof Error ? error.message : String(error);
+      });
+      return;
+    }
+
     const nav = event.target.closest("[data-nav]");
     if (nav) {
       navigateWorkbench(nav.dataset.nav, {
@@ -537,10 +644,7 @@ function initWorkbench() {
     ws.onmessage = (e) => {
       const data = JSON.parse(e.data);
       if (data.taskId) {
-        const rail = document.getElementById("railRecentOutput");
-        if (rail) {
-          rail.innerHTML = `<div class="rail-item"><span class="task-status">${data.status || 'running'}</span> ${data.currentStep || data.taskId}</div>` + rail.innerHTML.replace(/<div class="rail-empty">.*<\/div>/, "");
-        }
+        refreshTasks().catch(() => renderWorkbenchOverview());
       }
     };
     ws.onerror = () => {}; // 静默处理
@@ -549,12 +653,8 @@ function initWorkbench() {
     const pageId = window.location.hash.replace(/^#/, "");
     if (workbenchPages[pageId]) navigateWorkbench(pageId, { instant: true, fromHash: true });
   });
-  const hashPage = window.location.hash.replace(/^#/, "");
-  const saved = localStorage.getItem("short-video-workbench-page");
-  navigateWorkbench(
-    workbenchPages[hashPage] ? hashPage : workbenchPages[saved] ? saved : "dashboard",
-    { instant: true, fromHash: Boolean(workbenchPages[hashPage]) }
-  );
+  localStorage.setItem("short-video-workbench-page", "dashboard");
+  navigateWorkbench("dashboard", { instant: true });
 }
 
 function setupImageStudio() {

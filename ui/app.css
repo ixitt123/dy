@@ -3035,7 +3035,7 @@ a {
 .workbench-body {
   display: grid;
   min-width: 0;
-  grid-template-columns: minmax(0, 1fr) 270px;
+  grid-template-columns: minmax(0, 1fr) 340px;
 }
 
 .shell {
@@ -3084,7 +3084,7 @@ a {
 .rail-content {
   border: 1px solid #29303b;
   border-radius: 7px;
-  padding: 12px;
+  padding: 10px;
   background: #12161e;
 }
 
@@ -3116,6 +3116,177 @@ a {
   color: #9fa8b7;
   font-size: 10px;
   text-align: right;
+}
+
+.rail-task-console {
+  display: grid;
+  gap: 12px;
+}
+
+.rail-task-summary {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 5px;
+}
+
+.rail-task-summary div {
+  min-width: 0;
+  border: 1px solid #28303c;
+  border-radius: 6px;
+  padding: 7px 5px;
+  background: #0d1118;
+  text-align: center;
+}
+
+.rail-task-summary span,
+.rail-task-summary strong {
+  display: block;
+}
+
+.rail-task-summary span {
+  overflow: hidden;
+  color: #687386;
+  font-size: 9px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rail-task-summary strong {
+  margin-top: 4px;
+  color: #e8edf4;
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.rail-task-group {
+  min-width: 0;
+}
+
+.rail-subheading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 0 0 7px;
+  color: #788397;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.rail-subheading em {
+  color: #535d70;
+  font-style: normal;
+  font-variant-numeric: tabular-nums;
+}
+
+.rail-task-list {
+  display: grid;
+  max-height: 42vh;
+  gap: 7px;
+  overflow-y: auto;
+  padding-right: 2px;
+}
+
+.rail-task-list.compact {
+  max-height: 34vh;
+}
+
+.rail-task-card {
+  min-width: 0;
+  border: 1px solid #28303d;
+  border-radius: 7px;
+  padding: 9px;
+  background: #0f141c;
+}
+
+.rail-task-card.active {
+  border-color: rgba(142, 190, 255, 0.42);
+  background: #111827;
+}
+
+.rail-task-card.waiting {
+  border-color: rgba(243, 184, 75, 0.35);
+}
+
+.rail-task-top,
+.rail-task-meta,
+.rail-task-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.rail-task-id {
+  color: #6f7b90;
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+
+.rail-task-card strong,
+.rail-task-card small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rail-task-card strong {
+  margin-top: 7px;
+  color: #eef2f7;
+  font-size: 12px;
+}
+
+.rail-task-card small {
+  margin-top: 4px;
+  color: #828da0;
+  font-size: 10px;
+}
+
+.rail-task-progress {
+  height: 5px;
+  margin: 9px 0 7px;
+}
+
+.rail-task-meta {
+  color: #697487;
+  font-size: 9px;
+}
+
+.rail-task-meta span:last-child {
+  overflow: hidden;
+  max-width: 170px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rail-task-actions {
+  justify-content: flex-start;
+  margin-top: 8px;
+}
+
+.rail-task-actions button {
+  min-height: 26px;
+  border: 1px solid #303847;
+  border-radius: 5px;
+  padding: 0 7px;
+  background: #151b25;
+  color: #b6bfcd;
+  font-size: 10px;
+}
+
+.rail-task-actions button:hover {
+  border-color: #435065;
+  color: #ffffff;
+}
+
+.rail-failure-note {
+  border: 1px solid rgba(255, 102, 102, 0.24);
+  border-radius: 6px;
+  padding: 8px;
+  color: #e98787;
+  background: rgba(255, 102, 102, 0.06);
+  font-size: 10px;
 }
 
 .rail-progress {
@@ -4435,7 +4606,7 @@ audio {
   }
 
   .workbench-body {
-    grid-template-columns: minmax(0, 1fr) 240px;
+    grid-template-columns: minmax(0, 1fr) 300px;
   }
 
   .shell {
