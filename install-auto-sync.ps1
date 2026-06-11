@@ -3,14 +3,23 @@ $ErrorActionPreference = "Stop"
 $Root = Split-Path -Parent $PSCommandPath
 $Startup = [Environment]::GetFolderPath("Startup")
 $ShortcutPath = Join-Path $Startup "dy-codex-auto-sync.lnk"
-$Launcher = Join-Path $Root "自动同步.vbs"
+$Launcher = Join-Path $Root "auto-sync.vbs"
+$ChineseLauncher = Join-Path $Root "自动同步.vbs"
+
+if (-not (Test-Path -LiteralPath $Launcher) -and (Test-Path -LiteralPath $ChineseLauncher)) {
+  $Launcher = $ChineseLauncher
+}
 
 if (-not (Get-Command node -ErrorAction SilentlyContinue)) {
-  throw "没有找到 Node.js。请先安装 Node.js 22 或更新版本。"
+  throw "Node.js was not found. Install Node.js 22 or newer first."
 }
 
 if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
-  throw "没有找到 Git。请先安装 Git for Windows。"
+  throw "Git was not found. Install Git for Windows first."
+}
+
+if (-not (Test-Path -LiteralPath $Launcher)) {
+  throw "Auto sync launcher was not found: $Launcher"
 }
 
 $Shell = New-Object -ComObject WScript.Shell
@@ -24,5 +33,5 @@ $Shortcut.Save()
 
 Start-Process -FilePath "wscript.exe" -ArgumentList "`"$Launcher`"" -WorkingDirectory $Root -WindowStyle Hidden
 
-Write-Host "已创建当前用户启动项：$ShortcutPath"
-Write-Host "后台自动同步已启动。"
+Write-Host "Startup shortcut created: $ShortcutPath"
+Write-Host "Background auto sync started."
