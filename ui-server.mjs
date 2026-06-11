@@ -68,6 +68,53 @@ const REWRITE_VERSION_DEFAULTS = {
   moments: { direction: "朋友圈文案", wordCount: "220字左右" },
   conversion: { direction: "暑假班转化", wordCount: "150字左右" },
 };
+const DEFAULT_MODEL_MAPPING = {
+  analyze: { provider: "deepseek", model: "deepseek-chat" },
+  rewrite: { provider: "deepseek", model: "deepseek-chat" },
+  director: { provider: "deepseek", model: "deepseek-chat" },
+  storyboard: { provider: "deepseek", model: "deepseek-chat" },
+  image_prompt: { provider: "deepseek", model: "deepseek-chat" },
+  image: { provider: "jimeng", model: "flux-dev" },
+  video: { provider: "kling", model: "kling" },
+  tts: { provider: "aliyun_bailian", model: "cosyvoice-v2" },
+};
+const SETTINGS_TASKS = {
+  analyze: {
+    label: "内容分析",
+    purpose: "解析文案结构、受众、爆款点和改写建议。",
+    route: "使用模型中心的 analyze 映射，默认 DeepSeek。",
+  },
+  rewrite: {
+    label: "AI 改写",
+    purpose: "生成多版本招生、朋友圈、口播等文案。",
+    route: "使用 AI 改写页选择的文本 Provider；模型中心可同步默认 Provider。",
+  },
+  director: {
+    label: "AI 导演",
+    purpose: "生成故事弧、分镜、字幕、声音和镜头计划。",
+    route: "使用 AI 导演页选择的文本 Provider；模型中心可设置默认项。",
+  },
+  storyboard: {
+    label: "分镜生成",
+    purpose: "把导演稿拆成可执行镜头与提示词。",
+    route: "使用文本模型 Provider。",
+  },
+  image_prompt: {
+    label: "图片提示词",
+    purpose: "把文案改成画面提示词、风格参考和构图要求。",
+    route: "使用文本模型 Provider。",
+  },
+  image: {
+    label: "图片生成",
+    purpose: "根据提示词生成图片资产。",
+    route: "使用图片 Provider，目前接入即梦。",
+  },
+  tts: {
+    label: "TTS 语音",
+    purpose: "把文案生成配音，可用于短视频口播。",
+    route: "使用 TTS Provider，目前主要接入阿里云百炼和自定义 TTS。",
+  },
+};
 const REWRITE_PROVIDER_ORDER = [
   "dashscope",
   "deepseek",
@@ -227,7 +274,7 @@ const vfoService = createVfoService({
 // Image Studio
 const imageService = createImageService({
   baseDir: __dirname,
-  getSettings: () => { try { return JSON.parse(fs.readFileSync(settingsPath, "utf8") || "{}"); } catch { return {}; } },
+  getSettings: readSettings,
 });
 
 // ModelRouter 统一模型路由
@@ -486,6 +533,12 @@ function normalizeSettings(settings) {
   const legacyKey = next.dashscopeApiKey || "";
   const batch = next.batch && typeof next.batch === "object" ? { ...next.batch } : {};
   const tts = next.tts && typeof next.tts === "object" ? { ...next.tts } : {};
+  const imageProviders = next.imageProviders && typeof next.imageProviders === "object" ? { ...next.imageProviders } : {};
+  const modelMapping = next.modelMap && typeof next.modelMap === "object"
+    ? next.modelMap
+    : next.modelMapping && typeof next.modelMapping === "object"
+      ? next.modelMapping
+      : {};
 
   providers.dashscope = {
     label: "阿里云百炼 DashScope",
@@ -560,12 +613,40 @@ function normalizeSettings(settings) {
       model: String(tts.custom_tts?.model || "").trim(),
       voice: String(tts.custom_tts?.voice || "").trim(),
     },
+    minimax: {
+      base_url: String(tts.minimax?.base_url || "https://api.minimax.io/v1").trim(),
+      api_key: String(tts.minimax?.api_key || "").trim(),
+      model: String(tts.minimax?.model || "minimax-speech").trim() || "minimax-speech",
+      voice: String(tts.minimax?.voice || "").trim(),
+    },
+    fish_audio: {
+      base_url: String(tts.fish_audio?.base_url || "https://api.fish.audio").trim(),
+      api_key: String(tts.fish_audio?.api_key || "").trim(),
+      model: String(tts.fish_audio?.model || "fish-speech-1.5").trim() || "fish-speech-1.5",
+      voice: String(tts.fish_audio?.voice || "").trim(),
+    },
+    elevenlabs: {
+      base_url: String(tts.elevenlabs?.base_url || "https://api.elevenlabs.io").trim(),
+      api_key: String(tts.elevenlabs?.api_key || "").trim(),
+      model: String(tts.elevenlabs?.model || "eleven_multilingual_v2").trim() || "eleven_multilingual_v2",
+      voice: String(tts.elevenlabs?.voice || "").trim(),
+    },
     default_provider: TTS_PROVIDER_LABELS[String(tts.default_provider || "")]
       ? String(tts.default_provider)
       : "aliyun_bailian",
     default_speed: clampDecimal(tts.default_speed, 0.5, 2, 1),
     default_format: tts.default_format === "wav" ? "wav" : "mp3",
   };
+  next.imageProviders = {
+    jimeng: {
+      label: "即梦 AI",
+      baseUrl: String(imageProviders.jimeng?.baseUrl || "https://api.jimeng.io/v1").trim(),
+      apiKey: String(imageProviders.jimeng?.apiKey || "").trim(),
+      model: String(imageProviders.jimeng?.model || "flux-dev").trim() || "flux-dev",
+    },
+  };
+  next.modelMap = { ...DEFAULT_MODEL_MAPPING, ...modelMapping };
+  next.modelMapping = next.modelMap;
   return next;
 }
 
@@ -620,9 +701,39 @@ function publicTtsSettings(settings = readSettings()) {
       default_model: tts.custom_tts.model,
       default_voice: tts.custom_tts.voice,
     },
-    { id: "minimax", label: TTS_PROVIDER_LABELS.minimax, phase: "扩展预留", enabled: false, configured: false },
-    { id: "fish_audio", label: TTS_PROVIDER_LABELS.fish_audio, phase: "扩展预留", enabled: false, configured: false },
-    { id: "elevenlabs", label: TTS_PROVIDER_LABELS.elevenlabs, phase: "扩展预留", enabled: false, configured: false },
+    {
+      id: "minimax",
+      label: TTS_PROVIDER_LABELS.minimax,
+      phase: "扩展预留",
+      enabled: false,
+      configured: Boolean(tts.minimax.api_key),
+      secret_mask: maskApiKey(tts.minimax.api_key),
+      base_url: tts.minimax.base_url,
+      default_model: tts.minimax.model,
+      default_voice: tts.minimax.voice,
+    },
+    {
+      id: "fish_audio",
+      label: TTS_PROVIDER_LABELS.fish_audio,
+      phase: "扩展预留",
+      enabled: false,
+      configured: Boolean(tts.fish_audio.api_key),
+      secret_mask: maskApiKey(tts.fish_audio.api_key),
+      base_url: tts.fish_audio.base_url,
+      default_model: tts.fish_audio.model,
+      default_voice: tts.fish_audio.voice,
+    },
+    {
+      id: "elevenlabs",
+      label: TTS_PROVIDER_LABELS.elevenlabs,
+      phase: "扩展预留",
+      enabled: false,
+      configured: Boolean(tts.elevenlabs.api_key),
+      secret_mask: maskApiKey(tts.elevenlabs.api_key),
+      base_url: tts.elevenlabs.base_url,
+      default_model: tts.elevenlabs.model,
+      default_voice: tts.elevenlabs.voice,
+    },
   ];
   return {
     providers,
@@ -663,6 +774,269 @@ function publicRewriteSettings(settings = readSettings()) {
           ];
         })
     ),
+  };
+}
+
+function publicModelMapping(settings = readSettings()) {
+  const mapping = settings.modelMap || settings.modelMapping || {};
+  return { ...DEFAULT_MODEL_MAPPING, ...mapping };
+}
+
+function rewriteProviderIdFromMapping(providerId) {
+  const id = String(providerId || "");
+  if (id === "qwen" || id === "ali-bailian") return "dashscope";
+  return id;
+}
+
+function publicUnifiedProviders(settings = readSettings()) {
+  const providers = [];
+  const textFeatures = "内容分析、AI 改写、AI 导演、分镜生成、图片提示词";
+  for (const id of REWRITE_PROVIDER_ORDER) {
+    const provider = settings.rewriteProviders[id];
+    if (!provider) continue;
+    providers.push({
+      id,
+      label: provider.label || id,
+      group: "文本模型",
+      feature: textFeatures,
+      description: provider.custom
+        ? "接入本地模型或其它 OpenAI 兼容服务，填写 Base URL、模型名和可选 Key。"
+        : "用于需要大语言模型的文案、分析、导演和提示词任务。",
+      configured: Boolean(provider.apiKey),
+      apiKeyMask: maskApiKey(provider.apiKey || ""),
+      baseUrl: provider.baseUrl || "",
+      model: provider.model || "",
+      models: Array.isArray(provider.models) ? provider.models : [],
+      applyUrl: provider.applyUrl || "",
+      balanceUrl: provider.balanceUrl || provider.applyUrl || "",
+      activeDefault: settings.rewrite?.defaultProvider === id,
+      supportsBaseUrl: true,
+      supportsModel: true,
+      enabled: true,
+    });
+  }
+
+  const jimeng = settings.imageProviders?.jimeng || {};
+  providers.push({
+    id: "jimeng",
+    label: jimeng.label || "即梦 AI",
+    group: "图片生成",
+    feature: "图片生成",
+    description: "用于图片生成页面，根据提示词生成本地图片资产。",
+    configured: Boolean(jimeng.apiKey),
+    apiKeyMask: maskApiKey(jimeng.apiKey || ""),
+    baseUrl: jimeng.baseUrl || "https://api.jimeng.io/v1",
+    model: jimeng.model || "flux-dev",
+    models: ["flux-dev", "flux-pro", "sdxl"],
+    applyUrl: "",
+    balanceUrl: "",
+    activeDefault: publicModelMapping(settings).image?.provider === "jimeng",
+    supportsBaseUrl: true,
+    supportsModel: true,
+    enabled: true,
+  });
+
+  const tts = settings.tts || {};
+  const ttsProviders = [
+    {
+      id: "aliyun_bailian",
+      label: TTS_PROVIDER_LABELS.aliyun_bailian,
+      config: tts.aliyun_bailian || {},
+      description: "用于 TTS 语音和声音复刻；可与 DashScope 通义千问共用同一个阿里云百炼 Key。",
+      baseUrl: "https://dashscope.aliyuncs.com",
+      model: tts.aliyun_bailian?.default_model || "cosyvoice-v2",
+      models: ["cosyvoice-v2", "qwen-tts"],
+      enabled: true,
+    },
+    {
+      id: "custom_tts",
+      label: TTS_PROVIDER_LABELS.custom_tts,
+      config: tts.custom_tts || {},
+      description: "用于接入你自己的 TTS 服务；Base URL 必填，API Key 可选。",
+      baseUrl: tts.custom_tts?.base_url || "",
+      model: tts.custom_tts?.model || "",
+      models: [],
+      enabled: true,
+    },
+    {
+      id: "minimax",
+      label: TTS_PROVIDER_LABELS.minimax,
+      config: tts.minimax || {},
+      description: "扩展预留 Provider，可先保存 Key，正式生成能力后续接入。",
+      baseUrl: tts.minimax?.base_url || "https://api.minimax.io/v1",
+      model: tts.minimax?.model || "minimax-speech",
+      models: ["minimax-speech"],
+      enabled: false,
+    },
+    {
+      id: "fish_audio",
+      label: TTS_PROVIDER_LABELS.fish_audio,
+      config: tts.fish_audio || {},
+      description: "扩展预留 Provider，可先保存 Key，正式生成能力后续接入。",
+      baseUrl: tts.fish_audio?.base_url || "https://api.fish.audio",
+      model: tts.fish_audio?.model || "fish-speech-1.5",
+      models: ["fish-speech-1.5"],
+      enabled: false,
+    },
+    {
+      id: "elevenlabs",
+      label: TTS_PROVIDER_LABELS.elevenlabs,
+      config: tts.elevenlabs || {},
+      description: "扩展预留 Provider，可先保存 Key，正式生成能力后续接入。",
+      baseUrl: tts.elevenlabs?.base_url || "https://api.elevenlabs.io",
+      model: tts.elevenlabs?.model || "eleven_multilingual_v2",
+      models: ["eleven_multilingual_v2"],
+      enabled: false,
+    },
+  ];
+
+  for (const provider of ttsProviders) {
+    const config = provider.config || {};
+    const apiKey = config.api_key || "";
+    providers.push({
+      id: provider.id,
+      label: provider.label,
+      group: "TTS 语音",
+      feature: "TTS 语音、声音复刻",
+      description: provider.description,
+      configured: provider.id === "custom_tts" ? Boolean(config.base_url) : Boolean(apiKey),
+      apiKeyMask: maskApiKey(apiKey),
+      baseUrl: provider.baseUrl,
+      model: provider.model,
+      models: provider.models,
+      applyUrl: "",
+      balanceUrl: "",
+      activeDefault: tts.default_provider === provider.id,
+      supportsBaseUrl: provider.id !== "aliyun_bailian",
+      supportsModel: true,
+      enabled: provider.enabled,
+    });
+  }
+
+  return providers;
+}
+
+function saveUnifiedProvider(settings, body) {
+  const id = String(body.id || "").trim();
+  const apiKey = String(body.apiKey || "").trim();
+  const baseUrl = String(body.baseUrl || "").trim();
+  const model = String(body.model || "").trim();
+
+  if (settings.rewriteProviders?.[id]) {
+    const provider = settings.rewriteProviders[id];
+    if (apiKey) provider.apiKey = apiKey;
+    if (body.baseUrl !== undefined) provider.baseUrl = baseUrl;
+    if (body.model !== undefined) {
+      provider.model = model || provider.model || "";
+      provider.autoModel = !model && !provider.custom;
+    }
+    if (id === "dashscope") {
+      if (apiKey) {
+        settings.providers.dashscope.apiKey = apiKey;
+        settings.tts.aliyun_bailian.api_key = apiKey;
+      }
+      settings.providers.dashscope.label = "阿里云百炼 DashScope";
+    }
+    if (body.setDefault === true) settings.rewrite.defaultProvider = id;
+    return;
+  }
+
+  if (id === "jimeng") {
+    if (!settings.imageProviders) settings.imageProviders = {};
+    settings.imageProviders.jimeng = {
+      ...(settings.imageProviders.jimeng || {}),
+      label: "即梦 AI",
+      ...(apiKey ? { apiKey } : {}),
+      ...(body.baseUrl !== undefined ? { baseUrl } : {}),
+      ...(body.model !== undefined ? { model } : {}),
+    };
+    return;
+  }
+
+  if (id === "aliyun_bailian") {
+    if (apiKey) {
+      settings.tts.aliyun_bailian.api_key = apiKey;
+      settings.providers.dashscope.apiKey = apiKey;
+      settings.rewriteProviders.dashscope.apiKey = apiKey;
+    }
+    if (body.model !== undefined) settings.tts.aliyun_bailian.default_model = model || "cosyvoice-v2";
+    if (body.setDefault === true) settings.tts.default_provider = id;
+    return;
+  }
+
+  if (id === "custom_tts") {
+    if (apiKey) settings.tts.custom_tts.api_key = apiKey;
+    if (body.baseUrl !== undefined) settings.tts.custom_tts.base_url = baseUrl;
+    if (body.model !== undefined) settings.tts.custom_tts.model = model;
+    if (body.setDefault === true) settings.tts.default_provider = id;
+    return;
+  }
+
+  if (["minimax", "fish_audio", "elevenlabs"].includes(id)) {
+    if (!settings.tts[id]) settings.tts[id] = {};
+    if (apiKey) settings.tts[id].api_key = apiKey;
+    if (body.baseUrl !== undefined) settings.tts[id].base_url = baseUrl;
+    if (body.model !== undefined) settings.tts[id].model = model;
+    return;
+  }
+
+  throw new Error("未知 API 服务");
+}
+
+function applyModelMapping(settings, mapping) {
+  const normalized = { ...DEFAULT_MODEL_MAPPING, ...(mapping || {}) };
+  settings.modelMap = normalized;
+  settings.modelMapping = normalized;
+
+  const rewriteProvider = rewriteProviderIdFromMapping(normalized.rewrite?.provider);
+  if (settings.rewriteProviders?.[rewriteProvider]) {
+    settings.rewrite.defaultProvider = rewriteProvider;
+    if (normalized.rewrite?.model) {
+      settings.rewriteProviders[rewriteProvider].model = normalized.rewrite.model;
+      settings.rewriteProviders[rewriteProvider].autoModel = false;
+    }
+  }
+
+  for (const task of ["director", "storyboard", "image_prompt"]) {
+    const providerId = rewriteProviderIdFromMapping(normalized[task]?.provider);
+    if (settings.rewriteProviders?.[providerId] && normalized[task]?.model) {
+      settings.rewriteProviders[providerId].model = normalized[task].model;
+    }
+  }
+
+  const ttsProvider = String(normalized.tts?.provider || "");
+  if (TTS_PROVIDER_LABELS[ttsProvider]) {
+    settings.tts.default_provider = ttsProvider;
+    if (normalized.tts?.model) {
+      const target = settings.tts[ttsProvider];
+      if (target) {
+        if (ttsProvider === "aliyun_bailian") target.default_model = normalized.tts.model;
+        else target.model = normalized.tts.model;
+      }
+    }
+  }
+}
+
+function reloadModelRuntime(settings) {
+  writeSettings(settings);
+  const normalized = readSettings();
+  modelRouter.init(normalized);
+  providerRegistry.initFromModelRouter();
+  return normalized;
+}
+
+function providerConfigStatus(settings, providerId) {
+  const provider = publicUnifiedProviders(settings).find((item) => item.id === providerId);
+  if (!provider) return { ok: false, message: "未知 API 服务" };
+  if (!provider.configured) {
+    return { ok: false, status: "missing", message: `${provider.label} 还没有保存必要配置。` };
+  }
+  return {
+    ok: true,
+    status: provider.enabled ? "ready" : "saved",
+    message: provider.enabled
+      ? `${provider.label} 已保存，可用于：${provider.feature}。`
+      : `${provider.label} 配置已保存，但当前功能仍是预留接入。`,
   };
 }
 
@@ -2921,23 +3295,9 @@ function serveStatic(req, res) {
   });
 }
 
-const server = http.createServer(async (req, res) => {
-
 // ===== WebSocket 进度推送 =====
 const wss = new WebSocketServer({ noServer: true });
 const wsClients = new Set();
-
-server.on("upgrade", (request, socket, head) => {
-  if (request.url === "/ws/progress") {
-    wss.handleUpgrade(request, socket, head, (ws) => {
-      wsClients.add(ws);
-      ws.on("close", () => wsClients.delete(ws));
-      ws.send(JSON.stringify({ type: "connected", message: "已连接进度推送" }));
-    });
-  } else {
-    socket.destroy();
-  }
-});
 
 // 广播进度（赋值到前面声明的变量）
 broadcastProgress = (data) => {
@@ -2945,7 +3305,9 @@ broadcastProgress = (data) => {
   for (const ws of wsClients) {
     try { ws.send(msg); } catch { wsClients.delete(ws); }
   }
-}
+};
+
+const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, "http://127.0.0.1");
 
   try {
@@ -3155,11 +3517,12 @@ broadcastProgress = (data) => {
     if (req.method === "GET" && url.pathname === "/api/director/config") {
       const settings = readSettings();
       const rewrite = publicRewriteSettings(settings);
+      const mapping = publicModelMapping(settings);
       sendJson(res, 200, {
         ok: true,
         config: directorService.config,
         providers: rewrite.providers,
-        default_provider: rewrite.defaults.defaultProvider,
+        default_provider: rewriteProviderIdFromMapping(mapping.director?.provider) || rewrite.defaults.defaultProvider,
       });
       return;
     }
@@ -3218,11 +3581,12 @@ broadcastProgress = (data) => {
     if (req.method === "GET" && url.pathname === "/api/vfo/config") {
       const settings = readSettings();
       const rewrite = publicRewriteSettings(settings);
+      const mapping = publicModelMapping(settings);
       sendJson(res, 200, {
         ok: true,
         config: vfoService.config,
         providers: rewrite.providers,
-        default_provider: rewrite.defaults.defaultProvider,
+        default_provider: rewriteProviderIdFromMapping(mapping.storyboard?.provider || mapping.director?.provider) || rewrite.defaults.defaultProvider,
       });
       return;
     }
@@ -3978,7 +4342,7 @@ broadcastProgress = (data) => {
 
       // 模型映射
       if (req.method === "GET" && route === "map") {
-        sendJson(res, 200, { ok: true, map: settingsCenter.getModelMapping() || modelRouter._modelMap || {} });
+        sendJson(res, 200, { ok: true, map: publicModelMapping(readSettings()) });
         return;
       }
 
@@ -4170,43 +4534,61 @@ broadcastProgress = (data) => {
       const route = url.pathname.replace("/api/settings/", "");
 
       if (req.method === "GET" && route === "all") {
-        sendJson(res, 200, { ok: true, settings: settingsCenter.read() });
+        sendJson(res, 200, { ok: true, settings: readSettings() });
         return;
       }
 
       if (req.method === "GET" && route === "model-mapping") {
-        sendJson(res, 200, { ok: true, mapping: settingsCenter.getModelMapping() });
+        sendJson(res, 200, { ok: true, mapping: publicModelMapping(readSettings()), tasks: SETTINGS_TASKS });
         return;
       }
 
       if (req.method === "POST" && route === "model-mapping") {
         const body = JSON.parse(await readBody(req) || "{}");
-        settingsCenter.setModelMapping(body.mapping || {});
-        modelRouter.init(settingsCenter.read());
-        sendJson(res, 200, { ok: true });
+        const settings = readSettings();
+        applyModelMapping(settings, body.mapping || {});
+        const normalized = reloadModelRuntime(settings);
+        sendJson(res, 200, {
+          ok: true,
+          mapping: publicModelMapping(normalized),
+          providers: publicUnifiedProviders(normalized),
+        });
         return;
       }
 
       if (req.method === "GET" && route === "providers") {
-        sendJson(res, 200, { ok: true, providers: settingsCenter.getAllProviders() });
+        const settings = readSettings();
+        sendJson(res, 200, {
+          ok: true,
+          providers: publicUnifiedProviders(settings),
+          tasks: SETTINGS_TASKS,
+          mapping: publicModelMapping(settings),
+        });
         return;
       }
 
       if (req.method === "POST" && route === "provider") {
         const body = JSON.parse(await readBody(req) || "{}");
-        if (!body.id) { sendJson(res, 400, { ok: false, error: "缺少 provider id" }); return; }
-        settingsCenter.setProviderConfig(body.id, {
-          apiKey: body.apiKey,
-          baseUrl: body.baseUrl,
-        });
-        modelRouter.init(settingsCenter.read());
-        sendJson(res, 200, { ok: true });
+        if (!body.id) { sendJson(res, 400, { ok: false, message: "缺少 API 服务 ID" }); return; }
+        try {
+          const settings = readSettings();
+          saveUnifiedProvider(settings, body);
+          const normalized = reloadModelRuntime(settings);
+          sendJson(res, 200, {
+            ok: true,
+            providers: publicUnifiedProviders(normalized),
+            mapping: publicModelMapping(normalized),
+            status: providerConfigStatus(normalized, String(body.id)),
+          });
+        } catch (error) {
+          sendJson(res, 400, { ok: false, message: error instanceof Error ? error.message : String(error) });
+        }
         return;
       }
 
       if (req.method === "POST" && route === "test-provider") {
         const body = JSON.parse(await readBody(req) || "{}");
-        sendJson(res, 200, settingsCenter.testProviderConnection(body.id || ""));
+        sendJson(res, 200, providerConfigStatus(readSettings(), String(body.id || "")));
         return;
       }
 
@@ -4283,6 +4665,18 @@ broadcastProgress = (data) => {
       ok: false,
       message: error instanceof Error ? error.message : String(error),
     });
+  }
+});
+
+server.on("upgrade", (request, socket, head) => {
+  if (request.url === "/ws/progress") {
+    wss.handleUpgrade(request, socket, head, (ws) => {
+      wsClients.add(ws);
+      ws.on("close", () => wsClients.delete(ws));
+      ws.send(JSON.stringify({ type: "connected", message: "已连接进度推送" }));
+    });
+  } else {
+    socket.destroy();
   }
 });
 

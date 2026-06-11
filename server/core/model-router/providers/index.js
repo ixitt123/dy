@@ -14,6 +14,7 @@ import { VolcengineProvider } from "./volcengine.js";
  * Provider 注册表 — 所有支持的模型提供者
  */
 export const PROVIDER_REGISTRY = {
+  dashscope: { label: "DashScope 通义千问", Provider: QwenProvider, type: "text" },
   deepseek: { label: "DeepSeek", Provider: DeepSeekProvider, type: "text" },
   openai: { label: "OpenAI", Provider: OpenAIProvider, type: "text" },
   claude: { label: "Claude (Anthropic)", Provider: ClaudeProvider, type: "text" },

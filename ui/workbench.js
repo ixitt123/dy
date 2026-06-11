@@ -428,7 +428,7 @@ async function refreshWorkbenchOverview() {
       const data = await pr.json();
       const statusEl = document.querySelector("#workbenchConnectionStatus span:last-child");
       const online = data.providers?.filter(p => p.health?.status === "online").length || 0;
-      if (statusEl) statusEl.textContent = `${online} 模型在线`;
+      if (statusEl) statusEl.textContent = online > 0 ? `${online} 模型在线` : "系统正常";
     }
   } catch {}
 
@@ -687,126 +687,338 @@ function setupV2Settings() {
 
   const providerList = document.getElementById("v2ProviderList");
   const modelMapEl = document.getElementById("v2ModelMap");
-
-  // 加载 Provider 配置
-  async function loadProviders() {
-    try {
-      const res = await fetch("/api/settings/providers");
-      const data = await res.json();
-      const providers = data.providers || [];
-      providerList.innerHTML = providers.map(p => `
-        <div class="settings-row" style="display:flex;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid #eee">
-          <strong style="width:100px">${p.id}</strong>
-          <span style="font-size:12px;color:${p.configured?'green':'#999'}">${p.configured ? '✅ 已配置' : '⚠️ 未配置'}</span>
-          <input type="password" style="flex:1;padding:4px 8px;border:1px solid #ccc;border-radius:4px" class="input-api-key" data-provider="${p.id}" placeholder="API Key" value="${p.apiKey || ''}" />
-          <input type="text" style="width:200px;padding:4px 8px;border:1px solid #ccc;border-radius:4px" class="input-base-url" data-provider="${p.id}" placeholder="Base URL" value="${p.baseUrl || ''}" />
-          <button class="btn-sm" style="padding:4px 12px;background:#6366f1;color:#fff;border:0;border-radius:4px;cursor:pointer" data-save-provider="${p.id}">保存</button>
-        </div>
-      `).join("");
-
-      providerList.querySelectorAll("[data-save-provider]").forEach(btn => {
-        btn.addEventListener("click", async () => {
-          const id = btn.dataset.saveProvider;
-          const apiKey = providerList.querySelector(`[data-provider="${id}"].input-api-key`)?.value || "";
-          const baseUrl = providerList.querySelector(`[data-provider="${id}"].input-base-url`)?.value || "";
-          await fetch("/api/settings/provider", {
-            method: "POST", headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ id, apiKey, baseUrl }),
-          });
-          btn.textContent = "✅";
-          setTimeout(() => { btn.textContent = "保存"; }, 2000);
-        });
-      });
-    } catch (e) {
-      providerList.innerHTML = `<p style="color:#e00">加载失败: ${e.message}</p>`;
-    }
-  }
-
-  // 模型映射数据
-  const MODEL_DEFS = {
-    analyze: { label: "内容分析", options: [
-      { provider: "deepseek", model: "deepseek-chat", label: "DeepSeek V3" },
-      { provider: "deepseek", model: "deepseek-reasoner", label: "DeepSeek R1" },
-      { provider: "qwen", model: "qwen-plus", label: "通义千问 Qwen3" },
-      { provider: "openai", model: "gpt-4.1", label: "GPT-4.1" },
-      { provider: "claude", model: "claude-sonnet-4-20250514", label: "Claude Sonnet 4" },
-      { provider: "gemini", model: "gemini-2.5-pro", label: "Gemini 2.5 Pro" },
-    ]},
-    rewrite: { label: "AI改写", options: [
-      { provider: "deepseek", model: "deepseek-chat", label: "DeepSeek V3（默认）" },
-      { provider: "deepseek", model: "deepseek-reasoner", label: "DeepSeek R1" },
-      { provider: "openai", model: "gpt-4.1", label: "GPT-4.1" },
-      { provider: "claude", model: "claude-sonnet-4-20250514", label: "Claude Sonnet 4" },
-      { provider: "gemini", model: "gemini-2.5-pro", label: "Gemini 2.5 Pro" },
-    ]},
-    director: { label: "AI导演", options: [
-      { provider: "claude", model: "claude-sonnet-4-20250514", label: "Claude Sonnet 4（默认）" },
-      { provider: "openai", model: "gpt-4.1", label: "GPT-4.1" },
-      { provider: "deepseek", model: "deepseek-reasoner", label: "DeepSeek R1" },
-      { provider: "gemini", model: "gemini-2.5-pro", label: "Gemini 2.5 Pro" },
-    ]},
-    image_prompt: { label: "图片提示词", options: [
-      { provider: "openai", model: "gpt-4.1", label: "GPT-4.1" },
-      { provider: "claude", model: "claude-sonnet-4-20250514", label: "Claude Sonnet 4" },
-      { provider: "gemini", model: "gemini-2.5-pro", label: "Gemini 2.5 Pro" },
-      { provider: "deepseek", model: "deepseek-chat", label: "DeepSeek V3" },
-    ]},
-    image: { label: "图片生成", options: [
-      { provider: "jimeng", model: "flux-dev", label: "Flux Dev" },
-      { provider: "jimeng", model: "flux-pro", label: "Flux Pro" },
-      { provider: "openai", model: "dall-e-3", label: "GPT Image" },
-      { provider: "jimeng", model: "sdxl", label: "Stable Diffusion XL" },
-    ]},
-    video: { label: "视频生成", options: [
-      { provider: "kling", model: "kling", label: "Kling" },
-    ]},
-    tts: { label: "TTS语音", options: [
-      { provider: "fish-audio", model: "fish-speech-1.5", label: "Fish Audio" },
-      { provider: "minimax", model: "minimax-speech", label: "MiniMax Speech" },
-      { provider: "elevenlabs", model: "elevenlabs", label: "ElevenLabs" },
-      { provider: "qwen", model: "cosyvoice", label: "CosyVoice" },
-    ]},
+  const summaryEl = document.getElementById("v2SettingsSummary");
+  const taskGuideEl = document.getElementById("v2TaskGuide");
+  const saveMappingBtn = document.getElementById("v2SaveMapping");
+  const saveMappingStatus = document.getElementById("saveMappingStatus");
+  const refreshBtn = document.getElementById("v2RefreshSettings");
+  const html = typeof escapeHtml === "function" ? escapeHtml : (value) => String(value ?? "");
+  const state = {
+    providers: [],
+    mapping: {},
+    tasks: {},
   };
 
-  // 加载模型映射
-  async function loadModelMap() {
-    try {
-      const res = await fetch("/api/settings/model-mapping");
-      const data = await res.json();
-      const mapping = data.mapping || {};
-      modelMapEl.innerHTML = Object.entries(MODEL_DEFS).map(([key, def]) => {
-        const current = mapping[key] || {};
-        return `
-          <div class="model-row" style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid #eee">
-            <span style="min-width:90px;font-weight:600">${def.label}</span>
-            <select class="model-select" data-task="${key}" style="flex:1;padding:6px;border:1px solid #ccc;border-radius:4px">
-              ${def.options.map(o => `<option value="${o.provider}|${o.model}" ${current.provider===o.provider&&current.model===o.model?'selected':''}>${o.label}</option>`).join("")}
-            </select>
-          </div>
-        `;
-      }).join("");
+  const MODEL_DEFS = [
+    { key: "analyze", label: "内容分析", hint: "脚本结构、受众、爆款点" },
+    { key: "rewrite", label: "AI 改写", hint: "多版本文案生成" },
+    { key: "director", label: "AI 导演", hint: "故事弧、分镜、镜头计划" },
+    { key: "storyboard", label: "分镜生成", hint: "镜头拆解和画面描述" },
+    { key: "image_prompt", label: "图片提示词", hint: "画面提示词和风格描述" },
+    { key: "image", label: "图片生成", hint: "生成图片资产" },
+    { key: "tts", label: "TTS 语音", hint: "配音和声音复刻" },
+  ];
 
-      document.getElementById("v2SaveMapping").onclick = async () => {
-        const newMap = {};
-        modelMapEl.querySelectorAll(".model-select").forEach(sel => {
-          const task = sel.dataset.task;
-          const [provider, model] = sel.value.split("|");
-          newMap[task] = { provider, model };
-        });
-        await fetch("/api/settings/model-mapping", {
-          method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ mapping: newMap }),
-        });
-        document.getElementById("saveMappingStatus").textContent = "✅ 已保存";
-        setTimeout(() => document.getElementById("saveMappingStatus").textContent = "", 3000);
-      };
+  function groupedProviders() {
+    return state.providers.reduce((groups, provider) => {
+      const group = provider.group || "其它";
+      if (!groups[group]) groups[group] = [];
+      groups[group].push(provider);
+      return groups;
+    }, {});
+  }
+
+  function providerStatusText(provider) {
+    if (!provider.enabled) return provider.configured ? "已保存 / 预留" : "预留";
+    return provider.configured ? "已配置" : "未配置";
+  }
+
+  function renderSummary() {
+    const configured = state.providers.filter((provider) => provider.configured).length;
+    const enabled = state.providers.filter((provider) => provider.enabled).length;
+    const textDefault = state.providers.find((provider) => provider.activeDefault && provider.group === "文本模型");
+    const ttsDefault = state.providers.find((provider) => provider.activeDefault && provider.group === "TTS 语音");
+    summaryEl.innerHTML = `
+      <div class="settings-summary-item">
+        <strong>${configured}</strong>
+        <span>已保存服务</span>
+      </div>
+      <div class="settings-summary-item">
+        <strong>${enabled}</strong>
+        <span>当前可用服务</span>
+      </div>
+      <div class="settings-summary-item wide">
+        <strong>${html(textDefault?.label || "未设置")}</strong>
+        <span>文本任务默认服务</span>
+      </div>
+      <div class="settings-summary-item wide">
+        <strong>${html(ttsDefault?.label || "未设置")}</strong>
+        <span>语音任务默认服务</span>
+      </div>
+    `;
+  }
+
+  function renderTaskGuide() {
+    const tasks = Object.entries(state.tasks || {});
+    taskGuideEl.innerHTML = tasks.map(([key, task]) => {
+      const mapped = state.mapping[key] || {};
+      const providerId = mapped.provider || "";
+      const provider = state.providers.find((item) => item.id === providerId || (providerId === "qwen" && item.id === "dashscope"));
+      return `
+        <div class="task-guide-row">
+          <div>
+            <strong>${html(task.label || key)}</strong>
+            <p>${html(task.purpose || "")}</p>
+          </div>
+          <div>
+            <span>${html(provider?.label || providerId || "未设置")}</span>
+            <small>${html(task.route || "")}</small>
+          </div>
+        </div>
+      `;
+    }).join("");
+  }
+
+  function providerInputTemplate(provider) {
+    const datalistId = `models-${provider.id}`;
+    return `
+      <label>
+        API Key
+        <div class="secret-input-row">
+          <input class="provider-input" data-field="apiKey" data-provider="${html(provider.id)}" type="password" autocomplete="off" placeholder="${provider.configured ? `已保存：${html(provider.apiKeyMask || "已脱敏")}，留空不修改` : "粘贴 API Key"}" />
+          <button class="ghost small" type="button" data-toggle-secret="${html(provider.id)}">显示</button>
+        </div>
+      </label>
+      ${provider.supportsBaseUrl ? `
+        <label>
+          Base URL
+          <input class="provider-input" data-field="baseUrl" data-provider="${html(provider.id)}" type="text" value="${html(provider.baseUrl || "")}" placeholder="服务地址" />
+        </label>
+      ` : ""}
+      ${provider.supportsModel ? `
+        <label>
+          默认模型
+          <input class="provider-input" data-field="model" data-provider="${html(provider.id)}" type="text" value="${html(provider.model || "")}" placeholder="模型名" list="${datalistId}" />
+          <datalist id="${datalistId}">
+            ${(provider.models || []).map((model) => `<option value="${html(model)}"></option>`).join("")}
+          </datalist>
+        </label>
+      ` : ""}
+    `;
+  }
+
+  function renderProviders() {
+    const groups = groupedProviders();
+    providerList.innerHTML = Object.entries(groups).map(([group, providers]) => `
+      <section class="provider-group">
+        <div class="provider-group-title">
+          <strong>${html(group)}</strong>
+          <span>${providers.filter((provider) => provider.configured).length}/${providers.length} 已配置</span>
+        </div>
+        ${providers.map((provider) => `
+          <article class="provider-row" data-provider-row="${html(provider.id)}">
+            <div class="provider-main">
+              <div class="provider-title-row">
+                <h4>${html(provider.label)}</h4>
+                <span class="provider-state ${provider.configured ? "configured" : ""}">${html(providerStatusText(provider))}</span>
+              </div>
+              <p>${html(provider.description || "")}</p>
+              <div class="provider-meta">
+                <span>功能：${html(provider.feature || "")}</span>
+                <span>Key：${provider.configured ? html(provider.apiKeyMask || "已保存") : "未保存"}</span>
+              </div>
+            </div>
+            <div class="provider-fields">
+              ${providerInputTemplate(provider)}
+            </div>
+            <div class="provider-actions">
+              <button class="primary small" type="button" data-save-provider="${html(provider.id)}">保存</button>
+              ${provider.group === "文本模型" || provider.group === "TTS 语音" ? `<button class="ghost small" type="button" data-default-provider="${html(provider.id)}">设为默认</button>` : ""}
+              <button class="ghost small" type="button" data-test-provider="${html(provider.id)}">检查</button>
+              ${provider.applyUrl ? `<button class="ghost small" type="button" data-open-url="${html(provider.applyUrl)}">申请入口</button>` : ""}
+              ${provider.balanceUrl ? `<button class="ghost small" type="button" data-open-url="${html(provider.balanceUrl)}">余额</button>` : ""}
+            </div>
+            <p class="provider-row-status" data-status-for="${html(provider.id)}"></p>
+          </article>
+        `).join("")}
+      </section>
+    `).join("");
+  }
+
+  function optionsForTask(taskKey) {
+    if (taskKey === "image") {
+      return state.providers
+        .filter((provider) => provider.group === "图片生成")
+        .flatMap((provider) => (provider.models?.length ? provider.models : [provider.model || ""])
+          .filter(Boolean)
+          .map((model) => ({ provider: provider.id, model, label: `${provider.label} / ${model}` })));
+    }
+    if (taskKey === "tts") {
+      return state.providers
+        .filter((provider) => provider.group === "TTS 语音")
+        .flatMap((provider) => (provider.models?.length ? provider.models : [provider.model || ""])
+          .filter(Boolean)
+          .map((model) => ({
+            provider: provider.id,
+            model,
+            label: `${provider.label} / ${model}${provider.enabled ? "" : "（预留）"}`,
+          })));
+    }
+    const allowedForAnalyze = new Set(["dashscope", "deepseek", "openai", "siliconflow", "volcengine"]);
+    return state.providers
+      .filter((provider) => provider.group === "文本模型")
+      .filter((provider) => taskKey !== "analyze" || allowedForAnalyze.has(provider.id))
+      .flatMap((provider) => (provider.models?.length ? provider.models : [provider.model || ""])
+        .filter(Boolean)
+        .map((model) => ({ provider: provider.id, model, label: `${provider.label} / ${model}` })));
+  }
+
+  function renderModelMap() {
+    modelMapEl.innerHTML = MODEL_DEFS.map((def) => {
+      const current = state.mapping[def.key] || {};
+      const options = optionsForTask(def.key);
+      return `
+        <div class="model-map-row">
+          <div>
+            <strong>${html(def.label)}</strong>
+            <p>${html(def.hint)}</p>
+          </div>
+          <select class="model-select" data-task="${html(def.key)}">
+            ${options.map((option) => `
+              <option value="${html(option.provider)}|${html(option.model)}" ${current.provider === option.provider && current.model === option.model ? "selected" : ""}>
+                ${html(option.label)}
+              </option>
+            `).join("")}
+          </select>
+        </div>
+      `;
+    }).join("");
+  }
+
+  function renderAll() {
+    renderSummary();
+    renderProviders();
+    renderTaskGuide();
+    renderModelMap();
+  }
+
+  async function loadSettingsHub() {
+    try {
+      const res = await fetch("/api/settings/providers", { cache: "no-store" });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      state.providers = data.providers || [];
+      state.mapping = data.mapping || {};
+      state.tasks = data.tasks || {};
+      renderAll();
     } catch (e) {
-      modelMapEl.innerHTML = `<p style="color:#e00">加载失败: ${e.message}</p>`;
+      providerList.innerHTML = `<p class="settings-error">加载失败：${html(e.message)}</p>`;
+      if (modelMapEl) modelMapEl.innerHTML = "";
     }
   }
 
-  loadProviders();
-  loadModelMap();
+  async function saveProvider(id, setDefault = false) {
+    const row = providerList.querySelector(`[data-provider-row="${CSS.escape(id)}"]`);
+    if (!row) return;
+    const payload = { id, setDefault };
+    row.querySelectorAll(".provider-input").forEach((input) => {
+      payload[input.dataset.field] = input.value.trim();
+    });
+    const status = row.querySelector(`[data-status-for="${CSS.escape(id)}"]`);
+    if (status) status.textContent = setDefault ? "正在设置默认服务..." : "正在保存...";
+    try {
+      const res = await fetch("/api/settings/provider", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (!res.ok || data.ok === false) throw new Error(data.message || data.error || `HTTP ${res.status}`);
+      state.providers = data.providers || state.providers;
+      state.mapping = data.mapping || state.mapping;
+      renderAll();
+      const nextStatus = providerList.querySelector(`[data-status-for="${CSS.escape(id)}"]`);
+      if (nextStatus) nextStatus.textContent = data.status?.message || "已保存。";
+      if (typeof loadSettings === "function") loadSettings().catch(() => {});
+      if (typeof loadDirectorConfig === "function") loadDirectorConfig().catch(() => {});
+      if (typeof loadVfoConfig === "function") loadVfoConfig().catch(() => {});
+    } catch (e) {
+      if (status) status.textContent = e instanceof Error ? e.message : String(e);
+    }
+  }
+
+  async function testProvider(id) {
+    const row = providerList.querySelector(`[data-provider-row="${CSS.escape(id)}"]`);
+    const status = row?.querySelector(`[data-status-for="${CSS.escape(id)}"]`);
+    if (status) status.textContent = "正在检查配置...";
+    try {
+      const res = await fetch("/api/settings/test-provider", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id }),
+      });
+      const data = await res.json();
+      if (status) status.textContent = data.message || (data.ok ? "配置可用。" : "配置不可用。");
+    } catch (e) {
+      if (status) status.textContent = e instanceof Error ? e.message : String(e);
+    }
+  }
+
+  async function saveModelMapping() {
+    const mapping = {};
+    modelMapEl.querySelectorAll(".model-select").forEach((select) => {
+      const [provider, model] = select.value.split("|");
+      mapping[select.dataset.task] = { provider, model };
+    });
+    saveMappingBtn.disabled = true;
+    saveMappingStatus.textContent = "正在保存模型分配...";
+    try {
+      const res = await fetch("/api/settings/model-mapping", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mapping }),
+      });
+      const data = await res.json();
+      if (!res.ok || data.ok === false) throw new Error(data.message || data.error || `HTTP ${res.status}`);
+      state.mapping = data.mapping || mapping;
+      state.providers = data.providers || state.providers;
+      renderAll();
+      saveMappingStatus.textContent = "模型分配已保存，并已同步到全局默认设置。";
+      if (typeof loadSettings === "function") loadSettings().catch(() => {});
+      if (typeof loadDirectorConfig === "function") loadDirectorConfig().catch(() => {});
+      if (typeof loadVfoConfig === "function") loadVfoConfig().catch(() => {});
+    } catch (e) {
+      saveMappingStatus.textContent = e instanceof Error ? e.message : String(e);
+    } finally {
+      saveMappingBtn.disabled = false;
+    }
+  }
+
+  providerList.addEventListener("click", (event) => {
+    const toggle = event.target.closest("[data-toggle-secret]");
+    if (toggle) {
+      const id = toggle.dataset.toggleSecret;
+      const input = providerList.querySelector(`input[data-provider="${CSS.escape(id)}"][data-field="apiKey"]`);
+      if (input) {
+        input.type = input.type === "password" ? "text" : "password";
+        toggle.textContent = input.type === "password" ? "显示" : "隐藏";
+      }
+      return;
+    }
+    const save = event.target.closest("[data-save-provider]");
+    if (save) {
+      saveProvider(save.dataset.saveProvider);
+      return;
+    }
+    const setDefault = event.target.closest("[data-default-provider]");
+    if (setDefault) {
+      saveProvider(setDefault.dataset.defaultProvider, true);
+      return;
+    }
+    const test = event.target.closest("[data-test-provider]");
+    if (test) {
+      testProvider(test.dataset.testProvider);
+      return;
+    }
+    const openUrl = event.target.closest("[data-open-url]");
+    if (openUrl) {
+      window.open(openUrl.dataset.openUrl, "_blank", "noopener");
+    }
+  });
+
+  saveMappingBtn?.addEventListener("click", saveModelMapping);
+  refreshBtn?.addEventListener("click", () => loadSettingsHub());
+  loadSettingsHub();
 }
 
 window.workbenchNavigate = navigateWorkbench;

@@ -38,8 +38,7 @@ End If
 
 packagePath = base & "\node_modules\@yc-w-cn\douyin-mcp-server\package.json"
 If Not fso.FileExists(packagePath) Then
-  shell.Popup "Dependencies are not installed yet. Run the dependency installer first, then start this tool again.", 10, "Douyin Video Tool", 48
-  WScript.Quit 1
+  shell.Popup "First launch may install project dependencies. Please wait a moment after closing this message.", 5, "Douyin Video Tool", 64
 End If
 
 cmd = """" & nodePath & """ """ & base & "\launch-ui.mjs"""

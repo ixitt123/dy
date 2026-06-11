@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { runSync } from "./sync-project.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const urlPath = path.join(__dirname, "ui-server.url");
@@ -26,7 +27,15 @@ async function existingServerUrl() {
   return "";
 }
 
-const url = await existingServerUrl();
+let syncChanged = false;
+try {
+  const syncResult = await runSync({ mode: "startup", quiet: true });
+  syncChanged = Boolean(syncResult.changed);
+} catch {
+  syncChanged = false;
+}
+
+const url = syncChanged ? "" : await existingServerUrl();
 if (url) {
   openUrl(url);
   process.exit(0);

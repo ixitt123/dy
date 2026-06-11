@@ -6,18 +6,21 @@ import { createProvider, PROVIDER_REGISTRY } from "./providers/index.js";
 // Value: { provider, model } — 自动路由到的提供者和模型
 // ============================================================================
 const DEFAULT_MODEL_MAP = {
+  analyze: { provider: "deepseek", model: "deepseek-chat" },
   rewrite: { provider: "deepseek", model: "deepseek-chat" },
-  director: { provider: "claude", model: "claude-sonnet-4-20250514" },
+  director: { provider: "deepseek", model: "deepseek-chat" },
   storyboard: { provider: "deepseek", model: "deepseek-chat" },
+  image_prompt: { provider: "deepseek", model: "deepseek-chat" },
   image: { provider: "flux", model: "flux" },         // Flux 为外部图像服务，通过 ImageService 调用
   video: { provider: "kling", model: "kling" },       // Kling 为外部视频服务
-  tts: { provider: "fish-audio", model: "fish-speech-1.5" },
+  tts: { provider: "ali-bailian", model: "cosyvoice-v2" },
 };
 
 // 成本估算：每百万 token 的美元价格（仅供参考）
 const COST_PER_MILLION_TOKENS = {
   deepseek: { prompt: 0.27, completion: 1.10 },
   openai: { prompt: 0.15, completion: 0.60 },    // gpt-4o-mini
+  dashscope: { prompt: 0.40, completion: 1.20 },
   claude: { prompt: 3.00, completion: 15.00 },   // Sonnet
   gemini: { prompt: 0.15, completion: 0.60 },    // Flash
   qwen: { prompt: 0.40, completion: 1.20 },      // Plus
@@ -62,9 +65,9 @@ class ModelRouter {
    * @returns {ModelRouter}
    */
   init(settings = {}) {
-    if (this._initialized) return this;
-
     this._settings = settings;
+    this._providers.clear();
+    this._modelMap = { ...DEFAULT_MODEL_MAP };
 
     // 从 rewriteProviders 中加载 LLM Provider 配置
     const rewriteProviders = settings.rewriteProviders || {};
@@ -74,6 +77,7 @@ class ModelRouter {
     // 标准 ID: deepseek, openai, siliconflow, volcengine, minimax, qwen/ali-bailian
     const providerConfigMap = {
       deepseek: () => rewriteProviders.deepseek,
+      dashscope: () => rewriteProviders.dashscope,
       openai: () => rewriteProviders.openai,
       siliconflow: () => rewriteProviders.siliconflow,
       volcengine: () => rewriteProviders.volcengine,
@@ -103,9 +107,14 @@ class ModelRouter {
       }
     }
 
-    // 加载自定义模型映射（如果 settings 中有 modelMap）
-    if (settings.modelMap && typeof settings.modelMap === "object") {
-      this._modelMap = { ...DEFAULT_MODEL_MAP, ...settings.modelMap };
+    // 加载自定义模型映射。modelMapping 是旧字段，保留兼容。
+    const customMap = settings.modelMap && typeof settings.modelMap === "object"
+      ? settings.modelMap
+      : settings.modelMapping && typeof settings.modelMapping === "object"
+        ? settings.modelMapping
+        : {};
+    if (Object.keys(customMap).length > 0) {
+      this._modelMap = { ...DEFAULT_MODEL_MAP, ...customMap };
     }
 
     this._initialized = true;

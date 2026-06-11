@@ -4177,6 +4177,241 @@ a {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+.settings-hub {
+  display: grid;
+  gap: 14px;
+}
+
+.settings-hub-head,
+.settings-card-head,
+.provider-group-title,
+.provider-title-row,
+.provider-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.settings-hub-head h2 {
+  margin-top: 4px;
+  color: #f4f7fb;
+  font-size: 22px;
+}
+
+.settings-hub-head p,
+.settings-card-head p,
+.task-guide-row p,
+.model-map-row p,
+.provider-main p,
+.provider-meta,
+.provider-row-status,
+.settings-status {
+  color: #8d98aa;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.settings-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.settings-summary-item {
+  min-width: 0;
+  border: 1px solid #29313d;
+  border-radius: 7px;
+  padding: 12px;
+  background: #121720;
+}
+
+.settings-summary-item strong,
+.settings-summary-item span {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.settings-summary-item strong {
+  color: #f5f7fb;
+  font-size: 16px;
+}
+
+.settings-summary-item span {
+  margin-top: 4px;
+  color: #768295;
+  font-size: 11px;
+}
+
+.provider-grid,
+.task-guide-grid,
+.model-mapping-grid {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.provider-group {
+  display: grid;
+  gap: 8px;
+}
+
+.provider-group-title {
+  border-bottom: 1px solid #27303c;
+  padding: 4px 0 8px;
+}
+
+.provider-group-title strong {
+  color: #eef2f8;
+  font-size: 13px;
+}
+
+.provider-group-title span {
+  color: #7d8798;
+  font-size: 11px;
+}
+
+.provider-row {
+  display: grid;
+  grid-template-columns: minmax(220px, 0.95fr) minmax(280px, 1.2fr) minmax(120px, auto);
+  gap: 12px;
+  border-bottom: 1px solid #242c37;
+  padding: 12px 0;
+}
+
+.provider-row:last-child {
+  border-bottom: 0;
+}
+
+.provider-title-row {
+  align-items: flex-start;
+}
+
+.provider-title-row h4 {
+  margin: 0;
+  color: #f3f6fb;
+  font-size: 15px;
+}
+
+.provider-state {
+  flex: 0 0 auto;
+  border: 1px solid #3a4351;
+  border-radius: 999px;
+  padding: 3px 8px;
+  color: #9aa5b7;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.provider-state.configured {
+  border-color: rgba(47, 207, 143, 0.35);
+  color: #7ee0b4;
+  background: rgba(47, 207, 143, 0.08);
+}
+
+.provider-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.provider-meta span {
+  border: 1px solid #2b3441;
+  border-radius: 999px;
+  padding: 3px 8px;
+  background: #141a23;
+}
+
+.provider-fields {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.provider-fields label {
+  margin: 0;
+  color: #9aa5b7;
+  font-size: 11px;
+}
+
+.provider-fields input,
+.model-map-row select {
+  margin-top: 5px;
+  border-color: #303846;
+  background: #0c1017;
+  color: #eef2f8;
+}
+
+.secret-input-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 6px;
+}
+
+.provider-actions {
+  align-content: start;
+  align-items: stretch;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.provider-actions button {
+  min-height: 34px;
+  padding: 0 10px;
+  font-size: 11px;
+}
+
+.provider-row-status {
+  grid-column: 1 / -1;
+  min-height: 18px;
+}
+
+.task-guide-row,
+.model-map-row {
+  display: grid;
+  grid-template-columns: minmax(180px, 0.7fr) minmax(260px, 1fr);
+  gap: 12px;
+  border-bottom: 1px solid #242c37;
+  padding: 10px 0;
+}
+
+.task-guide-row:last-child,
+.model-map-row:last-child {
+  border-bottom: 0;
+}
+
+.task-guide-row strong,
+.model-map-row strong {
+  color: #eef2f8;
+  font-size: 13px;
+}
+
+.task-guide-row span,
+.task-guide-row small {
+  display: block;
+}
+
+.task-guide-row span {
+  color: #e1e7f0;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.task-guide-row small {
+  margin-top: 4px;
+  color: #7c8798;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.settings-error {
+  color: #ff8b8b;
+  font-size: 13px;
+}
+
 .provider-apply-link {
   color: #76bfff;
   white-space: normal;
@@ -4229,5 +4464,20 @@ audio {
 
   .workbench-body {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .settings-summary,
+  .provider-fields {
+    grid-template-columns: 1fr;
+  }
+
+  .provider-row,
+  .task-guide-row,
+  .model-map-row {
+    grid-template-columns: 1fr;
+  }
+
+  .provider-actions {
+    justify-content: flex-start;
   }
 }

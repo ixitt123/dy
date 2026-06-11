@@ -2,6 +2,17 @@
 import fs from "node:fs";
 import path from "node:path";
 
+const DEFAULT_MODEL_MAPPING = {
+  analyze: { provider: "deepseek", model: "deepseek-chat" },
+  rewrite: { provider: "deepseek", model: "deepseek-chat" },
+  director: { provider: "deepseek", model: "deepseek-chat" },
+  storyboard: { provider: "deepseek", model: "deepseek-chat" },
+  image_prompt: { provider: "deepseek", model: "deepseek-chat" },
+  image: { provider: "jimeng", model: "flux-dev" },
+  video: { provider: "kling", model: "kling" },
+  tts: { provider: "aliyun_bailian", model: "cosyvoice-v2" },
+};
+
 export function createSettingsCenter(baseDir, settingsPath) {
   const settingsPathResolved = settingsPath || path.join(baseDir, "settings.json");
 
@@ -15,21 +26,15 @@ export function createSettingsCenter(baseDir, settingsPath) {
   }
 
   function getModelMapping() {
-    const mapping = read().modelMapping || {};
-    // 提供默认值
-    return Object.keys(mapping).length > 0 ? mapping : {
-      rewrite: { provider: "deepseek", model: "deepseek-chat" },
-      director: { provider: "deepseek", model: "deepseek-chat" },
-      storyboard: { provider: "deepseek", model: "deepseek-chat" },
-      image: { provider: "jimeng", model: "" },
-      video: { provider: "kling", model: "" },
-      tts: { provider: "fish-audio", model: "fish-speech-1.5" },
-    };
+    const settings = read();
+    const mapping = settings.modelMap || settings.modelMapping || {};
+    return Object.keys(mapping).length > 0 ? { ...DEFAULT_MODEL_MAPPING, ...mapping } : DEFAULT_MODEL_MAPPING;
   }
 
   function setModelMapping(mapping) {
     const settings = read();
-    settings.modelMapping = mapping;
+    settings.modelMap = { ...DEFAULT_MODEL_MAPPING, ...(mapping || {}) };
+    settings.modelMapping = settings.modelMap;
     write(settings);
   }
 

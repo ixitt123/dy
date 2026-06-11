@@ -207,23 +207,49 @@
         <label for="shareLink">抖音分享链接 / 批量导入链接</label>
         <textarea id="shareLink" rows="8" placeholder="粘贴 1 条或多条抖音分享内容；有 1 条就处理 1 条，有多条会自动识别并加入队列"></textarea>
 
-        <div class="api-panel" id="unifiedSettingsPanel">
-          <div class="settings-sections">
-            <!-- Provider中心 -->
-            <div class="settings-card">
-              <h3>Provider 中心</h3>
-              <p class="text-secondary">统一管理所有 API Key</p>
-              <div id="v2ProviderList" class="settings-list"></div>
+        <div class="api-panel settings-hub" id="unifiedSettingsPanel">
+          <div class="settings-hub-head">
+            <div>
+              <span class="section-eyebrow">API Center</span>
+              <h2>API 与模型设置</h2>
+              <p>保存一次，全局读取；每个功能会按下方分配使用对应 API。</p>
             </div>
-            <!-- 模型中心 -->
-            <div class="settings-card">
-              <h3>模型中心</h3>
-              <p class="text-secondary">配置各任务使用的模型（配置一次全局生效）</p>
-              <div class="model-mapping-grid" id="v2ModelMap"></div>
-              <button class="primary" id="v2SaveMapping" type="button" style="margin-top:12px">保存模型映射</button>
-              <p id="saveMappingStatus" class="text-secondary" style="margin-top:8px"></p>
-            </div>
+            <button class="ghost small" id="v2RefreshSettings" type="button">刷新状态</button>
           </div>
+
+          <div class="settings-summary" id="v2SettingsSummary"></div>
+
+          <section class="settings-card provider-card">
+            <div class="settings-card-head">
+              <div>
+                <h3>API 服务中心</h3>
+                <p class="text-secondary">API Key 只保存在本机 settings.json；页面只显示脱敏状态。</p>
+              </div>
+            </div>
+            <div id="v2ProviderList" class="provider-grid"></div>
+          </section>
+
+          <section class="settings-card task-card">
+            <div class="settings-card-head">
+              <div>
+                <h3>功能使用说明</h3>
+                <p class="text-secondary">这里说明每个功能会调用哪类 API，方便排查为什么某个功能不可用。</p>
+              </div>
+            </div>
+            <div id="v2TaskGuide" class="task-guide-grid"></div>
+          </section>
+
+          <section class="settings-card model-card">
+            <div class="settings-card-head">
+              <div>
+                <h3>模型中心</h3>
+                <p class="text-secondary">设置各功能默认使用的服务和模型；保存后全局生效。</p>
+              </div>
+              <button class="primary" id="v2SaveMapping" type="button">保存模型分配</button>
+            </div>
+            <div class="model-mapping-grid" id="v2ModelMap"></div>
+            <p id="saveMappingStatus" class="settings-status" role="status"></p>
+          </section>
         </div>
 
         <div class="actions">
@@ -1092,21 +1118,6 @@
             <div class="empty-state">暂无保存的图片资产</div>
           </div>
         </div>
-      </div>
-    </section>
-
-    <!-- V2 统一设置中心 -->
-    <section class="v2-settings-page" id="v2SettingsPanel" hidden>
-      <div class="settings-section">
-        <h3>API Key 管理</h3>
-        <p class="text-secondary">配置各模型的 API Key 和连接地址</p>
-        <div id="v2ProviderList" class="settings-list"></div>
-      </div>
-      <div class="settings-section">
-        <h3>模型映射</h3>
-        <p class="text-secondary">设置各任务使用的默认模型</p>
-        <div id="v2ModelMap" class="settings-list"></div>
-        <button class="primary" id="v2SaveMapping" type="button">保存模型映射</button>
       </div>
     </section>
 

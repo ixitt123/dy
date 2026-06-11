@@ -16,6 +16,8 @@ class ProviderRegistry {
   }
 
   initFromModelRouter() {
+    this._providers.clear();
+    this._health.clear();
     const providers = modelRouter.getProviders();
     for (const id of providers) {
       this._providers.set(id, { id, name: id, enabled: true });

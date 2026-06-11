@@ -1,3 +1,32 @@
+if (typeof window.fetch !== "function") {
+  window.fetch = (input, init = {}) => new Promise((resolve, reject) => {
+    const requestUrl = typeof input === "string" ? input : String(input?.url || input || "");
+    const xhr = new XMLHttpRequest();
+    xhr.open(init.method || "GET", requestUrl, true);
+    const headers = init.headers || {};
+    if (typeof Headers !== "undefined" && headers instanceof Headers) {
+      headers.forEach((value, key) => xhr.setRequestHeader(key, value));
+    } else {
+      Object.entries(headers).forEach(([key, value]) => xhr.setRequestHeader(key, value));
+    }
+    xhr.onload = () => {
+      const response = {
+        ok: xhr.status >= 200 && xhr.status < 300,
+        status: xhr.status,
+        statusText: xhr.statusText,
+        url: xhr.responseURL || requestUrl,
+        text: () => Promise.resolve(xhr.responseText || ""),
+        json: () => Promise.resolve(JSON.parse(xhr.responseText || "{}")),
+        arrayBuffer: () => Promise.resolve(new TextEncoder().encode(xhr.responseText || "").buffer),
+      };
+      resolve(response);
+    };
+    xhr.onerror = () => reject(new TypeError("Failed to fetch"));
+    xhr.ontimeout = () => reject(new TypeError("Failed to fetch"));
+    xhr.send(init.body ?? null);
+  });
+}
+
 const shareLink = document.querySelector("#shareLink");
 const resultBox = document.querySelector("#resultBox");
 const statusText = document.querySelector("#statusText");
@@ -2428,16 +2457,18 @@ async function openVfoFile() {
 
 async function loadSettings() {
   const data = await fetchJson("/api/settings");
-  if (data.providers) {
+  if (data.providers && apiProvider) {
     apiProvider.innerHTML = Object.entries(data.providers)
       .map(([id, provider]) => `<option value="${id}">${provider.label}</option>`)
       .join("");
     apiProvider.value = data.activeProvider || "dashscope";
   }
-  const current = data.providers?.[apiProvider.value];
-  apiStatus.textContent = current?.apiKeyConfigured
-    ? `API Key 已保存：${current.apiKeyMask}`
-    : "提取文案时需要填写，下载视频不需要。";
+  const current = apiProvider ? data.providers?.[apiProvider.value] : null;
+  if (apiStatus) {
+    apiStatus.textContent = current?.apiKeyConfigured
+      ? `API Key 已保存：${current.apiKeyMask}`
+      : "提取文案时需要填写，下载视频不需要。";
+  }
   if (data.batch) {
     batchConcurrency.value = String(data.batch.concurrency || 3);
     batchLimit.value = String(data.batch.limit || 10);
@@ -2461,9 +2492,11 @@ async function loadSettings() {
     const statusParts = Object.values(providers)
       .filter((provider) => provider.apiKeyConfigured)
       .map((provider) => `${provider.label}：${provider.apiKeyMask}`);
-    rewriteSettingsStatus.textContent = statusParts.length
-      ? `已配置：${statusParts.join("；")}`
-      : "选择平台，粘贴 API Key，保存即可。";
+    if (rewriteSettingsStatus) {
+      rewriteSettingsStatus.textContent = statusParts.length
+        ? `已配置：${statusParts.join("；")}`
+        : "选择平台，粘贴 API Key，保存即可。";
+    }
   }
   if (data.tts) {
     renderTtsProviderOptions(data.tts);
@@ -2473,6 +2506,7 @@ async function loadSettings() {
 }
 
 async function saveApiKey() {
+  if (!apiKeyInput || !apiProvider || !apiStatus) return;
   const apiKey = apiKeyInput.value.trim();
   if (!apiKey) {
     apiStatus.textContent = "请先输入 API Key";
@@ -2493,6 +2527,7 @@ async function saveApiKey() {
 }
 
 async function saveRewriteSettings() {
+  if (!rewriteSettingsProvider || !rewriteUnifiedKey || !rewriteSettingsStatus) return;
   rewriteSettingsStatus.textContent = "正在保存改写设置...";
   try {
     const data = await fetchJson("/api/rewrite-settings", {
@@ -2808,12 +2843,12 @@ async function runTranscript() {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
         shareLink: text,
-        provider: apiProvider.value,
-        apiKey: apiKeyInput.value.trim(),
+        provider: apiProvider?.value || "dashscope",
+        apiKey: apiKeyInput?.value.trim() || "",
       }),
     });
 
-    if (apiKeyInput.value.trim()) {
+    if (apiKeyInput?.value.trim()) {
       apiKeyInput.value = "";
       loadSettings().catch(() => {});
     }
@@ -2909,19 +2944,19 @@ document.querySelector("#transcriptBtn").addEventListener("click", () => {
   enqueueTasks("transcript");
 });
 
-document.querySelector("#saveApiKey").addEventListener("click", () => {
+document.querySelector("#saveApiKey")?.addEventListener("click", () => {
   saveApiKey();
 });
 
-document.querySelector("#saveRewriteSettings").addEventListener("click", () => {
+document.querySelector("#saveRewriteSettings")?.addEventListener("click", () => {
   saveRewriteSettings();
 });
 
-rewriteSettingsProvider.addEventListener("change", () => {
+rewriteSettingsProvider?.addEventListener("change", () => {
   updateRewritePresetFields();
 });
 
-rewriteAutoModel.addEventListener("change", () => {
+rewriteAutoModel?.addEventListener("change", () => {
   if (rewriteModelInput) {
     rewriteModelInput.readOnly = rewriteAutoModel.checked;
     rewriteModelInput.placeholder = rewriteAutoModel.checked ? "保存后自动获取最新模型" : "手动填写模型名";
@@ -3098,7 +3133,7 @@ voiceTestsList.addEventListener("click", async (event) => {
   input.addEventListener("input", syncRewriteSliderLabels);
 });
 
-apiProvider.addEventListener("change", () => {
+apiProvider?.addEventListener("change", () => {
   loadSettings().catch(() => {});
 });
 
