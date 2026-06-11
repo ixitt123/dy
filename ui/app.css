@@ -4738,14 +4738,6 @@ audio {
 }
 
 @media (max-width: 1320px) {
-  .status-rail {
-    display: none;
-  }
-
-  .workbench-body {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
   .settings-summary,
   .provider-fields {
     grid-template-columns: 1fr;
@@ -4759,5 +4751,15 @@ audio {
 
   .provider-actions {
     justify-content: flex-start;
+  }
+}
+
+@media (max-width: 1100px) {
+  .status-rail {
+    display: none;
+  }
+
+  .workbench-body {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
