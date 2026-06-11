@@ -477,6 +477,7 @@ function railTaskCard(task, variant = "normal") {
   const id = Number(task.id || 0);
   const fileName = escapeHtml(shortPath(task.video_path || task.txt_path || task.analysis_path || ""));
   const selected = activeRailTaskId === id ? "selected" : "";
+  const canOpenVideo = Boolean(task.video_path);
   return `
     <article class="rail-task-card ${variant} ${selected}">
       <div class="rail-task-top">
@@ -492,6 +493,7 @@ function railTaskCard(task, variant = "normal") {
       </div>
       <div class="rail-task-actions">
         <button type="button" class="rail-task-view" data-task-id="${id}">查看</button>
+        ${canOpenVideo ? `<button type="button" class="rail-task-open" data-task-id="${id}">打开</button>` : ""}
         ${canPause ? `<button type="button" class="rail-task-pause" data-task-id="${id}">暂停</button>` : ""}
         ${canDelete ? `<button type="button" class="rail-task-delete" data-task-id="${id}">删除</button>` : ""}
       </div>
@@ -671,6 +673,25 @@ async function openLatestOutputLocation() {
   }
 }
 
+async function openRailTaskLocation(taskId) {
+  const id = Number(taskId || 0);
+  const task = (typeof allTasks === "undefined" ? [] : allTasks).find((item) => Number(item.id || 0) === id);
+  if (!task?.video_path) {
+    if (typeof batchStatus !== "undefined") batchStatus.textContent = "这个任务还没有生成视频文件";
+    return;
+  }
+
+  const response = await fetch("/api/open-path", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ filePath: task.video_path }),
+  });
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}));
+    throw new Error(data.message || "打开视频位置失败");
+  }
+}
+
 async function viewRailTask(taskId) {
   const id = Number(taskId || 0);
   const task = (typeof allTasks === "undefined" ? [] : allTasks).find((item) => Number(item.id || 0) === id);
@@ -738,12 +759,22 @@ async function viewRailTask(taskId) {
 function bindWorkbenchInteractions() {
   document.addEventListener("click", (event) => {
     const railView = event.target.closest(".rail-task-view");
+    const railOpen = event.target.closest(".rail-task-open");
     const railPause = event.target.closest(".rail-task-pause");
     const railDelete = event.target.closest(".rail-task-delete");
     if (railView) {
       event.preventDefault();
       viewRailTask(railView.dataset.taskId).catch((error) => {
         resultBox.textContent = error instanceof Error ? error.message : String(error);
+      });
+      return;
+    }
+    if (railOpen) {
+      event.preventDefault();
+      openRailTaskLocation(railOpen.dataset.taskId).catch((error) => {
+        const message = error instanceof Error ? error.message : String(error);
+        resultBox.textContent = message;
+        if (typeof batchStatus !== "undefined") batchStatus.textContent = message;
       });
       return;
     }
