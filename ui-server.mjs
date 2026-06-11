@@ -474,31 +474,207 @@ function saveDownloadsDir(nextDir) {
 
 function chooseDownloadDir() {
   return new Promise((resolve, reject) => {
+    const tempDir = path.join(__dirname, ".data");
+    fs.mkdirSync(tempDir, { recursive: true });
+    const scriptPath = path.join(tempDir, `choose-download-folder-${process.pid}-${Date.now()}.ps1`);
+    const outputPath = path.join(tempDir, `choose-download-folder-${process.pid}-${Date.now()}.txt`);
     const script = [
-      "$shell = New-Object -ComObject Shell.Application",
-      "$folder = $shell.BrowseForFolder(0, '选择下载文件夹', 0, 17)",
-      "if ($folder) { [Console]::OutputEncoding = [System.Text.Encoding]::UTF8; Write-Output $folder.Self.Path }",
-    ].join("; ");
-    const child = spawn("powershell.exe", ["-NoProfile", "-STA", "-WindowStyle", "Hidden", "-Command", script], {
+      "param(",
+      "  [Parameter(Mandatory=$true)][string]$OutputPath,",
+      "  [string]$InitialPath = \"\"",
+      ")",
+      "$ErrorActionPreference = \"Stop\"",
+      "Add-Type -AssemblyName System.Windows.Forms",
+      "Add-Type -AssemblyName System.Drawing",
+      "$owner = New-Object System.Windows.Forms.Form",
+      "$owner.Text = \"选择下载文件夹\"",
+      "$owner.TopMost = $true",
+      "$owner.ShowInTaskbar = $false",
+      "$owner.StartPosition = \"CenterScreen\"",
+      "$owner.Size = New-Object System.Drawing.Size(1, 1)",
+      "$owner.Opacity = 0",
+      "try {",
+      "  $explorerPath = Join-Path $env:WINDIR \"explorer.exe\"",
+      "  if (Test-Path -LiteralPath $explorerPath) {",
+      "    $owner.Icon = [System.Drawing.Icon]::ExtractAssociatedIcon($explorerPath)",
+      "  }",
+      "} catch {}",
+      "$dialog = New-Object System.Windows.Forms.FolderBrowserDialog",
+      "$dialog.Description = \"选择下载文件夹\"",
+      "$dialog.ShowNewFolderButton = $true",
+      "if ($InitialPath -and (Test-Path -LiteralPath $InitialPath)) {",
+      "  $dialog.SelectedPath = $InitialPath",
+      "}",
+      "try {",
+      "  $owner.Show()",
+      "  $owner.Activate()",
+      "  $result = $dialog.ShowDialog($owner)",
+      "  if ($result -eq [System.Windows.Forms.DialogResult]::OK) {",
+      "    [System.IO.File]::WriteAllText($OutputPath, $dialog.SelectedPath, [System.Text.UTF8Encoding]::new($false))",
+      "  }",
+      "} finally {",
+      "  $dialog.Dispose()",
+      "  $owner.Close()",
+      "  $owner.Dispose()",
+      "}",
+    ].join("\r\n");
+    fs.writeFileSync(scriptPath, `\uFEFF${script}`, "utf8");
+
+    const child = spawn("powershell.exe", [
+      "-NoProfile",
+      "-STA",
+      "-ExecutionPolicy",
+      "Bypass",
+      "-File",
+      scriptPath,
+      outputPath,
+      downloadsDir,
+    ], {
       windowsHide: true,
-      stdio: ["ignore", "pipe", "pipe"],
+      stdio: ["ignore", "ignore", "pipe"],
     });
-    let stdout = "";
     let stderr = "";
-    child.stdout.on("data", (chunk) => {
-      stdout += chunk.toString("utf8");
-    });
     child.stderr.on("data", (chunk) => {
       stderr += chunk.toString("utf8");
     });
-    child.on("error", reject);
+    child.on("error", (error) => {
+      try {
+        fs.unlinkSync(scriptPath);
+      } catch {
+        // Best effort cleanup only.
+      }
+      try {
+        fs.unlinkSync(outputPath);
+      } catch {
+        // Best effort cleanup only.
+      }
+      reject(error);
+    });
     child.on("close", (code) => {
+      try {
+        fs.unlinkSync(scriptPath);
+      } catch {
+        // Best effort cleanup only.
+      }
       if (code !== 0) {
         reject(new Error(stderr.trim() || "选择文件夹失败"));
         return;
       }
-      resolve(stdout.trim());
+      let selected = "";
+      try {
+        selected = fs.readFileSync(outputPath, "utf8").replace(/^\uFEFF/, "").trim();
+      } catch {
+        selected = "";
+      }
+      try {
+        fs.unlinkSync(outputPath);
+      } catch {
+        // Best effort cleanup only.
+      }
+      resolve(selected);
     });
+  });
+}
+
+function openExplorerPath(targetPath, options = {}) {
+  const mode = options.select ? "select" : "folder";
+  return new Promise((resolve) => {
+    const fallback = () => {
+      if (mode === "select") {
+        spawn("explorer.exe", ["/select,", targetPath], { detached: true, stdio: "ignore" }).unref();
+      } else {
+        spawn("explorer.exe", [targetPath], { detached: true, stdio: "ignore" }).unref();
+      }
+    };
+
+    try {
+      const tempDir = path.join(__dirname, ".data");
+      fs.mkdirSync(tempDir, { recursive: true });
+      const scriptPath = path.join(tempDir, `open-explorer-${process.pid}-${Date.now()}.ps1`);
+      const script = [
+        "param(",
+        "  [Parameter(Mandatory=$true)][string]$TargetPath,",
+        "  [string]$Mode = \"folder\"",
+        ")",
+        "$ErrorActionPreference = \"Stop\"",
+        "Add-Type @\"",
+        "using System;",
+        "using System.Runtime.InteropServices;",
+        "public static class ExplorerFocusWin32 {",
+        "  public static readonly IntPtr HWND_TOPMOST = new IntPtr(-1);",
+        "  public static readonly IntPtr HWND_NOTOPMOST = new IntPtr(-2);",
+        "  [DllImport(\"user32.dll\")] public static extern bool ShowWindowAsync(IntPtr hWnd, int nCmdShow);",
+        "  [DllImport(\"user32.dll\")] public static extern bool SetForegroundWindow(IntPtr hWnd);",
+        "  [DllImport(\"user32.dll\")] public static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);",
+        "}",
+        "\"@",
+        "$target = [System.IO.Path]::GetFullPath($TargetPath)",
+        "$focusPath = $target",
+        "if ($Mode -eq \"select\") {",
+        "  $focusPath = [System.IO.Path]::GetDirectoryName($target)",
+        "  Start-Process explorer.exe -ArgumentList (\"/select,`\"$target`\"\")",
+        "} else {",
+        "  Start-Process explorer.exe -ArgumentList (\"`\"$target`\"\")",
+        "}",
+        "$focusPath = [System.IO.Path]::GetFullPath($focusPath).TrimEnd([System.IO.Path]::DirectorySeparatorChar)",
+        "$shell = New-Object -ComObject Shell.Application",
+        "$match = $null",
+        "for ($i = 0; $i -lt 24 -and -not $match; $i++) {",
+        "  Start-Sleep -Milliseconds 120",
+        "  foreach ($window in $shell.Windows()) {",
+        "    try {",
+        "      $windowPath = [System.IO.Path]::GetFullPath($window.Document.Folder.Self.Path).TrimEnd([System.IO.Path]::DirectorySeparatorChar)",
+        "      if ($windowPath -ieq $focusPath) { $match = $window; break }",
+        "    } catch {}",
+        "  }",
+        "}",
+        "if ($match -and $match.HWND) {",
+        "  $hwnd = [IntPtr]$match.HWND",
+        "  [ExplorerFocusWin32]::ShowWindowAsync($hwnd, 9) | Out-Null",
+        "  [ExplorerFocusWin32]::SetWindowPos($hwnd, [ExplorerFocusWin32]::HWND_TOPMOST, 0, 0, 0, 0, 0x0001 -bor 0x0002 -bor 0x0040) | Out-Null",
+        "  Start-Sleep -Milliseconds 160",
+        "  [ExplorerFocusWin32]::SetWindowPos($hwnd, [ExplorerFocusWin32]::HWND_NOTOPMOST, 0, 0, 0, 0, 0x0001 -bor 0x0002 -bor 0x0040) | Out-Null",
+        "  [ExplorerFocusWin32]::SetForegroundWindow($hwnd) | Out-Null",
+        "}",
+      ].join("\r\n");
+      fs.writeFileSync(scriptPath, `\uFEFF${script}`, "utf8");
+
+      const child = spawn("powershell.exe", [
+        "-NoProfile",
+        "-STA",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        scriptPath,
+        targetPath,
+        mode,
+      ], {
+        windowsHide: true,
+        stdio: ["ignore", "ignore", "ignore"],
+      });
+
+      child.on("error", () => {
+        try {
+          fs.unlinkSync(scriptPath);
+        } catch {
+          // Best effort cleanup only.
+        }
+        fallback();
+        resolve();
+      });
+      child.on("close", (code) => {
+        try {
+          fs.unlinkSync(scriptPath);
+        } catch {
+          // Best effort cleanup only.
+        }
+        if (code !== 0) fallback();
+        resolve();
+      });
+    } catch {
+      fallback();
+      resolve();
+    }
   });
 }
 
@@ -4108,7 +4284,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.method === "POST" && url.pathname === "/api/open-folder") {
-      spawn("explorer.exe", [downloadsDir], { detached: true, stdio: "ignore" }).unref();
+      await openExplorerPath(downloadsDir);
       sendJson(res, 200, { ok: true });
       return;
     }
@@ -4133,7 +4309,7 @@ const server = http.createServer(async (req, res) => {
         sendJson(res, 400, { ok: false, message: "没有找到可打开的文件" });
         return;
       }
-      spawn("explorer.exe", ["/select,", filePath], { detached: true, stdio: "ignore" }).unref();
+      await openExplorerPath(filePath, { select: true });
       sendJson(res, 200, { ok: true });
       return;
     }
@@ -4145,7 +4321,7 @@ const server = http.createServer(async (req, res) => {
         sendJson(res, 400, { ok: false, message: "没有找到可打开的文件位置" });
         return;
       }
-      spawn("explorer.exe", ["/select,", filePath], { detached: true, stdio: "ignore" }).unref();
+      await openExplorerPath(filePath, { select: true });
       sendJson(res, 200, { ok: true });
       return;
     }
