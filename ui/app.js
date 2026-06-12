@@ -156,6 +156,8 @@ const ttsWorkspaceId = document.querySelector("#ttsWorkspaceId");
 const ttsBaseUrlField = document.querySelector("#ttsBaseUrlField");
 const ttsBaseUrl = document.querySelector("#ttsBaseUrl");
 const ttsModel = document.querySelector("#ttsModel");
+const ttsCurrentProviderLabel = document.querySelector("#ttsCurrentProviderLabel");
+const ttsCurrentModelLabel = document.querySelector("#ttsCurrentModelLabel");
 const ttsSettingsStatus = document.querySelector("#ttsSettingsStatus");
 const ttsText = document.querySelector("#ttsText");
 const ttsCharacterCount = document.querySelector("#ttsCharacterCount");
@@ -1128,22 +1130,53 @@ function updateTtsProviderFields() {
   const provider = selectedTtsProviderConfig();
   const isAliyun = provider.id === "aliyun_bailian";
   const isCustom = provider.id === "custom_tts";
-  ttsWorkspaceField.hidden = !isAliyun;
-  ttsBaseUrlField.hidden = !isCustom;
+  if (ttsWorkspaceField) ttsWorkspaceField.hidden = true;
+  if (ttsBaseUrlField) ttsBaseUrlField.hidden = true;
   ttsWorkspaceId.value = isAliyun ? provider.workspace_id || "" : "";
   ttsBaseUrl.value = isCustom ? provider.base_url || "" : "";
   ttsModel.value = provider.default_model || "";
   ttsApiKey.value = "";
-  ttsApiKey.placeholder = provider.configured
-    ? `已保存：${provider.secret_mask || "已脱敏"}，留空则不修改`
-    : "仅保存在本机 settings.json";
+  ttsApiKey.placeholder = "";
+  if (ttsCurrentProviderLabel) ttsCurrentProviderLabel.textContent = provider.label || "未设置";
+  if (ttsCurrentModelLabel) {
+    const keyState = provider.configured ? `API 已保存：${provider.secret_mask || "已脱敏"}` : "API 未配置";
+    ttsCurrentModelLabel.textContent = `${provider.default_model || "未设置模型"} · ${keyState}`;
+  }
   ttsSettingsStatus.textContent = provider.configured
-    ? `${provider.label} 已配置：${provider.secret_mask || "密钥已脱敏"}`
-    : `${provider.label || "当前平台"}尚未配置。`;
+    ? `${provider.label} 已在系统设置中配置。`
+    : `${provider.label || "当前平台"}尚未配置，请到系统设置保存 API。`;
+}
+
+function selectedTtsVoice() {
+  const voiceId = ttsVoiceSource.value === "manual" ? ttsManualVoice.value.trim() : ttsPresetVoice.value;
+  if (!voiceId) return null;
+  if (ttsVoiceSource.value === "cloned") {
+    const asset = voiceAssets.find((item) =>
+      item.provider === ttsProvider.value && item.voice_id === voiceId && item.voice_type === "clone" && !item.archived
+    );
+    return asset ? {
+      id: asset.voice_id,
+      name: asset.voice_name,
+      model: asset.metadata?.target_model || asset.metadata?.model || "",
+      asset,
+    } : null;
+  }
+  return ttsPresetVoices.find((voice) => voice.id === voiceId) || null;
+}
+
+function syncTtsModelToSelectedVoice() {
+  const voice = selectedTtsVoice();
+  if (voice?.model) {
+    ttsModel.value = voice.model;
+    if (ttsCurrentModelLabel) {
+      const provider = selectedTtsProviderConfig();
+      const keyState = provider.configured ? `API 已保存：${provider.secret_mask || "已脱敏"}` : "API 未配置";
+      ttsCurrentModelLabel.textContent = `${voice.model} · ${keyState}`;
+    }
+  }
 }
 
 function renderTtsVoices() {
-  const model = ttsModel.value.trim();
   const cloned = ttsVoiceSource.value === "cloned";
   const sourceVoices = cloned
     ? voiceAssets
@@ -1155,15 +1188,18 @@ function renderTtsVoices() {
           description: `克隆音色 v${asset.version}`,
         }))
     : ttsPresetVoices;
-  const matching = sourceVoices.filter((voice) => !model || !voice.model || voice.model === model);
-  const voices = matching.length ? matching : sourceVoices;
+  const voices = sourceVoices;
   ttsPresetVoice.innerHTML = voices.length
     ? voices
-        .map((voice) => `<option value="${escapeHtml(voice.id)}">${escapeHtml(voice.name)} · ${escapeHtml(voice.description || voice.id)}</option>`)
+        .map((voice) => {
+          const model = voice.model ? ` · ${voice.model}` : "";
+          return `<option value="${escapeHtml(voice.id)}">${escapeHtml(voice.name)} · ${escapeHtml(voice.description || voice.id)}${escapeHtml(model)}</option>`;
+        })
         .join("")
     : '<option value="">当前平台暂无预设音色</option>';
   const configuredDefault = selectedTtsProviderConfig().default_voice || "";
   if (voices.some((voice) => voice.id === configuredDefault)) ttsPresetVoice.value = configuredDefault;
+  syncTtsModelToSelectedVoice();
 }
 
 async function loadTtsVoices() {
@@ -1326,6 +1362,7 @@ async function generateTts() {
   ttsStatus.textContent = "正在提交生成任务...";
   try {
     const selectedVoice = ttsPresetVoices.find((voice) => voice.id === voiceId);
+    const selectedVoiceForModel = selectedTtsVoice();
     const data = await fetchJson("/api/tts/generate", {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -1333,9 +1370,9 @@ async function generateTts() {
         provider: ttsProvider.value,
         text,
         voice_id: voiceId,
-        voice_name: selectedVoice?.name || voiceId,
+        voice_name: selectedVoiceForModel?.name || selectedVoice?.name || voiceId,
         voice_asset_id: voiceAsset?.id || 0,
-        model: voiceAsset?.metadata?.target_model || voiceAsset?.metadata?.model || ttsModel.value.trim(),
+        model: voiceAsset?.metadata?.target_model || voiceAsset?.metadata?.model || selectedVoiceForModel?.model || ttsModel.value.trim(),
         speed: Number(ttsSpeed.value || 1),
         emotion: ttsEmotion.value === "custom" ? ttsCustomEmotion.value.trim() : ttsEmotion.value,
         style_prompt: ttsStylePrompt.value.trim(),
@@ -1588,10 +1625,17 @@ async function applyVoiceAssetToTts(asset) {
   if (model) ttsModel.value = model;
   await loadTtsVoices();
   const presetExists = ttsPresetVoices.some((voice) => voice.id === asset.voice_id);
-  ttsVoiceSource.value = presetExists ? "preset" : asset.voice_type === "clone" ? "cloned" : "manual";
+  const cloneExists = voiceAssets.some((item) =>
+    item.provider === asset.provider && item.voice_id === asset.voice_id && item.voice_type === "clone" && item.status === "active"
+  );
+  ttsVoiceSource.value = presetExists ? "preset" : asset.voice_type === "clone" && cloneExists ? "cloned" : "manual";
   updateTtsVoiceSource();
-  if (presetExists) ttsPresetVoice.value = asset.voice_id;
-  else ttsManualVoice.value = asset.voice_id;
+  if (presetExists || cloneExists) {
+    ttsPresetVoice.value = asset.voice_id;
+    syncTtsModelToSelectedVoice();
+  } else {
+    ttsManualVoice.value = asset.voice_id;
+  }
   ttsStatus.textContent = `已选择声音：${asset.voice_name}`;
 }
 
@@ -1679,18 +1723,17 @@ async function generateDefaultVoiceFromRewrite(versionKey) {
     rewriteStatus.textContent = "当前输出框没有文案，请先生成文案。";
     return;
   }
+  ttsText.value = text;
+  ttsCharacterCount.textContent = `${text.replace(/\s/g, "").length} 字`;
+  window.workbenchNavigate?.("tts", { preserveScroll: true });
+  document.querySelector("#ttsLab").scrollIntoView({ behavior: "smooth", block: "start" });
   if (!defaultVoiceAsset) {
-    rewriteStatus.textContent = "请先在声音资产中心设置默认音色。";
-    window.workbenchNavigate?.("voices", { preserveScroll: true });
-    document.querySelector("#voiceAssetCenter").scrollIntoView({ behavior: "smooth", block: "start" });
+    ttsStatus.textContent = "文案已带入，请选择音色后点击生成语音。";
+    rewriteStatus.textContent = "文案已带入 TTS 语音输入框，请选择音色后生成。";
     return;
   }
   try {
     await applyVoiceAssetToTts(defaultVoiceAsset);
-    ttsText.value = text;
-    ttsCharacterCount.textContent = `${text.replace(/\s/g, "").length} 字`;
-    window.workbenchNavigate?.("tts", { preserveScroll: true });
-    document.querySelector("#ttsLab").scrollIntoView({ behavior: "smooth", block: "start" });
     await generateTts();
   } catch (error) {
     rewriteStatus.textContent = error instanceof Error ? error.message : String(error);
@@ -2963,8 +3006,13 @@ rewriteAutoModel?.addEventListener("change", () => {
   }
 });
 
-document.querySelector("#saveTtsSettings").addEventListener("click", () => {
+document.querySelector("#saveTtsSettings")?.addEventListener("click", () => {
   saveTtsProviderSettings();
+});
+
+document.querySelector("#openTtsSettingsHub")?.addEventListener("click", () => {
+  window.workbenchNavigate?.("settings", { preserveScroll: true });
+  document.querySelector("#unifiedSettingsPanel")?.scrollIntoView({ behavior: "smooth", block: "start" });
 });
 
 ttsProvider.addEventListener("change", () => {
@@ -2974,8 +3022,9 @@ ttsProvider.addEventListener("change", () => {
   });
 });
 
-ttsModel.addEventListener("change", renderTtsVoices);
+ttsModel.addEventListener("change", syncTtsModelToSelectedVoice);
 ttsVoiceSource.addEventListener("change", updateTtsVoiceSource);
+ttsPresetVoice.addEventListener("change", syncTtsModelToSelectedVoice);
 ttsEmotion.addEventListener("change", updateTtsEmotionField);
 ttsVolume.addEventListener("input", updateTtsRangeLabels);
 ttsPitch.addEventListener("input", updateTtsRangeLabels);
@@ -2994,6 +3043,11 @@ document.querySelector("#refreshTtsJobs").addEventListener("click", () => {
 });
 
 document.querySelector("#newVoiceAsset").addEventListener("click", () => {
+  openVoiceAssetForm();
+});
+
+document.querySelector("#openVoiceCloneFromTts")?.addEventListener("click", () => {
+  window.workbenchNavigate?.("voices", { preserveScroll: true });
   openVoiceAssetForm();
 });
 

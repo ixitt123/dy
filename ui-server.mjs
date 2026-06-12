@@ -1021,7 +1021,15 @@ function publicUnifiedProviders(settings = readSettings()) {
       description: "用于 TTS 语音和声音复刻；可与 DashScope 通义千问共用同一个阿里云百炼 Key。",
       baseUrl: "https://dashscope.aliyuncs.com",
       model: tts.aliyun_bailian?.default_model || "cosyvoice-v2",
-      models: ["cosyvoice-v2", "qwen-tts"],
+      workspaceId: tts.aliyun_bailian?.workspace_id || "",
+      models: [
+        "cosyvoice-v2",
+        "cosyvoice-v3-flash",
+        "cosyvoice-v3-plus",
+        "qwen3-tts-flash",
+        "qwen3-tts-instruct-flash",
+        "qwen-tts-latest",
+      ],
       enabled: true,
     },
     {
@@ -1078,12 +1086,14 @@ function publicUnifiedProviders(settings = readSettings()) {
       configured: provider.id === "custom_tts" ? Boolean(config.base_url) : Boolean(apiKey),
       apiKeyMask: maskApiKey(apiKey),
       baseUrl: provider.baseUrl,
+      workspaceId: provider.workspaceId || "",
       model: provider.model,
       models: provider.models,
       applyUrl: "",
       balanceUrl: "",
       activeDefault: tts.default_provider === provider.id,
       supportsBaseUrl: provider.id !== "aliyun_bailian",
+      supportsWorkspace: provider.id === "aliyun_bailian",
       supportsModel: true,
       enabled: provider.enabled,
     });
@@ -1096,6 +1106,7 @@ function saveUnifiedProvider(settings, body) {
   const id = String(body.id || "").trim();
   const apiKey = String(body.apiKey || "").trim();
   const baseUrl = String(body.baseUrl || "").trim();
+  const workspaceId = String(body.workspaceId || "").trim();
   const model = String(body.model || "").trim();
 
   if (settings.rewriteProviders?.[id]) {
@@ -1135,6 +1146,7 @@ function saveUnifiedProvider(settings, body) {
       settings.providers.dashscope.apiKey = apiKey;
       settings.rewriteProviders.dashscope.apiKey = apiKey;
     }
+    if (body.workspaceId !== undefined) settings.tts.aliyun_bailian.workspace_id = workspaceId;
     if (body.model !== undefined) settings.tts.aliyun_bailian.default_model = model || "cosyvoice-v2";
     if (body.setDefault === true) settings.tts.default_provider = id;
     return;

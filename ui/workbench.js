@@ -1086,6 +1086,12 @@ function setupV2Settings() {
           <input class="provider-input" data-field="baseUrl" data-provider="${html(provider.id)}" type="text" value="${html(provider.baseUrl || "")}" placeholder="服务地址" />
         </label>
       ` : ""}
+      ${provider.supportsWorkspace ? `
+        <label>
+          Workspace ID
+          <input class="provider-input" data-field="workspaceId" data-provider="${html(provider.id)}" type="text" value="${html(provider.workspaceId || "")}" placeholder="可选" />
+        </label>
+      ` : ""}
       ${provider.supportsModel ? `
         <label>
           默认模型
