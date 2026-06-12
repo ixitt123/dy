@@ -206,6 +206,7 @@ const voiceAssetFormTitle = document.querySelector("#voiceAssetFormTitle");
 const voiceAssetName = document.querySelector("#voiceAssetName");
 const voiceAssetProvider = document.querySelector("#voiceAssetProvider");
 const voiceAssetVoiceId = document.querySelector("#voiceAssetVoiceId");
+const voiceAssetReferenceId = document.querySelector("#voiceAssetReferenceId");
 const voiceAssetTargetModel = document.querySelector("#voiceAssetTargetModel");
 const voiceAssetDescription = document.querySelector("#voiceAssetDescription");
 const voiceAssetTags = document.querySelector("#voiceAssetTags");
@@ -1544,6 +1545,7 @@ function resetVoiceAssetForm() {
   voiceAssetName.value = "";
   voiceAssetProvider.value = "aliyun_bailian";
   voiceAssetVoiceId.value = "";
+  if (voiceAssetReferenceId) voiceAssetReferenceId.value = "";
   voiceAssetTargetModel.value = "qwen3-tts-vc-2026-01-22";
   voiceAssetDescription.value = "";
   voiceAssetTags.value = "";
@@ -1562,6 +1564,7 @@ function openVoiceAssetForm(asset = null) {
     voiceAssetName.value = asset.voice_name || "";
     voiceAssetProvider.value = asset.provider || "aliyun_bailian";
     voiceAssetVoiceId.value = asset.voice_id || "";
+    if (voiceAssetReferenceId) voiceAssetReferenceId.value = asset.metadata?.reference_id || asset.metadata?.fish_audio?.reference_id || "";
     voiceAssetTargetModel.value = asset.metadata?.target_model || "qwen3-tts-vc-2026-01-22";
     voiceAssetDescription.value = asset.description || "";
     voiceAssetTags.value = (asset.tags || []).join("、");
@@ -1593,6 +1596,7 @@ async function saveVoiceAssetForm() {
           id: editId,
           voice_name: voiceAssetName.value.trim(),
           voice_id: voiceAssetVoiceId.value.trim(),
+          reference_id: voiceAssetReferenceId?.value.trim() || "",
           description: voiceAssetDescription.value.trim(),
           tags: voiceAssetTags.value,
         }),
@@ -1621,6 +1625,7 @@ async function saveVoiceAssetForm() {
           voice_name: voiceAssetName.value.trim(),
           provider: voiceAssetProvider.value,
           voice_id: voiceAssetVoiceId.value.trim(),
+          reference_id: voiceAssetReferenceId?.value.trim() || "",
           target_model: voiceAssetTargetModel.value,
           description: voiceAssetDescription.value.trim(),
           tags: voiceAssetTags.value,
