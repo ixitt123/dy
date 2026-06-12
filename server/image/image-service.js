@@ -5,6 +5,9 @@ import { randomUUID } from "node:crypto";
 import { createImageProvider } from "./providers/index.js";
 import { callProviderGenerate } from "./provider-adapter.js";
 
+const DEFAULT_IMAGE_PROVIDER = "volcengine_ark";
+const DEFAULT_IMAGE_MODEL = "doubao-seedream-5.0-lite";
+
 export function createImageService({ baseDir, getSettings }) {
   const outputDir = path.join(baseDir, "image-assets", "generated");
   const dbPath = path.join(baseDir, ".data", "image-studio.sqlite");
@@ -41,35 +44,82 @@ export function createImageService({ baseDir, getSettings }) {
       height INTEGER DEFAULT 0,
       file_size INTEGER DEFAULT 0,
       provider TEXT,
+      model TEXT DEFAULT '',
       prompt TEXT,
       revised_prompt TEXT,
       aspect_ratio TEXT,
+      file_path TEXT DEFAULT '',
+      source_url TEXT DEFAULT '',
       source_type TEXT DEFAULT 'manual',
       source_id TEXT DEFAULT '',
       created_at TEXT DEFAULT (datetime('now','localtime'))
     );
   `);
 
-  async function generateImage({ prompt, aspectRatio = "1:1", count = 1, sourceType = "manual", sourceId = "" } = {}) {
+  const assetColumns = new Set(db.prepare("PRAGMA table_info(image_assets)").all().map((column) => column.name));
+  if (!assetColumns.has("model")) db.exec("ALTER TABLE image_assets ADD COLUMN model TEXT DEFAULT ''");
+  if (!assetColumns.has("file_path")) db.exec("ALTER TABLE image_assets ADD COLUMN file_path TEXT DEFAULT ''");
+  if (!assetColumns.has("source_url")) db.exec("ALTER TABLE image_assets ADD COLUMN source_url TEXT DEFAULT ''");
+  const jobColumns = new Set(db.prepare("PRAGMA table_info(image_jobs)").all().map((column) => column.name));
+  if (!jobColumns.has("model")) db.exec("ALTER TABLE image_jobs ADD COLUMN model TEXT DEFAULT ''");
+
+  function imageProviderFromSettings(settings, explicitProvider = "") {
+    const mapped = settings.modelMap?.image || settings.modelMapping?.image || {};
+    const provider = String(explicitProvider || mapped.provider || DEFAULT_IMAGE_PROVIDER).trim() || DEFAULT_IMAGE_PROVIDER;
+    const model = String(mapped.model || settings.imageProviders?.[provider]?.model || DEFAULT_IMAGE_MODEL).trim();
+    return { provider, model };
+  }
+
+  async function downloadImage(result, outputPath) {
+    if (result.imageUrl) {
+      let response;
+      try {
+        response = await fetch(result.imageUrl);
+      } catch (error) {
+        throw new Error(`图片下载失败：${error instanceof Error ? error.message : String(error)}`);
+      }
+      if (!response.ok) throw new Error(`图片下载失败（${response.status}）`);
+      const buf = Buffer.from(await response.arrayBuffer());
+      fs.writeFileSync(outputPath, buf);
+      return outputPath;
+    }
+    if (result.imageBase64) {
+      fs.writeFileSync(outputPath, Buffer.from(result.imageBase64, "base64"));
+      return outputPath;
+    }
+    throw new Error("图片下载失败：Provider 未返回图片 URL 或 Base64。");
+  }
+
+  function publicAsset(row) {
+    if (!row) return row;
+    return {
+      ...row,
+      file_path: row.file_path || row.original_path || "",
+      ratio: row.aspect_ratio || "",
+    };
+  }
+
+  async function generateImage({ prompt, aspectRatio = "1:1", count = 1, sourceType = "manual", sourceId = "", provider = "" } = {}) {
     const cleanPrompt = String(prompt || "").trim();
     if (!cleanPrompt) throw new Error("请先输入图片描述。");
     const settings = getSettings();
     const providers = settings.imageProviders || {};
+    const selected = imageProviderFromSettings(settings, provider);
 
     const jobId = randomUUID();
     const results = [];
 
-    const providerInstance = createImageProvider("jimeng", { config: providers });
-    if (!providerInstance) throw new Error("即梦 Provider 初始化失败");
+    const providerInstance = createImageProvider(selected.provider, { config: providers });
+    if (!providerInstance) throw new Error("未知图片 Provider。");
     const validation = await providerInstance.validateConfig();
     if (!validation.valid) {
-      throw new Error(`${validation.error || "图片生成 API 未配置"}。请到系统设置 > API 服务中心 > 图片生成 > 即梦 AI 保存 API Key。`);
+      throw new Error(`${validation.error || "图片生成 API 未配置"} 请到系统设置 > API 服务中心 > 图片生成保存 API Key。`);
     }
 
     db.prepare(`
-      INSERT INTO image_jobs (id, source_type, source_id, provider, prompt, aspect_ratio, count_requested, status)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(jobId, sourceType, sourceId, "jimeng", cleanPrompt, aspectRatio, count, "生成中");
+      INSERT INTO image_jobs (id, source_type, source_id, provider, model, prompt, aspect_ratio, count_requested, status)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(jobId, sourceType, sourceId, selected.provider, selected.model, cleanPrompt, aspectRatio, count, "生成中");
 
     for (let i = 0; i < count; i++) {
       const filename = `img_${jobId.slice(0, 6)}_${i}_${Date.now()}.png`;
@@ -83,33 +133,45 @@ export function createImageService({ baseDir, getSettings }) {
           continue;
         }
 
-        let localPath = "";
-        if (result.imageUrl) {
-          const resp = await fetch(result.imageUrl);
-          if (resp.ok) {
-            const buf = Buffer.from(await resp.arrayBuffer());
-            fs.writeFileSync(outputPath, buf);
-            localPath = outputPath;
-          }
-        } else if (result.imageBase64) {
-          fs.writeFileSync(outputPath, Buffer.from(result.imageBase64, "base64"));
-          localPath = outputPath;
-        }
-
-        if (!localPath) {
-          results.push({ index: i, success: false, error: "图片保存失败" });
-          continue;
-        }
+        const localPath = await downloadImage(result, outputPath);
 
         const stats = fs.statSync(localPath);
         const assetId = randomUUID();
 
         db.prepare(`
-          INSERT INTO image_assets (id, job_id, filename, original_path, file_size, provider, prompt, revised_prompt, aspect_ratio, source_type, source_id)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `).run(assetId, jobId, filename, localPath, stats.size, "jimeng", cleanPrompt, result.revisedPrompt || cleanPrompt, aspectRatio, sourceType, sourceId);
+          INSERT INTO image_assets (
+            id, job_id, filename, original_path, file_path, file_size, provider, model,
+            prompt, revised_prompt, aspect_ratio, source_url, source_type, source_id
+          )
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `).run(
+          assetId,
+          jobId,
+          filename,
+          localPath,
+          localPath,
+          stats.size,
+          selected.provider,
+          result.model || selected.model,
+          cleanPrompt,
+          result.revisedPrompt || cleanPrompt,
+          aspectRatio,
+          result.sourceUrl || result.imageUrl || "",
+          sourceType,
+          sourceId,
+        );
 
-        results.push({ index: i, success: true, assetId, filename, imagePath: localPath });
+        results.push({
+          index: i,
+          success: true,
+          assetId,
+          filename,
+          imagePath: localPath,
+          file_path: localPath,
+          provider: selected.provider,
+          model: result.model || selected.model,
+          source_url: result.sourceUrl || result.imageUrl || "",
+        });
       } catch (err) {
         results.push({ index: i, success: false, error: err.message });
       }
@@ -127,12 +189,33 @@ export function createImageService({ baseDir, getSettings }) {
     return { jobId, results, total: count, success: successCount, failed: count - successCount };
   }
 
+  async function testProviderConnection(provider = "") {
+    const settings = getSettings();
+    const selected = imageProviderFromSettings(settings, provider);
+    const instance = createImageProvider(selected.provider, { config: settings.imageProviders || {} });
+    if (!instance) return { ok: false, status: "failed", message: "未知图片 Provider。" };
+    if (typeof instance.testConnection === "function") {
+      const result = await instance.testConnection();
+      return {
+        ok: Boolean(result.valid),
+        status: result.valid ? "success" : "failed",
+        message: result.message || result.error || (result.valid ? "测试成功。" : "测试失败。"),
+      };
+    }
+    const validation = await instance.validateConfig();
+    return {
+      ok: Boolean(validation.valid),
+      status: validation.valid ? "success" : "failed",
+      message: validation.valid ? "配置已保存。" : validation.error || "配置不可用。",
+    };
+  }
+
   function getJobs({ limit = 50, offset = 0 } = {}) {
     return db.prepare("SELECT * FROM image_jobs ORDER BY created_at DESC LIMIT ? OFFSET ?").all(limit, offset);
   }
 
   function getAssets({ limit = 50, offset = 0 } = {}) {
-    return db.prepare("SELECT * FROM image_assets ORDER BY created_at DESC LIMIT ? OFFSET ?").all(limit, offset);
+    return db.prepare("SELECT * FROM image_assets ORDER BY created_at DESC LIMIT ? OFFSET ?").all(limit, offset).map(publicAsset);
   }
 
   function deleteAsset(assetId) {
@@ -149,5 +232,5 @@ export function createImageService({ baseDir, getSettings }) {
     };
   }
 
-  return { generateImage, getJobs, getAssets, deleteAsset, getStats };
+  return { generateImage, testProviderConnection, getJobs, getAssets, deleteAsset, getStats };
 }

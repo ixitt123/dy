@@ -75,7 +75,7 @@ const DEFAULT_MODEL_MAPPING = {
   director: { provider: "deepseek", model: "deepseek-chat" },
   storyboard: { provider: "deepseek", model: "deepseek-chat" },
   image_prompt: { provider: "deepseek", model: "deepseek-chat" },
-  image: { provider: "jimeng", model: "flux-dev" },
+  image: { provider: "volcengine_ark", model: "doubao-seedream-5.0-lite" },
   video: { provider: "kling", model: "kling" },
   tts: { provider: "aliyun_bailian", model: "cosyvoice-v2" },
 };
@@ -108,7 +108,7 @@ const SETTINGS_TASKS = {
   image: {
     label: "图片生成",
     purpose: "根据提示词生成图片资产。",
-    route: "使用图片 Provider，目前接入即梦。",
+    route: "使用图片 Provider，默认火山方舟 Seedream，可切换即梦。",
   },
   tts: {
     label: "TTS 语音",
@@ -824,6 +824,12 @@ function normalizeSettings(settings) {
     default_format: tts.default_format === "wav" ? "wav" : "mp3",
   };
   next.imageProviders = {
+    volcengine_ark: {
+      label: "火山方舟 Seedream",
+      baseUrl: String(imageProviders.volcengine_ark?.baseUrl || "https://ark.cn-beijing.volces.com/api/v3").trim(),
+      apiKey: String(imageProviders.volcengine_ark?.apiKey || "").trim(),
+      model: String(imageProviders.volcengine_ark?.model || "doubao-seedream-5.0-lite").trim() || "doubao-seedream-5.0-lite",
+    },
     jimeng: {
       label: "即梦 AI",
       baseUrl: String(imageProviders.jimeng?.baseUrl || "https://api.jimeng.io/v1").trim(),
@@ -1002,25 +1008,49 @@ function publicUnifiedProviders(settings = readSettings()) {
     });
   }
 
-  const jimeng = settings.imageProviders?.jimeng || {};
-  providers.push({
-    id: "jimeng",
-    label: jimeng.label || "即梦 AI",
-    group: "图片生成",
-    feature: "图片生成",
-    description: "用于图片生成页面，根据提示词生成本地图片资产。",
-    configured: Boolean(jimeng.apiKey),
-    apiKeyMask: maskApiKey(jimeng.apiKey || ""),
-    baseUrl: jimeng.baseUrl || "https://api.jimeng.io/v1",
-    model: jimeng.model || "flux-dev",
-    models: ["flux-dev", "flux-pro", "sdxl"],
-    applyUrl: "",
-    balanceUrl: "",
-    activeDefault: publicModelMapping(settings).image?.provider === "jimeng",
-    supportsBaseUrl: true,
-    supportsModel: true,
-    enabled: true,
-  });
+  const imageProviderDefs = [
+    {
+      id: "volcengine_ark",
+      label: "火山方舟 Seedream",
+      description: "主力图片生成 Provider，调用火山方舟 Seedream 图片生成接口生成本地图片资产。",
+      baseUrl: "https://ark.cn-beijing.volces.com/api/v3",
+      model: "doubao-seedream-5.0-lite",
+      models: ["doubao-seedream-5.0-lite"],
+      applyUrl: "https://console.volcengine.com/ark/region:ark+cn-beijing/apiKey",
+      balanceUrl: "https://console.volcengine.com/finance",
+    },
+    {
+      id: "jimeng",
+      label: "即梦 AI",
+      description: "保留现有图片生成 Provider，可作为备用。",
+      baseUrl: "https://api.jimeng.io/v1",
+      model: "flux-dev",
+      models: ["flux-dev", "flux-pro", "sdxl"],
+      applyUrl: "",
+      balanceUrl: "",
+    },
+  ];
+  for (const def of imageProviderDefs) {
+    const config = settings.imageProviders?.[def.id] || {};
+    providers.push({
+      id: def.id,
+      label: config.label || def.label,
+      group: "图片生成",
+      feature: "图片生成",
+      description: def.description,
+      configured: Boolean(config.apiKey),
+      apiKeyMask: maskApiKey(config.apiKey || ""),
+      baseUrl: config.baseUrl || def.baseUrl,
+      model: config.model || def.model,
+      models: def.models,
+      applyUrl: def.applyUrl,
+      balanceUrl: def.balanceUrl,
+      activeDefault: publicModelMapping(settings).image?.provider === def.id,
+      supportsBaseUrl: true,
+      supportsModel: true,
+      enabled: true,
+    });
+  }
 
   const tts = settings.tts || {};
   const ttsProviders = [
@@ -1138,15 +1168,22 @@ function saveUnifiedProvider(settings, body) {
     return;
   }
 
-  if (id === "jimeng") {
+  if (["jimeng", "volcengine_ark"].includes(id)) {
     if (!settings.imageProviders) settings.imageProviders = {};
-    settings.imageProviders.jimeng = {
-      ...(settings.imageProviders.jimeng || {}),
-      label: "即梦 AI",
+    settings.imageProviders[id] = {
+      ...(settings.imageProviders[id] || {}),
+      label: id === "volcengine_ark" ? "火山方舟 Seedream" : "即梦 AI",
       ...(apiKey ? { apiKey } : {}),
       ...(body.baseUrl !== undefined ? { baseUrl } : {}),
       ...(body.model !== undefined ? { model } : {}),
     };
+    if (body.setDefault === true) {
+      settings.modelMap.image = {
+        provider: id,
+        model: model || settings.imageProviders[id].model || (id === "volcengine_ark" ? "doubao-seedream-5.0-lite" : "flux-dev"),
+      };
+      settings.modelMapping = settings.modelMap;
+    }
     return;
   }
 
