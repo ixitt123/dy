@@ -1013,12 +1013,17 @@
               Provider
               <select id="voiceAssetProvider">
                 <option value="aliyun_bailian">阿里云百炼 CosyVoice / Qwen-TTS</option>
+                <option value="fish_audio">Fish Audio</option>
                 <option value="custom_tts">自定义 Provider</option>
               </select>
             </label>
             <label>
               已有 voice_id
-              <input id="voiceAssetVoiceId" type="text" placeholder="没有可留空，系统将调用百炼复刻" />
+              <input id="voiceAssetVoiceId" type="text" placeholder="已有声音 ID，可用于 TTS" />
+            </label>
+            <label>
+              Fish reference_id
+              <input id="voiceAssetReferenceId" type="text" placeholder="Fish Audio 的 reference_id，可选" />
             </label>
             <label>
               复刻目标模型
