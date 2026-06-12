@@ -657,10 +657,10 @@
       <section class="vfo-system" id="vfoSystem">
         <div class="result-head vfo-head">
           <div>
-            <h2>视频工厂调度中心</h2>
-            <p>Storyboard 先经过素材规划，再生成平台渲染策略和质量检查；本阶段不生成图片或视频。</p>
+            <h2>视频成片中心</h2>
+            <p>Director Project → Asset Binding → Timeline Project → Render Plan → Output。</p>
           </div>
-          <span class="vfo-stage-badge">Decision &amp; QA</span>
+          <span class="vfo-stage-badge">Timeline First</span>
         </div>
 
         <div class="vfo-pipeline" aria-label="视频工厂工作流">
@@ -672,11 +672,85 @@
           <strong>→</strong>
           <span class="active">VFO</span>
           <strong>→</strong>
-          <span class="reserved">成品视频 MVP</span>
+          <span class="active">Timeline</span>
           <strong>→</strong>
-          <span class="reserved">AI 图片生成</span>
+          <span class="active">剪映草稿</span>
           <strong>→</strong>
-          <span class="reserved">剪映草稿导出</span>
+          <span class="reserved">MP4 成片</span>
+        </div>
+
+        <section class="video-product-center" id="videoProductCenter">
+          <div class="video-product-toolbar">
+            <div>
+              <h3>Video Product Center</h3>
+              <p>第一阶段优先生成剪映半成品素材包，同时提供第一版 MP4 渲染。</p>
+            </div>
+            <button class="ghost small" id="refreshVideoProductSources" type="button">刷新素材</button>
+          </div>
+
+          <div class="video-product-workbench">
+            <section class="video-product-panel">
+              <h3>输入</h3>
+              <label>
+                导演项目
+                <select id="videoProductDirector"></select>
+              </label>
+              <label>
+                TTS 音频
+                <select id="videoProductAudio"></select>
+              </label>
+              <label>
+                图片素材来源
+                <select id="videoProductImageSource">
+                  <option value="director">优先匹配当前导演项目图片</option>
+                  <option value="all">使用图片资产库全部图片</option>
+                </select>
+              </label>
+              <label>
+                输出方式
+                <select id="videoProductOutputType">
+                  <option value="jianying" selected>导出剪映草稿半成品</option>
+                  <option value="mp4">自动成片 MP4</option>
+                  <option value="package">导出素材包</option>
+                </select>
+              </label>
+              <div class="video-product-actions">
+                <button class="ghost" id="autoBindTimeline" type="button">自动匹配镜头素材</button>
+                <button class="primary" id="generateVideoProduct" type="button">生成输出</button>
+              </div>
+              <p id="videoProductStatus" role="status">等待选择导演项目、音频和图片素材。</p>
+            </section>
+
+            <section class="video-product-panel">
+              <h3>阻塞项</h3>
+              <div class="video-product-blockers" id="videoProductBlockers">
+                <span>刷新后会显示缺失音频、缺失图片和时间线问题。</span>
+              </div>
+              <h3>任务进度</h3>
+              <div class="video-product-progress">
+                <div class="progress-track" aria-hidden="true"><div class="progress-bar" id="videoProductProgressBar"></div></div>
+                <span id="videoProductProgressText">0%</span>
+              </div>
+              <button class="ghost" id="openVideoProductOutput" type="button" disabled>打开输出目录</button>
+            </section>
+          </div>
+
+          <div class="video-product-scene-head">
+            <h3>Timeline 镜头列表</h3>
+            <span id="videoProductSceneMeta">尚未生成预览</span>
+          </div>
+          <div class="video-product-scenes" id="videoProductScenes"></div>
+
+          <div class="video-product-history-head">
+            <h3>成片项目</h3>
+            <button class="ghost small" id="refreshVideoProductProjects" type="button">刷新</button>
+          </div>
+          <div class="video-product-projects" id="videoProductProjects"></div>
+        </section>
+
+        <div class="vfo-section-title">
+          <h3>Render Plan 规划区</h3>
+          <p>保留原 VFO 能力，用于素材规划、平台渲染策略和 QA。</p>
         </div>
 
         <div class="vfo-workbench">
