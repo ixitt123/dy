@@ -1146,6 +1146,8 @@ function publicUnifiedProviders(settings = readSettings()) {
       supportsBaseUrl: provider.id !== "aliyun_bailian",
       supportsWorkspace: provider.id === "aliyun_bailian",
       supportsModel: true,
+      supportsFormat: provider.id === "fish_audio",
+      format: provider.id === "fish_audio" ? tts.fish_audio?.default_format || "mp3" : "",
       enabled: provider.enabled,
     });
   }
@@ -1223,6 +1225,11 @@ function saveUnifiedProvider(settings, body) {
     if (apiKey) settings.tts[id].api_key = apiKey;
     if (body.baseUrl !== undefined) settings.tts[id].base_url = baseUrl;
     if (body.model !== undefined) settings.tts[id].model = model;
+    if (id === "fish_audio") {
+      if (body.format !== undefined) settings.tts[id].default_format = ["wav", "mp3", "opus"].includes(String(body.format).toLowerCase())
+        ? String(body.format).toLowerCase()
+        : "mp3";
+    }
     if (body.setDefault === true) settings.tts.default_provider = id;
     return;
   }

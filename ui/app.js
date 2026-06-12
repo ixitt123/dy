@@ -1152,14 +1152,20 @@ function renderTtsProviderOptions(tts = {}) {
 function updateTtsProviderFields() {
   const provider = selectedTtsProviderConfig();
   const isAliyun = provider.id === "aliyun_bailian";
-  const isCustom = provider.id === "custom_tts";
+  const supportsBaseUrl = ["custom_tts", "fish_audio"].includes(provider.id);
   if (ttsWorkspaceField) ttsWorkspaceField.hidden = true;
   if (ttsBaseUrlField) ttsBaseUrlField.hidden = true;
   ttsWorkspaceId.value = isAliyun ? provider.workspace_id || "" : "";
-  ttsBaseUrl.value = isCustom ? provider.base_url || "" : "";
+  ttsBaseUrl.value = supportsBaseUrl ? provider.base_url || "" : "";
   ttsModel.value = provider.default_model || "";
   ttsApiKey.value = "";
   ttsApiKey.placeholder = "";
+  if (ttsBaseUrlField) ttsBaseUrlField.hidden = !supportsBaseUrl;
+  if (ttsWorkspaceField) ttsWorkspaceField.hidden = !isAliyun;
+  if (provider.id === "fish_audio") {
+    ttsVoiceSource.value = "manual";
+    ttsFormat.value = provider.default_format || "mp3";
+  }
   if (ttsCurrentProviderLabel) ttsCurrentProviderLabel.textContent = provider.label || "未设置";
   if (ttsCurrentModelLabel) {
     const keyState = provider.configured ? `API 已保存：${provider.secret_mask || "已脱敏"}` : "API 未配置";
@@ -1235,7 +1241,7 @@ async function loadTtsVoices() {
   const data = await fetchJson(`/api/tts/voices?provider=${encodeURIComponent(provider.id)}`);
   ttsPresetVoices = Array.isArray(data.voices) ? data.voices : [];
   renderTtsVoices();
-  if (ttsPresetVoices.length === 0 && provider.id === "custom_tts") {
+  if (ttsPresetVoices.length === 0 && ["custom_tts", "fish_audio"].includes(provider.id)) {
     ttsVoiceSource.value = "manual";
     updateTtsVoiceSource();
   }
@@ -1275,6 +1281,13 @@ async function saveTtsProviderSettings() {
     body.base_url = ttsBaseUrl.value.trim();
     body.model = ttsModel.value.trim();
     body.voice = ttsVoiceSource.value === "manual" ? ttsManualVoice.value.trim() : ttsPresetVoice.value;
+  }
+  if (provider.id === "fish_audio") {
+    body.base_url = ttsBaseUrl.value.trim() || "https://api.fish.audio";
+    body.model = ttsModel.value.trim() || "s2-pro";
+    body.voice = ttsVoiceSource.value === "manual" ? ttsManualVoice.value.trim() : ttsPresetVoice.value;
+    body.reference_id = body.voice;
+    body.default_format = ttsFormat.value || "mp3";
   }
   try {
     const data = await fetchJson("/api/tts/settings", {

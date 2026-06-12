@@ -1361,6 +1361,14 @@ function setupV2Settings() {
           </datalist>
         </label>
       ` : ""}
+      ${provider.supportsFormat ? `
+        <label>
+          默认格式
+          <select class="provider-input" data-field="format" data-provider="${html(provider.id)}">
+            ${["mp3", "wav", "opus"].map((format) => `<option value="${format}" ${String(provider.format || "mp3") === format ? "selected" : ""}>${format.toUpperCase()}</option>`).join("")}
+          </select>
+        </label>
+      ` : ""}
     `;
   }
 
@@ -1394,6 +1402,7 @@ function setupV2Settings() {
               ${provider.group === "图片生成" ? `<button class="ghost small" type="button" data-default-provider="${html(provider.id)}">设为默认</button>` : ""}
               <button class="ghost small" type="button" data-test-provider="${html(provider.id)}">检查</button>
               ${provider.group === "图片生成" ? `<button class="ghost small" type="button" data-test-provider-sample="${html(provider.id)}">测试生成图片</button>` : ""}
+              ${provider.id === "fish_audio" ? `<button class="ghost small" type="button" data-test-provider-sample="${html(provider.id)}">测试生成语音</button>` : ""}
               ${provider.applyUrl ? `<button class="ghost small" type="button" data-open-url="${html(provider.applyUrl)}">申请入口</button>` : ""}
               ${provider.balanceUrl ? `<button class="ghost small" type="button" data-open-url="${html(provider.balanceUrl)}">余额</button>` : ""}
             </div>
@@ -1537,6 +1546,30 @@ function setupV2Settings() {
       if (!res.ok || data.ok === false) throw new Error(data.message || data.error || `HTTP ${res.status}`);
       if (status) status.textContent = data.message || "测试生成成功。";
       if (typeof loadVideoProductSources === "function") loadVideoProductSources().catch(() => {});
+      if (data.job?.id && typeof waitForSettingsTtsJob === "function") waitForSettingsTtsJob(data.job.id, id);
+    } catch (e) {
+      if (status) status.textContent = e instanceof Error ? e.message : String(e);
+    }
+  }
+
+  async function waitForSettingsTtsJob(jobId, providerId) {
+    const row = providerList.querySelector(`[data-provider-row="${CSS.escape(providerId)}"]`);
+    const status = row?.querySelector(`[data-status-for="${CSS.escape(providerId)}"]`);
+    try {
+      const res = await fetch(`/api/tts/job?id=${encodeURIComponent(jobId)}`, { cache: "no-store" });
+      const data = await res.json();
+      const job = data.job || {};
+      if (job.status === "completed") {
+        if (status) status.textContent = `测试生成语音成功，已保存到 TTS 记录 #${job.id}。`;
+        if (typeof refreshTtsJobs === "function") refreshTtsJobs().catch(() => {});
+        return;
+      }
+      if (job.status === "failed") {
+        if (status) status.textContent = job.error || "测试语音生成失败。";
+        if (typeof refreshTtsJobs === "function") refreshTtsJobs().catch(() => {});
+        return;
+      }
+      setTimeout(() => waitForSettingsTtsJob(jobId, providerId), 1200);
     } catch (e) {
       if (status) status.textContent = e instanceof Error ? e.message : String(e);
     }
