@@ -12,7 +12,7 @@ export class FishAudioProvider extends BaseProvider {
       label: "Fish Audio",
       baseUrl: config.baseUrl || "https://api.fish.audio",
       apiKey: config.apiKey || "",
-      model: config.model || "fish-speech-1.5",
+      model: config.model || "s2-pro",
     });
     this.defaultVoice = config.defaultVoice || "default";
   }

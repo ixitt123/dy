@@ -48,9 +48,35 @@
       "model": "",
       "voice": ""
     },
+    "fish_audio": {
+      "base_url": "https://api.fish.audio",
+      "api_key": "",
+      "model": "s2-pro",
+      "voice": "",
+      "reference_id": "",
+      "default_format": "mp3"
+    },
     "default_provider": "aliyun_bailian",
     "default_speed": 1,
     "default_format": "mp3"
+  },
+  "imageProviders": {
+    "volcengine_ark": {
+      "label": "火山方舟 Seedream",
+      "baseUrl": "https://ark.cn-beijing.volces.com/api/v3",
+      "apiKey": "",
+      "model": "doubao-seedream-5.0-lite"
+    },
+    "jimeng": {
+      "label": "即梦 AI",
+      "baseUrl": "https://api.jimeng.io/v1",
+      "apiKey": "",
+      "model": "flux-dev"
+    }
+  },
+  "modelMap": {
+    "image": { "provider": "volcengine_ark", "model": "doubao-seedream-5.0-lite" },
+    "tts": { "provider": "aliyun_bailian", "model": "cosyvoice-v2" }
   },
   "downloadsDir": ""
 }

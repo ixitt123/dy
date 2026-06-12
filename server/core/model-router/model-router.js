@@ -11,7 +11,7 @@ const DEFAULT_MODEL_MAP = {
   director: { provider: "deepseek", model: "deepseek-chat" },
   storyboard: { provider: "deepseek", model: "deepseek-chat" },
   image_prompt: { provider: "deepseek", model: "deepseek-chat" },
-  image: { provider: "flux", model: "flux" },         // Flux 为外部图像服务，通过 ImageService 调用
+  image: { provider: "volcengine_ark", model: "doubao-seedream-5.0-lite" }, // 图片通过 ImageService 调用
   video: { provider: "kling", model: "kling" },       // Kling 为外部视频服务
   tts: { provider: "ali-bailian", model: "cosyvoice-v2" },
 };
@@ -87,6 +87,7 @@ class ModelRouter {
       claude: () => settings.claude || {},                   // Claude 独立配置
       gemini: () => settings.gemini || {},                   // Gemini 独立配置
       "fish-audio": () => settings.tts?.fish_audio || {},
+      fish_audio: () => settings.tts?.fish_audio || {},
       elevenlabs: () => settings.tts?.elevenlabs || {},
     };
 

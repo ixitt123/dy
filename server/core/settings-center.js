@@ -8,7 +8,7 @@ const DEFAULT_MODEL_MAPPING = {
   director: { provider: "deepseek", model: "deepseek-chat" },
   storyboard: { provider: "deepseek", model: "deepseek-chat" },
   image_prompt: { provider: "deepseek", model: "deepseek-chat" },
-  image: { provider: "jimeng", model: "flux-dev" },
+  image: { provider: "volcengine_ark", model: "doubao-seedream-5.0-lite" },
   video: { provider: "kling", model: "kling" },
   tts: { provider: "aliyun_bailian", model: "cosyvoice-v2" },
 };
