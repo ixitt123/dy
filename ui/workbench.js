@@ -53,6 +53,8 @@ let activeWorkbenchPage = "dashboard";
 let activeRailTaskId = 0;
 let dashboardAudioJobs = [];
 let workbenchOverviewTimer = 0;
+let importedDirectorImagePrompts = [];
+let activeDirectorImageImport = null;
 
 function createWorkbenchPage(pageId) {
   const page = document.createElement("section");

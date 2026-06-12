@@ -1909,11 +1909,12 @@ function directorSubtitleMarkup(result) {
 function directorPromptMarkup(result) {
   const scenes = Array.isArray(result?.storyboard) ? result.storyboard : [];
   return scenes.map((scene) => `
-    <div class="director-prompt-row">
+    <div class="director-prompt-row" data-director-scene="${escapeHtml(scene.scene)}">
       <strong>Scene ${scene.scene}</strong>
       <div>
         <strong>Visual Prompt</strong>
         <p>${escapeHtml(scene.image_prompt)}</p>
+        <button class="ghost small director-send-scene-image" type="button" data-director-scene="${escapeHtml(scene.scene)}">送到图片生成</button>
       </div>
       <div>
         <strong>Motion Prompt</strong>
@@ -2452,6 +2453,43 @@ function sendDirectorProjectToVfo() {
     .catch((error) => {
       directorStatus.textContent = error instanceof Error ? error.message : String(error);
     });
+}
+
+function directorScenesForImage(project = activeDirectorProject) {
+  const scenes = Array.isArray(project?.result?.storyboard) ? project.result.storyboard : [];
+  return scenes
+    .map((scene, index) => ({
+      scene: scene.scene || index + 1,
+      title: `Scene ${scene.scene || index + 1}`,
+      prompt: String(scene.image_prompt || "").trim(),
+      motionPrompt: String(scene.motion_prompt || "").trim(),
+      subtitle: String(scene.subtitle || scene.voice_text || "").trim(),
+    }))
+    .filter((scene) => scene.prompt);
+}
+
+function sendDirectorProjectToImage(preferredScene = "") {
+  if (!activeDirectorProject?.id || activeDirectorProject.status !== "completed") {
+    directorStatus.textContent = "请先生成或打开一份已完成的导演稿。";
+    return;
+  }
+  const scenes = directorScenesForImage(activeDirectorProject);
+  if (!scenes.length) {
+    directorStatus.textContent = "这份导演稿里没有可用的图片提示词。";
+    return;
+  }
+  const imported = window.importDirectorPromptsToImage?.({
+    projectId: activeDirectorProject.id,
+    title: activeDirectorProject.result?.video_meta?.title || activeDirectorProject.title || `Director #${activeDirectorProject.id}`,
+    ratio: activeDirectorProject.result?.video_meta?.ratio || activeDirectorProject.metadata?.ratio || "9:16",
+    scenes,
+    preferredScene,
+  });
+  if (!imported) {
+    directorStatus.textContent = "图片生成模块还没有准备好，请稍后再试。";
+    return;
+  }
+  directorStatus.textContent = `已把 ${scenes.length} 个镜头图片提示词导入图片生成。`;
 }
 
 function vfoExport(type) {
@@ -3536,6 +3574,12 @@ directorResultTabs.addEventListener("click", (event) => {
   renderDirectorResultView();
 });
 
+directorResultView.addEventListener("click", (event) => {
+  const button = event.target.closest(".director-send-scene-image");
+  if (!button) return;
+  sendDirectorProjectToImage(button.dataset.directorScene || "");
+});
+
 document.querySelector("#copyDirectorResult").addEventListener("click", () => {
   copyDirectorResult();
 });
@@ -3554,6 +3598,10 @@ document.querySelector("#exportDirectorPrompts").addEventListener("click", () =>
 
 document.querySelector("#sendDirectorToVfo").addEventListener("click", () => {
   sendDirectorProjectToVfo();
+});
+
+document.querySelector("#sendDirectorToImage").addEventListener("click", () => {
+  sendDirectorProjectToImage();
 });
 
 document.querySelector("#openDirectorFile").addEventListener("click", () => {
