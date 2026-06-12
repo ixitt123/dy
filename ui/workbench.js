@@ -992,9 +992,11 @@ function setupImageStudio() {
   if (!panel) return;
   panel.hidden = false;
   const promptInput = document.getElementById("imagePrompt");
+  const providerSelect = document.getElementById("imageProviderSelect");
   const configStatus = document.getElementById("imageConfigStatus");
   const importPanel = document.getElementById("imageDirectorImportPanel");
   const importSelect = document.getElementById("imageDirectorPromptSelect");
+  let imageProviderConfigs = [];
 
   // 生成数量切换
   panel.querySelectorAll(".btn-count").forEach(btn => {
@@ -1053,7 +1055,18 @@ function setupImageStudio() {
     try {
       const res = await fetch("/api/settings/providers", { cache: "no-store" });
       const data = await res.json();
-      const provider = (data.providers || []).find((item) => item.group === "图片生成");
+      imageProviderConfigs = (data.providers || []).filter((item) => item.group === "图片生成");
+      const defaultProvider = imageProviderConfigs.find((item) => item.activeDefault) || imageProviderConfigs[0] || null;
+      if (providerSelect) {
+        const previous = providerSelect.value;
+        providerSelect.innerHTML = imageProviderConfigs.map((provider) => `
+          <option value="${escapeHtml(provider.id)}">${escapeHtml(provider.label)} · ${escapeHtml(provider.model || "默认模型")}${provider.configured ? "" : "（未配置）"}</option>
+        `).join("");
+        providerSelect.value = imageProviderConfigs.some((item) => item.id === previous)
+          ? previous
+          : defaultProvider?.id || "";
+      }
+      const provider = imageProviderConfigs.find((item) => item.id === providerSelect?.value) || defaultProvider;
       if (!provider) {
         configStatus.dataset.state = "error";
         configStatus.querySelector("span").textContent = "没有找到图片生成服务，请先到系统设置配置。";
@@ -1082,8 +1095,10 @@ function setupImageStudio() {
   });
   document.getElementById("openImageSettings")?.addEventListener("click", () => {
     navigateWorkbench("settings", { preserveScroll: true });
-    document.querySelector('[data-provider-row="jimeng"]')?.scrollIntoView({ behavior: "smooth", block: "center" });
+    const providerId = providerSelect?.value || "volcengine_ark";
+    document.querySelector(`[data-provider-row="${CSS.escape(providerId)}"]`)?.scrollIntoView({ behavior: "smooth", block: "center" });
   });
+  providerSelect?.addEventListener("change", () => refreshImageConfigStatus());
 
   window.importDirectorPromptsToImage = ({ projectId, title, ratio, scenes, preferredScene = "" } = {}) => {
     importedDirectorImagePrompts = (Array.isArray(scenes) ? scenes : [])
@@ -1120,16 +1135,23 @@ function setupImageStudio() {
     const aspectRatio = document.getElementById("imageAspectRatio").value;
     const btn = document.getElementById("imageGenerateBtn");
     const imported = activeDirectorImageImport?.prompt === prompt ? activeDirectorImageImport : null;
+    const providerId = providerSelect?.value || "volcengine_ark";
+    const provider = imageProviderConfigs.find((item) => item.id === providerId);
 
+    if (provider && !provider.configured) {
+      setStatus(`${provider.label} 未配置 API Key，请先到系统设置保存。`, "error");
+      return;
+    }
     btn.disabled = true;
     btn.textContent = "生成中...";
-    setStatus(`正在生成 ${count} 张图片...`);
+    setStatus(`正在通过 ${provider?.label || "图片 Provider"} 生成 ${count} 张图片...`);
 
     try {
       const res = await fetch("/api/image/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          provider: providerId,
           prompt,
           count,
           aspectRatio,
