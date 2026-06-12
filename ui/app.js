@@ -3875,6 +3875,10 @@ document.querySelector("#sendDirectorToVfo").addEventListener("click", () => {
   sendDirectorProjectToVfo();
 });
 
+document.querySelector("#sendDirectorToVideoProduct")?.addEventListener("click", () => {
+  sendDirectorProjectToVideoProduct();
+});
+
 document.querySelector("#sendDirectorToImage").addEventListener("click", () => {
   sendDirectorProjectToImage();
 });
@@ -3961,6 +3965,76 @@ document.querySelector("#exportAssetPackage").addEventListener("click", () => {
 document.querySelector("#openVfoFile").addEventListener("click", () => {
   openVfoFile().catch((error) => {
     vfoStatus.textContent = error instanceof Error ? error.message : String(error);
+  });
+});
+
+refreshVideoProductSourcesBtn?.addEventListener("click", () => {
+  loadVideoProductSources()
+    .then(() => {
+      videoProductStatus.textContent = "视频成片素材已刷新。";
+    })
+    .catch((error) => {
+      videoProductStatus.textContent = error instanceof Error ? error.message : String(error);
+    });
+});
+
+autoBindTimelineBtn?.addEventListener("click", () => {
+  previewVideoProductTimeline().catch((error) => {
+    videoProductStatus.textContent = error instanceof Error ? error.message : String(error);
+  });
+});
+
+generateVideoProductBtn?.addEventListener("click", () => {
+  generateVideoProduct();
+});
+
+openVideoProductOutputBtn?.addEventListener("click", () => {
+  openVideoProductOutput().catch((error) => {
+    videoProductStatus.textContent = error instanceof Error ? error.message : String(error);
+  });
+});
+
+refreshVideoProductProjectsBtn?.addEventListener("click", () => {
+  loadVideoProductProjects().catch((error) => {
+    videoProductStatus.textContent = error instanceof Error ? error.message : String(error);
+  });
+});
+
+videoProductDirector?.addEventListener("change", () => {
+  videoProductManualBindings = {};
+  previewVideoProductTimeline().catch(() => {});
+});
+
+videoProductAudio?.addEventListener("change", () => {
+  previewVideoProductTimeline().catch(() => {});
+});
+
+videoProductImageSource?.addEventListener("change", () => {
+  previewVideoProductTimeline().catch(() => {});
+});
+
+videoProductOutputType?.addEventListener("change", () => {
+  const label = videoProductOutputType.options[videoProductOutputType.selectedIndex]?.textContent || "输出方式";
+  videoProductStatus.textContent = `已选择：${label}`;
+});
+
+videoProductScenes?.addEventListener("change", (event) => {
+  const select = event.target.closest(".video-product-image-select");
+  if (!select) return;
+  const sceneIndex = select.dataset.sceneIndex || "";
+  if (select.value) videoProductManualBindings[sceneIndex] = select.value;
+  else delete videoProductManualBindings[sceneIndex];
+  previewVideoProductTimeline().catch((error) => {
+    videoProductStatus.textContent = error instanceof Error ? error.message : String(error);
+  });
+});
+
+videoProductProjects?.addEventListener("click", (event) => {
+  const button = event.target.closest(".video-product-open");
+  const row = event.target.closest(".video-product-project-row");
+  if (!button || !row) return;
+  openVideoProductProject(row.dataset.videoProductId || "").catch((error) => {
+    videoProductStatus.textContent = error instanceof Error ? error.message : String(error);
   });
 });
 
@@ -4092,6 +4166,8 @@ async function init() {
     await loadVfoSources();
     updateVfoSourceMode();
     await loadVfoProjects();
+    await loadVideoProductSources();
+    await loadVideoProductProjects();
     await loadVoiceAssets({ applyDefault: true });
     updateTtsVoiceSource();
     updateTtsEmotionField();
