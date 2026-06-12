@@ -265,6 +265,53 @@ const VFO_REVIEW_COLUMNS = [
   "metadata_json",
 ];
 
+const TIMELINE_PROJECT_COLUMNS = [
+  "id",
+  "source_director_project_id",
+  "audio_asset_id",
+  "platform",
+  "ratio",
+  "resolution",
+  "fps",
+  "duration",
+  "tracks_json",
+  "output_type",
+  "status",
+  "progress",
+  "current_step",
+  "output_dir",
+  "timeline_path",
+  "srt_path",
+  "manifest_path",
+  "draft_path",
+  "mp4_path",
+  "blockers_json",
+  "error",
+  "created_at",
+  "updated_at",
+  "completed_at",
+  "metadata_json",
+];
+
+const TIMELINE_SCENE_COLUMNS = [
+  "id",
+  "project_id",
+  "scene_index",
+  "narration_text",
+  "subtitle_text",
+  "start_time",
+  "end_time",
+  "duration",
+  "image_asset_id",
+  "image_path",
+  "motion_type",
+  "transition_type",
+  "title_text",
+  "visual_prompt",
+  "status",
+  "metadata_json",
+];
+
 function nowIso() {
   return new Date().toISOString();
 }
@@ -580,6 +627,59 @@ export function openTaskStore(baseDir) {
 
     CREATE UNIQUE INDEX IF NOT EXISTS idx_vfo_reviews_project
       ON vfo_reviews(project_id);
+
+    CREATE TABLE IF NOT EXISTS timeline_projects (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      source_director_project_id INTEGER NOT NULL DEFAULT 0,
+      audio_asset_id INTEGER NOT NULL DEFAULT 0,
+      platform TEXT NOT NULL DEFAULT 'douyin',
+      ratio TEXT NOT NULL DEFAULT '9:16',
+      resolution TEXT NOT NULL DEFAULT '1080x1920',
+      fps INTEGER NOT NULL DEFAULT 30,
+      duration REAL NOT NULL DEFAULT 0,
+      tracks_json TEXT NOT NULL DEFAULT '{}',
+      output_type TEXT NOT NULL DEFAULT 'jianying',
+      status TEXT NOT NULL DEFAULT 'pending',
+      progress INTEGER NOT NULL DEFAULT 0,
+      current_step TEXT NOT NULL DEFAULT '',
+      output_dir TEXT NOT NULL DEFAULT '',
+      timeline_path TEXT NOT NULL DEFAULT '',
+      srt_path TEXT NOT NULL DEFAULT '',
+      manifest_path TEXT NOT NULL DEFAULT '',
+      draft_path TEXT NOT NULL DEFAULT '',
+      mp4_path TEXT NOT NULL DEFAULT '',
+      blockers_json TEXT NOT NULL DEFAULT '[]',
+      error TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      completed_at TEXT NOT NULL DEFAULT '',
+      metadata_json TEXT NOT NULL DEFAULT '{}'
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_timeline_projects_status_created
+      ON timeline_projects(status, created_at, id);
+
+    CREATE TABLE IF NOT EXISTS timeline_scenes (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      project_id INTEGER NOT NULL,
+      scene_index INTEGER NOT NULL,
+      narration_text TEXT NOT NULL DEFAULT '',
+      subtitle_text TEXT NOT NULL DEFAULT '',
+      start_time REAL NOT NULL DEFAULT 0,
+      end_time REAL NOT NULL DEFAULT 0,
+      duration REAL NOT NULL DEFAULT 0,
+      image_asset_id TEXT NOT NULL DEFAULT '',
+      image_path TEXT NOT NULL DEFAULT '',
+      motion_type TEXT NOT NULL DEFAULT '',
+      transition_type TEXT NOT NULL DEFAULT '',
+      title_text TEXT NOT NULL DEFAULT '',
+      visual_prompt TEXT NOT NULL DEFAULT '',
+      status TEXT NOT NULL DEFAULT 'pending',
+      metadata_json TEXT NOT NULL DEFAULT '{}'
+    );
+
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_timeline_scenes_project_scene
+      ON timeline_scenes(project_id, scene_index);
   `);
 
   const taskColumns = new Set(db.prepare("PRAGMA table_info(tasks)").all().map((column) => column.name));
@@ -882,6 +982,40 @@ export function openTaskStore(baseDir) {
       created_at, updated_at, metadata_json
     )
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+  const getTimelineProjectStmt = db.prepare(`
+    SELECT ${TIMELINE_PROJECT_COLUMNS.join(", ")}
+    FROM timeline_projects
+    WHERE id = ?
+  `);
+  const listTimelineProjectsStmt = db.prepare(`
+    SELECT ${TIMELINE_PROJECT_COLUMNS.join(", ")}
+    FROM timeline_projects
+    ORDER BY datetime(created_at) DESC, id DESC
+    LIMIT ?
+  `);
+  const insertTimelineProjectStmt = db.prepare(`
+    INSERT INTO timeline_projects (
+      source_director_project_id, audio_asset_id, platform, ratio, resolution, fps,
+      duration, tracks_json, output_type, status, progress, current_step, output_dir,
+      timeline_path, srt_path, manifest_path, draft_path, mp4_path, blockers_json,
+      error, created_at, updated_at, completed_at, metadata_json
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+  const listTimelineScenesStmt = db.prepare(`
+    SELECT ${TIMELINE_SCENE_COLUMNS.join(", ")}
+    FROM timeline_scenes
+    WHERE project_id = ?
+    ORDER BY scene_index ASC, id ASC
+  `);
+  const insertTimelineSceneStmt = db.prepare(`
+    INSERT INTO timeline_scenes (
+      project_id, scene_index, narration_text, subtitle_text, start_time, end_time,
+      duration, image_asset_id, image_path, motion_type, transition_type, title_text,
+      visual_prompt, status, metadata_json
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
 
   function updateTask(id, changes) {
@@ -1636,6 +1770,119 @@ export function openTaskStore(baseDir) {
     return normalizeVfoReview(getVfoReviewStmt.get(Number(projectId || 0)));
   }
 
+  function normalizeTimelineProject(row) {
+    if (!row) return null;
+    return {
+      ...row,
+      project_id: Number(row.id || 0),
+      source_director_project_id: Number(row.source_director_project_id || 0),
+      audio_asset_id: Number(row.audio_asset_id || 0),
+      fps: Number(row.fps || 30),
+      duration: Number(row.duration || 0),
+      progress: Number(row.progress || 0),
+    };
+  }
+
+  function normalizeTimelineScene(row) {
+    if (!row) return null;
+    return {
+      ...row,
+      project_id: Number(row.project_id || 0),
+      scene_index: Number(row.scene_index || 0),
+      start_time: Number(row.start_time || 0),
+      end_time: Number(row.end_time || 0),
+      duration: Number(row.duration || 0),
+    };
+  }
+
+  function createTimelineProject(input) {
+    const timestamp = nowIso();
+    const result = insertTimelineProjectStmt.run(
+      Number(input.source_director_project_id || 0),
+      Number(input.audio_asset_id || 0),
+      String(input.platform || "douyin"),
+      String(input.ratio || "9:16"),
+      String(input.resolution || "1080x1920"),
+      Number(input.fps || 30),
+      Number(input.duration || 0),
+      String(input.tracks_json || "{}"),
+      String(input.output_type || "jianying"),
+      String(input.status || "pending"),
+      Number(input.progress || 0),
+      String(input.current_step || ""),
+      String(input.output_dir || ""),
+      String(input.timeline_path || ""),
+      String(input.srt_path || ""),
+      String(input.manifest_path || ""),
+      String(input.draft_path || ""),
+      String(input.mp4_path || ""),
+      String(input.blockers_json || "[]"),
+      String(input.error || ""),
+      timestamp,
+      timestamp,
+      String(input.completed_at || ""),
+      String(input.metadata_json || "{}")
+    );
+    return getTimelineProject(Number(result.lastInsertRowid));
+  }
+
+  function getTimelineProject(id) {
+    return normalizeTimelineProject(getTimelineProjectStmt.get(Number(id || 0)));
+  }
+
+  function updateTimelineProject(id, changes) {
+    const entries = Object.entries(changes).filter(([key]) => (
+      TIMELINE_PROJECT_COLUMNS.includes(key) && !["id", "created_at", "updated_at"].includes(key)
+    ));
+    if (entries.length === 0) return getTimelineProject(id);
+    const sql = entries.map(([key]) => `${key} = ?`).join(", ");
+    const values = entries.map(([, value]) => value ?? "");
+    values.push(nowIso(), Number(id));
+    db.prepare(`UPDATE timeline_projects SET ${sql}, updated_at = ? WHERE id = ?`).run(...values);
+    return getTimelineProject(id);
+  }
+
+  function listTimelineProjects({ limit = 50 } = {}) {
+    const safeLimit = Math.max(1, Math.min(500, Number(limit) || 50));
+    return listTimelineProjectsStmt.all(safeLimit).map(normalizeTimelineProject);
+  }
+
+  function replaceTimelineScenes(projectId, scenes = []) {
+    const id = Number(projectId || 0);
+    db.exec("BEGIN IMMEDIATE");
+    try {
+      db.prepare("DELETE FROM timeline_scenes WHERE project_id = ?").run(id);
+      for (const scene of scenes) {
+        insertTimelineSceneStmt.run(
+          id,
+          Number(scene.scene_index || scene.scene || 0),
+          String(scene.narration_text || ""),
+          String(scene.subtitle_text || ""),
+          Number(scene.start_time || 0),
+          Number(scene.end_time || 0),
+          Number(scene.duration || 0),
+          String(scene.image_asset_id || ""),
+          String(scene.image_path || ""),
+          String(scene.motion_type || ""),
+          String(scene.transition_type || ""),
+          String(scene.title_text || ""),
+          String(scene.visual_prompt || ""),
+          String(scene.status || "pending"),
+          String(scene.metadata_json || "{}")
+        );
+      }
+      db.exec("COMMIT");
+    } catch (error) {
+      db.exec("ROLLBACK");
+      throw error;
+    }
+    return listTimelineScenes(id);
+  }
+
+  function listTimelineScenes(projectId) {
+    return listTimelineScenesStmt.all(Number(projectId || 0)).map(normalizeTimelineScene);
+  }
+
   function deleteTasks(ids) {
     const values = ids.map((id) => Number(id)).filter(Number.isFinite);
     if (values.length === 0) return 0;
@@ -1716,5 +1963,11 @@ export function openTaskStore(baseDir) {
     listVfoScenes,
     saveVfoReview,
     getVfoReview,
+    createTimelineProject,
+    getTimelineProject,
+    updateTimelineProject,
+    listTimelineProjects,
+    replaceTimelineScenes,
+    listTimelineScenes,
   };
 }
