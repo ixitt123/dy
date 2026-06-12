@@ -863,6 +863,7 @@ function initWorkbench() {
 function setupImageStudio() {
   const panel = document.getElementById("imageStudioPanel");
   if (!panel) return;
+  panel.hidden = false;
   const promptInput = document.getElementById("imagePrompt");
   const configStatus = document.getElementById("imageConfigStatus");
   const importPanel = document.getElementById("imageDirectorImportPanel");
