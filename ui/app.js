@@ -2558,6 +2558,259 @@ async function openVfoFile() {
   vfoStatus.textContent = "已打开 Render Plan 文件位置。";
 }
 
+function videoProductStatusLabel(status) {
+  return {
+    pending: "等待",
+    binding_assets: "绑定素材",
+    building_timeline: "生成时间线",
+    rendering: "渲染 MP4",
+    exporting_draft: "导出草稿",
+    completed: "完成",
+    failed: "失败",
+  }[status] || status || "未知";
+}
+
+function videoProductPayload() {
+  return {
+    source_director_project_id: Number(videoProductDirector.value || 0),
+    audio_asset_id: Number(videoProductAudio.value || 0),
+    image_source: videoProductImageSource.value || "director",
+    output_type: videoProductOutputType.value || "jianying",
+    manual_bindings: videoProductManualBindings,
+  };
+}
+
+function setVideoProductProgress(project) {
+  const progress = Math.max(0, Math.min(100, Number(project?.progress || 0)));
+  if (videoProductProgressBar) videoProductProgressBar.style.width = `${progress}%`;
+  if (videoProductProgressText) videoProductProgressText.textContent = `${progress}%`;
+}
+
+function renderVideoProductBlockers(blockers = []) {
+  const items = (Array.isArray(blockers) ? blockers : []).filter(Boolean);
+  videoProductBlockers.innerHTML = items.length
+    ? `<ul>${items.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>`
+    : '<span class="vfo-ready">当前没有阻塞项，可以生成输出。</span>';
+}
+
+function renderVideoProductSourceOptions({ preferredDirectorId = 0, preferredAudioId = 0 } = {}) {
+  const directors = videoProductSources.directors || [];
+  const audios = videoProductSources.audioJobs || [];
+  videoProductDirector.innerHTML = directors.length
+    ? directors.map((project) => `<option value="${project.id}">#${project.id} ${escapeHtml(project.title || "未命名导演稿")} · ${Number(project.scene_count || 0)} 镜头</option>`).join("")
+    : '<option value="">暂无已完成导演项目</option>';
+  videoProductAudio.innerHTML = audios.length
+    ? audios.map((job) => `<option value="${job.id}">#${job.id} ${escapeHtml(job.voice_name || job.voice_id || job.provider)} · ${escapeHtml((job.text || "").slice(0, 28))}</option>`).join("")
+    : '<option value="">暂无已完成 TTS 音频</option>';
+  if (preferredDirectorId && directors.some((item) => Number(item.id) === Number(preferredDirectorId))) {
+    videoProductDirector.value = String(preferredDirectorId);
+  }
+  if (preferredAudioId && audios.some((item) => Number(item.id) === Number(preferredAudioId))) {
+    videoProductAudio.value = String(preferredAudioId);
+  }
+}
+
+async function loadVideoProductSources(options = {}) {
+  const data = await fetchJson("/api/video-product/sources");
+  videoProductSources = {
+    directors: data.directors || [],
+    audioJobs: data.audioJobs || [],
+    imageAssets: data.imageAssets || [],
+    timelines: data.timelines || [],
+    platforms: data.platforms || [],
+  };
+  renderVideoProductSourceOptions(options);
+  renderVideoProductProjects(videoProductSources.timelines || []);
+  if (!videoProductPreview && videoProductSources.directors.length && videoProductSources.audioJobs.length) {
+    await previewVideoProductTimeline().catch(() => {});
+  }
+}
+
+function imageSelectMarkup(scene) {
+  const assets = videoProductSources.imageAssets || [];
+  const current = videoProductManualBindings[scene.scene_index] || scene.image_asset_id || "";
+  return `
+    <select class="video-product-image-select" data-scene-index="${scene.scene_index}">
+      <option value="">未绑定</option>
+      ${assets.map((asset) => `
+        <option value="${escapeHtml(asset.id)}" ${String(current) === String(asset.id) ? "selected" : ""}>
+          ${escapeHtml(asset.filename || asset.id)} · ${escapeHtml((asset.prompt || "").slice(0, 18))}
+        </option>
+      `).join("")}
+    </select>
+  `;
+}
+
+function renderVideoProductScenes(preview = videoProductPreview) {
+  const scenes = preview?.scenes || [];
+  if (!scenes.length) {
+    videoProductScenes.innerHTML = '<div class="vfo-empty">选择导演项目和音频后，点击自动匹配镜头素材。</div>';
+    videoProductSceneMeta.textContent = "尚未生成预览";
+    return;
+  }
+  videoProductSceneMeta.textContent = `${scenes.length} 个镜头 · ${Number(preview.duration || 0).toFixed(1)} 秒`;
+  videoProductScenes.innerHTML = scenes.map((scene) => {
+    const imageSrc = scene.image_path ? `/api/image/file?path=${encodeURIComponent(scene.image_path)}` : "";
+    return `
+      <article class="video-product-scene ${scene.status === "blocked" ? "blocked" : ""}">
+        <div class="video-product-scene-media">
+          ${imageSrc ? `<img src="${imageSrc}" alt="Scene ${scene.scene_index}" loading="lazy" />` : "<span>缺图</span>"}
+        </div>
+        <div class="video-product-scene-main">
+          <div class="video-product-scene-top">
+            <strong>#${scene.scene_index} ${escapeHtml(scene.title_text || "")}</strong>
+            <span>${Number(scene.duration || 0).toFixed(1)}s · ${escapeHtml(scene.transition_type || "straight_cut")}</span>
+          </div>
+          <p>${escapeHtml(scene.narration_text || scene.subtitle_text || "")}</p>
+          <small>${escapeHtml(scene.visual_prompt || "无图片提示词")}</small>
+          ${imageSelectMarkup(scene)}
+        </div>
+      </article>
+    `;
+  }).join("");
+}
+
+async function previewVideoProductTimeline() {
+  if (!Number(videoProductDirector.value || 0)) {
+    videoProductStatus.textContent = "请先选择导演项目。";
+    return null;
+  }
+  videoProductStatus.textContent = "正在自动匹配镜头素材...";
+  const data = await fetchJson("/api/video-product/preview", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(videoProductPayload()),
+  });
+  videoProductPreview = data;
+  renderVideoProductBlockers(data.blockers || []);
+  renderVideoProductScenes(data);
+  videoProductStatus.textContent = (data.blockers || []).length
+    ? `已生成 Timeline 预览，但有 ${data.blockers.length} 个阻塞项。`
+    : "Timeline 预览已生成，可以输出。";
+  return data;
+}
+
+function renderVideoProductProjects(projects = videoProductProjectsState) {
+  videoProductProjectsState = Array.isArray(projects) ? projects : [];
+  if (!videoProductProjectsState.length) {
+    videoProductProjects.innerHTML = '<div class="vfo-empty">还没有视频成片项目。</div>';
+    return;
+  }
+  videoProductProjects.innerHTML = videoProductProjectsState.map((project) => `
+    <div class="video-product-project-row" data-video-product-id="${project.project_id || project.id}">
+      <strong>#${project.project_id || project.id}</strong>
+      <div class="vfo-project-title">
+        <strong>${escapeHtml(project.metadata?.title || `Timeline #${project.project_id || project.id}`)}</strong>
+        <span>Director #${project.source_director_project_id || "-"} · Audio #${project.audio_asset_id || "-"} · ${escapeHtml(project.output_type)}</span>
+      </div>
+      <span>${escapeHtml(project.ratio)} · ${escapeHtml(project.resolution)}</span>
+      <span>${Number(project.duration || 0).toFixed(1)}s</span>
+      <span>${Number(project.progress || 0)}%</span>
+      <div>
+        <span class="vfo-project-status ${escapeHtml(project.status)}">${escapeHtml(videoProductStatusLabel(project.status))}</span>
+        <button class="ghost small video-product-open" type="button">查看</button>
+      </div>
+    </div>
+  `).join("");
+}
+
+async function loadVideoProductProjects() {
+  const data = await fetchJson("/api/video-product/projects?limit=50");
+  renderVideoProductProjects(data.projects || []);
+}
+
+function renderVideoProductProject(project) {
+  activeVideoProductProject = project;
+  setVideoProductProgress(project);
+  renderVideoProductBlockers(project.blockers || []);
+  if (Array.isArray(project.scenes) && project.scenes.length) {
+    videoProductPreview = {
+      scenes: project.scenes,
+      duration: project.duration,
+      blockers: project.blockers || [],
+    };
+    renderVideoProductScenes(videoProductPreview);
+  }
+  videoProductStatus.textContent = project.status === "failed"
+    ? `视频成片失败：${project.error || "未知错误"}`
+    : `${videoProductStatusLabel(project.status)}：${project.current_step || "等待更新"}`;
+  openVideoProductOutputBtn.disabled = !project.output_dir;
+}
+
+async function openVideoProductProject(id) {
+  const data = await fetchJson(`/api/video-product/project?id=${encodeURIComponent(id)}`);
+  renderVideoProductProject(data.project);
+  return data.project;
+}
+
+async function pollVideoProductProject(id) {
+  if (videoProductPollTimer) clearTimeout(videoProductPollTimer);
+  const project = await openVideoProductProject(id);
+  await loadVideoProductProjects();
+  if (["pending", "binding_assets", "building_timeline", "rendering", "exporting_draft"].includes(project.status)) {
+    videoProductPollTimer = setTimeout(() => {
+      pollVideoProductProject(id).catch((error) => {
+        videoProductStatus.textContent = error instanceof Error ? error.message : String(error);
+      });
+    }, 1500);
+  }
+}
+
+async function generateVideoProduct() {
+  if (!Number(videoProductDirector.value || 0)) {
+    videoProductStatus.textContent = "请先选择导演项目。";
+    return;
+  }
+  if (!Number(videoProductAudio.value || 0)) {
+    videoProductStatus.textContent = "请先选择已生成的 TTS 音频。";
+    return;
+  }
+  generateVideoProductBtn.disabled = true;
+  videoProductStatus.textContent = "正在创建 Timeline Project...";
+  try {
+    const data = await fetchJson("/api/video-product/generate", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(videoProductPayload()),
+    });
+    videoProductStatus.textContent = `Timeline Project #${data.project.project_id} 已进入队列。`;
+    await pollVideoProductProject(data.project.project_id);
+  } catch (error) {
+    videoProductStatus.textContent = error instanceof Error ? error.message : String(error);
+  } finally {
+    generateVideoProductBtn.disabled = false;
+  }
+}
+
+function sendDirectorProjectToVideoProduct() {
+  if (!activeDirectorProject?.id || activeDirectorProject.status !== "completed") {
+    directorStatus.textContent = "请先生成或打开一份已完成的导演稿。";
+    return;
+  }
+  window.workbenchNavigate?.("vfo", { preserveScroll: true });
+  loadVideoProductSources({ preferredDirectorId: activeDirectorProject.id })
+    .then(() => {
+      videoProductStatus.textContent = `已载入 Director 项目 #${activeDirectorProject.id}，请选择音频并自动匹配图片。`;
+      document.querySelector("#videoProductCenter")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    })
+    .catch((error) => {
+      directorStatus.textContent = error instanceof Error ? error.message : String(error);
+    });
+}
+
+async function openVideoProductOutput() {
+  if (!activeVideoProductProject?.output_dir) {
+    videoProductStatus.textContent = "当前项目还没有输出目录。";
+    return;
+  }
+  await fetchJson("/api/open-path", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ filePath: activeVideoProductProject.output_dir }),
+  });
+  videoProductStatus.textContent = "已打开视频成片输出目录。";
+}
+
 async function loadSettings() {
   const data = await fetchJson("/api/settings");
   if (data.providers && apiProvider) {
