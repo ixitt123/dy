@@ -43,7 +43,7 @@ const workbenchPages = {
     title: "系统设置",
     description: "API Key、模型映射和系统配置。",
   },
-  imageStudio: {
+  "image-studio": {
     title: "图片生成",
     description: "输入 Prompt 生成图片，管理图片资产。",
   },
@@ -318,7 +318,7 @@ function buildWorkbenchInformationArchitecture() {
     director: ["#directorSystem"],
     vfo: ["#vfoSystem"],
     files: [".files-area"],
-    imageStudio: ["#imageStudioPanel"],
+    "image-studio": ["#imageStudioPanel"],
   };
 
   const pages = [dashboard];
@@ -975,7 +975,7 @@ function setupImageStudio() {
     applyImportedPrompt(activeDirectorImageImport);
     const ratioSelect = document.getElementById("imageAspectRatio");
     if (ratioSelect && ["9:16", "16:9", "1:1"].includes(String(ratio || ""))) ratioSelect.value = String(ratio);
-    navigateWorkbench("imageStudio", { preserveScroll: true });
+    navigateWorkbench("image-studio", { preserveScroll: true });
     panel.scrollIntoView({ behavior: "smooth", block: "start" });
     setStatus(`已从“${title || "导演稿"}”导入 ${importedDirectorImagePrompts.length} 个镜头图片提示词。`, "ok");
     return true;
