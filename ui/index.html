@@ -637,6 +637,7 @@
               <button class="ghost small" id="exportDirectorJson" type="button">导出 JSON</button>
               <button class="ghost small" id="exportDirectorMd" type="button">导出 MD</button>
               <button class="ghost small" id="exportDirectorPrompts" type="button">导出 Prompts</button>
+              <button class="ghost small" id="sendDirectorToImage" type="button">发送到图片生成</button>
               <button class="ghost small" id="sendDirectorToVfo" type="button">发送到 VFO</button>
               <button class="ghost small" id="openDirectorFile" type="button">打开文件位置</button>
             </div>
@@ -1074,10 +1075,23 @@
     <section class="image-studio-page" id="imageStudioPanel" hidden>
       <div class="image-studio-header">
         <h2>AI 图片生产中心</h2>
-        <p class="text-secondary">输入 Prompt，调用即梦生成图片</p>
+        <p class="text-secondary">输入 Prompt，调用系统设置里的图片生成 API。</p>
       </div>
       <div class="image-studio-body">
         <div class="image-studio-input">
+          <div class="image-config-status" id="imageConfigStatus">
+            <span>正在读取图片 API 配置...</span>
+            <button class="ghost small" id="openImageSettings" type="button">去系统设置</button>
+          </div>
+          <div class="image-import-panel" id="imageDirectorImportPanel" hidden>
+            <label for="imageDirectorPromptSelect">已导入导演镜头</label>
+            <div class="image-import-row">
+              <select id="imageDirectorPromptSelect"></select>
+              <button class="ghost small" id="useDirectorPrompt" type="button">使用当前镜头</button>
+              <button class="ghost small" id="generateDirectorPromptImage" type="button">生成当前镜头</button>
+              <button class="ghost small" id="clearDirectorPrompts" type="button">清空导入</button>
+            </div>
+          </div>
           <label for="imagePrompt">图片描述（Prompt）</label>
           <textarea id="imagePrompt" rows="4" placeholder="描述你想生成的图片内容，例如：一个阳光明媚的教室，老师在黑板上写英语单词，学生们认真听讲"></textarea>
           <div class="image-studio-controls">
