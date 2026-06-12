@@ -32,8 +32,8 @@ const workbenchPages = {
     description: "从文案生成 Storyboard、镜头列表和导演稿。",
   },
   vfo: {
-    title: "视频工厂",
-    description: "视频策划、素材规划与渲染准备。",
+    title: "视频成片中心",
+    description: "统一 Timeline、剪映草稿、素材包和 MP4 输出。",
   },
   files: {
     title: "文件资产",
@@ -52,6 +52,7 @@ const workbenchPages = {
 let activeWorkbenchPage = "dashboard";
 let activeRailTaskId = 0;
 let dashboardAudioJobs = [];
+let dashboardVideoProducts = [];
 let workbenchOverviewTimer = 0;
 let importedDirectorImagePrompts = [];
 let activeDirectorImageImport = null;
@@ -182,19 +183,7 @@ function setupDirectorStudio() {
 }
 
 function setupVfoFutureStep() {
-  const system = document.querySelector("#vfoSystem");
-  if (!system || system.querySelector(".vfo-next-stage")) return;
-  const nextStage = document.createElement("section");
-  nextStage.className = "vfo-next-stage";
-  nextStage.innerHTML = `
-    <div>
-      <span class="section-eyebrow">NEXT STAGE</span>
-      <strong>生成成品视频 MVP</strong>
-      <p>本地图片 + TTS音频 + 字幕 + 简单转场，使用 FFmpeg 输出 MP4。</p>
-    </div>
-    <button type="button" disabled title="第二阶段开发">下一阶段开发</button>
-  `;
-  system.appendChild(nextStage);
+  // 成片中心已经在 VFO 页面启用，不再追加旧的“下一阶段”占位卡。
 }
 
 function createTranscriptVault() {
@@ -503,7 +492,54 @@ function railTaskCard(task, variant = "normal") {
   `;
 }
 
-function renderRail(tasks, directors, vfoProjects, audioJobs) {
+function railVideoProductStatusLabel(status) {
+  return {
+    pending: "等待",
+    binding_assets: "绑定素材",
+    building_timeline: "生成时间线",
+    rendering: "渲染 MP4",
+    exporting_draft: "导出草稿",
+    completed: "完成",
+    failed: "失败",
+  }[status] || status || "未知";
+}
+
+function railVideoProductCard(project, variant = "normal") {
+  const id = Number(project.project_id || project.id || 0);
+  const progress = Math.max(0, Math.min(100, Number(project.progress || 0)));
+  const title = escapeHtml(project.metadata?.title || `Timeline #${id}`);
+  const status = railVideoProductStatusLabel(project.status);
+  const blockers = Array.isArray(project.blockers) ? project.blockers.filter(Boolean) : [];
+  const detail = [
+    project.current_step || status,
+    blockers.length ? `阻塞 ${blockers.length} 项` : "",
+    project.error || "",
+  ].filter(Boolean).join(" · ");
+  const output = project.mp4_path || project.output_dir || project.timeline_path || project.srt_path || "";
+  const hasOutput = Boolean(output);
+  return `
+    <article class="rail-task-card rail-video-product-card ${variant}">
+      <div class="rail-task-top">
+        <span class="rail-task-id">Timeline #${id}</span>
+        <span class="status-badge ${workbenchStatusClass(project.status)}">${escapeHtml(status)}</span>
+      </div>
+      <strong title="${title}">${title}</strong>
+      <small title="${escapeHtml(detail)}">${escapeHtml(detail || "等待生成")}</small>
+      <div class="rail-progress rail-task-progress" aria-hidden="true"><i style="width:${progress}%"></i></div>
+      <div class="rail-task-meta">
+        <span>${progress}%</span>
+        <span title="${escapeHtml(output)}">${escapeHtml(shortPath(output) || project.output_type || "未生成文件")}</span>
+      </div>
+      ${blockers.length ? `<ul class="rail-video-blockers">${blockers.slice(0, 3).map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>` : ""}
+      <div class="rail-task-actions">
+        <button type="button" class="rail-video-product-open" data-video-product-id="${id}">查看</button>
+        ${hasOutput ? `<button type="button" class="rail-video-product-folder" data-video-product-id="${id}">打开</button>` : ""}
+      </div>
+    </article>
+  `;
+}
+
+function renderRail(tasks, directors, vfoProjects, audioJobs, videoProducts = []) {
   const current = document.querySelector("#railCurrentTask");
   const recent = document.querySelector("#railRecentOutput");
   const errors = document.querySelector("#railErrors");
@@ -512,6 +548,11 @@ function renderRail(tasks, directors, vfoProjects, audioJobs) {
   const waitingTasks = sortedTasks.filter((task) => ["等待", "waiting"].includes(task.status));
   const failedTasks = sortedTasks.filter((task) => ["失败", "failed"].includes(task.status));
   const latestTasks = sortedTasks.filter((task) => !runningTasks.includes(task)).slice(0, 10);
+  const runningVideoProducts = videoProducts.filter((project) => ["pending", "binding_assets", "building_timeline", "rendering", "exporting_draft"].includes(project.status));
+  const failedVideoProducts = videoProducts.filter((project) => project.status === "failed");
+  const latestVideoProducts = videoProducts
+    .filter((project) => !runningVideoProducts.includes(project))
+    .slice(0, 4);
 
   if (current) {
     const summary = railStatusSummary(tasks)
@@ -525,6 +566,11 @@ function renderRail(tasks, directors, vfoProjects, audioJobs) {
     const recentList = latestTasks.length
       ? latestTasks.map((task) => railTaskCard(task)).join("")
       : '<div class="rail-empty">暂无任务记录</div>';
+    const videoList = runningVideoProducts.length
+      ? runningVideoProducts.slice(0, 4).map((project) => railVideoProductCard(project, "active")).join("")
+      : latestVideoProducts.length
+        ? latestVideoProducts.map((project) => railVideoProductCard(project)).join("")
+        : '<div class="rail-empty">暂无成片任务</div>';
     current.innerHTML = `
       <div class="rail-task-console">
         <div class="rail-task-summary">${summary}</div>
@@ -533,10 +579,14 @@ function renderRail(tasks, directors, vfoProjects, audioJobs) {
           <div class="rail-task-list">${activeList}</div>
         </div>
         <div class="rail-task-group">
+          <div class="rail-subheading"><span>成片 Timeline</span><em>${runningVideoProducts.length || latestVideoProducts.length}</em></div>
+          <div class="rail-task-list compact">${videoList}</div>
+        </div>
+        <div class="rail-task-group">
           <div class="rail-subheading"><span>最近任务</span><em>${latestTasks.length}${tasks.length > latestTasks.length ? " / " + tasks.length : ""}</em></div>
           <div class="rail-task-list compact">${recentList}</div>
         </div>
-        ${failedTasks.length ? `<div class="rail-failure-note">失败 ${failedTasks.length} 条，请看下方错误提示。</div>` : ""}
+        ${failedTasks.length + failedVideoProducts.length ? `<div class="rail-failure-note">失败 ${failedTasks.length + failedVideoProducts.length} 条，请看下方错误提示。</div>` : ""}
       </div>
     `;
   }
@@ -561,6 +611,12 @@ function renderRail(tasks, directors, vfoProjects, audioJobs) {
         time: item.updated_at,
         page: "vfo",
       })),
+      ...videoProducts.filter((item) => item.status === "completed").slice(0, 3).map((item) => ({
+        type: item.output_type === "mp4" ? "MP4成片" : "剪映草稿",
+        title: item.metadata?.title || `Timeline #${item.project_id || item.id}`,
+        time: item.completed_at || item.updated_at,
+        page: "vfo",
+      })),
     ]
       .sort((left, right) => String(right.time || "").localeCompare(String(left.time || "")))
       .slice(0, 5);
@@ -576,13 +632,22 @@ function renderRail(tasks, directors, vfoProjects, audioJobs) {
 
   if (errors) {
     const failed = tasks.filter((task) => ["失败", "failed"].includes(task.status)).slice(0, 3);
-    errors.innerHTML = failed.length
-      ? failed.map((task) => `
+    const failedTimelines = failedVideoProducts.slice(0, 3);
+    errors.innerHTML = failed.length || failedTimelines.length
+      ? [
+        ...failed.map((task) => `
         <button type="button" class="rail-list-item error-item rail-task-view" data-task-id="${Number(task.id || 0)}">
           <span>任务 #${Number(task.id || 0)}</span>
           <strong>${escapeHtml(task.error || task.message || "处理失败")}</strong>
         </button>
-      `).join("")
+      `),
+        ...failedTimelines.map((project) => `
+        <button type="button" class="rail-list-item error-item rail-video-product-open" data-video-product-id="${Number(project.project_id || project.id || 0)}">
+          <span>Timeline #${Number(project.project_id || project.id || 0)}</span>
+          <strong>${escapeHtml(project.error || project.current_step || "成片任务失败")}</strong>
+        </button>
+      `),
+      ].join("")
       : '<div class="rail-empty success-text">当前没有错误</div>';
   }
 }
@@ -591,15 +656,16 @@ function renderWorkbenchOverview() {
   const tasks = typeof allTasks === "undefined" ? [] : allTasks;
   const directors = typeof directorProjectsState === "undefined" ? [] : directorProjectsState;
   const vfoItems = typeof vfoProjectsState === "undefined" ? [] : vfoProjectsState;
+  const videoProducts = dashboardVideoProducts;
 
   setMetric("metricTodayVideos", tasks.filter((task) => isToday(task.created_at)).length);
   setMetric("metricTranscripts", tasks.filter((task) => task.txt_path).length);
   setMetric("metricRewrites", tasks.filter(hasRewrite).length);
   setMetric("metricAudio", dashboardAudioJobs.filter((job) => job.status === "completed").length);
   setMetric("metricDirectors", directors.filter((project) => project.status === "completed").length);
-  setMetric("metricRenderPlans", vfoItems.filter((project) => project.status === "completed").length);
+  setMetric("metricRenderPlans", vfoItems.filter((project) => project.status === "completed").length + videoProducts.filter((project) => project.status === "completed").length);
   renderDashboardTasks(tasks);
-  renderRail(tasks, directors, vfoItems, dashboardAudioJobs);
+  renderRail(tasks, directors, vfoItems, dashboardAudioJobs, videoProducts);
 }
 
 async function refreshWorkbenchOverview() {
@@ -611,6 +677,16 @@ async function refreshWorkbenchOverview() {
     }
   } catch {
     dashboardAudioJobs = [];
+  }
+
+  try {
+    const response = await fetch("/api/video-product/projects?limit=100");
+    if (response.ok) {
+      const data = await response.json();
+      dashboardVideoProducts = Array.isArray(data.projects) ? data.projects : [];
+    }
+  } catch {
+    dashboardVideoProducts = [];
   }
 
   // 加载 Provider 状态
@@ -654,6 +730,8 @@ async function updateWorkbenchConnection() {
 
 async function openLatestOutputLocation() {
   const candidates = [
+    typeof activeVideoProductProject !== "undefined" ? activeVideoProductProject?.output_dir : "",
+    dashboardVideoProducts?.[0]?.output_dir || "",
     typeof activeVfoProject !== "undefined" ? activeVfoProject?.render_plan_path : "",
     typeof vfoProjectsState !== "undefined" ? vfoProjectsState?.[0]?.render_plan_path : "",
     typeof activeDirectorProject !== "undefined" ? activeDirectorProject?.storyboard_path : "",
@@ -672,6 +750,34 @@ async function openLatestOutputLocation() {
     });
   } catch {
     navigateWorkbench("files");
+  }
+}
+
+async function openRailVideoProduct(projectId) {
+  const id = Number(projectId || 0);
+  if (!id) return;
+  navigateWorkbench("vfo", { preserveScroll: true });
+  if (typeof openVideoProductProject === "function") {
+    await openVideoProductProject(id);
+  }
+  document.querySelector("#videoProductCenter")?.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+async function openRailVideoProductLocation(projectId) {
+  const id = Number(projectId || 0);
+  const project = dashboardVideoProducts.find((item) => Number(item.project_id || item.id || 0) === id);
+  if (!project?.output_dir) {
+    await openRailVideoProduct(id);
+    return;
+  }
+  const response = await fetch("/api/open-path", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ filePath: project.output_dir }),
+  });
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}));
+    throw new Error(data.message || "打开成片输出目录失败");
   }
 }
 
@@ -764,6 +870,22 @@ function bindWorkbenchInteractions() {
     const railOpen = event.target.closest(".rail-task-open");
     const railPause = event.target.closest(".rail-task-pause");
     const railDelete = event.target.closest(".rail-task-delete");
+    const videoProductOpen = event.target.closest(".rail-video-product-open");
+    const videoProductFolder = event.target.closest(".rail-video-product-folder");
+    if (videoProductOpen) {
+      event.preventDefault();
+      openRailVideoProduct(videoProductOpen.dataset.videoProductId).catch((error) => {
+        resultBox.textContent = error instanceof Error ? error.message : String(error);
+      });
+      return;
+    }
+    if (videoProductFolder) {
+      event.preventDefault();
+      openRailVideoProductLocation(videoProductFolder.dataset.videoProductId).catch((error) => {
+        resultBox.textContent = error instanceof Error ? error.message : String(error);
+      });
+      return;
+    }
     if (railView) {
       event.preventDefault();
       viewRailTask(railView.dataset.taskId).catch((error) => {
@@ -846,6 +968,11 @@ function initWorkbench() {
     const ws = new WebSocket(`ws://127.0.0.1:${location.port}/ws/progress`);
     ws.onmessage = (e) => {
       const data = JSON.parse(e.data);
+      if (data.type === "video-product") {
+        if (typeof loadVideoProductProjects === "function") loadVideoProductProjects().catch(() => {});
+        refreshWorkbenchOverview();
+        return;
+      }
       if (data.taskId) {
         refreshTasks().catch(() => renderWorkbenchOverview());
       }
