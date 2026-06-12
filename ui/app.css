@@ -4722,6 +4722,64 @@ a {
   font-size: 13px;
 }
 
+.image-config-status,
+.image-import-panel {
+  display: grid;
+  gap: 8px;
+  border: 1px solid #2b3441;
+  border-radius: 8px;
+  padding: 10px;
+  background: #111822;
+}
+
+.image-config-status {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+}
+
+.image-config-status span,
+.image-import-panel label {
+  color: #a8b2c3;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.image-config-status[data-state="ok"] {
+  border-color: rgba(47, 207, 143, 0.35);
+  background: rgba(47, 207, 143, 0.08);
+}
+
+.image-config-status[data-state="error"] {
+  border-color: rgba(255, 93, 108, 0.35);
+  background: rgba(255, 93, 108, 0.08);
+}
+
+.image-import-panel[hidden] {
+  display: none !important;
+}
+
+.image-import-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto auto;
+  gap: 8px;
+}
+
+.image-import-row select {
+  min-width: 0;
+}
+
+#imageGenerateStatus[data-tone="ok"] {
+  color: #7ee0b4;
+}
+
+#imageGenerateStatus[data-tone="error"] {
+  color: #ff8b98;
+}
+
+#imageGenerateStatus[data-tone="info"] {
+  color: #8ebeff;
+}
+
 .provider-apply-link {
   color: #76bfff;
   white-space: normal;
