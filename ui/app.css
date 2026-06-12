@@ -4599,6 +4599,49 @@ a {
   gap: 12px;
 }
 
+.video-product-center {
+  border-color: #2b323e;
+  background: #0e1117;
+}
+
+.video-product-panel,
+.video-product-scene,
+.video-product-project-row {
+  border-color: #2b323e;
+  background: #141820;
+}
+
+.video-product-blockers,
+.video-product-scene-media {
+  border-color: #303846;
+  background: #10151d;
+  color: #8d98a8;
+}
+
+.video-product-scene-top strong {
+  color: #eef2f8;
+}
+
+.video-product-scene-main p {
+  color: #b8c3d3;
+}
+
+.video-product-scene-top span,
+.video-product-scene-main small,
+.video-product-toolbar p,
+.vfo-section-title p {
+  color: #7f8a9c;
+}
+
+.video-product-scene.blocked {
+  border-color: rgba(255, 93, 108, 0.5);
+  box-shadow: inset 3px 0 0 #ff5d6c;
+}
+
+.vfo-section-title {
+  border-color: #2b323e;
+}
+
 .vfo-source-panel,
 .vfo-control-panel,
 .vfo-result {
