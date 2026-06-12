@@ -838,6 +838,12 @@ function normalizeSettings(settings) {
     },
   };
   next.modelMap = { ...DEFAULT_MODEL_MAPPING, ...modelMapping };
+  if (!modelMapping.image || (modelMapping.image.provider === "jimeng" && modelMapping.image.model === "flux-dev")) {
+    next.modelMap.image = {
+      provider: "volcengine_ark",
+      model: next.imageProviders.volcengine_ark.model || "doubao-seedream-5.0-lite",
+    };
+  }
   next.modelMapping = next.modelMap;
   return next;
 }
