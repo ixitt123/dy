@@ -25,6 +25,7 @@ import { TTS_PROVIDER_LABELS } from "./server/tts/providers/index.js";
 import { createVoiceAssetService } from "./server/voices/voice-asset-service.js";
 import { createDirectorService } from "./server/director/director-service.js";
 import { createVfoService } from "./server/vfo/vfo-service.js";
+import { createVideoProductService } from "./server/video-product/video-product-service.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const uiDir = path.join(__dirname, "ui");
@@ -275,6 +276,15 @@ const vfoService = createVfoService({
 const imageService = createImageService({
   baseDir: __dirname,
   getSettings: readSettings,
+});
+
+const videoProductService = createVideoProductService({
+  baseDir: __dirname,
+  taskStore,
+  imageService,
+  ffmpegPath,
+  onProgress: (data) => broadcastProgress({ type: "video-product", ...data }),
+  onIdle: scheduleShutdownIfIdle,
 });
 
 // ModelRouter 统一模型路由
@@ -1468,6 +1478,7 @@ function isInsideManagedFilePath(filePath) {
     vfoService.outputDirs.assetPlansDir,
     vfoService.outputDirs.assetPackagesDir,
     vfoService.outputDirs.vfoDir,
+    videoProductService.outputRoot,
   ].map((item) => path.resolve(item));
   return roots.some((root) => resolved === root || resolved.startsWith(`${root}${path.sep}`));
 }
@@ -4781,6 +4792,77 @@ const server = http.createServer(async (req, res) => {
       }
 
       sendJson(res, 404, { ok: false, message: "未知设置 API" });
+      return;
+    }
+
+    // ===== Video Product Center API =====
+    if (url.pathname.startsWith("/api/video-product/")) {
+      const route = url.pathname.replace("/api/video-product/", "");
+
+      if (req.method === "GET" && route === "sources") {
+        sendJson(res, 200, { ok: true, ...videoProductService.listSources() });
+        return;
+      }
+
+      if (req.method === "GET" && route === "projects") {
+        sendJson(res, 200, {
+          ok: true,
+          projects: videoProductService.listProjects(Number(url.searchParams.get("limit")) || 50),
+        });
+        return;
+      }
+
+      if (req.method === "GET" && route === "project") {
+        const project = videoProductService.getProject(url.searchParams.get("id") || "");
+        if (!project) {
+          sendJson(res, 404, { ok: false, message: "没有找到 Timeline Project" });
+          return;
+        }
+        sendJson(res, 200, { ok: true, project });
+        return;
+      }
+
+      if (req.method === "POST" && route === "preview") {
+        const body = JSON.parse(await readBody(req) || "{}");
+        try {
+          const result = await videoProductService.preview(body);
+          sendJson(res, 200, result);
+        } catch (error) {
+          sendJson(res, 400, { ok: false, message: error instanceof Error ? error.message : String(error) });
+        }
+        return;
+      }
+
+      if (req.method === "POST" && route === "generate") {
+        const body = JSON.parse(await readBody(req) || "{}");
+        try {
+          sendJson(res, 200, { ok: true, ...videoProductService.enqueue(body) });
+        } catch (error) {
+          sendJson(res, 400, { ok: false, message: error instanceof Error ? error.message : String(error) });
+        }
+        return;
+      }
+
+      if (req.method === "GET" && route === "export") {
+        const id = url.searchParams.get("id") || "";
+        const type = url.searchParams.get("type") || "timeline";
+        const filePath = videoProductService.resolveOutputPath(id, type);
+        if (!filePath || !fs.existsSync(filePath) || fs.statSync(filePath).isDirectory()) {
+          sendJson(res, 404, { ok: false, message: "没有找到可导出的输出文件" });
+          return;
+        }
+        const ext = path.extname(filePath).toLowerCase();
+        const contentType = {
+          ".json": "application/json; charset=utf-8",
+          ".srt": "text/plain; charset=utf-8",
+          ".mp4": "video/mp4",
+        }[ext] || "application/octet-stream";
+        const data = fs.readFileSync(filePath);
+        sendBuffer(res, 200, data, contentType, path.basename(filePath));
+        return;
+      }
+
+      sendJson(res, 404, { ok: false, message: "未知视频成片 API" });
       return;
     }
 
