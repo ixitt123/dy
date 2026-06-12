@@ -1528,6 +1528,88 @@ pre {
   font-weight: 400;
 }
 
+.video-route-map {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.video-route-card {
+  min-width: 0;
+  border: 1px solid #dce4e8;
+  border-radius: 8px;
+  padding: 12px;
+  background: #ffffff;
+  box-shadow: inset 3px 0 0 #b8c4cc;
+}
+
+.video-route-card.primary {
+  border-color: rgba(44, 111, 159, 0.42);
+  background: #f3f8fc;
+  box-shadow: inset 3px 0 0 var(--primary-dark);
+}
+
+.video-route-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.video-route-top span {
+  flex: 0 0 auto;
+  border: 1px solid #d7e2e8;
+  border-radius: 999px;
+  padding: 3px 7px;
+  color: #4d5d66;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.video-route-top strong {
+  min-width: 0;
+  color: var(--ink);
+  font-size: 14px;
+  line-height: 1.25;
+}
+
+.video-route-card p {
+  min-height: 48px;
+  margin: 10px 0;
+  color: #53636c;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.video-route-flow {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.video-route-flow span {
+  overflow: hidden;
+  border: 1px solid #dce5ea;
+  border-radius: 6px;
+  padding: 5px 6px;
+  background: #f7fafb;
+  color: #3f4f58;
+  font-size: 11px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.video-route-card small {
+  display: block;
+  min-height: 34px;
+  color: #7a8790;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
 .vfo-workbench {
   display: grid;
   grid-template-columns: minmax(0, 1.15fr) minmax(380px, 0.85fr);
@@ -2722,6 +2804,15 @@ pre {
   .director-project-row > :nth-child(6) {
     display: none;
   }
+
+  .video-route-map {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .video-product-workbench,
+  .vfo-workbench {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 680px) {
@@ -2736,6 +2827,10 @@ pre {
   }
 
   .download-settings {
+    grid-template-columns: 1fr;
+  }
+
+  .video-route-map {
     grid-template-columns: 1fr;
   }
 
@@ -4620,6 +4715,37 @@ a {
 
 .vfo-pipeline span.reserved {
   color: #667082;
+}
+
+.video-route-card {
+  border-color: #2b323e;
+  background: #141820;
+  box-shadow: inset 3px 0 0 #445061;
+}
+
+.video-route-card.primary {
+  border-color: rgba(112, 92, 255, 0.52);
+  background: rgba(112, 92, 255, 0.08);
+  box-shadow: inset 3px 0 0 #705cff;
+}
+
+.video-route-top span,
+.video-route-flow span {
+  border-color: #303846;
+  background: #10151d;
+  color: #a8b3c4;
+}
+
+.video-route-top strong {
+  color: #eef2f8;
+}
+
+.video-route-card p {
+  color: #b8c3d3;
+}
+
+.video-route-card small {
+  color: #7f8a9c;
 }
 
 .vfo-workbench {
