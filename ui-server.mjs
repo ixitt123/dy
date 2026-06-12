@@ -808,8 +808,12 @@ function normalizeSettings(settings) {
     fish_audio: {
       base_url: String(tts.fish_audio?.base_url || "https://api.fish.audio").trim(),
       api_key: String(tts.fish_audio?.api_key || "").trim(),
-      model: String(tts.fish_audio?.model || "fish-speech-1.5").trim() || "fish-speech-1.5",
+      model: String(tts.fish_audio?.model || "s2-pro").trim() || "s2-pro",
       voice: String(tts.fish_audio?.voice || "").trim(),
+      default_format: ["wav", "mp3", "opus"].includes(String(tts.fish_audio?.default_format || "").toLowerCase())
+        ? String(tts.fish_audio.default_format).toLowerCase()
+        : "mp3",
+      reference_id: String(tts.fish_audio?.reference_id || "").trim(),
     },
     elevenlabs: {
       base_url: String(tts.elevenlabs?.base_url || "https://api.elevenlabs.io").trim(),
@@ -913,13 +917,14 @@ function publicTtsSettings(settings = readSettings()) {
     {
       id: "fish_audio",
       label: TTS_PROVIDER_LABELS.fish_audio,
-      phase: "扩展预留",
-      enabled: false,
+      phase: "高级备用",
+      enabled: true,
       configured: Boolean(tts.fish_audio.api_key),
       secret_mask: maskApiKey(tts.fish_audio.api_key),
       base_url: tts.fish_audio.base_url,
       default_model: tts.fish_audio.model,
       default_voice: tts.fish_audio.voice,
+      default_format: tts.fish_audio.default_format,
     },
     {
       id: "elevenlabs",
@@ -1102,11 +1107,11 @@ function publicUnifiedProviders(settings = readSettings()) {
       id: "fish_audio",
       label: TTS_PROVIDER_LABELS.fish_audio,
       config: tts.fish_audio || {},
-      description: "扩展预留 Provider，可先保存 Key，正式生成能力后续接入。",
+      description: "高质量 TTS 备用 Provider；填写 API Key 和 voice_id/reference_id 后可生成 MP3。",
       baseUrl: tts.fish_audio?.base_url || "https://api.fish.audio",
-      model: tts.fish_audio?.model || "fish-speech-1.5",
-      models: ["fish-speech-1.5"],
-      enabled: false,
+      model: tts.fish_audio?.model || "s2-pro",
+      models: ["s2-pro", "s1"],
+      enabled: true,
     },
     {
       id: "elevenlabs",
@@ -1218,6 +1223,7 @@ function saveUnifiedProvider(settings, body) {
     if (apiKey) settings.tts[id].api_key = apiKey;
     if (body.baseUrl !== undefined) settings.tts[id].base_url = baseUrl;
     if (body.model !== undefined) settings.tts[id].model = model;
+    if (body.setDefault === true) settings.tts.default_provider = id;
     return;
   }
 
@@ -4096,6 +4102,7 @@ const server = http.createServer(async (req, res) => {
         volcengine_doubao: ["api_key", "app_id", "access_key_id", "secret_access_key", "default_model", "default_voice"],
         tencent_tts: ["secret_id", "secret_key", "region", "default_voice"],
         custom_tts: ["base_url", "api_key", "model", "voice"],
+        fish_audio: ["base_url", "api_key", "model", "voice", "reference_id", "default_format"],
       }[providerId] || [];
       const secretFields = new Set(["api_key", "secret_id", "secret_key", "access_key_id", "secret_access_key"]);
       for (const field of allowedFields) {
