@@ -51,6 +51,8 @@ export function createImageService({ baseDir, getSettings }) {
   `);
 
   async function generateImage({ prompt, aspectRatio = "1:1", count = 1, sourceType = "manual", sourceId = "" } = {}) {
+    const cleanPrompt = String(prompt || "").trim();
+    if (!cleanPrompt) throw new Error("请先输入图片描述。");
     const settings = getSettings();
     const providers = settings.imageProviders || {};
 
@@ -59,18 +61,22 @@ export function createImageService({ baseDir, getSettings }) {
 
     const providerInstance = createImageProvider("jimeng", { config: providers });
     if (!providerInstance) throw new Error("即梦 Provider 初始化失败");
+    const validation = await providerInstance.validateConfig();
+    if (!validation.valid) {
+      throw new Error(`${validation.error || "图片生成 API 未配置"}。请到系统设置 > API 服务中心 > 图片生成 > 即梦 AI 保存 API Key。`);
+    }
 
     db.prepare(`
       INSERT INTO image_jobs (id, source_type, source_id, provider, prompt, aspect_ratio, count_requested, status)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(jobId, sourceType, sourceId, "jimeng", prompt, aspectRatio, count, "生成中");
+    `).run(jobId, sourceType, sourceId, "jimeng", cleanPrompt, aspectRatio, count, "生成中");
 
     for (let i = 0; i < count; i++) {
       const filename = `img_${jobId.slice(0, 6)}_${i}_${Date.now()}.png`;
       const outputPath = path.join(outputDir, filename);
 
       try {
-        const result = await callProviderGenerate(providerInstance, { prompt, aspectRatio, outputPath });
+        const result = await callProviderGenerate(providerInstance, { prompt: cleanPrompt, aspectRatio, outputPath });
 
         if (!result.success) {
           results.push({ index: i, success: false, error: result.error });
@@ -101,7 +107,7 @@ export function createImageService({ baseDir, getSettings }) {
         db.prepare(`
           INSERT INTO image_assets (id, job_id, filename, original_path, file_size, provider, prompt, revised_prompt, aspect_ratio, source_type, source_id)
           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `).run(assetId, jobId, filename, localPath, stats.size, "jimeng", prompt, result.revisedPrompt || prompt, aspectRatio, sourceType, sourceId);
+        `).run(assetId, jobId, filename, localPath, stats.size, "jimeng", cleanPrompt, result.revisedPrompt || cleanPrompt, aspectRatio, sourceType, sourceId);
 
         results.push({ index: i, success: true, assetId, filename, imagePath: localPath });
       } catch (err) {

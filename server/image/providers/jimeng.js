@@ -20,10 +20,13 @@ export class JimengProvider extends ImageProviderAdapter {
     if (!resp.ok) throw new Error(`即梦 API 错误 (${resp.status}): ${await resp.text()}`);
 
     const data = await resp.json();
+    const first = data.data?.[0] || data.output?.images?.[0] || data.images?.[0] || {};
+    const rawBase64 = first.b64_json || first.base64 || first.image_base64 || data.b64_json || "";
+    const imageBase64 = String(rawBase64 || "").replace(/^data:image\/\w+;base64,/, "");
     return {
-      imageUrl: data.data?.[0]?.url || "",
-      imageBase64: data.data?.[0]?.b64_json || "",
-      revisedPrompt: data.data?.[0]?.revised_prompt || prompt,
+      imageUrl: first.url || first.image_url || data.url || data.image_url || "",
+      imageBase64,
+      revisedPrompt: first.revised_prompt || data.revised_prompt || prompt,
     };
   }
 

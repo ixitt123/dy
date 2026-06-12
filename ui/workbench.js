@@ -863,6 +863,10 @@ function initWorkbench() {
 function setupImageStudio() {
   const panel = document.getElementById("imageStudioPanel");
   if (!panel) return;
+  const promptInput = document.getElementById("imagePrompt");
+  const configStatus = document.getElementById("imageConfigStatus");
+  const importPanel = document.getElementById("imageDirectorImportPanel");
+  const importSelect = document.getElementById("imageDirectorPromptSelect");
 
   // 生成数量切换
   panel.querySelectorAll(".btn-count").forEach(btn => {
@@ -881,62 +885,163 @@ function setupImageStudio() {
       document.getElementById("imageResultsGrid").style.display = showAssets ? "none" : "grid";
       document.getElementById("imageAssetsGrid").style.display = showAssets ? "grid" : "none";
       if (showAssets) loadImageAssets();
+      refreshImageConfigStatus();
     });
   });
 
+  function setStatus(msg, tone = "") {
+    const el = document.getElementById("imageGenerateStatus");
+    if (el) {
+      el.textContent = msg;
+      el.dataset.tone = tone;
+    }
+  }
+
+  function selectedImportedPrompt() {
+    if (!importSelect || !importedDirectorImagePrompts.length) return null;
+    const sceneKey = importSelect.value;
+    return importedDirectorImagePrompts.find((item) => String(item.scene) === String(sceneKey)) || importedDirectorImagePrompts[0] || null;
+  }
+
+  function applyImportedPrompt(item = selectedImportedPrompt()) {
+    if (!item) return false;
+    promptInput.value = item.prompt || "";
+    activeDirectorImageImport = item;
+    setStatus(`已载入 ${item.title || `Scene ${item.scene}`} 的图片提示词。`, "info");
+    return true;
+  }
+
+  function renderImportedPrompts() {
+    if (!importPanel || !importSelect) return;
+    importPanel.hidden = importedDirectorImagePrompts.length === 0;
+    importSelect.innerHTML = importedDirectorImagePrompts.map((item) => `
+      <option value="${escapeHtml(item.scene)}">${escapeHtml(item.title || `Scene ${item.scene}`)} · ${escapeHtml((item.subtitle || item.prompt || "").slice(0, 24))}</option>
+    `).join("");
+    if (activeDirectorImageImport?.scene) importSelect.value = String(activeDirectorImageImport.scene);
+  }
+
+  async function refreshImageConfigStatus() {
+    if (!configStatus) return;
+    try {
+      const res = await fetch("/api/settings/providers", { cache: "no-store" });
+      const data = await res.json();
+      const provider = (data.providers || []).find((item) => item.group === "图片生成");
+      if (!provider) {
+        configStatus.dataset.state = "error";
+        configStatus.querySelector("span").textContent = "没有找到图片生成服务，请先到系统设置配置。";
+        return;
+      }
+      configStatus.dataset.state = provider.configured ? "ok" : "error";
+      configStatus.querySelector("span").textContent = provider.configured
+        ? `图片 API 已配置：${provider.label} / ${provider.model || "默认模型"}`
+        : `图片 API 未配置：请到系统设置里的“图片生成 / ${provider.label}”保存 API Key。`;
+    } catch (error) {
+      configStatus.dataset.state = "error";
+      configStatus.querySelector("span").textContent = `图片 API 状态读取失败：${error instanceof Error ? error.message : String(error)}`;
+    }
+  }
+
+  importSelect?.addEventListener("change", () => applyImportedPrompt());
+  document.getElementById("useDirectorPrompt")?.addEventListener("click", () => applyImportedPrompt());
+  document.getElementById("generateDirectorPromptImage")?.addEventListener("click", () => {
+    if (applyImportedPrompt()) document.getElementById("imageGenerateBtn")?.click();
+  });
+  document.getElementById("clearDirectorPrompts")?.addEventListener("click", () => {
+    importedDirectorImagePrompts = [];
+    activeDirectorImageImport = null;
+    renderImportedPrompts();
+    setStatus("已清空导演镜头导入。", "info");
+  });
+  document.getElementById("openImageSettings")?.addEventListener("click", () => {
+    navigateWorkbench("settings", { preserveScroll: true });
+    document.querySelector('[data-provider-row="jimeng"]')?.scrollIntoView({ behavior: "smooth", block: "center" });
+  });
+
+  window.importDirectorPromptsToImage = ({ projectId, title, ratio, scenes, preferredScene = "" } = {}) => {
+    importedDirectorImagePrompts = (Array.isArray(scenes) ? scenes : [])
+      .map((scene, index) => ({
+        projectId,
+        scene: scene.scene || index + 1,
+        title: scene.title || `Scene ${scene.scene || index + 1}`,
+        prompt: String(scene.prompt || "").trim(),
+        motionPrompt: String(scene.motionPrompt || "").trim(),
+        subtitle: String(scene.subtitle || "").trim(),
+      }))
+      .filter((scene) => scene.prompt);
+    if (!importedDirectorImagePrompts.length) return false;
+    activeDirectorImageImport = importedDirectorImagePrompts.find((item) => String(item.scene) === String(preferredScene))
+      || importedDirectorImagePrompts[0];
+    renderImportedPrompts();
+    applyImportedPrompt(activeDirectorImageImport);
+    const ratioSelect = document.getElementById("imageAspectRatio");
+    if (ratioSelect && ["9:16", "16:9", "1:1"].includes(String(ratio || ""))) ratioSelect.value = String(ratio);
+    navigateWorkbench("imageStudio", { preserveScroll: true });
+    panel.scrollIntoView({ behavior: "smooth", block: "start" });
+    setStatus(`已从“${title || "导演稿"}”导入 ${importedDirectorImagePrompts.length} 个镜头图片提示词。`, "ok");
+    return true;
+  };
+
+  refreshImageConfigStatus();
+
   // 生成按钮
   document.getElementById("imageGenerateBtn").addEventListener("click", async () => {
-    const prompt = document.getElementById("imagePrompt").value.trim();
+    const prompt = promptInput.value.trim();
     if (!prompt) { setStatus("请先输入图片描述"); return; }
 
     const count = parseInt(panel.querySelector(".btn-count.active").dataset.count);
     const aspectRatio = document.getElementById("imageAspectRatio").value;
     const btn = document.getElementById("imageGenerateBtn");
-    const statusEl = document.getElementById("imageGenerateStatus");
+    const imported = activeDirectorImageImport?.prompt === prompt ? activeDirectorImageImport : null;
 
     btn.disabled = true;
-    btn.textContent = "⏳ 生成中...";
+    btn.textContent = "生成中...";
     setStatus(`正在生成 ${count} 张图片...`);
 
     try {
       const res = await fetch("/api/image/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt, count, aspectRatio }),
+        body: JSON.stringify({
+          prompt,
+          count,
+          aspectRatio,
+          sourceType: imported ? "director" : "manual",
+          sourceId: imported ? `${imported.projectId || ""}:${imported.scene || ""}` : "",
+        }),
       });
       const data = await res.json();
-      if (data.jobId) {
-        setStatus(`✅ 生成完成：成功 ${data.success} 张` + (data.failed > 0 ? `，失败 ${data.failed} 张` : ""));
-        renderResults(data.results || []);
+      if (!res.ok || data.ok === false) throw new Error(data.error || data.message || `HTTP ${res.status}`);
+      if (data.jobId && Number(data.success || 0) > 0) {
+        setStatus(`生成完成：成功 ${data.success} 张` + (data.failed > 0 ? `，失败 ${data.failed} 张` : ""), "ok");
+        renderResults(data.results || [], prompt);
       } else {
-        setStatus("❌ " + (data.error || "生成失败"));
+        const firstError = (data.results || []).find((item) => !item.success)?.error;
+        setStatus(`生成失败：${firstError || data.error || "没有成功生成图片"}`, "error");
+        renderResults(data.results || [], prompt);
       }
     } catch (e) {
-      setStatus("❌ 请求失败: " + e.message);
+      setStatus("请求失败：" + e.message, "error");
+      await refreshImageConfigStatus();
     } finally {
       btn.disabled = false;
-      btn.textContent = "🎨 生成图片";
+      btn.textContent = "生成图片";
     }
   });
 
-  function setStatus(msg) {
-    const el = document.getElementById("imageGenerateStatus");
-    if (el) el.textContent = msg;
-  }
-
-  function renderResults(results) {
+  function renderResults(results, sourcePrompt = "") {
     const grid = document.getElementById("imageResultsGrid");
     if (!results.length) { grid.innerHTML = '<div class="empty-state">无结果</div>'; return; }
     grid.innerHTML = results.map((r, i) => {
       if (!r.success) return `<div class="img-card error">第${i+1}张: ${r.error || "失败"}</div>`;
+      const safePrompt = String(sourcePrompt || "").replace(/\\/g, "\\\\").replace(/'/g, "\\'");
       return `<div class="img-card" data-asset-id="${r.assetId || ""}">
         <div class="img-preview">
           <img src="/api/image/file?path=${encodeURIComponent(r.imagePath || "")}" alt="生成图片" loading="lazy" />
         </div>
         <div class="img-actions">
-          <button class="btn-sm" onclick="window.open('/api/image/file?path=${encodeURIComponent(r.imagePath || "")}')">预览</button>
-          <button class="btn-sm" onclick="fetch('/api/image/assets/${r.assetId}/delete',{method:'POST'}).then(()=>this.closest('.img-card').remove())">删除</button>
-          <button class="btn-sm" onclick="document.getElementById('imagePrompt').value='${(prompt || "").replace(/'/g, "\\'")}';document.getElementById('imageGenerateBtn').click()">重新生成</button>
+          <button class="btn-sm" type="button" onclick="window.open('/api/image/file?path=${encodeURIComponent(r.imagePath || "")}')">预览</button>
+          <button class="btn-sm" type="button" onclick="fetch('/api/image/assets/${r.assetId}/delete',{method:'POST'}).then(()=>this.closest('.img-card').remove())">删除</button>
+          <button class="btn-sm" type="button" onclick="document.getElementById('imagePrompt').value='${safePrompt}';document.getElementById('imageGenerateBtn').click()">重新生成</button>
         </div>
       </div>`;
     }).join("");
@@ -979,7 +1084,10 @@ function setupImageStudio() {
   document.addEventListener("click", (e) => {
     const nav = e.target.closest("[data-nav]");
     if (nav && nav.dataset.nav === "image-studio") {
-      setTimeout(loadImageAssets, 100);
+      setTimeout(() => {
+        loadImageAssets();
+        refreshImageConfigStatus();
+      }, 100);
     }
   });
 }
