@@ -1369,7 +1369,9 @@ function setupV2Settings() {
             <div class="provider-actions">
               <button class="primary small" type="button" data-save-provider="${html(provider.id)}">保存</button>
               ${provider.group === "文本模型" || provider.group === "TTS 语音" ? `<button class="ghost small" type="button" data-default-provider="${html(provider.id)}">设为默认</button>` : ""}
+              ${provider.group === "图片生成" ? `<button class="ghost small" type="button" data-default-provider="${html(provider.id)}">设为默认</button>` : ""}
               <button class="ghost small" type="button" data-test-provider="${html(provider.id)}">检查</button>
+              ${provider.group === "图片生成" ? `<button class="ghost small" type="button" data-test-provider-sample="${html(provider.id)}">测试生成图片</button>` : ""}
               ${provider.applyUrl ? `<button class="ghost small" type="button" data-open-url="${html(provider.applyUrl)}">申请入口</button>` : ""}
               ${provider.balanceUrl ? `<button class="ghost small" type="button" data-open-url="${html(provider.balanceUrl)}">余额</button>` : ""}
             </div>
@@ -1499,6 +1501,25 @@ function setupV2Settings() {
     }
   }
 
+  async function testProviderSample(id) {
+    const row = providerList.querySelector(`[data-provider-row="${CSS.escape(id)}"]`);
+    const status = row?.querySelector(`[data-status-for="${CSS.escape(id)}"]`);
+    if (status) status.textContent = "正在执行测试生成...";
+    try {
+      const res = await fetch("/api/settings/test-provider-sample", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id }),
+      });
+      const data = await res.json();
+      if (!res.ok || data.ok === false) throw new Error(data.message || data.error || `HTTP ${res.status}`);
+      if (status) status.textContent = data.message || "测试生成成功。";
+      if (typeof loadVideoProductSources === "function") loadVideoProductSources().catch(() => {});
+    } catch (e) {
+      if (status) status.textContent = e instanceof Error ? e.message : String(e);
+    }
+  }
+
   async function saveModelMapping() {
     const mapping = {};
     modelMapEl.querySelectorAll(".model-select").forEach((select) => {
@@ -1553,6 +1574,11 @@ function setupV2Settings() {
     const test = event.target.closest("[data-test-provider]");
     if (test) {
       testProvider(test.dataset.testProvider);
+      return;
+    }
+    const testSample = event.target.closest("[data-test-provider-sample]");
+    if (testSample) {
+      testProviderSample(testSample.dataset.testProviderSample);
       return;
     }
     const openUrl = event.target.closest("[data-open-url]");

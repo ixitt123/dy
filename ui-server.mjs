@@ -1281,6 +1281,43 @@ function providerConfigStatus(settings, providerId) {
   };
 }
 
+async function testUnifiedProvider(settings, providerId) {
+  const provider = publicUnifiedProviders(settings).find((item) => item.id === providerId);
+  if (!provider) return { ok: false, status: "failed", message: "未知 API 服务" };
+  if (provider.group === "图片生成") {
+    const result = await imageService.testProviderConnection(providerId);
+    return { ok: result.ok, status: result.status, message: result.message };
+  }
+  return providerConfigStatus(settings, providerId);
+}
+
+async function testProviderSample(providerId) {
+  const provider = publicUnifiedProviders(readSettings()).find((item) => item.id === providerId);
+  if (!provider) return { ok: false, message: "未知 API 服务" };
+  if (provider.group === "图片生成") {
+    const result = await imageService.generateImage({
+      provider: providerId,
+      prompt: "短视频教育场景测试图：明亮教室里，一位英语老师在黑板前讲解单词，竖版构图，干净真实，适合招生短视频封面。",
+      aspectRatio: "9:16",
+      count: 1,
+      sourceType: "provider-test",
+      sourceId: providerId,
+    });
+    const first = (result.results || []).find((item) => item.success);
+    if (!first) {
+      const error = (result.results || []).find((item) => !item.success)?.error || "测试生成图片失败。";
+      return { ok: false, status: "failed", message: error, result };
+    }
+    return {
+      ok: true,
+      status: "success",
+      message: `测试生成图片成功，已保存到图片资产库：${first.filename || first.assetId}`,
+      result,
+    };
+  }
+  return { ok: false, message: "该 Provider 暂无测试生成动作。" };
+}
+
 function readTextFileSafe(filePath, fallback = "") {
   try {
     if (!fs.existsSync(filePath)) return fallback;
@@ -4830,7 +4867,17 @@ const server = http.createServer(async (req, res) => {
 
       if (req.method === "POST" && route === "test-provider") {
         const body = JSON.parse(await readBody(req) || "{}");
-        sendJson(res, 200, providerConfigStatus(readSettings(), String(body.id || "")));
+        sendJson(res, 200, await testUnifiedProvider(readSettings(), String(body.id || "")));
+        return;
+      }
+
+      if (req.method === "POST" && route === "test-provider-sample") {
+        const body = JSON.parse(await readBody(req) || "{}");
+        try {
+          sendJson(res, 200, await testProviderSample(String(body.id || "")));
+        } catch (error) {
+          sendJson(res, 400, { ok: false, status: "failed", message: error instanceof Error ? error.message : String(error) });
+        }
         return;
       }
 
@@ -4917,6 +4964,7 @@ const server = http.createServer(async (req, res) => {
         const body = JSON.parse(await readBody(req) || "{}");
         try {
           const result = await imageService.generateImage({
+            provider: body.provider || "",
             prompt: body.prompt || "",
             aspectRatio: body.aspectRatio || "1:1",
             count: Math.min(Math.max(Number(body.count) || 1, 1), 9),
