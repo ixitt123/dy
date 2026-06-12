@@ -161,6 +161,7 @@ const videoProductBlockers = document.querySelector("#videoProductBlockers");
 const videoProductProgressBar = document.querySelector("#videoProductProgressBar");
 const videoProductProgressText = document.querySelector("#videoProductProgressText");
 const openVideoProductOutputBtn = document.querySelector("#openVideoProductOutput");
+const videoProductOutputFiles = document.querySelector("#videoProductOutputFiles");
 const videoProductSceneMeta = document.querySelector("#videoProductSceneMeta");
 const videoProductScenes = document.querySelector("#videoProductScenes");
 const refreshVideoProductProjectsBtn = document.querySelector("#refreshVideoProductProjects");
@@ -2714,6 +2715,21 @@ function renderVideoProductProjects(projects = videoProductProjectsState) {
   `).join("");
 }
 
+function renderVideoProductOutputs(project) {
+  if (!videoProductOutputFiles) return;
+  const id = project?.project_id || project?.id || 0;
+  const files = [
+    ["timeline", "timeline.json", project?.timeline_path],
+    ["srt", "subtitles.srt", project?.srt_path],
+    ["manifest", "manifest", project?.manifest_path],
+    ["draft", "draft", project?.draft_path],
+    ["mp4", "MP4", project?.mp4_path],
+  ].filter(([, , value]) => value);
+  videoProductOutputFiles.innerHTML = files.length
+    ? files.map(([type, label]) => `<a href="/api/video-product/export?id=${encodeURIComponent(id)}&type=${encodeURIComponent(type)}" target="_blank" rel="noreferrer">${escapeHtml(label)}</a>`).join("")
+    : '<span>输出文件生成后会显示在这里。</span>';
+}
+
 async function loadVideoProductProjects() {
   const data = await fetchJson("/api/video-product/projects?limit=50");
   renderVideoProductProjects(data.projects || []);
@@ -2734,6 +2750,7 @@ function renderVideoProductProject(project) {
   videoProductStatus.textContent = project.status === "failed"
     ? `视频成片失败：${project.error || "未知错误"}`
     : `${videoProductStatusLabel(project.status)}：${project.current_step || "等待更新"}`;
+  renderVideoProductOutputs(project);
   openVideoProductOutputBtn.disabled = !project.output_dir;
 }
 

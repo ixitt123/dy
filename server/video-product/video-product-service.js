@@ -384,6 +384,7 @@ export function createVideoProductService({
 
     const timelineJson = {
       project_id: project.id,
+      name: timeline.director?.title || `Timeline #${project.id}`,
       source_director_project_id: project.source_director_project_id,
       audio_asset_id: project.audio_asset_id,
       platform: project.platform,
@@ -469,9 +470,9 @@ export function createVideoProductService({
       name: timelineFiles.timelineJson?.name || `Timeline #${project.id}`,
       status: "reference_package",
     };
-    writeJson(path.join(projectDir, "draft_content.json"), draftContent);
+    const draftContentPath = writeJson(path.join(projectDir, "draft_content.json"), draftContent);
     writeJson(path.join(projectDir, "draft_meta_info.json"), draftMeta);
-    return projectDir;
+    return draftContentPath;
   }
 
   async function renderMp4(project, timelineFiles) {
