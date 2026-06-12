@@ -4795,6 +4795,8 @@ const server = http.createServer(async (req, res) => {
             prompt: body.prompt || "",
             aspectRatio: body.aspectRatio || "1:1",
             count: Math.min(Math.max(Number(body.count) || 1, 1), 9),
+            sourceType: body.sourceType || "manual",
+            sourceId: body.sourceId || "",
           });
           sendJson(res, 200, result);
         } catch (e) {
