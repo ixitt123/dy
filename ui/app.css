@@ -1954,6 +1954,36 @@ pre {
   font-size: 13px;
 }
 
+.tts-settings.tts-settings-summary {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px;
+  background: color-mix(in srgb, var(--panel) 92%, var(--primary) 8%);
+}
+
+.tts-settings-summary > div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.tts-settings-summary span,
+.tts-settings-summary small {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.tts-settings-summary strong {
+  color: var(--text);
+  font-size: 15px;
+}
+
+.tts-settings-summary #ttsSettingsStatus {
+  grid-column: 1 / -1;
+}
+
 .tts-workbench {
   display: grid;
   grid-template-columns: minmax(0, 1.18fr) minmax(420px, 0.9fr);
