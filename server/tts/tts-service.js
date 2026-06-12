@@ -107,6 +107,13 @@ export function createTtsService({ baseDir, taskStore, getSettings, ffmpegPath }
     if (providerId === "aliyun_bailian" && !String(config.api_key || "").trim()) {
       return "请先在语音实验室保存阿里云百炼 API Key。";
     }
+    if (providerId === "fish_audio") {
+      if (!String(config.api_key || "").trim()) return "Fish Audio：未配置 API Key。";
+      if (!String(config.model || "").trim()) return "Fish Audio：模型为空。";
+      if (!String(input.voice_id || config.voice || config.reference_id || "").trim()) {
+        return "Fish Audio：请填写 voice_id / reference_id。";
+      }
+    }
     if (providerId === "custom_tts" && !String(config.base_url || "").trim()) {
       return "请先填写自定义 Provider 的 base_url。";
     }

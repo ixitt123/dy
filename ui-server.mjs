@@ -1294,6 +1294,24 @@ async function testUnifiedProvider(settings, providerId) {
     const result = await imageService.testProviderConnection(providerId);
     return { ok: result.ok, status: result.status, message: result.message };
   }
+  if (providerId === "fish_audio") {
+    const config = settings.tts?.fish_audio || {};
+    const apiKey = String(config.api_key || "").trim();
+    const baseUrl = String(config.base_url || "https://api.fish.audio").replace(/\/+$/, "");
+    if (!apiKey) return { ok: false, status: "missing", message: "Fish Audio：未配置 API Key。" };
+    if (!String(config.model || "").trim()) return { ok: false, status: "missing", message: "Fish Audio：模型为空。" };
+    try {
+      const response = await fetch(`${baseUrl}/model`, {
+        headers: { authorization: `Bearer ${apiKey}` },
+      });
+      if (response.ok) return { ok: true, status: "success", message: "Fish Audio 连接成功。" };
+      if (response.status === 401 || response.status === 403) return { ok: false, status: "failed", message: "Fish Audio：API Key 无效或未授权。" };
+      if (response.status === 402) return { ok: false, status: "failed", message: "Fish Audio：余额不足或额度不可用。" };
+      return { ok: false, status: "failed", message: `Fish Audio 测试失败（${response.status}）。` };
+    } catch (error) {
+      return { ok: false, status: "failed", message: `Fish Audio：网络错误，${error instanceof Error ? error.message : String(error)}` };
+    }
+  }
   return providerConfigStatus(settings, providerId);
 }
 
@@ -1319,6 +1337,31 @@ async function testProviderSample(providerId) {
       status: "success",
       message: `测试生成图片成功，已保存到图片资产库：${first.filename || first.assetId}`,
       result,
+    };
+  }
+  if (providerId === "fish_audio") {
+    const settings = readSettings();
+    const config = settings.tts?.fish_audio || {};
+    const voiceId = String(config.voice || config.reference_id || "").trim();
+    const result = ttsService.enqueue({
+      provider: "fish_audio",
+      text: "你好，这是一段 Fish Audio 测试语音。用于确认 API 连接、模型配置和本地音频保存是否正常。",
+      voice_id: voiceId,
+      voice_name: voiceId || "Fish Audio",
+      model: String(config.model || "s2-pro"),
+      format: String(config.default_format || "mp3"),
+      speed: 1,
+      volume: 50,
+      pitch: 1,
+      emotion: "自然",
+      style_prompt: "",
+    });
+    if (result.error) return { ok: false, status: "failed", message: result.error };
+    return {
+      ok: true,
+      status: "queued",
+      message: `Fish Audio 测试语音任务已提交：#${result.job.id}`,
+      job: result.job,
     };
   }
   return { ok: false, message: "该 Provider 暂无测试生成动作。" };
