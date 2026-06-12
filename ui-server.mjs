@@ -725,6 +725,7 @@ function normalizeSettings(settings) {
     : next.modelMapping && typeof next.modelMapping === "object"
       ? next.modelMapping
       : {};
+  const migrations = next.migrations && typeof next.migrations === "object" ? { ...next.migrations } : {};
 
   providers.dashscope = {
     label: "阿里云百炼 DashScope",
@@ -842,13 +843,15 @@ function normalizeSettings(settings) {
     },
   };
   next.modelMap = { ...DEFAULT_MODEL_MAPPING, ...modelMapping };
-  if (!modelMapping.image || (modelMapping.image.provider === "jimeng" && modelMapping.image.model === "flux-dev")) {
+  if (!migrations.imageDefaultVolcengineArk && (!modelMapping.image || (modelMapping.image.provider === "jimeng" && modelMapping.image.model === "flux-dev"))) {
     next.modelMap.image = {
       provider: "volcengine_ark",
       model: next.imageProviders.volcengine_ark.model || "doubao-seedream-5.0-lite",
     };
+    migrations.imageDefaultVolcengineArk = true;
   }
   next.modelMapping = next.modelMap;
+  next.migrations = migrations;
   return next;
 }
 
