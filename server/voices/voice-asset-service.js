@@ -163,6 +163,8 @@ export function createVoiceAssetService({ baseDir, taskStore, ttsService, getSet
     const provider = String(input.provider || "aliyun_bailian");
     const consentConfirmed = input.consent_confirmed === true;
     const manualVoiceId = String(input.voice_id || "").trim();
+    const referenceId = String(input.reference_id || "").trim();
+    const effectiveManualVoiceId = manualVoiceId || referenceId;
     let sample = null;
     if (input.sample_data) {
       try {
@@ -171,12 +173,12 @@ export function createVoiceAssetService({ baseDir, taskStore, ttsService, getSet
         return { error: error instanceof Error ? error.message : String(error) };
       }
     }
-    if (!manualVoiceId && !sample) return { error: "请上传参考音频，或填写已有 voice_id。" };
-    if (!manualVoiceId && !consentConfirmed) return { error: "必须确认拥有声音授权后才能复刻。" };
+    if (!effectiveManualVoiceId && !sample) return { error: "请上传参考音频，或填写已有 voice_id / reference_id。" };
+    if (!effectiveManualVoiceId && !consentConfirmed) return { error: "必须确认拥有声音授权后才能复刻。" };
 
     const targetModel = String(input.target_model || "qwen3-tts-vc-2026-01-22").trim();
     let cloneResult = null;
-    if (!manualVoiceId && sample) {
+    if (!effectiveManualVoiceId && sample) {
       cloneResult = await cloneSample({
         providerId: provider,
         name: String(input.preferred_name || voiceName),
@@ -187,10 +189,12 @@ export function createVoiceAssetService({ baseDir, taskStore, ttsService, getSet
         consentConfirmed,
       });
     }
-    const voiceId = manualVoiceId || cloneResult?.voice_id || `pending-${randomUUID()}`;
-    const status = manualVoiceId || cloneResult?.success ? "active" : "clone_failed";
+    const voiceId = effectiveManualVoiceId || cloneResult?.voice_id || `pending-${randomUUID()}`;
+    const status = effectiveManualVoiceId || cloneResult?.success ? "active" : "clone_failed";
     const metadata = {
       target_model: cloneResult?.metadata?.target_model || targetModel,
+      reference_id: referenceId,
+      fish_audio: provider === "fish_audio" ? { reference_id: referenceId || voiceId } : {},
       sample_mime: sample?.mimeType || "",
       sample_size: sample?.size || 0,
       sample_transcript: String(input.sample_transcript || ""),
@@ -271,6 +275,19 @@ export function createVoiceAssetService({ baseDir, taskStore, ttsService, getSet
     if (input.voice_id !== undefined && String(input.voice_id || "").trim()) {
       changes.voice_id = String(input.voice_id).trim();
       changes.status = "active";
+    }
+    if (input.reference_id !== undefined) {
+      const metadata = safeJson(asset.metadata_json, {});
+      const referenceId = String(input.reference_id || "").trim();
+      changes.metadata_json = JSON.stringify({
+        ...metadata,
+        reference_id: referenceId,
+        fish_audio: { ...(metadata.fish_audio || {}), reference_id: referenceId },
+      });
+      if (!changes.voice_id && referenceId) {
+        changes.voice_id = referenceId;
+        changes.status = "active";
+      }
     }
     if (input.is_favorite !== undefined) changes.is_favorite = Boolean(input.is_favorite);
     if (input.status !== undefined) changes.status = String(input.status || asset.status);
