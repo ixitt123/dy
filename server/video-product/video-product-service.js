@@ -24,6 +24,19 @@ const OUTPUT_TYPE_LABELS = {
   package: "标准素材包",
 };
 
+const PREMIUM_WORKFLOW_SKILLS = [
+  "premium-video-director",
+  "script-to-shotlist",
+  "visual-style-lock",
+  "voice-timing-align",
+  "bgm-sfx-mixer",
+  "kinetic-caption-designer",
+  "motion-template-render",
+  "ffmpeg-final-render",
+  "video-quality-review",
+  "publish-package-maker",
+];
+
 const PLATFORM_PRESETS = {
   douyin: { label: "抖音", ratio: "9:16", resolution: "1080x1920", fps: 30 },
   "video-account": { label: "视频号", ratio: "9:16", resolution: "1080x1920", fps: 30 },
@@ -98,6 +111,88 @@ function timelineToSrt(scenes) {
 function textDurationWeight(text) {
   const length = String(text || "").replace(/\s+/g, "").length;
   return Math.max(1.8, Math.min(12, length / 5.5));
+}
+
+function compactMatchText(text) {
+  return String(text || "")
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}\u4e00-\u9fa5]+/gu, "")
+    .trim();
+}
+
+function textBigrams(text) {
+  const value = compactMatchText(text);
+  if (value.length < 2) return new Set(value ? [value] : []);
+  const grams = new Set();
+  for (let index = 0; index < value.length - 1; index += 1) {
+    grams.add(value.slice(index, index + 2));
+  }
+  return grams;
+}
+
+function textSimilarityScore(a, b) {
+  const left = compactMatchText(a);
+  const right = compactMatchText(b);
+  if (!left || !right) return 0;
+  const shorter = left.length <= right.length ? left : right;
+  const longer = left.length > right.length ? left : right;
+  if (shorter.length >= 18 && longer.includes(shorter)) return 100;
+  const leftGrams = textBigrams(left);
+  const rightGrams = textBigrams(right);
+  if (!leftGrams.size || !rightGrams.size) return 0;
+  let overlap = 0;
+  for (const gram of leftGrams) {
+    if (rightGrams.has(gram)) overlap += 1;
+  }
+  return Math.round((overlap / Math.max(leftGrams.size, rightGrams.size)) * 100);
+}
+
+function audioDirectorBinding(director, audio, directorScenes = []) {
+  if (!director || !audio) return { accepted: false, score: 0, reason: "缺少导演稿或音频。" };
+  const narrationText = directorScenes.map((scene) => scene.voice_text || scene.subtitle || "").join("");
+  const score = Math.max(
+    textSimilarityScore(audio.text, narrationText),
+    textSimilarityScore(audio.text, director.source_text),
+  );
+  const sameTask = Number(director.task_id || 0) > 0
+    && Number(director.task_id || 0) === Number(audio.task_id || 0);
+  const sameRewrite = Number(director.rewrite_id || 0) > 0
+    && Number(director.rewrite_id || 0) === Number(audio.rewrite_id || 0);
+  const accepted = sameTask || sameRewrite || score >= 28;
+  return {
+    accepted,
+    score,
+    same_task: sameTask,
+    same_rewrite: sameRewrite,
+    reason: accepted
+      ? "音频和导演稿已通过绑定校验。"
+      : `当前音频与导演稿相似度 ${score}%，低于 28%，已阻止随机匹配。`,
+  };
+}
+
+function assTimestamp(seconds) {
+  const value = Math.max(0, Number(seconds || 0));
+  const hours = Math.floor(value / 3600);
+  const minutes = Math.floor((value % 3600) / 60);
+  const secs = Math.floor(value % 60);
+  const centiseconds = Math.floor((value - Math.floor(value)) * 100);
+  return `${hours}:${String(minutes).padStart(2, "0")}:${String(secs).padStart(2, "0")}.${String(centiseconds).padStart(2, "0")}`;
+}
+
+function assEscape(text) {
+  return String(text || "")
+    .replace(/[{}]/g, "")
+    .replace(/\r?\n/g, "\\N");
+}
+
+function assCaptionText(text) {
+  const value = String(text || "").trim();
+  if (value.length <= 18) return assEscape(value);
+  const chunks = [];
+  for (let index = 0; index < value.length; index += 16) {
+    chunks.push(value.slice(index, index + 16));
+  }
+  return assEscape(chunks.slice(0, 3).join("\\N"));
 }
 
 function normalizeSceneDuration(scene) {
@@ -187,6 +282,7 @@ export function createVideoProductService({
   onIdle = () => {},
 }) {
   const outputRoot = ensureDir(path.join(baseDir, "video-products"));
+  const premiumSkillsRoot = path.join(baseDir, ".skills");
   const pending = [];
   let working = false;
 
@@ -219,6 +315,32 @@ export function createVideoProductService({
       })
       .filter(Boolean)
       .slice(0, Math.max(1, Math.min(500, Number(limit) || 200)));
+  }
+
+  function premiumWorkflowSkillStatus() {
+    return PREMIUM_WORKFLOW_SKILLS.map((name) => ({
+      name,
+      path: path.join(".skills", name, "SKILL.md"),
+      ready: fs.existsSync(path.join(premiumSkillsRoot, name, "SKILL.md")),
+    }));
+  }
+
+  function findBgmAsset() {
+    const roots = [
+      path.join(baseDir, "assets", "bgm"),
+      path.join(baseDir, "media", "bgm"),
+      path.join(baseDir, "bgm"),
+    ];
+    const extensions = new Set([".mp3", ".wav", ".m4a", ".aac", ".ogg"]);
+    for (const root of roots) {
+      if (!fs.existsSync(root)) continue;
+      const files = fs.readdirSync(root)
+        .map((name) => path.join(root, name))
+        .filter((filePath) => fs.statSync(filePath).isFile() && extensions.has(path.extname(filePath).toLowerCase()))
+        .sort();
+      if (files.length) return files[0];
+    }
+    return "";
   }
 
   function sourceProject(row, { includeScenes = true } = {}) {
