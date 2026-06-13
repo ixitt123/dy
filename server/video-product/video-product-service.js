@@ -108,6 +108,49 @@ function timelineToSrt(scenes) {
   ].join("\n")).join("\n");
 }
 
+function timelineToAss(scenes, { width = 1080, height = 1920 } = {}) {
+  const marginV = Math.max(120, Math.round(height * 0.12));
+  const fontSize = Math.max(46, Math.round(height * 0.035));
+  const titleSize = Math.max(58, Math.round(height * 0.045));
+  const lines = [
+    "[Script Info]",
+    "ScriptType: v4.00+",
+    "WrapStyle: 0",
+    "ScaledBorderAndShadow: yes",
+    `PlayResX: ${width}`,
+    `PlayResY: ${height}`,
+    "",
+    "[V4+ Styles]",
+    "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding",
+    `Style: Premium,Microsoft YaHei,${fontSize},&H00FFFFFF,&H0000D7FF,&H00161616,&H99000000,-1,0,0,0,100,100,0,0,1,4,0,2,80,80,${marginV},1`,
+    `Style: Keyword,Microsoft YaHei,${titleSize},&H0000D7FF,&H00FFFFFF,&H00111111,&H99000000,-1,0,0,0,104,104,0,0,1,5,0,2,80,80,${marginV + 8},1`,
+    "",
+    "[Events]",
+    "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text",
+  ];
+
+  for (const scene of scenes) {
+    const text = assCaptionText(scene.subtitle_text || scene.narration_text || "");
+    if (!text) continue;
+    const style = String(scene.title_text || "").length <= 16 && Number(scene.scene_index || 0) === 1 ? "Keyword" : "Premium";
+    const effectText = `{\\fad(120,120)\\t(0,220,\\fscx106\\fscy106)}${text}`;
+    lines.push([
+      "Dialogue: 0",
+      assTimestamp(scene.start_time),
+      assTimestamp(scene.end_time),
+      style,
+      "",
+      "0",
+      "0",
+      "0",
+      "",
+      effectText,
+    ].join(","));
+  }
+
+  return `${lines.join("\n")}\n`;
+}
+
 function textDurationWeight(text) {
   const length = String(text || "").replace(/\s+/g, "").length;
   return Math.max(1.8, Math.min(12, length / 5.5));
@@ -253,6 +296,37 @@ function ffmpegDrawText(value) {
 
 function concatFileList(files) {
   return files.map((file) => `file '${file.replace(/\\/g, "/").replace(/'/g, "'\\''")}'`).join("\n");
+}
+
+function renderReport(project, timelineFiles, { mp4Path = "", bgmPath = "", quality = null } = {}) {
+  return {
+    project_id: project.id,
+    output_type: project.output_type,
+    ratio: project.ratio,
+    resolution: project.resolution,
+    fps: project.fps,
+    duration: timelineFiles.timelineJson?.duration || project.duration || 0,
+    commercial_contract: {
+      voiceover: Boolean(timelineFiles.packagedAudio),
+      bgm: Boolean(bgmPath),
+      ass_subtitles: Boolean(timelineFiles.assPath),
+      title_card: project.output_type === "template_mp4",
+      end_cta: project.output_type === "template_mp4",
+      cover: Boolean(timelineFiles.coverPath),
+      publish_text: true,
+    },
+    files: {
+      mp4: mp4Path ? path.basename(mp4Path) : "",
+      final_mp4: fs.existsSync(path.join(timelineFiles.projectDir, "final.mp4")) ? "final.mp4" : "",
+      cover: timelineFiles.coverPath ? path.basename(timelineFiles.coverPath) : "",
+      timeline: path.basename(timelineFiles.timelinePath || "timeline.json"),
+      subtitles_srt: path.basename(timelineFiles.srtPath || "subtitles.srt"),
+      subtitles_ass: timelineFiles.assPath ? path.basename(timelineFiles.assPath) : "",
+      manifest: path.basename(timelineFiles.manifestPath || "project_manifest.json"),
+    },
+    quality,
+    generated_at: new Date().toISOString(),
+  };
 }
 
 function publicTimelineProject(row, scenes = [], { includeScenes = true } = {}) {
@@ -423,6 +497,12 @@ export function createVideoProductService({
 
     const directorScenes = director ? taskStore.listDirectorScenes(director.id) : [];
     if (!directorScenes.length) blockers.push("导演项目没有可用镜头列表。");
+    const audioBinding = director && audio
+      ? audioDirectorBinding(director, audio, directorScenes)
+      : { accepted: false, score: 0, reason: "缺少导演稿或音频，无法绑定。" };
+    if (outputType === "template_mp4" && director && audio && !audioBinding.accepted) {
+      blockers.push(`路线 A 已阻止随机音频匹配：${audioBinding.reason}`);
+    }
 
     const imageSource = String(input.image_source || "director");
     const selectedImageIds = Array.isArray(input.image_asset_ids) ? input.image_asset_ids : [];
@@ -532,6 +612,8 @@ export function createVideoProductService({
         downloaded_video_count: downloadedVideos.length,
         audio_duration: Number(audioDuration.toFixed(3)),
         director_scene_count: directorScenes.length,
+        audio_binding: audioBinding,
+        premium_workflow_skills: premiumWorkflowSkillStatus(),
       },
     };
   }
