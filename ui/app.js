@@ -4164,6 +4164,39 @@ videoProductImageSource?.addEventListener("change", () => {
 videoProductOutputType?.addEventListener("change", () => {
   const label = videoProductOutputType.options[videoProductOutputType.selectedIndex]?.textContent || "输出方式";
   videoProductStatus.textContent = `已选择：${label}`;
+  previewVideoProductTimeline().catch(() => {});
+});
+
+document.querySelectorAll(".video-route-card[data-video-output]").forEach((card) => {
+  card.addEventListener("click", () => {
+    const outputType = card.dataset.videoOutput || "";
+    if (!outputType || !videoProductOutputType) return;
+    videoProductOutputType.value = outputType;
+    document.querySelectorAll(".video-route-card").forEach((item) => item.classList.toggle("primary", item === card));
+    videoProductStatus.textContent = `已选择：${videoProductOutputLabel(outputType)}`;
+    previewVideoProductTimeline().catch(() => {});
+    document.querySelector("#videoProductCenter")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  });
+});
+
+document.querySelector(".status-rail")?.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-video-product-action]");
+  if (!button) return;
+  const id = button.dataset.id || "";
+  const action = button.dataset.videoProductAction || "";
+  if (action === "view" && id) {
+    openVideoProductProject(id).catch((error) => {
+      videoProductStatus.textContent = error instanceof Error ? error.message : String(error);
+    });
+    document.querySelector("#videoProductCenter")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+  if (action === "open" && id) {
+    openVideoProductProject(id)
+      .then(() => openVideoProductOutput())
+      .catch((error) => {
+        videoProductStatus.textContent = error instanceof Error ? error.message : String(error);
+      });
+  }
 });
 
 videoProductScenes?.addEventListener("change", (event) => {
