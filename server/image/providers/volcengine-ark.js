@@ -16,11 +16,13 @@ function normalizeModel(model) {
 }
 
 function sizeForRatio(aspectRatio) {
+  // Seedream 5.0 lite requires at least 3,686,400 pixels. Keep the same
+  // aspect ratios while meeting that floor: 1440x2560, 2560x1440, 1920x1920.
   return {
-    "9:16": "1080x1920",
-    "16:9": "1920x1080",
-    "1:1": "1024x1024",
-  }[String(aspectRatio || "1:1")] || "1024x1024";
+    "9:16": "1440x2560",
+    "16:9": "2560x1440",
+    "1:1": "1920x1920",
+  }[String(aspectRatio || "1:1")] || "1920x1920";
 }
 
 function normalizeArkError(status, bodyText) {
@@ -42,6 +44,9 @@ function normalizeArkError(status, bodyText) {
   }
   if (raw.includes("quota") || raw.includes("balance") || raw.includes("insufficient") || raw.includes("余额")) {
     return "火山方舟：余额不足或额度不可用。";
+  }
+  if (raw.includes("image size") || raw.includes("size") && raw.includes("pixel")) {
+    return `火山方舟：图片尺寸不符合模型要求。当前 Provider 已按 9:16=1440x2560、16:9=2560x1440、1:1=1920x1920 发送，请刷新页面后重试。原始错误：${message}`;
   }
   if (status >= 500) return `火山方舟：服务请求失败（${status}）。`;
   return message ? `火山方舟请求失败（${status}）：${message}` : `火山方舟请求失败（${status}）。`;
