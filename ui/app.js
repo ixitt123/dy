@@ -2972,20 +2972,71 @@ function renderVideoProductBlockers(blockers = []) {
     : '<span class="vfo-ready">当前没有阻塞项，可以生成输出。</span>';
 }
 
+function videoProductCompactText(text) {
+  return String(text || "")
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}\u4e00-\u9fa5]+/gu, "")
+    .trim();
+}
+
+function videoProductTextSimilarity(leftText, rightText) {
+  const left = videoProductCompactText(leftText);
+  const right = videoProductCompactText(rightText);
+  if (!left || !right) return 0;
+  const shorter = left.length <= right.length ? left : right;
+  const longer = left.length > right.length ? left : right;
+  if (shorter.length >= 18 && longer.includes(shorter)) return 100;
+  const grams = (value) => {
+    const result = new Set();
+    if (value.length < 2) {
+      if (value) result.add(value);
+      return result;
+    }
+    for (let index = 0; index < value.length - 1; index += 1) {
+      result.add(value.slice(index, index + 2));
+    }
+    return result;
+  };
+  const leftGrams = grams(left);
+  const rightGrams = grams(right);
+  let overlap = 0;
+  leftGrams.forEach((gram) => {
+    if (rightGrams.has(gram)) overlap += 1;
+  });
+  return Math.round((overlap / Math.max(leftGrams.size, rightGrams.size, 1)) * 100);
+}
+
+function videoProductAudioScoreForDirector(director, audio) {
+  if (!director || !audio) return 0;
+  const sameTask = Number(director.task_id || 0) > 0 && Number(director.task_id || 0) === Number(audio.task_id || 0);
+  const sameRewrite = Number(director.rewrite_id || 0) > 0 && Number(director.rewrite_id || 0) === Number(audio.rewrite_id || 0);
+  const textScore = Math.max(
+    videoProductTextSimilarity(audio.text, director.source_text),
+    videoProductTextSimilarity(audio.text, director.title),
+  );
+  return Math.max(textScore, sameTask ? 100 : 0, sameRewrite ? 96 : 0);
+}
+
 function renderVideoProductSourceOptions({ preferredDirectorId = 0, preferredAudioId = 0 } = {}) {
   const directors = videoProductSources.directors || [];
   const audios = videoProductSources.audioJobs || [];
   videoProductDirector.innerHTML = directors.length
     ? directors.map((project) => `<option value="${project.id}">#${project.id} ${escapeHtml(project.title || "未命名导演稿")} · ${Number(project.scene_count || 0)} 镜头</option>`).join("")
     : '<option value="">暂无已完成导演项目</option>';
-  videoProductAudio.innerHTML = audios.length
-    ? audios.map((job) => `<option value="${job.id}">#${job.id} ${escapeHtml(job.voice_name || job.voice_id || job.provider)} · ${escapeHtml((job.text || "").slice(0, 28))}</option>`).join("")
-    : '<option value="">暂无已完成 TTS 音频</option>';
   if (preferredDirectorId && directors.some((item) => Number(item.id) === Number(preferredDirectorId))) {
     videoProductDirector.value = String(preferredDirectorId);
   }
+  const selectedDirector = directors.find((item) => Number(item.id) === Number(videoProductDirector.value || preferredDirectorId || 0)) || directors[0] || null;
+  const scoredAudios = audios
+    .map((job) => ({ ...job, match_score: videoProductAudioScoreForDirector(selectedDirector, job) }))
+    .sort((a, b) => Number(b.match_score || 0) - Number(a.match_score || 0) || Number(b.id || 0) - Number(a.id || 0));
+  videoProductAudio.innerHTML = audios.length
+    ? scoredAudios.map((job) => `<option value="${job.id}">匹配${Number(job.match_score || 0)}% · #${job.id} ${escapeHtml(job.voice_name || job.voice_id || job.provider)} · ${escapeHtml((job.text || "").slice(0, 24))}</option>`).join("")
+    : '<option value="">暂无已完成 TTS 音频</option>';
   if (preferredAudioId && audios.some((item) => Number(item.id) === Number(preferredAudioId))) {
     videoProductAudio.value = String(preferredAudioId);
+  } else if (scoredAudios.length) {
+    videoProductAudio.value = String(scoredAudios[0].id);
   }
 }
 
@@ -4406,6 +4457,7 @@ refreshVideoProductProjectsBtn?.addEventListener("click", () => {
 
 videoProductDirector?.addEventListener("change", () => {
   videoProductManualBindings = {};
+  renderVideoProductSourceOptions({ preferredDirectorId: Number(videoProductDirector.value || 0) });
   previewVideoProductTimeline().catch(() => {});
 });
 
