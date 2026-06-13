@@ -1178,6 +1178,7 @@ export function createVideoProductService({
     const expected = parseResolution(project.resolution);
     const stats = mp4Path && fs.existsSync(mp4Path) ? fs.statSync(mp4Path) : null;
     const media = await inspectMedia(mp4Path);
+    const publishTitle = String(timelineFiles.timelineJson?.publish_title || timelineFiles.timelineJson?.name || "");
 
     if (!media.exists) errors.push("MP4 文件不存在。");
     if (stats && stats.size < 1024) errors.push("MP4 文件大小异常。");
@@ -1190,9 +1191,15 @@ export function createVideoProductService({
     if (project.output_type === "template_mp4" && !timelineFiles.packagedBgm) {
       errors.push("路线 A 缺少 BGM 素材，不能按可发布成片标准通过。请放入 assets/bgm、media/bgm 或 bgm 文件夹。");
     }
+    if (project.output_type === "template_mp4" && titleLooksGeneric(publishTitle)) {
+      errors.push("路线 A 标题仍是内部导演稿名称，未生成面向观众的发布标题。");
+    }
     if (!timelineFiles.coverPath) warnings.push("封面 cover.png 未生成，可能需要人工补封面。");
     if (media.duration && timelineFiles.timelineJson.duration && Math.abs(media.duration - timelineFiles.timelineJson.duration) > 2.5) {
       warnings.push("MP4 时长与 Timeline 时长偏差较大，建议复查字幕和音频同步。");
+    }
+    if (project.output_type === "template_mp4" && stats && media.duration && stats.size / media.duration < 16000) {
+      warnings.push("路线 A 视频码率偏低，画面可能过于静态，需要增加模板动效或素材层。");
     }
 
     return {
@@ -1209,6 +1216,9 @@ export function createVideoProductService({
         has_bgm: Boolean(timelineFiles.packagedBgm),
         has_ass_subtitles: Boolean(timelineFiles.assPath && fs.existsSync(timelineFiles.assPath)),
         has_cover: Boolean(timelineFiles.coverPath),
+        publish_title: publishTitle,
+        title_optimized: !titleLooksGeneric(publishTitle),
+        motion_template_version: project.output_type === "template_mp4" ? "route-a-kinetic-v2" : "",
         duration: Number((media.duration || 0).toFixed(3)),
         file_size: stats?.size || 0,
       },
