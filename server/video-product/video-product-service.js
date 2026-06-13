@@ -989,23 +989,46 @@ export function createVideoProductService({
     if (!ffmpegPath || !fs.existsSync(ffmpegPath)) throw new Error("FFmpeg 不可用，无法渲染模板快剪 MP4。");
     const { width, height } = parseResolution(project.resolution);
     const duration = Math.max(1, Number(timelineFiles.timelineJson.duration || 0));
-    const title = ffmpegDrawText(String(timelineFiles.timelineJson.name || `Timeline #${project.id}`).slice(0, 24));
+    const publishTitle = String(timelineFiles.timelineJson.publish_title || timelineFiles.timelineJson.name || `Timeline #${project.id}`);
+    const titleLines = splitTitleLines(publishTitle, 11).slice(0, 2);
+    const titleLine1 = ffmpegDrawText(titleLines[0] || publishTitle);
+    const titleLine2 = ffmpegDrawText(titleLines[1] || "");
+    const narration = timelineFiles.packagedScenes.map((scene) => scene.narration_text || scene.subtitle_text || "").join("");
+    const routeLabel = ffmpegDrawText("路线 A · 口播快剪");
+    const hookLabel = ffmpegDrawText(titleClip(timelineFiles.packagedScenes[0]?.subtitle_text || timelineFiles.packagedScenes[0]?.narration_text || publishTitle, 18));
+    const ctaText = ffmpegDrawText(/英语/.test(narration) ? "别只收藏，今天就开口练" : "关注我，把方法变成结果");
     const fontPath = "C:/Windows/Fonts/msyh.ttc";
+    const boldFontPath = fs.existsSync("C:/Windows/Fonts/msyhbd.ttc") ? "C:/Windows/Fonts/msyhbd.ttc" : fontPath;
     const outputPath = path.join(timelineFiles.projectDir, `${safeFileName(timelineFiles.timelineJson.name || `timeline_${project.id}`)}_template.mp4`);
     const subtitlePath = timelineFiles.assPath || timelineFiles.srtPath;
     const subtitleFilter = `subtitles='${ffmpegFilterPath(subtitlePath)}'`;
-    const ctaText = ffmpegDrawText("关注我，少走弯路");
     const filters = [
-      `drawbox=x=0:y=0:w=${width}:h=${height}:color=0x101624:t=fill`,
-      `drawbox=x=54:y=96:w=12:h=128:color=0xD7B65B:t=fill`,
-      `drawbox=x=80:y=118:w=${Math.max(500, width - 160)}:h=2:color=0xD7B65B@0.7:t=fill`,
-      `drawbox=x='${width - 260}+18*sin(t*1.6)':y=260:w=180:h=180:color=0x27436E@0.22:t=fill`,
-      `drawbox=x='70+20*sin(t*1.2)':y=${Math.round(height * 0.62)}:w=260:h=120:color=0xD7B65B@0.12:t=fill`,
-      `drawtext=fontfile='${ffmpegFilterPath(fontPath)}':text='${title}':x=86:y=128:fontsize=56:fontcolor=white:line_spacing=10:box=1:boxcolor=black@0.22:boxborderw=22`,
+      `drawbox=x=0:y=0:w=${width}:h=${height}:color=0x09101B:t=fill`,
+      `drawbox=x=0:y=0:w=${width}:h=${Math.round(height * 0.2)}:color=0x111C2F@0.82:t=fill`,
+      `drawbox=x=0:y=${Math.round(height * 0.72)}:w=${width}:h=${Math.round(height * 0.2)}:color=0x000000@0.18:t=fill`,
+      `drawbox=x=44:y=78:w=${width - 88}:h=2:color=0xE7C76C@0.45:t=fill`,
+      `drawbox=x=52:y=102:w=10:h=116:color=0xE7C76C:t=fill:enable='lt(t\\,3.6)'`,
+      `drawbox=x=58:y=98:w=236:h=52:color=0xE7C76C@0.14:t=fill`,
+      `drawtext=fontfile='${ffmpegFilterPath(fontPath)}':text='${routeLabel}':x=82:y=112:fontsize=25:fontcolor=0xE7C76C:box=1:boxcolor=0x07101B@0.52:boxborderw=12`,
+      `drawtext=fontfile='${ffmpegFilterPath(boldFontPath)}':text='${titleLine1}':x=86:y=245:fontsize=72:fontcolor=white:box=1:boxcolor=0x07101B@0.72:boxborderw=24:enable='lt(t\\,3.6)'`,
+      titleLine2 ? `drawtext=fontfile='${ffmpegFilterPath(boldFontPath)}':text='${titleLine2}':x=86:y=335:fontsize=72:fontcolor=0xE7C76C:box=1:boxcolor=0x07101B@0.72:boxborderw=24:enable='lt(t\\,3.6)'` : "",
+      `drawtext=fontfile='${ffmpegFilterPath(fontPath)}':text='${hookLabel}':x=86:y=462:fontsize=34:fontcolor=0xBFD3EA:box=1:boxcolor=0x07101B@0.56:boxborderw=16:enable='lt(t\\,3.6)'`,
+      `drawbox=x=68:y='520+18*sin(t*0.9)':w=${width - 136}:h=6:color=0xE7C76C@0.22:t=fill`,
+      `drawbox=x=86:y='560+16*sin(t*0.7)':w=${Math.round((width - 172) * 0.68)}:h=6:color=0x6CA8FF@0.24:t=fill`,
       subtitleFilter,
-      `drawtext=fontfile='${ffmpegFilterPath(fontPath)}':text='${ctaText}':x=(w-text_w)/2:y=${height - 245}:fontsize=38:fontcolor=0xD7B65B:box=1:boxcolor=black@0.35:boxborderw=16:enable='gte(t,${Math.max(0, duration - 4)})'`,
-      `drawbox=x=0:y=${height - 20}:w='iw*t/${duration}':h=20:color=0xD7B65B:t=fill`,
-    ].join(",");
+      `drawbox=x=68:y=${height - 430}:w=${width - 136}:h=178:color=0xE7C76C@0.12:t=fill:enable='gte(t\\,${Math.max(0, duration - 5).toFixed(3)})'`,
+      `drawtext=fontfile='${ffmpegFilterPath(boldFontPath)}':text='${ctaText}':x=(w-text_w)/2:y=${height - 375}:fontsize=44:fontcolor=0xE7C76C:box=1:boxcolor=0x07101B@0.58:boxborderw=18:enable='gte(t\\,${Math.max(0, duration - 5).toFixed(3)})'`,
+      `drawtext=fontfile='${ffmpegFilterPath(fontPath)}':text='${ffmpegDrawText("把这一句发给正在学的人")}':x=(w-text_w)/2:y=${height - 305}:fontsize=30:fontcolor=white:enable='gte(t\\,${Math.max(0, duration - 5).toFixed(3)})'`,
+      `drawbox=x=0:y=${height - 14}:w=${width}:h=14:color=0x152133:t=fill`,
+      `drawbox=x=0:y=${height - 14}:w='iw*t/${duration}':h=14:color=0xE7C76C:t=fill`,
+    ].filter(Boolean);
+    for (const scene of timelineFiles.packagedScenes) {
+      const label = ffmpegDrawText(conciseSceneLabel(scene));
+      if (!label) continue;
+      filters.push(
+        `drawtext=fontfile='${ffmpegFilterPath(fontPath)}':text='${label}':x=68:y=190:fontsize=30:fontcolor=0xDDE7F4:box=1:boxcolor=0x07101B@0.52:boxborderw=14:enable='${ffmpegEnableBetween(scene.start_time, scene.end_time)}'`,
+      );
+    }
     const args = [
       "-y",
       "-f", "lavfi",
@@ -1024,7 +1047,7 @@ export function createVideoProductService({
       args.push("-stream_loop", "-1", "-i", timelineFiles.packagedBgm);
     }
     args.push(
-      "-vf", filters,
+      "-vf", filters.join(","),
       "-t", String(duration),
       "-c:v", "libx264",
       "-pix_fmt", "yuv420p",
