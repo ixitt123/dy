@@ -25,6 +25,24 @@ function sizeForRatio(aspectRatio) {
   }[String(aspectRatio || "1:1")] || "1920x1920";
 }
 
+function preparePrompt(prompt) {
+  const cleaned = String(prompt || "")
+    .replace(/\b(1[8-9]|2\d|3\d|4\d)\s*岁\s*(左右|上下)?/g, (match) => (
+      /3\d|4\d/.test(match) ? "成熟青年成人外观" : "青年成人外观"
+    ))
+    .replace(/\b(1[8-9]|2\d|3\d|4\d)[-\s]?year[-\s]?old\b/gi, (match) => (
+      /\b(3\d|4\d)/.test(match) ? "mature young adult appearance" : "young adult appearance"
+    ))
+    .replace(/生日快乐|生日|祝福|贺卡/g, "真实生活场景")
+    .trim();
+  return [
+    cleaned,
+    "",
+    "火山方舟 Seedream 生成硬约束：真实摄影感，单张竖屏短视频分镜，不是生日卡，不是祝福海报，不是PPT，不是文字海报。",
+    "不要生成任何可读文字、数字年龄、标题、字幕、logo、水印、表情符号或海报排版；字幕和标题由后期添加。",
+  ].filter(Boolean).join("\n");
+}
+
 function normalizeArkError(status, bodyText) {
   let data = {};
   try {
@@ -64,6 +82,7 @@ export class VolcengineArkImageProvider extends ImageProviderAdapter {
   async generateImage({ prompt, aspectRatio = "1:1" }) {
     if (!this.apiKey) throw new Error("火山方舟：未配置 API Key。");
     if (!String(this.model || "").trim()) throw new Error("火山方舟：模型 ID 为空。");
+    const requestPrompt = preparePrompt(prompt);
 
     let response;
     try {
@@ -75,7 +94,7 @@ export class VolcengineArkImageProvider extends ImageProviderAdapter {
         },
         body: JSON.stringify({
           model: this.model,
-          prompt,
+          prompt: requestPrompt,
           response_format: "url",
           watermark: false,
           size: sizeForRatio(aspectRatio),
@@ -100,7 +119,7 @@ export class VolcengineArkImageProvider extends ImageProviderAdapter {
     return {
       imageUrl: first.url || first.image_url || data.url || data.image_url || "",
       imageBase64,
-      revisedPrompt: first.revised_prompt || data.revised_prompt || prompt,
+      revisedPrompt: first.revised_prompt || data.revised_prompt || requestPrompt,
       model: this.model,
       sourceUrl: first.url || first.image_url || data.url || data.image_url || "",
     };
