@@ -89,12 +89,22 @@ export function createTtsService({ baseDir, taskStore, getSettings, ffmpegPath }
     });
   }
 
+  function visibleError(job, metadata = safeJson(job?.metadata_json, {})) {
+    const error = String(job?.error || "").trim();
+    const detail = String(metadata.provider_detail || metadata.error_detail || "").trim();
+    if (job?.status !== "failed") return error;
+    if (error && detail && !error.includes(detail)) return `${error} 详情：${detail}`;
+    return error || detail || "语音生成失败。";
+  }
+
   function publicJob(job) {
     if (!job) return null;
+    const metadata = safeJson(job.metadata_json, {});
     return {
       ...job,
+      error: visibleError(job, metadata),
       audio_url: job.status === "completed" && job.audio_path ? `/api/tts/audio?id=${job.id}` : "",
-      metadata: safeJson(job.metadata_json, {}),
+      metadata,
     };
   }
 
@@ -152,13 +162,18 @@ export function createTtsService({ baseDir, taskStore, getSettings, ffmpegPath }
     });
 
     if (!result.success) {
+      const failureDetail = redactSecrets(result.detail || "", Object.values(provider.config || {}));
+      const failureError = visibleError({
+        status: "failed",
+        error: redactSecrets(result.error || "语音生成失败。", Object.values(provider.config || {})),
+      }, { provider_detail: failureDetail });
       taskStore.updateTtsJob(job.id, {
         status: "failed",
-        error: redactSecrets(result.error || result.detail || "语音生成失败。", Object.values(provider.config || {})),
+        error: failureError,
         metadata_json: JSON.stringify({
           ...jobMetadata,
           ...prepared.metadata,
-          provider_detail: result.detail || "",
+          provider_detail: failureDetail,
         }),
         completed_at: new Date().toISOString(),
       });
