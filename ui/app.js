@@ -284,6 +284,7 @@ const rewriteVersionOptions = [
   { key: "moments", name: "朋友圈版", direction: "朋友圈文案", wordCount: "220字左右" },
   { key: "conversion", name: "成交转化版", direction: "暑假班转化", wordCount: "150字左右" },
 ];
+const defaultRewriteVersionCount = 1;
 const maxRewriteVersionCount = 50;
 
 function setBusy(label) {
@@ -528,7 +529,7 @@ function normalizeRewriteVersions(rewrite = {}, allowDefaults = true) {
     : currentRewriteSpecs.length > 0
       ? currentRewriteSpecs
       : allowDefaults
-        ? rewriteVersionOptions
+        ? rewriteVersionOptions.slice(0, defaultRewriteVersionCount)
         : [];
 
   return sources.map((item, index) => {
