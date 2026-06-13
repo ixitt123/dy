@@ -426,17 +426,27 @@ export function createVideoProductService({
     const mediaDir = ensureDir(path.join(projectDir, "media"));
     const imageDir = ensureDir(path.join(mediaDir, "images"));
     const audioDir = ensureDir(path.join(mediaDir, "audio"));
+    const videoDir = ensureDir(path.join(mediaDir, "videos"));
 
     const packagedScenes = timeline.scenes.map((scene) => {
+      const sceneMetadata = safeJson(scene.metadata_json, {});
       let packagedImage = "";
       if (scene.image_path && fs.existsSync(scene.image_path)) {
         const ext = path.extname(scene.image_path) || ".png";
         packagedImage = path.join(imageDir, `scene_${String(scene.scene_index).padStart(2, "0")}${ext}`);
         fs.copyFileSync(scene.image_path, packagedImage);
       }
+      let packagedVideo = "";
+      const sourceVideoPath = sceneMetadata.video_source?.path || "";
+      if (sourceVideoPath && fs.existsSync(sourceVideoPath)) {
+        const ext = path.extname(sourceVideoPath) || ".mp4";
+        packagedVideo = path.join(videoDir, `scene_${String(scene.scene_index).padStart(2, "0")}${ext}`);
+        fs.copyFileSync(sourceVideoPath, packagedVideo);
+      }
       return {
         ...scene,
         packaged_image_path: packagedImage,
+        packaged_video_path: packagedVideo,
       };
     });
 
@@ -461,7 +471,7 @@ export function createVideoProductService({
       tracks: {
         video: packagedScenes.map((scene) => ({
           scene_index: scene.scene_index,
-          source: path.relative(projectDir, scene.packaged_image_path || scene.image_path || ""),
+          source: path.relative(projectDir, scene.packaged_video_path || scene.packaged_image_path || scene.image_path || ""),
           start: scene.start_time,
           duration: scene.duration,
           motion: scene.motion_type,
@@ -495,12 +505,15 @@ export function createVideoProductService({
         subtitles: path.basename(srtPath),
         audio: packagedAudio ? path.relative(projectDir, packagedAudio) : "",
         images: packagedScenes.map((scene) => path.relative(projectDir, scene.packaged_image_path || "")),
+        videos: packagedScenes.map((scene) => path.relative(projectDir, scene.packaged_video_path || "")).filter(Boolean),
       },
       blockers: timeline.blockers,
       routes: {
-        jianying: "导演稿 + 图片 + 音频 → 剪映半成品素材包",
-        mp4: "导演稿 + 图片 + 音频 → FFmpeg MP4",
-        package: "素材包 + 时间线 + 字幕",
+        jianying: OUTPUT_TYPE_LABELS.jianying,
+        mp4: OUTPUT_TYPE_LABELS.mp4,
+        template_mp4: OUTPUT_TYPE_LABELS.template_mp4,
+        mix_mp4: OUTPUT_TYPE_LABELS.mix_mp4,
+        package: OUTPUT_TYPE_LABELS.package,
       },
     });
 
@@ -574,13 +587,96 @@ export function createVideoProductService({
     }
 
     const concatPath = path.join(segmentsDir, "concat.txt");
-    fs.writeFileSync(
-      concatPath,
-      segmentPaths.map((file) => `file '${file.replace(/\\/g, "/").replace(/'/g, "'\\''")}'`).join("\n"),
-      "utf8",
-    );
+    fs.writeFileSync(concatPath, concatFileList(segmentPaths), "utf8");
 
     const outputPath = path.join(timelineFiles.projectDir, `${safeFileName(project.metadata?.title || `timeline_${project.id}`)}.mp4`);
+    const subtitleFilter = `subtitles='${ffmpegFilterPath(timelineFiles.srtPath)}':force_style='Fontsize=16,PrimaryColour=&HFFFFFF&,OutlineColour=&H000000&,BorderStyle=1,Outline=2,Alignment=2,MarginV=120'`;
+    const args = [
+      "-y",
+      "-f", "concat",
+      "-safe", "0",
+      "-i", concatPath,
+    ];
+    if (timelineFiles.packagedAudio) args.push("-i", timelineFiles.packagedAudio);
+    args.push(
+      "-vf", subtitleFilter,
+      "-c:v", "libx264",
+      "-pix_fmt", "yuv420p",
+    );
+    if (timelineFiles.packagedAudio) args.push("-c:a", "aac", "-shortest");
+    else args.push("-an");
+    args.push(outputPath);
+    await runProcess(ffmpegPath, args);
+    return outputPath;
+  }
+
+  async function renderTemplateMp4(project, timelineFiles) {
+    if (!ffmpegPath || !fs.existsSync(ffmpegPath)) throw new Error("FFmpeg 不可用，无法渲染模板快剪 MP4。");
+    const { width, height } = parseResolution(project.resolution);
+    const duration = Math.max(1, Number(timelineFiles.timelineJson.duration || 0));
+    const title = ffmpegDrawText(timelineFiles.timelineJson.name || `Timeline #${project.id}`);
+    const fontPath = "C:/Windows/Fonts/msyh.ttc";
+    const outputPath = path.join(timelineFiles.projectDir, `${safeFileName(timelineFiles.timelineJson.name || `timeline_${project.id}`)}_template.mp4`);
+    const subtitleFilter = `subtitles='${ffmpegFilterPath(timelineFiles.srtPath)}':force_style='Fontsize=16,PrimaryColour=&HFFFFFF&,OutlineColour=&H000000&,BorderStyle=1,Outline=2,Alignment=2,MarginV=120'`;
+    const filters = [
+      `drawbox=x=0:y=0:w=${width}:h=${height}:color=0x101624:t=fill`,
+      `drawtext=fontfile='${ffmpegFilterPath(fontPath)}':text='${title}':x=(w-text_w)/2:y=140:fontsize=58:fontcolor=white:box=1:boxcolor=black@0.28:boxborderw=24`,
+      subtitleFilter,
+      `drawbox=x=0:y=${height - 18}:w='iw*t/${duration}':h=18:color=0x7c5cff:t=fill`,
+    ].join(",");
+    const args = [
+      "-y",
+      "-f", "lavfi",
+      "-i", `color=c=0x101624:s=${width}x${height}:r=${project.fps}:d=${duration}`,
+    ];
+    if (timelineFiles.packagedAudio) args.push("-i", timelineFiles.packagedAudio);
+    args.push(
+      "-vf", filters,
+      "-t", String(duration),
+      "-c:v", "libx264",
+      "-pix_fmt", "yuv420p",
+    );
+    if (timelineFiles.packagedAudio) args.push("-c:a", "aac", "-shortest");
+    else args.push("-an");
+    args.push(outputPath);
+    await runProcess(ffmpegPath, args);
+    return outputPath;
+  }
+
+  async function renderMixMp4(project, timelineFiles) {
+    if (!ffmpegPath || !fs.existsSync(ffmpegPath)) throw new Error("FFmpeg 不可用，无法渲染混剪 MP4。");
+    const { width, height } = parseResolution(project.resolution);
+    const segmentsDir = ensureDir(path.join(timelineFiles.projectDir, ".segments"));
+    const segmentPaths = [];
+
+    for (const scene of timelineFiles.packagedScenes) {
+      if (!scene.packaged_video_path || !fs.existsSync(scene.packaged_video_path)) {
+        throw new Error(`镜头 ${scene.scene_index} 缺少已下载视频素材，无法混剪。`);
+      }
+      const segmentPath = path.join(segmentsDir, `mix_scene_${String(scene.scene_index).padStart(2, "0")}.mp4`);
+      const vf = [
+        `scale=${width}:${height}:force_original_aspect_ratio=increase`,
+        `crop=${width}:${height}`,
+        `fps=${project.fps}`,
+        "format=yuv420p",
+      ].join(",");
+      await runProcess(ffmpegPath, [
+        "-y",
+        "-stream_loop", "-1",
+        "-i", scene.packaged_video_path,
+        "-t", String(scene.duration),
+        "-vf", vf,
+        "-an",
+        "-c:v", "libx264",
+        "-pix_fmt", "yuv420p",
+        segmentPath,
+      ]);
+      segmentPaths.push(segmentPath);
+    }
+
+    const concatPath = path.join(segmentsDir, "mix_concat.txt");
+    fs.writeFileSync(concatPath, concatFileList(segmentPaths), "utf8");
+    const outputPath = path.join(timelineFiles.projectDir, `${safeFileName(timelineFiles.timelineJson.name || `timeline_${project.id}`)}_mix.mp4`);
     const subtitleFilter = `subtitles='${ffmpegFilterPath(timelineFiles.srtPath)}':force_style='Fontsize=16,PrimaryColour=&HFFFFFF&,OutlineColour=&H000000&,BorderStyle=1,Outline=2,Alignment=2,MarginV=120'`;
     const args = [
       "-y",
@@ -618,6 +714,7 @@ export function createVideoProductService({
         source_director_project_id: project.source_director_project_id,
         audio_asset_id: project.audio_asset_id,
         platform: project.platform,
+        output_type: project.output_type,
       });
 
       updateProject(project.id, {
@@ -650,28 +747,34 @@ export function createVideoProductService({
       project = taskStore.getTimelineProject(project.id);
       const outputType = OUTPUT_TYPES.has(project.output_type) ? project.output_type : "jianying";
       updateProject(project.id, {
-        status: outputType === "mp4" ? "rendering" : "exporting_draft",
-        progress: outputType === "mp4" ? 52 : 58,
-        current_step: outputType === "mp4" ? "正在准备 MP4 渲染素材" : "正在导出剪映半成品素材包",
+        status: MP4_OUTPUT_TYPES.has(outputType) ? "rendering" : "exporting_draft",
+        progress: MP4_OUTPUT_TYPES.has(outputType) ? 52 : 58,
+        current_step: MP4_OUTPUT_TYPES.has(outputType) ? `正在准备 ${OUTPUT_TYPE_LABELS[outputType] || "MP4"} 渲染素材` : "正在导出剪映半成品素材包",
       });
 
       const timelineFiles = writeTimelineFiles(project, timeline);
       const draftPath = writeDraftReference(timelineFiles.projectDir, project, timelineFiles);
 
       let mp4Path = "";
-      if (outputType === "mp4") {
+      if (MP4_OUTPUT_TYPES.has(outputType)) {
         updateProject(project.id, {
           status: "rendering",
           progress: 72,
-          current_step: "正在使用 FFmpeg 合成 MP4",
+          current_step: `正在使用 FFmpeg 合成${OUTPUT_TYPE_LABELS[outputType] || "MP4"}`,
         });
-        mp4Path = await renderMp4({ ...project, metadata: safeJson(project.metadata_json, {}) }, timelineFiles);
+        if (outputType === "template_mp4") {
+          mp4Path = await renderTemplateMp4({ ...project, metadata: safeJson(project.metadata_json, {}) }, timelineFiles);
+        } else if (outputType === "mix_mp4") {
+          mp4Path = await renderMixMp4({ ...project, metadata: safeJson(project.metadata_json, {}) }, timelineFiles);
+        } else {
+          mp4Path = await renderMp4({ ...project, metadata: safeJson(project.metadata_json, {}) }, timelineFiles);
+        }
       }
 
       updateProject(project.id, {
         status: "completed",
         progress: 100,
-        current_step: outputType === "mp4" ? "MP4 成片已生成" : outputType === "package" ? "素材包已生成" : "剪映半成品素材包已生成",
+        current_step: MP4_OUTPUT_TYPES.has(outputType) ? `${OUTPUT_TYPE_LABELS[outputType] || "MP4"} 已生成` : outputType === "package" ? "素材包已生成" : "剪映半成品素材包已生成",
         output_dir: timelineFiles.projectDir,
         timeline_path: timelineFiles.timelinePath,
         srt_path: timelineFiles.srtPath,
@@ -724,6 +827,8 @@ export function createVideoProductService({
       current_step: "等待进入视频成片队列",
       metadata_json: JSON.stringify({
         title: String(input.title || ""),
+        output_type: outputType,
+        route_label: OUTPUT_TYPE_LABELS[outputType] || outputType,
         image_source: String(input.image_source || "director"),
         image_asset_ids: Array.isArray(input.image_asset_ids) ? input.image_asset_ids : [],
         manual_bindings: input.manual_bindings || {},
@@ -744,6 +849,7 @@ export function createVideoProductService({
       tracks: timeline.tracks,
       blockers: timeline.blockers,
       metadata: timeline.metadata,
+      output_type: OUTPUT_TYPES.has(String(input.output_type || "")) ? String(input.output_type) : "jianying",
     };
   }
 
