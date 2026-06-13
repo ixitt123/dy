@@ -34,6 +34,7 @@ const promptsDir = path.join(__dirname, "prompts");
 const rewritesDir = path.join(__dirname, "rewrites");
 const referenceExamplesPath = path.join(__dirname, "reference_examples.json");
 const defaultDownloadsDir = path.join(__dirname, "downloads");
+const localMediaDir = path.join(__dirname, "local-media");
 const pidPath = path.join(__dirname, "ui-server.pid");
 const urlPath = path.join(__dirname, "ui-server.url");
 const settingsPath = path.join(__dirname, "settings.json");
