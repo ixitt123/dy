@@ -113,9 +113,9 @@ function timelineToSrt(scenes) {
 }
 
 function timelineToAss(scenes, { width = 1080, height = 1920 } = {}) {
-  const marginV = Math.max(120, Math.round(height * 0.12));
-  const fontSize = Math.max(46, Math.round(height * 0.035));
-  const titleSize = Math.max(58, Math.round(height * 0.045));
+  const marginV = Math.max(132, Math.round(height * 0.13));
+  const fontSize = Math.max(42, Math.round(height * 0.029));
+  const titleSize = Math.max(48, Math.round(height * 0.034));
   const lines = [
     "[Script Info]",
     "ScriptType: v4.00+",
@@ -126,8 +126,8 @@ function timelineToAss(scenes, { width = 1080, height = 1920 } = {}) {
     "",
     "[V4+ Styles]",
     "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding",
-    `Style: Premium,Microsoft YaHei,${fontSize},&H00FFFFFF,&H0000D7FF,&H00161616,&H99000000,-1,0,0,0,100,100,0,0,1,4,0,2,80,80,${marginV},1`,
-    `Style: Keyword,Microsoft YaHei,${titleSize},&H0000D7FF,&H00FFFFFF,&H00111111,&H99000000,-1,0,0,0,104,104,0,0,1,5,0,2,80,80,${marginV + 8},1`,
+    `Style: Premium,Microsoft YaHei,${fontSize},&H00FFFFFF,&H0000D7FF,&H00161616,&H99000000,-1,0,0,0,100,100,0,0,1,3,0,2,96,96,${marginV},1`,
+    `Style: Keyword,Microsoft YaHei,${titleSize},&H0000D7FF,&H00FFFFFF,&H00111111,&H99000000,-1,0,0,0,102,102,0,0,1,4,0,2,96,96,${marginV + 8},1`,
     "",
     "[Events]",
     "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text",
@@ -158,6 +158,72 @@ function timelineToAss(scenes, { width = 1080, height = 1920 } = {}) {
 function textDurationWeight(text) {
   const length = String(text || "").replace(/\s+/g, "").length;
   return Math.max(1.8, Math.min(12, length / 5.5));
+}
+
+function splitSpeechUnits(text) {
+  const source = String(text || "")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!source) return [];
+  const units = [];
+  let current = "";
+  for (const char of source) {
+    current += char;
+    if (/[。！？!?；;]/.test(char) || (/[，、,]/.test(char) && current.replace(/\s+/g, "").length >= 18)) {
+      units.push(current.trim());
+      current = "";
+    }
+  }
+  if (current.trim()) units.push(current.trim());
+  return units
+    .flatMap((unit) => {
+      const compact = unit.replace(/\s+/g, "");
+      if (compact.length <= 26) return [unit];
+      const parts = unit.split(/(?<=[，、,])/).map((item) => item.trim()).filter(Boolean);
+      return parts.length > 1 ? parts : [unit];
+    })
+    .map((unit) => unit.replace(/\s+/g, " ").trim())
+    .filter(Boolean);
+}
+
+function speechUnitWeight(text) {
+  const value = String(text || "").trim();
+  const compactLength = value.replace(/\s+/g, "").length;
+  const englishLength = (value.match(/[A-Za-z]+/g) || []).join("").length;
+  const punctuationPause = /[。！？!?；;]$/.test(value) ? 0.45 : /[，、,]$/.test(value) ? 0.2 : 0;
+  return Math.max(0.9, (compactLength + englishLength * 0.35) / 6 + punctuationPause);
+}
+
+function buildRouteASubtitleScenes({ audioText = "", directorScenes = [], targetDuration = 0 } = {}) {
+  const units = splitSpeechUnits(audioText);
+  if (!units.length || !Number.isFinite(targetDuration) || targetDuration <= 0) return [];
+  const weights = units.map(speechUnitWeight);
+  const totalWeight = weights.reduce((sum, value) => sum + value, 0) || units.length;
+  let cursor = 0;
+  return units.map((unit, index) => {
+    const duration = index === units.length - 1
+      ? Math.max(0.75, targetDuration - cursor)
+      : Math.max(0.75, Number(((weights[index] / totalWeight) * targetDuration).toFixed(3)));
+    const sourceScene = directorScenes.find((scene) => textSimilarityScore(scene.voice_text || scene.subtitle || "", unit) >= 32)
+      || directorScenes[Math.min(index, Math.max(0, directorScenes.length - 1))]
+      || {};
+    cursor += duration;
+    return {
+      ...sourceScene,
+      scene_index: index + 1,
+      duration: Number(duration.toFixed(3)),
+      voice_text: unit,
+      subtitle: unit,
+      purpose: sourceScene.purpose || "",
+      camera: sourceScene.camera || "",
+      composition: sourceScene.composition || "",
+      image_prompt: sourceScene.image_prompt || "",
+      motion_prompt: sourceScene.motion_prompt || sourceScene.camera || "template_caption",
+      transition: sourceScene.transition || "straight_cut",
+      asset_type: "template_caption",
+      metadata_json: "",
+    };
+  });
 }
 
 function compactMatchText(text) {
@@ -633,20 +699,32 @@ export function createVideoProductService({
     const downloadedVideos = needsDownloadedVideo ? listDownloadedVideoAssets(200) : [];
     if (needsDownloadedVideo && !downloadedVideos.length) blockers.push("缺少可用于混剪的已下载视频素材。");
 
-    const rawDurations = directorScenes.map(normalizeSceneDuration);
-    const rawTotal = rawDurations.reduce((sum, value) => sum + value, 0) || directorScenes.length * 3;
     const audioDuration = await probeMediaDuration(ffmpegPath, audio?.audio_path || "");
+    const routeASubtitleScenes = outputType === "template_mp4"
+      ? buildRouteASubtitleScenes({
+        audioText: audio?.text || "",
+        directorScenes,
+        targetDuration: audioDuration,
+      })
+      : [];
+    const timelineSourceScenes = routeASubtitleScenes.length ? routeASubtitleScenes : directorScenes;
+    const rawDurations = timelineSourceScenes.map(normalizeSceneDuration);
+    const rawTotal = rawDurations.reduce((sum, value) => sum + value, 0) || directorScenes.length * 3;
     const targetDuration = audioDuration > 0 ? audioDuration : rawTotal;
     const scale = rawTotal > 0 ? targetDuration / rawTotal : 1;
 
     let cursor = 0;
-    const scenes = directorScenes.map((scene, index) => {
+    const scenes = timelineSourceScenes.map((scene, index) => {
       const image = needsImages ? bindSceneImage(scene, index, bindingContext) : null;
       const video = needsDownloadedVideo ? downloadedVideos[index % Math.max(1, downloadedVideos.length)] : null;
-      const duration = Number(Math.max(1, rawDurations[index] * scale).toFixed(3));
+      const isLastScene = index === timelineSourceScenes.length - 1;
+      const duration = isLastScene
+        ? Number(Math.max(0.75, targetDuration - cursor).toFixed(3))
+        : Number(Math.max(0.75, rawDurations[index] * scale).toFixed(3));
       const start = Number(cursor.toFixed(3));
       cursor += duration;
-      const end = Number(cursor.toFixed(3));
+      const end = Number((isLastScene ? targetDuration : cursor).toFixed(3));
+      cursor = end;
       const status = (needsImages && !image) || (needsDownloadedVideo && !video) ? "blocked" : "ready";
       return {
         scene_index: scene.scene_index || index + 1,
@@ -667,6 +745,7 @@ export function createVideoProductService({
           purpose: scene.purpose || "",
           emotion: scene.emotion || "",
           asset_type: scene.asset_type || "",
+          alignment_source: routeASubtitleScenes.length ? "tts_text_sentence_chunks" : "director_scene_duration_scaled",
           image_prompt: scene.image_prompt || "",
           output_type: outputType,
           image_source: image ? {
@@ -729,6 +808,8 @@ export function createVideoProductService({
         downloaded_video_count: downloadedVideos.length,
         audio_duration: Number(audioDuration.toFixed(3)),
         director_scene_count: directorScenes.length,
+        timeline_scene_count: scenes.length,
+        alignment_source: routeASubtitleScenes.length ? "tts_text_sentence_chunks" : "director_scene_duration_scaled",
         audio_binding: audioBinding,
         premium_workflow_skills: premiumWorkflowSkillStatus(),
       },
