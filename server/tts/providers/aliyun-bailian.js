@@ -1,4 +1,6 @@
 import fs from "node:fs";
+import http from "node:http";
+import https from "node:https";
 import path from "node:path";
 import { spawn } from "node:child_process";
 import { TtsProviderAdapter, clampNumber, redactSecrets } from "../provider-adapter.js";
@@ -77,10 +79,73 @@ function runFfmpeg(ffmpegPath, inputPath, outputPath) {
   });
 }
 
+function wait(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function detailedError(error) {
+  const parts = [error instanceof Error ? error.message : String(error)];
+  const cause = error?.cause;
+  if (cause?.code) parts.push(`code=${cause.code}`);
+  if (cause?.message && cause.message !== parts[0]) parts.push(cause.message);
+  if (cause?.errno) parts.push(`errno=${cause.errno}`);
+  return parts.filter(Boolean).join("；");
+}
+
+async function fetchWithRetry(url, options = {}, attempts = 3) {
+  let lastError = null;
+  for (let index = 0; index < attempts; index += 1) {
+    try {
+      return await fetch(url, options);
+    } catch (error) {
+      lastError = error;
+      if (index < attempts - 1) await wait(700 * (index + 1));
+    }
+  }
+  throw new Error(detailedError(lastError));
+}
+
+function downloadWithNodeClient(url, redirectCount = 0) {
+  return new Promise((resolve, reject) => {
+    const parsed = new URL(url);
+    const client = parsed.protocol === "http:" ? http : https;
+    const request = client.get(parsed, (response) => {
+      const status = Number(response.statusCode || 0);
+      if ([301, 302, 303, 307, 308].includes(status) && response.headers.location && redirectCount < 4) {
+        response.resume();
+        const nextUrl = new URL(response.headers.location, parsed).toString();
+        downloadWithNodeClient(nextUrl, redirectCount + 1).then(resolve, reject);
+        return;
+      }
+      if (status < 200 || status >= 300) {
+        response.resume();
+        reject(new Error(`下载合成音频失败：${status}`));
+        return;
+      }
+      const chunks = [];
+      response.on("data", (chunk) => chunks.push(chunk));
+      response.on("end", () => resolve(Buffer.concat(chunks)));
+    });
+    request.setTimeout(30000, () => {
+      request.destroy(new Error("下载合成音频超时"));
+    });
+    request.on("error", reject);
+  });
+}
+
 async function saveAudioResponse(audioUrl, outputPath, ffmpegPath) {
-  const response = await fetch(audioUrl);
-  if (!response.ok) throw new Error(`下载合成音频失败（${response.status}）`);
-  const buffer = Buffer.from(await response.arrayBuffer());
+  let buffer = null;
+  try {
+    const response = await fetchWithRetry(audioUrl, {}, 3);
+    if (!response.ok) throw new Error(`下载合成音频失败（${response.status}）`);
+    buffer = Buffer.from(await response.arrayBuffer());
+  } catch (error) {
+    try {
+      buffer = await downloadWithNodeClient(audioUrl);
+    } catch (fallbackError) {
+      throw new Error(`下载合成音频失败：${detailedError(error)}；备用下载也失败：${detailedError(fallbackError)}`);
+    }
+  }
   const tempPath = `${outputPath}.source`;
   fs.mkdirSync(path.dirname(outputPath), { recursive: true });
   fs.writeFileSync(tempPath, buffer);
