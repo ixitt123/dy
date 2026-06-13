@@ -1110,8 +1110,19 @@ export function createVideoProductService({
     const outputPath = path.join(timelineFiles.projectDir, `${safeFileName(timelineFiles.timelineJson.name || `timeline_${project.id}`)}_template.mp4`);
     const subtitlePath = timelineFiles.assPath || timelineFiles.srtPath;
     const subtitleFilter = `subtitles='${ffmpegFilterPath(subtitlePath)}'`;
+    const backgroundFilters = timelineFiles.packagedTemplateBackground
+      ? [
+        `scale=${width}:${height}:force_original_aspect_ratio=increase`,
+        `crop=${width}:${height}`,
+        "boxblur=luma_radius=18:luma_power=1",
+        "eq=brightness=-0.18:saturation=0.72",
+        `drawbox=x=0:y=0:w=${width}:h=${height}:color=0x06101D@0.48:t=fill`,
+      ]
+      : [
+        `drawbox=x=0:y=0:w=${width}:h=${height}:color=0x09101B:t=fill`,
+      ];
     const filters = [
-      `drawbox=x=0:y=0:w=${width}:h=${height}:color=0x09101B:t=fill`,
+      ...backgroundFilters,
       `drawbox=x=0:y=0:w=${width}:h=${Math.round(height * 0.22)}:color=0x101B2D@0.72:t=fill`,
       `drawbox=x=0:y=${Math.round(height * 0.77)}:w=${width}:h=${Math.round(height * 0.11)}:color=0x020813@0.62:t=fill`,
       `drawbox=x=64:y=116:w=${width - 128}:h=2:color=0xE7C76C@0.38:t=fill`,
@@ -1124,11 +1135,19 @@ export function createVideoProductService({
       `drawbox=x=0:y=${height - 14}:w=${width}:h=14:color=0x152133:t=fill`,
       `drawbox=x=0:y=${height - 14}:w='iw*t/${duration}':h=14:color=0xE7C76C:t=fill`,
     ].filter(Boolean);
-    const args = [
-      "-y",
-      "-f", "lavfi",
-      "-i", `color=c=0x101624:s=${width}x${height}:r=${project.fps}:d=${duration}`,
-    ];
+    const args = ["-y"];
+    if (timelineFiles.packagedTemplateBackground) {
+      args.push(
+        "-loop", "1",
+        "-framerate", String(project.fps),
+        "-i", timelineFiles.packagedTemplateBackground,
+      );
+    } else {
+      args.push(
+        "-f", "lavfi",
+        "-i", `color=c=0x101624:s=${width}x${height}:r=${project.fps}:d=${duration}`,
+      );
+    }
     let nextInput = 1;
     let voiceInput = -1;
     let bgmInput = -1;
@@ -1311,6 +1330,7 @@ export function createVideoProductService({
         has_bgm: Boolean(timelineFiles.packagedBgm),
         has_ass_subtitles: Boolean(timelineFiles.assPath && fs.existsSync(timelineFiles.assPath)),
         has_cover: Boolean(timelineFiles.coverPath),
+        has_template_background: Boolean(timelineFiles.packagedTemplateBackground),
         publish_title: publishTitle,
         title_optimized: !titleLooksGeneric(publishTitle),
         motion_template_version: project.output_type === "template_mp4" ? "route-a-single-caption-v3" : "",
