@@ -265,7 +265,7 @@ let vfoProjectsState = [];
 let activeVfoProject = null;
 let activeVfoTab = "overview";
 let vfoPollTimer = 0;
-let videoProductSources = { directors: [], audioJobs: [], imageAssets: [], timelines: [], platforms: [] };
+let videoProductSources = { directors: [], audioJobs: [], imageAssets: [], bgmAssets: [], timelines: [], platforms: [] };
 let videoProductPreview = null;
 let videoProductManualBindings = {};
 let videoProductProjectsState = [];
@@ -3192,22 +3192,92 @@ function renderVideoProductSourceOptions({ preferredDirectorId = 0, preferredAud
   }
 }
 
+function updateVideoProductAssetStatus() {
+  if (!videoProductAssetStatus) return;
+  const imageCount = videoProductSources.imageAssets?.length || 0;
+  const bgmCount = videoProductSources.bgmAssets?.length || 0;
+  videoProductAssetStatus.textContent = `当前图片库 ${imageCount} 张，BGM 库 ${bgmCount} 首；本地素材加入后可直接用于最终 1080 竖屏成片。`;
+}
+
 async function loadVideoProductSources(options = {}) {
   const data = await fetchJson("/api/video-product/sources");
   videoProductSources = {
     directors: data.directors || [],
     audioJobs: data.audioJobs || [],
     imageAssets: data.imageAssets || [],
+    bgmAssets: data.bgmAssets || [],
     downloadedVideos: data.downloadedVideos || [],
     timelines: data.timelines || [],
     platforms: data.platforms || [],
     outputTypes: data.outputTypes || [],
   };
   renderVideoProductSourceOptions(options);
+  updateVideoProductAssetStatus();
   renderVideoProductProjects(videoProductSources.timelines || []);
   if (!videoProductPreview && videoProductSources.directors.length && videoProductSources.audioJobs.length) {
     await previewVideoProductTimeline().catch(() => {});
   }
+}
+
+async function chooseVideoProductLocalImage() {
+  videoProductAssetStatus.textContent = "正在打开图片选择窗口...";
+  const data = await fetchJson("/api/local-media/choose-image", { method: "POST" });
+  if (data.filePath) {
+    videoProductLocalImagePath.value = data.filePath;
+    videoProductAssetStatus.textContent = "已选择本地图片，点击“加入图片库”后可用于成片。";
+  } else {
+    videoProductAssetStatus.textContent = "没有选择图片。";
+  }
+}
+
+async function addVideoProductLocalImage() {
+  const filePath = videoProductLocalImagePath?.value.trim() || "";
+  if (!filePath) {
+    videoProductAssetStatus.textContent = "请先选择本地图片。";
+    return;
+  }
+  videoProductAssetStatus.textContent = "正在把本地图片加入图片资产库...";
+  await fetchJson("/api/image/add-local", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      filePath,
+      aspectRatio: "9:16",
+      prompt: `本地成片素材：${filePath.split(/[\\/]/).pop() || "image"}`,
+      sourceId: "video-product",
+    }),
+  });
+  if (videoProductImageSource) videoProductImageSource.value = "all";
+  await loadVideoProductSources({ preferredDirectorId: Number(videoProductDirector.value || 0), preferredAudioId: Number(videoProductAudio.value || 0) });
+  videoProductAssetStatus.textContent = "本地图片已加入图片资产库，可以在镜头列表里绑定。";
+  await previewVideoProductTimeline().catch(() => {});
+}
+
+async function chooseVideoProductLocalBgm() {
+  videoProductAssetStatus.textContent = "正在打开音乐选择窗口...";
+  const data = await fetchJson("/api/local-media/choose-audio", { method: "POST" });
+  if (data.filePath) {
+    videoProductLocalBgmPath.value = data.filePath;
+    videoProductAssetStatus.textContent = "已选择背景音乐，点击“加入BGM库”后路线 A/B 可自动混音。";
+  } else {
+    videoProductAssetStatus.textContent = "没有选择音乐。";
+  }
+}
+
+async function addVideoProductLocalBgm() {
+  const filePath = videoProductLocalBgmPath?.value.trim() || "";
+  if (!filePath) {
+    videoProductAssetStatus.textContent = "请先选择背景音乐。";
+    return;
+  }
+  videoProductAssetStatus.textContent = "正在把背景音乐加入 BGM 库...";
+  await fetchJson("/api/video-product/add-bgm", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ filePath }),
+  });
+  await loadVideoProductSources({ preferredDirectorId: Number(videoProductDirector.value || 0), preferredAudioId: Number(videoProductAudio.value || 0) });
+  videoProductAssetStatus.textContent = "背景音乐已加入 BGM 库，最终 MP4 会优先语音、自动压低 BGM。";
 }
 
 function imageSelectMarkup(scene) {
