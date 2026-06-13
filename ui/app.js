@@ -2062,6 +2062,7 @@ function directorOutputLinks(project = {}) {
     ["json", "JSON"],
     ["md", "Markdown"],
     ["prompts", "图片提示词"],
+    ["chatgpt", "ChatGPT生图词"],
   ].map(([format, label]) => (
     `<a href="/api/director/export?id=${encodeURIComponent(project.id)}&format=${encodeURIComponent(format)}" target="_blank" rel="noreferrer">${escapeHtml(label)}</a>`
   )).join("");
