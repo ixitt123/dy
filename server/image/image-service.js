@@ -6,7 +6,18 @@ import { createImageProvider } from "./providers/index.js";
 import { callProviderGenerate } from "./provider-adapter.js";
 
 const DEFAULT_IMAGE_PROVIDER = "volcengine_ark";
-const DEFAULT_IMAGE_MODEL = "doubao-seedream-5.0-lite";
+const DEFAULT_IMAGE_MODEL = "doubao-seedream-5-0-lite-260128";
+
+function normalizeVolcengineArkModel(model) {
+  const value = String(model || "").trim();
+  if (!value || value === "doubao-seedream-5.0-lite" || value === "doubao-seedream-5-0-lite") {
+    return DEFAULT_IMAGE_MODEL;
+  }
+  if (value === "doubao-seedream-5.0" || value === "doubao-seedream-5-0") {
+    return "doubao-seedream-5-0-260128";
+  }
+  return value;
+}
 
 export function createImageService({ baseDir, getSettings }) {
   const outputDir = path.join(baseDir, "image-assets", "generated");
@@ -66,7 +77,8 @@ export function createImageService({ baseDir, getSettings }) {
   function imageProviderFromSettings(settings, explicitProvider = "") {
     const mapped = settings.modelMap?.image || settings.modelMapping?.image || {};
     const provider = String(explicitProvider || mapped.provider || DEFAULT_IMAGE_PROVIDER).trim() || DEFAULT_IMAGE_PROVIDER;
-    const model = String(mapped.model || settings.imageProviders?.[provider]?.model || DEFAULT_IMAGE_MODEL).trim();
+    const rawModel = mapped.model || settings.imageProviders?.[provider]?.model || DEFAULT_IMAGE_MODEL;
+    const model = provider === "volcengine_ark" ? normalizeVolcengineArkModel(rawModel) : String(rawModel || "").trim();
     return { provider, model };
   }
 

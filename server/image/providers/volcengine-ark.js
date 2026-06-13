@@ -1,7 +1,18 @@
 import { ImageProviderAdapter } from "../provider-adapter.js";
 
 const DEFAULT_BASE_URL = "https://ark.cn-beijing.volces.com/api/v3";
-const DEFAULT_MODEL = "doubao-seedream-5.0-lite";
+const DEFAULT_MODEL = "doubao-seedream-5-0-lite-260128";
+
+function normalizeModel(model) {
+  const value = String(model || "").trim();
+  if (!value || value === "doubao-seedream-5.0-lite" || value === "doubao-seedream-5-0-lite") {
+    return DEFAULT_MODEL;
+  }
+  if (value === "doubao-seedream-5.0" || value === "doubao-seedream-5-0") {
+    return "doubao-seedream-5-0-260128";
+  }
+  return value;
+}
 
 function sizeForRatio(aspectRatio) {
   return {
@@ -26,7 +37,7 @@ function normalizeArkError(status, bodyText) {
     return "火山方舟：API Key 无效或未授权。";
   }
   if (raw.includes("not found") || raw.includes("model") && (raw.includes("not") || raw.includes("access") || raw.includes("permission"))) {
-    return "火山方舟：模型未开通或模型 ID 不正确。";
+    return "火山方舟：模型未开通或模型 ID 不正确。请在系统设置把模型改为已开通的图片模型，例如 doubao-seedream-5-0-lite-260128。";
   }
   if (raw.includes("quota") || raw.includes("balance") || raw.includes("insufficient") || raw.includes("余额")) {
     return "火山方舟：余额不足或额度不可用。";
@@ -41,7 +52,7 @@ export class VolcengineArkImageProvider extends ImageProviderAdapter {
     this.name = "volcengine_ark";
     this.apiKey = options.config?.volcengine_ark?.apiKey || process.env.VOLCENGINE_ARK_API_KEY || "";
     this.baseUrl = options.config?.volcengine_ark?.baseUrl || process.env.VOLCENGINE_ARK_BASE_URL || DEFAULT_BASE_URL;
-    this.model = options.config?.volcengine_ark?.model || process.env.VOLCENGINE_ARK_IMAGE_MODEL || DEFAULT_MODEL;
+    this.model = normalizeModel(options.config?.volcengine_ark?.model || process.env.VOLCENGINE_ARK_IMAGE_MODEL || DEFAULT_MODEL);
   }
 
   async generateImage({ prompt, aspectRatio = "1:1" }) {
