@@ -1125,6 +1125,13 @@ export function createVideoProductService({
 
       const timelineFiles = writeTimelineFiles(project, timeline);
       const draftPath = writeDraftReference(timelineFiles.projectDir, project, timelineFiles);
+      project = updateProject(project.id, {
+        output_dir: timelineFiles.projectDir,
+        timeline_path: timelineFiles.timelinePath,
+        srt_path: timelineFiles.srtPath,
+        manifest_path: timelineFiles.manifestPath,
+        draft_path: draftPath,
+      });
 
       let mp4Path = "";
       if (MP4_OUTPUT_TYPES.has(outputType)) {
