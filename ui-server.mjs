@@ -69,13 +69,14 @@ const REWRITE_VERSION_DEFAULTS = {
   moments: { direction: "朋友圈文案", wordCount: "220字左右" },
   conversion: { direction: "暑假班转化", wordCount: "150字左右" },
 };
+const DEFAULT_VOLCENGINE_ARK_IMAGE_MODEL = "doubao-seedream-5-0-lite-260128";
 const DEFAULT_MODEL_MAPPING = {
   analyze: { provider: "deepseek", model: "deepseek-chat" },
   rewrite: { provider: "deepseek", model: "deepseek-chat" },
   director: { provider: "deepseek", model: "deepseek-chat" },
   storyboard: { provider: "deepseek", model: "deepseek-chat" },
   image_prompt: { provider: "deepseek", model: "deepseek-chat" },
-  image: { provider: "volcengine_ark", model: "doubao-seedream-5.0-lite" },
+  image: { provider: "volcengine_ark", model: DEFAULT_VOLCENGINE_ARK_IMAGE_MODEL },
   video: { provider: "kling", model: "kling" },
   tts: { provider: "aliyun_bailian", model: "cosyvoice-v2" },
 };
@@ -833,7 +834,7 @@ function normalizeSettings(settings) {
       label: "火山方舟 Seedream",
       baseUrl: String(imageProviders.volcengine_ark?.baseUrl || "https://ark.cn-beijing.volces.com/api/v3").trim(),
       apiKey: String(imageProviders.volcengine_ark?.apiKey || "").trim(),
-      model: String(imageProviders.volcengine_ark?.model || "doubao-seedream-5.0-lite").trim() || "doubao-seedream-5.0-lite",
+      model: normalizeVolcengineArkImageModel(imageProviders.volcengine_ark?.model),
     },
     jimeng: {
       label: "即梦 AI",
@@ -843,16 +844,33 @@ function normalizeSettings(settings) {
     },
   };
   next.modelMap = { ...DEFAULT_MODEL_MAPPING, ...modelMapping };
+  if (next.modelMap.image?.provider === "volcengine_ark") {
+    next.modelMap.image = {
+      ...next.modelMap.image,
+      model: normalizeVolcengineArkImageModel(next.modelMap.image.model),
+    };
+  }
   if (!migrations.imageDefaultVolcengineArk && (!modelMapping.image || (modelMapping.image.provider === "jimeng" && modelMapping.image.model === "flux-dev"))) {
     next.modelMap.image = {
       provider: "volcengine_ark",
-      model: next.imageProviders.volcengine_ark.model || "doubao-seedream-5.0-lite",
+      model: next.imageProviders.volcengine_ark.model || DEFAULT_VOLCENGINE_ARK_IMAGE_MODEL,
     };
     migrations.imageDefaultVolcengineArk = true;
   }
   next.modelMapping = next.modelMap;
   next.migrations = migrations;
   return next;
+}
+
+function normalizeVolcengineArkImageModel(model) {
+  const value = String(model || "").trim();
+  if (!value || value === "doubao-seedream-5.0-lite" || value === "doubao-seedream-5-0-lite") {
+    return DEFAULT_VOLCENGINE_ARK_IMAGE_MODEL;
+  }
+  if (value === "doubao-seedream-5.0" || value === "doubao-seedream-5-0") {
+    return "doubao-seedream-5-0-260128";
+  }
+  return value;
 }
 
 function maskApiKey(apiKey) {
