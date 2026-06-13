@@ -565,6 +565,7 @@ function normalizeRewriteVersions(rewrite = {}, allowDefaults = true) {
     const base = rewriteVersionOptions.find((option) => option.key === item.key || option.name === item.name) || {};
     const key = item.key || base.key || `version-${index + 1}`;
     const cached = rewriteVersionDrafts.get(key) || {};
+    const defaults = defaultRewriteVersionSettings();
     return {
       key,
       name: item.name || base.name || `版本 ${index + 1}`,
@@ -572,6 +573,11 @@ function normalizeRewriteVersions(rewrite = {}, allowDefaults = true) {
       wordCount: item.wordCount || cached.wordCount || base.wordCount || "150字左右",
       content: typeof item.content === "string" ? item.content : cached.content || "",
       revisionInstruction: item.revisionInstruction || cached.revisionInstruction || "",
+      provider: item.provider || cached.provider || defaults.provider,
+      style: item.style || cached.style || defaults.style,
+      referenceStyle: item.referenceStyle || cached.referenceStyle || defaults.referenceStyle,
+      params: item.params || cached.params || defaults.params,
+      humanizeLevel: item.humanizeLevel || cached.humanizeLevel || defaults.humanizeLevel,
     };
   });
 }
@@ -599,9 +605,21 @@ function renderRewriteVersions(rewrite = {}, { allowDefaults = true } = {}) {
         </div>
         <div class="rewrite-version-options">
           <label>
+            模型
+            <select class="rewrite-version-provider">
+              ${rewriteProviderOptionsMarkup(version.provider)}
+            </select>
+          </label>
+          <label>
             改写方向
             <select class="rewrite-version-direction">
               ${selectOptionsMarkup(rewriteDirectionOptions, version.direction)}
+            </select>
+          </label>
+          <label>
+            语气风格
+            <select class="rewrite-version-style">
+              ${selectOptionsMarkup(rewriteStyleOptions, version.style || rewriteStyle.value)}
             </select>
           </label>
           <label class="word-count-field">
@@ -609,6 +627,34 @@ function renderRewriteVersions(rewrite = {}, { allowDefaults = true } = {}) {
             <input class="rewrite-version-word-count" type="text" value="${escapeHtml(version.wordCount)}" placeholder="如 150字左右" />
           </label>
         </div>
+        <div class="rewrite-version-param-grid">
+          <label>
+            口语化 <span class="rewrite-version-tone-value">${Number(version.params?.toneLevel || 8)}</span>
+            <input class="rewrite-version-tone-level" type="range" min="1" max="10" value="${Number(version.params?.toneLevel || 8)}" />
+          </label>
+          <label>
+            冲突度 <span class="rewrite-version-conflict-value">${Number(version.params?.conflictLevel || 7)}</span>
+            <input class="rewrite-version-conflict-level" type="range" min="1" max="10" value="${Number(version.params?.conflictLevel || 7)}" />
+          </label>
+          <label>
+            情感强度 <span class="rewrite-version-emotion-value">${Number(version.params?.emotionLevel || 7)}</span>
+            <input class="rewrite-version-emotion-level" type="range" min="1" max="10" value="${Number(version.params?.emotionLevel || 7)}" />
+          </label>
+          <label>
+            销售感 <span class="rewrite-version-sales-value">${Number(version.params?.salesLevel || 6)}</span>
+            <input class="rewrite-version-sales-level" type="range" min="1" max="10" value="${Number(version.params?.salesLevel || 6)}" />
+          </label>
+          <label>
+            去AI强度
+            <select class="rewrite-version-humanize-level">
+              ${selectOptionsMarkup(rewriteHumanizeOptions, version.humanizeLevel || "普通")}
+            </select>
+          </label>
+        </div>
+        <label class="rewrite-version-reference-field">
+          参考风格输入
+          <textarea class="rewrite-version-reference" rows="3" placeholder="给这个输出框单独指定参考风格">${escapeHtml(version.referenceStyle || rewriteReference.value || defaultRewriteReference)}</textarea>
+        </label>
         <textarea class="rewrite-version-text" rows="8" data-version-key="${escapeHtml(version.key)}" placeholder="生成后可继续手动编辑">${escapeHtml(version.content)}</textarea>
         <div class="rewrite-revision-box">
           <label>
@@ -631,8 +677,18 @@ function collectRewriteVersions() {
     const version = {
       key: card.dataset.versionKey,
       name: cached.name || `版本 ${index + 1}`,
+      provider: card.querySelector(".rewrite-version-provider")?.value || rewriteProvider.value,
       direction: card.querySelector(".rewrite-version-direction")?.value || rewriteDirection.value,
+      style: card.querySelector(".rewrite-version-style")?.value || rewriteStyle.value,
       wordCount: card.querySelector(".rewrite-version-word-count")?.value.trim() || "150字左右",
+      params: {
+        toneLevel: Number(card.querySelector(".rewrite-version-tone-level")?.value || 8),
+        conflictLevel: Number(card.querySelector(".rewrite-version-conflict-level")?.value || 7),
+        emotionLevel: Number(card.querySelector(".rewrite-version-emotion-level")?.value || 7),
+        salesLevel: Number(card.querySelector(".rewrite-version-sales-level")?.value || 6),
+      },
+      humanizeLevel: card.querySelector(".rewrite-version-humanize-level")?.value || rewriteHumanizeLevel.value,
+      referenceStyle: card.querySelector(".rewrite-version-reference")?.value.trim() || rewriteReference.value,
       content: card.querySelector(".rewrite-version-text")?.value || "",
       revisionInstruction: card.querySelector(".rewrite-version-suggestion")?.value.trim() || "",
     };
@@ -675,6 +731,22 @@ function rewriteParams() {
     emotionLevel: Number(rewriteEmotionLevel.value || 7),
     salesLevel: Number(rewriteSalesLevel.value || 6),
     humanizeLevel: rewriteHumanizeLevel.value || "普通",
+  };
+}
+
+function rewritePayloadForVersion(id, version, extra = {}) {
+  return {
+    id,
+    provider: version.provider || rewriteProvider.value,
+    direction: version.direction || rewriteDirection.value,
+    style: version.style || rewriteStyle.value,
+    referenceStyle: version.referenceStyle || rewriteReference.value,
+    params: version.params || rewriteParams(),
+    humanizeLevel: version.humanizeLevel || rewriteHumanizeLevel.value,
+    referenceExamples: collectReferenceExamplesText(),
+    versionSpecs: [version],
+    text: rewriteOriginal.value,
+    ...extra,
   };
 }
 
