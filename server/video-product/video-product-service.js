@@ -839,7 +839,8 @@ export function createVideoProductService({
     fs.writeFileSync(concatPath, concatFileList(segmentPaths), "utf8");
 
     const outputPath = path.join(timelineFiles.projectDir, `${safeFileName(project.metadata?.title || `timeline_${project.id}`)}.mp4`);
-    const subtitleFilter = `subtitles='${ffmpegFilterPath(timelineFiles.srtPath)}':force_style='Fontsize=16,PrimaryColour=&HFFFFFF&,OutlineColour=&H000000&,BorderStyle=1,Outline=2,Alignment=2,MarginV=120'`;
+    const mixSubtitlePath = timelineFiles.assPath || timelineFiles.srtPath;
+    const subtitleFilter = `subtitles='${ffmpegFilterPath(mixSubtitlePath)}'`;
     const args = [
       "-y",
       "-f", "concat",
@@ -885,15 +886,41 @@ export function createVideoProductService({
       "-f", "lavfi",
       "-i", `color=c=0x101624:s=${width}x${height}:r=${project.fps}:d=${duration}`,
     ];
-    if (timelineFiles.packagedAudio) args.push("-i", timelineFiles.packagedAudio);
+    let nextInput = 1;
+    let voiceInput = -1;
+    let bgmInput = -1;
+    if (timelineFiles.packagedAudio) {
+      voiceInput = nextInput;
+      nextInput += 1;
+      args.push("-i", timelineFiles.packagedAudio);
+    }
+    if (timelineFiles.packagedBgm) {
+      bgmInput = nextInput;
+      args.push("-stream_loop", "-1", "-i", timelineFiles.packagedBgm);
+    }
     args.push(
       "-vf", filters,
       "-t", String(duration),
       "-c:v", "libx264",
       "-pix_fmt", "yuv420p",
     );
-    if (timelineFiles.packagedAudio) args.push("-c:a", "aac", "-shortest");
-    else args.push("-an");
+    if (voiceInput >= 0 && bgmInput >= 0) {
+      const fadeStart = Math.max(0, duration - 1.2).toFixed(2);
+      args.push(
+        "-filter_complex",
+        `[${voiceInput}:a]volume=1.0[a_voice];[${bgmInput}:a]volume=0.12,atrim=0:${duration.toFixed(3)},afade=t=in:st=0:d=0.6,afade=t=out:st=${fadeStart}:d=1.2[a_bgm];[a_voice][a_bgm]amix=inputs=2:duration=first:dropout_transition=2[aout]`,
+        "-map", "0:v",
+        "-map", "[aout]",
+        "-c:a", "aac",
+        "-shortest",
+      );
+    } else if (voiceInput >= 0) {
+      args.push("-map", "0:v", "-map", `${voiceInput}:a`, "-c:a", "aac", "-shortest");
+    } else if (bgmInput >= 0) {
+      args.push("-map", "0:v", "-map", `${bgmInput}:a`, "-c:a", "aac", "-shortest");
+    } else {
+      args.push("-map", "0:v", "-an");
+    }
     args.push(outputPath);
     await runProcess(ffmpegPath, args);
     return outputPath;
