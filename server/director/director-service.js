@@ -322,6 +322,58 @@ function scenePromptsMarkdown(result) {
   return lines.join("\n");
 }
 
+function chatGptImagePromptsMarkdown(project, result) {
+  const meta = result.video_meta || {};
+  const title = meta.title || project.title || "短视频分镜";
+  const ratio = meta.ratio || project.ratio || "9:16";
+  const style = meta.style || project.visual_style || "商业短视频";
+  const total = Array.isArray(result.storyboard) ? result.storyboard.length : 0;
+  const styleLock = [
+    `项目：${title}`,
+    `统一视觉风格：${style}，商业短视频质感，真实摄影感，电影级布光，干净高级，不要廉价海报感，不要普通插画感。`,
+    `统一画幅：${ratio}，竖屏素材按 1080x1920 构图；所有分镜保持同一色调、同一镜头语言、同一人物/场景风格。`,
+    "统一构图：主体明确，前景/中景/背景有层次，底部预留字幕安全区，画面可直接用于短视频成片。",
+    "禁止：乱码文字、水印、奇怪 logo、低清、脏乱背景、随机人物变脸、颜色漂移、PPT感、廉价模板感。",
+  ].join("\n");
+
+  const lines = [
+    `# ${title} - ChatGPT 网页生图提示词`,
+    "",
+    "使用方法：把下面每个 Scene 单独复制到 ChatGPT 网页生图，一次生成一张图。不要把所有 Scene 合并成一张图。",
+    "统一要求：每张图都要像同一支商业短视频的分镜素材，最后用于 1080 竖屏成片。",
+    "",
+    "## 全片风格锁定",
+    "",
+    styleLock,
+    "",
+  ];
+
+  for (const [index, scene] of (result.storyboard || []).entries()) {
+    const sceneIndex = scene.scene || index + 1;
+    const subtitle = String(scene.subtitle || scene.voice_text || "").slice(0, 80);
+    lines.push(
+      `## Scene ${sceneIndex}/${total}`,
+      "",
+      "请只生成这一张分镜图片，不要拼图，不要生成多宫格。",
+      "",
+      "### Prompt",
+      [
+        styleLock,
+        `分镜编号：${sceneIndex}/${total}`,
+        `本镜头任务：${scene.purpose || "推进叙事"}`,
+        `情绪：${scene.emotion || "专业、有冲击力、有节奏"}`,
+        `镜头语言：${scene.camera || "中近景，轻微推进"}`,
+        `构图：${scene.composition || "主体居中偏上，底部预留字幕安全区"}`,
+        `画面主体：${scene.image_prompt || scene.purpose || scene.voice_text || ""}`,
+        subtitle ? `字幕关键词参考：${subtitle}` : "",
+        "输出要求：单张高质量图片，适合短视频剪辑；画面高级、清晰、统一、有商业审美；不要在画面中生成可读文字，字幕后期再加。",
+      ].filter(Boolean).join("\n"),
+      "",
+    );
+  }
+  return lines.join("\n");
+}
+
 export function createDirectorService({ baseDir, taskStore, generateJson, onIdle = () => {} }) {
   const configPath = path.join(baseDir, "config", "director-system.json");
   const config = JSON.parse(readText(configPath));
@@ -463,9 +515,11 @@ export function createDirectorService({ baseDir, taskStore, generateJson, onIdle
       const jsonPath = path.join(storyboardsDir, `${baseName}_storyboard.json`);
       const markdownPath = path.join(storyboardsDir, `${baseName}_storyboard.md`);
       const scenePromptsPath = path.join(scenePromptsDir, `${baseName}_scene_prompts.md`);
+      const chatGptPromptsPath = path.join(scenePromptsDir, `${baseName}_chatgpt_image_prompts.md`);
       fs.writeFileSync(jsonPath, JSON.stringify(result, null, 2), "utf8");
       fs.writeFileSync(markdownPath, markdownForProject(project, result), "utf8");
       fs.writeFileSync(scenePromptsPath, scenePromptsMarkdown(result), "utf8");
+      fs.writeFileSync(chatGptPromptsPath, chatGptImagePromptsMarkdown(project, result), "utf8");
 
       let referenceStylePath = "";
       if (metadata.save_reference_style && metadata.reference_style) {
@@ -511,6 +565,7 @@ export function createDirectorService({ baseDir, taskStore, generateJson, onIdle
           ratio: platform.ratio,
           markdown_path: markdownPath,
           scene_prompts_path: scenePromptsPath,
+          chatgpt_prompts_path: chatGptPromptsPath,
           reference_style_path: referenceStylePath,
           scene_count: result.storyboard.length,
           total_duration: result.video_meta.estimated_duration,
@@ -603,11 +658,23 @@ export function createDirectorService({ baseDir, taskStore, generateJson, onIdle
     const project = taskStore.getDirectorProject(id);
     if (!project || project.status !== "completed") return "";
     const metadata = safeJson(project.metadata_json, {});
+    const normalizedFormat = String(format || "json").toLowerCase();
+    if ((normalizedFormat === "chatgpt" || normalizedFormat === "chatgpt-prompts") && !metadata.chatgpt_prompts_path && metadata.result) {
+      const baseName = `${project.id}_${safeFileName(project.title)}`;
+      const chatGptPromptsPath = path.join(scenePromptsDir, `${baseName}_chatgpt_image_prompts.md`);
+      fs.writeFileSync(chatGptPromptsPath, chatGptImagePromptsMarkdown(project, metadata.result), "utf8");
+      metadata.chatgpt_prompts_path = chatGptPromptsPath;
+      taskStore.updateDirectorProject(project.id, {
+        metadata_json: JSON.stringify(metadata),
+      });
+    }
     const requested = {
       json: project.storyboard_path,
       md: metadata.markdown_path,
       prompts: metadata.scene_prompts_path,
-    }[format];
+      chatgpt: metadata.chatgpt_prompts_path,
+      "chatgpt-prompts": metadata.chatgpt_prompts_path,
+    }[normalizedFormat];
     if (!requested || !fs.existsSync(requested)) return "";
     const resolved = path.resolve(requested);
     const roots = [storyboardsDir, scenePromptsDir].map((directory) => path.resolve(directory));
