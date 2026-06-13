@@ -5321,7 +5321,7 @@ a {
 
 .image-import-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto auto;
+  grid-template-columns: minmax(0, 1fr) repeat(5, auto);
   gap: 8px;
 }
 

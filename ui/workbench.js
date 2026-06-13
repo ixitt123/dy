@@ -1087,6 +1087,15 @@ function setupImageStudio() {
   document.getElementById("generateDirectorPromptImage")?.addEventListener("click", () => {
     if (applyImportedPrompt()) document.getElementById("imageGenerateBtn")?.click();
   });
+  document.getElementById("exportDirectorPromptChatGptSet")?.addEventListener("click", () => {
+    const projectId = activeDirectorImageImport?.projectId || importedDirectorImagePrompts[0]?.projectId || 0;
+    if (!projectId) {
+      setStatus("请先从 AI 导演导入分镜。", "error");
+      return;
+    }
+    window.open(`/api/director/export?id=${encodeURIComponent(projectId)}&format=chatgpt`, "_blank", "noopener,noreferrer");
+    setStatus("已打开 ChatGPT 网页生图提示词导出文件。", "ok");
+  });
   document.getElementById("generateDirectorPromptSet")?.addEventListener("click", async () => {
     const projectId = activeDirectorImageImport?.projectId || importedDirectorImagePrompts[0]?.projectId || 0;
     if (!projectId) {
