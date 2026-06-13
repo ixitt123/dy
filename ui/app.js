@@ -4212,6 +4212,17 @@ chooseDownloadDirBtn.addEventListener("click", () => {
   });
 });
 
+chooseLocalVideoBtn?.addEventListener("click", () => {
+  chooseLocalVideo().catch((error) => {
+    resultBox.textContent = error instanceof Error ? error.message : String(error);
+    setReady("选择本地视频失败", false);
+  });
+});
+
+extractLocalVideoTranscriptBtn?.addEventListener("click", () => {
+  runLocalVideoTranscript();
+});
+
 document.querySelector("#startQueue").addEventListener("click", () => {
   startQueue().catch((error) => {
     batchStatus.textContent = error instanceof Error ? error.message : String(error);
@@ -4334,10 +4345,26 @@ tasksTable.addEventListener("click", (event) => {
 transcriptList.addEventListener("click", (event) => {
   const analyzeButton = event.target.closest(".transcript-analyze");
   const rewriteButton = event.target.closest(".transcript-rewrite");
+  const ttsButton = event.target.closest(".transcript-tts");
+  const directorButton = event.target.closest(".transcript-director");
   if (analyzeButton) {
     openAnalysisEditor(analyzeButton.dataset.taskId).catch((error) => {
       resultBox.textContent = error instanceof Error ? error.message : String(error);
       setReady("打开分析失败", false);
+    });
+    return;
+  }
+  if (ttsButton) {
+    sendTranscriptToTts(ttsButton.dataset.taskId).catch((error) => {
+      resultBox.textContent = error instanceof Error ? error.message : String(error);
+      setReady("导入 TTS 失败", false);
+    });
+    return;
+  }
+  if (directorButton) {
+    sendTranscriptToDirector(directorButton.dataset.taskId).catch((error) => {
+      resultBox.textContent = error instanceof Error ? error.message : String(error);
+      setReady("导入 AI 导演失败", false);
     });
     return;
   }
