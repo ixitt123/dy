@@ -2744,8 +2744,10 @@ async function loadVideoProductSources(options = {}) {
     directors: data.directors || [],
     audioJobs: data.audioJobs || [],
     imageAssets: data.imageAssets || [],
+    downloadedVideos: data.downloadedVideos || [],
     timelines: data.timelines || [],
     platforms: data.platforms || [],
+    outputTypes: data.outputTypes || [],
   };
   renderVideoProductSourceOptions(options);
   renderVideoProductProjects(videoProductSources.timelines || []);
@@ -2829,7 +2831,7 @@ function renderVideoProductProjects(projects = videoProductProjectsState) {
       <strong>#${project.project_id || project.id}</strong>
       <div class="vfo-project-title">
         <strong>${escapeHtml(project.metadata?.title || `Timeline #${project.project_id || project.id}`)}</strong>
-        <span>Director #${project.source_director_project_id || "-"} · Audio #${project.audio_asset_id || "-"} · ${escapeHtml(project.output_type)}</span>
+        <span>Director #${project.source_director_project_id || "-"} · Audio #${project.audio_asset_id || "-"} · ${escapeHtml(videoProductOutputLabel(project.output_type))}</span>
       </div>
       <span>${escapeHtml(project.ratio)} · ${escapeHtml(project.resolution)}</span>
       <span>${Number(project.duration || 0).toFixed(1)}s</span>
@@ -2840,6 +2842,7 @@ function renderVideoProductProjects(projects = videoProductProjectsState) {
       </div>
     </div>
   `).join("");
+  renderVideoProductRailLists(videoProductProjectsState);
 }
 
 function renderVideoProductOutputs(project) {
@@ -2879,6 +2882,7 @@ function renderVideoProductProject(project) {
     : `${videoProductStatusLabel(project.status)}：${project.current_step || "等待更新"}`;
   renderVideoProductOutputs(project);
   openVideoProductOutputBtn.disabled = !project.output_dir;
+  renderVideoProductRail(project);
 }
 
 async function openVideoProductProject(id) {
