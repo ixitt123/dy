@@ -322,6 +322,23 @@ function scenePromptsMarkdown(result) {
   return lines.join("\n");
 }
 
+function imagePromptWithoutReadableText(value) {
+  let text = String(value || "").trim();
+  if (!text) return "";
+  text = text
+    .replace(/([，。,.;；]?\s*)?(白板|黑板|屏幕|海报|背景|墙面|标题|字幕|标签|卡片)[^。；;\n]*(写着|显示|出现|展示|包含|文字|text|words|quote)[^。；;\n]*/gi, " 用抽象图形、人物动作、左右分区和视觉隐喻表达信息，不出现可读文字")
+    .replace(/[“"']([^“”"']{1,80})[”"']/g, "抽象信息符号")
+    .replace(/[A-Za-z][A-Za-z\s'’:-]{2,}/g, (match) => (
+      /\b(scene|shot|cinematic|realistic|commercial|portrait|close|medium|wide|lighting|camera|style|blogger|knowledge|clean|premium|vertical|video)\b/i.test(match)
+        ? match
+        : "抽象信息符号"
+    ))
+    .replace(/拼写\s*(vs|VS|对比|和)\s*开口/g, "左右对比的抽象图形")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+  return text || "用人物动作、空间构图、抽象图形表达本镜头信息，不出现任何可读文字。";
+}
+
 function chatGptImagePromptsMarkdown(project, result) {
   const meta = result.video_meta || {};
   const title = meta.title || project.title || "短视频分镜";
@@ -332,15 +349,17 @@ function chatGptImagePromptsMarkdown(project, result) {
     `项目：${title}`,
     `统一视觉风格：${style}，商业短视频质感，真实摄影感，电影级布光，干净高级，不要廉价海报感，不要普通插画感。`,
     `统一画幅：${ratio}，竖屏素材按 1080x1920 构图；所有分镜保持同一色调、同一镜头语言、同一人物/场景风格。`,
+    "统一人物：同一位中国知识博主/老师形象，30岁左右，干净短发或利落发型，深色简洁上衣，专业但有亲和力，不要每张换脸、换职业感。",
     "统一构图：主体明确，前景/中景/背景有层次，底部预留字幕安全区，画面可直接用于短视频成片。",
-    "禁止：乱码文字、水印、奇怪 logo、低清、脏乱背景、随机人物变脸、颜色漂移、PPT感、廉价模板感。",
+    "禁止：任何可读文字、乱码文字、白板文字、屏幕文字、水印、奇怪 logo、低清、脏乱背景、随机人物变脸、颜色漂移、PPT感、廉价模板感。",
   ].join("\n");
 
   const lines = [
-    `# ${title} - ChatGPT 网页生图提示词`,
+    `# ${title} - ChatGPT 网页直接生图版`,
     "",
-    "使用方法：把下面每个 Scene 单独复制到 ChatGPT 网页生图，一次生成一张图。不要把所有 Scene 合并成一张图。",
-    "统一要求：每张图都要像同一支商业短视频的分镜素材，最后用于 1080 竖屏成片。",
+    "重要：不要把整份文件一次性发给 ChatGPT 让它分析。每次只复制一个 Scene 里的整段提示词。",
+    "每段都已经写成直接生图命令：ChatGPT 应该直接生成图片，不要先解释、不要总结、不要给建议。",
+    "统一要求：每张图都像同一支商业短视频的分镜素材，最后用于 1080 竖屏成片。",
     "",
     "## 全片风格锁定",
     "",
@@ -350,24 +369,29 @@ function chatGptImagePromptsMarkdown(project, result) {
 
   for (const [index, scene] of (result.storyboard || []).entries()) {
     const sceneIndex = scene.scene || index + 1;
+    const visualPrompt = imagePromptWithoutReadableText(scene.image_prompt || scene.purpose || scene.voice_text || "");
     const subtitle = String(scene.subtitle || scene.voice_text || "").slice(0, 80);
     lines.push(
       `## Scene ${sceneIndex}/${total}`,
       "",
-      "请只生成这一张分镜图片，不要拼图，不要生成多宫格。",
+      "复制下面整段到 ChatGPT 网页：",
       "",
-      "### Prompt",
+      "```text",
       [
+        "请直接生成一张竖屏短视频分镜图片。",
+        "不要解释，不要分析，不要复述提示词，不要给优化建议，直接出图。",
+        "只生成一张图，不要拼图，不要多宫格。",
         styleLock,
         `分镜编号：${sceneIndex}/${total}`,
         `本镜头任务：${scene.purpose || "推进叙事"}`,
         `情绪：${scene.emotion || "专业、有冲击力、有节奏"}`,
         `镜头语言：${scene.camera || "中近景，轻微推进"}`,
         `构图：${scene.composition || "主体居中偏上，底部预留字幕安全区"}`,
-        `画面主体：${scene.image_prompt || scene.purpose || scene.voice_text || ""}`,
-        subtitle ? `字幕关键词参考：${subtitle}` : "",
-        "输出要求：单张高质量图片，适合短视频剪辑；画面高级、清晰、统一、有商业审美；不要在画面中生成可读文字，字幕后期再加。",
+        `画面主体：${visualPrompt}`,
+        subtitle ? `字幕语义只作为情绪参考，不要把这些字画进图片：${subtitle}` : "",
+        "输出要求：单张高质量图片，适合短视频剪辑；画面高级、清晰、统一、有商业审美；不要在画面中生成任何可读文字，字幕和标题后期再加。",
       ].filter(Boolean).join("\n"),
+      "```",
       "",
     );
   }
@@ -659,7 +683,7 @@ export function createDirectorService({ baseDir, taskStore, generateJson, onIdle
     if (!project || project.status !== "completed") return "";
     const metadata = safeJson(project.metadata_json, {});
     const normalizedFormat = String(format || "json").toLowerCase();
-    if ((normalizedFormat === "chatgpt" || normalizedFormat === "chatgpt-prompts") && !metadata.chatgpt_prompts_path && metadata.result) {
+    if ((normalizedFormat === "chatgpt" || normalizedFormat === "chatgpt-prompts") && metadata.result) {
       const baseName = `${project.id}_${safeFileName(project.title)}`;
       const chatGptPromptsPath = path.join(scenePromptsDir, `${baseName}_chatgpt_image_prompts.md`);
       fs.writeFileSync(chatGptPromptsPath, chatGptImagePromptsMarkdown(project, metadata.result), "utf8");
