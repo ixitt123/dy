@@ -3665,11 +3665,17 @@ a {
   color: #ffffff;
 }
 
+.rail-task-actions button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 .rail-video-product-card {
   border-color: rgba(112, 92, 255, 0.32);
 }
 
 .rail-video-blockers {
+  padding-left: 16px;
   margin-top: 7px;
   color: #ff9aa5;
   font-size: 10px;
@@ -4721,6 +4727,13 @@ a {
   border-color: #2b323e;
   background: #141820;
   box-shadow: inset 3px 0 0 #445061;
+  cursor: pointer;
+  transition: border-color 0.16s ease, background 0.16s ease, transform 0.16s ease;
+}
+
+.video-route-card:hover {
+  border-color: #435065;
+  transform: translateY(-1px);
 }
 
 .video-route-card.primary {

@@ -2824,6 +2824,7 @@ function renderVideoProductProjects(projects = videoProductProjectsState) {
   videoProductProjectsState = Array.isArray(projects) ? projects : [];
   if (!videoProductProjectsState.length) {
     videoProductProjects.innerHTML = '<div class="vfo-empty">还没有视频成片项目。</div>';
+    renderVideoProductRailLists([]);
     return;
   }
   videoProductProjects.innerHTML = videoProductProjectsState.map((project) => `
@@ -4164,6 +4165,9 @@ videoProductImageSource?.addEventListener("change", () => {
 videoProductOutputType?.addEventListener("change", () => {
   const label = videoProductOutputType.options[videoProductOutputType.selectedIndex]?.textContent || "输出方式";
   videoProductStatus.textContent = `已选择：${label}`;
+  document.querySelectorAll(".video-route-card[data-video-output]").forEach((item) => {
+    item.classList.toggle("primary", item.dataset.videoOutput === videoProductOutputType.value);
+  });
   previewVideoProductTimeline().catch(() => {});
 });
 
