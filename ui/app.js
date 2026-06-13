@@ -2592,6 +2592,112 @@ function videoProductStatusLabel(status) {
   }[status] || status || "未知";
 }
 
+function videoProductOutputLabel(outputType) {
+  return {
+    jianying: "路线 C：剪映半成品素材包",
+    mp4: "路线 B：AI 图文成片 MP4",
+    template_mp4: "路线 A：模板快剪 MP4",
+    mix_mp4: "路线 D：下载素材混剪 MP4",
+    package: "标准素材包",
+  }[outputType] || outputType || "视频成片";
+}
+
+function videoProductCompletedSteps(project = {}) {
+  const order = [
+    ["pending", "进入 SQLite 队列"],
+    ["binding_assets", "绑定导演稿、音频和素材"],
+    ["building_timeline", "生成 Timeline Project"],
+    [project.output_type === "jianying" || project.output_type === "package" ? "exporting_draft" : "rendering", project.output_type === "jianying" ? "导出剪映半成品" : project.output_type === "package" ? "导出素材包" : "渲染 MP4"],
+    ["completed", "写入输出文件"],
+  ];
+  const statusIndex = order.findIndex(([status]) => status === project.status);
+  if (project.status === "completed") return order.map(([, label]) => label);
+  if (statusIndex <= 0) return [];
+  return order.slice(0, statusIndex).map(([, label]) => label);
+}
+
+function videoProductFileLinks(project = {}) {
+  const id = project.project_id || project.id || 0;
+  return [
+    ["timeline", "timeline.json", project.timeline_path],
+    ["srt", "subtitles.srt", project.srt_path],
+    ["manifest", "project_manifest.json", project.manifest_path],
+    ["draft", "draft_content.json", project.draft_path],
+    ["mp4", "MP4", project.mp4_path],
+  ]
+    .filter(([, , value]) => value)
+    .map(([type, label]) => `<a href="/api/video-product/export?id=${encodeURIComponent(id)}&type=${encodeURIComponent(type)}" target="_blank" rel="noreferrer">${escapeHtml(label)}</a>`);
+}
+
+function renderVideoProductRail(project = activeVideoProductProject) {
+  if (!railCurrentTask) return;
+  if (!project) {
+    railCurrentTask.innerHTML = `
+      <strong>暂无视频成片任务</strong>
+      <small>生成路线 A/B/C/D 后，会显示当前步骤、阻塞项和输出文件。</small>
+    `;
+    return;
+  }
+  const blockers = Array.isArray(project.blockers) ? project.blockers.filter(Boolean) : [];
+  const completed = videoProductCompletedSteps(project);
+  const fileLinks = videoProductFileLinks(project);
+  const progress = Math.max(0, Math.min(100, Number(project.progress || 0)));
+  railCurrentTask.innerHTML = `
+    <div class="rail-video-product-card">
+      <strong>#${project.project_id || project.id} ${escapeHtml(videoProductOutputLabel(project.output_type))}</strong>
+      <small>当前步骤：${escapeHtml(project.current_step || videoProductStatusLabel(project.status))}</small>
+      <div class="rail-progress"><i style="width:${progress}%"></i></div>
+      <div class="rail-task-summary">
+        <div><span>进度</span><strong>${progress}%</strong></div>
+        <div><span>状态</span><strong>${escapeHtml(videoProductStatusLabel(project.status))}</strong></div>
+        <div><span>时长</span><strong>${Number(project.duration || 0).toFixed(1)}s</strong></div>
+      </div>
+      <div class="rail-task-group">
+        <span class="rail-subheading">已完成步骤</span>
+        ${completed.length ? `<ul class="rail-video-blockers">${completed.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>` : "<small>等待开始处理。</small>"}
+      </div>
+      <div class="rail-task-group">
+        <span class="rail-subheading">阻塞项</span>
+        ${blockers.length ? `<ul class="rail-video-blockers">${blockers.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>` : "<small>当前没有阻塞项。</small>"}
+      </div>
+      ${project.error ? `<div class="rail-failure-note">错误原因：${escapeHtml(project.error)}</div>` : ""}
+      <div class="rail-task-group">
+        <span class="rail-subheading">输出文件</span>
+        <div class="video-product-output-files">${fileLinks.length ? fileLinks.join("") : "<span>完成后显示文件。</span>"}</div>
+      </div>
+      <div class="rail-task-actions">
+        <button type="button" data-video-product-action="view" data-id="${project.project_id || project.id}">查看</button>
+        <button type="button" data-video-product-action="open" data-id="${project.project_id || project.id}" ${project.output_dir ? "" : "disabled"}>打开目录</button>
+      </div>
+    </div>
+  `;
+}
+
+function renderVideoProductRailLists(projects = videoProductProjectsState) {
+  if (railRecentOutput) {
+    const completed = (Array.isArray(projects) ? projects : []).filter((project) => project.status === "completed").slice(0, 5);
+    railRecentOutput.innerHTML = completed.length
+      ? completed.map((project) => `
+        <button class="rail-list-item" type="button" data-video-product-action="view" data-id="${project.project_id || project.id}">
+          <span>#${project.project_id || project.id} ${escapeHtml(videoProductOutputLabel(project.output_type))}</span>
+          <strong>${escapeHtml(shortPath(project.mp4_path || project.output_dir || project.timeline_path || ""))}</strong>
+        </button>
+      `).join("")
+      : '<div class="rail-empty">还没有生成记录</div>';
+  }
+  if (railErrors) {
+    const failed = (Array.isArray(projects) ? projects : []).filter((project) => project.status === "failed").slice(0, 4);
+    railErrors.innerHTML = failed.length
+      ? failed.map((project) => `
+        <button class="rail-list-item" type="button" data-video-product-action="view" data-id="${project.project_id || project.id}">
+          <span>#${project.project_id || project.id} ${escapeHtml(videoProductOutputLabel(project.output_type))}</span>
+          <strong>${escapeHtml(project.error || "未知错误")}</strong>
+        </button>
+      `).join("")
+      : '<div class="rail-empty success-text">当前没有错误</div>';
+  }
+}
+
 function videoProductPayload() {
   return {
     source_director_project_id: Number(videoProductDirector.value || 0),
