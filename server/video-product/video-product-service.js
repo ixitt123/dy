@@ -1002,6 +1002,8 @@ export function createVideoProductService({
     const outputPath = path.join(timelineFiles.projectDir, `${safeFileName(timelineFiles.timelineJson.name || `timeline_${project.id}`)}_template.mp4`);
     const subtitlePath = timelineFiles.assPath || timelineFiles.srtPath;
     const subtitleFilter = `subtitles='${ffmpegFilterPath(subtitlePath)}'`;
+    const ctaStart = Math.max(0, duration - 5).toFixed(3);
+    const ctaY = Math.round(height * 0.61);
     const filters = [
       `drawbox=x=0:y=0:w=${width}:h=${height}:color=0x09101B:t=fill`,
       `drawbox=x=0:y=0:w=${width}:h=${Math.round(height * 0.2)}:color=0x111C2F@0.82:t=fill`,
@@ -1016,9 +1018,9 @@ export function createVideoProductService({
       `drawbox=x=68:y='520+18*sin(t*0.9)':w=${width - 136}:h=6:color=0xE7C76C@0.22:t=fill`,
       `drawbox=x=86:y='560+16*sin(t*0.7)':w=${Math.round((width - 172) * 0.68)}:h=6:color=0x6CA8FF@0.24:t=fill`,
       subtitleFilter,
-      `drawbox=x=68:y=${height - 430}:w=${width - 136}:h=178:color=0xE7C76C@0.12:t=fill:enable='gte(t\\,${Math.max(0, duration - 5).toFixed(3)})'`,
-      `drawtext=fontfile='${ffmpegFilterPath(boldFontPath)}':text='${ctaText}':x=(w-text_w)/2:y=${height - 375}:fontsize=44:fontcolor=0xE7C76C:box=1:boxcolor=0x07101B@0.58:boxborderw=18:enable='gte(t\\,${Math.max(0, duration - 5).toFixed(3)})'`,
-      `drawtext=fontfile='${ffmpegFilterPath(fontPath)}':text='${ffmpegDrawText("把这一句发给正在学的人")}':x=(w-text_w)/2:y=${height - 305}:fontsize=30:fontcolor=white:enable='gte(t\\,${Math.max(0, duration - 5).toFixed(3)})'`,
+      `drawbox=x=68:y=${ctaY}:w=${width - 136}:h=178:color=0xE7C76C@0.12:t=fill:enable='gte(t\\,${ctaStart})'`,
+      `drawtext=fontfile='${ffmpegFilterPath(boldFontPath)}':text='${ctaText}':x=(w-text_w)/2:y=${ctaY + 54}:fontsize=44:fontcolor=0xE7C76C:box=1:boxcolor=0x07101B@0.58:boxborderw=18:enable='gte(t\\,${ctaStart})'`,
+      `drawtext=fontfile='${ffmpegFilterPath(fontPath)}':text='${ffmpegDrawText("把这一句发给正在学的人")}':x=(w-text_w)/2:y=${ctaY + 126}:fontsize=30:fontcolor=white:enable='gte(t\\,${ctaStart})'`,
       `drawbox=x=0:y=${height - 14}:w=${width}:h=14:color=0x152133:t=fill`,
       `drawbox=x=0:y=${height - 14}:w='iw*t/${duration}':h=14:color=0xE7C76C:t=fill`,
     ].filter(Boolean);
