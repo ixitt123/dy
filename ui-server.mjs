@@ -4933,6 +4933,18 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
+    if (req.method === "POST" && url.pathname === "/api/local-media/choose-image") {
+      const selected = await chooseLocalImageFile();
+      sendJson(res, 200, { ok: true, filePath: selected || "" });
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/local-media/choose-audio") {
+      const selected = await chooseLocalAudioFile();
+      sendJson(res, 200, { ok: true, filePath: selected || "" });
+      return;
+    }
+
     if (req.method === "POST" && url.pathname === "/api/local-video/transcript") {
       const body = JSON.parse(await readBody(req) || "{}");
       const filePath = String(body.filePath || "").trim();
@@ -5421,6 +5433,22 @@ const server = http.createServer(async (req, res) => {
           sendJson(res, 200, { ok: true, ...result });
         } catch (e) {
           sendJson(res, 400, { ok: false, error: e.message });
+        }
+        return;
+      }
+
+      if (req.method === "POST" && route === "add-local") {
+        const body = JSON.parse(await readBody(req) || "{}");
+        try {
+          const asset = imageService.addLocalImageAsset({
+            filePath: body.filePath || "",
+            prompt: body.prompt || "",
+            aspectRatio: body.aspectRatio || "9:16",
+            sourceId: body.sourceId || "",
+          });
+          sendJson(res, 200, { ok: true, asset });
+        } catch (e) {
+          sendJson(res, 400, { ok: false, message: e.message, error: e.message });
         }
         return;
       }
