@@ -51,6 +51,9 @@ const deleteSelectedBtn = document.querySelector("#deleteSelected");
 const downloadDirInput = document.querySelector("#downloadDirInput");
 const chooseDownloadDirBtn = document.querySelector("#chooseDownloadDir");
 const saveDownloadDirBtn = document.querySelector("#saveDownloadDir");
+const localVideoPath = document.querySelector("#localVideoPath");
+const chooseLocalVideoBtn = document.querySelector("#chooseLocalVideo");
+const extractLocalVideoTranscriptBtn = document.querySelector("#extractLocalVideoTranscript");
 const batchKind = document.querySelector("#batchKind");
 const batchLimit = document.querySelector("#batchLimit");
 const batchConcurrency = document.querySelector("#batchConcurrency");
@@ -279,6 +282,8 @@ const taskActionLabels = {
 };
 const defaultRewriteReference = "痞里带刺、幽默自嘲、生活化观察、少说废话、有冲突、有观点、适合教育招生、让家长有感觉、不要像官方通稿、不要像AI作文。";
 const rewriteDirectionOptions = ["招生引流", "家长焦虑", "单招升学", "暑假班转化", "英语提分", "朋友圈文案", "短视频口播"];
+const rewriteStyleOptions = ["老板风格", "痞里带刺", "接地气", "温和专业", "强冲突", "强转化"];
+const rewriteHumanizeOptions = ["关闭", "普通", "强", "极强"];
 const rewriteVersionOptions = [
   { key: "strongHook", name: "强钩子版", direction: "招生引流", wordCount: "150字左右" },
   { key: "parentAnxiety", name: "家长焦虑版", direction: "家长焦虑", wordCount: "150字左右" },
@@ -505,6 +510,28 @@ function selectOptionsMarkup(options, selected) {
     .join("");
 }
 
+function rewriteProviderOptionsMarkup(selected = rewriteProvider?.value || "dashscope") {
+  const entries = Object.entries(rewriteProviderConfigs || {});
+  if (!entries.length) {
+    return `<option value="${escapeHtml(selected || "dashscope")}">${escapeHtml(selected || "dashscope")}</option>`;
+  }
+  return entries.map(([id, provider]) => {
+    const disabled = provider.apiKeyConfigured ? "" : " disabled";
+    const suffix = provider.apiKeyConfigured ? "" : "（未配置）";
+    return `<option value="${escapeHtml(id)}"${id === selected ? " selected" : ""}${disabled}>${escapeHtml(provider.label || id)}${suffix}</option>`;
+  }).join("");
+}
+
+function defaultRewriteVersionSettings() {
+  return {
+    provider: rewriteProvider?.value || "dashscope",
+    style: rewriteStyle?.value || "痞里带刺",
+    referenceStyle: rewriteReference?.value || defaultRewriteReference,
+    params: rewriteParams(),
+    humanizeLevel: rewriteHumanizeLevel?.value || "普通",
+  };
+}
+
 function clampRewriteVersionCount(value) {
   const parsed = Number.parseInt(value, 10);
   return Math.max(1, Math.min(maxRewriteVersionCount, Number.isFinite(parsed) ? parsed : 5));
@@ -517,7 +544,7 @@ function rewriteVersionAt(index) {
     direction: rewriteDirection.value || "招生引流",
     wordCount: "150字左右",
   };
-  return rewriteVersionDrafts.get(base.key) || { ...base, content: "" };
+  return rewriteVersionDrafts.get(base.key) || { ...base, ...defaultRewriteVersionSettings(), content: "" };
 }
 
 function countRewriteCharacters(value) {

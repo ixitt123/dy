@@ -259,6 +259,19 @@
           <button class="accent" id="transcriptBtn" type="button">提取文案</button>
         </div>
 
+        <section class="local-video-card" aria-label="本地视频提取文案">
+          <div>
+            <span class="section-eyebrow">Local Video</span>
+            <h2>本地视频提取文案</h2>
+            <p>选择电脑里的视频文件，直接提取中文文案并进入文案库，可继续 AI 分析、AI 改写、TTS 和 AI 导演。</p>
+          </div>
+          <div class="local-video-controls">
+            <input id="localVideoPath" type="text" placeholder="请选择本地视频文件" readonly />
+            <button class="ghost" id="chooseLocalVideo" type="button">选择视频</button>
+            <button class="accent" id="extractLocalVideoTranscript" type="button">提取本地文案</button>
+          </div>
+        </section>
+
         <div class="progress-panel" id="progressPanel" hidden>
           <div class="progress-line">
             <span id="progressLabel">准备下载</span>

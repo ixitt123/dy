@@ -2785,9 +2785,18 @@ function rewriteToText(task, rewrite, format = "txt") {
     .map((version) => [
       `## ${version.name}`,
       "",
+      `- 模型：${version.provider || rewrite.provider || rewrite.model || "-"}`,
       `- 方向：${version.direction || rewrite.direction || "-"}`,
+      `- 语气：${version.style || rewrite.style || "-"}`,
       `- 字数：${version.wordCount || "-"}`,
+      `- 口语化：${version.params?.toneLevel || rewrite.params?.toneLevel || ""}`,
+      `- 冲突度：${version.params?.conflictLevel || rewrite.params?.conflictLevel || ""}`,
+      `- 情绪强度：${version.params?.emotionLevel || rewrite.params?.emotionLevel || ""}`,
+      `- 销售感：${version.params?.salesLevel || rewrite.params?.salesLevel || ""}`,
+      `- 去AI味：${version.humanizeLevel || rewrite.humanizeLevel || "-"}`,
       "",
+      version.referenceStyle ? `参考风格：${version.referenceStyle}` : "",
+      version.referenceStyle ? "" : "",
       version.content || "",
     ].join("\n"))
     .join("\n\n");
