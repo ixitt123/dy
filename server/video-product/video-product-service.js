@@ -973,7 +973,7 @@ export function createVideoProductService({
         bgm_note: packagedBgm ? "已接入本地 BGM 并按语音优先混音。" : "未找到本地 BGM 素材，路线 A 会在质量报告中标记为待补资源。",
         ass_subtitles: true,
         motion_template: project.output_type === "template_mp4",
-        motion_template_version: project.output_type === "template_mp4" ? "route-a-single-caption-v3" : "",
+        motion_template_version: project.output_type === "template_mp4" ? "route-a-single-caption-v4" : "",
         optimized_publish_title: titleText,
         route_a_caption_policy: project.output_type === "template_mp4" ? "single_ass_caption_layer" : "",
         template_background: packagedTemplateBackground ? "image_asset_dark_blur" : "procedural_dark",
@@ -1110,6 +1110,10 @@ export function createVideoProductService({
     const titleLines = splitTitleLines(publishTitle, 11).slice(0, 2);
     const titleLine1 = ffmpegDrawText(titleLines[0] || publishTitle);
     const titleLine2 = ffmpegDrawText(titleLines[1] || "");
+    const voiceStartSeconds = Math.max(0, Number(timelineFiles.timelineJson.tracks?.audio?.[0]?.start || 0));
+    const voiceDelayMs = Math.round(voiceStartSeconds * 1000);
+    const introEnd = Math.max(0.65, voiceStartSeconds).toFixed(2);
+    const titleEnable = `enable='lt(t\\,${introEnd})'`;
     const fontPath = "C:/Windows/Fonts/msyh.ttc";
     const boldFontPath = fs.existsSync("C:/Windows/Fonts/msyhbd.ttc") ? "C:/Windows/Fonts/msyhbd.ttc" : fontPath;
     const outputPath = path.join(timelineFiles.projectDir, `${safeFileName(timelineFiles.timelineJson.name || `timeline_${project.id}`)}_template.mp4`);
@@ -1128,14 +1132,11 @@ export function createVideoProductService({
       ];
     const filters = [
       ...backgroundFilters,
-      `drawbox=x=0:y=0:w=${width}:h=${Math.round(height * 0.22)}:color=0x101B2D@0.72:t=fill`,
       `drawbox=x=0:y=${Math.round(height * 0.77)}:w=${width}:h=${Math.round(height * 0.11)}:color=0x020813@0.62:t=fill`,
-      `drawbox=x=64:y=116:w=${width - 128}:h=2:color=0xE7C76C@0.38:t=fill`,
-      `drawbox=x=72:y=168:w=9:h=132:color=0xE7C76C:t=fill:enable='lt(t\\,3.2)'`,
-      `drawtext=fontfile='${ffmpegFilterPath(boldFontPath)}':text='${titleLine1}':x=106:y=195:fontsize=72:fontcolor=white:box=1:boxcolor=0x07101B@0.58:boxborderw=20:enable='lt(t\\,3.2)'`,
-      titleLine2 ? `drawtext=fontfile='${ffmpegFilterPath(boldFontPath)}':text='${titleLine2}':x=106:y=286:fontsize=72:fontcolor=0xE7C76C:box=1:boxcolor=0x07101B@0.58:boxborderw=20:enable='lt(t\\,3.2)'` : "",
-      `drawbox=x='${Math.round(width * 0.16)}+18*sin(t*0.55)':y=${Math.round(height * 0.43)}:w=${Math.round(width * 0.62)}:h=5:color=0xE7C76C@0.18:t=fill`,
-      `drawbox=x='${Math.round(width * 0.2)}+14*sin(t*0.7)':y=${Math.round(height * 0.47)}:w=${Math.round(width * 0.48)}:h=5:color=0x6CA8FF@0.2:t=fill`,
+      `drawbox=x=0:y=0:w=${width}:h=${Math.round(height * 0.28)}:color=0x07101B@0.86:t=fill:${titleEnable}`,
+      `drawbox=x=72:y=168:w=9:h=132:color=0xE7C76C:t=fill:${titleEnable}`,
+      `drawtext=fontfile='${ffmpegFilterPath(boldFontPath)}':text='${titleLine1}':x=106:y=195:fontsize=72:fontcolor=white:box=1:boxcolor=0x07101B@0.50:boxborderw=20:${titleEnable}`,
+      titleLine2 ? `drawtext=fontfile='${ffmpegFilterPath(boldFontPath)}':text='${titleLine2}':x=106:y=286:fontsize=72:fontcolor=0xE7C76C:box=1:boxcolor=0x07101B@0.50:boxborderw=20:${titleEnable}` : "",
       subtitleFilter,
       `drawbox=x=0:y=${height - 14}:w=${width}:h=14:color=0x152133:t=fill`,
       `drawbox=x=0:y=${height - 14}:w='iw*t/${duration}':h=14:color=0xE7C76C:t=fill`,
@@ -1171,18 +1172,26 @@ export function createVideoProductService({
       "-c:v", "libx264",
       "-pix_fmt", "yuv420p",
     );
+    const voiceDelayFilter = voiceDelayMs > 0 ? `adelay=${voiceDelayMs}:all=1,` : "";
     if (voiceInput >= 0 && bgmInput >= 0) {
       const fadeStart = Math.max(0, duration - 1.2).toFixed(2);
       args.push(
         "-filter_complex",
-        `[${voiceInput}:a]volume=1.0[a_voice];[${bgmInput}:a]volume=0.12,atrim=0:${duration.toFixed(3)},afade=t=in:st=0:d=0.6,afade=t=out:st=${fadeStart}:d=1.2[a_bgm];[a_voice][a_bgm]amix=inputs=2:duration=first:dropout_transition=2[aout]`,
+        `[${voiceInput}:a]${voiceDelayFilter}volume=1.0[a_voice];[${bgmInput}:a]volume=0.12,atrim=0:${duration.toFixed(3)},afade=t=in:st=0:d=0.6,afade=t=out:st=${fadeStart}:d=1.2[a_bgm];[a_voice][a_bgm]amix=inputs=2:duration=first:dropout_transition=2[aout]`,
         "-map", "0:v",
         "-map", "[aout]",
         "-c:a", "aac",
         "-shortest",
       );
     } else if (voiceInput >= 0) {
-      args.push("-map", "0:v", "-map", `${voiceInput}:a`, "-c:a", "aac", "-shortest");
+      args.push(
+        "-filter_complex",
+        `[${voiceInput}:a]${voiceDelayFilter}volume=1.0[aout]`,
+        "-map", "0:v",
+        "-map", "[aout]",
+        "-c:a", "aac",
+        "-shortest",
+      );
     } else if (bgmInput >= 0) {
       args.push("-map", "0:v", "-map", `${bgmInput}:a`, "-c:a", "aac", "-shortest");
     } else {
@@ -1338,7 +1347,7 @@ export function createVideoProductService({
         has_template_background: Boolean(timelineFiles.packagedTemplateBackground),
         publish_title: publishTitle,
         title_optimized: !titleLooksGeneric(publishTitle),
-        motion_template_version: project.output_type === "template_mp4" ? "route-a-single-caption-v3" : "",
+        motion_template_version: project.output_type === "template_mp4" ? "route-a-single-caption-v4" : "",
         alignment_source: project.output_type === "template_mp4"
           ? timelineFiles.packagedScenes[0]?.metadata?.alignment_source || safeJson(timelineFiles.packagedScenes[0]?.metadata_json, {})?.alignment_source || ""
           : "",
