@@ -3220,23 +3220,23 @@ async function loadVideoProductSources(options = {}) {
 }
 
 async function chooseVideoProductLocalImage() {
-  videoProductAssetStatus.textContent = "正在打开图片选择窗口...";
+  if (videoProductAssetStatus) videoProductAssetStatus.textContent = "正在打开图片选择窗口...";
   const data = await fetchJson("/api/local-media/choose-image", { method: "POST" });
   if (data.filePath) {
     videoProductLocalImagePath.value = data.filePath;
-    videoProductAssetStatus.textContent = "已选择本地图片，点击“加入图片库”后可用于成片。";
+    if (videoProductAssetStatus) videoProductAssetStatus.textContent = "已选择本地图片，点击“加入图片库”后可用于成片。";
   } else {
-    videoProductAssetStatus.textContent = "没有选择图片。";
+    if (videoProductAssetStatus) videoProductAssetStatus.textContent = "没有选择图片。";
   }
 }
 
 async function addVideoProductLocalImage() {
   const filePath = videoProductLocalImagePath?.value.trim() || "";
   if (!filePath) {
-    videoProductAssetStatus.textContent = "请先选择本地图片。";
+    if (videoProductAssetStatus) videoProductAssetStatus.textContent = "请先选择本地图片。";
     return;
   }
-  videoProductAssetStatus.textContent = "正在把本地图片加入图片资产库...";
+  if (videoProductAssetStatus) videoProductAssetStatus.textContent = "正在把本地图片加入图片资产库...";
   await fetchJson("/api/image/add-local", {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -3249,35 +3249,35 @@ async function addVideoProductLocalImage() {
   });
   if (videoProductImageSource) videoProductImageSource.value = "all";
   await loadVideoProductSources({ preferredDirectorId: Number(videoProductDirector.value || 0), preferredAudioId: Number(videoProductAudio.value || 0) });
-  videoProductAssetStatus.textContent = "本地图片已加入图片资产库，可以在镜头列表里绑定。";
+  if (videoProductAssetStatus) videoProductAssetStatus.textContent = "本地图片已加入图片资产库，可以在镜头列表里绑定。";
   await previewVideoProductTimeline().catch(() => {});
 }
 
 async function chooseVideoProductLocalBgm() {
-  videoProductAssetStatus.textContent = "正在打开音乐选择窗口...";
+  if (videoProductAssetStatus) videoProductAssetStatus.textContent = "正在打开音乐选择窗口...";
   const data = await fetchJson("/api/local-media/choose-audio", { method: "POST" });
   if (data.filePath) {
     videoProductLocalBgmPath.value = data.filePath;
-    videoProductAssetStatus.textContent = "已选择背景音乐，点击“加入BGM库”后路线 A/B 可自动混音。";
+    if (videoProductAssetStatus) videoProductAssetStatus.textContent = "已选择背景音乐，点击“加入BGM库”后路线 A/B 可自动混音。";
   } else {
-    videoProductAssetStatus.textContent = "没有选择音乐。";
+    if (videoProductAssetStatus) videoProductAssetStatus.textContent = "没有选择音乐。";
   }
 }
 
 async function addVideoProductLocalBgm() {
   const filePath = videoProductLocalBgmPath?.value.trim() || "";
   if (!filePath) {
-    videoProductAssetStatus.textContent = "请先选择背景音乐。";
+    if (videoProductAssetStatus) videoProductAssetStatus.textContent = "请先选择背景音乐。";
     return;
   }
-  videoProductAssetStatus.textContent = "正在把背景音乐加入 BGM 库...";
+  if (videoProductAssetStatus) videoProductAssetStatus.textContent = "正在把背景音乐加入 BGM 库...";
   await fetchJson("/api/video-product/add-bgm", {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ filePath }),
   });
   await loadVideoProductSources({ preferredDirectorId: Number(videoProductDirector.value || 0), preferredAudioId: Number(videoProductAudio.value || 0) });
-  videoProductAssetStatus.textContent = "背景音乐已加入 BGM 库，最终 MP4 会优先语音、自动压低 BGM。";
+  if (videoProductAssetStatus) videoProductAssetStatus.textContent = "背景音乐已加入 BGM 库，最终 MP4 会优先语音、自动压低 BGM。";
 }
 
 function imageSelectMarkup(scene) {
@@ -4757,6 +4757,30 @@ refreshVideoProductSourcesBtn?.addEventListener("click", () => {
     .catch((error) => {
       videoProductStatus.textContent = error instanceof Error ? error.message : String(error);
     });
+});
+
+chooseVideoProductImageBtn?.addEventListener("click", () => {
+  chooseVideoProductLocalImage().catch((error) => {
+    if (videoProductAssetStatus) videoProductAssetStatus.textContent = error instanceof Error ? error.message : String(error);
+  });
+});
+
+addVideoProductImageAssetBtn?.addEventListener("click", () => {
+  addVideoProductLocalImage().catch((error) => {
+    if (videoProductAssetStatus) videoProductAssetStatus.textContent = error instanceof Error ? error.message : String(error);
+  });
+});
+
+chooseVideoProductBgmBtn?.addEventListener("click", () => {
+  chooseVideoProductLocalBgm().catch((error) => {
+    if (videoProductAssetStatus) videoProductAssetStatus.textContent = error instanceof Error ? error.message : String(error);
+  });
+});
+
+addVideoProductBgmAssetBtn?.addEventListener("click", () => {
+  addVideoProductLocalBgm().catch((error) => {
+    if (videoProductAssetStatus) videoProductAssetStatus.textContent = error instanceof Error ? error.message : String(error);
+  });
 });
 
 autoBindTimelineBtn?.addEventListener("click", () => {
