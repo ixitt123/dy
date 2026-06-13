@@ -681,7 +681,7 @@
         </div>
 
         <section class="video-route-map" aria-label="视频成片四条产出路线">
-          <article class="video-route-card route-a">
+          <article class="video-route-card route-a" data-video-output="template_mp4">
             <div class="video-route-top">
               <span>路线 A</span>
               <strong>模板快剪 MP4</strong>
@@ -695,7 +695,7 @@
             </div>
             <small>适合口播、知识讲解、招生宣传和批量账号内容。</small>
           </article>
-          <article class="video-route-card route-b">
+          <article class="video-route-card route-b" data-video-output="mp4">
             <div class="video-route-top">
               <span>路线 B</span>
               <strong>AI 图文成片</strong>
@@ -709,7 +709,7 @@
             </div>
             <small>未来主力路线，适合故事、分镜、教育宣传和电影感图文视频。</small>
           </article>
-          <article class="video-route-card route-c primary">
+          <article class="video-route-card route-c primary" data-video-output="jianying">
             <div class="video-route-top">
               <span>路线 C</span>
               <strong>剪映半成品</strong>
@@ -723,7 +723,7 @@
             </div>
             <small>当前优先路线：AI 做 80%，最后在剪映里保留人工审美。</small>
           </article>
-          <article class="video-route-card route-d">
+          <article class="video-route-card route-d" data-video-output="mix_mp4">
             <div class="video-route-top">
               <span>路线 D</span>
               <strong>下载素材混剪</strong>
@@ -769,9 +769,11 @@
               <label>
                 输出方式
                 <select id="videoProductOutputType">
-                  <option value="jianying" selected>导出剪映草稿半成品</option>
-                  <option value="mp4">自动成片 MP4</option>
-                  <option value="package">导出素材包</option>
+                  <option value="jianying" selected>路线 C：剪映半成品素材包</option>
+                  <option value="mp4">路线 B：AI 图文成片 MP4</option>
+                  <option value="template_mp4">路线 A：模板快剪 MP4</option>
+                  <option value="mix_mp4">路线 D：下载素材混剪 MP4</option>
+                  <option value="package">标准素材包</option>
                 </select>
               </label>
               <div class="video-product-actions">
