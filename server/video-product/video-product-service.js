@@ -309,7 +309,10 @@ export function createVideoProductService({
       directorId,
       ...selectImagesForScenes({ directorId, imageSource, selectedImageIds, manualBindings }),
     };
-    if (!bindingContext.pool.length) blockers.push("缺少可绑定的 AI 图片素材。");
+    if (needsImages && !bindingContext.pool.length) blockers.push("缺少可绑定的 AI 图片素材。");
+
+    const downloadedVideos = needsDownloadedVideo ? listDownloadedVideoAssets(200) : [];
+    if (needsDownloadedVideo && !downloadedVideos.length) blockers.push("缺少可用于混剪的已下载视频素材。");
 
     const rawDurations = directorScenes.map(normalizeSceneDuration);
     const rawTotal = rawDurations.reduce((sum, value) => sum + value, 0) || directorScenes.length * 3;
@@ -319,12 +322,13 @@ export function createVideoProductService({
 
     let cursor = 0;
     const scenes = directorScenes.map((scene, index) => {
-      const image = bindSceneImage(scene, index, bindingContext);
+      const image = needsImages ? bindSceneImage(scene, index, bindingContext) : null;
+      const video = needsDownloadedVideo ? downloadedVideos[index % Math.max(1, downloadedVideos.length)] : null;
       const duration = Number(Math.max(1, rawDurations[index] * scale).toFixed(3));
       const start = Number(cursor.toFixed(3));
       cursor += duration;
       const end = Number(cursor.toFixed(3));
-      const status = image ? "ready" : "blocked";
+      const status = (needsImages && !image) || (needsDownloadedVideo && !video) ? "blocked" : "ready";
       return {
         scene_index: scene.scene_index || index + 1,
         narration_text: scene.voice_text || "",
@@ -345,23 +349,31 @@ export function createVideoProductService({
           emotion: scene.emotion || "",
           asset_type: scene.asset_type || "",
           image_prompt: scene.image_prompt || "",
+          output_type: outputType,
           image_source: image ? {
             id: image.id,
             source_type: image.source_type,
             source_id: image.source_id,
             prompt: image.prompt,
           } : null,
+          video_source: video ? {
+            id: video.id,
+            title: video.title,
+            path: video.path,
+            filename: video.filename,
+            source_url: video.source_url,
+          } : null,
         }),
       };
     });
 
     const missingImages = scenes.filter((scene) => !scene.image_path).map((scene) => scene.scene_index);
-    if (missingImages.length) blockers.push(`缺少镜头图片：${missingImages.join("、")}。`);
+    if (needsImages && missingImages.length) blockers.push(`缺少镜头图片：${missingImages.join("、")}。`);
 
     const tracks = {
       video: scenes.map((scene) => ({
         scene_index: scene.scene_index,
-        source: scene.image_path,
+        source: safeJson(scene.metadata_json, {})?.video_source?.path || scene.image_path || "",
         start: scene.start_time,
         duration: scene.duration,
         motion: scene.motion_type,
@@ -390,9 +402,12 @@ export function createVideoProductService({
       scenes,
       blockers,
       metadata: {
+        output_type: outputType,
+        route_label: OUTPUT_TYPE_LABELS[outputType] || outputType,
         image_source: imageSource,
         selected_image_count: selectedImageIds.length,
         available_image_count: bindingContext.pool.length,
+        downloaded_video_count: downloadedVideos.length,
         audio_duration: Number(audioDuration.toFixed(3)),
         director_scene_count: directorScenes.length,
       },
