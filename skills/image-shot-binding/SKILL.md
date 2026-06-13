@@ -1,52 +1,52 @@
 ---
 name: image-shot-binding
-description: 将 AI 图片生产中心的图片资产按镜头顺序绑定到 Timeline scene。
+description: 将 AI 图片资产或下载素材绑定到 Timeline scene，形成可渲染的视频轨道。
 ---
 
 # Image Shot Binding
 
 ## 输入
 
-- Director Project id。
-- Director scene 列表。
-- AI 图片资产库。
-- 用户手动替换的镜头图片绑定。
+- Timeline scenes。
+- 图片资产库中的 AI 图片。
+- 下载素材库中的视频文件。
+- 可选手动绑定关系 `manual_bindings`。
 
 ## 输出
 
-- scene 级 `image_asset_id` 和 `image_path`。
-- 缺失图片阻塞项。
-- 可人工调整的镜头图片列表。
+- scene 的 `image_asset_id`、`image_path` 或视频素材 metadata。
+- `tracks.video`。
+- 缺图、缺素材或匹配失败的 blockers。
 
 ## 禁止事项
 
-- 不下载外部图片作为默认行为。
-- 不用不存在的路径占位。
-- 不覆盖用户手动选择的镜头图片。
-- 不改变 Director scene 顺序。
+- 不删除原始图片或下载视频。
+- 不跨项目误改已有资产记录。
+- 不在此阶段调用图片生成 Provider。
+- 不把不属于项目输出目录的文件当作已打包结果。
 
 ## 成功标准
 
-- 优先绑定 `source_type=director` 且 `source_id=projectId:sceneIndex` 的图片。
-- 没有精准匹配时按可用图片池顺序绑定。
-- 每个镜头都能在前端查看缩略图和替换图片。
-- 缺图时明确显示阻塞项。
+- 路线 B/C 每个 scene 都能找到图片，或明确列出缺图镜头。
+- 路线 D 每个 scene 都能找到下载视频素材，或明确提示缺素材。
+- 手动绑定优先于自动匹配。
+- 输出包中有可复查的素材副本。
 
 ## 错误处理
 
-- 图片资产库为空时阻塞。
-- 图片文件不存在时跳过并阻塞对应镜头。
-- 手动绑定 id 无效时回退自动匹配。
+- 图片文件不存在时标记该 scene 为 `blocked`。
+- 下载视频不存在时标记路线 D 任务失败。
+- 绑定数量不足时可循环使用素材，但必须保留来源信息。
 
 ## 可扩展 Provider
 
-- 语义相似度图片匹配 Provider。
-- 图片质量评分 Provider。
-- 人物/品牌一致性 Provider。
-- 多图镜头选择 Provider。
+- 语义匹配 Provider。
+- 视觉相似度 Provider。
+- 素材安全审核 Provider。
+- 平台画幅裁切 Provider。
 
 ## 与现有模块的关系
 
-- 读取 AI 图片生产中心 `image_assets`。
-- 输出给 Timeline Project。
-- 被前端视频成片中心用于自动匹配和手动替换。
+- 上游读取图片中心和抖音下载素材库。
+- 下游写入 Timeline scene 和视频轨道。
+- 与 AI 导演的 `image_prompt`、`motion_prompt` 保持映射。
