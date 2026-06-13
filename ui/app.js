@@ -245,6 +245,7 @@ let directorConfig = null;
 let directorSources = [];
 let directorProjectsState = [];
 let activeDirectorProject = null;
+let activeDirectorRailProject = null;
 let activeDirectorTab = "shot-list";
 let directorSourceContext = { taskId: 0, rewriteId: 0, sourceKey: "", sourceType: "manual" };
 let directorPollTimer = 0;
@@ -1893,6 +1894,100 @@ function directorStatusLabel(status) {
   }[status] || status || "未知";
 }
 
+function directorProgressValue(project = {}) {
+  if (project.status === "completed") return 100;
+  if (project.status === "processing") return 58;
+  if (project.status === "failed") return Math.max(10, Number(project.progress || 0) || 58);
+  if (project.status === "waiting" || project.status === "pending") return 18;
+  return Number(project.progress || 0) || 8;
+}
+
+function directorCurrentStep(project = {}) {
+  if (project.status === "completed") return "导演稿已完成并保存";
+  if (project.status === "failed") return "导演稿生成失败";
+  if (project.status === "processing") return "正在生成专业导演稿";
+  if (project.status === "waiting" || project.status === "pending") return "任务已进入队列";
+  return directorStatusLabel(project.status);
+}
+
+function directorOutputLinks(project = {}) {
+  if (!project.id || project.status !== "completed") {
+    return '<span>完成后显示导演稿文件。</span>';
+  }
+  return [
+    ["json", "JSON"],
+    ["md", "Markdown"],
+    ["prompts", "图片提示词"],
+  ].map(([format, label]) => (
+    `<a href="/api/director/export?id=${encodeURIComponent(project.id)}&format=${encodeURIComponent(format)}" target="_blank" rel="noreferrer">${escapeHtml(label)}</a>`
+  )).join("");
+}
+
+function renderDirectorRail(project = activeDirectorRailProject) {
+  if (!railCurrentTask || !project) return;
+  activeDirectorRailProject = project;
+  const meta = project.metadata || {};
+  const progress = Math.max(0, Math.min(100, directorProgressValue(project)));
+  const title = project.title || directorTitle?.value || "AI 导演稿";
+  const scenes = meta.scene_count || project.result?.storyboard?.length || project.scenes?.length || meta.shot_count || directorShotCount?.value || "-";
+  const textPreview = String(project.source_text || directorSourceText?.value || "").trim().slice(0, 72);
+  const error = meta.error || project.error || "";
+  railCurrentTask.innerHTML = `
+    <div class="rail-video-product-card rail-director-card">
+      <strong>#${project.id || "-"} ${escapeHtml(title)}</strong>
+      <small>当前步骤：${escapeHtml(directorCurrentStep(project))}</small>
+      <div class="rail-progress"><i style="width:${progress}%"></i></div>
+      <div class="rail-task-summary">
+        <div><span>进度</span><strong>${progress}%</strong></div>
+        <div><span>状态</span><strong>${escapeHtml(directorStatusLabel(project.status))}</strong></div>
+        <div><span>镜头</span><strong>${escapeHtml(String(scenes))}</strong></div>
+      </div>
+      <div class="rail-task-group">
+        <span class="rail-subheading">导演文案</span>
+        <small>${escapeHtml(textPreview || "等待提交文案。")}</small>
+      </div>
+      ${error ? `<div class="rail-failure-note">错误原因：${escapeHtml(error)}</div>` : ""}
+      <div class="rail-task-group">
+        <span class="rail-subheading">输出文件</span>
+        <div class="video-product-output-files">${directorOutputLinks(project)}</div>
+      </div>
+      <div class="rail-task-actions">
+        <button type="button" data-nav="director">查看导演</button>
+      </div>
+    </div>
+  `;
+}
+
+function renderDirectorRailLists(projects = directorProjectsState) {
+  const rows = Array.isArray(projects) ? projects : [];
+  const running = rows.find((project) => ["waiting", "pending", "processing"].includes(project.status));
+  if (running && (!activeDirectorRailProject || activeDirectorRailProject.status === "completed" || activeDirectorRailProject.status === "failed")) {
+    renderDirectorRail(running);
+  }
+  if (railRecentOutput) {
+    const completed = rows.filter((project) => project.status === "completed").slice(0, 5);
+    if (completed.length) {
+      railRecentOutput.innerHTML = completed.map((project) => `
+        <button class="rail-list-item" type="button" data-nav="director">
+          <span>#${project.id} AI 导演稿 · ${escapeHtml(project.platform || "")}</span>
+          <strong>${escapeHtml(project.title || "导演稿已完成")}</strong>
+        </button>
+      `).join("");
+    }
+  }
+  if (railErrors) {
+    const failed = rows.filter((project) => project.status === "failed").slice(0, 4);
+    if (failed.length) {
+      railErrors.innerHTML = failed.map((project) => `
+        <button class="rail-list-item error-item" type="button" data-nav="director">
+          <span>#${project.id} AI 导演稿失败</span>
+          <strong>${escapeHtml(project.metadata?.error || project.error || "未知错误")}</strong>
+        </button>
+      `).join("");
+    }
+  }
+}
+
 function directorOptions(rows = [], selected = "") {
   return rows.map((item) => `
     <option value="${escapeHtml(item.id)}"${item.id === selected ? " selected" : ""}>${escapeHtml(item.label)}</option>
@@ -1970,6 +2065,7 @@ async function loadDirectorSources({ preserveText = true } = {}) {
 function renderDirectorProjects() {
   if (!directorProjectsState.length) {
     directorProjects.innerHTML = '<div class="director-empty">还没有导演项目。</div>';
+    renderDirectorRailLists(directorProjectsState);
     return;
   }
   directorProjects.innerHTML = directorProjectsState.map((project) => `
@@ -1989,6 +2085,7 @@ function renderDirectorProjects() {
       </div>
     </div>
   `).join("");
+  renderDirectorRailLists(directorProjectsState);
 }
 
 async function loadDirectorProjects() {
@@ -2122,6 +2219,7 @@ function renderDirectorResultView() {
 
 function renderDirectorProject(project) {
   activeDirectorProject = project;
+  renderDirectorRail(project);
   const meta = project.metadata || {};
   if (project.status !== "completed" || !project.result) {
     directorResult.hidden = true;
@@ -2158,6 +2256,12 @@ async function pollDirectorProject(id) {
     directorPollTimer = setTimeout(() => {
       pollDirectorProject(id).catch((error) => {
         directorStatus.textContent = error instanceof Error ? error.message : String(error);
+        renderDirectorRail({
+          ...(activeDirectorRailProject || { id, status: "failed" }),
+          id,
+          status: "failed",
+          error: error instanceof Error ? error.message : String(error),
+        });
       });
     }, 1500);
   }
@@ -2172,6 +2276,14 @@ async function generateDirectorProject() {
   const button = document.querySelector("#generateDirector");
   button.disabled = true;
   directorStatus.textContent = "正在创建导演任务...";
+  renderDirectorRail({
+    id: "",
+    status: "waiting",
+    title: directorTitle.value.trim() || "AI 导演稿",
+    source_text: sourceText,
+    metadata: { shot_count: directorShotCount.value },
+    progress: 8,
+  });
   try {
     const data = await fetchJson("/api/director/generate", {
       method: "POST",
@@ -2196,10 +2308,22 @@ async function generateDirectorProject() {
       }),
     });
     directorStatus.textContent = `导演任务 #${data.project.id} 已进入队列。`;
+    renderDirectorRail(data.project);
     await loadDirectorProjects();
     await pollDirectorProject(data.project.id);
   } catch (error) {
     directorStatus.textContent = error instanceof Error ? error.message : String(error);
+    renderDirectorRail({
+      ...(activeDirectorRailProject || {}),
+      status: "failed",
+      title: directorTitle.value.trim() || "AI 导演稿",
+      source_text: sourceText,
+      metadata: {
+        ...(activeDirectorRailProject?.metadata || {}),
+        error: error instanceof Error ? error.message : String(error),
+      },
+      error: error instanceof Error ? error.message : String(error),
+    });
   } finally {
     button.disabled = false;
   }
