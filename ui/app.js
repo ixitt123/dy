@@ -4571,6 +4571,10 @@ document.querySelector("#exportDirectorPrompts").addEventListener("click", () =>
   directorExport("prompts");
 });
 
+document.querySelector("#exportDirectorChatGptPrompts")?.addEventListener("click", () => {
+  directorExport("chatgpt");
+});
+
 document.querySelector("#sendDirectorToVfo").addEventListener("click", () => {
   sendDirectorProjectToVfo();
 });

@@ -111,6 +111,46 @@ export function createImageService({ baseDir, getSettings, taskStore = null }) {
     };
   }
 
+  function addLocalImageAsset({ filePath, prompt = "", aspectRatio = "9:16", sourceId = "" } = {}) {
+    const resolved = path.resolve(String(filePath || "").trim());
+    if (!resolved || !fs.existsSync(resolved)) throw new Error("请选择存在的本地图片文件。");
+    const ext = path.extname(resolved).toLowerCase();
+    const supported = new Set([".png", ".jpg", ".jpeg", ".webp", ".gif"]);
+    if (!supported.has(ext)) throw new Error("暂只支持 PNG、JPG、WEBP、GIF 图片素材。");
+
+    const assetId = randomUUID();
+    const filename = `local_${Date.now()}_${assetId.slice(0, 8)}${ext}`;
+    const outputPath = path.join(outputDir, filename);
+    fs.copyFileSync(resolved, outputPath);
+    const stats = fs.statSync(outputPath);
+    const assetPrompt = String(prompt || "").trim() || `本地图片素材：${path.basename(resolved)}`;
+
+    db.prepare(`
+      INSERT INTO image_assets (
+        id, job_id, filename, original_path, file_path, file_size, provider, model,
+        prompt, revised_prompt, aspect_ratio, source_url, source_type, source_id
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      assetId,
+      "",
+      filename,
+      outputPath,
+      outputPath,
+      stats.size,
+      "local",
+      "local-file",
+      assetPrompt,
+      assetPrompt,
+      aspectRatio,
+      resolved,
+      "local",
+      sourceId,
+    );
+
+    return publicAsset(db.prepare("SELECT * FROM image_assets WHERE id=?").get(assetId));
+  }
+
   function directorProjectForImages(projectId) {
     if (!taskStore) throw new Error("图片中心尚未接入导演项目库。");
     const project = taskStore.getDirectorProject(Number(projectId || 0));
@@ -356,6 +396,7 @@ export function createImageService({ baseDir, getSettings, taskStore = null }) {
     generateImage,
     generateStoryboardImages,
     storyboardImagePrompts,
+    addLocalImageAsset,
     testProviderConnection,
     getJobs,
     getAssets,
