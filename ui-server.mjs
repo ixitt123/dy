@@ -4565,6 +4565,17 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
+    if (req.method === "POST" && url.pathname === "/api/tts/retry") {
+      const body = JSON.parse(await readBody(req) || "{}");
+      const result = ttsService.retryJob(body.id || body.jobId || 0);
+      if (result.error) {
+        sendJson(res, 400, { ok: false, message: result.error });
+        return;
+      }
+      sendJson(res, 202, { ok: true, job: result.job });
+      return;
+    }
+
     if (req.method === "GET" && url.pathname === "/api/tts/audio") {
       const job = taskStore.getTtsJob(Number(url.searchParams.get("id") || 0));
       const audioPath = job?.audio_path ? path.resolve(job.audio_path) : "";

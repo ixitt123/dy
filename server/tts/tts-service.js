@@ -237,6 +237,28 @@ export function createTtsService({ baseDir, taskStore, getSettings, ffmpegPath }
     return { job: publicJob(job) };
   }
 
+  function retryJob(id) {
+    const source = taskStore.getTtsJob(Number(id || 0));
+    if (!source) return { error: "没有找到这条语音任务。" };
+    const metadata = safeJson(source.metadata_json, {});
+    return enqueue({
+      task_id: source.task_id,
+      rewrite_id: source.rewrite_id,
+      provider: source.provider,
+      text: source.text,
+      voice_id: source.voice_id,
+      voice_name: source.voice_name,
+      voice_asset_id: Number(metadata.voice_asset_id || 0),
+      model: metadata.model || "",
+      speed: source.speed,
+      emotion: source.emotion,
+      style_prompt: source.style_prompt,
+      volume: source.volume,
+      pitch: source.pitch,
+      format: source.format,
+    });
+  }
+
   function listJobs(limit = 50) {
     return taskStore.listTtsJobs({ limit }).map(publicJob);
   }
@@ -270,6 +292,7 @@ export function createTtsService({ baseDir, taskStore, getSettings, ffmpegPath }
 
   return {
     enqueue,
+    retryJob,
     getJob,
     listJobs,
     listVoices,
