@@ -2875,17 +2875,35 @@ function sendDirectorProjectToVfo() {
     });
 }
 
+function imagePromptWithoutReadableText(value) {
+  let text = String(value || "").trim();
+  if (!text) return "";
+  text = text
+    .replace(/([，。,.;；]?\s*)?(白板|黑板|屏幕|海报|背景|墙面|标题|字幕|标签|卡片)[^。；;\n]*(写着|显示|出现|展示|包含|文字|text|words|quote)[^。；;\n]*/gi, " 用抽象图形、人物动作、左右分区和视觉隐喻表达信息，不出现可读文字")
+    .replace(/[“"']([^“”"']{1,80})[”"']/g, "抽象信息符号")
+    .replace(/[A-Za-z][A-Za-z\s'’:-]{2,}/g, (match) => (
+      /\b(scene|shot|cinematic|realistic|commercial|portrait|close|medium|wide|lighting|camera|style|blogger|knowledge|clean|premium|vertical|video)\b/i.test(match)
+        ? match
+        : "抽象信息符号"
+    ))
+    .replace(/拼写\s*(vs|VS|对比|和)\s*开口/g, "左右对比的抽象图形")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+  return text || "用人物动作、空间构图、抽象图形表达本镜头信息，不出现任何可读文字。";
+}
+
 function buildDirectorImagePrompt(project, scene, index = 0, total = 1) {
   const meta = project?.result?.video_meta || {};
   const title = meta.title || project?.title || "短视频分镜";
   const ratio = meta.ratio || project?.metadata?.ratio || "9:16";
   const style = meta.style || project?.visual_style || "高级商业短视频";
   const sceneIndex = scene.scene || index + 1;
-  const basePrompt = String(scene.image_prompt || scene.purpose || scene.subtitle || scene.voice_text || "").trim();
+  const basePrompt = imagePromptWithoutReadableText(scene.image_prompt || scene.purpose || scene.subtitle || scene.voice_text || "");
   return [
     `统一项目：${title}`,
     `统一风格锁定：${style}，商业短视频质感，真实摄影感，电影级布光，干净高级，不廉价，不像PPT。`,
     `统一画幅：${ratio}，全部分镜保持同一色调、同一镜头语言、同一人物/场景风格。`,
+    "统一人物：同一位中国知识博主/老师形象，30岁左右，深色简洁上衣，专业但有亲和力，不要每张换脸、换职业感。",
     "统一色彩：深色高级背景，克制金色或电光蓝点缀，高对比但不过曝，有空间层次。",
     "统一构图：主体明确，前景/中景/背景有纵深，底部保留字幕安全区，适合竖屏发布。",
     `分镜编号：${sceneIndex}/${total}`,
@@ -2893,8 +2911,8 @@ function buildDirectorImagePrompt(project, scene, index = 0, total = 1) {
     `情绪：${scene.emotion || "专业、有冲击力"}`,
     `镜头语言：${scene.camera || "中近景，轻微推近"}；构图：${scene.composition || "主体居中偏上"}`,
     `画面主体：${basePrompt}`,
-    `字幕关键词参考：${String(scene.subtitle || scene.voice_text || "").slice(0, 60)}`,
-    "禁止：乱码文字、水印、奇怪logo、低清、脏乱背景、随机人物变脸、颜色漂移、普通插画感、廉价海报感。",
+    `字幕语义只作为情绪参考，不要把这些字画进图片：${String(scene.subtitle || scene.voice_text || "").slice(0, 60)}`,
+    "禁止：任何可读文字、乱码文字、白板文字、屏幕文字、水印、奇怪logo、低清、脏乱背景、随机人物变脸、颜色漂移、普通插画感、廉价海报感。",
   ].filter(Boolean).join("\n");
 }
 
