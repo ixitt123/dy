@@ -1044,10 +1044,11 @@ function normalizeSettings(settings) {
 
 function normalizeVolcengineArkImageModel(model) {
   const value = String(model || "").trim();
-  if (!value || value === "doubao-seedream-5.0-lite" || value === "doubao-seedream-5-0-lite") {
+  const lower = value.toLowerCase().replace(/_/g, "-");
+  if (!lower || ["doubao-seedream-5.0-lite", "doubao-seedream-5-0-lite", "doubao-seedream-5.0-lite-260128", DEFAULT_VOLCENGINE_ARK_IMAGE_MODEL].includes(lower)) {
     return DEFAULT_VOLCENGINE_ARK_IMAGE_MODEL;
   }
-  if (value === "doubao-seedream-5.0" || value === "doubao-seedream-5-0") {
+  if (["doubao-seedream-5.0", "doubao-seedream-5-0", "doubao-seedream-5.0-260128", "doubao-seedream-5-0-260128"].includes(lower)) {
     return "doubao-seedream-5-0-260128";
   }
   return value;
