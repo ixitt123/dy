@@ -635,6 +635,16 @@ export function createVideoProductService({
     };
   }
 
+  function findTemplateBackgroundAsset({ directorId = 0, ratio = "9:16" } = {}) {
+    const assets = listImageAssets(200)
+      .filter((asset) => asset.original_path && fs.existsSync(asset.original_path))
+      .filter((asset) => !ratio || !asset.aspect_ratio || asset.aspect_ratio === ratio);
+    const directorScoped = assets.find((asset) => (
+      asset.source_type === "director" && String(asset.source_id || "").startsWith(`${directorId}:`)
+    ));
+    return directorScoped || assets[0] || null;
+  }
+
   function selectImagesForScenes({ directorId, imageSource = "director", selectedImageIds = [], manualBindings = {} } = {}) {
     const all = listImageAssets(500);
     const selectedSet = new Set((Array.isArray(selectedImageIds) ? selectedImageIds : [])
@@ -865,6 +875,18 @@ export function createVideoProductService({
       packagedBgm = path.join(audioDir, `bgm${ext}`);
       fs.copyFileSync(bgmSource, packagedBgm);
     }
+    let packagedTemplateBackground = "";
+    if (project.output_type === "template_mp4") {
+      const backgroundAsset = findTemplateBackgroundAsset({
+        directorId: project.source_director_project_id,
+        ratio: project.ratio,
+      });
+      if (backgroundAsset?.original_path && fs.existsSync(backgroundAsset.original_path)) {
+        const ext = path.extname(backgroundAsset.original_path) || ".png";
+        packagedTemplateBackground = path.join(imageDir, `template_background${ext}`);
+        fs.copyFileSync(backgroundAsset.original_path, packagedTemplateBackground);
+      }
+    }
 
     const { width, height } = parseResolution(project.resolution);
     const publishTitle = optimizedPublishTitle({
@@ -907,6 +929,11 @@ export function createVideoProductService({
           volume: 0.12,
           ducking: "voiceover_first",
         }] : [],
+        template_background: packagedTemplateBackground ? [{
+          source: path.relative(projectDir, packagedTemplateBackground),
+          role: "background",
+          fit: "cover_blur_dark",
+        }] : [],
         subtitles: timeline.tracks.subtitles,
       },
       output_type: project.output_type,
@@ -944,6 +971,7 @@ export function createVideoProductService({
         motion_template_version: project.output_type === "template_mp4" ? "route-a-single-caption-v3" : "",
         optimized_publish_title: titleText,
         route_a_caption_policy: project.output_type === "template_mp4" ? "single_ass_caption_layer" : "",
+        template_background: packagedTemplateBackground ? "image_asset_dark_blur" : "procedural_dark",
         publish_package: true,
       },
       audio_binding: timeline.metadata?.audio_binding || null,
@@ -953,6 +981,7 @@ export function createVideoProductService({
         ass_subtitles: path.basename(assPath),
         audio: packagedAudio ? path.relative(projectDir, packagedAudio) : "",
         bgm: packagedBgm ? path.relative(projectDir, packagedBgm) : "",
+        template_background: packagedTemplateBackground ? path.relative(projectDir, packagedTemplateBackground) : "",
         images: packagedScenes.map((scene) => path.relative(projectDir, scene.packaged_image_path || "")),
         videos: packagedScenes.map((scene) => path.relative(projectDir, scene.packaged_video_path || "")).filter(Boolean),
         title: "title.txt",
@@ -979,6 +1008,7 @@ export function createVideoProductService({
       srtPath,
       assPath,
       packagedBgm,
+      packagedTemplateBackground,
       manifestPath,
     };
   }
