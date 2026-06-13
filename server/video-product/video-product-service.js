@@ -863,16 +863,22 @@ export function createVideoProductService({
     if (!ffmpegPath || !fs.existsSync(ffmpegPath)) throw new Error("FFmpeg 不可用，无法渲染模板快剪 MP4。");
     const { width, height } = parseResolution(project.resolution);
     const duration = Math.max(1, Number(timelineFiles.timelineJson.duration || 0));
-    const title = ffmpegDrawText(timelineFiles.timelineJson.name || `Timeline #${project.id}`);
+    const title = ffmpegDrawText(String(timelineFiles.timelineJson.name || `Timeline #${project.id}`).slice(0, 24));
     const fontPath = "C:/Windows/Fonts/msyh.ttc";
     const outputPath = path.join(timelineFiles.projectDir, `${safeFileName(timelineFiles.timelineJson.name || `timeline_${project.id}`)}_template.mp4`);
     const subtitlePath = timelineFiles.assPath || timelineFiles.srtPath;
     const subtitleFilter = `subtitles='${ffmpegFilterPath(subtitlePath)}'`;
+    const ctaText = ffmpegDrawText("关注我，少走弯路");
     const filters = [
       `drawbox=x=0:y=0:w=${width}:h=${height}:color=0x101624:t=fill`,
-      `drawtext=fontfile='${ffmpegFilterPath(fontPath)}':text='${title}':x=(w-text_w)/2:y=140:fontsize=58:fontcolor=white:box=1:boxcolor=black@0.28:boxborderw=24`,
+      `drawbox=x=54:y=96:w=12:h=128:color=0xD7B65B:t=fill`,
+      `drawbox=x=80:y=118:w=${Math.max(500, width - 160)}:h=2:color=0xD7B65B@0.7:t=fill`,
+      `drawbox=x='${width - 260}+18*sin(t*1.6)':y=260:w=180:h=180:color=0x27436E@0.22:t=fill`,
+      `drawbox=x='70+20*sin(t*1.2)':y=${Math.round(height * 0.62)}:w=260:h=120:color=0xD7B65B@0.12:t=fill`,
+      `drawtext=fontfile='${ffmpegFilterPath(fontPath)}':text='${title}':x=86:y=128:fontsize=56:fontcolor=white:line_spacing=10:box=1:boxcolor=black@0.22:boxborderw=22`,
       subtitleFilter,
-      `drawbox=x=0:y=${height - 18}:w='iw*t/${duration}':h=18:color=0x7c5cff:t=fill`,
+      `drawtext=fontfile='${ffmpegFilterPath(fontPath)}':text='${ctaText}':x=(w-text_w)/2:y=${height - 245}:fontsize=38:fontcolor=0xD7B65B:box=1:boxcolor=black@0.35:boxborderw=16:enable='gte(t,${Math.max(0, duration - 4)})'`,
+      `drawbox=x=0:y=${height - 20}:w='iw*t/${duration}':h=20:color=0xD7B65B:t=fill`,
     ].join(",");
     const args = [
       "-y",
@@ -927,7 +933,8 @@ export function createVideoProductService({
     const concatPath = path.join(segmentsDir, "mix_concat.txt");
     fs.writeFileSync(concatPath, concatFileList(segmentPaths), "utf8");
     const outputPath = path.join(timelineFiles.projectDir, `${safeFileName(timelineFiles.timelineJson.name || `timeline_${project.id}`)}_mix.mp4`);
-    const subtitleFilter = `subtitles='${ffmpegFilterPath(timelineFiles.srtPath)}':force_style='Fontsize=16,PrimaryColour=&HFFFFFF&,OutlineColour=&H000000&,BorderStyle=1,Outline=2,Alignment=2,MarginV=120'`;
+    const imageSubtitlePath = timelineFiles.assPath || timelineFiles.srtPath;
+    const subtitleFilter = `subtitles='${ffmpegFilterPath(imageSubtitlePath)}'`;
     const args = [
       "-y",
       "-f", "concat",
