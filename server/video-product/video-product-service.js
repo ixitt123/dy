@@ -285,6 +285,9 @@ export function createVideoProductService({
   async function buildTimeline(input = {}) {
     const directorId = Number(input.source_director_project_id || input.director_project_id || 0);
     const audioAssetId = Number(input.audio_asset_id || input.tts_job_id || 0);
+    const outputType = OUTPUT_TYPES.has(String(input.output_type || "")) ? String(input.output_type) : "jianying";
+    const needsImages = IMAGE_REQUIRED_OUTPUT_TYPES.has(outputType);
+    const needsDownloadedVideo = outputType === "mix_mp4";
     const director = taskStore.getDirectorProject(directorId);
     const audio = taskStore.getTtsJob(audioAssetId);
     const platformId = String(input.platform || director?.platform || "douyin");
