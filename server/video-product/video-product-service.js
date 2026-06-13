@@ -866,7 +866,8 @@ export function createVideoProductService({
     const title = ffmpegDrawText(timelineFiles.timelineJson.name || `Timeline #${project.id}`);
     const fontPath = "C:/Windows/Fonts/msyh.ttc";
     const outputPath = path.join(timelineFiles.projectDir, `${safeFileName(timelineFiles.timelineJson.name || `timeline_${project.id}`)}_template.mp4`);
-    const subtitleFilter = `subtitles='${ffmpegFilterPath(timelineFiles.srtPath)}':force_style='Fontsize=16,PrimaryColour=&HFFFFFF&,OutlineColour=&H000000&,BorderStyle=1,Outline=2,Alignment=2,MarginV=120'`;
+    const subtitlePath = timelineFiles.assPath || timelineFiles.srtPath;
+    const subtitleFilter = `subtitles='${ffmpegFilterPath(subtitlePath)}'`;
     const filters = [
       `drawbox=x=0:y=0:w=${width}:h=${height}:color=0x101624:t=fill`,
       `drawtext=fontfile='${ffmpegFilterPath(fontPath)}':text='${title}':x=(w-text_w)/2:y=140:fontsize=58:fontcolor=white:box=1:boxcolor=black@0.28:boxborderw=24`,
