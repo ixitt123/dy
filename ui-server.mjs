@@ -670,6 +670,103 @@ function chooseLocalVideoFile() {
   });
 }
 
+function chooseLocalAssetFile({ prefix = "choose-local-asset", title = "选择本地素材", filter = "所有文件 (*.*)|*.*" } = {}) {
+  return new Promise((resolve, reject) => {
+    const tempDir = path.join(__dirname, ".data");
+    fs.mkdirSync(tempDir, { recursive: true });
+    const scriptPath = path.join(tempDir, `${prefix}-${process.pid}-${Date.now()}.ps1`);
+    const outputPath = path.join(tempDir, `${prefix}-${process.pid}-${Date.now()}.txt`);
+    const script = [
+      "param(",
+      "  [Parameter(Mandatory=$true)][string]$OutputPath,",
+      "  [string]$InitialPath = \"\"",
+      ")",
+      "$ErrorActionPreference = \"Stop\"",
+      "Add-Type -AssemblyName System.Windows.Forms",
+      "Add-Type -AssemblyName System.Drawing",
+      "$owner = New-Object System.Windows.Forms.Form",
+      `$owner.Text = ${JSON.stringify(title)}`,
+      "$owner.TopMost = $true",
+      "$owner.ShowInTaskbar = $false",
+      "$owner.StartPosition = \"CenterScreen\"",
+      "$owner.Size = New-Object System.Drawing.Size(1, 1)",
+      "$owner.Opacity = 0",
+      "$dialog = New-Object System.Windows.Forms.OpenFileDialog",
+      `$dialog.Title = ${JSON.stringify(title)}`,
+      `$dialog.Filter = ${JSON.stringify(filter)}`,
+      "$dialog.Multiselect = $false",
+      "if ($InitialPath -and (Test-Path -LiteralPath $InitialPath)) {",
+      "  $dialog.InitialDirectory = $InitialPath",
+      "}",
+      "try {",
+      "  $owner.Show()",
+      "  $owner.Activate()",
+      "  $result = $dialog.ShowDialog($owner)",
+      "  if ($result -eq [System.Windows.Forms.DialogResult]::OK) {",
+      "    [System.IO.File]::WriteAllText($OutputPath, $dialog.FileName, [System.Text.UTF8Encoding]::new($false))",
+      "  }",
+      "} finally {",
+      "  $dialog.Dispose()",
+      "  $owner.Close()",
+      "  $owner.Dispose()",
+      "}",
+    ].join("\r\n");
+    fs.writeFileSync(scriptPath, `\uFEFF${script}`, "utf8");
+
+    const child = spawn("powershell.exe", [
+      "-NoProfile",
+      "-STA",
+      "-ExecutionPolicy",
+      "Bypass",
+      "-File",
+      scriptPath,
+      outputPath,
+      downloadsDir,
+    ], {
+      windowsHide: true,
+      stdio: ["ignore", "ignore", "pipe"],
+    });
+    let stderr = "";
+    child.stderr.on("data", (chunk) => { stderr += chunk.toString("utf8"); });
+    child.on("error", (error) => {
+      try { fs.unlinkSync(scriptPath); } catch {}
+      try { fs.unlinkSync(outputPath); } catch {}
+      reject(error);
+    });
+    child.on("close", (code) => {
+      try { fs.unlinkSync(scriptPath); } catch {}
+      if (code !== 0) {
+        reject(new Error(stderr.trim() || `${title}失败`));
+        return;
+      }
+      let selected = "";
+      try {
+        selected = fs.readFileSync(outputPath, "utf8").replace(/^\uFEFF/, "").trim();
+      } catch {
+        selected = "";
+      }
+      try { fs.unlinkSync(outputPath); } catch {}
+      resolve(selected);
+    });
+  });
+}
+
+function chooseLocalImageFile() {
+  return chooseLocalAssetFile({
+    prefix: "choose-local-image",
+    title: "选择本地图片素材",
+    filter: "图片素材 (*.png;*.jpg;*.jpeg;*.webp;*.gif)|*.png;*.jpg;*.jpeg;*.webp;*.gif|所有文件 (*.*)|*.*",
+  });
+}
+
+function chooseLocalAudioFile() {
+  return chooseLocalAssetFile({
+    prefix: "choose-local-audio",
+    title: "选择本地背景音乐",
+    filter: "音频文件 (*.mp3;*.wav;*.m4a;*.aac;*.ogg)|*.mp3;*.wav;*.m4a;*.aac;*.ogg|所有文件 (*.*)|*.*",
+  });
+}
+
 function openExplorerPath(targetPath, options = {}) {
   const mode = options.select ? "select" : "folder";
   return new Promise((resolve) => {
