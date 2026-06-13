@@ -305,7 +305,7 @@ export class AliyunBailianProvider extends TtsProviderAdapter {
     }
 
     try {
-      const response = await fetch(qwen ? QWEN_TTS_ENDPOINT : COSYVOICE_ENDPOINT, {
+      const response = await fetchWithRetry(qwen ? QWEN_TTS_ENDPOINT : COSYVOICE_ENDPOINT, {
         method: "POST",
         headers: {
           authorization: `Bearer ${apiKey}`,
@@ -323,7 +323,12 @@ export class AliyunBailianProvider extends TtsProviderAdapter {
       }
       if (!response.ok || data.code || data.status_code >= 400) {
         const message = data.message || data.code || `阿里云百炼请求失败（${response.status}）`;
-        return this.failure(message);
+        const detail = [
+          data.request_id ? `request_id=${data.request_id}` : "",
+          data.code ? `code=${data.code}` : "",
+          raw ? raw.slice(0, 600) : "",
+        ].filter(Boolean).join("；");
+        return this.failure(message, detail);
       }
       const audioUrl = data.output?.audio?.url || data.output?.audio_url || data.audio?.url || "";
       if (!audioUrl) return this.failure("阿里云百炼未返回可下载的音频地址。");
@@ -345,7 +350,7 @@ export class AliyunBailianProvider extends TtsProviderAdapter {
         },
       });
     } catch (error) {
-      return this.failure("语音生成失败。", redactSecrets(error instanceof Error ? error.message : error, [apiKey]));
+      return this.failure("语音生成失败。", redactSecrets(detailedError(error), [apiKey]));
     }
   }
 }
