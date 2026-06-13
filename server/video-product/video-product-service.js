@@ -12,7 +12,17 @@ const TIMELINE_STATUSES = new Set([
   "failed",
 ]);
 
-const OUTPUT_TYPES = new Set(["jianying", "mp4", "package"]);
+const OUTPUT_TYPES = new Set(["jianying", "mp4", "package", "template_mp4", "mix_mp4"]);
+const IMAGE_REQUIRED_OUTPUT_TYPES = new Set(["jianying", "mp4", "package"]);
+const MP4_OUTPUT_TYPES = new Set(["mp4", "template_mp4", "mix_mp4"]);
+
+const OUTPUT_TYPE_LABELS = {
+  jianying: "路线 C：剪映半成品素材包",
+  mp4: "路线 B：AI 图文成片 MP4",
+  template_mp4: "路线 A：模板快剪 MP4",
+  mix_mp4: "路线 D：下载素材混剪 MP4",
+  package: "标准素材包",
+};
 
 const PLATFORM_PRESETS = {
   douyin: { label: "抖音", ratio: "9:16", resolution: "1080x1920", fps: 30 },
@@ -138,6 +148,18 @@ function ffmpegFilterPath(filePath) {
     .replace(/'/g, "\\'");
 }
 
+function ffmpegDrawText(value) {
+  return String(value || "")
+    .replace(/\\/g, "\\\\")
+    .replace(/:/g, "\\:")
+    .replace(/'/g, "\\'")
+    .replace(/\n/g, " ");
+}
+
+function concatFileList(files) {
+  return files.map((file) => `file '${file.replace(/\\/g, "/").replace(/'/g, "'\\''")}'`).join("\n");
+}
+
 function publicTimelineProject(row, scenes = [], { includeScenes = true } = {}) {
   if (!row) return null;
   const metadata = safeJson(row.metadata_json, {});
@@ -177,6 +199,28 @@ export function createVideoProductService({
       .filter((asset) => asset.original_path && fs.existsSync(asset.original_path));
   }
 
+  function listDownloadedVideoAssets(limit = 200) {
+    const seen = new Set();
+    return taskStore.allTasks()
+      .filter((task) => task.video_path && fs.existsSync(task.video_path))
+      .map((task) => {
+        const resolved = path.resolve(task.video_path);
+        if (seen.has(resolved)) return null;
+        seen.add(resolved);
+        return {
+          id: task.id,
+          title: task.title || task.video_id || path.basename(resolved),
+          video_id: task.video_id || "",
+          path: resolved,
+          filename: path.basename(resolved),
+          source_url: task.url || "",
+          created_at: task.completed_at || task.updated_at || task.created_at || "",
+        };
+      })
+      .filter(Boolean)
+      .slice(0, Math.max(1, Math.min(500, Number(limit) || 200)));
+  }
+
   function sourceProject(row, { includeScenes = true } = {}) {
     if (!row) return null;
     return publicTimelineProject(row, taskStore.listTimelineScenes(row.id), { includeScenes });
@@ -200,12 +244,15 @@ export function createVideoProductService({
         label: `${job.voice_name || job.voice_id || job.provider} · #${job.id}`,
       }));
     const imageAssets = listImageAssets(500);
+    const downloadedVideos = listDownloadedVideoAssets(200);
     return {
       directors,
       audioJobs,
       imageAssets,
+      downloadedVideos,
       timelines: taskStore.listTimelineProjects({ limit: 50 }).map((row) => sourceProject(row, { includeScenes: false })),
       platforms: Object.entries(PLATFORM_PRESETS).map(([id, value]) => ({ id, ...value })),
+      outputTypes: Object.entries(OUTPUT_TYPE_LABELS).map(([id, label]) => ({ id, label })),
     };
   }
 
