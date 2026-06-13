@@ -3287,6 +3287,132 @@ function createTranscriptJob(shareLink, apiKey) {
   return job;
 }
 
+function isSupportedLocalVideo(filePath) {
+  const extension = path.extname(filePath).toLowerCase();
+  return [".mp4", ".mov", ".mkv", ".avi", ".m4v", ".webm"].includes(extension);
+}
+
+function createLocalVideoTranscriptJob(filePath, apiKey) {
+  const resolvedPath = path.resolve(String(filePath || "").trim());
+  if (!resolvedPath || !fs.existsSync(resolvedPath)) throw new Error("没有找到本地视频文件");
+  const stat = fs.statSync(resolvedPath);
+  if (!stat.isFile() || !isSupportedLocalVideo(resolvedPath)) throw new Error("请选择 mp4、mov、mkv、avi、m4v 或 webm 视频文件");
+  const activeApiKey = String(apiKey || getActiveProviderApiKey() || "").trim();
+  if (!activeApiKey) throw new Error("请先在系统设置保存 DashScope API Key，用于本地视频语音识别");
+
+  fs.mkdirSync(localMediaDir, { recursive: true });
+  const title = path.basename(resolvedPath, path.extname(resolvedPath));
+  const videoInfo = {
+    title,
+    videoId: `local_${createHash("sha1").update(resolvedPath).digest("hex").slice(0, 12)}`,
+    downloadUrl: `file://${resolvedPath}`,
+  };
+  const imported = taskStore.importTasks([{
+    kind: "local-video",
+    taskAction: "local-transcript",
+    url: resolvedPath,
+    normalizedUrl: `local:${resolvedPath.toLowerCase()}`,
+    sourceText: resolvedPath,
+    transcriptEnabled: true,
+    analysisEnabled: true,
+    onlyTranscript: true,
+  }]);
+  const task = imported.tasks[0] || imported.duplicates[0];
+  if (!task) throw new Error("本地视频任务创建失败");
+
+  const id = `local-${task.id}-${Date.now()}`;
+  const job = {
+    id,
+    taskId: task.id,
+    status: "running",
+    percent: 0,
+    message: "准备提取本地视频文案",
+    text: "",
+    transcriptPath: "",
+    files: listDownloads(),
+    startedAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+  transcriptJobs.set(id, job);
+  const updateJob = (changes) => {
+    Object.assign(job, changes, { updatedAt: new Date().toISOString() });
+  };
+
+  taskStore.updateTask(task.id, {
+    kind: "local-video",
+    task_action: "local-transcript",
+    status: TASK_STATUS.TRANSCRIBING,
+    progress: 8,
+    title,
+    video_id: videoInfo.videoId,
+    video_path: resolvedPath,
+    file_size: stat.size,
+    message: "准备提取本地视频文案",
+    error: "",
+  });
+
+  (async () => {
+    const transcriptText = await transcribeLocalMediaWithDashScope(activeApiKey, resolvedPath, (progress) => {
+      const percent = Math.max(10, Math.min(92, Math.round(Number(progress.percent || 0))));
+      updateJob({ percent, message: progress.message || "正在识别本地视频" });
+      taskStore.updateTask(task.id, {
+        status: TASK_STATUS.TRANSCRIBING,
+        progress: percent,
+        message: progress.message || "正在识别本地视频",
+      });
+    });
+    const transcriptPath = saveTranscript(videoInfo, transcriptText);
+    updateJob({ percent: 94, message: "正在进行 AI 分析" });
+    taskStore.updateTask(task.id, {
+      txt_path: transcriptPath,
+      progress: 94,
+      message: "正在进行 AI 分析",
+    });
+    const analysis = await analyzeTranscriptWithDashScope(activeApiKey, transcriptText, videoInfo);
+    const analysisPath = saveAnalysis(videoInfo, analysis);
+    taskStore.updateTask(task.id, {
+      txt_path: transcriptPath,
+      analysis_path: analysisPath,
+      ai_json: JSON.stringify(analysis),
+      status: TASK_STATUS.DONE,
+      progress: 100,
+      message: "本地视频文案和 AI 分析完成",
+      completed_at: new Date().toISOString(),
+    });
+    updateJob({
+      status: "done",
+      percent: 100,
+      message: "本地视频文案和 AI 分析完成",
+      text: transcriptText,
+      transcriptPath,
+      analysisPath,
+      files: listDownloads(),
+    });
+  })()
+    .catch((error) => {
+      const message = error instanceof Error ? error.message : String(error);
+      taskStore.updateTask(task.id, {
+        status: TASK_STATUS.FAILED,
+        progress: Math.max(taskStore.getTask(task.id)?.progress || 0, 1),
+        message: "本地视频文案提取失败",
+        error: message,
+        completed_at: new Date().toISOString(),
+      });
+      updateJob({
+        status: "error",
+        message,
+        text: message,
+        files: listDownloads(),
+      });
+    })
+    .finally(() => {
+      setTimeout(() => transcriptJobs.delete(id), 30 * 60 * 1000);
+      scheduleShutdownIfIdle();
+    });
+
+  return job;
+}
+
 function getBatchSettings() {
   return readSettings().batch;
 }
