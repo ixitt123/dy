@@ -1087,6 +1087,51 @@ function setupImageStudio() {
   document.getElementById("generateDirectorPromptImage")?.addEventListener("click", () => {
     if (applyImportedPrompt()) document.getElementById("imageGenerateBtn")?.click();
   });
+  document.getElementById("generateDirectorPromptSet")?.addEventListener("click", async () => {
+    const projectId = activeDirectorImageImport?.projectId || importedDirectorImagePrompts[0]?.projectId || 0;
+    if (!projectId) {
+      setStatus("请先从 AI 导演导入分镜。", "error");
+      return;
+    }
+    const providerId = providerSelect?.value || "volcengine_ark";
+    const provider = imageProviderConfigs.find((item) => item.id === providerId);
+    if (provider && !provider.configured) {
+      setStatus(`${provider.label} 未配置 API Key，请先到系统设置保存。`, "error");
+      return;
+    }
+    const btn = document.getElementById("generateDirectorPromptSet");
+    const aspectRatio = document.getElementById("imageAspectRatio")?.value || "9:16";
+    btn.disabled = true;
+    btn.textContent = "整套生成中...";
+    setStatus(`正在生成整套分镜图：${importedDirectorImagePrompts.length || ""} 个镜头，统一风格锁定中...`, "info");
+    try {
+      const res = await fetch("/api/image/generate-storyboard", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          provider: providerId,
+          projectId,
+          aspectRatio,
+          countPerScene: 1,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || data.ok === false) throw new Error(data.error || data.message || `HTTP ${res.status}`);
+      const firstError = (data.results || []).find((item) => !item.success)?.error || "";
+      setStatus(
+        `整套分镜图完成：成功 ${data.success || 0} 张，失败 ${data.failed || 0} 张`
+          + (firstError ? `；首个错误：${firstError}` : ""),
+        data.success > 0 ? "ok" : "error",
+      );
+      renderResults(data.results || [], `Director #${projectId} 整套分镜图`);
+    } catch (error) {
+      setStatus(`整套分镜图生成失败：${error instanceof Error ? error.message : String(error)}`, "error");
+      await refreshImageConfigStatus();
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "一键生成整套分镜图";
+    }
+  });
   document.getElementById("clearDirectorPrompts")?.addEventListener("click", () => {
     importedDirectorImagePrompts = [];
     activeDirectorImageImport = null;

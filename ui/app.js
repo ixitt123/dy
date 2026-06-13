@@ -2723,13 +2723,36 @@ function sendDirectorProjectToVfo() {
     });
 }
 
+function buildDirectorImagePrompt(project, scene, index = 0, total = 1) {
+  const meta = project?.result?.video_meta || {};
+  const title = meta.title || project?.title || "短视频分镜";
+  const ratio = meta.ratio || project?.metadata?.ratio || "9:16";
+  const style = meta.style || project?.visual_style || "高级商业短视频";
+  const sceneIndex = scene.scene || index + 1;
+  const basePrompt = String(scene.image_prompt || scene.purpose || scene.subtitle || scene.voice_text || "").trim();
+  return [
+    `统一项目：${title}`,
+    `统一风格锁定：${style}，商业短视频质感，真实摄影感，电影级布光，干净高级，不廉价，不像PPT。`,
+    `统一画幅：${ratio}，全部分镜保持同一色调、同一镜头语言、同一人物/场景风格。`,
+    "统一色彩：深色高级背景，克制金色或电光蓝点缀，高对比但不过曝，有空间层次。",
+    "统一构图：主体明确，前景/中景/背景有纵深，底部保留字幕安全区，适合竖屏发布。",
+    `分镜编号：${sceneIndex}/${total}`,
+    `本镜头任务：${scene.purpose || "推动叙事"}`,
+    `情绪：${scene.emotion || "专业、有冲击力"}`,
+    `镜头语言：${scene.camera || "中近景，轻微推近"}；构图：${scene.composition || "主体居中偏上"}`,
+    `画面主体：${basePrompt}`,
+    `字幕关键词参考：${String(scene.subtitle || scene.voice_text || "").slice(0, 60)}`,
+    "禁止：乱码文字、水印、奇怪logo、低清、脏乱背景、随机人物变脸、颜色漂移、普通插画感、廉价海报感。",
+  ].filter(Boolean).join("\n");
+}
+
 function directorScenesForImage(project = activeDirectorProject) {
   const scenes = Array.isArray(project?.result?.storyboard) ? project.result.storyboard : [];
   return scenes
     .map((scene, index) => ({
       scene: scene.scene || index + 1,
       title: `Scene ${scene.scene || index + 1}`,
-      prompt: String(scene.image_prompt || "").trim(),
+      prompt: buildDirectorImagePrompt(project, scene, index, scenes.length),
       motionPrompt: String(scene.motion_prompt || "").trim(),
       subtitle: String(scene.subtitle || scene.voice_text || "").trim(),
     }))

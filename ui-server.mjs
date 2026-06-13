@@ -277,6 +277,7 @@ const vfoService = createVfoService({
 const imageService = createImageService({
   baseDir: __dirname,
   getSettings: readSettings,
+  taskStore,
 });
 
 const videoProductService = createVideoProductService({
@@ -5057,6 +5058,22 @@ const server = http.createServer(async (req, res) => {
             sourceId: body.sourceId || "",
           });
           sendJson(res, 200, result);
+        } catch (e) {
+          sendJson(res, 400, { ok: false, error: e.message });
+        }
+        return;
+      }
+
+      if (req.method === "POST" && route === "generate-storyboard") {
+        const body = JSON.parse(await readBody(req) || "{}");
+        try {
+          const result = await imageService.generateStoryboardImages({
+            provider: body.provider || "",
+            projectId: Number(body.projectId || body.directorProjectId || 0),
+            aspectRatio: body.aspectRatio || "9:16",
+            countPerScene: Math.min(Math.max(Number(body.countPerScene) || 1, 1), 4),
+          });
+          sendJson(res, 200, { ok: true, ...result });
         } catch (e) {
           sendJson(res, 400, { ok: false, error: e.message });
         }
