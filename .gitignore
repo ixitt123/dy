@@ -22,6 +22,8 @@ vfo/*
 !asset-plans/.gitkeep
 !asset-packages/.gitkeep
 !vfo/.gitkeep
+video-products/*
+!video-products/.gitkeep
 
 settings.json
 ui-server.pid
