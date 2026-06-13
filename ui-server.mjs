@@ -1046,8 +1046,13 @@ function publicUnifiedProviders(settings = readSettings()) {
       label: "火山方舟 Seedream",
       description: "主力图片生成 Provider，调用火山方舟 Seedream 图片生成接口生成本地图片资产。",
       baseUrl: "https://ark.cn-beijing.volces.com/api/v3",
-      model: "doubao-seedream-5.0-lite",
-      models: ["doubao-seedream-5.0-lite"],
+      model: DEFAULT_VOLCENGINE_ARK_IMAGE_MODEL,
+      models: [
+        DEFAULT_VOLCENGINE_ARK_IMAGE_MODEL,
+        "doubao-seedream-5-0-260128",
+        "doubao-seedream-4-5-251128",
+        "doubao-seedream-4-0-250828",
+      ],
       applyUrl: "https://console.volcengine.com/ark/region:ark+cn-beijing/apiKey",
       balanceUrl: "https://console.volcengine.com/finance",
     },
@@ -1214,7 +1219,9 @@ function saveUnifiedProvider(settings, body) {
     if (body.setDefault === true) {
       settings.modelMap.image = {
         provider: id,
-        model: model || settings.imageProviders[id].model || (id === "volcengine_ark" ? "doubao-seedream-5.0-lite" : "flux-dev"),
+        model: id === "volcengine_ark"
+          ? normalizeVolcengineArkImageModel(model || settings.imageProviders[id].model)
+          : model || settings.imageProviders[id].model || "flux-dev",
       };
       settings.modelMapping = settings.modelMap;
     }
