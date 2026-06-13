@@ -1,0 +1,220 @@
+{
+  "note": "标准剪映半成品参考包，不伪造剪映私有工程格式。",
+  "version": 1,
+  "name": "强钩子版导演稿",
+  "ratio": "9:16",
+  "resolution": "1080x1920",
+  "fps": 30,
+  "timeline_file": "timeline.json",
+  "subtitles_file": "subtitles.srt",
+  "tracks": {
+    "video": [
+      {
+        "scene_index": 1,
+        "source": "..\\..",
+        "start": 0,
+        "duration": 2.144,
+        "motion": "Static camera, slight breathing movement",
+        "transition": "straight_cut"
+      },
+      {
+        "scene_index": 2,
+        "source": "..\\..",
+        "start": 2.144,
+        "duration": 2.863,
+        "motion": "Slight handheld shake",
+        "transition": "straight_cut"
+      },
+      {
+        "scene_index": 3,
+        "source": "..\\..",
+        "start": 5.007,
+        "duration": 2.863,
+        "motion": "Static, slight finger movement",
+        "transition": "straight_cut"
+      },
+      {
+        "scene_index": 4,
+        "source": "..\\..",
+        "start": 7.87,
+        "duration": 2.863,
+        "motion": "Slow push in to emphasize exhaustion",
+        "transition": "straight_cut"
+      },
+      {
+        "scene_index": 5,
+        "source": "..\\..",
+        "start": 10.733,
+        "duration": 2.863,
+        "motion": "Static, slight zoom in on face",
+        "transition": "straight_cut"
+      },
+      {
+        "scene_index": 6,
+        "source": "..\\..",
+        "start": 13.596,
+        "duration": 4.288,
+        "motion": "Static screen recording, cursor clicks",
+        "transition": "straight_cut"
+      },
+      {
+        "scene_index": 7,
+        "source": "..\\..",
+        "start": 17.884,
+        "duration": 2.863,
+        "motion": "Static, subtle scale up",
+        "transition": "straight_cut"
+      },
+      {
+        "scene_index": 8,
+        "source": "..\\..",
+        "start": 20.747,
+        "duration": 2.863,
+        "motion": "Static, slight forward lean",
+        "transition": "straight_cut"
+      },
+      {
+        "scene_index": 9,
+        "source": "..\\..",
+        "start": 23.61,
+        "duration": 2.863,
+        "motion": "Static, text pulses slightly",
+        "transition": "straight_cut"
+      },
+      {
+        "scene_index": 10,
+        "source": "..\\..",
+        "start": 26.473,
+        "duration": 2.144,
+        "motion": "Static, cursor movement",
+        "transition": "straight_cut"
+      },
+      {
+        "scene_index": 11,
+        "source": "..\\..",
+        "start": 28.617,
+        "duration": 2.144,
+        "motion": "Static, slight pan to show both devices",
+        "transition": "straight_cut"
+      },
+      {
+        "scene_index": 12,
+        "source": "..\\..",
+        "start": 30.761,
+        "duration": 2.144,
+        "motion": "Static, slight zoom in",
+        "transition": "straight_cut"
+      },
+      {
+        "scene_index": 13,
+        "source": "..\\..",
+        "start": 32.905,
+        "duration": 2.144,
+        "motion": "Static, text flashes",
+        "transition": "straight_cut"
+      },
+      {
+        "scene_index": 14,
+        "source": "..\\..",
+        "start": 35.049,
+        "duration": 2.132,
+        "motion": "Static, slight forward lean",
+        "transition": "straight_cut"
+      }
+    ],
+    "audio": [
+      {
+        "asset_id": 1,
+        "source": "media\\audio\\voiceover.mp3",
+        "start": 0,
+        "duration": 37.181
+      }
+    ],
+    "subtitles": [
+      {
+        "scene_index": 1,
+        "text": "刷到这条，先别划走",
+        "start": 0,
+        "duration": 2.144
+      },
+      {
+        "scene_index": 2,
+        "text": "别急着砸钱补课",
+        "start": 2.144,
+        "duration": 2.863
+      },
+      {
+        "scene_index": 3,
+        "text": "平台限制、分辨率糊、拖不动",
+        "start": 5.007,
+        "duration": 2.863
+      },
+      {
+        "scene_index": 4,
+        "text": "每天熬夜到两点，孩子哭闹",
+        "start": 7.87,
+        "duration": 2.863
+      },
+      {
+        "scene_index": 5,
+        "text": "发现个神器，免费开源",
+        "start": 10.733,
+        "duration": 2.863
+      },
+      {
+        "scene_index": 6,
+        "text": "全平台下载，音画字幕随便拆",
+        "start": 13.596,
+        "duration": 4.288
+      },
+      {
+        "scene_index": 7,
+        "text": "先抄个近道再说",
+        "start": 17.884,
+        "duration": 2.863
+      },
+      {
+        "scene_index": 8,
+        "text": "私信我，免费领资料",
+        "start": 20.747,
+        "duration": 2.863
+      },
+      {
+        "scene_index": 9,
+        "text": "现在行动，立刻改变！",
+        "start": 23.61,
+        "duration": 2.863
+      },
+      {
+        "scene_index": 10,
+        "text": "操作简单，一键搞定",
+        "start": 26.473,
+        "duration": 2.144
+      },
+      {
+        "scene_index": 11,
+        "text": "手机电脑都能用",
+        "start": 28.617,
+        "duration": 2.144
+      },
+      {
+        "scene_index": 12,
+        "text": "完全免费",
+        "start": 30.761,
+        "duration": 2.144
+      },
+      {
+        "scene_index": 13,
+        "text": "名额有限，先到先得",
+        "start": 32.905,
+        "duration": 2.144
+      },
+      {
+        "scene_index": 14,
+        "text": "现在就私信我，免费领取！",
+        "start": 35.049,
+        "duration": 2.132
+      }
+    ]
+  }
+}
