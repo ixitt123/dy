@@ -15,6 +15,7 @@ const TIMELINE_STATUSES = new Set([
 const OUTPUT_TYPES = new Set(["jianying", "mp4", "package", "template_mp4", "mix_mp4"]);
 const IMAGE_REQUIRED_OUTPUT_TYPES = new Set(["jianying", "mp4", "package"]);
 const MP4_OUTPUT_TYPES = new Set(["mp4", "template_mp4", "mix_mp4"]);
+const ROUTE_A_INTRO_SECONDS = 1.35;
 
 const OUTPUT_TYPE_LABELS = {
   jianying: "路线 C：剪映半成品素材包",
@@ -718,22 +719,25 @@ export function createVideoProductService({
       })
       : [];
     const timelineSourceScenes = routeASubtitleScenes.length ? routeASubtitleScenes : directorScenes;
+    const routeAIntroSeconds = outputType === "template_mp4" && routeASubtitleScenes.length ? ROUTE_A_INTRO_SECONDS : 0;
     const rawDurations = timelineSourceScenes.map(normalizeSceneDuration);
     const rawTotal = rawDurations.reduce((sum, value) => sum + value, 0) || directorScenes.length * 3;
-    const targetDuration = audioDuration > 0 ? audioDuration : rawTotal;
-    const scale = rawTotal > 0 ? targetDuration / rawTotal : 1;
+    const speechTargetDuration = audioDuration > 0 ? audioDuration : rawTotal;
+    const timelineTargetDuration = speechTargetDuration + routeAIntroSeconds;
+    const scale = rawTotal > 0 ? speechTargetDuration / rawTotal : 1;
 
-    let cursor = 0;
+    let cursor = routeAIntroSeconds;
     const scenes = timelineSourceScenes.map((scene, index) => {
       const image = needsImages ? bindSceneImage(scene, index, bindingContext) : null;
       const video = needsDownloadedVideo ? downloadedVideos[index % Math.max(1, downloadedVideos.length)] : null;
       const isLastScene = index === timelineSourceScenes.length - 1;
+      const speechCursor = Math.max(0, cursor - routeAIntroSeconds);
       const duration = isLastScene
-        ? Number(Math.max(0.75, targetDuration - cursor).toFixed(3))
+        ? Number(Math.max(0.75, speechTargetDuration - speechCursor).toFixed(3))
         : Number(Math.max(0.75, rawDurations[index] * scale).toFixed(3));
       const start = Number(cursor.toFixed(3));
       cursor += duration;
-      const end = Number((isLastScene ? targetDuration : cursor).toFixed(3));
+      const end = Number((isLastScene ? routeAIntroSeconds + speechTargetDuration : cursor).toFixed(3));
       cursor = end;
       const status = (needsImages && !image) || (needsDownloadedVideo && !video) ? "blocked" : "ready";
       return {
@@ -790,8 +794,8 @@ export function createVideoProductService({
       audio: audio?.audio_path ? [{
         asset_id: audio.id,
         source: audio.audio_path,
-        start: 0,
-        duration: targetDuration,
+        start: routeAIntroSeconds,
+        duration: speechTargetDuration,
       }] : [],
       subtitles: scenes.map((scene) => ({
         scene_index: scene.scene_index,
@@ -805,7 +809,7 @@ export function createVideoProductService({
       director,
       audio,
       platform,
-      duration: Number((scenes.at(-1)?.end_time || targetDuration || 0).toFixed(3)),
+      duration: Number((scenes.at(-1)?.end_time || timelineTargetDuration || 0).toFixed(3)),
       tracks,
       scenes,
       blockers,
@@ -817,6 +821,7 @@ export function createVideoProductService({
         available_image_count: bindingContext.pool.length,
         downloaded_video_count: downloadedVideos.length,
         audio_duration: Number(audioDuration.toFixed(3)),
+        route_a_intro_seconds: routeAIntroSeconds,
         director_scene_count: directorScenes.length,
         timeline_scene_count: scenes.length,
         alignment_source: routeASubtitleScenes.length ? "tts_text_sentence_chunks" : "director_scene_duration_scaled",
