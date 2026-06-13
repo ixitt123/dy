@@ -3481,30 +3481,48 @@ async function generateRewrite() {
   rewriteStatus.textContent = `正在生成 ${versionSpecs.length} 个改写版本...`;
   startRewriteProgress(versionSpecs.length);
   try {
-    const data = await fetchJson("/api/tasks/rewrite", {
+    const generatedVersions = [];
+    let latestTranscripts = [];
+    let latestTask = null;
+    for (let index = 0; index < versionSpecs.length; index += 1) {
+      const spec = versionSpecs[index];
+      setRewriteProgress(Math.min(92, Math.round(index / versionSpecs.length * 82) + 8), `正在生成输出框 ${index + 1}/${versionSpecs.length}`);
+      const data = await fetchJson("/api/tasks/rewrite", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(rewritePayloadForVersion(id, spec, { previewOnly: true })),
+      });
+      const generated = data.rewrite?.versions?.[0];
+      if (!generated) throw new Error(`输出框 ${index + 1} 没有生成内容`);
+      generatedVersions.push({ ...spec, ...generated, content: generated.content || spec.content || "" });
+      latestTranscripts = data.transcripts || latestTranscripts;
+      latestTask = data.task || latestTask;
+    }
+    const first = generatedVersions[0] || versionSpecs[0] || {};
+    const saved = await fetchJson("/api/tasks/rewrite/save", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
         id,
-        provider: rewriteProvider.value,
-        direction: rewriteDirection.value,
-        style: rewriteStyle.value,
-        referenceStyle: rewriteReference.value,
-        params: rewriteParams(),
-        humanizeLevel: rewriteHumanizeLevel.value,
+        provider: first.provider || rewriteProvider.value,
+        direction: first.direction || rewriteDirection.value,
+        style: first.style || rewriteStyle.value,
+        referenceStyle: first.referenceStyle || rewriteReference.value,
+        params: first.params || rewriteParams(),
+        humanizeLevel: first.humanizeLevel || rewriteHumanizeLevel.value,
         referenceExamples: collectReferenceExamplesText(),
-        versionSpecs,
-        text: rewriteOriginal.value,
+        versions: generatedVersions,
+        format: "md",
       }),
     });
-    renderRewriteVersions(data.rewrite || {});
-    renderTranscripts(data.transcripts);
+    renderRewriteVersions({ versions: generatedVersions }, { allowDefaults: false });
+    renderTranscripts(saved.transcripts || latestTranscripts);
     stopRewriteProgress("正在保存结果", 96);
     await refreshTasks();
     await refreshFiles();
     stopRewriteProgress("改写完成", 100);
-    lastRewritePath = data.task?.rewrite_path || lastRewritePath;
-    rewriteStatus.textContent = `改写已生成并写入 SQLite：${data.task?.rewrite_path || ""}`;
+    lastRewritePath = saved.task?.rewrite_path || latestTask?.rewrite_path || lastRewritePath;
+    rewriteStatus.textContent = `改写已生成并写入 SQLite：${saved.task?.rewrite_path || latestTask?.rewrite_path || ""}`;
   } catch (error) {
     stopRewriteProgress("生成失败", 100);
     rewriteStatus.textContent = error instanceof Error ? error.message : String(error);
@@ -3523,19 +3541,7 @@ async function generateSingleRewrite(versionKey) {
     const data = await fetchJson("/api/tasks/rewrite", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        id,
-        provider: rewriteProvider.value,
-        direction: rewriteDirection.value,
-        style: rewriteStyle.value,
-        referenceStyle: rewriteReference.value,
-        params: rewriteParams(),
-        humanizeLevel: rewriteHumanizeLevel.value,
-        referenceExamples: collectReferenceExamplesText(),
-        versionSpecs: [target],
-        text: rewriteOriginal.value,
-        previewOnly: true,
-      }),
+      body: JSON.stringify(rewritePayloadForVersion(id, target, { previewOnly: true })),
     });
     const generated = data.rewrite?.versions?.[0];
     if (!generated) throw new Error("当前输出框没有生成内容");
@@ -3571,20 +3577,11 @@ async function reviseSingleRewrite(versionKey) {
     const data = await fetchJson("/api/tasks/rewrite", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        id,
-        provider: rewriteProvider.value,
-        direction: target.direction,
-        style: rewriteStyle.value,
-        referenceStyle: rewriteReference.value,
-        params: rewriteParams(),
-        humanizeLevel: rewriteHumanizeLevel.value,
-        referenceExamples: collectReferenceExamplesText(),
-        versionSpecs: [target],
+      body: JSON.stringify(rewritePayloadForVersion(id, target, {
         text: target.content,
         revisionInstruction: target.revisionInstruction,
         previewOnly: true,
-      }),
+      })),
     });
     const generated = data.rewrite?.versions?.[0];
     if (!generated) throw new Error("二次改写没有返回内容");
@@ -3612,12 +3609,12 @@ async function saveSingleRewrite(versionKey) {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
         id,
-        provider: rewriteProvider.value,
-        direction: rewriteDirection.value,
-        style: rewriteStyle.value,
-        referenceStyle: rewriteReference.value,
-        params: rewriteParams(),
-        humanizeLevel: rewriteHumanizeLevel.value,
+        provider: target.provider || rewriteProvider.value,
+        direction: target.direction || rewriteDirection.value,
+        style: target.style || rewriteStyle.value,
+        referenceStyle: target.referenceStyle || rewriteReference.value,
+        params: target.params || rewriteParams(),
+        humanizeLevel: target.humanizeLevel || rewriteHumanizeLevel.value,
         referenceExamples: collectReferenceExamplesText(),
         versions: [target],
         format: "md",
@@ -3640,19 +3637,21 @@ async function saveRewrite(format = "txt") {
   if (document.activeElement === rewriteVersionCountInput) syncRewriteVersionCount();
   rewriteStatus.textContent = format === "md" ? "正在另存为 MD..." : format === "txt" ? "正在保存改写..." : "正在保存...";
   try {
+    const versions = collectRewriteVersions();
+    const first = versions[0] || {};
     const data = await fetchJson("/api/tasks/rewrite/save", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
         id,
-        provider: rewriteProvider.value,
-        direction: rewriteDirection.value,
-        style: rewriteStyle.value,
-        referenceStyle: rewriteReference.value,
-        params: rewriteParams(),
-        humanizeLevel: rewriteHumanizeLevel.value,
+        provider: first.provider || rewriteProvider.value,
+        direction: first.direction || rewriteDirection.value,
+        style: first.style || rewriteStyle.value,
+        referenceStyle: first.referenceStyle || rewriteReference.value,
+        params: first.params || rewriteParams(),
+        humanizeLevel: first.humanizeLevel || rewriteHumanizeLevel.value,
         referenceExamples: collectReferenceExamplesText(),
-        versions: collectRewriteVersions(),
+        versions,
         format,
       }),
     });
@@ -4312,11 +4311,26 @@ rewriteVersions.addEventListener("input", (event) => {
     if (count) count.textContent = `当前 ${countRewriteCharacters(textarea.value)} 字`;
     return;
   }
-  if (event.target.closest(".rewrite-version-word-count, .rewrite-version-suggestion")) collectRewriteVersions();
+  const range = event.target.closest(".rewrite-version-tone-level, .rewrite-version-conflict-level, .rewrite-version-emotion-level, .rewrite-version-sales-level");
+  if (range) {
+    const card = range.closest(".rewrite-version");
+    const valueTarget = range.classList.contains("rewrite-version-tone-level")
+      ? ".rewrite-version-tone-value"
+      : range.classList.contains("rewrite-version-conflict-level")
+        ? ".rewrite-version-conflict-value"
+        : range.classList.contains("rewrite-version-emotion-level")
+          ? ".rewrite-version-emotion-value"
+          : ".rewrite-version-sales-value";
+    const label = card?.querySelector(valueTarget);
+    if (label) label.textContent = range.value;
+    collectRewriteVersions();
+    return;
+  }
+  if (event.target.closest(".rewrite-version-word-count, .rewrite-version-suggestion, .rewrite-version-reference")) collectRewriteVersions();
 });
 
 rewriteVersions.addEventListener("change", (event) => {
-  if (!event.target.closest(".rewrite-version-direction, .rewrite-version-word-count")) return;
+  if (!event.target.closest(".rewrite-version-provider, .rewrite-version-direction, .rewrite-version-style, .rewrite-version-word-count, .rewrite-version-humanize-level")) return;
   collectRewriteVersions();
 });
 
