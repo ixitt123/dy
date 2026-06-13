@@ -660,7 +660,15 @@ export function createVideoProductService({
       packagedAudio = path.join(audioDir, `voiceover${ext}`);
       fs.copyFileSync(timeline.audio.audio_path, packagedAudio);
     }
+    const bgmSource = findBgmAsset();
+    let packagedBgm = "";
+    if (bgmSource && fs.existsSync(bgmSource)) {
+      const ext = path.extname(bgmSource) || ".mp3";
+      packagedBgm = path.join(audioDir, `bgm${ext}`);
+      fs.copyFileSync(bgmSource, packagedBgm);
+    }
 
+    const { width, height } = parseResolution(project.resolution);
     const timelineJson = {
       project_id: project.id,
       name: timeline.director?.title || `Timeline #${project.id}`,
@@ -686,6 +694,14 @@ export function createVideoProductService({
           source: path.relative(projectDir, packagedAudio),
           start: 0,
           duration: timeline.duration,
+          role: "voiceover",
+        }] : [],
+        bgm: packagedBgm ? [{
+          source: path.relative(projectDir, packagedBgm),
+          start: 0,
+          duration: timeline.duration,
+          volume: 0.12,
+          ducking: "voiceover_first",
         }] : [],
         subtitles: timeline.tracks.subtitles,
       },
@@ -698,18 +714,44 @@ export function createVideoProductService({
     const timelinePath = writeJson(path.join(projectDir, "timeline.json"), timelineJson);
     const srtPath = path.join(projectDir, "subtitles.srt");
     fs.writeFileSync(srtPath, timelineToSrt(packagedScenes), "utf8");
+    const assPath = path.join(projectDir, "subtitles.ass");
+    fs.writeFileSync(assPath, timelineToAss(packagedScenes, { width, height }), "utf8");
+    const titleText = timeline.director?.title || `Timeline #${project.id}`;
+    fs.writeFileSync(path.join(projectDir, "title.txt"), `${titleText}\n`, "utf8");
+    fs.writeFileSync(path.join(projectDir, "description.txt"), [
+      titleText,
+      "",
+      "本视频由导演稿、配音、分镜素材和高级字幕时间轴生成，可继续人工精修后发布。",
+    ].join("\n"), "utf8");
+    fs.writeFileSync(path.join(projectDir, "hashtags.txt"), "#短视频 #知识口播 #AI成片 #抖音 #视频号 #小红书\n", "utf8");
     const manifestPath = writeJson(path.join(projectDir, "project_manifest.json"), {
       name: timeline.director?.title || `Timeline #${project.id}`,
       kind: "video-product-center",
       generated_at: new Date().toISOString(),
       stable_import_package: true,
-      jianying_note: "第一版输出标准素材包、timeline.json 与 SRT 字幕；可人工导入剪映继续加工。",
+      jianying_note: "第一版输出标准素材包、timeline.json、SRT 与 ASS 字幕；可人工导入剪映继续加工。",
+      premium_workflow_skills: premiumWorkflowSkillStatus(),
+      commercial_video_contract: {
+        voiceover: Boolean(packagedAudio),
+        bgm: Boolean(packagedBgm),
+        bgm_note: packagedBgm ? "已接入本地 BGM 并按语音优先混音。" : "未找到本地 BGM 素材，路线 A 会在质量报告中标记为待补资源。",
+        ass_subtitles: true,
+        motion_template: project.output_type === "template_mp4",
+        publish_package: true,
+      },
+      audio_binding: timeline.metadata?.audio_binding || null,
       files: {
         timeline: path.basename(timelinePath),
         subtitles: path.basename(srtPath),
+        ass_subtitles: path.basename(assPath),
         audio: packagedAudio ? path.relative(projectDir, packagedAudio) : "",
+        bgm: packagedBgm ? path.relative(projectDir, packagedBgm) : "",
         images: packagedScenes.map((scene) => path.relative(projectDir, scene.packaged_image_path || "")),
         videos: packagedScenes.map((scene) => path.relative(projectDir, scene.packaged_video_path || "")).filter(Boolean),
+        title: "title.txt",
+        description: "description.txt",
+        hashtags: "hashtags.txt",
+        render_report: "render_report.json",
       },
       blockers: timeline.blockers,
       routes: {
@@ -728,6 +770,8 @@ export function createVideoProductService({
       timelineJson,
       timelinePath,
       srtPath,
+      assPath,
+      packagedBgm,
       manifestPath,
     };
   }
@@ -743,6 +787,7 @@ export function createVideoProductService({
       fps: project.fps,
       timeline_file: "timeline.json",
       subtitles_file: "subtitles.srt",
+      ass_subtitles_file: "subtitles.ass",
       tracks: timelineFiles.timelineJson.tracks,
     };
     const draftMeta = {
