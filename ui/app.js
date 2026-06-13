@@ -263,6 +263,7 @@ let videoProductPollTimer = 0;
 let ttsProviderConfigs = [];
 let ttsPresetVoices = [];
 let ttsPollTimer = 0;
+let activeTtsRailJob = null;
 let voiceAssets = [];
 let defaultVoiceAsset = null;
 let voiceAssetFilter = "preset";
@@ -1321,6 +1322,74 @@ function ttsStatusLabel(status) {
   }[status] || status;
 }
 
+function ttsProgressValue(job = {}) {
+  if (job.status === "completed") return 100;
+  if (job.status === "processing") return 62;
+  if (job.status === "failed") return Math.max(10, Number(job.progress || 0) || 62);
+  if (job.status === "waiting" || job.status === "pending") return 24;
+  return Number(job.progress || 0) || 8;
+}
+
+function renderTtsRail(job = activeTtsRailJob) {
+  if (!railCurrentTask || !job) return;
+  activeTtsRailJob = job;
+  const progress = Math.max(0, Math.min(100, ttsProgressValue(job)));
+  const textPreview = String(job.text || ttsText?.value || "").trim().slice(0, 72);
+  const outputLink = job.audio_url
+    ? `<a href="${escapeHtml(job.audio_url)}" target="_blank" rel="noreferrer">语音文件</a>`
+    : "<span>完成后显示音频文件。</span>";
+  railCurrentTask.innerHTML = `
+    <div class="rail-video-product-card rail-tts-card">
+      <strong>#${job.id || "-"} TTS 语音生成</strong>
+      <small>当前步骤：${escapeHtml(job.status === "completed" ? "语音已生成，可以试听" : job.status === "failed" ? "语音生成失败" : job.status === "processing" ? "正在生成音频" : "任务已进入队列")}</small>
+      <div class="rail-progress"><i style="width:${progress}%"></i></div>
+      <div class="rail-task-summary">
+        <div><span>进度</span><strong>${progress}%</strong></div>
+        <div><span>状态</span><strong>${escapeHtml(ttsStatusLabel(job.status))}</strong></div>
+        <div><span>格式</span><strong>${escapeHtml(String(job.format || ttsFormat?.value || "mp3").toUpperCase())}</strong></div>
+      </div>
+      <div class="rail-task-group">
+        <span class="rail-subheading">配音文案</span>
+        <small>${escapeHtml(textPreview || "等待提交文案。")}</small>
+      </div>
+      ${job.error ? `<div class="rail-failure-note">错误原因：${escapeHtml(job.error)}</div>` : ""}
+      <div class="rail-task-group">
+        <span class="rail-subheading">输出文件</span>
+        <div class="video-product-output-files">${outputLink}</div>
+      </div>
+      <div class="rail-task-actions">
+        <button type="button" data-nav="tts">查看语音</button>
+      </div>
+    </div>
+  `;
+}
+
+function renderTtsRailLists(jobs = []) {
+  if (!Array.isArray(jobs) || !jobs.length) return;
+  if (railRecentOutput) {
+    const completed = jobs.filter((job) => job.status === "completed").slice(0, 5);
+    if (completed.length) {
+      railRecentOutput.innerHTML = completed.map((job) => `
+        <button class="rail-list-item" type="button" data-nav="tts">
+          <span>#${job.id} TTS 语音 · ${escapeHtml(job.voice_name || job.voice_id || job.provider || "")}</span>
+          <strong>${escapeHtml(String(job.text || "").slice(0, 48) || "语音已生成")}</strong>
+        </button>
+      `).join("");
+    }
+  }
+  if (railErrors) {
+    const failed = jobs.filter((job) => job.status === "failed").slice(0, 4);
+    if (failed.length) {
+      railErrors.innerHTML = failed.map((job) => `
+        <button class="rail-list-item" type="button" data-nav="tts">
+          <span>#${job.id} TTS 语音失败</span>
+          <strong>${escapeHtml(job.error || "未知错误")}</strong>
+        </button>
+      `).join("");
+    }
+  }
+}
+
 function renderTtsJobs(jobs = []) {
   if (!jobs.length) {
     ttsHistory.innerHTML = '<div class="tts-empty">还没有生成记录。</div>';
@@ -1349,6 +1418,11 @@ function renderTtsJobs(jobs = []) {
 async function refreshTtsJobs() {
   const data = await fetchJson("/api/tts/jobs?limit=30");
   renderTtsJobs(data.jobs || []);
+  renderTtsRailLists(data.jobs || []);
+  if (activeTtsRailJob?.id) {
+    const latest = (data.jobs || []).find((job) => String(job.id) === String(activeTtsRailJob.id));
+    if (latest) renderTtsRail(latest);
+  }
 }
 
 function showTtsPreview(job) {
@@ -1363,6 +1437,7 @@ async function waitForTtsJob(jobId) {
   if (ttsPollTimer) clearTimeout(ttsPollTimer);
   const data = await fetchJson(`/api/tts/job?id=${encodeURIComponent(jobId)}`);
   const job = data.job;
+  renderTtsRail(job);
   if (job.status === "completed") {
     generateTtsButton.disabled = false;
     ttsStatus.textContent = "生成完成，可以试听。";
@@ -1373,6 +1448,7 @@ async function waitForTtsJob(jobId) {
   if (job.status === "failed") {
     generateTtsButton.disabled = false;
     ttsStatus.textContent = job.error || "生成失败。";
+    renderTtsRail(job);
     await refreshTtsJobs();
     return;
   }
@@ -1381,6 +1457,11 @@ async function waitForTtsJob(jobId) {
     waitForTtsJob(jobId).catch((error) => {
       generateTtsButton.disabled = false;
       ttsStatus.textContent = error instanceof Error ? error.message : String(error);
+      renderTtsRail({
+        ...(activeTtsRailJob || {}),
+        status: "failed",
+        error: error instanceof Error ? error.message : String(error),
+      });
     });
   }, 1000);
 }
@@ -1401,6 +1482,15 @@ async function generateTts() {
   }
   generateTtsButton.disabled = true;
   ttsStatus.textContent = "正在提交生成任务...";
+  renderTtsRail({
+    id: "",
+    status: "waiting",
+    text,
+    voice_id: voiceId,
+    voice_name: ttsPresetVoices.find((voice) => voice.id === voiceId)?.name || voiceId,
+    format: ttsFormat.value,
+    progress: 8,
+  });
   try {
     const selectedVoice = ttsPresetVoices.find((voice) => voice.id === voiceId);
     const selectedVoiceForModel = selectedTtsVoice();
@@ -1422,10 +1512,19 @@ async function generateTts() {
         format: ttsFormat.value,
       }),
     });
+    renderTtsRail(data.job);
     await waitForTtsJob(data.job.id);
   } catch (error) {
     generateTtsButton.disabled = false;
     ttsStatus.textContent = error instanceof Error ? error.message : String(error);
+    renderTtsRail({
+      ...(activeTtsRailJob || {}),
+      status: "failed",
+      error: error instanceof Error ? error.message : String(error),
+      text,
+      voice_id: voiceId,
+      format: ttsFormat.value,
+    });
   }
 }
 
