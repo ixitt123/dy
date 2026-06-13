@@ -294,8 +294,86 @@ function ffmpegDrawText(value) {
   return String(value || "")
     .replace(/\\/g, "\\\\")
     .replace(/:/g, "\\:")
+    .replace(/,/g, "\\,")
     .replace(/'/g, "\\'")
+    .replace(/%/g, "\\%")
     .replace(/\n/g, " ");
+}
+
+function compactTitleText(value) {
+  return String(value || "")
+    .replace(/[《》「」“”"']/g, "")
+    .replace(/\s+/g, "")
+    .replace(/^[#\s]+|[#\s]+$/g, "")
+    .trim();
+}
+
+function titleLooksGeneric(value) {
+  const text = compactTitleText(value);
+  return !text
+    || /导演稿|强钩子版|弱钩子版|版本|Timeline|timeline|成片中心/i.test(text)
+    || text.length < 6;
+}
+
+function sentenceParts(text) {
+  return String(text || "")
+    .split(/[。！？!?；;\n\r]+/)
+    .map((item) => compactTitleText(item))
+    .filter(Boolean);
+}
+
+function titleClip(value, maxLength = 22) {
+  const text = compactTitleText(value);
+  if (text.length <= maxLength) return text;
+  return text.slice(0, maxLength);
+}
+
+function optimizedPublishTitle({ directorTitle = "", scenes = [] } = {}) {
+  const narration = scenes.map((scene) => scene.narration_text || scene.subtitle_text || "").join("。");
+  const first = scenes[0]?.narration_text || scenes[0]?.subtitle_text || "";
+  const parts = sentenceParts(first);
+  const allParts = sentenceParts(narration);
+
+  if (/英语/.test(narration) && /背单词/.test(narration)) {
+    return "半年说流利英语？先别死背单词";
+  }
+  if (/招生|引流|家长|咨询/.test(narration)) {
+    const pain = allParts.find((item) => /家长|咨询|报名|招生|引流/.test(item)) || parts[0] || directorTitle;
+    return titleClip(`${pain}，先抓住这一点`, 22);
+  }
+  if (/赚钱|副业|成交|客户|流量/.test(narration)) {
+    const hook = parts[0] || allParts[0] || directorTitle;
+    return titleClip(`${hook}，问题在这里`, 22);
+  }
+  if (!titleLooksGeneric(directorTitle)) return titleClip(directorTitle, 22);
+  const hook = parts[0] || allParts[0] || directorTitle || "这件事别再做错";
+  const contrast = allParts.find((item) => /不是|别|先|关键|前提|因为|方法|核心/.test(item) && item !== hook);
+  return titleClip(contrast ? `${hook}，${contrast}` : hook, 22);
+}
+
+function splitTitleLines(value, maxLineLength = 11) {
+  const text = compactTitleText(value);
+  if (text.length <= maxLineLength) return [text];
+  const breakMarks = ["？", "！", "，", "、", "："];
+  for (const mark of breakMarks) {
+    const index = text.indexOf(mark);
+    if (index >= 4 && index < text.length - 2 && index <= maxLineLength + 1) {
+      return [text.slice(0, index + 1), text.slice(index + 1)];
+    }
+  }
+  return [text.slice(0, maxLineLength), text.slice(maxLineLength)];
+}
+
+function conciseSceneLabel(scene) {
+  const title = String(scene.title_text || "").replace(/^(强钩子|展示痛点|提出|解释|总结|CTA|转折)[：:]/, "");
+  const text = titleLooksGeneric(title) ? (scene.subtitle_text || scene.narration_text || "") : title;
+  return titleClip(text, 14);
+}
+
+function ffmpegEnableBetween(start, end) {
+  const safeStart = Math.max(0, Number(start || 0)).toFixed(3);
+  const safeEnd = Math.max(Number(safeStart) + 0.2, Number(end || 0)).toFixed(3);
+  return `between(t\\,${safeStart}\\,${safeEnd})`;
 }
 
 function concatFileList(files) {
@@ -708,9 +786,15 @@ export function createVideoProductService({
     }
 
     const { width, height } = parseResolution(project.resolution);
+    const publishTitle = optimizedPublishTitle({
+      directorTitle: timeline.director?.title || `Timeline #${project.id}`,
+      scenes: packagedScenes,
+    });
     const timelineJson = {
       project_id: project.id,
-      name: timeline.director?.title || `Timeline #${project.id}`,
+      name: publishTitle,
+      director_title: timeline.director?.title || "",
+      publish_title: publishTitle,
       source_director_project_id: project.source_director_project_id,
       audio_asset_id: project.audio_asset_id,
       platform: project.platform,
@@ -755,16 +839,16 @@ export function createVideoProductService({
     fs.writeFileSync(srtPath, timelineToSrt(packagedScenes), "utf8");
     const assPath = path.join(projectDir, "subtitles.ass");
     fs.writeFileSync(assPath, timelineToAss(packagedScenes, { width, height }), "utf8");
-    const titleText = timeline.director?.title || `Timeline #${project.id}`;
+    const titleText = publishTitle;
     fs.writeFileSync(path.join(projectDir, "title.txt"), `${titleText}\n`, "utf8");
     fs.writeFileSync(path.join(projectDir, "description.txt"), [
       titleText,
       "",
-      "本视频由导演稿、配音、分镜素材和高级字幕时间轴生成，可继续人工精修后发布。",
+      "如果你也想把知识讲清楚，先把学习方式换成可执行的动作。",
     ].join("\n"), "utf8");
     fs.writeFileSync(path.join(projectDir, "hashtags.txt"), "#短视频 #知识口播 #AI成片 #抖音 #视频号 #小红书\n", "utf8");
     const manifestPath = writeJson(path.join(projectDir, "project_manifest.json"), {
-      name: timeline.director?.title || `Timeline #${project.id}`,
+      name: publishTitle,
       kind: "video-product-center",
       generated_at: new Date().toISOString(),
       stable_import_package: true,
@@ -776,6 +860,8 @@ export function createVideoProductService({
         bgm_note: packagedBgm ? "已接入本地 BGM 并按语音优先混音。" : "未找到本地 BGM 素材，路线 A 会在质量报告中标记为待补资源。",
         ass_subtitles: true,
         motion_template: project.output_type === "template_mp4",
+        motion_template_version: project.output_type === "template_mp4" ? "route-a-kinetic-v2" : "",
+        optimized_publish_title: titleText,
         publish_package: true,
       },
       audio_binding: timeline.metadata?.audio_binding || null,
