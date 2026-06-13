@@ -2672,6 +2672,11 @@ function normalizeVersionSpecs(input = [], fallbackDirection = "招生引流") {
         name: String(item?.name || known?.name || `版本 ${index + 1}`).trim().slice(0, 40) || `版本 ${index + 1}`,
         direction,
         wordCount,
+        provider: String(item?.provider || "").trim(),
+        style: REWRITE_STYLES.includes(String(item?.style || "")) ? String(item.style) : "",
+        referenceStyle: String(item?.referenceStyle || "").trim(),
+        params: item?.params && typeof item.params === "object" ? item.params : {},
+        humanizeLevel: String(item?.humanizeLevel || "").trim(),
       };
     })
     .filter(Boolean)
@@ -2691,11 +2696,16 @@ function normalizeRewrite(raw, meta = {}) {
   const versionSpecs = normalizeVersionSpecs(meta.versionSpecs, meta.direction || "招生引流");
   const versions = versionSpecs.map((spec) => {
     const value = readVersionValue(source, spec);
-    return {
-      ...spec,
-      content: normalizeRewriteVersionContent(value),
-    };
-  });
+      return {
+        ...spec,
+        content: normalizeRewriteVersionContent(value),
+        provider: spec.provider || source.versions?.find?.((item) => item?.key === spec.key)?.provider || meta.provider || "",
+        style: spec.style || source.versions?.find?.((item) => item?.key === spec.key)?.style || meta.style || "",
+        referenceStyle: spec.referenceStyle || source.versions?.find?.((item) => item?.key === spec.key)?.referenceStyle || meta.referenceStyle || "",
+        params: Object.keys(spec.params || {}).length ? spec.params : source.versions?.find?.((item) => item?.key === spec.key)?.params || meta.params || {},
+        humanizeLevel: spec.humanizeLevel || source.versions?.find?.((item) => item?.key === spec.key)?.humanizeLevel || meta.humanizeLevel || "",
+      };
+    });
 
   return {
     provider: meta.provider || "",
@@ -4807,6 +4817,24 @@ const server = http.createServer(async (req, res) => {
       }
 
       const job = createTranscriptJob(shareLink, apiKey);
+      sendJson(res, 200, { ok: true, job });
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/local-video/choose") {
+      const selected = await chooseLocalVideoFile();
+      sendJson(res, 200, { ok: true, filePath: selected || "" });
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/local-video/transcript") {
+      const body = JSON.parse(await readBody(req) || "{}");
+      const filePath = String(body.filePath || "").trim();
+      if (!filePath) {
+        sendJson(res, 400, { ok: false, message: "请先选择本地视频文件" });
+        return;
+      }
+      const job = createLocalVideoTranscriptJob(filePath, String(body.apiKey || "").trim());
       sendJson(res, 200, { ok: true, job });
       return;
     }
