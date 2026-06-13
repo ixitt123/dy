@@ -19,7 +19,7 @@ function normalizeVolcengineArkModel(model) {
   return value;
 }
 
-export function createImageService({ baseDir, getSettings }) {
+export function createImageService({ baseDir, getSettings, taskStore = null }) {
   const outputDir = path.join(baseDir, "image-assets", "generated");
   const dbPath = path.join(baseDir, ".data", "image-studio.sqlite");
   fs.mkdirSync(outputDir, { recursive: true });
@@ -109,6 +109,69 @@ export function createImageService({ baseDir, getSettings }) {
       file_path: row.file_path || row.original_path || "",
       ratio: row.aspect_ratio || "",
     };
+  }
+
+  function directorProjectForImages(projectId) {
+    if (!taskStore) throw new Error("图片中心尚未接入导演项目库。");
+    const project = taskStore.getDirectorProject(Number(projectId || 0));
+    if (!project || project.status !== "completed") throw new Error("请先选择已完成的 AI 导演项目。");
+    const scenes = taskStore.listDirectorScenes(project.id);
+    if (!scenes.length) throw new Error("导演项目没有可用分镜。");
+    return { project, scenes };
+  }
+
+  function styleLockForProject(project, aspectRatio = "9:16") {
+    const title = String(project?.title || "短视频分镜").trim();
+    const style = String(project?.visual_style || "高级商业短视频").trim();
+    const platform = String(project?.platform || "douyin").trim();
+    return [
+      `统一项目：${title}`,
+      `统一风格：${style}，商业短视频质感，真实摄影感，电影级布光，干净高级，不廉价，不像PPT。`,
+      `统一画幅：${aspectRatio}，平台：${platform}，所有分镜保持同一色调、同一镜头语言、同一人物/场景风格。`,
+      "统一色彩：深色高级背景，克制的金色或电光蓝点缀，高对比但不过曝，画面有层次和空间感。",
+      "统一构图：主体明确，前景/中景/背景有纵深，保留字幕安全区，适合竖屏短视频发布。",
+      "统一质感：高端商业广告、知识口播视觉包装、高清、锐利、无廉价海报感、无普通插画感。",
+      "禁止：乱码文字、水印、奇怪logo、低清、脏乱背景、随机人物变脸、颜色漂移、过度卡通、塑料感。",
+    ].join("\n");
+  }
+
+  function buildStoryboardImagePrompt({ project, scene, index = 0, total = 1, aspectRatio = "9:16" }) {
+    const title = String(project?.title || "短视频分镜").trim();
+    const sceneIndex = Number(scene?.scene_index || scene?.scene || index + 1);
+    const basePrompt = String(scene?.image_prompt || scene?.purpose || scene?.subtitle || scene?.voice_text || "").trim();
+    const subtitle = String(scene?.subtitle || scene?.voice_text || "").trim();
+    const purpose = String(scene?.purpose || "").trim();
+    const emotion = String(scene?.emotion || "").trim();
+    const camera = String(scene?.camera || "").trim();
+    const composition = String(scene?.composition || "").trim();
+    return [
+      styleLockForProject(project, aspectRatio),
+      `分镜编号：${sceneIndex}/${total}`,
+      `本镜头任务：${purpose || "承接上一镜头，推动叙事"}`,
+      `情绪：${emotion || "专业、有冲击力"}`,
+      `镜头语言：${camera || "中近景，轻微推近"}；构图：${composition || "主体居中偏上，底部留字幕区"}`,
+      `画面主体：${basePrompt}`,
+      `字幕关键词参考：${subtitle.slice(0, 60)}`,
+      "生成要求：像一套完整商业短视频分镜里的同一支片子，不要像不同软件随机生成；画面高级、清晰、统一、能直接用于视频成片。",
+    ].filter(Boolean).join("\n");
+  }
+
+  function storyboardImagePrompts({ projectId, aspectRatio = "9:16" } = {}) {
+    const { project, scenes } = directorProjectForImages(projectId);
+    return scenes.map((scene, index) => ({
+      projectId: project.id,
+      scene: scene.scene_index || index + 1,
+      title: `Scene ${scene.scene_index || index + 1}`,
+      prompt: buildStoryboardImagePrompt({
+        project,
+        scene,
+        index,
+        total: scenes.length,
+        aspectRatio,
+      }),
+      subtitle: scene.subtitle || scene.voice_text || "",
+      aspectRatio,
+    }));
   }
 
   async function generateImage({ prompt, aspectRatio = "1:1", count = 1, sourceType = "manual", sourceId = "", provider = "" } = {}) {
@@ -201,6 +264,51 @@ export function createImageService({ baseDir, getSettings }) {
     return { jobId, results, total: count, success: successCount, failed: count - successCount };
   }
 
+  async function generateStoryboardImages({ projectId, aspectRatio = "9:16", provider = "", countPerScene = 1 } = {}) {
+    const prompts = storyboardImagePrompts({ projectId, aspectRatio });
+    const perScene = Math.max(1, Math.min(4, Number(countPerScene) || 1));
+    const results = [];
+    for (const item of prompts) {
+      try {
+        const generated = await generateImage({
+          provider,
+          prompt: item.prompt,
+          aspectRatio: item.aspectRatio,
+          count: perScene,
+          sourceType: "director",
+          sourceId: `${item.projectId}:${item.scene}`,
+        });
+        for (const result of generated.results || []) {
+          results.push({
+            ...result,
+            scene: item.scene,
+            prompt: item.prompt,
+            subtitle: item.subtitle,
+            jobId: generated.jobId,
+          });
+        }
+      } catch (error) {
+        results.push({
+          success: false,
+          scene: item.scene,
+          prompt: item.prompt,
+          subtitle: item.subtitle,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+    const success = results.filter((item) => item.success).length;
+    return {
+      projectId: Number(projectId || 0),
+      totalScenes: prompts.length,
+      total: prompts.length * perScene,
+      success,
+      failed: results.length - success,
+      results,
+      prompts,
+    };
+  }
+
   async function testProviderConnection(provider = "") {
     const settings = getSettings();
     const selected = imageProviderFromSettings(settings, provider);
@@ -244,5 +352,14 @@ export function createImageService({ baseDir, getSettings }) {
     };
   }
 
-  return { generateImage, testProviderConnection, getJobs, getAssets, deleteAsset, getStats };
+  return {
+    generateImage,
+    generateStoryboardImages,
+    storyboardImagePrompts,
+    testProviderConnection,
+    getJobs,
+    getAssets,
+    deleteAsset,
+    getStats,
+  };
 }
