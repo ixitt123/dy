@@ -981,6 +981,93 @@ export function createVideoProductService({
     return outputPath;
   }
 
+  async function inspectMedia(filePath) {
+    if (!ffmpegPath || !filePath || !fs.existsSync(filePath)) {
+      return { exists: false, width: 0, height: 0, hasAudio: false, duration: 0, raw: "" };
+    }
+    const result = await runProcess(ffmpegPath, ["-hide_banner", "-i", filePath]).catch((error) => ({
+      stdout: "",
+      stderr: error instanceof Error ? error.message : String(error),
+    }));
+    const raw = `${result.stderr || ""}\n${result.stdout || ""}`;
+    const durationMatch = raw.match(/Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)/);
+    const videoMatch = raw.match(/Video:.*?,\s*(\d{2,5})x(\d{2,5})[\s,\[]/);
+    return {
+      exists: true,
+      width: videoMatch ? Number(videoMatch[1]) : 0,
+      height: videoMatch ? Number(videoMatch[2]) : 0,
+      hasAudio: /Audio:/i.test(raw),
+      duration: durationMatch
+        ? Number(durationMatch[1]) * 3600 + Number(durationMatch[2]) * 60 + Number(durationMatch[3])
+        : 0,
+      raw,
+    };
+  }
+
+  async function makePublishPackage(project, timelineFiles, mp4Path) {
+    if (!mp4Path || !fs.existsSync(mp4Path)) return { finalPath: "", coverPath: "" };
+    const finalPath = path.join(timelineFiles.projectDir, "final.mp4");
+    if (path.resolve(mp4Path) !== path.resolve(finalPath)) {
+      fs.copyFileSync(mp4Path, finalPath);
+    }
+    const coverPath = path.join(timelineFiles.projectDir, "cover.png");
+    if (ffmpegPath && fs.existsSync(ffmpegPath)) {
+      await runProcess(ffmpegPath, [
+        "-y",
+        "-ss", "0.2",
+        "-i", finalPath,
+        "-frames:v", "1",
+        coverPath,
+      ]).catch(() => {});
+    }
+    timelineFiles.coverPath = fs.existsSync(coverPath) ? coverPath : "";
+    return { finalPath, coverPath: timelineFiles.coverPath };
+  }
+
+  async function reviewRenderedVideo(project, timelineFiles, mp4Path) {
+    const errors = [];
+    const warnings = [];
+    const expected = parseResolution(project.resolution);
+    const stats = mp4Path && fs.existsSync(mp4Path) ? fs.statSync(mp4Path) : null;
+    const media = await inspectMedia(mp4Path);
+
+    if (!media.exists) errors.push("MP4 文件不存在。");
+    if (stats && stats.size < 1024) errors.push("MP4 文件大小异常。");
+    if (media.width && media.height && (media.width !== expected.width || media.height !== expected.height)) {
+      errors.push(`MP4 分辨率为 ${media.width}x${media.height}，不是 ${project.resolution}。`);
+    }
+    if (!media.hasAudio) errors.push("MP4 没有音频轨。");
+    if (!timelineFiles.packagedAudio) errors.push("缺少配音文件。");
+    if (!timelineFiles.assPath || !fs.existsSync(timelineFiles.assPath)) errors.push("缺少 ASS 高级字幕文件。");
+    if (project.output_type === "template_mp4" && !timelineFiles.packagedBgm) {
+      errors.push("路线 A 缺少 BGM 素材，不能按可发布成片标准通过。请放入 assets/bgm、media/bgm 或 bgm 文件夹。");
+    }
+    if (!timelineFiles.coverPath) warnings.push("封面 cover.png 未生成，可能需要人工补封面。");
+    if (media.duration && timelineFiles.timelineJson.duration && Math.abs(media.duration - timelineFiles.timelineJson.duration) > 2.5) {
+      warnings.push("MP4 时长与 Timeline 时长偏差较大，建议复查字幕和音频同步。");
+    }
+
+    return {
+      passed: errors.length === 0,
+      errors,
+      warnings,
+      checks: {
+        mp4_exists: media.exists,
+        resolution: media.width && media.height ? `${media.width}x${media.height}` : "",
+        expected_resolution: project.resolution,
+        ratio: project.ratio,
+        has_audio: media.hasAudio,
+        has_voiceover: Boolean(timelineFiles.packagedAudio),
+        has_bgm: Boolean(timelineFiles.packagedBgm),
+        has_ass_subtitles: Boolean(timelineFiles.assPath && fs.existsSync(timelineFiles.assPath)),
+        has_cover: Boolean(timelineFiles.coverPath),
+        duration: Number((media.duration || 0).toFixed(3)),
+        file_size: stats?.size || 0,
+      },
+      reviewed_at: new Date().toISOString(),
+    };
+  }
+
   async function processProject(projectId) {
     let project = taskStore.getTimelineProject(projectId);
     if (!project) return;
@@ -1053,6 +1140,27 @@ export function createVideoProductService({
         } else {
           mp4Path = await renderMp4({ ...project, metadata: safeJson(project.metadata_json, {}) }, timelineFiles);
         }
+        await makePublishPackage(project, timelineFiles, mp4Path);
+        const quality = await reviewRenderedVideo(project, timelineFiles, mp4Path);
+        const reportPath = path.join(timelineFiles.projectDir, "render_report.json");
+        writeJson(reportPath, renderReport(project, timelineFiles, {
+          mp4Path,
+          bgmPath: timelineFiles.packagedBgm,
+          quality,
+        }));
+        if (!quality.passed) {
+          throw new Error(`质量审查未通过：${quality.errors.join(" ")}`);
+        }
+      } else {
+        writeJson(path.join(timelineFiles.projectDir, "render_report.json"), renderReport(project, timelineFiles, {
+          mp4Path: "",
+          bgmPath: timelineFiles.packagedBgm,
+          quality: {
+            passed: true,
+            warnings: ["当前路线输出素材包，不执行 MP4 画面质检。"],
+            errors: [],
+          },
+        }));
       }
 
       updateProject(project.id, {
@@ -1152,9 +1260,16 @@ export function createVideoProductService({
       dir: project.output_dir,
       timeline: project.timeline_path,
       srt: project.srt_path,
+      ass: project.output_dir ? path.join(project.output_dir, "subtitles.ass") : "",
       manifest: project.manifest_path,
       draft: project.draft_path,
       mp4: project.mp4_path,
+      final: project.output_dir ? path.join(project.output_dir, "final.mp4") : "",
+      cover: project.output_dir ? path.join(project.output_dir, "cover.png") : "",
+      title: project.output_dir ? path.join(project.output_dir, "title.txt") : "",
+      description: project.output_dir ? path.join(project.output_dir, "description.txt") : "",
+      hashtags: project.output_dir ? path.join(project.output_dir, "hashtags.txt") : "",
+      report: project.output_dir ? path.join(project.output_dir, "render_report.json") : "",
     };
     const target = candidates[type] || project.output_dir;
     if (!target || !fs.existsSync(target)) return "";

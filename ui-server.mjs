@@ -5031,6 +5031,9 @@ const server = http.createServer(async (req, res) => {
         const contentType = {
           ".json": "application/json; charset=utf-8",
           ".srt": "text/plain; charset=utf-8",
+          ".ass": "text/plain; charset=utf-8",
+          ".txt": "text/plain; charset=utf-8",
+          ".png": "image/png",
           ".mp4": "video/mp4",
         }[ext] || "application/octet-stream";
         const data = fs.readFileSync(filePath);

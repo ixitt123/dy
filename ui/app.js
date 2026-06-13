@@ -2868,9 +2868,13 @@ function videoProductFileLinks(project = {}) {
   return [
     ["timeline", "timeline.json", project.timeline_path],
     ["srt", "subtitles.srt", project.srt_path],
+    ["ass", "subtitles.ass", project.output_dir],
     ["manifest", "project_manifest.json", project.manifest_path],
     ["draft", "draft_content.json", project.draft_path],
     ["mp4", "MP4", project.mp4_path],
+    ["final", "final.mp4", project.mp4_path],
+    ["cover", "cover.png", project.mp4_path],
+    ["report", "render_report.json", project.output_dir],
   ]
     .filter(([, , value]) => value)
     .map(([type, label]) => `<a href="/api/video-product/export?id=${encodeURIComponent(id)}&type=${encodeURIComponent(type)}" target="_blank" rel="noreferrer">${escapeHtml(label)}</a>`);
@@ -3099,9 +3103,13 @@ function renderVideoProductOutputs(project) {
   const files = [
     ["timeline", "timeline.json", project?.timeline_path],
     ["srt", "subtitles.srt", project?.srt_path],
+    ["ass", "subtitles.ass", project?.output_dir],
     ["manifest", "manifest", project?.manifest_path],
     ["draft", "draft", project?.draft_path],
     ["mp4", "MP4", project?.mp4_path],
+    ["final", "final.mp4", project?.mp4_path],
+    ["cover", "cover.png", project?.mp4_path],
+    ["report", "render_report.json", project?.output_dir],
   ].filter(([, , value]) => value);
   videoProductOutputFiles.innerHTML = files.length
     ? files.map(([type, label]) => `<a href="/api/video-product/export?id=${encodeURIComponent(id)}&type=${encodeURIComponent(type)}" target="_blank" rel="noreferrer">${escapeHtml(label)}</a>`).join("")
