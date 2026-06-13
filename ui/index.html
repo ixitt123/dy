@@ -780,6 +780,20 @@
                   <option value="all">使用图片资产库全部图片</option>
                 </select>
               </label>
+              <div class="video-product-local-assets">
+                <strong>本地素材</strong>
+                <div class="video-product-local-row">
+                  <input id="videoProductLocalImagePath" type="text" placeholder="添加现有图片素材" readonly />
+                  <button class="ghost small" id="chooseVideoProductImage" type="button">选择图片</button>
+                  <button class="ghost small" id="addVideoProductImageAsset" type="button">加入图片库</button>
+                </div>
+                <div class="video-product-local-row">
+                  <input id="videoProductLocalBgmPath" type="text" placeholder="添加背景音乐" readonly />
+                  <button class="ghost small" id="chooseVideoProductBgm" type="button">选择音乐</button>
+                  <button class="ghost small" id="addVideoProductBgmAsset" type="button">加入BGM库</button>
+                </div>
+                <small id="videoProductAssetStatus">本地图片会进入图片资产库；BGM 会用于最终 MP4 混音。</small>
+              </div>
               <label>
                 输出方式
                 <select id="videoProductOutputType">

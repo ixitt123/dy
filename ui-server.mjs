@@ -5373,6 +5373,17 @@ const server = http.createServer(async (req, res) => {
         return;
       }
 
+      if (req.method === "POST" && route === "add-bgm") {
+        const body = JSON.parse(await readBody(req) || "{}");
+        try {
+          const asset = videoProductService.importBgmAsset(body.filePath || "");
+          sendJson(res, 200, { ok: true, asset, ...videoProductService.listSources() });
+        } catch (error) {
+          sendJson(res, 400, { ok: false, message: error instanceof Error ? error.message : String(error) });
+        }
+        return;
+      }
+
       if (req.method === "GET" && route === "export") {
         const id = url.searchParams.get("id") || "";
         const type = url.searchParams.get("type") || "timeline";
