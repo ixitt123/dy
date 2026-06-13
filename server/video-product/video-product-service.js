@@ -994,7 +994,7 @@ export function createVideoProductService({
     const titleLine1 = ffmpegDrawText(titleLines[0] || publishTitle);
     const titleLine2 = ffmpegDrawText(titleLines[1] || "");
     const narration = timelineFiles.packagedScenes.map((scene) => scene.narration_text || scene.subtitle_text || "").join("");
-    const routeLabel = ffmpegDrawText("路线 A · 口播快剪");
+    const routeLabel = ffmpegDrawText("路线 A / 口播快剪");
     const hookLabel = ffmpegDrawText(titleClip(timelineFiles.packagedScenes[0]?.subtitle_text || timelineFiles.packagedScenes[0]?.narration_text || publishTitle, 18));
     const ctaText = ffmpegDrawText(/英语/.test(narration) ? "别只收藏，今天就开口练" : "关注我，把方法变成结果");
     const fontPath = "C:/Windows/Fonts/msyh.ttc";
@@ -1025,8 +1025,14 @@ export function createVideoProductService({
     for (const scene of timelineFiles.packagedScenes) {
       const label = ffmpegDrawText(conciseSceneLabel(scene));
       if (!label) continue;
+      const sceneNo = ffmpegDrawText(`0${scene.scene_index}`.slice(-2));
+      const sceneEnable = ffmpegEnableBetween(scene.start_time, scene.end_time);
       filters.push(
-        `drawtext=fontfile='${ffmpegFilterPath(fontPath)}':text='${label}':x=68:y=190:fontsize=30:fontcolor=0xDDE7F4:box=1:boxcolor=0x07101B@0.52:boxborderw=14:enable='${ffmpegEnableBetween(scene.start_time, scene.end_time)}'`,
+        `drawtext=fontfile='${ffmpegFilterPath(fontPath)}':text='${label}':x=68:y=190:fontsize=30:fontcolor=0xDDE7F4:box=1:boxcolor=0x07101B@0.52:boxborderw=14:enable='${sceneEnable}'`,
+        `drawbox=x=68:y=650:w=${width - 136}:h=148:color=0x0D1726@0.88:t=fill:enable='${sceneEnable}'`,
+        `drawbox=x=68:y=650:w=8:h=148:color=0xE7C76C:t=fill:enable='${sceneEnable}'`,
+        `drawtext=fontfile='${ffmpegFilterPath(fontPath)}':text='${sceneNo}':x=96:y=672:fontsize=28:fontcolor=0xE7C76C:enable='${sceneEnable}'`,
+        `drawtext=fontfile='${ffmpegFilterPath(boldFontPath)}':text='${label}':x=96:y=715:fontsize=50:fontcolor=white:box=1:boxcolor=0x07101B@0.18:boxborderw=8:enable='${sceneEnable}'`,
       );
     }
     const args = [
