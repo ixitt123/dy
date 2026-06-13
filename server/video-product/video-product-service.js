@@ -68,6 +68,10 @@ function safeFileName(value) {
     .slice(0, 80) || "timeline";
 }
 
+function createStableAssetId(filePath) {
+  return Buffer.from(path.resolve(String(filePath || ""))).toString("base64url").slice(0, 32);
+}
+
 function ensureDir(dir) {
   fs.mkdirSync(dir, { recursive: true });
   return dir;
@@ -399,22 +403,55 @@ export function createVideoProductService({
     }));
   }
 
-  function findBgmAsset() {
+  function listBgmAssets() {
     const roots = [
       path.join(baseDir, "assets", "bgm"),
       path.join(baseDir, "media", "bgm"),
       path.join(baseDir, "bgm"),
     ];
     const extensions = new Set([".mp3", ".wav", ".m4a", ".aac", ".ogg"]);
+    const assets = [];
     for (const root of roots) {
       if (!fs.existsSync(root)) continue;
       const files = fs.readdirSync(root)
         .map((name) => path.join(root, name))
         .filter((filePath) => fs.statSync(filePath).isFile() && extensions.has(path.extname(filePath).toLowerCase()))
         .sort();
-      if (files.length) return files[0];
+      for (const filePath of files) {
+        const stats = fs.statSync(filePath);
+        assets.push({
+          id: createStableAssetId(filePath),
+          path: filePath,
+          filename: path.basename(filePath),
+          file_size: stats.size,
+          created_at: stats.birthtime?.toISOString?.() || stats.mtime?.toISOString?.() || "",
+        });
+      }
     }
-    return "";
+    return assets.sort((a, b) => String(a.filename).localeCompare(String(b.filename)));
+  }
+
+  function findBgmAsset() {
+    return listBgmAssets()[0]?.path || "";
+  }
+
+  function importBgmAsset(filePath) {
+    const resolved = path.resolve(String(filePath || "").trim());
+    if (!resolved || !fs.existsSync(resolved)) throw new Error("请选择存在的本地音乐文件。");
+    const ext = path.extname(resolved).toLowerCase();
+    const supported = new Set([".mp3", ".wav", ".m4a", ".aac", ".ogg"]);
+    if (!supported.has(ext)) throw new Error("暂只支持 MP3、WAV、M4A、AAC、OGG 背景音乐。");
+    const bgmDir = ensureDir(path.join(baseDir, "assets", "bgm"));
+    const filename = `bgm_local_${Date.now()}_${safeFileName(path.basename(resolved, ext))}${ext}`;
+    const outputPath = path.join(bgmDir, filename);
+    fs.copyFileSync(resolved, outputPath);
+    const stats = fs.statSync(outputPath);
+    return {
+      id: createStableAssetId(outputPath),
+      path: outputPath,
+      filename,
+      file_size: stats.size,
+    };
   }
 
   function sourceProject(row, { includeScenes = true } = {}) {
@@ -441,11 +478,13 @@ export function createVideoProductService({
       }));
     const imageAssets = listImageAssets(500);
     const downloadedVideos = listDownloadedVideoAssets(200);
+    const bgmAssets = listBgmAssets();
     return {
       directors,
       audioJobs,
       imageAssets,
       downloadedVideos,
+      bgmAssets,
       timelines: taskStore.listTimelineProjects({ limit: 50 }).map((row) => sourceProject(row, { includeScenes: false })),
       platforms: Object.entries(PLATFORM_PRESETS).map(([id, value]) => ({ id, ...value })),
       outputTypes: Object.entries(OUTPUT_TYPE_LABELS).map(([id, label]) => ({ id, label })),
@@ -1305,6 +1344,7 @@ export function createVideoProductService({
     getProject,
     listProjects,
     listSources,
+    importBgmAsset,
     resolveOutputPath,
     outputRoot,
   };
