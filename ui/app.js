@@ -784,6 +784,8 @@ function renderTranscripts(items) {
           <div class="transcript-actions">
             <button class="ghost small transcript-analyze" type="button" data-task-id="${item.id}">AI 分析</button>
             <button class="ghost small transcript-rewrite" type="button" data-task-id="${item.id}">AI 改写</button>
+            <button class="ghost small transcript-tts" type="button" data-task-id="${item.id}">导入 TTS</button>
+            <button class="ghost small transcript-director" type="button" data-task-id="${item.id}">导入 AI 导演</button>
           </div>
         </div>
       `;
@@ -846,6 +848,37 @@ async function openRewriteEditor(taskId) {
   rewritePanel.hidden = false;
   window.workbenchNavigate?.("rewrite", { preserveScroll: true });
   rewritePanel.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+async function sendTranscriptToTts(taskId) {
+  const transcripts = await refreshTranscripts();
+  const item = transcripts.find((row) => String(row.id) === String(taskId));
+  if (!item) return;
+  ttsText.value = item.text || "";
+  ttsCharacterCount.textContent = `${(item.text || "").replace(/\s/g, "").length} 字`;
+  window.workbenchNavigate?.("tts", { preserveScroll: true });
+  document.querySelector("#ttsLab")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  ttsStatus.textContent = `已从文案库导入：${item.title || `任务 ${item.id}`}。请选择音色后生成语音。`;
+}
+
+async function sendTranscriptToDirector(taskId) {
+  const transcripts = await refreshTranscripts();
+  const item = transcripts.find((row) => String(row.id) === String(taskId));
+  if (!item) return;
+  directorSourceMode.value = "manual";
+  updateDirectorSourceOptions({ preserveText: true });
+  directorTitle.value = conciseDirectorTitle(item.title || `任务 ${item.id}`);
+  directorSourceText.value = item.text || "";
+  directorSourceContext = {
+    taskId: Number(item.id || 0),
+    rewriteId: 0,
+    sourceKey: `transcript:${item.id}`,
+    sourceType: "transcript",
+  };
+  updateDirectorCharacterCount();
+  window.workbenchNavigate?.("director", { preserveScroll: true });
+  document.querySelector("#directorSystem")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  directorStatus.textContent = `已从文案库导入：${item.title || `任务 ${item.id}`}。`;
 }
 
 function statusClass(status) {
@@ -1130,6 +1163,18 @@ async function chooseDownloadDir() {
   downloadDirInput.value = data.downloadsDir || "";
   savePath.textContent = `下载位置：${data.downloadsDir}`;
   renderFiles(data.files);
+}
+
+async function chooseLocalVideo() {
+  const data = await fetchJson("/api/local-video/choose", { method: "POST" });
+  localVideoPath.value = data.filePath || "";
+  if (data.filePath) {
+    resultBox.textContent = `已选择本地视频：${data.filePath}`;
+    setReady("已选择本地视频", true);
+  } else {
+    resultBox.textContent = "未选择本地视频。";
+    setReady("已取消选择", false);
+  }
 }
 
 async function pauseTask(id) {
@@ -3780,6 +3825,65 @@ async function runTranscript() {
 
       if (job.status === "error") {
         resultBox.textContent = job.text || job.message || "文案提取失败";
+        setReady("失败", false);
+        finished = true;
+      }
+    }
+  } catch (error) {
+    resultBox.textContent = error instanceof Error ? error.message : String(error);
+    setReady("失败", false);
+  }
+}
+
+async function runLocalVideoTranscript() {
+  const filePath = localVideoPath.value.trim();
+  if (!filePath) {
+    resultBox.textContent = "请先选择本地视频文件。";
+    setReady("缺少本地视频", false);
+    return;
+  }
+
+  setBusy("正在提取本地视频文案");
+  setTranscriptActions();
+  showProgress(0, "准备提取本地视频文案");
+  resultBox.textContent = "本地视频文案提取已经开始，请看上方进度条。";
+
+  try {
+    const startData = await fetchJson("/api/local-video/transcript", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        filePath,
+        apiKey: apiKeyInput?.value.trim() || "",
+      }),
+    });
+
+    if (apiKeyInput?.value.trim()) {
+      apiKeyInput.value = "";
+      loadSettings().catch(() => {});
+    }
+
+    let finished = false;
+    while (!finished) {
+      await delay(1200);
+      const data = await fetchJson(`/api/transcript/status?id=${encodeURIComponent(startData.job.id)}`);
+      const job = data.job;
+      showProgress(job.percent || 0, job.message || "正在提取本地视频文案");
+
+      if (job.status === "done") {
+        showProgress(100, "本地视频文案提取完成");
+        resultBox.textContent = job.text || "本地视频文案提取完成";
+        setTranscriptActions(job.text || "", job.transcriptPath || "");
+        renderFiles(job.files || allFiles);
+        await refreshTasks();
+        await refreshTranscripts();
+        setReady("完成", true);
+        finished = true;
+      }
+
+      if (job.status === "error") {
+        resultBox.textContent = job.text || job.message || "本地视频文案提取失败";
+        await refreshTasks().catch(() => {});
         setReady("失败", false);
         finished = true;
       }
