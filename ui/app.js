@@ -3197,16 +3197,74 @@ function videoProductAudioScoreForDirector(director, audio) {
   return Math.max(textScore, sameTask ? 100 : 0, sameRewrite ? 96 : 0);
 }
 
+function isRouteAVideoProduct() {
+  return (videoProductOutputType?.value || "") === "template_mp4";
+}
+
+function renderRouteAOptionControls() {
+  const styles = videoProductSources.routeAStyles?.length
+    ? videoProductSources.routeAStyles
+    : [{ id: "black_gold_knowledge", label: "黑金知识口播" }];
+  const strategies = videoProductSources.bgmStrategies?.length
+    ? videoProductSources.bgmStrategies
+    : [
+      { id: "auto", label: "自动匹配" },
+      { id: "manual", label: "手动本地 BGM" },
+      { id: "generated_default", label: "基础氛围生成" },
+    ];
+  const bgmAssets = videoProductSources.bgmAssets || [];
+  const currentStyle = videoProductRouteAStyle?.value || "black_gold_knowledge";
+  const currentStrategy = videoProductBgmStrategy?.value || "auto";
+  const currentBgm = videoProductBgm?.value || "";
+  if (videoProductRouteAStyle) {
+    videoProductRouteAStyle.innerHTML = styles
+      .map((item) => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.label)}</option>`)
+      .join("");
+    videoProductRouteAStyle.value = styles.some((item) => item.id === currentStyle) ? currentStyle : styles[0]?.id || "";
+  }
+  if (videoProductBgmStrategy) {
+    videoProductBgmStrategy.innerHTML = strategies
+      .map((item) => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.label)}</option>`)
+      .join("");
+    videoProductBgmStrategy.value = strategies.some((item) => item.id === currentStrategy) ? currentStrategy : "auto";
+  }
+  if (videoProductBgm) {
+    const options = [
+      '<option value="">自动匹配本地 BGM；没有则基础生成</option>',
+      ...bgmAssets.map((asset) => {
+        const title = asset.title || asset.filename || asset.path || asset.id;
+        return `<option value="${escapeHtml(asset.id)}">${escapeHtml(title)}</option>`;
+      }),
+    ];
+    videoProductBgm.innerHTML = options.join("");
+    videoProductBgm.value = bgmAssets.some((asset) => String(asset.id) === String(currentBgm)) ? currentBgm : "";
+  }
+}
+
+function updateRouteAOptionsVisibility() {
+  if (!videoProductRouteAOptions) return;
+  videoProductRouteAOptions.hidden = !isRouteAVideoProduct();
+}
+
 function renderVideoProductSourceOptions({ preferredDirectorId = 0, preferredAudioId = 0 } = {}) {
   const directors = videoProductSources.directors || [];
   const audios = videoProductSources.audioJobs || [];
-  videoProductDirector.innerHTML = directors.length
-    ? directors.map((project) => `<option value="${project.id}">#${project.id} ${escapeHtml(project.title || "未命名导演稿")} · ${Number(project.scene_count || 0)} 镜头</option>`).join("")
+  const routeA = isRouteAVideoProduct();
+  const directorOptions = directors
+    .map((project) => `<option value="${project.id}">#${project.id} ${escapeHtml(project.title || "未命名导演稿")} · ${Number(project.scene_count || 0)} 镜头</option>`);
+  if (routeA) {
+    directorOptions.unshift('<option value="">路线 A：按 TTS 文案自动生成导演稿</option>');
+  }
+  videoProductDirector.innerHTML = directorOptions.length
+    ? directorOptions.join("")
     : '<option value="">暂无已完成导演项目</option>';
   if (preferredDirectorId && directors.some((item) => Number(item.id) === Number(preferredDirectorId))) {
     videoProductDirector.value = String(preferredDirectorId);
+  } else if (routeA && !preferredDirectorId) {
+    videoProductDirector.value = "";
   }
-  const selectedDirector = directors.find((item) => Number(item.id) === Number(videoProductDirector.value || preferredDirectorId || 0)) || directors[0] || null;
+  const selectedDirector = directors.find((item) => Number(item.id) === Number(videoProductDirector.value || preferredDirectorId || 0))
+    || (routeA ? null : directors[0] || null);
   const scoredAudios = audios
     .map((job) => ({ ...job, match_score: videoProductAudioScoreForDirector(selectedDirector, job) }))
     .sort((a, b) => Number(b.match_score || 0) - Number(a.match_score || 0) || Number(b.id || 0) - Number(a.id || 0));
@@ -3218,6 +3276,8 @@ function renderVideoProductSourceOptions({ preferredDirectorId = 0, preferredAud
   } else if (scoredAudios.length) {
     videoProductAudio.value = String(scoredAudios[0].id);
   }
+  renderRouteAOptionControls();
+  updateRouteAOptionsVisibility();
 }
 
 function updateVideoProductAssetStatus() {
@@ -3238,6 +3298,9 @@ async function loadVideoProductSources(options = {}) {
     timelines: data.timelines || [],
     platforms: data.platforms || [],
     outputTypes: data.outputTypes || [],
+    routeAStyles: data.routeAStyles || [],
+    bgmStrategies: data.bgmStrategies || [],
+    bgmProviderSuggestions: data.bgmProviderSuggestions || [],
   };
   renderVideoProductSourceOptions(options);
   updateVideoProductAssetStatus();
