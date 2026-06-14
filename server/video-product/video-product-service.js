@@ -744,6 +744,10 @@ function renderReport(project, timelineFiles, { mp4Path = "", bgmPath = "", qual
       cover: Boolean(timelineFiles.coverPath),
       publish_text: true,
       hyperframes_package: Boolean(timelineFiles.hyperframesIndexPath),
+      motion_template_version: project.output_type === "template_mp4" ? "route-a-premium-ffmpeg-v5" : "",
+      template_background_mode: project.output_type === "template_mp4"
+        ? (timelineFiles.packagedTemplateBackground ? "image_asset_dark_blur_motion" : "procedural_premium_motion")
+        : "",
     },
     files: {
       mp4: mp4Path ? path.basename(mp4Path) : "",
@@ -1759,7 +1763,7 @@ ${sceneMarkup}
     const srtPath = path.join(projectDir, "subtitles.srt");
     fs.writeFileSync(srtPath, timelineToSrt(packagedScenes), "utf8");
     const assPath = path.join(projectDir, "subtitles.ass");
-    fs.writeFileSync(assPath, timelineToAss(packagedScenes, { width, height }), "utf8");
+    fs.writeFileSync(assPath, timelineToAss(packagedScenes, { width, height, style: timelineJson.route_a_style }), "utf8");
     const titleText = publishTitle;
     fs.writeFileSync(path.join(projectDir, "title.txt"), `${titleText}\n`, "utf8");
     fs.writeFileSync(path.join(projectDir, "description.txt"), [
@@ -1794,12 +1798,12 @@ ${sceneMarkup}
           : "未找到 BGM 素材。",
         ass_subtitles: true,
         motion_template: project.output_type === "template_mp4",
-        motion_template_version: project.output_type === "template_mp4" ? "route-a-single-caption-v4" : "",
+        motion_template_version: project.output_type === "template_mp4" ? "route-a-premium-ffmpeg-v5" : "",
         hyperframes_package: Boolean(hyperframesPackage?.indexPath),
-        hyperframes_status: hyperframesPackage?.indexPath ? "package_ready_ffmpeg_final" : "",
+        hyperframes_status: hyperframesPackage?.indexPath ? "package_ready_for_future_render_ffmpeg_v5_final" : "",
         optimized_publish_title: titleText,
-        route_a_caption_policy: project.output_type === "template_mp4" ? "single_ass_caption_layer" : "",
-        template_background: packagedTemplateBackground ? "image_asset_dark_blur" : "procedural_dark",
+        route_a_caption_policy: project.output_type === "template_mp4" ? "premium_ass_boxed_keyword_highlight" : "",
+        template_background: packagedTemplateBackground ? "image_asset_dark_blur_motion" : "procedural_premium_motion",
         publish_package: true,
       },
       audio_binding: timeline.metadata?.audio_binding || null,
@@ -1976,9 +1980,8 @@ ${sceneMarkup}
     });
     const backgroundFilters = timelineFiles.packagedTemplateBackground
       ? [
-        `scale=${width}:${height}:force_original_aspect_ratio=increase`,
-        `crop=${width}:${height}`,
-        `zoompan=z='min(zoom+0.00026,1.055)':d=${Math.max(1, Math.ceil(duration * project.fps))}:s=${width}x${height}:fps=${project.fps}`,
+        `scale=${Math.round(width * 1.09)}:${Math.round(height * 1.09)}:force_original_aspect_ratio=increase`,
+        `crop=${width}:${height}:x='(iw-${width})/2+22*sin(t*0.35)':y='(ih-${height})/2+18*cos(t*0.29)'`,
         "boxblur=luma_radius=13:luma_power=1",
         "eq=brightness=-0.20:saturation=0.78:contrast=1.08",
         `drawbox=x=0:y=0:w=${width}:h=${height}:color=${kit.bg}@0.50:t=fill`,
@@ -2216,11 +2219,14 @@ ${sceneMarkup}
         bgm_label: timelineFiles.bgmLabel || "",
         has_ass_subtitles: Boolean(timelineFiles.assPath && fs.existsSync(timelineFiles.assPath)),
         has_cover: Boolean(timelineFiles.coverPath),
-        has_template_background: Boolean(timelineFiles.packagedTemplateBackground),
+        has_template_background: Boolean(timelineFiles.packagedTemplateBackground) || project.output_type === "template_mp4",
         has_hyperframes_package: Boolean(timelineFiles.hyperframesIndexPath),
+        template_background_mode: project.output_type === "template_mp4"
+          ? (timelineFiles.packagedTemplateBackground ? "image_asset_dark_blur_motion" : "procedural_premium_motion")
+          : "",
         publish_title: publishTitle,
         title_optimized: !titleLooksGeneric(publishTitle),
-        motion_template_version: project.output_type === "template_mp4" ? "route-a-single-caption-v4" : "",
+        motion_template_version: project.output_type === "template_mp4" ? "route-a-premium-ffmpeg-v5" : "",
         alignment_source: project.output_type === "template_mp4"
           ? timelineFiles.packagedScenes[0]?.metadata?.alignment_source || safeJson(timelineFiles.packagedScenes[0]?.metadata_json, {})?.alignment_source || ""
           : "",
