@@ -705,6 +705,7 @@ export function createVideoProductService({
   baseDir,
   taskStore,
   imageService,
+  directorService = null,
   ffmpegPath,
   onProgress = () => {},
   onIdle = () => {},
