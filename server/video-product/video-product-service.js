@@ -175,6 +175,26 @@ function parseResolution(value) {
   };
 }
 
+function normalizedHex(value, fallback = "#07101B") {
+  const raw = String(value || "").trim();
+  if (/^0x[0-9a-f]{6}$/i.test(raw)) return `#${raw.slice(2).toUpperCase()}`;
+  if (/^#[0-9a-f]{6}$/i.test(raw)) return raw.toUpperCase();
+  if (/^[0-9a-f]{6}$/i.test(raw)) return `#${raw.toUpperCase()}`;
+  return fallback.toUpperCase();
+}
+
+function ffmpegColor(value, fallback = "#07101B") {
+  return `0x${normalizedHex(value, fallback).slice(1)}`;
+}
+
+function assColor(value, fallback = "#FFFFFF", alpha = "00") {
+  const hex = normalizedHex(value, fallback).slice(1);
+  const rr = hex.slice(0, 2);
+  const gg = hex.slice(2, 4);
+  const bb = hex.slice(4, 6);
+  return `&H${alpha}${bb}${gg}${rr}`;
+}
+
 function srtTimestamp(seconds) {
   const value = Math.max(0, Number(seconds || 0));
   const hours = Math.floor(value / 3600);
@@ -197,10 +217,16 @@ function timelineToSrt(scenes) {
   ].join("\n")).join("\n");
 }
 
-function timelineToAss(scenes, { width = 1080, height = 1920 } = {}) {
-  const marginV = Math.max(132, Math.round(height * 0.13));
-  const fontSize = Math.max(42, Math.round(height * 0.029));
-  const titleSize = Math.max(48, Math.round(height * 0.034));
+function timelineToAss(scenes, { width = 1080, height = 1920, style = null } = {}) {
+  const palette = style?.palette || {};
+  const marginV = Math.max(230, Math.round(height * 0.16));
+  const fontSize = Math.max(56, Math.round(height * 0.034));
+  const titleSize = Math.max(64, Math.round(height * 0.042));
+  const accent = assColor(palette.accent, "#E7C76C");
+  const accent2 = assColor(palette.accent2, "#49D6C8");
+  const textColor = assColor(palette.text, "#FFFFFF");
+  const outlineColor = assColor("#05070C", "#05070C");
+  const boxColor = assColor(palette.background, "#07101B", "88");
   const lines = [
     "[Script Info]",
     "ScriptType: v4.00+",
@@ -211,23 +237,27 @@ function timelineToAss(scenes, { width = 1080, height = 1920 } = {}) {
     "",
     "[V4+ Styles]",
     "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding",
-    `Style: Premium,Microsoft YaHei,${fontSize},&H00FFFFFF,&H0000D7FF,&H00161616,&H99000000,-1,0,0,0,100,100,0,0,1,3,0,2,96,96,${marginV},1`,
-    `Style: Keyword,Microsoft YaHei,${titleSize},&H0000D7FF,&H00FFFFFF,&H00111111,&H99000000,-1,0,0,0,102,102,0,0,1,4,0,2,96,96,${marginV + 8},1`,
+    `Style: Premium,Microsoft YaHei,${fontSize},${textColor},${accent},${outlineColor},${boxColor},-1,0,0,0,100,100,0,0,3,5,0,2,86,86,${marginV},1`,
+    `Style: Keyword,Microsoft YaHei,${titleSize},${accent},${textColor},${outlineColor},${boxColor},-1,0,0,0,104,104,0,0,3,5,0,2,86,86,${marginV + 10},1`,
+    `Style: CTA,Microsoft YaHei,${titleSize},${textColor},${accent2},${outlineColor},${boxColor},-1,0,0,0,104,104,0,0,3,5,0,2,86,86,${marginV + 12},1`,
     "",
     "[Events]",
     "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text",
   ];
 
   for (const scene of scenes) {
-    const text = assCaptionText(scene.subtitle_text || scene.narration_text || "");
+    const styleName = Number(scene.scene_index || 0) === 1 ? "Keyword" : "Premium";
+    const text = assCaptionText(scene.subtitle_text || scene.narration_text || "", {
+      accent,
+      resetStyle: styleName,
+    });
     if (!text) continue;
-    const style = String(scene.title_text || "").length <= 16 && Number(scene.scene_index || 0) === 1 ? "Keyword" : "Premium";
-    const effectText = `{\\fad(120,120)\\t(0,220,\\fscx106\\fscy106)}${text}`;
+    const effectText = `{\\fad(80,120)\\t(0,180,\\fscx106\\fscy106)\\t(180,360,\\fscx100\\fscy100)}${text}`;
     lines.push([
-      "Dialogue: 0",
+      "Dialogue: 1",
       assTimestamp(scene.start_time),
       assTimestamp(scene.end_time),
-      style,
+      styleName,
       "",
       "0",
       "0",
@@ -383,14 +413,32 @@ function assEscape(text) {
     .replace(/\r?\n/g, "\\N");
 }
 
-function assCaptionText(text) {
+function assCaptionText(text, { accent = "&H0000D7FF", resetStyle = "Premium" } = {}) {
   const value = String(text || "").trim();
-  if (value.length <= 18) return assEscape(value);
+  const highlightPattern = /(半年|英语|背单词|开口|关键|核心|方法|不是|不要|别|先|真正|立刻|马上|免费|报名|家长|解决|\d+(?:\.\d+)?%?)/g;
+  const emphasize = (source) => assEscape(source)
+    .replace(highlightPattern, `{\\c${accent}\\b1}$1{\\r${resetStyle}}`);
+  if (value.length <= 16) return emphasize(value);
   const chunks = [];
-  for (let index = 0; index < value.length; index += 16) {
-    chunks.push(value.slice(index, index + 16));
+  const sentenceChunks = value.split(/(?<=[，、。！？!?；;])/).map((item) => item.trim()).filter(Boolean);
+  let current = "";
+  for (const chunk of sentenceChunks.length ? sentenceChunks : [value]) {
+    if (current && current.length + chunk.length > 14) {
+      chunks.push(current);
+      current = "";
+    }
+    if (chunk.length > 18) {
+      if (current) {
+        chunks.push(current);
+        current = "";
+      }
+      for (let index = 0; index < chunk.length; index += 14) chunks.push(chunk.slice(index, index + 14));
+      continue;
+    }
+    current += chunk;
   }
-  return assEscape(chunks.slice(0, 3).join("\\N"));
+  if (current) chunks.push(current);
+  return chunks.slice(0, 3).map(emphasize).join("\\N");
 }
 
 function normalizeSceneDuration(scene) {
@@ -977,7 +1025,7 @@ export function createVideoProductService({
 
   function writeDefaultBgmWav(outputPath, durationSeconds, styleId = ROUTE_A_DEFAULT_STYLE_ID) {
     const preset = routeAStylePreset(styleId);
-    const sampleRate = 22050;
+    const sampleRate = 44100;
     const duration = Math.max(1, Math.min(600, Number(durationSeconds || 0) || 30));
     const sampleCount = Math.ceil(sampleRate * duration);
     const dataSize = sampleCount * 2;
@@ -997,23 +1045,41 @@ export function createVideoProductService({
     buffer.writeUInt32LE(dataSize, 40);
 
     const tonalMap = {
-      black_gold_knowledge: [110, 165, 220],
-      clean_education: [147, 196, 247],
-      tech_info: [130.81, 196, 261.63],
-      enrollment_ad: [98, 146.83, 196],
+      black_gold_knowledge: { tones: [110, 165, 220], bpm: 92, hit: 74 },
+      clean_education: { tones: [147, 196, 247], bpm: 86, hit: 92 },
+      tech_info: { tones: [130.81, 196, 261.63], bpm: 104, hit: 82 },
+      enrollment_ad: { tones: [98, 146.83, 196], bpm: 112, hit: 68 },
     };
-    const tones = tonalMap[routeAStyleId(styleId)] || tonalMap.black_gold_knowledge;
+    const music = tonalMap[routeAStyleId(styleId)] || tonalMap.black_gold_knowledge;
+    const tones = music.tones;
+    const beat = 60 / music.bpm;
+    const halfBeat = beat / 2;
     for (let index = 0; index < sampleCount; index += 1) {
       const t = index / sampleRate;
       const fadeIn = Math.min(1, t / 1.5);
       const fadeOut = Math.min(1, (duration - t) / 1.8);
       const envelope = Math.max(0, Math.min(fadeIn, fadeOut));
-      const pulse = Math.sin(2 * Math.PI * 1.5 * t) > 0.82 ? 0.055 : 0;
+      const beatPhase = t % beat;
+      const halfPhase = t % halfBeat;
+      const kick = beatPhase < 0.18
+        ? Math.sin(2 * Math.PI * (music.hit + 42 * (1 - beatPhase / 0.18)) * t) * Math.exp(-beatPhase * 16) * 0.36
+        : 0;
+      const tickNoise = Math.sin((index + 1) * 12.9898) * 43758.5453;
+      const tick = halfPhase < 0.028
+        ? (tickNoise - Math.floor(tickNoise) - 0.5) * Math.exp(-halfPhase * 105) * 0.08
+        : 0;
+      const introHit = t < 0.42
+        ? Math.sin(2 * Math.PI * (music.hit * 1.7 - t * 60) * t) * Math.exp(-t * 6.5) * 0.34
+        : 0;
+      const transitionLift = Math.sin(2 * Math.PI * (1 / Math.max(beat * 4, 1)) * t) * 0.025;
       const value = (
-        Math.sin(2 * Math.PI * tones[0] * t) * 0.18
-        + Math.sin(2 * Math.PI * tones[1] * t) * 0.08
-        + Math.sin(2 * Math.PI * tones[2] * t) * 0.035
-        + pulse
+        Math.sin(2 * Math.PI * tones[0] * t) * 0.11
+        + Math.sin(2 * Math.PI * tones[1] * t) * 0.055
+        + Math.sin(2 * Math.PI * tones[2] * t) * 0.03
+        + transitionLift
+        + kick
+        + tick
+        + introHit
       ) * envelope;
       const sample = Math.max(-1, Math.min(1, value)) * 32767;
       buffer.writeInt16LE(Math.round(sample), 44 + index * 2);
