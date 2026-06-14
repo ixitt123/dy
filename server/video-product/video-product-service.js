@@ -1939,39 +1939,75 @@ ${sceneMarkup}
     const { width, height } = parseResolution(project.resolution);
     const duration = Math.max(1, Number(timelineFiles.timelineJson.duration || 0));
     const publishTitle = String(timelineFiles.timelineJson.publish_title || timelineFiles.timelineJson.name || `Timeline #${project.id}`);
+    const kit = routeAVisualKit(timelineFiles.timelineJson.route_a_style || project.metadata || {});
     const titleLines = splitTitleLines(publishTitle, 11).slice(0, 2);
     const titleLine1 = ffmpegDrawText(titleLines[0] || publishTitle);
     const titleLine2 = ffmpegDrawText(titleLines[1] || "");
+    const ctaText = ffmpegDrawText(routeACtaText(timelineFiles.timelineJson));
     const voiceStartSeconds = Math.max(0, Number(timelineFiles.timelineJson.tracks?.audio?.[0]?.start || 0));
     const voiceDelayMs = Math.round(voiceStartSeconds * 1000);
     const introEnd = Math.max(0.65, voiceStartSeconds).toFixed(2);
     const titleEnable = `enable='lt(t\\,${introEnd})'`;
+    const outroStart = Math.max(0, duration - 1.72).toFixed(3);
+    const outroEnable = `enable='gte(t\\,${outroStart})'`;
     const fontPath = "C:/Windows/Fonts/msyh.ttc";
     const boldFontPath = fs.existsSync("C:/Windows/Fonts/msyhbd.ttc") ? "C:/Windows/Fonts/msyhbd.ttc" : fontPath;
     const outputPath = path.join(timelineFiles.projectDir, `${safeFileName(timelineFiles.timelineJson.name || `timeline_${project.id}`)}_template.mp4`);
     const subtitlePath = timelineFiles.assPath || timelineFiles.srtPath;
     const subtitleFilter = `subtitles='${ffmpegFilterPath(subtitlePath)}'`;
+    const titlePanelHeight = Math.round(height * 0.30);
+    const lowerSafeY = Math.round(height * 0.72);
+    const progressY = height - 18;
+    const sceneFilters = (timelineFiles.packagedScenes || []).flatMap((scene, index) => {
+      const start = Number(scene.start_time || 0);
+      const end = Math.max(start + 0.35, Number(scene.end_time || start + scene.duration || 0));
+      const enable = ffmpegEnableBetween(start, end);
+      const burstEnable = ffmpegEnableBetween(start, Math.min(end, start + 0.32));
+      const label = ffmpegDrawText(conciseSceneLabel(scene));
+      const labelWidth = Math.min(width - 160, Math.max(360, compactTitleText(label).length * 34 + 210));
+      const y = Math.round(height * 0.104);
+      return [
+        `drawbox=x=0:y=${Math.round(height * 0.39)}:w=${width}:h=8:color=${kit.accent2}@0.34:t=fill:enable='${burstEnable}'`,
+        `drawbox=x=70:y=${y}:w=10:h=118:color=${index % 2 ? kit.accent2 : kit.accent}:t=fill:enable='${enable}'`,
+        `drawbox=x=92:y=${y}:w=${labelWidth}:h=118:color=${kit.panel}@0.76:t=fill:enable='${enable}'`,
+        `drawtext=fontfile='${ffmpegFilterPath(boldFontPath)}':text='SHOT ${String(index + 1).padStart(2, "0")}':x=122:y=${y + 18}:fontsize=30:fontcolor=${kit.muted}:enable='${enable}'`,
+        `drawtext=fontfile='${ffmpegFilterPath(boldFontPath)}':text='${label}':x=122:y=${y + 56}:fontsize=42:fontcolor=${index % 2 ? kit.accent2 : kit.accent}:enable='${enable}'`,
+      ];
+    });
     const backgroundFilters = timelineFiles.packagedTemplateBackground
       ? [
         `scale=${width}:${height}:force_original_aspect_ratio=increase`,
         `crop=${width}:${height}`,
-        "boxblur=luma_radius=18:luma_power=1",
-        "eq=brightness=-0.18:saturation=0.72",
-        `drawbox=x=0:y=0:w=${width}:h=${height}:color=0x06101D@0.48:t=fill`,
+        `zoompan=z='min(zoom+0.00026,1.055)':d=${Math.max(1, Math.ceil(duration * project.fps))}:s=${width}x${height}:fps=${project.fps}`,
+        "boxblur=luma_radius=13:luma_power=1",
+        "eq=brightness=-0.20:saturation=0.78:contrast=1.08",
+        `drawbox=x=0:y=0:w=${width}:h=${height}:color=${kit.bg}@0.50:t=fill`,
       ]
       : [
-        `drawbox=x=0:y=0:w=${width}:h=${height}:color=0x09101B:t=fill`,
+        `drawbox=x=0:y=0:w=${width}:h=${height}:color=${kit.bg}:t=fill`,
+        `drawbox=x='-360+mod(t*34\\,${width + 720})':y=${Math.round(height * 0.15)}:w=560:h=94:color=${kit.accent}@0.14:t=fill`,
+        `drawbox=x='${Math.round(width * 0.72)}-mod(t*22\\,${width + 520})':y=${Math.round(height * 0.58)}:w=460:h=78:color=${kit.accent2}@0.12:t=fill`,
+        `drawbox=x=${Math.round(width * 0.08)}:y='${Math.round(height * 0.08)}+28*sin(t*1.2)':w=${Math.round(width * 0.84)}:h=${Math.round(height * 0.012)}:color=${kit.text}@0.035:t=fill`,
+        "noise=alls=5:allf=t+u",
       ];
     const filters = [
       ...backgroundFilters,
-      `drawbox=x=0:y=${Math.round(height * 0.77)}:w=${width}:h=${Math.round(height * 0.11)}:color=0x020813@0.62:t=fill`,
-      `drawbox=x=0:y=0:w=${width}:h=${Math.round(height * 0.28)}:color=0x07101B@0.86:t=fill:${titleEnable}`,
-      `drawbox=x=72:y=168:w=9:h=132:color=0xE7C76C:t=fill:${titleEnable}`,
-      `drawtext=fontfile='${ffmpegFilterPath(boldFontPath)}':text='${titleLine1}':x=106:y=195:fontsize=72:fontcolor=white:box=1:boxcolor=0x07101B@0.50:boxborderw=20:${titleEnable}`,
-      titleLine2 ? `drawtext=fontfile='${ffmpegFilterPath(boldFontPath)}':text='${titleLine2}':x=106:y=286:fontsize=72:fontcolor=0xE7C76C:box=1:boxcolor=0x07101B@0.50:boxborderw=20:${titleEnable}` : "",
+      "vignette=PI/5",
+      `drawbox=x=54:y=56:w=${width - 108}:h=${height - 112}:color=${kit.text}@0.045:t=2`,
+      `drawbox=x=0:y=${lowerSafeY}:w=${width}:h=${Math.round(height * 0.16)}:color=${kit.bg}@0.64:t=fill`,
+      `drawbox=x=0:y=0:w=${width}:h=${titlePanelHeight}:color=${kit.bg}@0.92:t=fill:${titleEnable}`,
+      `drawbox=x=72:y=156:w=10:h=146:color=${kit.accent}:t=fill:${titleEnable}`,
+      `drawbox=x=96:y=142:w=${width - 168}:h=184:color=${kit.panel}@0.76:t=fill:${titleEnable}`,
+      `drawtext=fontfile='${ffmpegFilterPath(boldFontPath)}':text='${titleLine1}':x=126:y=174:fontsize=78:fontcolor=${kit.text}:box=0:${titleEnable}`,
+      titleLine2 ? `drawtext=fontfile='${ffmpegFilterPath(boldFontPath)}':text='${titleLine2}':x=126:y=266:fontsize=78:fontcolor=${kit.accent}:box=0:${titleEnable}` : "",
+      `drawtext=fontfile='${ffmpegFilterPath(fontPath)}':text='AI Director · Voice First · 1080x1920':x=74:y=${height - 92}:fontsize=25:fontcolor=${kit.muted}:enable='lt(t\\,${duration - 1.2})'`,
+      ...sceneFilters,
       subtitleFilter,
-      `drawbox=x=0:y=${height - 14}:w=${width}:h=14:color=0x152133:t=fill`,
-      `drawbox=x=0:y=${height - 14}:w='iw*t/${duration}':h=14:color=0xE7C76C:t=fill`,
+      `drawbox=x=0:y=0:w=${width}:h=${height}:color=${kit.bg}@0.82:t=fill:${outroEnable}`,
+      `drawtext=fontfile='${ffmpegFilterPath(boldFontPath)}':text='${ctaText}':x=(w-text_w)/2:y=${Math.round(height * 0.43)}:fontsize=68:fontcolor=${kit.text}:box=1:boxcolor=${kit.panel}@0.72:boxborderw=28:${outroEnable}`,
+      `drawtext=fontfile='${ffmpegFilterPath(fontPath)}':text='关注 / 收藏 / 下条继续':x=(w-text_w)/2:y=${Math.round(height * 0.53)}:fontsize=36:fontcolor=${kit.accent}:${outroEnable}`,
+      `drawbox=x=0:y=${progressY}:w=${width}:h=18:color=${kit.text}@0.10:t=fill`,
+      `drawbox=x=0:y=${progressY}:w='iw*t/${duration}':h=18:color=${kit.accent}:t=fill`,
     ].filter(Boolean);
     const args = ["-y"];
     if (timelineFiles.packagedTemplateBackground) {
@@ -2002,6 +2038,8 @@ ${sceneMarkup}
       "-vf", filters.join(","),
       "-t", String(duration),
       "-c:v", "libx264",
+      "-preset", "veryfast",
+      "-crf", "20",
       "-pix_fmt", "yuv420p",
     );
     const voiceDelayFilter = voiceDelayMs > 0 ? `adelay=${voiceDelayMs}:all=1,` : "";
@@ -2009,7 +2047,7 @@ ${sceneMarkup}
       const fadeStart = Math.max(0, duration - 1.2).toFixed(2);
       args.push(
         "-filter_complex",
-        `[${voiceInput}:a]${voiceDelayFilter}volume=1.0[a_voice];[${bgmInput}:a]volume=0.12,atrim=0:${duration.toFixed(3)},afade=t=in:st=0:d=0.6,afade=t=out:st=${fadeStart}:d=1.2[a_bgm];[a_voice][a_bgm]amix=inputs=2:duration=first:dropout_transition=2[aout]`,
+        `[${voiceInput}:a]${voiceDelayFilter}volume=1.0[a_voice];[${bgmInput}:a]volume=0.20,atrim=0:${duration.toFixed(3)},afade=t=in:st=0:d=0.6,afade=t=out:st=${fadeStart}:d=1.2[a_bgm_raw];[a_bgm_raw][a_voice]sidechaincompress=threshold=0.06:ratio=8:attack=18:release=260[a_bgm];[a_voice][a_bgm]amix=inputs=2:duration=first:dropout_transition=2[aout]`,
         "-map", "0:v",
         "-map", "[aout]",
         "-c:a", "aac",
@@ -2029,7 +2067,7 @@ ${sceneMarkup}
     } else {
       args.push("-map", "0:v", "-an");
     }
-    args.push(outputPath);
+    args.push("-movflags", "+faststart", outputPath);
     await runProcess(ffmpegPath, args);
     return outputPath;
   }
