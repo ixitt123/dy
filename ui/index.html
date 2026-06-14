@@ -766,7 +766,7 @@
             <section class="video-product-panel">
               <h3>输入</h3>
               <label>
-                导演项目
+                导演项目（路线 A 可留空自动生成）
                 <select id="videoProductDirector"></select>
               </label>
               <label>
@@ -793,6 +793,28 @@
                   <button class="ghost small" id="addVideoProductBgmAsset" type="button">加入BGM库</button>
                 </div>
                 <small id="videoProductAssetStatus">本地图片会进入图片资产库；BGM 会用于最终 MP4 混音。</small>
+              </div>
+              <div class="video-product-route-a-options" id="videoProductRouteAOptions">
+                <strong>路线 A 高级成片</strong>
+                <div class="video-product-route-a-grid">
+                  <label>
+                    风格预设
+                    <select id="videoProductRouteAStyle"></select>
+                  </label>
+                  <label>
+                    BGM 策略
+                    <select id="videoProductBgmStrategy"></select>
+                  </label>
+                </div>
+                <label>
+                  指定本地 BGM
+                  <select id="videoProductBgm"></select>
+                </label>
+                <label>
+                  自定义风格
+                  <textarea id="videoProductRouteACustomStyle" rows="3" placeholder="例如：更像商业招生广告，节奏更快，字幕更有压迫感。"></textarea>
+                </label>
+                <small id="videoProductRouteAHelp">默认会用 TTS 文案自动生成导演稿，再走标题、动态字幕、BGM 混音、片头片尾和质检。</small>
               </div>
               <label>
                 输出方式

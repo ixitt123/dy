@@ -1677,6 +1677,15 @@ ${sceneMarkup}
       "如果你也想把知识讲清楚，先把学习方式换成可执行的动作。",
     ].join("\n"), "utf8");
     fs.writeFileSync(path.join(projectDir, "hashtags.txt"), "#短视频 #知识口播 #AI成片 #抖音 #视频号 #小红书\n", "utf8");
+    const hyperframesPackage = writeHyperframesPackage(project, {
+      projectDir,
+      packagedAudio,
+      packagedScenes,
+      timelineJson,
+      packagedBgm,
+      bgmSourceKind,
+      packagedTemplateBackground,
+    });
     const manifestPath = writeJson(path.join(projectDir, "project_manifest.json"), {
       name: publishTitle,
       kind: "video-product-center",
@@ -1695,6 +1704,8 @@ ${sceneMarkup}
         ass_subtitles: true,
         motion_template: project.output_type === "template_mp4",
         motion_template_version: project.output_type === "template_mp4" ? "route-a-single-caption-v4" : "",
+        hyperframes_package: Boolean(hyperframesPackage?.indexPath),
+        hyperframes_status: hyperframesPackage?.indexPath ? "package_ready_ffmpeg_final" : "",
         optimized_publish_title: titleText,
         route_a_caption_policy: project.output_type === "template_mp4" ? "single_ass_caption_layer" : "",
         template_background: packagedTemplateBackground ? "image_asset_dark_blur" : "procedural_dark",
@@ -1714,6 +1725,9 @@ ${sceneMarkup}
         description: "description.txt",
         hashtags: "hashtags.txt",
         render_report: "render_report.json",
+        hyperframes_index: hyperframesPackage?.indexPath ? path.relative(projectDir, hyperframesPackage.indexPath) : "",
+        hyperframes_design: hyperframesPackage?.designPath ? path.relative(projectDir, hyperframesPackage.designPath) : "",
+        hyperframes_data: hyperframesPackage?.dataPath ? path.relative(projectDir, hyperframesPackage.dataPath) : "",
       },
       blockers: timeline.blockers,
       routes: {
@@ -1737,6 +1751,10 @@ ${sceneMarkup}
       bgmSourceKind,
       bgmLabel,
       packagedTemplateBackground,
+      hyperframesDir: hyperframesPackage?.hyperframesDir || "",
+      hyperframesIndexPath: hyperframesPackage?.indexPath || "",
+      hyperframesDesignPath: hyperframesPackage?.designPath || "",
+      hyperframesDataPath: hyperframesPackage?.dataPath || "",
       manifestPath,
     };
   }
@@ -2065,9 +2083,12 @@ ${sceneMarkup}
         has_audio: media.hasAudio,
         has_voiceover: Boolean(timelineFiles.packagedAudio),
         has_bgm: Boolean(timelineFiles.packagedBgm),
+        bgm_source: timelineFiles.bgmSourceKind || "none",
+        bgm_label: timelineFiles.bgmLabel || "",
         has_ass_subtitles: Boolean(timelineFiles.assPath && fs.existsSync(timelineFiles.assPath)),
         has_cover: Boolean(timelineFiles.coverPath),
         has_template_background: Boolean(timelineFiles.packagedTemplateBackground),
+        has_hyperframes_package: Boolean(timelineFiles.hyperframesIndexPath),
         publish_title: publishTitle,
         title_optimized: !titleLooksGeneric(publishTitle),
         motion_template_version: project.output_type === "template_mp4" ? "route-a-single-caption-v4" : "",
@@ -2084,9 +2105,11 @@ ${sceneMarkup}
   async function processProject(projectId) {
     let project = taskStore.getTimelineProject(projectId);
     if (!project) return;
-    const input = safeJson(project.metadata_json, {});
+    let input = safeJson(project.metadata_json, {});
 
     try {
+      project = await ensureRouteADirectorReady(project, input);
+      input = { ...input, ...safeJson(project.metadata_json, {}) };
       updateProject(project.id, {
         status: "binding_assets",
         progress: 15,
@@ -2221,7 +2244,8 @@ ${sceneMarkup}
   }
 
   function enqueue(input = {}) {
-    const directorId = Number(input.source_director_project_id || input.director_project_id || 0);
+    const routeA = ensureRouteADirectorForEnqueue(input);
+    const directorId = routeA.directorId;
     const audioId = Number(input.audio_asset_id || input.tts_job_id || 0);
     const outputType = OUTPUT_TYPES.has(String(input.output_type || "")) ? String(input.output_type) : "jianying";
     const platformId = String(input.platform || "douyin");
@@ -2244,6 +2268,13 @@ ${sceneMarkup}
         image_source: String(input.image_source || "director"),
         image_asset_ids: Array.isArray(input.image_asset_ids) ? input.image_asset_ids : [],
         manual_bindings: input.manual_bindings || {},
+        route_a_style_id: routeAStyleId(input.route_a_style_id || input.style_id),
+        route_a_custom_style: String(input.route_a_custom_style || input.custom_style || ""),
+        bgm_strategy: String(input.bgm_strategy || "auto"),
+        bgm_asset_id: String(input.bgm_asset_id || ""),
+        render_engine: outputType === "template_mp4" ? "ffmpeg_stable_with_hyperframes_package" : "ffmpeg",
+        route_a_skill_chain: outputType === "template_mp4" ? ROUTE_A_SKILL_CHAIN : [],
+        ...routeA.metadata,
       }),
     });
     pending.push(project.id);
@@ -2290,6 +2321,8 @@ ${sceneMarkup}
       description: project.output_dir ? path.join(project.output_dir, "description.txt") : "",
       hashtags: project.output_dir ? path.join(project.output_dir, "hashtags.txt") : "",
       report: project.output_dir ? path.join(project.output_dir, "render_report.json") : "",
+      hyperframes: project.output_dir ? path.join(project.output_dir, "hyperframes", "index.html") : "",
+      hyperframes_design: project.output_dir ? path.join(project.output_dir, "hyperframes", "DESIGN.md") : "",
     };
     const target = candidates[type] || project.output_dir;
     if (!target || !fs.existsSync(target)) return "";

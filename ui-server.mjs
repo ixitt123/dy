@@ -285,6 +285,7 @@ const videoProductService = createVideoProductService({
   baseDir: __dirname,
   taskStore,
   imageService,
+  directorService,
   ffmpegPath,
   onProgress: (data) => broadcastProgress({ type: "video-product", ...data }),
   onIdle: scheduleShutdownIfIdle,
