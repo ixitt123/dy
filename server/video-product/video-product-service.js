@@ -2050,7 +2050,7 @@ ${sceneMarkup}
       const fadeStart = Math.max(0, duration - 1.2).toFixed(2);
       args.push(
         "-filter_complex",
-        `[${voiceInput}:a]${voiceDelayFilter}volume=1.0[a_voice];[${bgmInput}:a]volume=0.20,atrim=0:${duration.toFixed(3)},afade=t=in:st=0:d=0.6,afade=t=out:st=${fadeStart}:d=1.2[a_bgm_raw];[a_bgm_raw][a_voice]sidechaincompress=threshold=0.06:ratio=8:attack=18:release=260[a_bgm];[a_voice][a_bgm]amix=inputs=2:duration=first:dropout_transition=2[aout]`,
+        `[${voiceInput}:a]${voiceDelayFilter}volume=1.0,asplit=2[a_voice_mix][a_voice_sc];[${bgmInput}:a]volume=0.20,atrim=0:${duration.toFixed(3)},afade=t=in:st=0:d=0.6,afade=t=out:st=${fadeStart}:d=1.2[a_bgm_raw];[a_bgm_raw][a_voice_sc]sidechaincompress=threshold=0.06:ratio=8:attack=18:release=260[a_bgm];[a_voice_mix][a_bgm]amix=inputs=2:duration=first:dropout_transition=2[aout]`,
         "-map", "0:v",
         "-map", "[aout]",
         "-c:a", "aac",
