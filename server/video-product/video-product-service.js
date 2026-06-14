@@ -1311,6 +1311,8 @@ export function createVideoProductService({
     const imageDir = ensureDir(path.join(mediaDir, "images"));
     const audioDir = ensureDir(path.join(mediaDir, "audio"));
     const videoDir = ensureDir(path.join(mediaDir, "videos"));
+    const projectMetadata = safeJson(project.metadata_json, {});
+    const routeAStyle = routeAStyleId(timeline.metadata?.route_a_style_id || projectMetadata.route_a_style_id);
 
     const packagedScenes = timeline.scenes.map((scene) => {
       const sceneMetadata = safeJson(scene.metadata_json, {});
@@ -1340,12 +1342,31 @@ export function createVideoProductService({
       packagedAudio = path.join(audioDir, `voiceover${ext}`);
       fs.copyFileSync(timeline.audio.audio_path, packagedAudio);
     }
-    const bgmSource = findBgmAsset();
     let packagedBgm = "";
-    if (bgmSource && fs.existsSync(bgmSource)) {
-      const ext = path.extname(bgmSource) || ".mp3";
+    let bgmSourceKind = "none";
+    let bgmLabel = "";
+    const bgmSelection = project.output_type === "template_mp4"
+      ? selectBgmAsset({
+        preferredId: projectMetadata.bgm_asset_id || timeline.metadata?.route_a_bgm_asset_id || "",
+        strategy: projectMetadata.bgm_strategy || timeline.metadata?.route_a_bgm_strategy || "auto",
+        styleId: routeAStyle,
+      })
+      : { path: findBgmAsset(), source: "local_auto", label: "本地 BGM", asset: null };
+    if (bgmSelection.path && fs.existsSync(bgmSelection.path)) {
+      const ext = path.extname(bgmSelection.path) || ".mp3";
       packagedBgm = path.join(audioDir, `bgm${ext}`);
-      fs.copyFileSync(bgmSource, packagedBgm);
+      fs.copyFileSync(bgmSelection.path, packagedBgm);
+      bgmSourceKind = bgmSelection.source || "local_auto";
+      bgmLabel = bgmSelection.label || path.basename(bgmSelection.path);
+    } else if (project.output_type === "template_mp4") {
+      const generated = writeDefaultBgmWav(
+        path.join(audioDir, "bgm_generated_default.wav"),
+        timeline.duration,
+        routeAStyle,
+      );
+      packagedBgm = generated.path;
+      bgmSourceKind = generated.source;
+      bgmLabel = generated.label;
     }
     let packagedTemplateBackground = "";
     if (project.output_type === "template_mp4") {
@@ -1400,6 +1421,8 @@ export function createVideoProductService({
           duration: timeline.duration,
           volume: 0.12,
           ducking: "voiceover_first",
+          source_type: bgmSourceKind,
+          label: bgmLabel,
         }] : [],
         template_background: packagedTemplateBackground ? [{
           source: path.relative(projectDir, packagedTemplateBackground),
@@ -1409,6 +1432,9 @@ export function createVideoProductService({
         subtitles: timeline.tracks.subtitles,
       },
       output_type: project.output_type,
+      route_a_style: project.output_type === "template_mp4" ? routeAStyleContract(projectMetadata) : null,
+      bgm_source: bgmSourceKind,
+      bgm_label: bgmLabel,
       status: project.status,
       created_at: project.created_at,
       updated_at: new Date().toISOString(),
@@ -1437,7 +1463,11 @@ export function createVideoProductService({
       commercial_video_contract: {
         voiceover: Boolean(packagedAudio),
         bgm: Boolean(packagedBgm),
-        bgm_note: packagedBgm ? "已接入本地 BGM 并按语音优先混音。" : "未找到本地 BGM 素材，路线 A 会在质量报告中标记为待补资源。",
+        bgm_source: bgmSourceKind,
+        bgm_label: bgmLabel,
+        bgm_note: packagedBgm
+          ? `已接入 BGM（${bgmSourceKind}），并按语音优先混音。`
+          : "未找到 BGM 素材。",
         ass_subtitles: true,
         motion_template: project.output_type === "template_mp4",
         motion_template_version: project.output_type === "template_mp4" ? "route-a-single-caption-v4" : "",
@@ -1480,6 +1510,8 @@ export function createVideoProductService({
       srtPath,
       assPath,
       packagedBgm,
+      bgmSourceKind,
+      bgmLabel,
       packagedTemplateBackground,
       manifestPath,
     };
