@@ -576,6 +576,21 @@ function routeAStyleContract(input = {}) {
   };
 }
 
+function routeAVisualKit(input = {}) {
+  const style = input?.palette ? input : routeAStyleContract(input);
+  const preset = routeAStylePreset(style.id);
+  const palette = style.palette || preset.palette || ROUTE_A_STYLE_PRESETS[ROUTE_A_DEFAULT_STYLE_ID].palette;
+  return {
+    style,
+    bg: ffmpegColor(palette.background, "#07101B"),
+    panel: ffmpegColor(palette.panel, "#101827"),
+    accent: ffmpegColor(palette.accent, "#E7C76C"),
+    accent2: ffmpegColor(palette.accent2, "#49D6C8"),
+    text: ffmpegColor(palette.text, "#FFFFFF"),
+    muted: ffmpegColor(palette.muted, "#AAB7C7"),
+  };
+}
+
 function routeAAutoTitle(audio, input = {}) {
   const explicit = String(input.title || "").trim();
   if (explicit) return titleClip(explicit, 28);
@@ -688,6 +703,16 @@ function conciseSceneLabel(scene) {
   const title = String(scene.title_text || "").replace(/^(强钩子|展示痛点|提出|解释|总结|CTA|转折)[：:]/, "");
   const text = titleLooksGeneric(title) ? (scene.subtitle_text || scene.narration_text || "") : title;
   return titleClip(text, 14);
+}
+
+function routeACtaText(timelineJson = {}) {
+  const narration = (timelineJson.scenes || [])
+    .map((scene) => scene.subtitle_text || scene.narration_text || "")
+    .join("");
+  if (/英语|背单词|开口/.test(narration)) return "别再死背，今天就开口练";
+  if (/招生|报名|家长|补课|咨询/.test(narration)) return "想少走弯路，先把方法换对";
+  if (/赚钱|成交|客户|流量|副业/.test(narration)) return "收藏起来，下一条继续拆解";
+  return "收藏起来，下一条继续讲透";
 }
 
 function ffmpegEnableBetween(start, end) {
