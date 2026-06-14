@@ -158,6 +158,11 @@ const videoProductImageSource = document.querySelector("#videoProductImageSource
 const videoProductOutputType = document.querySelector("#videoProductOutputType");
 const videoProductLocalImagePath = document.querySelector("#videoProductLocalImagePath");
 const videoProductLocalBgmPath = document.querySelector("#videoProductLocalBgmPath");
+const videoProductRouteAOptions = document.querySelector("#videoProductRouteAOptions");
+const videoProductRouteAStyle = document.querySelector("#videoProductRouteAStyle");
+const videoProductRouteACustomStyle = document.querySelector("#videoProductRouteACustomStyle");
+const videoProductBgmStrategy = document.querySelector("#videoProductBgmStrategy");
+const videoProductBgm = document.querySelector("#videoProductBgm");
 const chooseVideoProductImageBtn = document.querySelector("#chooseVideoProductImage");
 const addVideoProductImageAssetBtn = document.querySelector("#addVideoProductImageAsset");
 const chooseVideoProductBgmBtn = document.querySelector("#chooseVideoProductBgm");
@@ -265,7 +270,7 @@ let vfoProjectsState = [];
 let activeVfoProject = null;
 let activeVfoTab = "overview";
 let vfoPollTimer = 0;
-let videoProductSources = { directors: [], audioJobs: [], imageAssets: [], bgmAssets: [], timelines: [], platforms: [] };
+let videoProductSources = { directors: [], audioJobs: [], imageAssets: [], bgmAssets: [], timelines: [], platforms: [], routeAStyles: [], bgmStrategies: [] };
 let videoProductPreview = null;
 let videoProductManualBindings = {};
 let videoProductProjectsState = [];
@@ -3125,6 +3130,11 @@ function videoProductPayload() {
     audio_asset_id: Number(videoProductAudio.value || 0),
     image_source: videoProductImageSource.value || "director",
     output_type: videoProductOutputType.value || "jianying",
+    route_a_style_id: videoProductRouteAStyle?.value || "black_gold_knowledge",
+    route_a_custom_style: videoProductRouteACustomStyle?.value.trim() || "",
+    bgm_strategy: videoProductBgmStrategy?.value || "auto",
+    bgm_asset_id: videoProductBgm?.value || "",
+    render_engine: "auto",
     manual_bindings: videoProductManualBindings,
   };
 }
