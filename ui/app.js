@@ -3050,6 +3050,7 @@ function videoProductFileLinks(project = {}) {
     ["final", "final.mp4", project.mp4_path],
     ["cover", "cover.png", project.mp4_path],
     ["report", "render_report.json", project.output_dir],
+    ["hyperframes", "HyperFrames", project.output_dir],
   ]
     .filter(([, , value]) => value)
     .map(([type, label]) => `<a href="/api/video-product/export?id=${encodeURIComponent(id)}&type=${encodeURIComponent(type)}" target="_blank" rel="noreferrer">${escapeHtml(label)}</a>`);
@@ -3482,6 +3483,7 @@ function renderVideoProductOutputs(project) {
     ["final", "final.mp4", project?.mp4_path],
     ["cover", "cover.png", project?.mp4_path],
     ["report", "render_report.json", project?.output_dir],
+    ["hyperframes", "HyperFrames", project?.output_dir],
   ].filter(([, , value]) => value);
   videoProductOutputFiles.innerHTML = files.length
     ? files.map(([type, label]) => `<a href="/api/video-product/export?id=${encodeURIComponent(id)}&type=${encodeURIComponent(type)}" target="_blank" rel="noreferrer">${escapeHtml(label)}</a>`).join("")
@@ -4956,6 +4958,10 @@ document.querySelectorAll(".video-route-card[data-video-output]").forEach((card)
     videoProductOutputType.value = outputType;
     document.querySelectorAll(".video-route-card").forEach((item) => item.classList.toggle("primary", item === card));
     videoProductStatus.textContent = `已选择：${videoProductOutputLabel(outputType)}`;
+    renderVideoProductSourceOptions({
+      preferredDirectorId: isRouteAVideoProduct() ? 0 : Number(videoProductDirector.value || 0),
+      preferredAudioId: Number(videoProductAudio.value || 0),
+    });
     previewVideoProductTimeline().catch(() => {});
     document.querySelector("#videoProductCenter")?.scrollIntoView({ behavior: "smooth", block: "start" });
   });
