@@ -754,6 +754,162 @@ export function createVideoProductService({
     }));
   }
 
+  function wait(ms) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  function createLocalRouteADirector(audio, input = {}, fallbackReason = "") {
+    const style = routeAStyleContract(input);
+    const title = routeAAutoTitle(audio, input);
+    const estimatedDuration = estimateSpeechDuration(audio?.text || "");
+    const scenes = buildRouteAAutoDirectorScenes(audio, input, estimatedDuration);
+    const project = taskStore.createDirectorProject({
+      task_id: Number(audio?.task_id || input.task_id || 0),
+      rewrite_id: Number(audio?.rewrite_id || input.rewrite_id || 0),
+      title,
+      source_text: String(audio?.text || ""),
+      video_type: routeAStylePreset(style.id).videoType,
+      visual_style: routeAStylePreset(style.id).directorStyle,
+      platform: String(input.platform || "douyin"),
+      pace: routeAStylePreset(style.id).pace,
+      estimated_duration: estimatedDuration,
+      status: "completed",
+      score: 88,
+      metadata_json: JSON.stringify({
+        source_type: "route_a_auto_tts",
+        source_key: `tts:${audio?.id || 0}`,
+        tts_job_id: Number(audio?.id || 0),
+        route_a_auto_director: true,
+        route_a_director_mode: "local_skill_fallback",
+        route_a_fallback_reason: fallbackReason,
+        route_a_style: style,
+        scene_count: scenes.length,
+        total_duration: estimatedDuration,
+        ratio: "9:16",
+        skill_chain: ROUTE_A_SKILL_CHAIN,
+        result: buildRouteAAutoDirectorResult({
+          title,
+          platform: String(input.platform || "douyin"),
+          estimated_duration: estimatedDuration,
+        }, scenes, style),
+        error: "",
+      }),
+    });
+    taskStore.replaceDirectorScenes(project.id, scenes);
+    return taskStore.getDirectorProject(project.id);
+  }
+
+  function enqueueRouteAAiDirector(audio, input = {}) {
+    if (!directorService?.enqueue) return { project: null, error: "Director Service 不可用。" };
+    const style = routeAStyleContract(input);
+    const preset = routeAStylePreset(style.id);
+    const result = directorService.enqueue({
+      task_id: Number(audio?.task_id || 0),
+      rewrite_id: Number(audio?.rewrite_id || 0),
+      title: routeAAutoTitle(audio, input),
+      source_text: String(audio?.text || ""),
+      source_type: "route_a_tts",
+      source_key: `tts:${audio?.id || 0}`,
+      provider: String(input.director_provider || ""),
+      video_type: preset.videoType,
+      visual_style: preset.directorStyle,
+      platform: String(input.platform || "douyin"),
+      pace: preset.pace,
+      shot_count: "auto",
+      estimated_duration: estimateSpeechDuration(audio?.text || ""),
+      tts_duration: 0,
+      reference_style: [
+        `路线 A 高质量成片风格：${style.label}`,
+        `语气：${style.tone}`,
+        `视觉规则：${style.visual_rules.join("；")}`,
+        `字幕规则：${style.caption_rules.join("；")}`,
+        `音乐规则：${style.music_rules.join("；")}`,
+        style.custom_style ? `用户补充风格：${style.custom_style}` : "",
+        `必须使用 Skills：${ROUTE_A_SKILL_CHAIN.join(" -> ")}`,
+      ].filter(Boolean).join("\n"),
+      save_reference_style: true,
+    });
+    if (result?.error) return { project: null, error: result.error };
+    return { project: result?.project || null, error: "" };
+  }
+
+  function ensureRouteADirectorForEnqueue(input = {}) {
+    const outputType = OUTPUT_TYPES.has(String(input.output_type || "")) ? String(input.output_type) : "jianying";
+    let directorId = Number(input.source_director_project_id || input.director_project_id || 0);
+    const audioId = Number(input.audio_asset_id || input.tts_job_id || 0);
+    if (outputType !== "template_mp4" || directorId > 0) {
+      return { directorId, metadata: {} };
+    }
+    const audio = taskStore.getTtsJob(audioId);
+    if (!audio || audio.status !== "completed" || !audio.audio_path || !fs.existsSync(audio.audio_path)) {
+      throw new Error("路线 A 需要先选择一条已完成且可试听的 TTS 音频。");
+    }
+    const ai = enqueueRouteAAiDirector(audio, input);
+    if (ai.project?.id) {
+      return {
+        directorId: Number(ai.project.id),
+        metadata: {
+          route_a_auto_director: true,
+          route_a_director_mode: "ai_director",
+          route_a_director_status: ai.project.status || "waiting",
+          source_tts_job_id: audio.id,
+        },
+      };
+    }
+    const fallback = createLocalRouteADirector(audio, input, ai.error || "AI 导演未能创建，已使用路线 A 本地 Skills 导演稿。");
+    return {
+      directorId: Number(fallback.id),
+      metadata: {
+        route_a_auto_director: true,
+        route_a_director_mode: "local_skill_fallback",
+        route_a_director_status: "completed",
+        route_a_director_fallback_reason: ai.error || "",
+        source_tts_job_id: audio.id,
+      },
+    };
+  }
+
+  async function ensureRouteADirectorReady(project, input = {}) {
+    if (project.output_type !== "template_mp4") return project;
+    const metadata = safeJson(project.metadata_json, {});
+    if (!metadata.route_a_auto_director) return project;
+    let director = taskStore.getDirectorProject(project.source_director_project_id);
+    if (director?.status === "completed") return project;
+    const maxWaitMs = 5 * 60 * 1000;
+    const startedAt = Date.now();
+    while (director && ["waiting", "processing"].includes(director.status) && Date.now() - startedAt < maxWaitMs) {
+      updateProject(project.id, {
+        status: "binding_assets",
+        progress: 12,
+        current_step: `正在等待路线 A AI 导演稿完成：Director #${director.id}`,
+        metadata_json: JSON.stringify({
+          ...metadata,
+          route_a_director_status: director.status,
+        }),
+      });
+      await wait(1600);
+      director = taskStore.getDirectorProject(project.source_director_project_id);
+    }
+    if (director?.status === "completed") return taskStore.getTimelineProject(project.id);
+
+    const audio = taskStore.getTtsJob(project.audio_asset_id);
+    const reason = director?.status === "failed"
+      ? safeJson(director.metadata_json, {})?.error || "AI 导演稿生成失败。"
+      : "AI 导演稿等待超时，已使用路线 A 本地 Skills 导演稿。";
+    const fallback = createLocalRouteADirector(audio, input, reason);
+    return updateProject(project.id, {
+      source_director_project_id: fallback.id,
+      current_step: "AI 导演稿不可用，已切换到路线 A 本地 Skills 导演稿",
+      metadata_json: JSON.stringify({
+        ...metadata,
+        route_a_director_mode: "local_skill_fallback",
+        route_a_director_status: "completed",
+        route_a_director_fallback_reason: reason,
+        fallback_director_project_id: fallback.id,
+      }),
+    });
+  }
+
   function listBgmAssets() {
     const roots = [
       path.join(baseDir, "assets", "bgm"),
