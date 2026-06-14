@@ -1327,6 +1327,207 @@ export function createVideoProductService({
     return project;
   }
 
+  function htmlEscape(value) {
+    return String(value || "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+  }
+
+  function scriptJson(value) {
+    return JSON.stringify(value)
+      .replace(/</g, "\\u003c")
+      .replace(/>/g, "\\u003e")
+      .replace(/&/g, "\\u0026")
+      .replace(/\u2028/g, "\\u2028")
+      .replace(/\u2029/g, "\\u2029");
+  }
+
+  function cssHex(value, fallback = "#0b111c") {
+    const raw = String(value || "").trim();
+    if (/^0x[0-9a-f]{6}$/i.test(raw)) return `#${raw.slice(2)}`;
+    if (/^#[0-9a-f]{6}$/i.test(raw)) return raw;
+    return fallback;
+  }
+
+  function relativeMediaPath(fromDir, filePath) {
+    if (!filePath) return "";
+    return path.relative(fromDir, filePath).replace(/\\/g, "/");
+  }
+
+  function writeHyperframesPackage(project, timelineFiles) {
+    if (project.output_type !== "template_mp4") return null;
+    const hyperframesDir = ensureDir(path.join(timelineFiles.projectDir, "hyperframes"));
+    const style = timelineFiles.timelineJson.route_a_style || routeAStyleContract(safeJson(project.metadata_json, {}));
+    const preset = routeAStylePreset(style.id);
+    const palette = style.palette || preset.palette || ROUTE_A_STYLE_PRESETS[ROUTE_A_DEFAULT_STYLE_ID].palette;
+    const { width, height } = parseResolution(project.resolution);
+    const duration = Math.max(1, Number(timelineFiles.timelineJson.duration || project.duration || 0));
+    const publishTitle = String(timelineFiles.timelineJson.publish_title || timelineFiles.timelineJson.name || "路线 A 成片");
+    const bg = cssHex(palette.background, "#07101B");
+    const panel = cssHex(palette.panel, "#101827");
+    const accent = cssHex(palette.accent, "#E7C76C");
+    const accent2 = cssHex(palette.accent2, "#49D6C8");
+    const fg = cssHex(palette.text, "#FFFFFF");
+    const muted = cssHex(palette.muted, "#AAB7C7");
+    const voiceTrack = timelineFiles.timelineJson.tracks?.audio?.[0] || {};
+    const sceneData = timelineFiles.packagedScenes.map((scene, index) => ({
+      id: `scene-${index + 1}`,
+      index: index + 1,
+      start: Number(scene.start_time || 0),
+      end: Number(scene.end_time || 0),
+      duration: Number(scene.duration || 0),
+      title: conciseSceneLabel(scene),
+      caption: String(scene.subtitle_text || scene.narration_text || "").trim(),
+      image: relativeMediaPath(hyperframesDir, scene.packaged_image_path || ""),
+      motion: scene.motion_type || "template_caption",
+      transition: scene.transition_type || "push_slide",
+    }));
+    const routeData = {
+      composition_id: "route-a",
+      title: publishTitle,
+      duration,
+      width,
+      height,
+      style: {
+        id: style.id,
+        label: style.label,
+        tone: style.tone,
+        palette: { bg, panel, accent, accent2, fg, muted },
+        visual_rules: style.visual_rules,
+        caption_rules: style.caption_rules,
+      },
+      audio: {
+        voiceover: relativeMediaPath(hyperframesDir, timelineFiles.packagedAudio),
+        voice_start: Number(voiceTrack.start || 0),
+        bgm: relativeMediaPath(hyperframesDir, timelineFiles.packagedBgm),
+        bgm_source: timelineFiles.bgmSourceKind || "none",
+      },
+      background: relativeMediaPath(hyperframesDir, timelineFiles.packagedTemplateBackground),
+      scenes: sceneData,
+    };
+
+    const dataPath = writeJson(path.join(hyperframesDir, "route-a-data.json"), routeData);
+    const designPath = path.join(hyperframesDir, "DESIGN.md");
+    fs.writeFileSync(designPath, [
+      "# Route A HyperFrames Design",
+      "",
+      `Style: ${style.label}`,
+      `Tone: ${style.tone}`,
+      "",
+      "## Colors",
+      `- Background: ${bg}`,
+      `- Panel: ${panel}`,
+      `- Accent: ${accent}`,
+      `- Secondary Accent: ${accent2}`,
+      `- Text: ${fg}`,
+      `- Muted: ${muted}`,
+      "",
+      "## Typography",
+      "- Display/body: Microsoft YaHei / PingFang SC with heavy display weights.",
+      "- Captions use large vertical-video safe margins, black stroke, and accent keyword emphasis.",
+      "",
+      "## Motion Rules",
+      "- Every scene has entrance animation.",
+      "- Scene changes use consistent wipe or flash transitions.",
+      "- Voiceover is the master clock; captions follow timeline.json.",
+      "",
+      "## What NOT to Do",
+      "- Do not create random visuals.",
+      "- Do not use unreadable tiny subtitles.",
+      "- Do not let BGM overpower voiceover.",
+      "- Do not render as static PPT.",
+      "",
+    ].join("\n"), "utf8");
+
+    const sceneMarkup = sceneData.map((scene) => `
+      <section id="${scene.id}" class="scene" data-start="${scene.start}" data-duration="${scene.duration}" data-track-index="1">
+        ${scene.image ? `<img class="scene-image" src="${htmlEscape(scene.image)}" alt="" crossorigin="anonymous" />` : ""}
+        <div class="scene-shade"></div>
+        <div class="scene-content">
+          <div class="kicker">SHOT ${String(scene.index).padStart(2, "0")}</div>
+          <h2>${htmlEscape(scene.title)}</h2>
+          <p>${htmlEscape(scene.caption)}</p>
+        </div>
+      </section>
+      ${scene.index < sceneData.length ? `<div id="transition-${scene.index}" class="transition-strip" data-start="${Math.max(0, scene.end - 0.22).toFixed(3)}" data-duration="0.36" data-track-index="8"></div>` : ""}
+    `).join("\n");
+
+    const indexPath = path.join(hyperframesDir, "index.html");
+    fs.writeFileSync(indexPath, `<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>${htmlEscape(publishTitle)}</title>
+  <style>
+    html, body { margin: 0; width: 100%; height: 100%; background: ${bg}; color: ${fg}; font-family: "Microsoft YaHei", "PingFang SC", sans-serif; }
+    [data-composition-id="route-a"] { position: relative; overflow: hidden; width: ${width}px; height: ${height}px; background: ${bg}; }
+    .base-bg { position: absolute; inset: 0; background: radial-gradient(circle at 18% 12%, ${accent}44, transparent 34%), radial-gradient(circle at 80% 78%, ${accent2}2e, transparent 30%), ${bg}; }
+    .grid { position: absolute; inset: 0; opacity: 0.13; background-image: linear-gradient(${fg}10 1px, transparent 1px), linear-gradient(90deg, ${fg}10 1px, transparent 1px); background-size: 54px 54px; }
+    .scene { position: absolute; inset: 0; overflow: hidden; background: ${bg}; }
+    .scene-image { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; filter: saturate(0.86) contrast(1.05) brightness(0.58); transform: scale(1.06); }
+    .scene-shade { position: absolute; inset: 0; background: linear-gradient(180deg, ${bg}ee 0%, ${bg}99 42%, ${bg}f2 100%); }
+    .scene-content { position: relative; z-index: 2; box-sizing: border-box; width: 100%; height: 100%; padding: 176px 86px 240px; display: flex; flex-direction: column; justify-content: center; gap: 28px; }
+    .kicker { width: fit-content; padding: 10px 18px; border: 1px solid ${accent}99; color: ${accent}; background: ${panel}dd; border-radius: 999px; font-size: 28px; font-weight: 800; letter-spacing: 0.08em; }
+    h1, h2, p { margin: 0; }
+    .title-card { position: absolute; inset: 0; z-index: 6; display: flex; flex-direction: column; justify-content: center; gap: 28px; padding: 180px 84px 260px; box-sizing: border-box; background: linear-gradient(180deg, ${bg} 0%, ${panel} 100%); }
+    .title-card h1 { font-size: 86px; line-height: 1.08; font-weight: 900; color: ${fg}; text-wrap: balance; }
+    .title-card span { color: ${accent}; font-size: 32px; font-weight: 900; }
+    h2 { max-width: 910px; font-size: 76px; line-height: 1.08; font-weight: 900; color: ${accent}; text-wrap: balance; }
+    p { max-width: 910px; padding: 24px 28px; border: 1px solid ${fg}1f; border-radius: 24px; background: ${panel}dd; color: ${fg}; font-size: 54px; line-height: 1.28; font-weight: 800; box-shadow: 0 24px 80px rgba(0,0,0,0.36); }
+    .brand-bar { position: absolute; left: 72px; right: 72px; bottom: 78px; z-index: 9; height: 72px; border-top: 1px solid ${fg}20; display: flex; align-items: center; justify-content: space-between; color: ${muted}; font-size: 24px; font-weight: 700; }
+    .progress { position: absolute; left: 0; right: 0; bottom: 0; z-index: 12; height: 16px; background: ${fg}12; }
+    .progress i { display: block; width: 100%; height: 100%; background: ${accent}; transform-origin: left center; transform: scaleX(0); }
+    .transition-strip { position: absolute; top: 0; bottom: 0; left: -18%; width: 38%; z-index: 10; background: linear-gradient(90deg, transparent, ${accent}, ${accent2}, transparent); transform: skewX(-12deg) translateX(-120%); filter: blur(1px); }
+    .final-fade { position: absolute; inset: 0; z-index: 20; pointer-events: none; background: ${bg}; opacity: 0; }
+  </style>
+</head>
+<body>
+  <div id="route-a-root" data-composition-id="route-a" data-start="0" data-duration="${duration}" data-width="${width}" data-height="${height}">
+    <div class="base-bg"></div>
+    <div class="grid"></div>
+    <div class="title-card" data-start="0" data-duration="${Math.min(1.35, duration).toFixed(3)}" data-track-index="3">
+      <span>${htmlEscape(style.label || "路线 A")}</span>
+      <h1>${htmlEscape(publishTitle)}</h1>
+    </div>
+${sceneMarkup}
+    <div class="brand-bar"><span>AI Director Timeline</span><span>Voice First Mix</span></div>
+    <div class="progress"><i id="progress-fill"></i></div>
+    <div id="final-fade" class="final-fade"></div>
+    ${routeData.audio.voiceover ? `<audio id="voiceover" data-start="${routeData.audio.voice_start}" data-duration="${Math.max(0.1, duration - routeData.audio.voice_start).toFixed(3)}" data-track-index="20" src="${htmlEscape(routeData.audio.voiceover)}" data-volume="1"></audio>` : ""}
+    ${routeData.audio.bgm ? `<audio id="bgm" data-start="0" data-duration="${duration}" data-track-index="21" src="${htmlEscape(routeData.audio.bgm)}" data-volume="0.12"></audio>` : ""}
+  </div>
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+  <script>
+    window.__timelines = window.__timelines || {};
+    var DATA = ${scriptJson(routeData)};
+    var tl = gsap.timeline({ paused: true });
+    tl.from(".title-card span", { y: 34, opacity: 0, duration: 0.42, ease: "power3.out" }, 0.15);
+    tl.from(".title-card h1", { y: 52, opacity: 0, scale: 0.96, duration: 0.58, ease: "expo.out" }, 0.28);
+    tl.to("#progress-fill", { scaleX: 1, duration: DATA.duration, ease: "none" }, 0);
+    DATA.scenes.forEach(function(scene) {
+      var start = scene.start + 0.12;
+      tl.from("#" + scene.id + " .scene-image", { scale: 1.16, opacity: 0.72, duration: Math.max(0.8, scene.duration), ease: "sine.out" }, scene.start);
+      tl.from("#" + scene.id + " .kicker", { y: 34, opacity: 0, duration: 0.36, ease: "power2.out" }, start);
+      tl.from("#" + scene.id + " h2", { x: -44, opacity: 0, scale: 0.97, duration: 0.48, ease: "expo.out" }, start + 0.08);
+      tl.from("#" + scene.id + " p", { y: 42, opacity: 0, scale: 0.98, duration: 0.45, ease: "back.out(1.35)" }, start + 0.18);
+      if (scene.index < DATA.scenes.length) {
+        tl.fromTo("#transition-" + scene.index, { xPercent: -120 }, { xPercent: 330, duration: 0.32, ease: "power4.inOut" }, Math.max(0, scene.end - 0.2));
+      }
+    });
+    tl.to("#final-fade", { opacity: 0.84, duration: 0.55, ease: "power1.inOut" }, Math.max(0, DATA.duration - 0.58));
+    window.__timelines["route-a"] = tl;
+  </script>
+</body>
+</html>
+`, "utf8");
+
+    return { hyperframesDir, indexPath, designPath, dataPath };
+  }
+
   function writeTimelineFiles(project, timeline) {
     const baseName = `${project.id}_${safeFileName(timeline.director?.title || "video-product")}`;
     const projectDir = ensureDir(project.output_dir || path.join(outputRoot, baseName));
