@@ -3305,7 +3305,7 @@ async function loadVideoProductSources(options = {}) {
   renderVideoProductSourceOptions(options);
   updateVideoProductAssetStatus();
   renderVideoProductProjects(videoProductSources.timelines || []);
-  if (!videoProductPreview && videoProductSources.directors.length && videoProductSources.audioJobs.length) {
+  if (!videoProductPreview && videoProductSources.audioJobs.length && (isRouteAVideoProduct() || videoProductSources.directors.length)) {
     await previewVideoProductTimeline().catch(() => {});
   }
 }
@@ -3362,12 +3362,16 @@ async function addVideoProductLocalBgm() {
     return;
   }
   if (videoProductAssetStatus) videoProductAssetStatus.textContent = "正在把背景音乐加入 BGM 库...";
-  await fetchJson("/api/video-product/add-bgm", {
+  const data = await fetchJson("/api/video-product/add-bgm", {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ filePath }),
   });
   await loadVideoProductSources({ preferredDirectorId: Number(videoProductDirector.value || 0), preferredAudioId: Number(videoProductAudio.value || 0) });
+  if (data.asset?.id && videoProductBgm) {
+    videoProductBgmStrategy.value = "manual";
+    videoProductBgm.value = String(data.asset.id);
+  }
   if (videoProductAssetStatus) videoProductAssetStatus.textContent = "背景音乐已加入 BGM 库，最终 MP4 会优先语音、自动压低 BGM。";
 }
 
@@ -3416,8 +3420,12 @@ function renderVideoProductScenes(preview = videoProductPreview) {
 }
 
 async function previewVideoProductTimeline() {
-  if (!Number(videoProductDirector.value || 0)) {
+  if (!isRouteAVideoProduct() && !Number(videoProductDirector.value || 0)) {
     videoProductStatus.textContent = "请先选择导演项目。";
+    return null;
+  }
+  if (!Number(videoProductAudio.value || 0)) {
+    videoProductStatus.textContent = "请先选择已完成的 TTS 音频。";
     return null;
   }
   videoProductStatus.textContent = "正在自动匹配镜头素材...";
@@ -3525,7 +3533,7 @@ async function pollVideoProductProject(id) {
 }
 
 async function generateVideoProduct() {
-  if (!Number(videoProductDirector.value || 0)) {
+  if (!isRouteAVideoProduct() && !Number(videoProductDirector.value || 0)) {
     videoProductStatus.textContent = "请先选择导演项目。";
     return;
   }
@@ -4916,6 +4924,28 @@ videoProductOutputType?.addEventListener("change", () => {
   document.querySelectorAll(".video-route-card[data-video-output]").forEach((item) => {
     item.classList.toggle("primary", item.dataset.videoOutput === videoProductOutputType.value);
   });
+  renderVideoProductSourceOptions({
+    preferredDirectorId: isRouteAVideoProduct() ? 0 : Number(videoProductDirector.value || 0),
+    preferredAudioId: Number(videoProductAudio.value || 0),
+  });
+  previewVideoProductTimeline().catch(() => {});
+});
+
+videoProductRouteAStyle?.addEventListener("change", () => {
+  previewVideoProductTimeline().catch(() => {});
+});
+
+videoProductRouteACustomStyle?.addEventListener("change", () => {
+  previewVideoProductTimeline().catch(() => {});
+});
+
+videoProductBgmStrategy?.addEventListener("change", () => {
+  if (videoProductBgmStrategy.value !== "manual" && videoProductBgm) videoProductBgm.value = "";
+  previewVideoProductTimeline().catch(() => {});
+});
+
+videoProductBgm?.addEventListener("change", () => {
+  if (videoProductBgm.value && videoProductBgmStrategy) videoProductBgmStrategy.value = "manual";
   previewVideoProductTimeline().catch(() => {});
 });
 
