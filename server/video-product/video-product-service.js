@@ -942,6 +942,85 @@ export function createVideoProductService({
     return listBgmAssets()[0]?.path || "";
   }
 
+  function scoreBgmAsset(asset, styleId = ROUTE_A_DEFAULT_STYLE_ID) {
+    const preset = routeAStylePreset(styleId);
+    const haystack = `${asset.filename || ""} ${asset.path || ""}`.toLowerCase();
+    let score = 0;
+    for (const keyword of preset.bgmKeywords || []) {
+      if (haystack.includes(String(keyword).toLowerCase())) score += 8;
+    }
+    if (/bgm|music|loop|背景|音乐/i.test(haystack)) score += 2;
+    if (/default|generated|tts/i.test(haystack)) score -= 2;
+    return score;
+  }
+
+  function selectBgmAsset({ preferredId = "", strategy = "auto", styleId = ROUTE_A_DEFAULT_STYLE_ID } = {}) {
+    const assets = listBgmAssets();
+    const preferred = preferredId
+      ? assets.find((asset) => String(asset.id) === String(preferredId) || path.resolve(asset.path) === path.resolve(String(preferredId)))
+      : null;
+    if (preferred) return { path: preferred.path, source: "manual", label: preferred.filename, asset: preferred };
+    if (strategy === "manual") return { path: "", source: "generated_default", label: "系统默认基础 BGM", asset: null };
+    if (assets.length) {
+      const selected = assets
+        .map((asset) => ({ asset, score: scoreBgmAsset(asset, styleId) }))
+        .sort((a, b) => b.score - a.score || String(a.asset.filename).localeCompare(String(b.asset.filename)))[0]?.asset;
+      if (selected) return { path: selected.path, source: "local_auto", label: selected.filename, asset: selected };
+    }
+    return { path: "", source: "generated_default", label: "系统默认基础 BGM", asset: null };
+  }
+
+  function writeDefaultBgmWav(outputPath, durationSeconds, styleId = ROUTE_A_DEFAULT_STYLE_ID) {
+    const preset = routeAStylePreset(styleId);
+    const sampleRate = 22050;
+    const duration = Math.max(1, Math.min(600, Number(durationSeconds || 0) || 30));
+    const sampleCount = Math.ceil(sampleRate * duration);
+    const dataSize = sampleCount * 2;
+    const buffer = Buffer.alloc(44 + dataSize);
+    buffer.write("RIFF", 0);
+    buffer.writeUInt32LE(36 + dataSize, 4);
+    buffer.write("WAVE", 8);
+    buffer.write("fmt ", 12);
+    buffer.writeUInt32LE(16, 16);
+    buffer.writeUInt16LE(1, 20);
+    buffer.writeUInt16LE(1, 22);
+    buffer.writeUInt32LE(sampleRate, 24);
+    buffer.writeUInt32LE(sampleRate * 2, 28);
+    buffer.writeUInt16LE(2, 32);
+    buffer.writeUInt16LE(16, 34);
+    buffer.write("data", 36);
+    buffer.writeUInt32LE(dataSize, 40);
+
+    const tonalMap = {
+      black_gold_knowledge: [110, 165, 220],
+      clean_education: [147, 196, 247],
+      tech_info: [130.81, 196, 261.63],
+      enrollment_ad: [98, 146.83, 196],
+    };
+    const tones = tonalMap[routeAStyleId(styleId)] || tonalMap.black_gold_knowledge;
+    for (let index = 0; index < sampleCount; index += 1) {
+      const t = index / sampleRate;
+      const fadeIn = Math.min(1, t / 1.5);
+      const fadeOut = Math.min(1, (duration - t) / 1.8);
+      const envelope = Math.max(0, Math.min(fadeIn, fadeOut));
+      const pulse = Math.sin(2 * Math.PI * 1.5 * t) > 0.82 ? 0.055 : 0;
+      const value = (
+        Math.sin(2 * Math.PI * tones[0] * t) * 0.18
+        + Math.sin(2 * Math.PI * tones[1] * t) * 0.08
+        + Math.sin(2 * Math.PI * tones[2] * t) * 0.035
+        + pulse
+      ) * envelope;
+      const sample = Math.max(-1, Math.min(1, value)) * 32767;
+      buffer.writeInt16LE(Math.round(sample), 44 + index * 2);
+    }
+    fs.writeFileSync(outputPath, buffer);
+    return {
+      path: outputPath,
+      source: "generated_default",
+      label: `${preset.label} · 系统默认基础 BGM`,
+    };
+  }
+
   function importBgmAsset(filePath) {
     const resolved = path.resolve(String(filePath || "").trim());
     if (!resolved || !fs.existsSync(resolved)) throw new Error("请选择存在的本地音乐文件。");
@@ -1040,18 +1119,38 @@ export function createVideoProductService({
     const outputType = OUTPUT_TYPES.has(String(input.output_type || "")) ? String(input.output_type) : "jianying";
     const needsImages = IMAGE_REQUIRED_OUTPUT_TYPES.has(outputType);
     const needsDownloadedVideo = outputType === "mix_mp4";
-    const director = taskStore.getDirectorProject(directorId);
+    let director = taskStore.getDirectorProject(directorId);
     const audio = taskStore.getTtsJob(audioAssetId);
     const platformId = String(input.platform || director?.platform || "douyin");
     const platform = platformPreset(platformId);
     const blockers = [];
 
-    if (!director || director.status !== "completed") blockers.push("缺少已完成的 AI 导演项目。");
     if (!audio || audio.status !== "completed" || !audio.audio_path || !fs.existsSync(audio.audio_path)) {
       blockers.push("缺少已生成的 TTS 音频。");
     }
 
-    const directorScenes = director ? taskStore.listDirectorScenes(director.id) : [];
+    let directorScenes = director ? taskStore.listDirectorScenes(director.id) : [];
+    let routeAAutoPreview = false;
+    if (outputType === "template_mp4" && (!director || director.status !== "completed") && audio && audio.status === "completed") {
+      const style = routeAStyleContract(input);
+      directorScenes = buildRouteAAutoDirectorScenes(audio, input, 0);
+      director = {
+        id: 0,
+        task_id: audio.task_id || 0,
+        rewrite_id: audio.rewrite_id || 0,
+        title: routeAAutoTitle(audio, input),
+        source_text: audio.text || "",
+        platform: platformId,
+        status: "completed",
+        metadata_json: JSON.stringify({
+          route_a_auto_preview: true,
+          route_a_style: style,
+          skill_chain: ROUTE_A_SKILL_CHAIN,
+        }),
+      };
+      routeAAutoPreview = true;
+    }
+    if (!director || director.status !== "completed") blockers.push("缺少已完成的 AI 导演项目。");
     if (!directorScenes.length) blockers.push("导演项目没有可用镜头列表。");
     const audioBinding = director && audio
       ? audioDirectorBinding(director, audio, directorScenes)
@@ -1184,6 +1283,12 @@ export function createVideoProductService({
         downloaded_video_count: downloadedVideos.length,
         audio_duration: Number(audioDuration.toFixed(3)),
         route_a_intro_seconds: routeAIntroSeconds,
+        route_a_style_id: routeAStyleId(input.route_a_style_id || input.style_id),
+        route_a_style: routeAStyleContract(input),
+        route_a_bgm_strategy: String(input.bgm_strategy || "auto"),
+        route_a_bgm_asset_id: String(input.bgm_asset_id || ""),
+        route_a_auto_preview: routeAAutoPreview,
+        route_a_skill_chain: ROUTE_A_SKILL_CHAIN,
         director_scene_count: directorScenes.length,
         timeline_scene_count: scenes.length,
         alignment_source: routeASubtitleScenes.length ? "tts_text_sentence_chunks" : "director_scene_duration_scaled",
