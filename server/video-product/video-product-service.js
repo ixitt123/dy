@@ -702,7 +702,7 @@ function splitTitleLines(value, maxLineLength = 11) {
 function conciseSceneLabel(scene) {
   const title = String(scene.title_text || "").replace(/^(强钩子|展示痛点|提出|解释|总结|CTA|转折)[：:]/, "");
   const text = titleLooksGeneric(title) ? (scene.subtitle_text || scene.narration_text || "") : title;
-  return titleClip(text, 14);
+  return titleClip(text, 11);
 }
 
 function routeACtaText(timelineJson = {}) {
@@ -1968,14 +1968,14 @@ ${sceneMarkup}
       const enable = ffmpegEnableBetween(start, end);
       const burstEnable = ffmpegEnableBetween(start, Math.min(end, start + 0.32));
       const label = ffmpegDrawText(conciseSceneLabel(scene));
-      const labelWidth = Math.min(width - 160, Math.max(360, compactTitleText(label).length * 34 + 210));
+      const labelWidth = Math.min(width - 140, Math.max(420, compactTitleText(label).length * 46 + 230));
       const y = Math.round(height * 0.104);
       return [
         `drawbox=x=0:y=${Math.round(height * 0.39)}:w=${width}:h=8:color=${kit.accent2}@0.34:t=fill:enable='${burstEnable}'`,
         `drawbox=x=70:y=${y}:w=10:h=118:color=${index % 2 ? kit.accent2 : kit.accent}:t=fill:enable='${enable}'`,
         `drawbox=x=92:y=${y}:w=${labelWidth}:h=118:color=${kit.panel}@0.76:t=fill:enable='${enable}'`,
         `drawtext=fontfile='${ffmpegFilterPath(boldFontPath)}':text='SHOT ${String(index + 1).padStart(2, "0")}':x=122:y=${y + 18}:fontsize=30:fontcolor=${kit.muted}:enable='${enable}'`,
-        `drawtext=fontfile='${ffmpegFilterPath(boldFontPath)}':text='${label}':x=122:y=${y + 56}:fontsize=42:fontcolor=${index % 2 ? kit.accent2 : kit.accent}:enable='${enable}'`,
+        `drawtext=fontfile='${ffmpegFilterPath(boldFontPath)}':text='${label}':x=122:y=${y + 58}:fontsize=39:fontcolor=${index % 2 ? kit.accent2 : kit.accent}:enable='${enable}'`,
       ];
     });
     const backgroundFilters = timelineFiles.packagedTemplateBackground
