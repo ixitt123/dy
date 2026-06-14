@@ -502,6 +502,127 @@ function optimizedPublishTitle({ directorTitle = "", scenes = [] } = {}) {
   return titleClip(contrast ? `${hook}，${contrast}` : hook, 22);
 }
 
+function routeAStylePreset(styleId = "") {
+  return ROUTE_A_STYLE_PRESETS[String(styleId || "")] || ROUTE_A_STYLE_PRESETS[ROUTE_A_DEFAULT_STYLE_ID];
+}
+
+function routeAStyleId(value = "") {
+  return ROUTE_A_STYLE_PRESETS[String(value || "")] ? String(value) : ROUTE_A_DEFAULT_STYLE_ID;
+}
+
+function routeAStyleContract(input = {}) {
+  const styleId = routeAStyleId(input.route_a_style_id || input.style_id);
+  const preset = routeAStylePreset(styleId);
+  const customStyle = String(input.route_a_custom_style || input.custom_style || "").trim();
+  return {
+    id: styleId,
+    label: preset.label,
+    tone: preset.tone,
+    visual_rules: preset.visualRules,
+    caption_rules: ["竖屏大字字幕", "关键词高亮", "黑色描边", "安全边距", "一屏一个重点"],
+    music_rules: ["语音优先", "BGM 自动压低", "片头有轻冲击", "片尾收束"],
+    transition_rules: ["主转场保持统一", "重点句使用信息卡", "结尾 CTA 大字卡"],
+    custom_style: customStyle,
+    palette: preset.palette,
+    skill_chain: ROUTE_A_SKILL_CHAIN,
+  };
+}
+
+function routeAAutoTitle(audio, input = {}) {
+  const explicit = String(input.title || "").trim();
+  if (explicit) return titleClip(explicit, 28);
+  const text = String(audio?.text || "").trim();
+  const first = sentenceParts(text)[0] || text.slice(0, 28);
+  if (/英语/.test(text) && /背单词/.test(text)) return "半年说流利英语？先别死背单词";
+  if (/招生|家长|报名|升学|补课/.test(text)) return titleClip(`${first}，家长一定要听`, 28);
+  return titleClip(first || "路线 A 自动导演稿", 28);
+}
+
+function estimateSpeechDuration(text) {
+  const units = splitSpeechUnits(text);
+  const weight = units.reduce((sum, unit) => sum + speechUnitWeight(unit), 0);
+  return Math.max(12, Math.min(180, Number((weight * 1.05).toFixed(2))));
+}
+
+function buildRouteAAutoDirectorScenes(audio, input = {}, targetDuration = 0) {
+  const style = routeAStyleContract(input);
+  const units = splitSpeechUnits(audio?.text || "");
+  const safeUnits = units.length ? units : [String(audio?.text || "").trim()].filter(Boolean);
+  const duration = Number(targetDuration || 0) > 0 ? Number(targetDuration) : estimateSpeechDuration(audio?.text || "");
+  const weights = safeUnits.map(speechUnitWeight);
+  const totalWeight = weights.reduce((sum, value) => sum + value, 0) || safeUnits.length || 1;
+  return safeUnits.map((unit, index) => {
+    const sceneDuration = Math.max(1.2, Number(((weights[index] / totalWeight) * duration).toFixed(2)));
+    const keyword = compactTitleText(unit).slice(0, 10);
+    return {
+      scene_index: index + 1,
+      duration: sceneDuration,
+      purpose: index === 0 ? `片头钩子：${keyword}` : index === safeUnits.length - 1 ? `片尾收束：${keyword}` : `信息推进：${keyword}`,
+      emotion: index === 0 ? "抓注意力" : index === safeUnits.length - 1 ? "推动行动" : "持续解释",
+      voice_text: unit,
+      subtitle: unit,
+      visual_style: style.label,
+      camera: index % 3 === 0 ? "push_in" : index % 3 === 1 ? "text_card" : "montage",
+      composition: `${style.label}，竖屏安全区，主字幕居中偏下，信息卡跟随节奏出现。`,
+      image_prompt: `${style.label}商业短视频包装画面，统一色调，真实摄影感或高级信息图背景，不生成可读文字。镜头语义：${unit.slice(0, 80)}`,
+      motion_prompt: index % 3 === 0 ? "push" : index % 3 === 1 ? "slide" : "zoom",
+      bgm: "voiceover_first",
+      sfx: index === 0 ? "intro_hit" : index === safeUnits.length - 1 ? "outro_resolve" : "soft_transition",
+      transition: index === 0 ? "fade" : index % 4 === 0 ? "whip_pan" : "match_cut",
+      asset_type: "graphic",
+      metadata_json: JSON.stringify({
+        generated_by: "route_a_auto_director",
+        route_a_style_id: style.id,
+        skill_chain: ROUTE_A_SKILL_CHAIN,
+      }),
+    };
+  });
+}
+
+function buildRouteAAutoDirectorResult(project, scenes, style) {
+  return {
+    video_meta: {
+      title: project.title,
+      platform: project.platform,
+      ratio: "9:16",
+      estimated_duration: project.estimated_duration,
+      style: style.label,
+    },
+    premium_video_director: {
+      video_style: style.label,
+      tone: style.tone,
+      pacing: "快节奏",
+      visual_rules: style.visual_rules,
+      caption_rules: style.caption_rules,
+      music_rules: style.music_rules,
+      transition_rules: style.transition_rules,
+    },
+    storyboard: scenes.map((scene) => ({
+      scene: scene.scene_index,
+      duration: scene.duration,
+      purpose: scene.purpose,
+      emotion: scene.emotion,
+      voice_text: scene.voice_text,
+      subtitle: scene.subtitle,
+      visual_style: scene.visual_style,
+      camera: scene.camera,
+      composition: scene.composition,
+      image_prompt: scene.image_prompt,
+      motion_prompt: scene.motion_prompt,
+      bgm: scene.bgm,
+      sfx: scene.sfx,
+      transition: scene.transition,
+      asset_type: scene.asset_type,
+      subtitle_style: { highlight_words: [compactTitleText(scene.subtitle).slice(0, 4)].filter(Boolean) },
+      notes: "路线 A 自动导演稿，服务于模板快剪 MP4。",
+    })),
+    aesthetic_review: {
+      score: 88,
+      summary: "路线 A 自动导演稿已锁定风格、节奏、字幕和混音要求。",
+    },
+  };
+}
+
 function splitTitleLines(value, maxLineLength = 11) {
   const text = compactTitleText(value);
   if (text.length <= maxLineLength) return [text];
