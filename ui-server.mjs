@@ -5103,6 +5103,40 @@ const server = http.createServer(async (req, res) => {
     }
 
     // ===== ProjectCenter API =====
+    if (url.pathname === "/api/projects" && req.method === "GET") {
+      sendJson(res, 200, { ok: true, projects: projectCenter.list({ limit: url.searchParams.get("limit") || 100 }) });
+      return;
+    }
+    if (url.pathname === "/api/projects" && req.method === "POST") {
+      const body = JSON.parse(await readBody(req) || "{}");
+      sendJson(res, 201, { ok: true, project: projectCenter.create(body) });
+      return;
+    }
+    if (url.pathname === "/api/project" && req.method === "GET") {
+      const project = projectCenter.getById(url.searchParams.get("id") || "");
+      sendJson(res, project ? 200 : 404, project ? { ok: true, project } : { ok: false, message: "短视频项目不存在。" });
+      return;
+    }
+    if (url.pathname === "/api/project/update" && req.method === "POST") {
+      const body = JSON.parse(await readBody(req) || "{}");
+      const project = projectCenter.update(body.id, body.changes || body);
+      sendJson(res, project ? 200 : 404, project ? { ok: true, project } : { ok: false, message: "短视频项目不存在。" });
+      return;
+    }
+    const projectRestMatch = url.pathname.match(/^\/api\/projects\/([^/]+)(?:\/(update))?$/);
+    const projectRestReserved = new Set(["create", "list", "get", "update", "stats", "link-asset", "assets", "readiness", "quality", "delete"]);
+    const isProjectRestResource = projectRestMatch && !projectRestReserved.has(projectRestMatch[1]);
+    if (isProjectRestResource && req.method === "GET" && !projectRestMatch[2]) {
+      const project = projectCenter.getById(decodeURIComponent(projectRestMatch[1]));
+      sendJson(res, project ? 200 : 404, project ? { ok: true, project } : { ok: false, message: "短视频项目不存在。" });
+      return;
+    }
+    if (isProjectRestResource && req.method === "POST" && projectRestMatch[2] === "update") {
+      const body = JSON.parse(await readBody(req) || "{}");
+      const project = projectCenter.update(decodeURIComponent(projectRestMatch[1]), body.changes || body);
+      sendJson(res, project ? 200 : 404, project ? { ok: true, project } : { ok: false, message: "短视频项目不存在。" });
+      return;
+    }
     if (url.pathname.startsWith("/api/projects/")) {
       const route = url.pathname.replace("/api/projects/", "");
       if (req.method === "POST" && route === "create") {

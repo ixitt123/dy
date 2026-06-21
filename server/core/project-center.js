@@ -84,10 +84,10 @@ function nextAction(project) {
     transcribed: { label: "生成 3 个改写版本", page: "rewrite" },
     rewritten: { label: "生成配音", page: "tts" },
     voiced: { label: "生成导演稿", page: "director" },
-    directed: { label: "匹配素材", page: "files" },
-    assets_ready: { label: "生成成片草稿", page: "vfo" },
-    draft_ready: { label: "打开剪映并导出", page: "vfo" },
-    exported: { label: "查看成片记录", page: "vfo" },
+    directed: { label: "匹配素材", page: "assets" },
+    assets_ready: { label: "生成成片草稿", page: "video-output" },
+    draft_ready: { label: "打开剪映并导出", page: "video-output" },
+    exported: { label: "查看成片记录", page: "video-output" },
   };
   return actions[project.status] || actions.created;
 }
@@ -270,7 +270,10 @@ export function createProjectCenter(baseDir) {
     return "created";
   }
 
-  function listAssets(filters = {}) {
+  function listAssets(projectIdOrFilters = {}, extraFilters = {}) {
+    const filters = typeof projectIdOrFilters === "string"
+      ? { ...extraFilters, projectId: projectIdOrFilters }
+      : projectIdOrFilters || {};
     const where = [];
     const values = [];
     const mapping = {
@@ -380,6 +383,16 @@ export function createProjectCenter(baseDir) {
     return { asset, project: updatedProject };
   }
 
+  function addAsset(projectId, asset = {}) {
+    return linkAsset(
+      projectId,
+      asset.assetType || asset.type || "",
+      asset.assetId || asset.id || asset.path || makeId("asset"),
+      asset.name || asset.title || "",
+      asset.metadata || asset,
+    );
+  }
+
   function getAssets(projectId) {
     return listAssets({ projectId });
   }
@@ -446,8 +459,8 @@ export function createProjectCenter(baseDir) {
     const suggestions = [];
     if (hookScore < 75) { problems.push("开头钩子不够强"); suggestions.push({ label: "生成强钩子版本", page: "rewrite" }); }
     if (subtitleRhythmScore < 70) { problems.push("字幕过长或节奏不足"); suggestions.push({ label: "重新切分字幕", page: "director" }); }
-    if (assetMatchScore < 80) { problems.push("分镜素材不足"); suggestions.push({ label: "去素材库补齐", page: "files" }); }
-    if (!bgmReady) { problems.push("没有准备 BGM"); suggestions.push({ label: "推荐本地 BGM", page: "files" }); }
+    if (assetMatchScore < 80) { problems.push("分镜素材不足"); suggestions.push({ label: "去素材库补齐", page: "assets" }); }
+    if (!bgmReady) { problems.push("没有准备 BGM"); suggestions.push({ label: "推荐本地 BGM", page: "assets" }); }
     if (!ctaReady) { problems.push("结尾行动号召不明显"); suggestions.push({ label: "生成 CTA 版本", page: "rewrite" }); }
     if (!readiness.ready) problems.push(...readiness.blockers.map((item) => `${item.label}${item.detail}`));
     return {
@@ -492,7 +505,9 @@ export function createProjectCenter(baseDir) {
     list,
     getById,
     update,
+    delete: remove,
     remove,
+    addAsset,
     linkAsset,
     getAssets,
     listAssets,
