@@ -444,7 +444,13 @@ export async function syncSelectionsToProject({ preview = state.preview } = {}) 
   await window.videoProjects.linkCurrent("bgm", bgmId, bgm?.filename || bgm?.title || "默认基础氛围 BGM", { path: bgm?.path || "", strategy: bgm ? (selectedBgmId ? "manual" : "auto") : "generated_default", source: bgm ? "local_upload" : "ai_generated", status: "ready" });
   if (["jianying", "jianying_template"].includes(outputType)) {
     const template = document.querySelector("#videoProductJianyingTemplate");
-    await window.videoProjects.linkCurrent("template", template?.value || "education_tips", template?.selectedOptions?.[0]?.textContent || "学习技巧模板", { ratio: "9:16", source: "local_upload", status: "ready" });
+    const templateConfig = state.sources?.jianyingTemplates?.find((item) => String(item.id) === String(template?.value || ""));
+    await window.videoProjects.linkCurrent("template", template?.value || "education_tips", templateConfig?.name || template?.selectedOptions?.[0]?.textContent || "学习技巧模板", {
+      ...templateConfig,
+      ratio: templateConfig?.ratio || "9:16",
+      source: "local_upload",
+      status: templateConfig?.hasMaster === false ? "missing_master" : "ready",
+    });
   }
   return currentVideoProject();
 }
