@@ -42,19 +42,64 @@ function firstExistingPath(candidates = []) {
   return candidates.map((value) => String(value || "").trim()).find((value) => value && fs.existsSync(value)) || "";
 }
 
+function readNullTerminated(buffer, offset, encoding) {
+  if (!offset || offset >= buffer.length) return "";
+  if (encoding === "utf16le") {
+    let end = offset;
+    while (end + 1 < buffer.length && buffer.readUInt16LE(end) !== 0) end += 2;
+    return buffer.toString("utf16le", offset, end);
+  }
+  const end = buffer.indexOf(0, offset);
+  return buffer.toString("latin1", offset, end < 0 ? buffer.length : end);
+}
+
 function readWindowsShortcut(shortcutPath) {
   if (!WINDOWS || !shortcutPath || !fs.existsSync(shortcutPath)) return null;
-  const escapedPath = shortcutPath.replaceAll("'", "''");
-  const script = [
-    "[Console]::OutputEncoding = [Text.UTF8Encoding]::new()",
-    "$shell = New-Object -ComObject WScript.Shell",
-    `$shortcut = $shell.CreateShortcut('${escapedPath}')`,
-    "@{ targetPath = $shortcut.TargetPath; arguments = $shortcut.Arguments } | ConvertTo-Json -Compress",
-  ].join("; ");
-  const result = run("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", script]);
-  if (!result.ok || !result.stdout) return null;
   try {
-    return JSON.parse(result.stdout);
+    const buffer = fs.readFileSync(shortcutPath);
+    if (buffer.length < 0x4c || buffer.readUInt32LE(0) !== 0x4c) return null;
+    const flags = buffer.readUInt32LE(0x14);
+    const isUnicode = Boolean(flags & 0x80);
+    let cursor = 0x4c;
+    if (flags & 0x01) cursor += 2 + buffer.readUInt16LE(cursor);
+
+    let targetPath = "";
+    if (flags & 0x02) {
+      const linkInfoStart = cursor;
+      const linkInfoSize = buffer.readUInt32LE(linkInfoStart);
+      const headerSize = buffer.readUInt32LE(linkInfoStart + 4);
+      const localBaseOffset = buffer.readUInt32LE(linkInfoStart + 16);
+      const suffixOffset = buffer.readUInt32LE(linkInfoStart + 24);
+      const unicodeBaseOffset = headerSize >= 0x24 ? buffer.readUInt32LE(linkInfoStart + 28) : 0;
+      const unicodeSuffixOffset = headerSize >= 0x24 ? buffer.readUInt32LE(linkInfoStart + 32) : 0;
+      const basePath = unicodeBaseOffset
+        ? readNullTerminated(buffer, linkInfoStart + unicodeBaseOffset, "utf16le")
+        : readNullTerminated(buffer, linkInfoStart + localBaseOffset, "latin1");
+      const suffix = unicodeSuffixOffset
+        ? readNullTerminated(buffer, linkInfoStart + unicodeSuffixOffset, "utf16le")
+        : readNullTerminated(buffer, linkInfoStart + suffixOffset, "latin1");
+      targetPath = basePath && suffix && !basePath.toLowerCase().endsWith(suffix.toLowerCase())
+        ? path.join(basePath, suffix)
+        : basePath || suffix;
+      cursor += linkInfoSize;
+    }
+
+    const readStringData = (flag) => {
+      if (!(flags & flag) || cursor + 2 > buffer.length) return "";
+      const length = buffer.readUInt16LE(cursor);
+      cursor += 2;
+      const byteLength = length * (isUnicode ? 2 : 1);
+      const value = buffer.toString(isUnicode ? "utf16le" : "latin1", cursor, cursor + byteLength);
+      cursor += byteLength;
+      return value;
+    };
+    readStringData(0x04);
+    const relativePath = readStringData(0x08);
+    readStringData(0x10);
+    const argumentsValue = readStringData(0x20);
+    readStringData(0x40);
+    if (!targetPath && relativePath && fs.existsSync(relativePath)) targetPath = relativePath;
+    return { targetPath, arguments: argumentsValue };
   } catch {
     return null;
   }
@@ -185,6 +230,7 @@ export function createCapcutCliDetector({ baseDir, ffmpegPath = "", getSettings 
       paths: { templatesRoot, draftDirectory, outputRoot },
       jianying: {
         appPath: jianyingAppPath,
+        discoveredPath: String(discoveredInstall?.targetPath || "").trim(),
         arguments: String(discoveredInstall?.arguments || "").trim(),
         canOpen: Boolean(jianyingAppPath),
       },
