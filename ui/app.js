@@ -3078,7 +3078,7 @@ function videoProductCompletedSteps(project = {}) {
   const order = [
     ["pending", "进入 SQLite 队列"],
     ["binding_assets", "绑定导演稿、音频和素材"],
-    ["building_timeline", "生成 Timeline Project"],
+    ["building_timeline", "生成成片草稿"],
     [project.output_type === "jianying" || project.output_type === "package" ? "exporting_draft" : "rendering", project.output_type === "jianying" ? "导出剪映半成品" : project.output_type === "package" ? "导出素材包" : "渲染 MP4"],
     ["completed", "写入输出文件"],
   ];
@@ -3489,8 +3489,8 @@ async function previewVideoProductTimeline() {
   renderVideoProductBlockers(data.blockers || []);
   renderVideoProductScenes(data);
   videoProductStatus.textContent = (data.blockers || []).length
-    ? `已生成 Timeline 预览，但有 ${data.blockers.length} 个阻塞项。`
-    : "Timeline 预览已生成，可以输出。";
+    ? `已生成成片预览，但有 ${data.blockers.length} 个阻塞项。`
+    : "成片预览已生成，可以输出。";
   return data;
 }
 
@@ -3505,7 +3505,7 @@ function renderVideoProductProjects(projects = videoProductProjectsState) {
     <div class="video-product-project-row" data-video-product-id="${project.project_id || project.id}">
       <strong>#${project.project_id || project.id}</strong>
       <div class="vfo-project-title">
-        <strong>${escapeHtml(project.metadata?.title || `Timeline #${project.project_id || project.id}`)}</strong>
+        <strong>${escapeHtml(project.metadata?.title || `成片 #${project.project_id || project.id}`)}</strong>
         <span>Director #${project.source_director_project_id || "-"} · Audio #${project.audio_asset_id || "-"} · ${escapeHtml(videoProductOutputLabel(project.output_type))}</span>
       </div>
       <span>${escapeHtml(project.ratio)} · ${escapeHtml(project.resolution)}</span>
