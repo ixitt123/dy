@@ -7,12 +7,19 @@ const WINDOWS = process.platform === "win32";
 function run(command, args, timeout = 8000) {
   try {
     const needsWindowsShell = WINDOWS && /\.(?:cmd|bat)$/i.test(String(command || ""));
-    const result = spawnSync(command, args, {
+    const commandLine = needsWindowsShell
+      ? `"${[quoteWindowsShellArg(command), ...args.map(quoteWindowsShellArg)].join(" ")}"`
+      : "";
+    const result = spawnSync(
+      needsWindowsShell ? (process.env.ComSpec || "cmd.exe") : command,
+      needsWindowsShell ? ["/d", "/s", "/c", commandLine] : args,
+      {
       encoding: "utf8",
       windowsHide: true,
       timeout,
-      shell: needsWindowsShell,
-    });
+      shell: false,
+      },
+    );
     return {
       ok: result.status === 0 && !result.error,
       status: result.status,
@@ -32,6 +39,12 @@ function firstLine(result) {
 function probeExecutable(command, args = ["-version"]) {
   const result = run(command, args);
   return { ok: result.ok, detail: firstLine(result), command, args };
+}
+
+function quoteWindowsShellArg(value) {
+  const text = String(value ?? "");
+  if (!/[\s&()^|<>"]/u.test(text)) return text;
+  return `"${text.replace(/"/g, '\\"')}"`;
 }
 
 function directoryHasTemplate(directory) {
