@@ -41,7 +41,7 @@ const COST_PER_MILLION_TOKENS = {
  * 3. 提供统一的 generate() 接口（含流式 SSE 支持）
  * 4. 追踪用量（tokens、成本、耗时）
  */
-export class ModelRouter {
+class ModelRouter {
   constructor() {
     this._initialized = false;
     this._settings = null;

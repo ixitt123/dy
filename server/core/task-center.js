@@ -10,6 +10,7 @@ export function calculateDurationMs(startedAt, now = Date.now()) {
 
 export function createTaskCenterV2(baseDir, { onProgress, maxConcurrency = 3 } = {}) {
   const dbPath = path.join(baseDir, ".data", "task-center.sqlite");
+  fs.mkdirSync(path.dirname(dbPath), { recursive: true });
   const db = new DatabaseSync(dbPath);
   db.exec("PRAGMA journal_mode=WAL");
   db.exec(`
