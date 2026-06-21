@@ -91,13 +91,14 @@ export function createCapcutCliDetector({ baseDir, ffmpegPath = "", getSettings 
       localAppData && path.join(localAppData, "JianyingPro", "JianyingPro.exe"),
       localAppData && path.join(localAppData, "CapCut", "CapCut.exe"),
     ]);
-    const npxCommand = WINDOWS ? "npx.cmd" : "npx";
     const capcutCommand = WINDOWS ? "capcut.cmd" : "capcut";
-    const npxResult = run(npxCommand, ["--no-install", "capcut-cli", "--version"]);
-    const directResult = npxResult.ok ? null : run(capcutCommand, ["--version"]);
-    const capcutResult = npxResult.ok ? npxResult : directResult;
-    const capcutInvocation = npxResult.ok
-      ? { command: npxCommand, prefixArgs: ["--no-install", "capcut-cli"] }
+    const localCapcutCommand = path.join(baseDir, "node_modules", ".bin", WINDOWS ? "capcut-cli.cmd" : "capcut-cli");
+    const localResult = fs.existsSync(localCapcutCommand) ? run(localCapcutCommand, ["--version"], 3000) : null;
+    const globalLookup = localResult?.ok ? null : run(WINDOWS ? "where.exe" : "which", [capcutCommand], 2000);
+    const directResult = globalLookup?.ok ? run(capcutCommand, ["--version"], 3000) : null;
+    const capcutResult = localResult?.ok ? localResult : directResult;
+    const capcutInvocation = localResult?.ok
+      ? { command: localCapcutCommand, prefixArgs: [] }
       : directResult?.ok
         ? { command: capcutCommand, prefixArgs: [] }
         : null;
