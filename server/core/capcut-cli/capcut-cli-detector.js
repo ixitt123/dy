@@ -6,11 +6,12 @@ const WINDOWS = process.platform === "win32";
 
 function run(command, args, timeout = 8000) {
   try {
+    const needsWindowsShell = WINDOWS && /\.(?:cmd|bat)$/i.test(String(command || ""));
     const result = spawnSync(command, args, {
       encoding: "utf8",
       windowsHide: true,
       timeout,
-      shell: false,
+      shell: needsWindowsShell,
     });
     return {
       ok: result.status === 0 && !result.error,
