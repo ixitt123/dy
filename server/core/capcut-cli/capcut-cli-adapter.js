@@ -6,6 +6,44 @@ import { parseCapcutCliResult } from "./capcut-cli-result-parser.js";
 export function createCapcutCliAdapter(options = {}) {
   const detector = options.detector || createCapcutCliDetector(options);
 
+  function detectCapabilities() {
+    const status = detector.detect();
+    const probes = {
+      doctor: ["doctor"],
+      version: ["--version"],
+      help: ["--help"],
+      applyTemplate: ["apply-template", "--help"],
+      importSrt: ["import-srt", "--help"],
+      addAudio: ["add-audio", "--help"],
+      addImage: ["add-image", "--help"],
+    };
+    const commands = {};
+    const warnings = [];
+    if (!status.invocation) {
+      Object.keys(probes).forEach((name) => {
+        commands[name] = { ok: false, command: probes[name].join(" "), stdout: "", stderr: "capcut-cli 未安装" };
+      });
+      return { ...status, mode: "compatibility_package", capabilities: { ready: false, commands }, warnings: ["capcut-cli 不可用，进入素材包兼容模式。"] };
+    }
+    Object.entries(probes).forEach(([name, args]) => {
+      const result = detector.run(status.invocation.command, [...status.invocation.prefixArgs, ...args], 15000);
+      commands[name] = {
+        ok: result.ok,
+        command: args.join(" "),
+        stdout: result.stdout,
+        stderr: result.stderr || result.error,
+      };
+      if (!result.ok) warnings.push(`capcut-cli 命令不可用：${args.join(" ")}`);
+    });
+    const ready = Object.values(commands).every((command) => command.ok);
+    return {
+      ...status,
+      mode: status.mode === "capcut_cli" && ready ? "capcut_cli" : "compatibility_package",
+      capabilities: { ready, commands },
+      warnings,
+    };
+  }
+
   function execute(args, defaults = {}) {
     const status = detector.detect();
     if (!status.invocation) {
@@ -26,13 +64,13 @@ export function createCapcutCliAdapter(options = {}) {
   function buildTemplateDraft({ project, timeline, timelineFiles, templateName }) {
     const plan = buildCapcutCliPlan({ project, timeline, timelineFiles, templateName });
     const planPath = writeCapcutCliPlan(path.join(timelineFiles.projectDir, "capcut-plan.json"), plan);
-    const status = detector.detect();
+    const status = detectCapabilities();
     if (status.mode !== "capcut_cli") {
       return {
         ok: true,
         draftPath: "",
         previewPath: "",
-        warnings: ["未检测到可执行的 capcut-cli 与剪映母版，已输出兼容素材包和执行计划。"],
+        warnings: ["capcut-cli、命令能力或剪映母版未就绪，已输出兼容素材包和执行计划。", ...(status.warnings || [])],
         errors: [],
         files: [planPath, timelineFiles.timelinePath, timelineFiles.srtPath].filter(Boolean),
         fallback: true,
@@ -55,9 +93,15 @@ export function createCapcutCliAdapter(options = {}) {
   }
 
   return {
-    detect: detector.detect,
+    detect: detectCapabilities,
+    detectCapabilities,
     doctor: () => execute(["doctor"]),
     version: () => execute(["--version"]),
+    help: () => execute(["--help"]),
+    applyTemplateHelp: () => execute(["apply-template", "--help"]),
+    importSrtHelp: () => execute(["import-srt", "--help"]),
+    addAudioHelp: () => execute(["add-audio", "--help"]),
+    addImageHelp: () => execute(["add-image", "--help"]),
     info: (planPath) => execute(["info", "--plan", planPath]),
     lint: (planPath) => execute(["lint", "--plan", planPath]),
     importSrt: (draftPath, srtPath) => execute(["import-srt", "--draft", draftPath, "--input", srtPath]),

@@ -33,6 +33,12 @@ export function parseCapcutCliResult(result = {}, defaults = {}) {
     warnings: [...new Set(warnings.filter(Boolean))],
     errors: [...new Set(errors.filter(Boolean))],
     files: [...new Set(files.filter((file) => !file || fs.existsSync(file)))],
-    raw: parsed,
+    raw: {
+      parsed,
+      stdout: String(result.stdout || ""),
+      stderr: String(result.stderr || ""),
+      error: String(result.error || ""),
+      status: result.status ?? null,
+    },
   };
 }

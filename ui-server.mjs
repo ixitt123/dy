@@ -27,6 +27,7 @@ import { createVoiceAssetService } from "./server/voices/voice-asset-service.js"
 import { createDirectorService } from "./server/director/director-service.js";
 import { createVfoService } from "./server/vfo/vfo-service.js";
 import { createVideoProductService } from "./server/video-product/video-product-service.js";
+import { createVideoOutputRoutes } from "./server/routes/video-output-routes.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const uiDir = path.join(__dirname, "ui");
@@ -301,6 +302,13 @@ const videoProductService = createVideoProductService({
   projectCenter,
   onProgress: (data) => broadcastProgress({ type: "video-product", ...data }),
   onIdle: scheduleShutdownIfIdle,
+});
+
+const handleVideoOutputRoutes = createVideoOutputRoutes({
+  videoProductService,
+  readBody,
+  sendJson,
+  sendBuffer,
 });
 
 // ModelRouter 统一模型路由
@@ -5427,95 +5435,7 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
-    // ===== Video Product Center API =====
-    if (url.pathname.startsWith("/api/video-product/")) {
-      const route = url.pathname.replace("/api/video-product/", "");
-
-      if (req.method === "GET" && route === "sources") {
-        sendJson(res, 200, { ok: true, ...videoProductService.listSources() });
-        return;
-      }
-
-      if (req.method === "GET" && route === "projects") {
-        sendJson(res, 200, {
-          ok: true,
-          projects: videoProductService.listProjects(Number(url.searchParams.get("limit")) || 50),
-        });
-        return;
-      }
-
-      if (req.method === "GET" && route === "project") {
-        const project = videoProductService.getProject(url.searchParams.get("id") || "");
-        if (!project) {
-          sendJson(res, 404, { ok: false, message: "没有找到 Timeline Project" });
-          return;
-        }
-        sendJson(res, 200, { ok: true, project });
-        return;
-      }
-
-      if (req.method === "POST" && route === "preview") {
-        const body = JSON.parse(await readBody(req) || "{}");
-        try {
-          const result = await videoProductService.preview(body);
-          sendJson(res, 200, result);
-        } catch (error) {
-          sendJson(res, 400, { ok: false, message: error instanceof Error ? error.message : String(error) });
-        }
-        return;
-      }
-
-      if (req.method === "POST" && route === "generate") {
-        const body = JSON.parse(await readBody(req) || "{}");
-        try {
-          sendJson(res, 200, { ok: true, ...videoProductService.enqueue(body) });
-        } catch (error) {
-          sendJson(res, 400, { ok: false, message: error instanceof Error ? error.message : String(error) });
-        }
-        return;
-      }
-
-      if (req.method === "GET" && route === "tools") {
-        sendJson(res, 200, videoProductService.getToolStatus());
-        return;
-      }
-
-      if (req.method === "POST" && route === "add-bgm") {
-        const body = JSON.parse(await readBody(req) || "{}");
-        try {
-          const asset = videoProductService.importBgmAsset(body.filePath || "");
-          sendJson(res, 200, { ok: true, asset, ...videoProductService.listSources() });
-        } catch (error) {
-          sendJson(res, 400, { ok: false, message: error instanceof Error ? error.message : String(error) });
-        }
-        return;
-      }
-
-      if (req.method === "GET" && route === "export") {
-        const id = url.searchParams.get("id") || "";
-        const type = url.searchParams.get("type") || "timeline";
-        const filePath = videoProductService.resolveOutputPath(id, type);
-        if (!filePath || !fs.existsSync(filePath) || fs.statSync(filePath).isDirectory()) {
-          sendJson(res, 404, { ok: false, message: "没有找到可导出的输出文件" });
-          return;
-        }
-        const ext = path.extname(filePath).toLowerCase();
-        const contentType = {
-          ".json": "application/json; charset=utf-8",
-          ".srt": "text/plain; charset=utf-8",
-          ".ass": "text/plain; charset=utf-8",
-          ".txt": "text/plain; charset=utf-8",
-          ".png": "image/png",
-          ".mp4": "video/mp4",
-        }[ext] || "application/octet-stream";
-        const data = fs.readFileSync(filePath);
-        sendBuffer(res, 200, data, contentType, path.basename(filePath));
-        return;
-      }
-
-      sendJson(res, 404, { ok: false, message: "未知视频成片 API" });
-      return;
-    }
+    if (await handleVideoOutputRoutes(req, res, url)) return;
 
     // ===== Image Studio API =====
     if (url.pathname.startsWith("/api/image/")) {
