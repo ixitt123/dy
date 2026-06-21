@@ -834,6 +834,12 @@ async function openRewriteEditor(taskId) {
   const item = transcripts.find((row) => String(row.id) === String(taskId));
   if (!item) return;
 
+  await window.videoProjects?.linkCurrent?.("transcript", item.id, item.title || `文案 ${item.id}`, {
+    text: item.text || "",
+    taskId: Number(item.id || 0),
+    source: "downloaded",
+  });
+
   rewriteTaskId.value = item.id;
   rewriteOriginal.value = item.text || "";
   rewriteAnalysisView.textContent = formatAnalysisForRewrite(item.ai || {});
