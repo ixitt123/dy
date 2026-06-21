@@ -50,7 +50,12 @@ function readNullTerminated(buffer, offset, encoding) {
     return buffer.toString("utf16le", offset, end);
   }
   const end = buffer.indexOf(0, offset);
-  return buffer.toString("latin1", offset, end < 0 ? buffer.length : end);
+  const bytes = buffer.subarray(offset, end < 0 ? buffer.length : end);
+  try {
+    return new TextDecoder(WINDOWS ? "gbk" : "windows-1252").decode(bytes);
+  } catch {
+    return buffer.toString("latin1", offset, end < 0 ? buffer.length : end);
+  }
 }
 
 function readWindowsShortcut(shortcutPath) {
@@ -89,7 +94,9 @@ function readWindowsShortcut(shortcutPath) {
       const length = buffer.readUInt16LE(cursor);
       cursor += 2;
       const byteLength = length * (isUnicode ? 2 : 1);
-      const value = buffer.toString(isUnicode ? "utf16le" : "latin1", cursor, cursor + byteLength);
+      const value = isUnicode
+        ? buffer.toString("utf16le", cursor, cursor + byteLength)
+        : readNullTerminated(Buffer.concat([buffer.subarray(cursor, cursor + byteLength), Buffer.from([0])]), 0, "ansi");
       cursor += byteLength;
       return value;
     };
