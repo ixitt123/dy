@@ -16,6 +16,7 @@ const state = {
   activeTimeline: null,
   preview: null,
   manualBindings: {},
+  templateManuallySelected: false,
   pollTimer: 0,
 };
 
@@ -122,6 +123,98 @@ function setOptions(select, rows, label, preferred) {
   if ([...select.options].some((option) => option.value === current)) select.value = current;
 }
 
+function compactText(value) {
+  return String(value || "").toLowerCase().replace(/[^\p{L}\p{N}\u4e00-\u9fa5]+/gu, "");
+}
+
+function scoreTemplateKeywordList(list, targetText) {
+  const target = compactText(targetText);
+  if (!target) return 0;
+  return (Array.isArray(list) ? list : []).reduce((score, item) => (
+    target.includes(compactText(item)) || compactText(item).includes(target) ? score + 2 : score
+  ), 0);
+}
+
+function currentTemplateContext() {
+  const project = currentVideoProject();
+  const directorId = document.querySelector("#videoProductDirector")?.value || "";
+  const director = state.sources?.directors?.find((item) => String(item.id) === String(directorId));
+  return {
+    videoType: project?.videoType || project?.type || "",
+    title: project?.title || director?.title || "",
+    visualStyle: director?.visual_style || director?.style || "",
+  };
+}
+
+function sortedJianyingTemplates() {
+  const templates = state.sources?.jianyingTemplates || [];
+  const context = currentTemplateContext();
+  return templates
+    .map((template) => {
+      const score = Number(template.hasMaster) * 5
+        + scoreTemplateKeywordList(template.recommendedVideoTypes, `${context.videoType} ${context.title}`)
+        + scoreTemplateKeywordList(template.recommendedStyles, context.visualStyle)
+        + scoreTemplateKeywordList(template.tags, `${context.videoType} ${context.title} ${context.visualStyle}`);
+      return { ...template, recommendationScore: score };
+    })
+    .sort((a, b) => b.recommendationScore - a.recommendationScore || Number(b.hasMaster) - Number(a.hasMaster) || String(a.name).localeCompare(String(b.name), "zh-Hans-CN"));
+}
+
+function renderJianyingTemplateOptions() {
+  const select = document.querySelector("#videoProductJianyingTemplate");
+  if (!select) return;
+  const rows = sortedJianyingTemplates();
+  const recommended = rows[0];
+  const preferred = state.templateManuallySelected ? select.value : recommended?.id;
+  setOptions(select, rows, (row) => {
+    const prefix = recommended && row.id === recommended.id ? "【推荐】" : "";
+    const master = row.hasMaster ? "" : " · 缺母版";
+    return `${prefix}${row.name || row.id} · ${row.category || "模板"}${master}`;
+  }, preferred);
+  const note = document.querySelector("#videoProductTemplateRecommendation");
+  if (note) note.textContent = recommended
+    ? `推荐：${recommended.name || recommended.id}，匹配 ${recommended.category || "当前项目"}；${recommended.hasMaster ? "母版已就绪" : "还缺剪映母版文件"}。`
+    : "暂无模板配置，请先导入本地剪映模板母版。";
+}
+
+async function loadJianyingLocalConfig() {
+  const appInput = document.querySelector("#jianyingAppPathInput");
+  const draftInput = document.querySelector("#jianyingDraftDirInput");
+  if (!appInput && !draftInput) return;
+  const data = await getJson("/api/jianying/local-config").catch(() => null);
+  if (!data) return;
+  if (appInput) appInput.value = data.appPath || "";
+  if (draftInput) draftInput.value = data.draftDir || "";
+}
+
+async function saveJianyingLocalConfig() {
+  const note = document.querySelector("#videoOutputCompatibilityNote");
+  const body = {
+    appPath: document.querySelector("#jianyingAppPathInput")?.value.trim() || "",
+    draftDir: document.querySelector("#jianyingDraftDirInput")?.value.trim() || "",
+  };
+  const result = await postJson("/api/jianying/local-config", body);
+  if (note) note.textContent = `已保存本地剪映对接：${result.draftDir || "未填写草稿目录"}`;
+  await refreshToolStatus();
+}
+
+async function importJianyingTemplate() {
+  const input = document.querySelector("#jianyingTemplateSourcePath");
+  const status = document.querySelector("#jianyingTemplateStatus");
+  const sourcePath = input?.value.trim() || "";
+  if (!sourcePath) {
+    if (status) status.textContent = "请先粘贴已解压的剪映模板母版目录。";
+    return;
+  }
+  if (status) status.textContent = "正在导入模板母版...";
+  const data = await postJson("/api/video-product/import-template", { sourcePath });
+  state.sources = data;
+  state.templateManuallySelected = false;
+  renderJianyingTemplateOptions();
+  if (status) status.textContent = `已导入：${data.template?.name || data.template?.id || "模板"}，并加入自动推荐。`;
+  await refreshToolStatus();
+}
+
 export async function loadVideoProductSources() {
   const data = await getJson("/api/video-product/sources");
   state.sources = data;
@@ -135,6 +228,7 @@ export async function loadVideoProductSources() {
   setOptions(document.querySelector("#videoProductBgm"), [{ id: "", filename: "自动匹配本地 BGM；没有则基础生成" }, ...(data.bgmAssets || [])], (row) => row.filename || row.title || "自动匹配", preferred.bgmId);
   setOptions(document.querySelector("#videoProductRouteAStyle"), data.routeAStyles || [], (row) => row.label || row.id);
   setOptions(document.querySelector("#videoProductBgmStrategy"), data.bgmStrategies || [], (row) => row.label || row.id);
+  renderJianyingTemplateOptions();
   state.manualBindings = {};
   state.preview = null;
   updateGenerateAvailability();
@@ -453,6 +547,14 @@ function bindEvents() {
   }));
   document.querySelector("#refreshVideoOutputTools")?.addEventListener("click", refreshToolStatus);
   document.querySelector("#openJianyingApp")?.addEventListener("click", openJianyingApp);
+  document.querySelector("#saveJianyingLocalConfig")?.addEventListener("click", () => saveJianyingLocalConfig().catch((error) => {
+    const note = document.querySelector("#videoOutputCompatibilityNote");
+    if (note) note.textContent = error.message;
+  }));
+  document.querySelector("#importJianyingTemplate")?.addEventListener("click", () => importJianyingTemplate().catch((error) => {
+    const status = document.querySelector("#jianyingTemplateStatus");
+    if (status) status.textContent = error.message;
+  }));
   document.querySelector("#refreshVideoProductSources")?.addEventListener("click", () => loadVideoProductSources().then(() => previewVideoProductTimeline()).catch(() => {}));
   document.querySelector("#refreshVideoProductProjects")?.addEventListener("click", () => loadVideoProductProjects().catch(() => {}));
   document.querySelector("#refreshVideoProjectReadiness")?.addEventListener("click", () => Promise.allSettled([refreshReadiness(), refreshQualityCheck()]));
@@ -484,9 +586,15 @@ function bindEvents() {
     state.preview = null;
     previewVideoProductTimeline().catch(() => {});
   });
+  document.querySelector("#videoProductJianyingTemplate")?.addEventListener("change", () => {
+    state.templateManuallySelected = true;
+    state.preview = null;
+    previewVideoProductTimeline().catch(() => {});
+  });
   ["videoProductDirector", "videoProductAudio", "videoProductImageSource", "videoProductOutputType", "videoProductBgmStrategy", "videoProductBgm", "videoProductRouteAStyle", "videoProductRouteACustomStyle"].forEach((id) => {
     document.querySelector(`#${id}`)?.addEventListener("change", () => {
       state.preview = null;
+      if (id === "videoProductDirector") renderJianyingTemplateOptions();
       updateGenerateAvailability();
       previewVideoProductTimeline().catch(() => {});
     });
@@ -494,6 +602,7 @@ function bindEvents() {
   const handleProjectChange = () => {
     state.preview = null;
     state.manualBindings = {};
+    state.templateManuallySelected = false;
     Promise.allSettled([loadVideoProductSources(), loadVideoProductProjects(), refreshReadiness(), refreshQualityCheck()])
       .then(() => previewVideoProductTimeline().catch(() => {}));
   };
@@ -506,6 +615,6 @@ export async function initVideoOutputModule() {
   window.__modularVideoOutputReady = true;
   bindEvents();
   window.videoOutputModule = { loadVideoProductSources, loadVideoProductProjects, refreshReadiness, refreshQualityCheck, previewVideoProductTimeline, syncSelectionsToProject, generateVideoProduct, pollVideoProductProject, openVideoProductOutput };
-  await Promise.allSettled([refreshToolStatus(), loadVideoProductSources(), loadVideoProductProjects(), refreshReadiness(), refreshQualityCheck()]);
+  await Promise.allSettled([loadJianyingLocalConfig(), refreshToolStatus(), loadVideoProductSources(), loadVideoProductProjects(), refreshReadiness(), refreshQualityCheck()]);
   await previewVideoProductTimeline().catch(() => {});
 }
