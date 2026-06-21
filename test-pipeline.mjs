@@ -71,6 +71,14 @@ try {
   assert.equal(legacyQaSkipped, true);
   assert.equal(bus.videoBank.getBySourceIdAndType("legacy-jianying", "pipeline:qa"), null);
 
+  const legacyVideoSource = "legacy-video";
+  const timelineRecord = bus.insertStageRecord("timeline", { sourceId: legacyVideoSource, data: { timeline: true } });
+  const legacyVideoResult = bus.onStageComplete("video", { sourceId: legacyVideoSource, data: { rendered: true } });
+  const storedTimeline = bus.videoBank.getById(timelineRecord.id);
+  assert.equal(storedTimeline.data.skipped, true);
+  assert.equal(legacyVideoResult.currentRecord.source_type, "pipeline:render");
+  assert.notEqual(legacyVideoResult.currentRecord.id, timelineRecord.id);
+
   console.log("Pipeline stage, alias and shared-bank tests passed.");
 } finally {
   bus.destroy();

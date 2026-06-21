@@ -164,6 +164,9 @@ export class PipelineBus extends EventEmitter {
       currentStage: "rewrite",
       status: "running",
       stages: {
+        collect: { status: "skipped", compatibility: true },
+        normalize: { status: "skipped", compatibility: true },
+        analyze: { status: "skipped", compatibility: true },
         rewrite: { recordId: rewriteRecord.id, status: "waiting" },
       },
       createdAt: new Date().toISOString(),
@@ -236,6 +239,18 @@ export class PipelineBus extends EventEmitter {
     stage = normalizePipelineStage(stage);
     const bank = this.getBank(stage);
     if (!bank) throw new Error(`未知阶段：${stage}`);
+
+    if (requestedStage === "video") {
+      const timelineRecord = this.videoBank.getBySourceIdAndType(sourceId, this._stageSourceType("timeline"));
+      if (timelineRecord && timelineRecord.status !== "done") {
+        this.videoBank.updateStatus(timelineRecord.id, "done", {
+          data: { ...(timelineRecord.data || {}), skipped: true, compatibility: true },
+        });
+      }
+      if (jobId && this.jobs.has(jobId)) {
+        this.jobs.get(jobId).stages.timeline = { recordId: timelineRecord?.id, status: "skipped", compatibility: true };
+      }
+    }
 
     // 1. 查找或创建当前阶段的 bank 记录
     let currentRecord = this._findStageRecord(stage, sourceId, recordId);
@@ -505,10 +520,16 @@ export class PipelineBus extends EventEmitter {
     stage = normalizePipelineStage(stage);
     const bank = this.getBank(stage);
     if (!bank) return null;
-    if (recordId) return bank.getById(recordId);
-    const canonical = bank.getBySourceIdAndType(sourceId, this._stageSourceType(stage));
+    const expectedSourceType = this._stageSourceType(stage);
+    if (recordId) {
+      const record = bank.getById(recordId);
+      if (record && (record.source_type === expectedSourceType || !String(record.source_type || "").startsWith("pipeline:"))) return record;
+    }
+    const canonical = bank.getBySourceIdAndType(sourceId, expectedSourceType);
     if (canonical) return canonical;
-    return LEGACY_STAGE_RECORDS.has(stage) ? bank.getBySourceId(sourceId) : null;
+    if (!LEGACY_STAGE_RECORDS.has(stage)) return null;
+    const legacy = bank.getBySourceId(sourceId);
+    return legacy && !String(legacy.source_type || "").startsWith("pipeline:") ? legacy : null;
   }
 
   /**

@@ -24,9 +24,13 @@ export class PipelineRunner {
     this._state = state || new PipelineState(baseDir);
     this._handlers = {};
     for (const [stageId, handler] of Object.entries(handlers)) this.registerHandler(stageId, handler);
+    const normalizedPolicies = Object.fromEntries(Object.entries(stagePolicies).map(([id, policy]) => [
+      normalizePipelineStage(id),
+      policy,
+    ]));
     this._stagePolicies = Object.fromEntries(PIPELINE_STAGES.map(({ id }) => [
       id,
-      { ...DEFAULT_STAGE_POLICIES[id], ...(stagePolicies[id] || {}) },
+      { ...DEFAULT_STAGE_POLICIES[id], ...(normalizedPolicies[id] || {}) },
     ]));
   }
 

@@ -65,8 +65,8 @@ export class PipelineState {
       startedAt: previous.startedAt || meta.startedAt || new Date().toISOString(),
       completedAt: ["done", "failed", "skipped"].includes(status) ? new Date().toISOString() : null,
       error: meta.error || null,
-      output: meta.output || null,
-      progress: meta.progress || 0,
+      output: meta.output ?? previous.output ?? null,
+      progress: meta.progress ?? previous.progress ?? 0,
       warning: meta.warning || null,
       fallback: Boolean(meta.fallback),
     };
