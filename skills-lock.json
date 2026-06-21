@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "skills": {
+    "visual-style": {
+      "source": "calesthio/openmontage",
+      "sourceType": "github",
+      "skillPath": ".agents/skills/visual-style/SKILL.md",
+      "computedHash": "759e4ca1265cbde715a90f7e0cc25ef2a839ed619208b3e5517f21ebcc027a27"
+    }
+  }
+}
