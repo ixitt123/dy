@@ -894,8 +894,10 @@ export function createVideoProductService({
   }
 
   function importJianyingTemplate(input = {}) {
-    const sourcePath = path.resolve(String(input.sourcePath || input.path || "").trim());
-    if (!sourcePath || !fs.existsSync(sourcePath)) throw new Error("请提供存在的本地剪映模板目录。");
+    const sourcePathInput = String(input.sourcePath || input.path || "").trim();
+    if (!sourcePathInput) throw new Error("请提供存在的本地剪映模板目录。");
+    const sourcePath = path.resolve(sourcePathInput);
+    if (!fs.existsSync(sourcePath)) throw new Error("请提供存在的本地剪映模板目录。");
     if (!fs.statSync(sourcePath).isDirectory()) throw new Error("当前先支持导入已解压的模板目录，请把安装包解压后再填写目录路径。");
 
     const sourceDraftPath = hasDirectoryEntries(path.join(sourcePath, "draft_template"))
@@ -940,8 +942,10 @@ export function createVideoProductService({
   }
 
   function syncDraftToLocalJianying(draftPath, project, templateId = "") {
-    const resolvedDraftPath = path.resolve(String(draftPath || "").trim());
-    if (!resolvedDraftPath || !hasDirectoryEntries(resolvedDraftPath)) return "";
+    const draftPathInput = String(draftPath || "").trim();
+    if (!draftPathInput) return "";
+    const resolvedDraftPath = path.resolve(draftPathInput);
+    if (!hasDirectoryEntries(resolvedDraftPath)) return "";
     const status = capcutCliAdapter?.detect?.() || {};
     const draftDirectory = String(status.paths?.draftDirectory || "").trim();
     if (!draftDirectory || !fs.existsSync(draftDirectory) || !fs.statSync(draftDirectory).isDirectory()) return "";
