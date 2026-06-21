@@ -5831,6 +5831,21 @@ audio {
   text-align: center;
 }
 
+.workbench-page[data-page="settings"] > .topbar {
+  align-items: stretch;
+  flex-direction: column;
+}
+
+.workbench-page[data-page="settings"] .download-settings {
+  width: 100%;
+  grid-template-columns: minmax(240px, 1fr) repeat(3, auto);
+}
+
+.workbench-page[data-page="settings"] .download-settings button {
+  min-width: 96px;
+  white-space: nowrap;
+}
+
 .video-product-preflight-head {
   display: flex;
   align-items: center;
