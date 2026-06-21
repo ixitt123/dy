@@ -271,7 +271,7 @@ let vfoProjectsState = [];
 let activeVfoProject = null;
 let activeVfoTab = "overview";
 let vfoPollTimer = 0;
-let videoProductSources = { directors: [], audioJobs: [], imageAssets: [], bgmAssets: [], timelines: [], platforms: [], routeAStyles: [], bgmStrategies: [] };
+let videoProductSources = { directors: [], audioJobs: [], imageAssets: [], bgmAssets: [], timelines: [], platforms: [], routeAStyles: [], bgmStrategies: [], jianyingTemplates: [] };
 let videoProductPreview = null;
 let videoProductManualBindings = {};
 let videoProductProjectsState = [];
@@ -3288,6 +3288,43 @@ function videoProductTextSimilarity(leftText, rightText) {
   return Math.round((overlap / Math.max(leftGrams.size, rightGrams.size, 1)) * 100);
 }
 
+function videoProductTemplateKeywordScore(list, text) {
+  const target = videoProductCompactText(text);
+  if (!target) return 0;
+  return (Array.isArray(list) ? list : []).reduce((score, item) => {
+    const value = videoProductCompactText(item);
+    return value && (target.includes(value) || value.includes(target)) ? score + 2 : score;
+  }, 0);
+}
+
+function renderVideoProductTemplateOptions(selectedDirector = null) {
+  if (!videoProductJianyingTemplate) return;
+  const templates = videoProductSources.jianyingTemplates || [];
+  if (!templates.length) return;
+  const context = `${selectedDirector?.title || ""} ${selectedDirector?.visual_style || ""}`;
+  const sorted = templates
+    .map((template) => ({
+      ...template,
+      score: Number(template.hasMaster) * 5
+        + videoProductTemplateKeywordScore(template.recommendedVideoTypes, context)
+        + videoProductTemplateKeywordScore(template.recommendedStyles, selectedDirector?.visual_style || "")
+        + videoProductTemplateKeywordScore(template.tags, context),
+    }))
+    .sort((a, b) => b.score - a.score || Number(b.hasMaster) - Number(a.hasMaster) || String(a.name).localeCompare(String(b.name), "zh-Hans-CN"));
+  const recommended = sorted[0];
+  const current = videoProductJianyingTemplate.value;
+  videoProductJianyingTemplate.innerHTML = sorted.map((template) => {
+    const prefix = recommended?.id === template.id ? "【推荐】" : "";
+    const suffix = template.hasMaster ? "" : " · 缺母版";
+    return `<option value="${escapeHtml(template.id)}">${escapeHtml(`${prefix}${template.name || template.id} · ${template.category || "模板"}${suffix}`)}</option>`;
+  }).join("");
+  videoProductJianyingTemplate.value = sorted.some((template) => String(template.id) === String(current))
+    ? current
+    : recommended?.id || sorted[0]?.id || "";
+  const note = document.querySelector("#videoProductTemplateRecommendation");
+  if (note && recommended) note.textContent = `推荐：${recommended.name || recommended.id}；${recommended.hasMaster ? "母版已就绪" : "还缺剪映母版文件"}。`;
+}
+
 function videoProductAudioScoreForDirector(director, audio) {
   if (!director || !audio) return 0;
   const sameTask = Number(director.task_id || 0) > 0 && Number(director.task_id || 0) === Number(audio.task_id || 0);
@@ -3362,6 +3399,7 @@ function renderVideoProductSourceOptions({ preferredDirectorId = 0, preferredAud
   }
   const selectedDirector = directors.find((item) => Number(item.id) === Number(videoProductDirector.value || preferredDirectorId || 0))
     || (routeA ? null : directors[0] || null);
+  renderVideoProductTemplateOptions(selectedDirector);
   const scoredAudios = audios
     .map((job) => ({ ...job, match_score: videoProductAudioScoreForDirector(selectedDirector, job) }))
     .sort((a, b) => Number(b.match_score || 0) - Number(a.match_score || 0) || Number(b.id || 0) - Number(a.id || 0));
@@ -3398,6 +3436,7 @@ async function loadVideoProductSources(options = {}) {
     routeAStyles: data.routeAStyles || [],
     bgmStrategies: data.bgmStrategies || [],
     bgmProviderSuggestions: data.bgmProviderSuggestions || [],
+    jianyingTemplates: data.jianyingTemplates || [],
   };
   renderVideoProductSourceOptions(options);
   updateVideoProductAssetStatus();
