@@ -5396,6 +5396,19 @@ const server = http.createServer(async (req, res) => {
         return;
       }
 
+      if (req.method === "GET" && route === "thumbnail") {
+        const filePath = url.searchParams.get("path") || "";
+        try {
+          const thumbPath = await imageService.thumbnailForImage(filePath, { width: Number(url.searchParams.get("width")) || 360 });
+          const ext = path.extname(thumbPath).toLowerCase();
+          const mime = { ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".gif": "image/gif", ".webp": "image/webp" };
+          sendBuffer(res, 200, fs.readFileSync(thumbPath), mime[ext] || "image/jpeg");
+        } catch (error) {
+          sendJson(res, 404, { ok: false, message: error instanceof Error ? error.message : String(error) });
+        }
+        return;
+      }
+
       sendJson(res, 404, { ok: false, message: "未知路由" });
       return;
     }

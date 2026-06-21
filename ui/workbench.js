@@ -1906,12 +1906,14 @@ function setupImageStudio() {
     grid.innerHTML = results.map((r, i) => {
       if (!r.success) return `<div class="img-card error">第${i+1}张: ${r.error || "失败"}</div>`;
       const safePrompt = String(sourcePrompt || "").replace(/\\/g, "\\\\").replace(/'/g, "\\'");
+      const originalUrl = `/api/image/file?path=${encodeURIComponent(r.imagePath || "")}`;
+      const thumbUrl = r.thumbnailUrl || `/api/image/thumbnail?width=360&path=${encodeURIComponent(r.imagePath || "")}`;
       return `<div class="img-card" data-asset-id="${r.assetId || ""}">
-        <div class="img-preview">
-          <img src="/api/image/file?path=${encodeURIComponent(r.imagePath || "")}" alt="生成图片" loading="lazy" />
-        </div>
+        <button class="img-preview" type="button" onclick="window.open('${originalUrl}')">
+          <img src="${thumbUrl}" alt="生成图片缩略图" loading="lazy" />
+        </button>
         <div class="img-actions">
-          <button class="btn-sm" type="button" onclick="window.open('/api/image/file?path=${encodeURIComponent(r.imagePath || "")}')">预览</button>
+          <button class="btn-sm" type="button" onclick="window.open('${originalUrl}')">预览原图</button>
           <button class="btn-sm" type="button" onclick="fetch('/api/image/assets/${r.assetId}/delete',{method:'POST'}).then(()=>this.closest('.img-card').remove())">删除</button>
           <button class="btn-sm" type="button" onclick="document.getElementById('imagePrompt').value='${safePrompt}';document.getElementById('imageGenerateBtn').click()">重新生成</button>
         </div>
@@ -1928,15 +1930,15 @@ function setupImageStudio() {
       if (!assets.length) { grid.innerHTML = '<div class="empty-state">暂无保存的图片资产</div>'; return; }
       grid.innerHTML = assets.map(a => `
         <div class="img-card">
-          <div class="img-preview">
-            <img src="/api/image/file?path=${encodeURIComponent(a.original_path || "")}" alt="asset" loading="lazy" />
-          </div>
+          <button class="img-preview" type="button" onclick="window.open('/api/image/file?path=${encodeURIComponent(a.original_path || "")}')">
+            <img src="${a.thumbnail_url || `/api/image/thumbnail?width=360&path=${encodeURIComponent(a.original_path || "")}`}" alt="图片资产缩略图" loading="lazy" />
+          </button>
           <div class="img-meta">
             <span>${(a.prompt || "").slice(0, 30)}</span>
-            <span class="text-xs text-secondary">${(a.created_at || "").slice(0, 10)}</span>
+            <span class="text-xs text-secondary">${(a.created_at || "").slice(0, 10)} · ${a.width || 1080}x${a.height || 1080}</span>
           </div>
           <div class="img-actions">
-            <button class="btn-sm" onclick="window.open('/api/image/file?path=${encodeURIComponent(a.original_path || "")}')">预览</button>
+            <button class="btn-sm" onclick="window.open('/api/image/file?path=${encodeURIComponent(a.original_path || "")}')">预览原图</button>
             <button class="btn-sm" onclick="fetch('/api/image/assets/${a.id}/delete',{method:'POST'}).then(()=>this.closest('.img-card').remove())">删除</button>
           </div>
         </div>
