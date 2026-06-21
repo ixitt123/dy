@@ -9,9 +9,9 @@ export class QueueManager {
   }
 
   // 添加任务到队列
-  enqueue(type, data, executor) {
+  enqueue(type, data, executor, { taskId = "" } = {}) {
     return new Promise((resolve, reject) => {
-      const task = { type, data, executor, resolve, reject, addedAt: Date.now() };
+      const task = { type, data, executor, resolve, reject, addedAt: Date.now(), taskId };
       this._waiting.push(task);
       this._emit({ type: "queued", taskType: type });
       this._processNext();
@@ -21,14 +21,17 @@ export class QueueManager {
   async _processNext() {
     while (this._running.size < this._maxConcurrency && this._waiting.length > 0) {
       const task = this._waiting.shift();
-      const taskId = `${task.type}_${Date.now()}_${Math.random().toString(36).slice(2,5)}`;
-      
-      this._running.set(taskId, { type: task.type, startedAt: Date.now() });
+      const taskId = task.taskId || `${task.type}_${Date.now()}_${Math.random().toString(36).slice(2,5)}`;
+      const startedAt = Date.now();
+
+      this._running.set(taskId, { type: task.type, startedAt });
       this._emit({ type: "started", taskId, taskType: task.type });
 
       try {
         const result = await task.executor({
           taskId,
+          startedAt,
+          queuedAt: task.addedAt,
           onProgress: (pct, step) => {
             this._emit({ type: "progress", taskId, taskType: task.type, progress: pct, step });
           },

@@ -4,6 +4,10 @@ import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { QueueManager } from "./queue-manager.js";
 
+export function calculateDurationMs(startedAt, now = Date.now()) {
+  return Number.isFinite(startedAt) ? Math.max(0, now - startedAt) : null;
+}
+
 export function createTaskCenterV2(baseDir, { onProgress, maxConcurrency = 3 } = {}) {
   const dbPath = path.join(baseDir, ".data", "task-center.sqlite");
   const db = new DatabaseSync(dbPath);
@@ -33,20 +37,22 @@ export function createTaskCenterV2(baseDir, { onProgress, maxConcurrency = 3 } =
     db.prepare(`INSERT INTO tasks (id, type, name, status, input_data) VALUES (?, ?, ?, 'waiting', ?)`)
       .run(taskId, type, name, JSON.stringify(data || {}));
 
-    queue.enqueue(type, data, async (ctx) => {
+    void queue.enqueue(type, data, async (ctx) => {
       db.prepare(`UPDATE tasks SET status='running', updated_at=datetime('now','localtime') WHERE id=?`).run(taskId);
       try {
         const result = await executor(ctx);
+        const durationMs = calculateDurationMs(ctx.startedAt);
         db.prepare(`UPDATE tasks SET status='done', progress=100, output_data=?, duration_ms=?, 
           updated_at=datetime('now','localtime'), completed_at=datetime('now','localtime') WHERE id=?`)
-          .run(JSON.stringify(result || {}), Date.now() - ctx._startTime, taskId);
+          .run(JSON.stringify(result || {}), durationMs, taskId);
         return result;
       } catch (e) {
-        db.prepare(`UPDATE tasks SET status='failed', error=?, updated_at=datetime('now','localtime') WHERE id=?`)
-          .run(e.message, taskId);
+        const durationMs = calculateDurationMs(ctx.startedAt);
+        db.prepare(`UPDATE tasks SET status='failed', error=?, duration_ms=?, updated_at=datetime('now','localtime'), completed_at=datetime('now','localtime') WHERE id=?`)
+          .run(e.message, durationMs, taskId);
         throw e;
       }
-    });
+    }, { taskId }).catch(() => {});
 
     return taskId;
   }
@@ -71,5 +77,10 @@ export function createTaskCenterV2(baseDir, { onProgress, maxConcurrency = 3 } =
     };
   }
 
-  return { submit, getTasks, getStats, queue };
+  function close() {
+    queue.cancelAll();
+    db.close();
+  }
+
+  return { submit, getTasks, getStats, queue, close };
 }

@@ -3,8 +3,17 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "start": "node node_modules/@yc-w-cn/douyin-mcp-server/dist/index.js",
+    "start": "node ui-server.mjs",
+    "start:mcp": "node node_modules/@yc-w-cn/douyin-mcp-server/dist/index.js",
+    "dev": "node ui-server.mjs --open",
     "check": "node check-install.mjs",
+    "test:e2e": "node test-e2e.mjs",
+    "test:pipeline": "node test-pipeline.mjs",
+    "test:pipeline:fail-policy": "node test-pipeline-runner-fail-policy.mjs",
+    "test:task-duration": "node test-task-center-duration.mjs",
+    "test:provider-registry": "node test-provider-registry.mjs",
+    "test:http-body": "node test-read-json-body.mjs",
+    "test:config": "node test-config-extraction.mjs",
     "patch-output": "node patch-mcp-output.mjs",
     "postinstall": "node patch-mcp-output.mjs"
   },

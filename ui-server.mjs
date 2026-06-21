@@ -5238,7 +5238,7 @@ const server = http.createServer(async (req, res) => {
             inputData: body.inputData || {},
             startFrom: body.startFrom || "collect",
           });
-          sendJson(res, 200, { ok: true, ...result });
+          sendJson(res, 200, { ok: result.status !== "failed", ...result });
         } catch (e) {
           sendJson(res, 400, { ok: false, error: e.message });
         }

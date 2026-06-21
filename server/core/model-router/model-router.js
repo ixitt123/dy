@@ -41,7 +41,7 @@ const COST_PER_MILLION_TOKENS = {
  * 3. 提供统一的 generate() 接口（含流式 SSE 支持）
  * 4. 追踪用量（tokens、成本、耗时）
  */
-class ModelRouter {
+export class ModelRouter {
   constructor() {
     this._initialized = false;
     this._settings = null;
@@ -549,8 +549,36 @@ class ModelRouter {
     return { ...this._modelMap };
   }
 
+  getLoadedProviders() {
+    return Array.from(this._providers.keys());
+  }
+
+  getConfiguredProviders() {
+    return Array.from(this._providers.entries())
+      .filter(([, provider]) => {
+        if (typeof provider.validateConfig === "function") {
+          try {
+            return provider.validateConfig()?.valid === true;
+          } catch {
+            return false;
+          }
+        }
+        return provider.supportsNoKey === true || provider.localProvider === true;
+      })
+      .map(([id]) => id);
+  }
+
+  setTaskProvider(taskType, provider, model) {
+    if (!taskType || !provider) throw new Error("taskType 和 provider 不能为空");
+    this._modelMap[taskType] = {
+      provider,
+      model: model || this._modelMap[taskType]?.model || "",
+    };
+    return { ...this._modelMap[taskType] };
+  }
+
   getProviders() {
-    return Object.keys(PROVIDER_REGISTRY);
+    return this.getLoadedProviders();
   }
 }
 

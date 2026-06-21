@@ -58,17 +58,21 @@ export class PipelineState {
   setStageStatus(jobId, stageId, status, meta = {}) {
     const state = this._states.get(jobId);
     if (!state) return;
+    const previous = state.stages[stageId] || {};
     state.currentStage = stageId;
     state.stages[stageId] = {
       status,
-      startedAt: meta.startedAt || new Date().toISOString(),
-      completedAt: status === "done" || status === "failed" ? new Date().toISOString() : null,
+      startedAt: previous.startedAt || meta.startedAt || new Date().toISOString(),
+      completedAt: ["done", "failed", "skipped"].includes(status) ? new Date().toISOString() : null,
       error: meta.error || null,
       output: meta.output || null,
       progress: meta.progress || 0,
+      warning: meta.warning || null,
+      fallback: Boolean(meta.fallback),
     };
     if (status === "failed") state.status = "failed";
     this._save();
+    return state.stages[stageId];
   }
 
   setStageProgress(jobId, stageId, progress, currentStep = "") {
@@ -81,10 +85,23 @@ export class PipelineState {
 
   completeJob(jobId) {
     const state = this._states.get(jobId);
-    if (!state) return;
+    if (!state || state.status === "failed") return state || null;
     state.status = "done";
     state.completedAt = new Date().toISOString();
     this._save();
+    return state;
+  }
+
+  failJob(jobId, meta = {}) {
+    const state = this._states.get(jobId);
+    if (!state) return null;
+    state.status = "failed";
+    state.failedStage = meta.failedStage || state.currentStage || null;
+    state.error = meta.error || state.error || "Pipeline failed";
+    state.errors = Array.isArray(meta.errors) ? meta.errors : state.errors || [];
+    state.completedAt = new Date().toISOString();
+    this._save();
+    return state;
   }
 
   getJobState(jobId) {
@@ -98,10 +115,10 @@ export class PipelineState {
   getJobProgress(jobId) {
     const state = this._states.get(jobId);
     if (!state) return { stages: [] };
-    const stages = Object.values(PIPELINE_STAGES).length || 9;
+    const stages = PIPELINE_STAGES.length;
     let done = 0;
     for (const s of Object.values(state.stages)) {
-      if (s.status === "done") done++;
+      if (s.status === "done" || s.status === "skipped") done++;
     }
     const current = state.currentStage ? state.stages[state.currentStage] : null;
     return {

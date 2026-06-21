@@ -17,6 +17,13 @@ import { EventEmitter } from "node:events";
 import fs from "node:fs";
 import path from "node:path";
 import {
+  PIPELINE_STAGES,
+  getNextStageId,
+  getStageById,
+  getStageIdList,
+  normalizePipelineStage,
+} from "./PipelineEvents.js";
+import {
   CopyBank,
   DirectorBank,
   StoryboardBank,
@@ -30,35 +37,18 @@ import {
 // 流水线阶段定义
 // ============================================================
 
-const PIPELINE_STAGES = [
-  "rewrite",     // 0: 文案改写
-  "director",    // 1: 导演稿生成
-  "storyboard",  // 2: 分镜生成
-  "image",       // 3: 图片生成
-  "tts",         // 4: 语音合成
-  "video",       // 5: 视频合成
-  "jianying",    // 6: 剪映导出
-];
-
-const STAGE_BANKS = {
-  rewrite: "copyBank",
-  director: "directorBank",
-  storyboard: "storyboardBank",
-  image: "imageBank",
-  tts: "voiceBank",
-  video: "videoBank",
-  jianying: "jianyingBank",
+const STORE_BANKS = {
+  copybank: "copyBank",
+  "director-bank": "directorBank",
+  "storyboard-bank": "storyboardBank",
+  "image-bank": "imageBank",
+  "voice-bank": "voiceBank",
+  "video-bank": "videoBank",
+  "jianying-bank": "jianyingBank",
 };
 
-const STAGE_LABELS = {
-  rewrite: "文案改写",
-  director: "导演稿",
-  storyboard: "分镜",
-  image: "图片生成",
-  tts: "语音合成",
-  video: "视频合成",
-  jianying: "剪映导出",
-};
+const STAGE_LABELS = Object.fromEntries(PIPELINE_STAGES.map((stage) => [stage.id, stage.name]));
+const LEGACY_STAGE_RECORDS = new Set(["rewrite", "director", "storyboard", "image", "tts", "render", "export"]);
 
 // ============================================================
 // PipelineBus 类
@@ -106,7 +96,7 @@ export class PipelineBus extends EventEmitter {
 
   /** 所有阶段名称列表 */
   static get STAGES() {
-    return PIPELINE_STAGES;
+    return getStageIdList();
   }
 
   /** 阶段中文标签 */
@@ -129,7 +119,8 @@ export class PipelineBus extends EventEmitter {
 
   /** 根据阶段名获取对应的 bank */
   getBank(stage) {
-    const bankKey = STAGE_BANKS[stage];
+    const definition = getStageById(stage);
+    const bankKey = definition ? STORE_BANKS[definition.store] : "";
     return bankKey ? this[bankKey] : null;
   }
 
@@ -203,11 +194,12 @@ export class PipelineBus extends EventEmitter {
    * @returns {object} 插入的记录
    */
   insertStageRecord(stage, { sourceId, data = {}, sourceType = "", jobId } = {}) {
+    stage = normalizePipelineStage(stage);
     const bank = this.getBank(stage);
     if (!bank) throw new Error(`未知阶段：${stage}`);
 
     const record = bank.insert({
-      sourceType,
+      sourceType: sourceType || this._stageSourceType(stage),
       sourceId,
       status: "waiting",
       data,
@@ -240,16 +232,13 @@ export class PipelineBus extends EventEmitter {
    * @returns {object} { currentRecord, nextStage, nextRecord }
    */
   onStageComplete(stage, { sourceId, data = {}, jobId, recordId } = {}) {
+    const requestedStage = stage;
+    stage = normalizePipelineStage(stage);
     const bank = this.getBank(stage);
     if (!bank) throw new Error(`未知阶段：${stage}`);
 
     // 1. 查找或创建当前阶段的 bank 记录
-    let currentRecord;
-    if (recordId) {
-      currentRecord = bank.getById(recordId);
-    } else {
-      currentRecord = bank.getBySourceId(sourceId);
-    }
+    let currentRecord = this._findStageRecord(stage, sourceId, recordId);
 
     if (!currentRecord) {
       // 自动创建一条记录（兼容没有预插入的场景）
@@ -270,6 +259,7 @@ export class PipelineBus extends EventEmitter {
     // 4. 发出完成事件
     this.emit("stage:complete", {
       stage,
+      requestedStage,
       label: STAGE_LABELS[stage],
       sourceId,
       jobId,
@@ -277,6 +267,19 @@ export class PipelineBus extends EventEmitter {
     });
 
     // 5. 自动触发下一阶段
+    if (requestedStage === "jianying") {
+      if (jobId && this.jobs.has(jobId)) {
+        const job = this.jobs.get(jobId);
+        job.stages.qa = { status: "skipped", compatibility: true };
+        job.currentStage = null;
+        job.status = "completed";
+        job.updatedAt = new Date().toISOString();
+      }
+      this.emit("stage:skip", { stage: "qa", sourceId, jobId, compatibility: true });
+      this.emit("pipeline:complete", { sourceId, jobId, finalRecord: currentRecord, compatibility: true });
+      return { currentRecord, nextStage: null, nextRecord: null };
+    }
+
     const next = this._nextStage(stage);
     if (next) {
       const nextRecord = this._autoTriggerNextStage(next, sourceId, currentRecord.data, jobId);
@@ -292,8 +295,8 @@ export class PipelineBus extends EventEmitter {
       return { currentRecord, nextStage: next, nextRecord };
     }
 
-    // 6. 流水线终点：jianying 完成后触发 pipeline:complete
-    if (stage === "jianying") {
+    // 6. 统一流水线终点：qa 完成后触发 pipeline:complete
+    if (stage === "qa") {
       if (jobId && this.jobs.has(jobId)) {
         const job = this.jobs.get(jobId);
         job.status = "completed";
@@ -320,15 +323,11 @@ export class PipelineBus extends EventEmitter {
    * @param {number} [params.recordId] - bank 记录 ID
    */
   onStageError(stage, { sourceId, error, jobId, recordId } = {}) {
+    stage = normalizePipelineStage(stage);
     const bank = this.getBank(stage);
     if (!bank) throw new Error(`未知阶段：${stage}`);
 
-    let record;
-    if (recordId) {
-      record = bank.getById(recordId);
-    } else {
-      record = bank.getBySourceId(sourceId);
-    }
+    let record = this._findStageRecord(stage, sourceId, recordId);
 
     if (record) {
       record = bank.updateStatus(record.id, "failed", { error });
@@ -368,10 +367,11 @@ export class PipelineBus extends EventEmitter {
    * @returns {object} 重试的记录
    */
   retryStage(stage, sourceId) {
+    stage = normalizePipelineStage(stage);
     const bank = this.getBank(stage);
     if (!bank) throw new Error(`未知阶段：${stage}`);
 
-    const record = bank.getBySourceId(sourceId);
+    const record = this._findStageRecord(stage, sourceId);
     if (!record || record.status !== "failed") {
       throw new Error(`未找到 source_id=${sourceId} 的失败记录`);
     }
@@ -432,9 +432,8 @@ export class PipelineBus extends EventEmitter {
    */
   getPipelineBySourceId(sourceId) {
     const stages = {};
-    for (const stage of PIPELINE_STAGES) {
-      const bank = this.getBank(stage);
-      const record = bank.getBySourceId(sourceId);
+    for (const { id: stage } of PIPELINE_STAGES) {
+      const record = this._findStageRecord(stage, sourceId);
       stages[stage] = {
         label: STAGE_LABELS[stage],
         record,
@@ -468,11 +467,11 @@ export class PipelineBus extends EventEmitter {
    */
   getAllStats() {
     const stats = {};
-    for (const stage of PIPELINE_STAGES) {
+    for (const { id: stage } of PIPELINE_STAGES) {
       const bank = this.getBank(stage);
       stats[stage] = {
         label: STAGE_LABELS[stage],
-        ...bank.getStats(),
+        ...bank.getStatsBySourceType(this._stageSourceType(stage)),
       };
     }
     return stats;
@@ -498,15 +497,27 @@ export class PipelineBus extends EventEmitter {
   // 私有方法
   // ==========================================================
 
+  _stageSourceType(stage) {
+    return `pipeline:${normalizePipelineStage(stage)}`;
+  }
+
+  _findStageRecord(stage, sourceId, recordId) {
+    stage = normalizePipelineStage(stage);
+    const bank = this.getBank(stage);
+    if (!bank) return null;
+    if (recordId) return bank.getById(recordId);
+    const canonical = bank.getBySourceIdAndType(sourceId, this._stageSourceType(stage));
+    if (canonical) return canonical;
+    return LEGACY_STAGE_RECORDS.has(stage) ? bank.getBySourceId(sourceId) : null;
+  }
+
   /**
    * 获取下一个阶段名
    * @param {string} stage
    * @returns {string|null}
    */
   _nextStage(stage) {
-    const idx = PIPELINE_STAGES.indexOf(stage);
-    if (idx === -1 || idx >= PIPELINE_STAGES.length - 1) return null;
-    return PIPELINE_STAGES[idx + 1];
+    return getNextStageId(stage);
   }
 
   /**
@@ -519,11 +530,12 @@ export class PipelineBus extends EventEmitter {
    * @returns {object} 下游新创建的记录
    */
   _autoTriggerNextStage(nextStage, sourceId, upstreamData, jobId) {
+    nextStage = normalizePipelineStage(nextStage);
     const bank = this.getBank(nextStage);
     if (!bank) return null;
 
     // 检查是否已存在记录
-    let existing = bank.getBySourceId(sourceId);
+    let existing = bank.getBySourceIdAndType(sourceId, this._stageSourceType(nextStage));
     if (existing) {
       // 如果状态是 done 或 processing，跳过
       if (existing.status === "done") return existing;
@@ -535,7 +547,7 @@ export class PipelineBus extends EventEmitter {
       });
     } else {
       existing = bank.insert({
-        sourceType: "pipeline",
+        sourceType: this._stageSourceType(nextStage),
         sourceId,
         status: "waiting",
         data: {
@@ -598,8 +610,8 @@ export class PipelineBus extends EventEmitter {
   _calcProgress(job) {
     const total = PIPELINE_STAGES.length;
     let done = 0;
-    for (const stage of PIPELINE_STAGES) {
-      if (job.stages[stage]?.status === "done") done++;
+    for (const { id: stage } of PIPELINE_STAGES) {
+      if (["done", "skipped"].includes(job.stages[stage]?.status)) done++;
     }
     return Math.round((done / total) * 100);
   }

@@ -119,6 +119,26 @@ export class BaseBank {
     return row ? this._enrich(row) : null;
   }
 
+  getBySourceIdAndType(sourceId, sourceType) {
+    const row = this.db.prepare(
+      `SELECT * FROM ${this.tableName} WHERE source_id = ? AND source_type = ? ORDER BY id DESC LIMIT 1`,
+    ).get(String(sourceId), String(sourceType));
+    return row ? this._enrich(row) : null;
+  }
+
+  getStatsBySourceType(sourceType) {
+    const total = this.db.prepare(
+      `SELECT COUNT(*) as c FROM ${this.tableName} WHERE source_type = ?`,
+    ).get(String(sourceType)).c;
+    const byStatus = {};
+    for (const status of ["waiting", "processing", "done", "failed"]) {
+      byStatus[status] = this.db.prepare(
+        `SELECT COUNT(*) as c FROM ${this.tableName} WHERE source_type = ? AND status = ?`,
+      ).get(String(sourceType), status).c;
+    }
+    return { total, byStatus };
+  }
+
   /**
    * 按状态列出记录
    * @param {string} status
