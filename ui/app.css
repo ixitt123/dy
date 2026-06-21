@@ -1756,6 +1756,13 @@ pre {
   min-height: 36px;
 }
 
+.video-product-toolbar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
 .video-product-local-assets {
   display: grid;
   gap: 8px;
@@ -6119,7 +6126,7 @@ audio {
 
 .video-output-tool-status {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(145px, 1fr));
   gap: 8px;
   margin-top: 12px;
 }

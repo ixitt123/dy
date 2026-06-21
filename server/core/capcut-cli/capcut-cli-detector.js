@@ -69,9 +69,11 @@ export function createCapcutCliDetector({ baseDir, ffmpegPath = "", getSettings 
     if (!WINDOWS) return null;
     if (Date.now() - windowsDiscovery.checkedAt < 30000) return windowsDiscovery.shortcut;
     const appData = process.env.APPDATA || "";
-    const shortcutPath = appData
-      ? path.join(appData, "Microsoft", "Windows", "Start Menu", "Programs", "剪映专业版", "剪映专业版.lnk")
-      : "";
+    const programData = process.env.PROGRAMDATA || "";
+    const shortcutPath = firstExistingPath([
+      appData && path.join(appData, "Microsoft", "Windows", "Start Menu", "Programs", "剪映专业版", "剪映专业版.lnk"),
+      programData && path.join(programData, "Microsoft", "Windows", "Start Menu", "Programs", "剪映专业版", "剪映专业版.lnk"),
+    ]);
     windowsDiscovery = { checkedAt: Date.now(), shortcut: readWindowsShortcut(shortcutPath) };
     return windowsDiscovery.shortcut;
   }
