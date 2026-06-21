@@ -729,7 +729,23 @@
           <span class="reserved">MP4 成片</span>
         </div>
 
-        <section class="video-route-map" aria-label="视频成片四条产出路线">
+        <section class="video-output-primary" aria-label="常用输出方式">
+          <div class="video-product-toolbar">
+            <div><h3>选择输出结果</h3><p>默认使用剪映母版替换素材；工具不可用时自动切换为兼容素材包。</p></div>
+            <button class="ghost small" id="refreshVideoOutputTools" type="button">重新检测工具</button>
+          </div>
+          <div class="video-output-primary-actions">
+            <button class="video-output-choice active" type="button" data-main-output="jianying_template"><strong>生成剪映模板草稿【推荐】</strong><small>母版替换、字幕、配音、BGM 与封面</small></button>
+            <button class="video-output-choice" type="button" data-main-output="mp4"><strong>生成 MP4 预览</strong><small>用于检查画面、字幕和音频效果</small></button>
+            <button class="video-output-choice" type="button" data-main-output="package"><strong>导出素材包</strong><small>兼容导出图片、音频、字幕与时间线</small></button>
+          </div>
+          <div class="video-output-tool-status" id="videoOutputToolStatus" aria-live="polite"></div>
+          <p id="videoOutputCompatibilityNote" class="video-output-compatibility-note">正在检测本机成片工具...</p>
+        </section>
+
+        <details class="advanced-output-routes">
+          <summary>高级输出方式</summary>
+        <section class="video-route-map" aria-label="视频成片高级产出路线">
           <article class="video-route-card route-a" data-video-output="template_mp4">
             <div class="video-route-top">
               <span>路线 A</span>
@@ -758,10 +774,10 @@
             </div>
             <small>未来主力路线，适合故事、分镜、教育宣传和电影感图文视频。</small>
           </article>
-          <article class="video-route-card route-c primary" data-video-output="jianying">
+          <article class="video-route-card route-c" data-video-output="jianying">
             <div class="video-route-top">
               <span>路线 C</span>
-              <strong>剪映半成品</strong>
+              <strong>标准素材包 / 兼容导出</strong>
             </div>
             <p>导演稿 + AI 图片 + 音频 → 图片轨、音频轨、字幕轨、分镜备注和素材文件夹。</p>
             <div class="video-route-flow">
@@ -770,7 +786,7 @@
               <span>timeline.json</span>
               <span>剪映加工</span>
             </div>
-            <small>当前优先路线：AI 做 80%，最后在剪映里保留人工审美。</small>
+            <small>历史兼容路线：保留 timeline、字幕和素材，供人工导入或故障回退。</small>
           </article>
           <article class="video-route-card route-d" data-video-output="mix_mp4">
             <div class="video-route-top">
@@ -854,19 +870,23 @@
               <label>
                 输出方式
                 <select id="videoProductOutputType">
-                  <option value="jianying" selected>路线 C：剪映半成品素材包</option>
-                  <option value="mp4">路线 B：AI 图文成片 MP4</option>
+                  <option value="jianying_template" selected>剪映模板草稿【推荐】</option>
+                  <option value="mp4">MP4 预览</option>
+                  <option value="package">标准素材包 / 兼容导出</option>
                   <option value="template_mp4">路线 A：模板快剪 MP4</option>
                   <option value="mix_mp4">路线 D：下载素材混剪 MP4</option>
-                  <option value="package">标准素材包</option>
+                  <option value="jianying">路线 C：历史剪映素材包</option>
                 </select>
               </label>
               <label id="videoProductJianyingTemplateField">
                 剪映模板
                 <select id="videoProductJianyingTemplate">
-                  <option value="vertical_knowledge">竖屏知识口播模板</option>
-                  <option value="vertical_promo">竖屏商业宣传模板</option>
-                  <option value="vertical_course">竖屏课程招生模板</option>
+                  <option value="education_tips">学习技巧</option>
+                  <option value="promo_commercial">商业宣传</option>
+                  <option value="enrollment_conversion">招生转化</option>
+                  <option value="black_gold_business">黑金商业</option>
+                  <option value="clean_knowledge_card">清爽知识卡片</option>
+                  <option value="campus_education">校园教育</option>
                 </select>
               </label>
               <div class="video-product-actions">
@@ -1009,6 +1029,7 @@
           </div>
           <div class="vfo-result-view" id="vfoResultView"></div>
         </section>
+        </details>
         </details>
       </section>
 
