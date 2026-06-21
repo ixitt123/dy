@@ -12,17 +12,18 @@ const TIMELINE_STATUSES = new Set([
   "failed",
 ]);
 
-const OUTPUT_TYPES = new Set(["jianying", "mp4", "package", "template_mp4", "mix_mp4"]);
-const IMAGE_REQUIRED_OUTPUT_TYPES = new Set(["jianying", "mp4", "package"]);
+const OUTPUT_TYPES = new Set(["jianying_template", "jianying", "mp4", "package", "template_mp4", "mix_mp4"]);
+const IMAGE_REQUIRED_OUTPUT_TYPES = new Set(["jianying_template", "jianying", "mp4", "package"]);
 const MP4_OUTPUT_TYPES = new Set(["mp4", "template_mp4", "mix_mp4"]);
 const ROUTE_A_INTRO_SECONDS = 1.35;
 
 const OUTPUT_TYPE_LABELS = {
-  jianying: "路线 C：剪映半成品素材包",
-  mp4: "路线 B：AI 图文成片 MP4",
+  jianying_template: "剪映模板草稿【推荐】",
+  jianying: "路线 C：历史剪映素材包",
+  mp4: "MP4 预览",
   template_mp4: "路线 A：模板快剪 MP4",
   mix_mp4: "路线 D：下载素材混剪 MP4",
-  package: "标准素材包",
+  package: "标准素材包 / 兼容导出",
 };
 
 const PREMIUM_WORKFLOW_SKILLS = [
@@ -789,6 +790,7 @@ export function createVideoProductService({
   imageService,
   directorService = null,
   ffmpegPath,
+  capcutCliAdapter = null,
   onProgress = () => {},
   onIdle = () => {},
 }) {
@@ -916,7 +918,7 @@ export function createVideoProductService({
   }
 
   function ensureRouteADirectorForEnqueue(input = {}) {
-    const outputType = OUTPUT_TYPES.has(String(input.output_type || "")) ? String(input.output_type) : "jianying";
+    const outputType = OUTPUT_TYPES.has(String(input.output_type || "")) ? String(input.output_type) : "jianying_template";
     let directorId = Number(input.source_director_project_id || input.director_project_id || 0);
     const audioId = Number(input.audio_asset_id || input.tts_job_id || 0);
     if (outputType !== "template_mp4" || directorId > 0) {
@@ -1234,7 +1236,7 @@ export function createVideoProductService({
   async function buildTimeline(input = {}) {
     const directorId = Number(input.source_director_project_id || input.director_project_id || 0);
     const audioAssetId = Number(input.audio_asset_id || input.tts_job_id || 0);
-    const outputType = OUTPUT_TYPES.has(String(input.output_type || "")) ? String(input.output_type) : "jianying";
+    const outputType = OUTPUT_TYPES.has(String(input.output_type || "")) ? String(input.output_type) : "jianying_template";
     const needsImages = IMAGE_REQUIRED_OUTPUT_TYPES.has(outputType);
     const needsDownloadedVideo = outputType === "mix_mp4";
     let director = taskStore.getDirectorProject(directorId);
@@ -1826,6 +1828,7 @@ ${sceneMarkup}
       },
       blockers: timeline.blockers,
       routes: {
+        jianying_template: OUTPUT_TYPE_LABELS.jianying_template,
         jianying: OUTPUT_TYPE_LABELS.jianying,
         mp4: OUTPUT_TYPE_LABELS.mp4,
         template_mp4: OUTPUT_TYPE_LABELS.template_mp4,
@@ -2287,15 +2290,33 @@ ${sceneMarkup}
       }
 
       project = taskStore.getTimelineProject(project.id);
-      const outputType = OUTPUT_TYPES.has(project.output_type) ? project.output_type : "jianying";
+      const outputType = OUTPUT_TYPES.has(project.output_type) ? project.output_type : "jianying_template";
       updateProject(project.id, {
         status: MP4_OUTPUT_TYPES.has(outputType) ? "rendering" : "exporting_draft",
         progress: MP4_OUTPUT_TYPES.has(outputType) ? 52 : 58,
-        current_step: MP4_OUTPUT_TYPES.has(outputType) ? `正在准备 ${OUTPUT_TYPE_LABELS[outputType] || "MP4"} 渲染素材` : "正在导出剪映半成品素材包",
+        current_step: MP4_OUTPUT_TYPES.has(outputType) ? `正在准备 ${OUTPUT_TYPE_LABELS[outputType] || "MP4"} 渲染素材` : `正在导出${OUTPUT_TYPE_LABELS[outputType] || "素材包"}`,
       });
 
       const timelineFiles = writeTimelineFiles(project, timeline);
-      const draftPath = writeDraftReference(timelineFiles.projectDir, project, timelineFiles);
+      let draftPath = "";
+      let capcutResult = null;
+      if (outputType === "jianying_template") {
+        capcutResult = capcutCliAdapter?.buildTemplateDraft({
+          project: { ...project, metadata: safeJson(project.metadata_json, {}) },
+          timeline,
+          timelineFiles,
+          templateName: input.jianying_template || "education_tips",
+        }) || {
+          ok: true,
+          fallback: true,
+          warnings: ["capcut-cli 适配器未启用，已输出兼容素材包。"],
+          files: [],
+        };
+        draftPath = capcutResult.draftPath || capcutResult.planPath || "";
+        writeJson(path.join(timelineFiles.projectDir, "capcut-result.json"), capcutResult);
+      } else if (outputType === "jianying" || outputType === "package") {
+        draftPath = writeDraftReference(timelineFiles.projectDir, project, timelineFiles);
+      }
       project = updateProject(project.id, {
         output_dir: timelineFiles.projectDir,
         timeline_path: timelineFiles.timelinePath,
@@ -2335,7 +2356,10 @@ ${sceneMarkup}
           bgmPath: timelineFiles.packagedBgm,
           quality: {
             passed: true,
-            warnings: ["当前路线输出素材包，不执行 MP4 画面质检。"],
+            warnings: [
+              "当前路线输出剪映草稿或素材包，不执行 MP4 画面质检。",
+              ...(capcutResult?.warnings || []),
+            ],
             errors: [],
           },
         }));
@@ -2344,7 +2368,7 @@ ${sceneMarkup}
       updateProject(project.id, {
         status: "completed",
         progress: 100,
-        current_step: MP4_OUTPUT_TYPES.has(outputType) ? `${OUTPUT_TYPE_LABELS[outputType] || "MP4"} 已生成` : outputType === "package" ? "素材包已生成" : "剪映半成品素材包已生成",
+        current_step: MP4_OUTPUT_TYPES.has(outputType) ? `${OUTPUT_TYPE_LABELS[outputType] || "MP4"} 已生成` : `${OUTPUT_TYPE_LABELS[outputType] || "素材包"}已生成`,
         output_dir: timelineFiles.projectDir,
         timeline_path: timelineFiles.timelinePath,
         srt_path: timelineFiles.srtPath,
@@ -2382,7 +2406,7 @@ ${sceneMarkup}
     const routeA = ensureRouteADirectorForEnqueue(input);
     const directorId = routeA.directorId;
     const audioId = Number(input.audio_asset_id || input.tts_job_id || 0);
-    const outputType = OUTPUT_TYPES.has(String(input.output_type || "")) ? String(input.output_type) : "jianying";
+    const outputType = OUTPUT_TYPES.has(String(input.output_type || "")) ? String(input.output_type) : "jianying_template";
     const platformId = String(input.platform || "douyin");
     const platform = platformPreset(platformId);
     const project = taskStore.createTimelineProject({
@@ -2407,6 +2431,7 @@ ${sceneMarkup}
         route_a_custom_style: String(input.route_a_custom_style || input.custom_style || ""),
         bgm_strategy: String(input.bgm_strategy || "auto"),
         bgm_asset_id: String(input.bgm_asset_id || ""),
+        jianying_template: String(input.jianying_template || "education_tips"),
         render_engine: outputType === "template_mp4" ? "ffmpeg_stable_with_hyperframes_package" : "ffmpeg",
         route_a_skill_chain: outputType === "template_mp4" ? ROUTE_A_SKILL_CHAIN : [],
         ...routeA.metadata,
@@ -2427,7 +2452,7 @@ ${sceneMarkup}
       tracks: timeline.tracks,
       blockers: timeline.blockers,
       metadata: timeline.metadata,
-      output_type: OUTPUT_TYPES.has(String(input.output_type || "")) ? String(input.output_type) : "jianying",
+      output_type: OUTPUT_TYPES.has(String(input.output_type || "")) ? String(input.output_type) : "jianying_template",
     };
   }
 
@@ -2437,6 +2462,20 @@ ${sceneMarkup}
 
   function listProjects(limit = 50) {
     return taskStore.listTimelineProjects({ limit }).map((row) => sourceProject(row, { includeScenes: false }));
+  }
+
+  function getToolStatus() {
+    return capcutCliAdapter?.detect() || {
+      ok: true,
+      mode: "compatibility_package",
+      checks: {
+        capcutCli: { ok: false, label: "未安装", detail: "当前使用素材包兼容模式" },
+        ffmpeg: { ok: Boolean(ffmpegPath && fs.existsSync(ffmpegPath)), label: ffmpegPath && fs.existsSync(ffmpegPath) ? "可用" : "不可用", detail: ffmpegPath || "未找到 FFmpeg" },
+        draftDirectory: { ok: false, label: "未配置", detail: "请在系统设置中选择剪映草稿目录" },
+        templateMaster: { ok: false, label: "未检测", detail: "请复制剪映母版到模板目录" },
+        outputDirectory: { ok: true, label: "正常", detail: outputRoot },
+      },
+    };
   }
 
   function resolveOutputPath(id, type = "dir") {
@@ -2486,6 +2525,7 @@ ${sceneMarkup}
     getProject,
     listProjects,
     listSources,
+    getToolStatus,
     importBgmAsset,
     resolveOutputPath,
     outputRoot,

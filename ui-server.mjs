@@ -16,7 +16,8 @@ import { createSettingsCenter } from "./server/core/settings-center.js";
 import { createTaskCenterV2 } from "./server/core/task-center.js";
 import { providerRegistry } from "./server/core/provider-registry.js";
 import { createAnalysisEngine } from "./server/core/analysis-engine.js";
-import { createJianyingExporter } from "./server/core/jianying-exporter.js";
+import { createLegacyJianyingExporter } from "./server/core/jianying-exporter.js";
+import { createCapcutCliAdapter } from "./server/core/capcut-cli/capcut-cli-adapter.js";
 import { PipelineRunner } from "./server/core/pipeline-bus/PipelineRunner.js";
 import { PipelineState } from "./server/core/pipeline-bus/PipelineState.js";
 import { PIPELINE_EVENTS } from "./server/core/pipeline-bus/PipelineEvents.js";
@@ -281,12 +282,19 @@ const imageService = createImageService({
   taskStore,
 });
 
+const capcutCliAdapter = createCapcutCliAdapter({
+  baseDir: __dirname,
+  ffmpegPath,
+  getSettings: readSettings,
+});
+
 const videoProductService = createVideoProductService({
   baseDir: __dirname,
   taskStore,
   imageService,
   directorService,
   ffmpegPath,
+  capcutCliAdapter,
   onProgress: (data) => broadcastProgress({ type: "video-product", ...data }),
   onIdle: scheduleShutdownIfIdle,
 });
@@ -313,7 +321,7 @@ const taskCenter = createTaskCenterV2(__dirname, {
 const analysisEngine = createAnalysisEngine(__dirname);
 
 // 剪映导出器
-const jianyingExporter = createJianyingExporter(__dirname);
+const jianyingExporter = createLegacyJianyingExporter(__dirname);
 
 // P0 流水线执行器
 const pipelineState = new PipelineState(__dirname);
@@ -5429,6 +5437,11 @@ const server = http.createServer(async (req, res) => {
         } catch (error) {
           sendJson(res, 400, { ok: false, message: error instanceof Error ? error.message : String(error) });
         }
+        return;
+      }
+
+      if (req.method === "GET" && route === "tools") {
+        sendJson(res, 200, videoProductService.getToolStatus());
         return;
       }
 

@@ -1,8 +1,8 @@
-// 剪映草稿导出器
+// 历史兼容导出器：仅用于简单实验、素材包和 capcut-cli 失败后的回退。
 import fs from "node:fs";
 import path from "node:path";
 
-export function createJianyingExporter(baseDir) {
+export function createLegacyJianyingExporter(baseDir) {
   const exportDir = path.join(baseDir, "jianying-exports");
   fs.mkdirSync(exportDir, { recursive: true });
 
@@ -106,6 +106,8 @@ export function createJianyingExporter(baseDir) {
     }
 
     return {
+      mode: "legacy_manual_json",
+      warnings: ["此草稿由历史兼容导出器生成，不作为高质量剪映模板主路线。"],
       projectDir,
       files: ["draft_content.json", "draft_meta_info.json", ...copiedAssets],
       draftContent,
@@ -137,3 +139,5 @@ export function createJianyingExporter(baseDir) {
 
   return { exportDraft, listDrafts, deleteDraft };
 }
+
+export const createJianyingExporter = createLegacyJianyingExporter;
