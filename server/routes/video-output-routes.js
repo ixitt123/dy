@@ -1,7 +1,8 @@
 import fs from "node:fs";
 import path from "node:path";
+import { HttpBodyError, readJsonBody } from "../utils/http-body.js";
 
-export function createVideoOutputRoutes({ videoProductService, readBody, sendJson, sendBuffer }) {
+export function createVideoOutputRoutes({ videoProductService, sendJson, sendBuffer }) {
   return async function handleVideoOutputRoutes(req, res, url) {
     if (!url.pathname.startsWith("/api/video-product/")) return false;
     const route = url.pathname.replace("/api/video-product/", "");
@@ -20,20 +21,20 @@ export function createVideoOutputRoutes({ videoProductService, readBody, sendJso
       return true;
     }
     if (req.method === "POST" && route === "preview") {
-      const body = JSON.parse(await readBody(req) || "{}");
       try {
+        const body = await readJsonBody(req);
         sendJson(res, 200, await videoProductService.preview(body));
       } catch (error) {
-        sendJson(res, 400, { ok: false, message: error instanceof Error ? error.message : String(error) });
+        sendJson(res, error instanceof HttpBodyError ? error.statusCode : 400, { ok: false, message: error instanceof Error ? error.message : String(error) });
       }
       return true;
     }
     if (req.method === "POST" && route === "generate") {
-      const body = JSON.parse(await readBody(req) || "{}");
       try {
+        const body = await readJsonBody(req);
         sendJson(res, 200, { ok: true, ...videoProductService.enqueue(body) });
       } catch (error) {
-        sendJson(res, 400, { ok: false, message: error instanceof Error ? error.message : String(error) });
+        sendJson(res, error instanceof HttpBodyError ? error.statusCode : 400, { ok: false, message: error instanceof Error ? error.message : String(error) });
       }
       return true;
     }
@@ -47,12 +48,12 @@ export function createVideoOutputRoutes({ videoProductService, readBody, sendJso
       return true;
     }
     if (req.method === "POST" && route === "add-bgm") {
-      const body = JSON.parse(await readBody(req) || "{}");
       try {
+        const body = await readJsonBody(req);
         const asset = videoProductService.importBgmAsset(body.filePath || "");
         sendJson(res, 200, { ok: true, asset, ...videoProductService.listSources() });
       } catch (error) {
-        sendJson(res, 400, { ok: false, message: error instanceof Error ? error.message : String(error) });
+        sendJson(res, error instanceof HttpBodyError ? error.statusCode : 400, { ok: false, message: error instanceof Error ? error.message : String(error) });
       }
       return true;
     }

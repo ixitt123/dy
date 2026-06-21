@@ -28,6 +28,7 @@ import { createDirectorService } from "./server/director/director-service.js";
 import { createVfoService } from "./server/vfo/vfo-service.js";
 import { createVideoProductService } from "./server/video-product/video-product-service.js";
 import { createVideoOutputRoutes } from "./server/routes/video-output-routes.js";
+import { HttpBodyError, readBody, readJsonBody } from "./server/utils/http-body.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const uiDir = path.join(__dirname, "ui");
@@ -306,7 +307,6 @@ const videoProductService = createVideoProductService({
 
 const handleVideoOutputRoutes = createVideoOutputRoutes({
   videoProductService,
-  readBody,
   sendJson,
   sendBuffer,
 });
@@ -391,21 +391,6 @@ function sendBuffer(res, status, buffer, contentType, fileName = "") {
   }
   res.writeHead(status, headers);
   res.end(buffer);
-}
-
-function readBody(req, maxBytes = 2 * 1024 * 1024) {
-  return new Promise((resolve, reject) => {
-    let body = "";
-    req.on("data", (chunk) => {
-      body += chunk;
-      if (body.length > maxBytes) {
-        reject(new Error("内容太长了"));
-        req.destroy();
-      }
-    });
-    req.on("end", () => resolve(body));
-    req.on("error", reject);
-  });
 }
 
 function getFirstUrl(text) {
@@ -4024,7 +4009,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.method === "POST" && url.pathname === "/api/downloads-dir") {
-      const body = JSON.parse(await readBody(req) || "{}");
+      const body = await readJsonBody(req);
       const selected = String(body.path || "").trim();
       if (!selected) {
         sendJson(res, 400, { ok: false, message: "请先输入下载位置" });
@@ -4079,7 +4064,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.method === "POST" && url.pathname === "/api/reference-examples") {
-      const body = JSON.parse(await readBody(req) || "{}");
+      const body = await readJsonBody(req);
       const examples = writeReferenceExamples(body.examples || []);
       sendJson(res, 200, {
         ok: true,
@@ -4089,7 +4074,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.method === "POST" && url.pathname === "/api/tasks/analyze") {
-      const body = JSON.parse(await readBody(req) || "{}");
+      const body = await readJsonBody(req);
       const id = Number(body.id || 0);
       const task = taskStore.getTask(id);
       if (!task || !task.txt_path || !fs.existsSync(task.txt_path)) {
@@ -4122,7 +4107,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.method === "POST" && url.pathname === "/api/tasks/analysis") {
-      const body = JSON.parse(await readBody(req) || "{}");
+      const body = await readJsonBody(req);
       const id = Number(body.id || 0);
       const task = taskStore.getTask(id);
       if (!task) {
@@ -4150,7 +4135,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.method === "POST" && url.pathname === "/api/tasks/rewrite") {
-      const body = JSON.parse(await readBody(req) || "{}");
+      const body = await readJsonBody(req);
       const id = Number(body.id || 0);
       const task = taskStore.getTask(id);
       if (!task || !task.txt_path || !fs.existsSync(task.txt_path)) {
@@ -4187,7 +4172,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.method === "POST" && url.pathname === "/api/tasks/rewrite/save") {
-      const body = JSON.parse(await readBody(req) || "{}");
+      const body = await readJsonBody(req);
       const id = Number(body.id || 0);
       const task = taskStore.getTask(id);
       if (!task) {
@@ -4262,7 +4247,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.method === "POST" && url.pathname === "/api/director/generate") {
-      const body = JSON.parse(await readBody(req) || "{}");
+      const body = await readJsonBody(req);
       const result = directorService.enqueue(body);
       if (result.error) {
         sendJson(res, 400, { ok: false, message: result.error });
@@ -4326,7 +4311,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.method === "POST" && url.pathname === "/api/vfo/generate") {
-      const body = JSON.parse(await readBody(req) || "{}");
+      const body = await readJsonBody(req);
       const result = vfoService.enqueue(body);
       if (result.error) {
         sendJson(res, 400, { ok: false, message: result.error });
@@ -4368,7 +4353,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.method === "POST" && url.pathname === "/api/tasks/import") {
-      const body = JSON.parse(await readBody(req) || "{}");
+      const body = await readJsonBody(req);
       const limit = clampNumber(body.limit, 1, 1000, getBatchSettings().limit || 10);
       const concurrency = clampNumber(body.concurrency, 1, 5, getBatchSettings().concurrency);
       const taskAction = ["parse", "link", "download", "transcript"].includes(String(body.action || "download"))
@@ -4406,7 +4391,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.method === "POST" && url.pathname === "/api/tasks/pause") {
-      const body = JSON.parse(await readBody(req) || "{}");
+      const body = await readJsonBody(req);
       const id = Number(body.id || 0);
       const controller = activeBatchControllers.get(id);
       const task = taskStore.getTask(id);
@@ -4434,7 +4419,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.method === "POST" && url.pathname === "/api/tasks/delete") {
-      const body = JSON.parse(await readBody(req) || "{}");
+      const body = await readJsonBody(req);
       const ids = Array.isArray(body.ids) ? body.ids : [body.id];
       const deleted = taskStore.deleteTasks(ids);
       sendJson(res, 200, {
@@ -4447,7 +4432,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.method === "POST" && url.pathname === "/api/tasks/start") {
-      const body = JSON.parse(await readBody(req) || "{}");
+      const body = await readJsonBody(req);
       if (body.concurrency) {
         saveBatchSettings({ concurrency: clampNumber(body.concurrency, 1, 5, getBatchSettings().concurrency) });
       }
@@ -4511,7 +4496,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.method === "POST" && url.pathname === "/api/tts/settings") {
-      const body = JSON.parse(await readBody(req) || "{}");
+      const body = await readJsonBody(req);
       const providerId = String(body.provider || "aliyun_bailian");
       const settings = readSettings();
       const target = settings.tts[providerId];
@@ -4573,7 +4558,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.method === "POST" && url.pathname === "/api/tts/generate") {
-      const body = JSON.parse(await readBody(req) || "{}");
+      const body = await readJsonBody(req);
       const result = ttsService.enqueue(body);
       if (result.error) {
         sendJson(res, 400, { ok: false, message: result.error });
@@ -4584,7 +4569,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.method === "POST" && url.pathname === "/api/tts/retry") {
-      const body = JSON.parse(await readBody(req) || "{}");
+      const body = await readJsonBody(req);
       const result = ttsService.retryJob(body.id || body.jobId || 0);
       if (result.error) {
         sendJson(res, 400, { ok: false, message: result.error });
@@ -4651,7 +4636,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.method === "POST" && url.pathname === "/api/voice-assets/create") {
-      const body = JSON.parse(await readBody(req, 15 * 1024 * 1024) || "{}");
+      const body = await readJsonBody(req, { maxBytes: 15 * 1024 * 1024 });
       const result = await voiceAssetService.createAsset(body);
       if (result.error && !result.asset) {
         sendJson(res, 400, { ok: false, message: result.error });
@@ -4666,7 +4651,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.method === "POST" && url.pathname === "/api/voice-assets/update") {
-      const body = JSON.parse(await readBody(req) || "{}");
+      const body = await readJsonBody(req);
       const result = voiceAssetService.updateAsset(Number(body.id || 0), body);
       if (result.error) {
         sendJson(res, 400, { ok: false, message: result.error });
@@ -4677,7 +4662,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.method === "POST" && url.pathname === "/api/voice-assets/retry-clone") {
-      const body = JSON.parse(await readBody(req) || "{}");
+      const body = await readJsonBody(req);
       const result = await voiceAssetService.retryClone(Number(body.id || 0), body);
       if (result.error) {
         sendJson(res, 400, { ok: false, message: result.error, asset: result.asset || null });
@@ -4688,7 +4673,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.method === "POST" && url.pathname === "/api/voice-assets/version") {
-      const body = JSON.parse(await readBody(req) || "{}");
+      const body = await readJsonBody(req);
       const result = voiceAssetService.createVersion(Number(body.id || 0));
       if (result.error) {
         sendJson(res, 400, { ok: false, message: result.error });
@@ -4699,7 +4684,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.method === "POST" && url.pathname === "/api/voice-assets/default") {
-      const body = JSON.parse(await readBody(req) || "{}");
+      const body = await readJsonBody(req);
       const result = voiceAssetService.setDefault(Number(body.id || 0));
       if (result.error) {
         sendJson(res, 400, { ok: false, message: result.error });
@@ -4710,7 +4695,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.method === "POST" && url.pathname === "/api/voice-assets/archive") {
-      const body = JSON.parse(await readBody(req) || "{}");
+      const body = await readJsonBody(req);
       const result = voiceAssetService.archive(Number(body.id || 0));
       if (result.error) {
         sendJson(res, 400, { ok: false, message: result.error });
@@ -4721,7 +4706,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.method === "POST" && url.pathname === "/api/voice-assets/tests") {
-      const body = JSON.parse(await readBody(req) || "{}");
+      const body = await readJsonBody(req);
       const result = voiceAssetService.createTests(Number(body.id || 0));
       if (result.error) {
         sendJson(res, 400, { ok: false, message: result.error, tests: result.tests || [] });
@@ -4732,7 +4717,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.method === "POST" && url.pathname === "/api/voice-assets/rating") {
-      const body = JSON.parse(await readBody(req) || "{}");
+      const body = await readJsonBody(req);
       const result = voiceAssetService.saveRating(body);
       if (result.error) {
         sendJson(res, 400, { ok: false, message: result.error });
@@ -4743,7 +4728,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.method === "POST" && url.pathname === "/api/settings") {
-      const body = JSON.parse(await readBody(req) || "{}");
+      const body = await readJsonBody(req);
       const providerId = String(body.provider || "dashscope").trim();
       const apiKey = String(body.apiKey || "").trim();
       if (!apiKey) {
@@ -4763,7 +4748,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.method === "POST" && url.pathname === "/api/rewrite-settings") {
-      const body = JSON.parse(await readBody(req) || "{}");
+      const body = await readJsonBody(req);
       const settings = readSettings();
       const rewriteProviders = settings.rewriteProviders;
       const selectedProvider = rewriteProviders[String(body.provider || "")]
@@ -4833,7 +4818,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.method === "POST" && url.pathname === "/api/open-transcript") {
-      const body = JSON.parse(await readBody(req) || "{}");
+      const body = await readJsonBody(req);
       const filePath = String(body.filePath || "").trim();
       if (!filePath || !isInsideDownloads(filePath) || !fs.existsSync(filePath)) {
         sendJson(res, 400, { ok: false, message: "没有找到可打开的文案文件" });
@@ -4845,7 +4830,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.method === "POST" && url.pathname === "/api/open-file") {
-      const body = JSON.parse(await readBody(req) || "{}");
+      const body = await readJsonBody(req);
       const fileName = String(body.fileName || "").trim();
       const filePath = path.join(downloadsDir, fileName);
       if (!fileName || !isInsideDownloads(filePath) || !fs.existsSync(filePath)) {
@@ -4858,7 +4843,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.method === "POST" && url.pathname === "/api/open-path") {
-      const body = JSON.parse(await readBody(req) || "{}");
+      const body = await readJsonBody(req);
       const filePath = String(body.filePath || "").trim();
       if (!filePath || !isInsideManagedFilePath(filePath) || !fs.existsSync(filePath)) {
         sendJson(res, 400, { ok: false, message: "没有找到可打开的文件位置" });
@@ -4870,7 +4855,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.method === "POST" && url.pathname === "/api/delete-files") {
-      const body = JSON.parse(await readBody(req) || "{}");
+      const body = await readJsonBody(req);
       const fileNames = Array.isArray(body.fileNames) ? body.fileNames : [body.fileName];
       const deleted = [];
 
@@ -4890,28 +4875,28 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.method === "POST" && url.pathname === "/api/page-open") {
-      const body = JSON.parse(await readBody(req) || "{}");
+      const body = await readJsonBody(req);
       touchPageSession(String(body.sessionId || ""));
       sendJson(res, 200, { ok: true });
       return;
     }
 
     if (req.method === "POST" && url.pathname === "/api/heartbeat") {
-      const body = JSON.parse(await readBody(req) || "{}");
+      const body = await readJsonBody(req);
       touchPageSession(String(body.sessionId || ""));
       sendJson(res, 200, { ok: true });
       return;
     }
 
     if (req.method === "POST" && url.pathname === "/api/page-close") {
-      const body = JSON.parse(await readBody(req) || "{}");
+      const body = await readJsonBody(req);
       closePageSession(String(body.sessionId || ""));
       sendJson(res, 200, { ok: true });
       return;
     }
 
     if (req.method === "POST" && url.pathname === "/api/download/start") {
-      const body = JSON.parse(await readBody(req) || "{}");
+      const body = await readJsonBody(req);
       const shareLink = String(body.shareLink || "").trim();
       const validationMessage = validateShareLink(shareLink);
       if (validationMessage) {
@@ -4925,7 +4910,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.method === "POST" && url.pathname === "/api/transcript/start") {
-      const body = JSON.parse(await readBody(req) || "{}");
+      const body = await readJsonBody(req);
       const shareLink = String(body.shareLink || "").trim();
       const settings = readSettings();
       const providerId = String(body.provider || settings.activeProvider || "dashscope").trim();
@@ -4976,7 +4961,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.method === "POST" && url.pathname === "/api/local-video/transcript") {
-      const body = JSON.parse(await readBody(req) || "{}");
+      const body = await readJsonBody(req);
       const filePath = String(body.filePath || "").trim();
       if (!filePath) {
         sendJson(res, 400, { ok: false, message: "请先选择本地视频文件" });
@@ -5010,7 +4995,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.method === "POST" && url.pathname === "/api/tool") {
-      const body = JSON.parse(await readBody(req) || "{}");
+      const body = await readJsonBody(req);
       const shareLink = String(body.shareLink || "").trim();
       const action = String(body.action || "").trim();
 
@@ -5050,7 +5035,7 @@ const server = http.createServer(async (req, res) => {
 
       // 统一生成（带自动降级）
       if (req.method === "POST" && route === "generate") {
-        const body = JSON.parse(await readBody(req) || "{}");
+        const body = await readJsonBody(req);
         try {
           const result = await providerRegistry.generate(
             body.taskType || "rewrite",
@@ -5066,7 +5051,7 @@ const server = http.createServer(async (req, res) => {
 
       // 流式生成 (SSE)
       if (req.method === "POST" && route === "generate-stream") {
-        const body = JSON.parse(await readBody(req) || "{}");
+        const body = await readJsonBody(req);
         res.writeHead(200, {
           "Content-Type": "text/event-stream",
           "Cache-Control": "no-cache",
@@ -5117,7 +5102,7 @@ const server = http.createServer(async (req, res) => {
       return;
     }
     if (url.pathname === "/api/projects" && req.method === "POST") {
-      const body = JSON.parse(await readBody(req) || "{}");
+      const body = await readJsonBody(req);
       sendJson(res, 201, { ok: true, project: projectCenter.create(body) });
       return;
     }
@@ -5127,7 +5112,7 @@ const server = http.createServer(async (req, res) => {
       return;
     }
     if (url.pathname === "/api/project/update" && req.method === "POST") {
-      const body = JSON.parse(await readBody(req) || "{}");
+      const body = await readJsonBody(req);
       const project = projectCenter.update(body.id, body.changes || body);
       sendJson(res, project ? 200 : 404, project ? { ok: true, project } : { ok: false, message: "短视频项目不存在。" });
       return;
@@ -5141,7 +5126,7 @@ const server = http.createServer(async (req, res) => {
       return;
     }
     if (isProjectRestResource && req.method === "POST" && projectRestMatch[2] === "update") {
-      const body = JSON.parse(await readBody(req) || "{}");
+      const body = await readJsonBody(req);
       const project = projectCenter.update(decodeURIComponent(projectRestMatch[1]), body.changes || body);
       sendJson(res, project ? 200 : 404, project ? { ok: true, project } : { ok: false, message: "短视频项目不存在。" });
       return;
@@ -5149,7 +5134,7 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname.startsWith("/api/projects/")) {
       const route = url.pathname.replace("/api/projects/", "");
       if (req.method === "POST" && route === "create") {
-        const body = JSON.parse(await readBody(req) || "{}");
+        const body = await readJsonBody(req);
         sendJson(res, 200, { ok: true, project: projectCenter.create(body) });
         return;
       }
@@ -5163,14 +5148,14 @@ const server = http.createServer(async (req, res) => {
         return;
       }
       if (req.method === "POST" && route === "update") {
-        const body = JSON.parse(await readBody(req) || "{}");
+        const body = await readJsonBody(req);
         const project = projectCenter.update(body.id, body.changes || body);
         sendJson(res, project ? 200 : 404, project ? { ok: true, project } : { ok: false, message: "短视频项目不存在。" });
         return;
       }
       if (req.method === "GET" && route === "stats") { sendJson(res, 200, { ok: true, ...projectCenter.getStats() }); return; }
       if (req.method === "POST" && route === "link-asset") {
-        const body = JSON.parse(await readBody(req) || "{}");
+        const body = await readJsonBody(req);
         try {
           const linked = projectCenter.linkAsset(body.projectId, body.assetType, body.assetId, body.name, body.metadata || {});
           sendJson(res, 200, { ok: true, ...linked });
@@ -5205,7 +5190,7 @@ const server = http.createServer(async (req, res) => {
         return;
       }
       if (req.method === "POST" && route === "delete") {
-        const body = JSON.parse(await readBody(req) || "{}");
+        const body = await readJsonBody(req);
         projectCenter.remove(body.id);
         sendJson(res, 200, { ok: true });
         return;
@@ -5231,7 +5216,7 @@ const server = http.createServer(async (req, res) => {
       }
 
       if (req.method === "POST" && route === "run") {
-        const body = JSON.parse(await readBody(req) || "{}");
+        const body = await readJsonBody(req);
         try {
           const result = await pipelineRunner.start({
             sourceId: body.sourceId || "",
@@ -5246,7 +5231,7 @@ const server = http.createServer(async (req, res) => {
       }
 
       if (req.method === "POST" && route === "register-handler") {
-        const body = JSON.parse(await readBody(req) || "{}");
+        const body = await readJsonBody(req);
         if (!body.stageId) { sendJson(res, 400, { ok: false, error: "missing stageId" }); return; }
         // 注册内置 handler（各模块接入）
         const builtin = {
@@ -5280,7 +5265,7 @@ const server = http.createServer(async (req, res) => {
       const route = url.pathname.replace("/api/jianying", "").replace(/^\//, "");
 
       if (req.method === "POST" && route === "export") {
-        const body = JSON.parse(await readBody(req) || "{}");
+        const body = await readJsonBody(req);
         try {
           const result = jianyingExporter.exportDraft(body);
           sendJson(res, 200, { ok: true, ...result });
@@ -5296,7 +5281,7 @@ const server = http.createServer(async (req, res) => {
       }
 
       if (req.method === "POST" && route === "delete") {
-        const body = JSON.parse(await readBody(req) || "{}");
+        const body = await readJsonBody(req);
         sendJson(res, 200, jianyingExporter.deleteDraft(body.id || ""));
         return;
       }
@@ -5308,7 +5293,7 @@ const server = http.createServer(async (req, res) => {
     // ===== 统一分析引擎 API =====
     if (url.pathname === "/api/analyze") {
       if (req.method !== "POST") { sendJson(res, 405, { ok: false }); return; }
-      const body = JSON.parse(await readBody(req) || "{}");
+      const body = await readJsonBody(req);
       try {
         const result = await analysisEngine.analyzeUrl(body.url || body.value || "");
         sendJson(res, 200, { ok: true, ...result });
@@ -5328,7 +5313,7 @@ const server = http.createServer(async (req, res) => {
       }
 
       if (req.method === "POST" && route === "health") {
-        const body = JSON.parse(await readBody(req) || "{}");
+        const body = await readJsonBody(req);
         const result = await providerRegistry.healthCheck(body.id || "");
         sendJson(res, 200, { ok: true, ...result });
         return;
@@ -5373,7 +5358,7 @@ const server = http.createServer(async (req, res) => {
       }
 
       if (req.method === "POST" && route === "model-mapping") {
-        const body = JSON.parse(await readBody(req) || "{}");
+        const body = await readJsonBody(req);
         const settings = readSettings();
         applyModelMapping(settings, body.mapping || {});
         const normalized = reloadModelRuntime(settings);
@@ -5397,7 +5382,7 @@ const server = http.createServer(async (req, res) => {
       }
 
       if (req.method === "POST" && route === "provider") {
-        const body = JSON.parse(await readBody(req) || "{}");
+        const body = await readJsonBody(req);
         if (!body.id) { sendJson(res, 400, { ok: false, message: "缺少 API 服务 ID" }); return; }
         try {
           const settings = readSettings();
@@ -5416,13 +5401,13 @@ const server = http.createServer(async (req, res) => {
       }
 
       if (req.method === "POST" && route === "test-provider") {
-        const body = JSON.parse(await readBody(req) || "{}");
+        const body = await readJsonBody(req);
         sendJson(res, 200, await testUnifiedProvider(readSettings(), String(body.id || "")));
         return;
       }
 
       if (req.method === "POST" && route === "test-provider-sample") {
-        const body = JSON.parse(await readBody(req) || "{}");
+        const body = await readJsonBody(req);
         try {
           sendJson(res, 200, await testProviderSample(String(body.id || "")));
         } catch (error) {
@@ -5442,7 +5427,7 @@ const server = http.createServer(async (req, res) => {
       const route = url.pathname.replace("/api/image/", "");
 
       if (req.method === "POST" && route === "generate") {
-        const body = JSON.parse(await readBody(req) || "{}");
+        const body = await readJsonBody(req);
         try {
           const result = await imageService.generateImage({
             provider: body.provider || "",
@@ -5460,7 +5445,7 @@ const server = http.createServer(async (req, res) => {
       }
 
       if (req.method === "POST" && route === "generate-storyboard") {
-        const body = JSON.parse(await readBody(req) || "{}");
+        const body = await readJsonBody(req);
         try {
           const result = await imageService.generateStoryboardImages({
             provider: body.provider || "",
@@ -5476,7 +5461,7 @@ const server = http.createServer(async (req, res) => {
       }
 
       if (req.method === "POST" && route === "add-local") {
-        const body = JSON.parse(await readBody(req) || "{}");
+        const body = await readJsonBody(req);
         try {
           const asset = imageService.addLocalImageAsset({
             filePath: body.filePath || "",
@@ -5537,7 +5522,7 @@ const server = http.createServer(async (req, res) => {
     res.writeHead(405);
     res.end("Method not allowed");
   } catch (error) {
-    sendJson(res, 500, {
+    sendJson(res, error instanceof HttpBodyError ? error.statusCode : 500, {
       ok: false,
       message: error instanceof Error ? error.message : String(error),
     });
