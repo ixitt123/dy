@@ -1326,6 +1326,126 @@
           <button class="ghost small" id="nextPage" type="button">下一页</button>
         </div>
       </section>
+
+      <section class="image-studio-page" id="imageStudioPanel">
+        <div class="image-studio-header">
+          <h2>AI 图片生产中心</h2>
+          <p class="text-secondary">输入 Prompt，调用系统设置里的图片生成 API。</p>
+        </div>
+        <div class="image-studio-body">
+          <div class="image-studio-input">
+            <div class="image-config-status" id="imageConfigStatus">
+              <span>正在读取图片 API 配置...</span>
+              <button class="ghost small" id="openImageSettings" type="button">去系统设置</button>
+            </div>
+            <div class="image-import-panel" id="imageDirectorImportPanel" hidden>
+              <label for="imageDirectorPromptSelect">已导入导演镜头</label>
+              <div class="image-import-row">
+                <select id="imageDirectorPromptSelect"></select>
+                <button class="ghost small" id="useDirectorPrompt" type="button">使用当前镜头</button>
+                <button class="ghost small" id="generateDirectorPromptImage" type="button">生成当前镜头</button>
+                <button class="ghost small" id="generateDirectorPromptSet" type="button">一键生成整套分镜图</button>
+                <button class="ghost small" id="exportDirectorPromptChatGptSet" type="button">导出ChatGPT生图词</button>
+                <button class="ghost small" id="clearDirectorPrompts" type="button">清空导入</button>
+              </div>
+            </div>
+            <label for="imageProviderSelect">图片 Provider</label>
+            <select id="imageProviderSelect" class="input-select"></select>
+            <label for="imagePrompt">图片描述（Prompt）</label>
+            <textarea id="imagePrompt" rows="4" placeholder="描述你想生成的图片内容，例如：一个阳光明媚的教室，老师在黑板上写英语单词，学生们认真听讲"></textarea>
+            <div class="image-studio-controls">
+              <div class="control-row">
+                <label>生成数量</label>
+                <div class="btn-group" id="imageCountGroup">
+                  <button class="btn-count active" data-count="1">1张</button>
+                  <button class="btn-count" data-count="4">4张</button>
+                  <button class="btn-count" data-count="9">9张</button>
+                </div>
+              </div>
+              <div class="control-row">
+                <label>画面比例</label>
+                <select id="imageAspectRatio" class="input-select">
+                  <option value="9:16">9:16 竖版｜抖音、快手、视频号、小红书短视频</option>
+                  <option value="16:9">16:9 横版｜B站、西瓜、课程、访谈、横屏封面</option>
+                  <option value="1:1" selected>1:1 正方形｜朋友圈、小红书图文、商品图、头像海报</option>
+                </select>
+              </div>
+            </div>
+            <button class="primary" id="imageGenerateBtn" type="button">生成图片</button>
+            <div id="imageGenerateStatus" class="status-text"></div>
+          </div>
+          <div class="image-studio-results">
+            <div class="results-head">
+              <h3>生成结果</h3>
+              <div class="results-tabs">
+                <button class="tab-link active" data-tab="latest">最新</button>
+                <button class="tab-link" data-tab="assets">资产库</button>
+              </div>
+            </div>
+            <div class="results-grid" id="imageResultsGrid">
+              <div class="empty-state">输入 Prompt 后点击生成</div>
+            </div>
+            <div class="assets-grid" id="imageAssetsGrid" style="display:none">
+              <div class="empty-state">暂无保存的图片资产</div>
+            </div>
+          </div>
+        </div>
+      </section>
+      </section>
+
+      <section class="workbench-page" data-page="settings" id="settingsPage">
+        <section class="topbar">
+          <div>
+            <h1>系统设置</h1>
+            <p id="savePath">下载位置: 加载中...</p>
+          </div>
+          <div class="download-settings">
+            <input id="downloadDirInput" type="text" placeholder="下载位置" style="width:300px" />
+            <button class="ghost" id="chooseDownloadDir" type="button">选择文件夹</button>
+            <button class="ghost" id="saveDownloadDir" type="button">保存位置</button>
+            <button class="ghost" id="openFolder" type="button">打开下载文件夹</button>
+          </div>
+        </section>
+
+        <div class="api-panel settings-hub" id="unifiedSettingsPanel">
+          <div class="settings-hub-head">
+            <div>
+              <span class="section-eyebrow">API Center</span>
+              <h2>API 与模型设置</h2>
+              <p>保存一次，全局读取；每个功能会按下方分配使用对应 API。</p>
+            </div>
+            <button class="ghost small" id="v2RefreshSettings" type="button">刷新状态</button>
+          </div>
+          <div class="settings-summary" id="v2SettingsSummary"></div>
+          <div class="settings-category-grid" aria-label="设置分区">
+            <span>AI 文本模型</span><span>语音识别模型</span><span>TTS 配音模型</span>
+            <span>图片生成模型</span><span>视频生成模型</span><span>下载设置</span>
+            <span>输出设置</span><span>剪映模板设置</span><span>系统状态检测</span>
+          </div>
+          <section class="settings-card provider-card">
+            <div class="settings-card-head"><div>
+              <h3>API 服务中心</h3>
+              <p class="text-secondary">API Key 只保存在本机 settings.json；页面只显示脱敏状态。</p>
+            </div></div>
+            <div id="v2ProviderList" class="provider-grid"></div>
+          </section>
+          <section class="settings-card task-card">
+            <div class="settings-card-head"><div>
+              <h3>功能使用说明</h3>
+              <p class="text-secondary">这里说明每个功能会调用哪类 API，方便排查为什么某个功能不可用。</p>
+            </div></div>
+            <div id="v2TaskGuide" class="task-guide-grid"></div>
+          </section>
+          <section class="settings-card model-card">
+            <div class="settings-card-head">
+              <div><h3>模型中心</h3><p class="text-secondary">设置各功能默认使用的服务和模型；保存后全局生效。</p></div>
+              <button class="primary" id="v2SaveMapping" type="button">保存模型分配</button>
+            </div>
+            <div class="model-mapping-grid" id="v2ModelMap"></div>
+            <p id="saveMappingStatus" class="settings-status" role="status"></p>
+          </section>
+        </div>
+      </section>
           </main>
 
           <aside class="status-rail" aria-label="状态面板">
@@ -1368,73 +1488,8 @@
       </div>
     </div>
 
-    <!-- Image Studio Panel -->
-    <section class="image-studio-page" id="imageStudioPanel" hidden>
-      <div class="image-studio-header">
-        <h2>AI 图片生产中心</h2>
-        <p class="text-secondary">输入 Prompt，调用系统设置里的图片生成 API。</p>
-      </div>
-      <div class="image-studio-body">
-        <div class="image-studio-input">
-          <div class="image-config-status" id="imageConfigStatus">
-            <span>正在读取图片 API 配置...</span>
-            <button class="ghost small" id="openImageSettings" type="button">去系统设置</button>
-          </div>
-          <div class="image-import-panel" id="imageDirectorImportPanel" hidden>
-            <label for="imageDirectorPromptSelect">已导入导演镜头</label>
-            <div class="image-import-row">
-              <select id="imageDirectorPromptSelect"></select>
-              <button class="ghost small" id="useDirectorPrompt" type="button">使用当前镜头</button>
-              <button class="ghost small" id="generateDirectorPromptImage" type="button">生成当前镜头</button>
-              <button class="ghost small" id="generateDirectorPromptSet" type="button">一键生成整套分镜图</button>
-              <button class="ghost small" id="exportDirectorPromptChatGptSet" type="button">导出ChatGPT生图词</button>
-              <button class="ghost small" id="clearDirectorPrompts" type="button">清空导入</button>
-            </div>
-          </div>
-          <label for="imageProviderSelect">图片 Provider</label>
-          <select id="imageProviderSelect" class="input-select"></select>
-          <label for="imagePrompt">图片描述（Prompt）</label>
-          <textarea id="imagePrompt" rows="4" placeholder="描述你想生成的图片内容，例如：一个阳光明媚的教室，老师在黑板上写英语单词，学生们认真听讲"></textarea>
-          <div class="image-studio-controls">
-            <div class="control-row">
-              <label>生成数量</label>
-              <div class="btn-group" id="imageCountGroup">
-                <button class="btn-count active" data-count="1">1张</button>
-                <button class="btn-count" data-count="4">4张</button>
-                <button class="btn-count" data-count="9">9张</button>
-              </div>
-            </div>
-            <div class="control-row">
-              <label>画面比例</label>
-              <select id="imageAspectRatio" class="input-select">
-                <option value="9:16">9:16 竖版｜抖音、快手、视频号、小红书短视频</option>
-                <option value="16:9">16:9 横版｜B站、西瓜、课程、访谈、横屏封面</option>
-                <option value="1:1" selected>1:1 正方形｜朋友圈、小红书图文、商品图、头像海报</option>
-              </select>
-            </div>
-          </div>
-          <button class="primary" id="imageGenerateBtn" type="button">🎨 生成图片</button>
-          <div id="imageGenerateStatus" class="status-text"></div>
-        </div>
-        <div class="image-studio-results">
-          <div class="results-head">
-            <h3>生成结果</h3>
-            <div class="results-tabs">
-              <button class="tab-link active" data-tab="latest">最新</button>
-              <button class="tab-link" data-tab="assets">资产库</button>
-            </div>
-          </div>
-          <div class="results-grid" id="imageResultsGrid">
-            <div class="empty-state">输入 Prompt 后点击生成</div>
-          </div>
-          <div class="assets-grid" id="imageAssetsGrid" style="display:none">
-            <div class="empty-state">暂无保存的图片资产</div>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <script src="/app.js"></script>
+    <script src="/modules/legacy-runtime.js"></script>
     <script src="/workbench.js"></script>
+    <script type="module" src="/app.js"></script>
   </body>
 </html>
