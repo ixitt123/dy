@@ -1,1 +1,12 @@
-{"id":"promo_commercial","name":"商业宣传","ratio":"9:16","resolution":"1080x1920","fps":30,"version":1}
+{
+  "id": "promo_commercial",
+  "name": "商业宣传",
+  "category": "商业广告",
+  "ratio": "9:16",
+  "resolution": "1080x1920",
+  "fps": 30,
+  "version": 1,
+  "recommendedVideoTypes": ["promo", "product", "commercial", "品牌宣传", "产品讲解"],
+  "recommendedStyles": ["clean-commercial", "apple-keynote", "tech-data", "cinematic"],
+  "tags": ["品牌", "产品", "卖点", "高级感"]
+}

@@ -1,1 +1,12 @@
-{"id":"clean_knowledge_card","name":"清爽知识卡片","ratio":"9:16","resolution":"1080x1920","fps":30,"version":1}
+{
+  "id": "clean_knowledge_card",
+  "name": "清爽知识卡片",
+  "category": "知识卡片",
+  "ratio": "9:16",
+  "resolution": "1080x1920",
+  "fps": 30,
+  "version": 1,
+  "recommendedVideoTypes": ["knowledge", "explainer", "douyin-knowledge", "课程", "观点讲解"],
+  "recommendedStyles": ["clean-commercial", "knowledge-blogger", "sketch-line", "apple-keynote"],
+  "tags": ["卡片", "清爽", "知识", "字幕"]
+}

@@ -1,1 +1,12 @@
-{"id":"black_gold_business","name":"黑金商业","ratio":"9:16","resolution":"1080x1920","fps":30,"version":1}
+{
+  "id": "black_gold_business",
+  "name": "黑金商业",
+  "category": "商业观点",
+  "ratio": "9:16",
+  "resolution": "1080x1920",
+  "fps": 30,
+  "version": 1,
+  "recommendedVideoTypes": ["business", "case-study", "finance", "商业解读", "观点"],
+  "recommendedStyles": ["tech-data", "cinematic", "clean-commercial", "retro-futurism"],
+  "tags": ["黑金", "数据", "观点", "商业"]
+}
