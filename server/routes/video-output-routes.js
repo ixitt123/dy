@@ -57,6 +57,16 @@ export function createVideoOutputRoutes({ videoProductService, sendJson, sendBuf
       }
       return true;
     }
+    if (req.method === "POST" && route === "import-template") {
+      try {
+        const body = await readJsonBody(req);
+        const template = videoProductService.importJianyingTemplate(body);
+        sendJson(res, 200, { ok: true, template, ...videoProductService.listSources() });
+      } catch (error) {
+        sendJson(res, error instanceof HttpBodyError ? error.statusCode : 400, { ok: false, message: error instanceof Error ? error.message : String(error) });
+      }
+      return true;
+    }
     if (req.method === "POST" && route === "delete") {
       try {
         const body = await readJsonBody(req);

@@ -59,6 +59,57 @@ const ROUTE_A_SKILL_CHAIN = [
   "video-quality-review",
 ];
 
+const DEFAULT_JIANYING_TEMPLATES = [
+  {
+    id: "education_tips",
+    name: "学习技巧",
+    category: "知识教育",
+    recommendedVideoTypes: ["learning-method", "english-improvement", "douyin-knowledge", "知识口播", "学习技巧"],
+    recommendedStyles: ["knowledge-blogger", "sketch-line", "clean-commercial", "tech-data"],
+    tags: ["学习方法", "知识口播", "字幕强化", "教程"],
+  },
+  {
+    id: "promo_commercial",
+    name: "商业宣传",
+    category: "商业广告",
+    recommendedVideoTypes: ["promo", "product", "commercial", "品牌宣传", "产品讲解"],
+    recommendedStyles: ["clean-commercial", "apple-keynote", "tech-data", "cinematic"],
+    tags: ["品牌", "产品", "卖点", "高级感"],
+  },
+  {
+    id: "enrollment_conversion",
+    name: "招生转化",
+    category: "教育转化",
+    recommendedVideoTypes: ["enrollment", "education", "lead-generation", "招生", "家长焦虑"],
+    recommendedStyles: ["parent-anxiety", "warm-campus", "knowledge-blogger", "clean-commercial"],
+    tags: ["招生", "家长", "留资", "行动号召"],
+  },
+  {
+    id: "black_gold_business",
+    name: "黑金商业",
+    category: "商业观点",
+    recommendedVideoTypes: ["business", "case-study", "finance", "商业解读", "观点"],
+    recommendedStyles: ["tech-data", "cinematic", "clean-commercial", "retro-futurism"],
+    tags: ["黑金", "数据", "观点", "商业"],
+  },
+  {
+    id: "clean_knowledge_card",
+    name: "清爽知识卡片",
+    category: "知识卡片",
+    recommendedVideoTypes: ["knowledge", "explainer", "douyin-knowledge", "课程", "观点讲解"],
+    recommendedStyles: ["clean-commercial", "knowledge-blogger", "sketch-line", "apple-keynote"],
+    tags: ["卡片", "清爽", "知识", "字幕"],
+  },
+  {
+    id: "campus_education",
+    name: "校园教育",
+    category: "校园教育",
+    recommendedVideoTypes: ["campus", "education", "school", "中考", "高中选科"],
+    recommendedStyles: ["warm-campus", "healing-illustration", "parent-anxiety", "chinese-ink"],
+    tags: ["校园", "教育", "家长", "学生"],
+  },
+];
+
 function safeJson(value, fallback = {}) {
   if (value && typeof value === "object") return value;
   try {
@@ -89,6 +140,39 @@ function createStableAssetId(filePath) {
 function ensureDir(dir) {
   fs.mkdirSync(dir, { recursive: true });
   return dir;
+}
+
+function hasDirectoryEntries(dir) {
+  try {
+    return fs.existsSync(dir) && fs.statSync(dir).isDirectory() && fs.readdirSync(dir).length > 0;
+  } catch {
+    return false;
+  }
+}
+
+function isInsideDirectory(parent, child) {
+  const relative = path.relative(path.resolve(parent), path.resolve(child));
+  return Boolean(relative) && !relative.startsWith("..") && !path.isAbsolute(relative);
+}
+
+function safeTemplateId(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .slice(0, 64) || "custom_template";
+}
+
+function templateDefaults(id) {
+  return DEFAULT_JIANYING_TEMPLATES.find((item) => item.id === id) || {
+    id,
+    name: id,
+    category: "自定义模板",
+    recommendedVideoTypes: [],
+    recommendedStyles: [],
+    tags: ["自定义"],
+  };
 }
 
 function writeJson(filePath, data) {
@@ -724,6 +808,7 @@ export function createVideoProductService({
   onIdle = () => {},
 }) {
   const outputRoot = ensureDir(path.join(baseDir, "video-products"));
+  const jianyingTemplatesRoot = ensureDir(path.join(baseDir, "templates", "jianying"));
   const premiumSkillsRoot = path.join(baseDir, ".skills");
   const pending = [];
   let working = false;
@@ -765,6 +850,93 @@ export function createVideoProductService({
       path: path.join(".skills", name, "SKILL.md"),
       ready: fs.existsSync(path.join(premiumSkillsRoot, name, "SKILL.md")),
     }));
+  }
+
+  function normalizeJianyingTemplateConfig(id, templateDir, config = {}) {
+    const defaults = templateDefaults(id);
+    const merged = { ...defaults, ...(config && typeof config === "object" ? config : {}) };
+    const draftTemplatePath = path.join(templateDir, "draft_template");
+    return {
+      id,
+      name: String(merged.name || defaults.name || id).trim(),
+      category: String(merged.category || defaults.category || "自定义模板").trim(),
+      ratio: String(merged.ratio || "9:16").trim(),
+      resolution: String(merged.resolution || "1080x1920").trim(),
+      fps: Number(merged.fps || 30),
+      version: Number(merged.version || 1),
+      recommendedVideoTypes: stringArray(merged.recommendedVideoTypes),
+      recommendedStyles: stringArray(merged.recommendedStyles),
+      tags: stringArray(merged.tags),
+      hasMaster: hasDirectoryEntries(draftTemplatePath),
+      templateRoot: templateDir,
+      draftTemplatePath,
+    };
+  }
+
+  function readJianyingTemplate(templateId) {
+    const id = safeTemplateId(templateId);
+    const templateDir = path.join(jianyingTemplatesRoot, id);
+    const configPath = path.join(templateDir, "template.config.json");
+    const config = fs.existsSync(configPath) ? safeJson(fs.readFileSync(configPath, "utf8"), {}) : {};
+    return normalizeJianyingTemplateConfig(id, templateDir, config);
+  }
+
+  function listJianyingTemplates() {
+    const ids = new Set(DEFAULT_JIANYING_TEMPLATES.map((item) => item.id));
+    if (fs.existsSync(jianyingTemplatesRoot)) {
+      for (const entry of fs.readdirSync(jianyingTemplatesRoot, { withFileTypes: true })) {
+        if (entry.isDirectory()) ids.add(safeTemplateId(entry.name));
+      }
+    }
+    return [...ids]
+      .map((id) => readJianyingTemplate(id))
+      .sort((a, b) => Number(b.hasMaster) - Number(a.hasMaster) || a.category.localeCompare(b.category, "zh-Hans-CN") || a.name.localeCompare(b.name, "zh-Hans-CN"));
+  }
+
+  function importJianyingTemplate(input = {}) {
+    const sourcePath = path.resolve(String(input.sourcePath || input.path || "").trim());
+    if (!sourcePath || !fs.existsSync(sourcePath)) throw new Error("请提供存在的本地剪映模板目录。");
+    if (!fs.statSync(sourcePath).isDirectory()) throw new Error("当前先支持导入已解压的模板目录，请把安装包解压后再填写目录路径。");
+
+    const sourceDraftPath = hasDirectoryEntries(path.join(sourcePath, "draft_template"))
+      ? path.join(sourcePath, "draft_template")
+      : sourcePath;
+    if (!hasDirectoryEntries(sourceDraftPath)) throw new Error("模板目录为空，未检测到可复制的剪映母版文件。");
+
+    const id = safeTemplateId(input.id || path.basename(sourcePath));
+    const targetDir = path.join(jianyingTemplatesRoot, id);
+    if (!isInsideDirectory(jianyingTemplatesRoot, targetDir)) throw new Error("模板 ID 不合法。");
+    const targetDraftPath = path.join(targetDir, "draft_template");
+    ensureDir(targetDir);
+    if (path.resolve(sourceDraftPath) !== path.resolve(targetDraftPath)) {
+      fs.rmSync(targetDraftPath, { recursive: true, force: true });
+      fs.cpSync(sourceDraftPath, targetDraftPath, { recursive: true, force: true });
+    }
+    const config = normalizeJianyingTemplateConfig(id, targetDir, {
+      id,
+      name: String(input.name || templateDefaults(id).name || id).trim(),
+      category: String(input.category || templateDefaults(id).category || "自定义模板").trim(),
+      ratio: input.ratio || "9:16",
+      resolution: input.resolution || "1080x1920",
+      fps: Number(input.fps || 30),
+      version: Number(input.version || 1),
+      recommendedVideoTypes: input.recommendedVideoTypes || templateDefaults(id).recommendedVideoTypes,
+      recommendedStyles: input.recommendedStyles || templateDefaults(id).recommendedStyles,
+      tags: input.tags || templateDefaults(id).tags,
+    });
+    writeJson(path.join(targetDir, "template.config.json"), {
+      id: config.id,
+      name: config.name,
+      category: config.category,
+      ratio: config.ratio,
+      resolution: config.resolution,
+      fps: config.fps,
+      version: config.version,
+      recommendedVideoTypes: config.recommendedVideoTypes,
+      recommendedStyles: config.recommendedStyles,
+      tags: config.tags,
+    });
+    return readJianyingTemplate(id);
   }
 
   function wait(ms) {
@@ -1096,12 +1268,14 @@ export function createVideoProductService({
     const imageAssets = listImageAssets(500);
     const downloadedVideos = listDownloadedVideoAssets(200);
     const bgmAssets = listBgmAssets();
+    const jianyingTemplates = listJianyingTemplates();
     return {
       directors,
       audioJobs,
       imageAssets,
       downloadedVideos,
       bgmAssets,
+      jianyingTemplates,
       routeAStyles: Object.entries(ROUTE_A_STYLE_PRESETS).map(([id, preset]) => ({
         id,
         label: preset.label,
@@ -2590,6 +2764,7 @@ ${sceneMarkup}
     getToolStatus,
     openJianying,
     importBgmAsset,
+    importJianyingTemplate,
     resolveOutputPath,
     outputRoot,
   };
