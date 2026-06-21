@@ -22,6 +22,8 @@
 
 ### capcut-cli
 
+本机剪映专业版与 `capcut-cli` 是两项独立能力：系统会从本地设置、用户/系统开始菜单快捷方式和常见安装目录检测剪映客户端，并自动识别默认草稿目录；检测到客户端后，成片中心可直接启动剪映。仅安装剪映客户端并不代表模板命令已经可用，缺少 `capcut-cli` 或母版时仍使用素材包兼容模式。
+
 当前首选适配目标。优点是可以通过进程边界隔离，并按 `doctor / info / lint / import-srt / add-audio / add-image / apply-template / render preview` 分步执行。由于不同安装版本的命令能力可能不同，所有调用必须先检测并允许兼容降级。
 
 ### pyJianYingDraft
