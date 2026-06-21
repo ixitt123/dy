@@ -939,6 +939,25 @@ export function createVideoProductService({
     return readJianyingTemplate(id);
   }
 
+  function syncDraftToLocalJianying(draftPath, project, templateId = "") {
+    const resolvedDraftPath = path.resolve(String(draftPath || "").trim());
+    if (!resolvedDraftPath || !hasDirectoryEntries(resolvedDraftPath)) return "";
+    const status = capcutCliAdapter?.detect?.() || {};
+    const draftDirectory = String(status.paths?.draftDirectory || "").trim();
+    if (!draftDirectory || !fs.existsSync(draftDirectory) || !fs.statSync(draftDirectory).isDirectory()) return "";
+    const targetName = safeFileName(`codex_${project.id}_${templateId || "template"}_${Date.now()}`);
+    const targetPath = path.join(draftDirectory, targetName);
+    if (!isInsideDirectory(draftDirectory, targetPath)) return "";
+    fs.cpSync(resolvedDraftPath, targetPath, { recursive: true, force: true });
+    writeJson(path.join(targetPath, "codex-import.json"), {
+      sourceDraftPath: resolvedDraftPath,
+      timelineProjectId: project.id,
+      templateId,
+      syncedAt: new Date().toISOString(),
+    });
+    return targetPath;
+  }
+
   function wait(ms) {
     return new Promise((resolve) => setTimeout(resolve, ms));
   }
@@ -2402,6 +2421,7 @@ ${sceneMarkup}
 
       const timelineFiles = writeTimelineFiles(project, timeline);
       let draftPath = "";
+      let localJianyingDraftPath = "";
       let capcutResult = null;
       if (outputType === "jianying_template") {
         capcutResult = capcutCliAdapter?.buildTemplateDraft({
@@ -2416,6 +2436,12 @@ ${sceneMarkup}
           files: [],
         };
         draftPath = capcutResult.draftPath || capcutResult.planPath || "";
+        localJianyingDraftPath = syncDraftToLocalJianying(capcutResult.draftPath || "", project, input.jianying_template || "education_tips");
+        if (localJianyingDraftPath) {
+          capcutResult.localJianyingDraftPath = localJianyingDraftPath;
+          capcutResult.files = [...(capcutResult.files || []), localJianyingDraftPath];
+          capcutResult.warnings = [...(capcutResult.warnings || []), "已同步到本机剪映草稿目录。"];
+        }
         writeJson(path.join(timelineFiles.projectDir, "capcut-result.json"), capcutResult);
       } else if (outputType === "jianying" || outputType === "package") {
         draftPath = writeDraftReference(timelineFiles.projectDir, project, timelineFiles);
@@ -2425,7 +2451,7 @@ ${sceneMarkup}
         timeline_path: timelineFiles.timelinePath,
         srt_path: timelineFiles.srtPath,
         manifest_path: timelineFiles.manifestPath,
-        draft_path: draftPath,
+        draft_path: localJianyingDraftPath || draftPath,
       });
 
       let mp4Path = "";
@@ -2480,7 +2506,7 @@ ${sceneMarkup}
         mp4_path: mp4Path,
         completed_at: new Date().toISOString(),
       });
-      syncOutputToVideoProject(completedProject, timeline, timelineFiles, { draftPath, mp4Path });
+      syncOutputToVideoProject(completedProject, timeline, timelineFiles, { draftPath: localJianyingDraftPath || draftPath, mp4Path });
     } catch (error) {
       updateProject(project.id, {
         status: "failed",
