@@ -69,6 +69,10 @@ let activeVideoProject = null;
 let projectReadinessState = null;
 let projectAssetsState = [];
 
+const RAIL_TASK_RUNNING_STATUSES = new Set(["下载中", "提取中", "running", "processing"]);
+const RAIL_TASK_FINISHED_STATUSES = new Set(["完成", "失败", "completed", "failed", "success", "error"]);
+const RAIL_VIDEO_PRODUCT_RUNNING_STATUSES = new Set(["pending", "binding_assets", "building_timeline", "rendering", "exporting_draft"]);
+
 const VIDEO_PROJECT_STEPS = [
   ["created", "采集素材", "collector"],
   ["collected", "提取文案", "transcript"],
@@ -892,6 +896,26 @@ function railTaskProgress(task) {
   return Math.max(0, Math.min(100, Number(task?.progress || 0)));
 }
 
+function railTaskIsRunning(task) {
+  return RAIL_TASK_RUNNING_STATUSES.has(task?.status);
+}
+
+function railTaskIsFinished(task) {
+  return RAIL_TASK_FINISHED_STATUSES.has(task?.status);
+}
+
+function railVideoProductId(project) {
+  return Number(project?.project_id || project?.id || 0);
+}
+
+function railVideoProductIsRunning(project) {
+  return RAIL_VIDEO_PRODUCT_RUNNING_STATUSES.has(project?.status);
+}
+
+function railVideoProductCanDelete(project) {
+  return railVideoProductId(project) > 0 && !railVideoProductIsRunning(project);
+}
+
 function railTaskActionLabel(task) {
   const action = task?.task_action || (task?.only_transcript ? "transcript" : "download");
   return typeof taskActionLabels !== "undefined" ? taskActionLabels[action] || "任务" : "任务";
@@ -927,7 +951,7 @@ function railStatusSummary(tasks) {
 
 function railTaskCard(task, variant = "normal") {
   const progress = railTaskProgress(task);
-  const running = ["下载中", "提取中", "running", "processing"].includes(task.status);
+  const running = railTaskIsRunning(task);
   const canPause = ["下载中", "提取中"].includes(task.status);
   const canDelete = !running;
   const title = escapeHtml(railTaskTitle(task));
@@ -982,7 +1006,7 @@ function friendlyVideoProductError(value) {
 }
 
 function railVideoProductCard(project, variant = "normal") {
-  const id = Number(project.project_id || project.id || 0);
+  const id = railVideoProductId(project);
   const progress = Math.max(0, Math.min(100, Number(project.progress || 0)));
   const title = escapeHtml(project.metadata?.title || `成片 #${id}`);
   const status = railVideoProductStatusLabel(project.status);
@@ -994,6 +1018,7 @@ function railVideoProductCard(project, variant = "normal") {
   ].filter(Boolean).join(" · ");
   const output = project.mp4_path || project.output_dir || project.timeline_path || project.srt_path || "";
   const hasOutput = Boolean(output);
+  const canDelete = railVideoProductCanDelete(project);
   return `
     <article class="rail-task-card rail-video-product-card ${variant}">
       <div class="rail-task-top">
@@ -1011,6 +1036,7 @@ function railVideoProductCard(project, variant = "normal") {
       <div class="rail-task-actions">
         <button type="button" class="rail-video-product-open" data-video-product-id="${id}">查看</button>
         ${hasOutput ? `<button type="button" class="rail-video-product-folder" data-video-product-id="${id}">打开</button>` : ""}
+        ${canDelete ? `<button type="button" class="rail-video-product-delete danger-action" data-video-product-id="${id}">删除</button>` : ""}
       </div>
     </article>
   `;
@@ -1021,12 +1047,14 @@ function renderRail(tasks, directors, vfoProjects, audioJobs, videoProducts = []
   const recent = document.querySelector("#railRecentOutput");
   const errors = document.querySelector("#railErrors");
   const sortedTasks = [...tasks].sort((left, right) => Number(right.id || 0) - Number(left.id || 0));
-  const runningTasks = sortedTasks.filter((task) => ["下载中", "提取中", "running", "processing"].includes(task.status));
+  const runningTasks = sortedTasks.filter(railTaskIsRunning);
   const waitingTasks = sortedTasks.filter((task) => ["等待", "waiting"].includes(task.status));
+  const finishedTasks = sortedTasks.filter(railTaskIsFinished);
   const failedTasks = sortedTasks.filter((task) => ["失败", "failed"].includes(task.status));
   const latestTasks = sortedTasks.filter((task) => !runningTasks.includes(task)).slice(0, 10);
-  const runningVideoProducts = videoProducts.filter((project) => ["pending", "binding_assets", "building_timeline", "rendering", "exporting_draft"].includes(project.status));
+  const runningVideoProducts = videoProducts.filter(railVideoProductIsRunning);
   const failedVideoProducts = videoProducts.filter((project) => project.status === "failed");
+  const deletableVideoProducts = videoProducts.filter(railVideoProductCanDelete);
   const latestVideoProducts = videoProducts
     .filter((project) => !runningVideoProducts.includes(project))
     .slice(0, 4);
@@ -1056,11 +1084,23 @@ function renderRail(tasks, directors, vfoProjects, audioJobs, videoProducts = []
           <div class="rail-task-list">${activeList}</div>
         </div>
         <div class="rail-task-group">
-          <div class="rail-subheading"><span>成片任务</span><em>${runningVideoProducts.length || latestVideoProducts.length}</em></div>
+          <div class="rail-subheading">
+            <span>成片任务</span>
+            <span class="rail-subheading-actions">
+              ${deletableVideoProducts.length ? `<button type="button" class="rail-subheading-action rail-video-product-clear danger-action" title="清理已完成/失败的成片记录和输出文件夹">清理</button>` : ""}
+              <em>${runningVideoProducts.length || latestVideoProducts.length}</em>
+            </span>
+          </div>
           <div class="rail-task-list compact">${videoList}</div>
         </div>
         <div class="rail-task-group">
-          <div class="rail-subheading"><span>最近任务</span><em>${latestTasks.length}${tasks.length > latestTasks.length ? " / " + tasks.length : ""}</em></div>
+          <div class="rail-subheading">
+            <span>最近任务</span>
+            <span class="rail-subheading-actions">
+              ${finishedTasks.length ? `<button type="button" class="rail-subheading-action rail-task-clear-finished" title="清理已完成和失败的普通任务记录，文件会保留">清理</button>` : ""}
+              <em>${latestTasks.length}${tasks.length > latestTasks.length ? " / " + tasks.length : ""}</em>
+            </span>
+          </div>
           <div class="rail-task-list compact">${recentList}</div>
         </div>
         ${failedTasks.length + failedVideoProducts.length ? `<div class="rail-failure-note">失败 ${failedTasks.length + failedVideoProducts.length} 条，请看下方错误提示。</div>` : ""}
@@ -1258,6 +1298,72 @@ async function openRailVideoProductLocation(projectId) {
   }
 }
 
+function setRailActionStatus(message) {
+  if (typeof batchStatus !== "undefined") batchStatus.textContent = message;
+  if (typeof resultBox !== "undefined") resultBox.textContent = message;
+}
+
+async function refreshVideoProductSurfaces() {
+  const refreshJobs = [];
+  if (typeof loadVideoProductProjects === "function") {
+    refreshJobs.push(loadVideoProductProjects());
+  }
+  if (window.videoOutputModule?.loadVideoProductProjects) {
+    refreshJobs.push(window.videoOutputModule.loadVideoProductProjects());
+  }
+  await Promise.allSettled(refreshJobs);
+  await refreshWorkbenchOverview();
+}
+
+async function deleteRailVideoProduct(projectId) {
+  const id = Number(projectId || 0);
+  if (!id) return;
+  const project = dashboardVideoProducts.find((item) => railVideoProductId(item) === id);
+  if (project && railVideoProductIsRunning(project)) {
+    throw new Error("成片任务正在处理，完成或失败后才能删除。");
+  }
+  const title = project?.metadata?.title || `成片 #${id}`;
+  if (!window.confirm(`确定删除「${title}」的成片记录和输出文件夹吗？\n\nMP4、字幕、封面、报告和素材包都会一起删除，此操作不可撤销。`)) return;
+  const data = await fetchJson("/api/video-product/delete", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ id, deleteFiles: true }),
+  });
+  setRailActionStatus(`已删除 ${data.deleted || 0} 条成片记录`);
+  await refreshVideoProductSurfaces();
+}
+
+async function clearRailVideoProducts() {
+  const deletable = dashboardVideoProducts.filter(railVideoProductCanDelete);
+  if (!deletable.length) {
+    setRailActionStatus("当前没有可清理的成片记录");
+    return;
+  }
+  if (!window.confirm(`确定清理 ${deletable.length} 条已结束成片记录和对应输出文件夹吗？\n\n正在运行的任务会保留，此操作不可撤销。`)) return;
+  const data = await fetchJson("/api/video-product/clear", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ scope: "all", deleteFiles: true }),
+  });
+  setRailActionStatus(`已清理 ${data.deleted || 0} 条成片记录`);
+  await refreshVideoProductSurfaces();
+}
+
+async function clearFinishedRailTasks() {
+  const tasks = typeof allTasks === "undefined" ? [] : allTasks;
+  const finished = tasks.filter(railTaskIsFinished);
+  if (!finished.length) {
+    setRailActionStatus("当前没有可清理的完成/失败任务");
+    return;
+  }
+  if (!window.confirm(`确定清理 ${finished.length} 条已完成和失败的任务记录吗？\n\n文件不会被删除。`)) return;
+  const data = await fetchJson("/api/tasks/clear-finished", { method: "POST" });
+  setRailActionStatus(`已清理 ${data.deleted || 0} 条任务记录`);
+  renderTaskStats(data.summary, data.running, data.concurrency);
+  renderTasks(data.tasks);
+  renderWorkbenchOverview();
+}
+
 async function openRailTaskLocation(taskId) {
   const id = Number(taskId || 0);
   const task = (typeof allTasks === "undefined" ? [] : allTasks).find((item) => Number(item.id || 0) === id);
@@ -1349,6 +1455,30 @@ function bindWorkbenchInteractions() {
     const railDelete = event.target.closest(".rail-task-delete");
     const videoProductOpen = event.target.closest(".rail-video-product-open");
     const videoProductFolder = event.target.closest(".rail-video-product-folder");
+    const videoProductDelete = event.target.closest(".rail-video-product-delete");
+    const videoProductClear = event.target.closest(".rail-video-product-clear");
+    const railTaskClearFinished = event.target.closest(".rail-task-clear-finished");
+    if (videoProductClear) {
+      event.preventDefault();
+      clearRailVideoProducts().catch((error) => {
+        setRailActionStatus(error instanceof Error ? error.message : String(error));
+      });
+      return;
+    }
+    if (railTaskClearFinished) {
+      event.preventDefault();
+      clearFinishedRailTasks().catch((error) => {
+        setRailActionStatus(error instanceof Error ? error.message : String(error));
+      });
+      return;
+    }
+    if (videoProductDelete) {
+      event.preventDefault();
+      deleteRailVideoProduct(videoProductDelete.dataset.videoProductId).catch((error) => {
+        setRailActionStatus(error instanceof Error ? error.message : String(error));
+      });
+      return;
+    }
     if (videoProductOpen) {
       event.preventDefault();
       openRailVideoProduct(videoProductOpen.dataset.videoProductId).catch((error) => {
