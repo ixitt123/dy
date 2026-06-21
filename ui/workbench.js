@@ -59,6 +59,7 @@ let activeDirectorImageImport = null;
 let videoProjectsState = [];
 let activeVideoProject = null;
 let projectReadinessState = null;
+let projectAssetsState = [];
 
 const VIDEO_PROJECT_STEPS = [
   ["created", "采集素材", "collector"],
@@ -313,6 +314,7 @@ async function refreshProjectAssets() {
   Object.entries(filters).forEach(([key, value]) => { if (value && value !== "all") params.set(key, value); });
   const data = await projectApi(`/api/projects/assets?${params.toString()}`);
   const assets = Array.isArray(data.assets) ? data.assets : [];
+  projectAssetsState = assets;
   container.innerHTML = assets.length ? assets.map(projectAssetCard).join("") : '<div class="empty">没有符合筛选条件的素材。完成文案、配音、导演或导入素材后会自动归档到这里。</div>';
   return assets;
 }
@@ -344,6 +346,7 @@ function renderProjectReadiness(readiness, qualityCheck) {
         <span>匹配 ${Number(qualityCheck.assetMatchScore || 0)}</span>
       </div>
       ${qualityCheck.problems?.length ? `<p>${qualityCheck.problems.slice(0, 3).map((item) => escapeHtml(item)).join("；")}</p>` : '<p class="success-text">检查通过，可以生成成片。</p>'}
+      ${qualityCheck.suggestions?.length ? `<div class="quality-actions">${qualityCheck.suggestions.slice(0, 3).map((item) => `<button class="ghost small" type="button" data-nav="${escapeHtml(item.page)}">${escapeHtml(item.label)}</button>`).join("")}</div>` : ""}
     ` : "";
   }
   if (generateButton) {
@@ -412,6 +415,16 @@ async function syncCurrentVideoProductSelections() {
       source: selectedBgm ? "local_upload" : "ai_generated",
       strategy: videoProductBgmStrategy.value || "auto",
       style: videoProductRouteAStyle?.value || "",
+      status: "ready",
+    });
+  }
+  if (outputType === "jianying") {
+    const templateSelect = document.querySelector("#videoProductJianyingTemplate");
+    const templateId = templateSelect?.value || "vertical_knowledge";
+    const templateName = templateSelect?.selectedOptions?.[0]?.textContent || "竖屏知识口播模板";
+    await linkCurrentProjectAsset("template", templateId, templateName, {
+      source: "local_upload",
+      ratio: "9:16",
       status: "ready",
     });
   }
@@ -583,6 +596,35 @@ function setupTtsStudio() {
   oldWorkbench.remove();
   studio.append(inputLane, settingsLane, resultLane);
   lab.querySelector(".tts-head")?.after(studio);
+
+  const projectSource = document.createElement("div");
+  projectSource.className = "tts-project-source";
+  projectSource.innerHTML = `
+    <label>
+      选择项目文案
+      <select id="ttsProjectScriptSource">
+        <option value="selected">当前项目最佳改写</option>
+        <option value="transcript">当前项目原始文案</option>
+      </select>
+    </label>
+    <button class="ghost" id="loadProjectScriptToTts" type="button">载入项目文案</button>
+  `;
+  inputLane.querySelector(".studio-lane-heading")?.after(projectSource);
+  document.querySelector("#loadProjectScriptToTts")?.addEventListener("click", () => {
+    if (!activeVideoProject) {
+      if (typeof ttsStatus !== "undefined") ttsStatus.textContent = "请先在首页选择短视频项目。";
+      return;
+    }
+    const mode = document.querySelector("#ttsProjectScriptSource")?.value || "selected";
+    const text = mode === "transcript" ? activeVideoProject.transcriptText : (activeVideoProject.selectedRewriteText || activeVideoProject.transcriptText);
+    if (!text) {
+      if (typeof ttsStatus !== "undefined") ttsStatus.textContent = "当前项目还没有可用文案。";
+      return;
+    }
+    ttsText.value = text;
+    ttsCharacterCount.textContent = `${text.replace(/\s/g, "").length} 字`;
+    ttsStatus.textContent = `已载入项目“${activeVideoProject.title}”的文案。`;
+  });
 }
 
 function setupDirectorStudio() {
