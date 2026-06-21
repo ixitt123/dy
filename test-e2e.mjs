@@ -39,7 +39,7 @@ test("Router Model Map", async () => {
 test("Image Stats", async () => {
   const r = await fetch(`${BASE}/api/image/stats`);
   const d = await r.json();
-  if (d.total === undefined) throw new Error("No image stats");
+  if (!d.ok || !Number.isFinite(d.jobs) || !Number.isFinite(d.assets)) throw new Error("No image stats");
 });
 
 test("Task Center Stats", async () => {
@@ -62,4 +62,4 @@ for (const t of tests) {
   }
 }
 console.log(`\n📊 ${passed} passed, ${failed} failed`);
-process.exit(failed > 0 ? 1 : 0);
+process.exitCode = failed > 0 ? 1 : 0;
