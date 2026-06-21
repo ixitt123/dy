@@ -3575,6 +3575,23 @@ async function pollVideoProductProject(id) {
   if (videoProductPollTimer) clearTimeout(videoProductPollTimer);
   const project = await openVideoProductProject(id);
   await loadVideoProductProjects();
+  if (project.status === "completed") {
+    if (project.output_type === "jianying" || project.draft_path) {
+      await window.videoProjects?.linkCurrent?.("jianying", project.project_id || project.id, "剪映成片草稿", {
+        path: project.draft_path || project.output_dir || "",
+        outputDir: project.output_dir || "",
+        source: "ai_generated",
+        status: "ready",
+      });
+    }
+    await window.videoProjects?.linkCurrent?.("output", project.project_id || project.id, videoProductOutputLabel(project.output_type), {
+      path: project.mp4_path || project.draft_path || project.output_dir || "",
+      outputDir: project.output_dir || "",
+      outputType: project.output_type,
+      source: "ai_generated",
+      status: "ready",
+    });
+  }
   if (["pending", "binding_assets", "building_timeline", "rendering", "exporting_draft"].includes(project.status)) {
     videoProductPollTimer = setTimeout(() => {
       pollVideoProductProject(id).catch((error) => {
@@ -3585,6 +3602,11 @@ async function pollVideoProductProject(id) {
 }
 
 async function generateVideoProduct() {
+  if (!window.videoProjects?.current?.()) {
+    videoProductStatus.textContent = "请先在首页新建或选择一个短视频项目。";
+    window.workbenchNavigate?.("dashboard");
+    return;
+  }
   if (!isRouteAVideoProduct() && !Number(videoProductDirector.value || 0)) {
     videoProductStatus.textContent = "请先选择导演项目。";
     return;
@@ -3594,19 +3616,26 @@ async function generateVideoProduct() {
     return;
   }
   generateVideoProductBtn.disabled = true;
-  videoProductStatus.textContent = "正在创建 Timeline Project...";
+  videoProductStatus.textContent = "正在检查当前项目的文案、语音、导演稿、素材和 BGM...";
   try {
+    const readiness = await window.videoProjects.syncSelections();
+    if (!readiness?.ready) {
+      const missing = readiness?.blockers?.map((item) => `${item.label}${item.detail}`).join("、") || "关键内容未完成";
+      videoProductStatus.textContent = `暂不能生成：${missing}。请使用右侧按钮补齐。`;
+      return;
+    }
+    videoProductStatus.textContent = "检查通过，正在创建成片草稿任务...";
     const data = await fetchJson("/api/video-product/generate", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify(videoProductPayload()),
+      body: JSON.stringify({ ...videoProductPayload(), video_project_id: window.videoProjects.current().id }),
     });
-    videoProductStatus.textContent = `Timeline Project #${data.project.project_id} 已进入队列。`;
+    videoProductStatus.textContent = `成片任务 #${data.project.project_id} 已进入队列。`;
     await pollVideoProductProject(data.project.project_id);
   } catch (error) {
     videoProductStatus.textContent = error instanceof Error ? error.message : String(error);
   } finally {
-    generateVideoProductBtn.disabled = false;
+    generateVideoProductBtn.disabled = !window.videoProjects?.canGenerate?.();
   }
 }
 
@@ -4233,6 +4262,23 @@ ttsText.addEventListener("input", () => {
 
 generateTtsButton.addEventListener("click", () => {
   generateTts();
+});
+
+document.querySelector("#sendTtsToVideoProduct")?.addEventListener("click", async () => {
+  if (!activeTtsRailJob?.id || activeTtsRailJob.status !== "completed") {
+    ttsStatus.textContent = "请先生成并完成一条语音。";
+    return;
+  }
+  await window.videoProjects?.linkCurrent?.("tts", activeTtsRailJob.id, activeTtsRailJob.voice_name || `配音 #${activeTtsRailJob.id}`, {
+    ...activeTtsRailJob,
+    text: activeTtsRailJob.text || ttsText.value.trim(),
+    source: "ai_generated",
+    status: "ready",
+  });
+  window.workbenchNavigate?.("vfo", { preserveScroll: true });
+  await loadVideoProductSources({ preferredAudioId: activeTtsRailJob.id });
+  document.querySelector("#videoProductCenter")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  ttsStatus.textContent = "已把当前语音发送到成片中心。";
 });
 
 document.querySelector("#refreshTtsJobs").addEventListener("click", () => {
