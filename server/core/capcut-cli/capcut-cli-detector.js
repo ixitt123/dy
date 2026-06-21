@@ -94,9 +94,14 @@ export function createCapcutCliDetector({ baseDir, ffmpegPath = "", getSettings 
         detail: nodeMajor >= 18 ? "运行环境正常" : "建议升级到 Node 18 或更高版本",
       },
       ffmpeg: {
-        ok: ffmpeg.ok && ffprobe.ok,
-        label: ffmpeg.ok && ffprobe.ok ? "可用" : "不可用",
+        ok: ffmpeg.ok,
+        label: ffmpeg.ok ? "可用" : "不可用",
         detail: `FFmpeg ${ffmpeg.ok ? "正常" : "缺失"}；ffprobe ${ffprobe.ok ? "正常" : "缺失"}`,
+      },
+      ffprobe: {
+        ok: ffprobe.ok,
+        label: ffprobe.ok ? "可用" : "不可用",
+        detail: ffprobe.detail || "未找到 ffprobe",
       },
       draftDirectory: {
         ok: Boolean(draftDirectory && fs.existsSync(draftDirectory)),
