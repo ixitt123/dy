@@ -1,14 +1,26 @@
 {
   "id": "8_14_83",
-  "name": "8_14_83",
-  "category": "自定义模板",
+  "name": "8_14_83 动效预设包",
+  "category": "剪映动效预设",
   "ratio": "9:16",
   "resolution": "1080x1920",
   "fps": 30,
   "version": 1,
-  "recommendedVideoTypes": [],
-  "recommendedStyles": [],
+  "recommendedVideoTypes": [
+    "english-improvement",
+    "douyin-knowledge",
+    "education",
+    "learning-method"
+  ],
+  "recommendedStyles": [
+    "tech-data",
+    "clean-commercial",
+    "knowledge-blogger"
+  ],
   "tags": [
-    "自定义"
+    "动效",
+    "字幕动画",
+    "知识口播",
+    "商业短视频"
   ]
 }

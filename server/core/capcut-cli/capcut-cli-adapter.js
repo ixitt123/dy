@@ -90,18 +90,46 @@ export function createCapcutCliAdapter(options = {}) {
       };
     }
 
-    const draftDirectory = path.join(timelineFiles.projectDir, "jianying-template-draft");
-    const steps = [
-      ["info", "--plan", planPath],
-      ["lint", "--plan", planPath],
-      ["apply-template", "--plan", planPath, "--output", draftDirectory],
-    ];
-    let lastResult = { ok: true, warnings: [], errors: [], files: [planPath] };
-    for (const args of steps) {
-      lastResult = execute(args, { draftPath: draftDirectory, files: [planPath, draftDirectory] });
-      if (!lastResult.ok) break;
+    const draftRoot = status.paths?.draftDirectory && fs.existsSync(status.paths.draftDirectory)
+      ? status.paths.draftDirectory
+      : timelineFiles.projectDir;
+    const draftDirectory = path.join(draftRoot, safeDraftName(`codex_${project.id}_${templateName || "template"}_${Date.now()}`));
+    const commonFiles = [planPath, specPath, timelineFiles.timelinePath, timelineFiles.srtPath].filter(Boolean);
+    const checkResult = execute(["compile", specPath, "--check", "--drafts", draftRoot], {
+      files: commonFiles,
+    });
+    if (!checkResult.ok) {
+      return {
+        ...checkResult,
+        draftPath: "",
+        fallback: true,
+        planPath,
+        specPath,
+        files: commonFiles,
+      };
     }
-    return { ...lastResult, planPath };
+    const compileResult = execute(["compile", specPath, "--out", draftDirectory, "--drafts", draftRoot], {
+      draftPath: draftDirectory,
+      files: [...commonFiles, draftDirectory],
+    });
+    const infoResult = compileResult.ok
+      ? execute(["info", draftDirectory], { draftPath: draftDirectory, files: [...commonFiles, draftDirectory] })
+      : { ok: false, warnings: [], errors: [] };
+    return {
+      ...compileResult,
+      warnings: [
+        ...(compileResult.warnings || []),
+        ...(infoResult.ok ? ["已生成可在剪映专业版项目列表中打开的本地草稿。"] : []),
+      ],
+      errors: [
+        ...(compileResult.errors || []),
+        ...(compileResult.ok && !infoResult.ok ? (infoResult.errors || []) : []),
+      ],
+      files: [...new Set([...(compileResult.files || []), ...commonFiles, draftDirectory].filter(Boolean))],
+      fallback: !compileResult.ok,
+      planPath,
+      specPath,
+    };
   }
 
   async function openJianying() {

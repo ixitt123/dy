@@ -949,6 +949,16 @@ export function createVideoProductService({
     const status = capcutCliAdapter?.detect?.() || {};
     const draftDirectory = String(status.paths?.draftDirectory || "").trim();
     if (!draftDirectory || !fs.existsSync(draftDirectory) || !fs.statSync(draftDirectory).isDirectory()) return "";
+    if (isInsideDirectory(draftDirectory, resolvedDraftPath)) {
+      writeJson(path.join(resolvedDraftPath, "codex-import.json"), {
+        sourceDraftPath: resolvedDraftPath,
+        timelineProjectId: project.id,
+        templateId,
+        syncedAt: new Date().toISOString(),
+        alreadyInJianyingDraftDirectory: true,
+      });
+      return resolvedDraftPath;
+    }
     const targetName = safeFileName(`codex_${project.id}_${templateId || "template"}_${Date.now()}`);
     const targetPath = path.join(draftDirectory, targetName);
     if (!isInsideDirectory(draftDirectory, targetPath)) return "";
