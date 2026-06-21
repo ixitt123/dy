@@ -73,6 +73,8 @@ export function createCapcutCliAdapter(options = {}) {
   function buildTemplateDraft({ project, timeline, timelineFiles, templateName }) {
     const plan = buildCapcutCliPlan({ project, timeline, timelineFiles, templateName });
     const planPath = writeCapcutCliPlan(path.join(timelineFiles.projectDir, "capcut-plan.json"), plan);
+    const spec = buildCapcutCompileSpec({ project, timeline, timelineFiles, templateName });
+    const specPath = writeCapcutCliPlan(path.join(timelineFiles.projectDir, "capcut-compile-spec.json"), spec);
     const status = detectCapabilities();
     if (status.mode !== "capcut_cli") {
       return {
@@ -81,9 +83,10 @@ export function createCapcutCliAdapter(options = {}) {
         previewPath: "",
         warnings: ["capcut-cli、命令能力或剪映母版未就绪，已输出兼容素材包和执行计划。", ...(status.warnings || [])],
         errors: [],
-        files: [planPath, timelineFiles.timelinePath, timelineFiles.srtPath].filter(Boolean),
+        files: [planPath, specPath, timelineFiles.timelinePath, timelineFiles.srtPath].filter(Boolean),
         fallback: true,
         planPath,
+        specPath,
       };
     }
 
