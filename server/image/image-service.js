@@ -218,7 +218,7 @@ export function createImageService({ baseDir, getSettings, taskStore = null, ffm
     };
   }
 
-  async function addLocalImageAsset({ filePath, prompt = "", aspectRatio = "9:16", sourceId = "" } = {}) {
+  async function addLocalImageAsset({ filePath, prompt = "", aspectRatio = "9:16", sourceId = "", sourceType = "local" } = {}) {
     const resolved = path.resolve(String(filePath || "").trim());
     if (!resolved || !fs.existsSync(resolved)) throw new Error("请选择存在的本地图片文件。");
     const ext = path.extname(resolved).toLowerCase();
@@ -232,6 +232,7 @@ export function createImageService({ baseDir, getSettings, taskStore = null, ffm
     const size = await normalizeImageTo1080(outputPath, aspectRatio);
     const stats = fs.statSync(outputPath);
     const assetPrompt = String(prompt || "").trim() || `本地图片素材：${path.basename(resolved)}`;
+    const cleanSourceType = String(sourceType || "local").trim() || "local";
 
     db.prepare(`
       INSERT INTO image_assets (
@@ -254,7 +255,7 @@ export function createImageService({ baseDir, getSettings, taskStore = null, ffm
       assetPrompt,
       aspectRatio,
       resolved,
-      "local",
+      cleanSourceType,
       sourceId,
     );
 

@@ -5402,6 +5402,7 @@ const server = http.createServer(async (req, res) => {
             prompt: body.prompt || "",
             aspectRatio: body.aspectRatio || "9:16",
             sourceId: body.sourceId || "",
+            sourceType: body.sourceType || "local",
           });
           sendJson(res, 200, { ok: true, asset });
         } catch (e) {
