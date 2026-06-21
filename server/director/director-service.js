@@ -86,6 +86,30 @@ function shotRange(config, shotCount) {
   return findOption(config.shot_counts, shotCount, config.defaults.shot_count);
 }
 
+function visualStylePromptBlock(style = {}, platform = {}) {
+  return [
+    `视觉风格：${style.label || style.id || ""}`,
+    style.prompt_short ? `风格摘要：${style.prompt_short}` : "",
+    style.image_prompt ? `生图风格锁定：${style.image_prompt}` : "",
+    style.palette ? `色彩：${style.palette}` : "",
+    style.texture ? `材质与渲染：${style.texture}` : "",
+    style.composition ? `构图规则：${style.composition}` : "",
+    style.character ? `人物规则：${style.character}` : "",
+    platform.ratio ? `画幅：${platform.ratio}` : "",
+    style.negative ? `禁止项：${style.negative}` : "",
+  ].filter(Boolean).join("\n");
+}
+
+function styledImagePrompt(basePrompt, style, platform) {
+  const prompt = String(basePrompt || "").trim() || "用清晰主体、真实场景或视觉隐喻表达本镜头信息。";
+  const lock = visualStylePromptBlock(style, platform);
+  return [
+    lock,
+    `本镜头画面：${prompt}`,
+    "统一要求：单张短视频分镜图，主体明确，底部保留字幕安全区，不生成任何可读文字、logo、水印或海报标题。",
+  ].filter(Boolean).join("\n");
+}
+
 function timelineFromScenes(scenes) {
   let cursor = 0;
   return scenes.map((scene) => {
@@ -128,7 +152,7 @@ function normalizeStoryboard(raw, project, config) {
       visual_style: style.id,
       camera: allowedCameras.has(scene?.camera) ? scene.camera : "static",
       composition: String(scene?.composition || "").trim(),
-      image_prompt: String(scene?.image_prompt || "").trim(),
+      image_prompt: styledImagePrompt(scene?.image_prompt || scene?.purpose || voiceText, style, platform),
       motion_prompt: String(scene?.motion_prompt || "").trim(),
       subtitle_style: {
         position: String(subtitleStyle.position || "bottom"),
