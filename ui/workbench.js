@@ -1437,7 +1437,6 @@ function startWorkbenchObservers() {
 
 function initWorkbench() {
   buildWorkbenchInformationArchitecture();
-  setupProjectWorkbench();
   bindWorkbenchInteractions();
   startWorkbenchObservers();
 
