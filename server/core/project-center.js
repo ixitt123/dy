@@ -316,7 +316,7 @@ export function createProjectCenter(baseDir) {
       if (Array.isArray(timeline)) changes.subtitleTimeline = timeline;
     }
     if (asset.assetType === "asset_plan") changes.assetPlan = item;
-    if (["image", "video", "sfx", "subtitle", "cover"].includes(asset.assetType)) {
+    if (["image", "video", "sfx", "subtitle", "cover", "template"].includes(asset.assetType)) {
       changes.selectedAssets = uniqueById([...project.selectedAssets, item]);
       if (asset.assetType === "subtitle" && Array.isArray(metadata.timeline)) changes.subtitleTimeline = metadata.timeline;
     }
@@ -389,6 +389,7 @@ export function createProjectCenter(baseDir) {
     if (!project) return null;
     const assets = getAssets(id);
     const mediaAssets = assets.filter((item) => ["image", "video"].includes(item.assetType) && item.status === "ready");
+    const templateAssets = assets.filter((item) => item.assetType === "template" && item.status === "ready");
     const expectedAssets = Math.max(1, Number(project.directorScript?.sceneCount || project.directorScript?.scene_count || project.directorScript?.result?.storyboard?.length || 1));
     const missingAssets = Math.max(0, expectedAssets - mediaAssets.length);
     const outputDir = path.join(baseDir, "video-products");
@@ -406,7 +407,7 @@ export function createProjectCenter(baseDir) {
       { id: "subtitle", label: "字幕时间轴", ok: hasValue(project.subtitleTimeline), ready: "已完成", missing: "缺失", page: "director", action: "补齐字幕", critical: true },
       { id: "assets", label: "素材", ok: mediaAssets.length > 0 && missingAssets === 0, ready: `已完成 · ${mediaAssets.length} 个`, missing: `缺少 ${missingAssets || expectedAssets} 个`, page: "files", action: "匹配素材", critical: true },
       { id: "bgm", label: "BGM", ok: hasValue(project.bgm), ready: "已完成", missing: "未选择", page: "files", action: "选择 BGM", critical: true },
-      { id: "template", label: "剪映模板", ok: project.outputMode !== "jianying" || hasValue(project.jianyingDraft), ready: project.outputMode === "jianying" ? "已选择" : "当前路线不需要", missing: "未选择", page: "vfo", action: "选择模板", critical: project.outputMode === "jianying" },
+      { id: "template", label: "剪映模板", ok: project.outputMode !== "jianying" || templateAssets.length > 0, ready: project.outputMode === "jianying" ? "已选择" : "当前路线不需要", missing: "未选择", page: "vfo", action: "选择模板", critical: project.outputMode === "jianying" },
       { id: "output", label: "输出目录", ok: outputReady, ready: "正常", missing: "异常", page: "settings", action: "检查目录", critical: true },
     ].map((item) => ({ ...item, detail: item.ok ? item.ready : item.missing }));
     const blockers = checks.filter((item) => item.critical && !item.ok);
