@@ -14,6 +14,7 @@
     "test:provider-registry": "node test-provider-registry.mjs",
     "test:http-body": "node test-read-json-body.mjs",
     "test:config": "node test-config-extraction.mjs",
+    "test:record-cleanup": "node test-record-cleanup.mjs",
     "patch-output": "node patch-mcp-output.mjs",
     "postinstall": "node patch-mcp-output.mjs"
   },

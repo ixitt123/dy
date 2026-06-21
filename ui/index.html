@@ -168,6 +168,7 @@
                     <span class="section-eyebrow">最近项目</span>
                     <h2>继续上次的制作</h2>
                   </div>
+                  <button class="ghost small danger-action" id="clearVideoProjects" type="button">清空项目记录</button>
                 </div>
                 <div class="recent-project-list" id="recentVideoProjects">
                   <div class="empty">正在读取项目...</div>
@@ -549,7 +550,7 @@
             <div class="rewrite-result-meta">
               <label class="rewrite-count-control" for="rewriteVersionCountInput">
                 <span>输出框数量</span>
-                <input id="rewriteVersionCountInput" type="number" min="1" max="50" value="3" />
+                <input id="rewriteVersionCountInput" type="number" min="1" max="50" value="1" />
               </label>
             </div>
           </div>
@@ -639,7 +640,7 @@
               </label>
               <label>
                 预计时长（秒）
-                <input id="directorEstimatedDuration" type="number" min="10" max="7200" value="60" />
+                <input id="directorEstimatedDuration" type="number" min="10" max="7200" value="30" />
               </label>
             </div>
             <label for="directorReferenceStyle">参考风格</label>
@@ -667,7 +668,10 @@
 
         <div class="director-history-head">
           <h2>导演项目</h2>
-          <button class="ghost small" id="refreshDirectorProjects" type="button">刷新</button>
+          <div class="history-actions">
+            <button class="ghost small" id="refreshDirectorProjects" type="button">刷新</button>
+            <button class="ghost small danger-action" id="clearDirectorProjects" type="button">清空记录</button>
+          </div>
         </div>
         <div class="director-projects" id="directorProjects"></div>
 
@@ -931,7 +935,10 @@
 
           <div class="video-product-history-head">
             <h3>成片项目</h3>
-            <button class="ghost small" id="refreshVideoProductProjects" type="button">刷新</button>
+            <div class="history-actions">
+              <button class="ghost small" id="refreshVideoProductProjects" type="button">刷新</button>
+              <button class="ghost small danger-action" id="clearVideoProductProjects" type="button">清空记录和文件</button>
+            </div>
           </div>
           <div class="video-product-projects" id="videoProductProjects"></div>
         </section>
@@ -1174,7 +1181,11 @@
 
         <div class="tts-history-head">
           <h2>生成记录</h2>
-          <button class="ghost small" id="refreshTtsJobs" type="button">刷新</button>
+          <div class="history-actions">
+            <button class="ghost small" id="refreshTtsJobs" type="button">刷新</button>
+            <button class="ghost small" id="clearFailedTtsJobs" type="button">清理失败</button>
+            <button class="ghost small danger-action" id="clearTtsJobs" type="button">清空记录和音频</button>
+          </div>
         </div>
         <div class="tts-history" id="ttsHistory"></div>
       </section>

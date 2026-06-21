@@ -487,6 +487,47 @@ export function createProjectCenter(baseDir) {
     return true;
   }
 
+  function removeAssetsByType(projectId, assetTypes = []) {
+    const project = getById(projectId);
+    if (!project) throw new Error("短视频项目不存在。");
+    const types = [...new Set((Array.isArray(assetTypes) ? assetTypes : [assetTypes]).map((item) => String(item || "").trim()).filter(Boolean))];
+    if (!types.length) return { removed: 0, project };
+    const marks = types.map(() => "?").join(", ");
+    const result = db.prepare(`DELETE FROM project_assets WHERE project_id=? AND asset_type IN (${marks})`).run(String(projectId), ...types);
+    const changes = {};
+    if (types.includes("tts")) {
+      changes.ttsAudios = [];
+      changes.selectedTtsAudio = {};
+    }
+    if (types.includes("director")) {
+      changes.directorScript = {};
+      changes.subtitleTimeline = [];
+    }
+    if (types.includes("bgm")) changes.bgm = {};
+    if (types.includes("jianying")) changes.jianyingDraft = {};
+    if (types.includes("output")) changes.outputHistory = [];
+    if (types.some((type) => ["image", "video", "sfx", "subtitle", "cover", "template"].includes(type))) {
+      changes.selectedAssets = (project.selectedAssets || []).filter((item) => !types.includes(String(item.assetType || "")));
+    }
+    const next = { ...project, ...changes };
+    changes.status = deriveStatus(next);
+    return { removed: Number(result.changes || 0), project: update(projectId, changes) };
+  }
+
+  function clear() {
+    const count = Number(db.prepare("SELECT COUNT(*) AS count FROM projects").get()?.count || 0);
+    db.exec("BEGIN IMMEDIATE");
+    try {
+      db.prepare("DELETE FROM project_assets").run();
+      db.prepare("DELETE FROM projects").run();
+      db.exec("COMMIT");
+      return count;
+    } catch (error) {
+      db.exec("ROLLBACK");
+      throw error;
+    }
+  }
+
   function getStats() {
     const projects = list({ limit: 500 });
     const today = new Date().toISOString().slice(0, 10);
@@ -501,12 +542,15 @@ export function createProjectCenter(baseDir) {
   }
 
   return {
+    close: () => db.close(),
     create,
     list,
     getById,
     update,
     delete: remove,
     remove,
+    clear,
+    removeAssetsByType,
     addAsset,
     linkAsset,
     getAssets,

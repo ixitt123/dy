@@ -2561,7 +2561,7 @@ function normalizeRewriteVersionContent(value) {
   return String(value || "").trim();
 }
 
-function normalizeWordCount(input, fallback = "150字左右") {
+function normalizeWordCount(input, fallback = "160字左右") {
   const value = String(input || "").trim().replace(/\s+/g, " ");
   return value ? value.slice(0, 32) : fallback;
 }
@@ -2581,7 +2581,7 @@ function normalizeVersionSpecs(input = [], fallbackDirection = "招生引流") {
       seen.add(key);
       const defaults = REWRITE_VERSION_DEFAULTS[key] || {};
       const direction = REWRITE_DIRECTIONS.includes(String(item?.direction || "")) ? String(item.direction) : defaults.direction || fallbackDirection;
-      const wordCount = normalizeWordCount(item?.wordCount, defaults.wordCount || "150字左右");
+      const wordCount = normalizeWordCount(item?.wordCount, defaults.wordCount || "160字左右");
       return {
         key,
         name: String(item?.name || known?.name || `版本 ${index + 1}`).trim().slice(0, 40) || `版本 ${index + 1}`,
@@ -4060,6 +4060,32 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
+    if (req.method === "POST" && url.pathname === "/api/director/delete") {
+      try {
+        const body = await readJsonBody(req);
+        const result = directorService.removeProject(body.id, { deleteFiles: body.deleteFiles !== false });
+        for (const project of projectCenter.list({ limit: 500 })) {
+          if (String(project.directorScript?.id || "") === String(body.id || "")) projectCenter.removeAssetsByType(project.id, ["director"]);
+        }
+        sendJson(res, 200, { ok: true, ...result });
+      } catch (error) {
+        sendJson(res, 400, { ok: false, message: error instanceof Error ? error.message : String(error) });
+      }
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/director/clear") {
+      try {
+        const body = await readJsonBody(req);
+        const result = directorService.clearProjects({ scope: body.scope || "all", deleteFiles: body.deleteFiles !== false });
+        for (const project of projectCenter.list({ limit: 500 })) projectCenter.removeAssetsByType(project.id, ["director"]);
+        sendJson(res, 200, { ok: true, ...result });
+      } catch (error) {
+        sendJson(res, 400, { ok: false, message: error instanceof Error ? error.message : String(error) });
+      }
+      return;
+    }
+
     if (req.method === "POST" && url.pathname === "/api/director/generate") {
       const body = await readJsonBody(req);
       const result = directorService.enqueue(body);
@@ -4368,6 +4394,34 @@ const server = http.createServer(async (req, res) => {
         return;
       }
       sendJson(res, 200, { ok: true, job });
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/tts/delete") {
+      try {
+        const body = await readJsonBody(req);
+        const result = ttsService.removeJob(body.id, { deleteFile: body.deleteFile !== false });
+        for (const project of projectCenter.list({ limit: 500 })) {
+          if (String(project.selectedTtsAudio?.id || "") === String(body.id || "")) projectCenter.removeAssetsByType(project.id, ["tts"]);
+        }
+        sendJson(res, 200, { ok: true, ...result });
+      } catch (error) {
+        sendJson(res, 400, { ok: false, message: error instanceof Error ? error.message : String(error) });
+      }
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/tts/clear") {
+      try {
+        const body = await readJsonBody(req);
+        const result = ttsService.clearJobs({ scope: body.scope || "all", deleteFiles: body.deleteFiles !== false });
+        if ((body.scope || "all") === "all") {
+          for (const project of projectCenter.list({ limit: 500 })) projectCenter.removeAssetsByType(project.id, ["tts"]);
+        }
+        sendJson(res, 200, { ok: true, ...result });
+      } catch (error) {
+        sendJson(res, 400, { ok: false, message: error instanceof Error ? error.message : String(error) });
+      }
       return;
     }
 
@@ -4932,7 +4986,7 @@ const server = http.createServer(async (req, res) => {
       return;
     }
     const projectRestMatch = url.pathname.match(/^\/api\/projects\/([^/]+)(?:\/(update))?$/);
-    const projectRestReserved = new Set(["create", "list", "get", "update", "stats", "link-asset", "assets", "readiness", "quality", "delete"]);
+    const projectRestReserved = new Set(["create", "list", "get", "update", "stats", "link-asset", "assets", "readiness", "quality", "delete", "clear", "clear-assets"]);
     const isProjectRestResource = projectRestMatch && !projectRestReserved.has(projectRestMatch[1]);
     if (isProjectRestResource && req.method === "GET" && !projectRestMatch[2]) {
       const project = projectCenter.getById(decodeURIComponent(projectRestMatch[1]));
@@ -4978,6 +5032,15 @@ const server = http.createServer(async (req, res) => {
         }
         return;
       }
+      if (req.method === "POST" && route === "clear-assets") {
+        try {
+          const body = await readJsonBody(req);
+          sendJson(res, 200, { ok: true, ...projectCenter.removeAssetsByType(body.projectId, body.assetTypes || []) });
+        } catch (error) {
+          sendJson(res, 400, { ok: false, message: error instanceof Error ? error.message : String(error) });
+        }
+        return;
+      }
       if (req.method === "GET" && route === "assets") {
         sendJson(res, 200, {
           ok: true,
@@ -5007,6 +5070,10 @@ const server = http.createServer(async (req, res) => {
         const body = await readJsonBody(req);
         projectCenter.remove(body.id);
         sendJson(res, 200, { ok: true });
+        return;
+      }
+      if (req.method === "POST" && route === "clear") {
+        sendJson(res, 200, { ok: true, deleted: projectCenter.clear() });
         return;
       }
       sendJson(res, 404, { ok: false });

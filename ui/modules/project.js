@@ -130,7 +130,7 @@ export function renderRecentProjects(projects = state.projects) {
       <div class="recent-project-top"><span>${escapeHtml(project.videoType || "短视频")}</span><strong>${escapeHtml(statusLabel(project.status))}</strong></div>
       <h3>${escapeHtml(project.title)}</h3>
       <div class="recent-project-progress"><i style="width:${Number(project.progress || 0)}%"></i></div>
-      <div class="recent-project-foot"><small>${Number(project.progress || 0)}% · ${escapeHtml(project.nextAction?.label || "继续制作")}</small><button class="ghost small select-video-project" type="button">继续制作</button></div>
+      <div class="recent-project-foot"><small>${Number(project.progress || 0)}% · ${escapeHtml(project.nextAction?.label || "继续制作")}</small><div class="history-actions"><button class="ghost small select-video-project" type="button">继续制作</button><button class="ghost small danger-action delete-video-project" type="button">删除</button></div></div>
     </article>`).join("") : '<div class="empty">还没有项目，点击“新建短视频项目”开始。</div>';
 }
 
@@ -176,6 +176,26 @@ export async function setActiveProject(projectId, options = {}) {
   renderRecentProjects();
   window.dispatchEvent(new CustomEvent("video-project-changed", { detail: state.activeProject }));
   return state.activeProject;
+}
+
+export async function deleteProject(projectId) {
+  const project = state.projects.find((item) => item.id === projectId);
+  if (!project) return false;
+  const confirmed = window.confirm(`确定删除项目“${project.title}”吗？\n\n只删除项目记录和关联关系，不会删除共享的原始视频、音频和图片文件。`);
+  if (!confirmed) return false;
+  await postJson("/api/projects/delete", { id: projectId });
+  if (state.activeProject?.id === projectId) localStorage.removeItem("active-video-project-id");
+  await loadProjects({ preserveSelection: false });
+  return true;
+}
+
+async function clearProjects() {
+  if (!state.projects.length) return;
+  const confirmed = window.confirm(`确定清空全部 ${state.projects.length} 条短视频项目记录吗？\n\n只清空项目记录和关联关系，不删除共享素材与已生成文件。此操作不可撤销。`);
+  if (!confirmed) return;
+  await postJson("/api/projects/clear", {});
+  localStorage.removeItem("active-video-project-id");
+  await loadProjects({ preserveSelection: false });
 }
 
 async function updateCurrent(changes = {}) {
@@ -245,8 +265,14 @@ function bindProjectEvents() {
   document.querySelector("#activeVideoProjectSelect")?.addEventListener("change", (event) => setActiveProject(event.target.value));
   document.querySelector("#recentVideoProjects")?.addEventListener("click", (event) => {
     const card = event.target.closest("[data-project-id]");
-    if (card) setActiveProject(card.dataset.projectId);
+    if (!card) return;
+    if (event.target.closest(".delete-video-project")) {
+      deleteProject(card.dataset.projectId).catch((error) => window.alert(error.message));
+      return;
+    }
+    setActiveProject(card.dataset.projectId);
   });
+  document.querySelector("#clearVideoProjects")?.addEventListener("click", () => clearProjects().catch((error) => window.alert(error.message)));
   document.querySelector("#projectNextAction")?.addEventListener("click", (event) => {
     if (event.currentTarget.dataset.projectAction === "create") document.querySelector("#newVideoProject")?.click();
     else if (event.currentTarget.dataset.nav) window.appNavigate?.(event.currentTarget.dataset.nav);
@@ -267,6 +293,7 @@ export async function initProjectModule() {
     refresh: loadProjects,
     create: createProject,
     setActiveProject,
+    deleteProject,
     select: setActiveProject,
     updateCurrent,
     linkCurrent,

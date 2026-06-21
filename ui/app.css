@@ -2572,13 +2572,21 @@ pre {
   padding-top: 16px;
 }
 
+.history-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
 .tts-history {
   margin-top: 10px;
 }
 
 .tts-history-row {
   display: grid;
-  grid-template-columns: 54px minmax(150px, 0.8fr) minmax(220px, 1.4fr) 100px 90px minmax(220px, 1fr);
+  grid-template-columns: 54px minmax(140px, 0.8fr) minmax(200px, 1.4fr) 100px 82px minmax(190px, 1fr) auto;
   align-items: center;
   gap: 10px;
   border-bottom: 1px solid #e8edef;
@@ -3809,6 +3817,19 @@ a {
   color: #ffffff;
 }
 
+.tts-history-row > .danger-action {
+  justify-self: end;
+}
+
+.director-project-row > div:last-child,
+.video-product-project-row > div:last-child {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
 .rail-task-actions button:disabled {
   opacity: 0.45;
   cursor: not-allowed;
@@ -4737,9 +4758,13 @@ a {
   display: none;
 }
 
-.tts-history-row audio,
-.tts-history-row > :last-child {
+.tts-history-row audio {
   grid-column: 1 / -1;
+}
+
+.tts-history-row > .danger-action {
+  grid-column: 2;
+  justify-self: end;
 }
 
 .director-source-lane textarea {

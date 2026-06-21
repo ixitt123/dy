@@ -2395,6 +2395,62 @@ ${sceneMarkup}
     return taskStore.listTimelineProjects({ limit }).map((row) => sourceProject(row, { includeScenes: false }));
   }
 
+  function removeProject(id, { deleteFiles = true } = {}) {
+    const project = taskStore.getTimelineProject(Number(id || 0));
+    if (!project) return { deleted: 0, message: "成片记录不存在。" };
+    if (["pending", "binding_assets", "building_timeline", "rendering", "exporting_draft"].includes(project.status)) {
+      throw new Error("成片任务正在处理，完成或失败后才能删除。");
+    }
+    if (deleteFiles && project.output_dir) {
+      const root = path.resolve(outputRoot);
+      const target = path.resolve(project.output_dir);
+      if (target !== root && target.startsWith(`${root}${path.sep}`) && fs.existsSync(target)) {
+        fs.rmSync(target, { recursive: true, force: true });
+      }
+    }
+    const metadata = safeJson(project.metadata_json, {});
+    const videoProjectId = String(metadata.video_project_id || metadata.projectId || "").trim();
+    if (videoProjectId && projectCenter) {
+      const videoProject = projectCenter.getById(videoProjectId);
+      if (videoProject) {
+        const outputHistory = (videoProject.outputHistory || []).filter((item) => Number(item.timelineProjectId || 0) !== Number(project.id));
+        const clearDraft = Number(videoProject.jianyingDraft?.timelineProjectId || 0) === Number(project.id);
+        const hasAssets = Array.isArray(videoProject.selectedAssets) && videoProject.selectedAssets.length > 0;
+        const status = outputHistory.length
+          ? "exported"
+          : !clearDraft && videoProject.jianyingDraft?.id
+            ? "draft_ready"
+            : hasAssets && videoProject.bgm?.id
+              ? "assets_ready"
+              : videoProject.directorScript?.id
+                ? "directed"
+                : videoProject.selectedTtsAudio?.id
+                  ? "voiced"
+                  : videoProject.selectedRewriteText
+                    ? "rewritten"
+                    : videoProject.transcriptText
+                      ? "transcribed"
+                      : "created";
+        projectCenter.update(videoProjectId, {
+          outputHistory,
+          ...(clearDraft ? { jianyingDraft: {} } : {}),
+          status,
+        });
+      }
+    }
+    return { deleted: taskStore.deleteTimelineProjects([project.id]), id: project.id };
+  }
+
+  function clearProjects({ scope = "all", deleteFiles = true } = {}) {
+    const rows = taskStore.listTimelineProjects({ limit: 500 }).filter((project) => {
+      if (["pending", "binding_assets", "building_timeline", "rendering", "exporting_draft"].includes(project.status)) return false;
+      return scope === "failed" ? project.status === "failed" : true;
+    });
+    let deleted = 0;
+    for (const project of rows) deleted += removeProject(project.id, { deleteFiles }).deleted;
+    return { deleted };
+  }
+
   function getToolStatus() {
     return capcutCliAdapter?.detect() || {
       ok: true,
@@ -2409,7 +2465,7 @@ ${sceneMarkup}
     };
   }
 
-  function openJianying() {
+  async function openJianying() {
     return capcutCliAdapter?.openJianying?.() || { ok: false, message: "剪映启动适配器未启用。" };
   }
 
@@ -2528,6 +2584,8 @@ ${sceneMarkup}
     preview,
     getProject,
     listProjects,
+    removeProject,
+    clearProjects,
     listSources,
     getToolStatus,
     openJianying,

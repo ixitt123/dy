@@ -267,6 +267,32 @@ export function createTtsService({ baseDir, taskStore, getSettings, ffmpegPath }
     return publicJob(taskStore.getTtsJob(id));
   }
 
+  function removeJob(id, { deleteFile = true } = {}) {
+    const job = taskStore.getTtsJob(Number(id || 0));
+    if (!job) return { deleted: 0, message: "语音记录不存在。" };
+    if (["waiting", "processing"].includes(job.status)) {
+      throw new Error("语音正在生成，完成或失败后才能删除。");
+    }
+    if (deleteFile && job.audio_path) {
+      const root = path.resolve(outputDir);
+      const target = path.resolve(job.audio_path);
+      if (target !== root && target.startsWith(`${root}${path.sep}`) && fs.existsSync(target)) {
+        fs.rmSync(target, { force: true });
+      }
+    }
+    return { deleted: taskStore.deleteTtsJobs([job.id]), id: job.id };
+  }
+
+  function clearJobs({ scope = "all", deleteFiles = true } = {}) {
+    const candidates = taskStore.listTtsJobs({ limit: 500 }).filter((job) => {
+      if (["waiting", "processing"].includes(job.status)) return false;
+      return scope === "failed" ? job.status === "failed" : true;
+    });
+    let deleted = 0;
+    for (const job of candidates) deleted += removeJob(job.id, { deleteFile: deleteFiles }).deleted;
+    return { deleted, skipped: taskStore.listTtsJobs({ limit: 500 }).filter((job) => ["waiting", "processing"].includes(job.status)).length };
+  }
+
   function listVoices(providerId) {
     const provider = getProvider(providerId);
     if (!provider) return [];
@@ -295,6 +321,8 @@ export function createTtsService({ baseDir, taskStore, getSettings, ffmpegPath }
     retryJob,
     getJob,
     listJobs,
+    removeJob,
+    clearJobs,
     listVoices,
     outputDir,
   };

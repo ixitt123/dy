@@ -144,7 +144,7 @@ function normalizeStoryboard(raw, project, config) {
   });
   const requestedDuration = Math.max(
     scenes.length * 0.8,
-    Number(metadata.tts_duration || project.estimated_duration || 60),
+    Number(metadata.tts_duration || project.estimated_duration || 30),
   );
   let totalDuration = scenes.reduce((sum, scene) => sum + scene.duration, 0);
   if (scenes.length && totalDuration > 0 && Math.abs(totalDuration - requestedDuration) / requestedDuration > 0.1) {
@@ -172,7 +172,7 @@ function normalizeStoryboard(raw, project, config) {
       title: String(raw?.video_meta?.title || project.title || "未命名导演稿").trim(),
       platform: platform.id,
       ratio: platform.ratio,
-      estimated_duration: Number((totalDuration || project.estimated_duration || 60).toFixed(2)),
+      estimated_duration: Number((totalDuration || project.estimated_duration || 30).toFixed(2)),
       style: style.id,
       pace: project.pace,
       target_audience: String(raw?.video_meta?.target_audience || videoType.audience || "").trim(),
@@ -678,6 +678,36 @@ export function createDirectorService({ baseDir, taskStore, generateJson, onIdle
     return taskStore.listDirectorProjects({ limit }).map((project) => publicProject(project, { includeResult: false }));
   }
 
+  function removeProject(id, { deleteFiles = true } = {}) {
+    const project = taskStore.getDirectorProject(Number(id || 0));
+    if (!project) return { deleted: 0, message: "导演稿记录不存在。" };
+    if (["waiting", "processing"].includes(project.status)) {
+      throw new Error("导演稿正在生成，完成或失败后才能删除。");
+    }
+    if (deleteFiles) {
+      const metadata = safeJson(project.metadata_json, {});
+      const roots = [storyboardsDir, scenePromptsDir, referenceStylesDir].map((item) => path.resolve(item));
+      const files = [project.storyboard_path, metadata.markdown_path, metadata.scene_prompts_path, metadata.chatgpt_prompts_path];
+      for (const filePath of files.filter(Boolean)) {
+        const target = path.resolve(filePath);
+        if (roots.some((root) => target !== root && target.startsWith(`${root}${path.sep}`)) && fs.existsSync(target)) {
+          fs.rmSync(target, { force: true });
+        }
+      }
+    }
+    return { deleted: taskStore.deleteDirectorProjects([project.id]), id: project.id };
+  }
+
+  function clearProjects({ scope = "all", deleteFiles = true } = {}) {
+    const rows = taskStore.listDirectorProjects({ limit: 500 }).filter((project) => {
+      if (["waiting", "processing"].includes(project.status)) return false;
+      return scope === "failed" ? project.status === "failed" : true;
+    });
+    let deleted = 0;
+    for (const project of rows) deleted += removeProject(project.id, { deleteFiles }).deleted;
+    return { deleted };
+  }
+
   function resolveExportPath(id, format) {
     const project = taskStore.getDirectorProject(id);
     if (!project || project.status !== "completed") return "";
@@ -717,6 +747,8 @@ export function createDirectorService({ baseDir, taskStore, generateJson, onIdle
     enqueue,
     getProject,
     listProjects,
+    removeProject,
+    clearProjects,
     resolveExportPath,
     isBusy: () => working || pending.length > 0,
     outputDirs: {

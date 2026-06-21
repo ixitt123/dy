@@ -478,7 +478,7 @@ export function openTaskStore(baseDir) {
       visual_style TEXT NOT NULL DEFAULT '',
       platform TEXT NOT NULL DEFAULT '',
       pace TEXT NOT NULL DEFAULT '',
-      estimated_duration REAL NOT NULL DEFAULT 60,
+      estimated_duration REAL NOT NULL DEFAULT 30,
       storyboard_path TEXT NOT NULL DEFAULT '',
       status TEXT NOT NULL DEFAULT 'waiting',
       score INTEGER NOT NULL DEFAULT 0,
@@ -1203,6 +1203,13 @@ export function openTaskStore(baseDir) {
     return listTtsJobsStmt.all(safeLimit).map(normalizeTtsJob);
   }
 
+  function deleteTtsJobs(ids = []) {
+    const values = ids.map((id) => Number(id)).filter((id) => Number.isInteger(id) && id > 0);
+    if (!values.length) return 0;
+    const result = db.prepare(`DELETE FROM tts_jobs WHERE id IN (${placeholders(values.length)})`).run(...values);
+    return Number(result.changes || 0);
+  }
+
   function normalizeVoice(row) {
     if (!row) return null;
     return {
@@ -1416,7 +1423,7 @@ export function openTaskStore(baseDir) {
       String(input.visual_style || ""),
       String(input.platform || ""),
       String(input.pace || ""),
-      Number(input.estimated_duration || 60),
+      Number(input.estimated_duration || 30),
       String(input.storyboard_path || ""),
       String(input.status || "waiting"),
       Number(input.score || 0),
@@ -1446,6 +1453,22 @@ export function openTaskStore(baseDir) {
   function listDirectorProjects({ limit = 50 } = {}) {
     const safeLimit = Math.max(1, Math.min(500, Number(limit) || 50));
     return listDirectorProjectsStmt.all(safeLimit).map(normalizeDirectorProject);
+  }
+
+  function deleteDirectorProjects(ids = []) {
+    const values = ids.map((id) => Number(id)).filter((id) => Number.isInteger(id) && id > 0);
+    if (!values.length) return 0;
+    db.exec("BEGIN IMMEDIATE");
+    try {
+      const marks = placeholders(values.length);
+      db.prepare(`DELETE FROM director_scenes WHERE project_id IN (${marks})`).run(...values);
+      const result = db.prepare(`DELETE FROM director_projects WHERE id IN (${marks})`).run(...values);
+      db.exec("COMMIT");
+      return Number(result.changes || 0);
+    } catch (error) {
+      db.exec("ROLLBACK");
+      throw error;
+    }
   }
 
   function replaceDirectorScenes(projectId, scenes = []) {
@@ -1847,6 +1870,22 @@ export function openTaskStore(baseDir) {
     return listTimelineProjectsStmt.all(safeLimit).map(normalizeTimelineProject);
   }
 
+  function deleteTimelineProjects(ids = []) {
+    const values = ids.map((id) => Number(id)).filter((id) => Number.isInteger(id) && id > 0);
+    if (!values.length) return 0;
+    db.exec("BEGIN IMMEDIATE");
+    try {
+      const marks = placeholders(values.length);
+      db.prepare(`DELETE FROM timeline_scenes WHERE project_id IN (${marks})`).run(...values);
+      const result = db.prepare(`DELETE FROM timeline_projects WHERE id IN (${marks})`).run(...values);
+      db.exec("COMMIT");
+      return Number(result.changes || 0);
+    } catch (error) {
+      db.exec("ROLLBACK");
+      throw error;
+    }
+  }
+
   function replaceTimelineScenes(projectId, scenes = []) {
     const id = Number(projectId || 0);
     db.exec("BEGIN IMMEDIATE");
@@ -1910,6 +1949,7 @@ export function openTaskStore(baseDir) {
 
   return {
     dbPath,
+    close: () => db.close(),
     updateTask,
     getTask,
     importTasks,
@@ -1927,6 +1967,7 @@ export function openTaskStore(baseDir) {
     getTtsJob,
     updateTtsJob,
     listTtsJobs,
+    deleteTtsJobs,
     createVoiceAsset,
     getVoiceAsset,
     upsertVoice,
@@ -1945,6 +1986,7 @@ export function openTaskStore(baseDir) {
     getDirectorProject,
     updateDirectorProject,
     listDirectorProjects,
+    deleteDirectorProjects,
     replaceDirectorScenes,
     listDirectorScenes,
     createAssetProject,
@@ -1967,6 +2009,7 @@ export function openTaskStore(baseDir) {
     getTimelineProject,
     updateTimelineProject,
     listTimelineProjects,
+    deleteTimelineProjects,
     replaceTimelineScenes,
     listTimelineScenes,
   };

@@ -67,7 +67,7 @@ Return JSON only. No Markdown and no explanation.
     "title": "",
     "platform": "",
     "ratio": "",
-    "estimated_duration": 60,
+    "estimated_duration": 30,
     "style": "",
     "pace": "",
     "target_audience": ""

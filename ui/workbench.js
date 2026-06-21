@@ -358,7 +358,7 @@ function renderProjectReadiness(readiness, qualityCheck) {
       ${qualityCheck.suggestions?.length ? `<div class="quality-actions">${qualityCheck.suggestions.slice(0, 3).map((item) => `<button class="ghost small" type="button" data-nav="${escapeHtml(item.page)}">${escapeHtml(item.label)}</button>`).join("")}</div>` : ""}
     ` : "";
   }
-  if (generateButton) {
+  if (generateButton && !window.__modularVideoOutputReady) {
     generateButton.disabled = !readiness?.ready;
     generateButton.title = readiness?.ready ? "生成成片输出" : "请先补齐生成前检查中的关键项";
   }

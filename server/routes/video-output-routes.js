@@ -43,7 +43,7 @@ export function createVideoOutputRoutes({ videoProductService, sendJson, sendBuf
       return true;
     }
     if (req.method === "POST" && route === "open-jianying") {
-      const result = videoProductService.openJianying();
+      const result = await videoProductService.openJianying();
       sendJson(res, result.ok ? 200 : 400, result);
       return true;
     }
@@ -52,6 +52,24 @@ export function createVideoOutputRoutes({ videoProductService, sendJson, sendBuf
         const body = await readJsonBody(req);
         const asset = videoProductService.importBgmAsset(body.filePath || "");
         sendJson(res, 200, { ok: true, asset, ...videoProductService.listSources() });
+      } catch (error) {
+        sendJson(res, error instanceof HttpBodyError ? error.statusCode : 400, { ok: false, message: error instanceof Error ? error.message : String(error) });
+      }
+      return true;
+    }
+    if (req.method === "POST" && route === "delete") {
+      try {
+        const body = await readJsonBody(req);
+        sendJson(res, 200, { ok: true, ...videoProductService.removeProject(body.id, { deleteFiles: body.deleteFiles !== false }) });
+      } catch (error) {
+        sendJson(res, error instanceof HttpBodyError ? error.statusCode : 400, { ok: false, message: error instanceof Error ? error.message : String(error) });
+      }
+      return true;
+    }
+    if (req.method === "POST" && route === "clear") {
+      try {
+        const body = await readJsonBody(req);
+        sendJson(res, 200, { ok: true, ...videoProductService.clearProjects({ scope: body.scope || "all", deleteFiles: body.deleteFiles !== false }) });
       } catch (error) {
         sendJson(res, error instanceof HttpBodyError ? error.statusCode : 400, { ok: false, message: error instanceof Error ? error.message : String(error) });
       }

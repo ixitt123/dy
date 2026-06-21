@@ -298,13 +298,13 @@ const rewriteDirectionOptions = ["招生引流", "家长焦虑", "单招升学",
 const rewriteStyleOptions = ["老板风格", "痞里带刺", "接地气", "温和专业", "强冲突", "强转化"];
 const rewriteHumanizeOptions = ["关闭", "普通", "强", "极强"];
 const rewriteVersionOptions = [
-  { key: "strongHook", name: "强钩子版", direction: "招生引流", wordCount: "150字左右" },
-  { key: "parentAnxiety", name: "家长焦虑版", direction: "家长焦虑", wordCount: "150字左右" },
-  { key: "shortVideoScript", name: "短视频口播版", direction: "短视频口播", wordCount: "220字左右" },
-  { key: "moments", name: "朋友圈版", direction: "朋友圈文案", wordCount: "220字左右" },
-  { key: "conversion", name: "成交转化版", direction: "暑假班转化", wordCount: "150字左右" },
+  { key: "strongHook", name: "强钩子版", direction: "招生引流", wordCount: "160字左右" },
+  { key: "parentAnxiety", name: "家长焦虑版", direction: "家长焦虑", wordCount: "160字左右" },
+  { key: "shortVideoScript", name: "短视频口播版", direction: "短视频口播", wordCount: "160字左右" },
+  { key: "moments", name: "朋友圈版", direction: "朋友圈文案", wordCount: "160字左右" },
+  { key: "conversion", name: "成交转化版", direction: "暑假班转化", wordCount: "160字左右" },
 ];
-const defaultRewriteVersionCount = 3;
+const defaultRewriteVersionCount = 1;
 const maxRewriteVersionCount = 50;
 
 function setBusy(label) {
@@ -547,7 +547,7 @@ function defaultRewriteVersionSettings() {
 
 function clampRewriteVersionCount(value) {
   const parsed = Number.parseInt(value, 10);
-  return Math.max(1, Math.min(maxRewriteVersionCount, Number.isFinite(parsed) ? parsed : 5));
+  return Math.max(1, Math.min(maxRewriteVersionCount, Number.isFinite(parsed) ? parsed : 1));
 }
 
 function rewriteVersionAt(index) {
@@ -555,7 +555,7 @@ function rewriteVersionAt(index) {
     key: `version-${index + 1}`,
     name: `版本 ${index + 1}`,
     direction: rewriteDirection.value || "招生引流",
-    wordCount: "150字左右",
+    wordCount: "160字左右",
   };
   return rewriteVersionDrafts.get(base.key) || { ...base, ...defaultRewriteVersionSettings(), content: "" };
 }
@@ -583,7 +583,7 @@ function normalizeRewriteVersions(rewrite = {}, allowDefaults = true) {
       key,
       name: item.name || base.name || `版本 ${index + 1}`,
       direction: item.direction || cached.direction || base.direction || rewriteDirection.value || "招生引流",
-      wordCount: item.wordCount || cached.wordCount || base.wordCount || "150字左右",
+      wordCount: item.wordCount || cached.wordCount || base.wordCount || "160字左右",
       content: typeof item.content === "string" ? item.content : cached.content || "",
       revisionInstruction: item.revisionInstruction || cached.revisionInstruction || "",
       provider: item.provider || cached.provider || defaults.provider,
@@ -640,7 +640,7 @@ function renderRewriteVersions(rewrite = {}, { allowDefaults = true } = {}) {
           </label>
           <label class="word-count-field">
             字数要求
-            <input class="rewrite-version-word-count" type="text" value="${escapeHtml(version.wordCount)}" placeholder="如 150字左右" />
+            <input class="rewrite-version-word-count" type="text" value="${escapeHtml(version.wordCount)}" placeholder="如 160字左右" />
           </label>
         </div>
         <div class="rewrite-version-param-grid">
@@ -697,7 +697,7 @@ function collectRewriteVersions() {
       provider: card.querySelector(".rewrite-version-provider")?.value || rewriteProvider.value,
       direction: card.querySelector(".rewrite-version-direction")?.value || rewriteDirection.value,
       style: card.querySelector(".rewrite-version-style")?.value || rewriteStyle.value,
-      wordCount: card.querySelector(".rewrite-version-word-count")?.value.trim() || "150字左右",
+      wordCount: card.querySelector(".rewrite-version-word-count")?.value.trim() || "160字左右",
       params: {
         toneLevel: Number(card.querySelector(".rewrite-version-tone-level")?.value || 8),
         conflictLevel: Number(card.querySelector(".rewrite-version-conflict-level")?.value || 7),
@@ -1597,13 +1597,14 @@ function renderTtsJobs(jobs = []) {
         ? `<audio controls preload="none" src="${escapeHtml(job.audio_url)}"></audio>`
         : `<span title="${escapeHtml(job.error || "")}">${escapeHtml(job.error || "等待生成")}</span>`;
       return `
-        <div class="tts-history-row">
+        <div class="tts-history-row" data-tts-job-id="${job.id}">
           <strong>#${job.id}</strong>
           <span>${escapeHtml(labels[job.provider] || job.provider)}</span>
           <span class="tts-history-text" title="${escapeHtml(job.text)}">${escapeHtml(job.text)}</span>
           <span>${escapeHtml(job.voice_name || job.voice_id || "-")}</span>
           <span class="tts-job-status ${escapeHtml(job.status)}">${escapeHtml(ttsStatusLabel(job.status))}</span>
           ${audio}
+          <button class="ghost small danger-action tts-job-delete" type="button" ${["waiting", "processing"].includes(job.status) ? "disabled" : ""}>删除</button>
         </div>
       `;
     })
@@ -1618,6 +1619,30 @@ async function refreshTtsJobs() {
     const latest = (data.jobs || []).find((job) => String(job.id) === String(activeTtsRailJob.id));
     if (latest) renderTtsRail(latest);
   }
+}
+
+async function deleteTtsJob(id) {
+  const confirmed = window.confirm(`确定删除语音记录 #${id} 和对应音频文件吗？此操作不可撤销。`);
+  if (!confirmed) return;
+  const data = await fetchJson("/api/tts/delete", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ id, deleteFile: true }),
+  });
+  ttsStatus.textContent = `已删除 ${data.deleted || 0} 条语音记录。`;
+  await refreshTtsJobs();
+}
+
+async function clearTtsJobs(scope = "all") {
+  const label = scope === "failed" ? "全部失败语音记录" : "全部已结束语音记录和对应音频文件";
+  if (!window.confirm(`确定清理${label}吗？正在生成的任务会保留，此操作不可撤销。`)) return;
+  const data = await fetchJson("/api/tts/clear", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ scope, deleteFiles: true }),
+  });
+  ttsStatus.textContent = `已清理 ${data.deleted || 0} 条语音记录。`;
+  await refreshTtsJobs();
 }
 
 function showTtsPreview(job) {
@@ -2283,6 +2308,7 @@ function renderDirectorProjects() {
       <div>
         <span class="director-project-status ${escapeHtml(project.status)}">${escapeHtml(directorStatusLabel(project.status))}</span>
         <button class="ghost small director-project-open" type="button">查看</button>
+        <button class="ghost small danger-action director-project-delete" type="button" ${["waiting", "processing"].includes(project.status) ? "disabled" : ""}>删除</button>
       </div>
     </div>
   `).join("");
@@ -2473,6 +2499,28 @@ async function pollDirectorProject(id) {
       });
     }, 1500);
   }
+}
+
+async function deleteDirectorProject(id) {
+  if (!window.confirm(`确定删除导演稿 #${id}、分镜记录和导出文件吗？此操作不可撤销。`)) return;
+  const data = await fetchJson("/api/director/delete", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ id, deleteFiles: true }),
+  });
+  directorStatus.textContent = `已删除 ${data.deleted || 0} 条导演稿记录。`;
+  await loadDirectorProjects();
+}
+
+async function clearDirectorProjects() {
+  if (!window.confirm("确定清空全部已结束导演稿记录和导出文件吗？正在生成的导演稿会保留，此操作不可撤销。")) return;
+  const data = await fetchJson("/api/director/clear", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ scope: "all", deleteFiles: true }),
+  });
+  directorStatus.textContent = `已清理 ${data.deleted || 0} 条导演稿记录。`;
+  await loadDirectorProjects();
 }
 
 async function generateDirectorProject() {
@@ -3643,7 +3691,9 @@ function sendDirectorProjectToVideoProduct() {
     return;
   }
   window.workbenchNavigate?.("vfo", { preserveScroll: true });
-  loadVideoProductSources({ preferredDirectorId: activeDirectorProject.id })
+  (window.videoOutputModule?.loadVideoProductSources
+    ? window.videoOutputModule.loadVideoProductSources()
+    : loadVideoProductSources({ preferredDirectorId: activeDirectorProject.id }))
     .then(() => {
       videoProductStatus.textContent = `已载入 Director 项目 #${activeDirectorProject.id}，请选择音频并自动匹配图片。`;
       document.querySelector("#videoProductCenter")?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -4274,7 +4324,8 @@ document.querySelector("#sendTtsToVideoProduct")?.addEventListener("click", asyn
     status: "ready",
   });
   window.workbenchNavigate?.("vfo", { preserveScroll: true });
-  await loadVideoProductSources({ preferredAudioId: activeTtsRailJob.id });
+  if (window.videoOutputModule?.loadVideoProductSources) await window.videoOutputModule.loadVideoProductSources();
+  else await loadVideoProductSources({ preferredAudioId: activeTtsRailJob.id });
   document.querySelector("#videoProductCenter")?.scrollIntoView({ behavior: "smooth", block: "start" });
   ttsStatus.textContent = "已把当前语音发送到成片中心。";
 });
@@ -4283,6 +4334,21 @@ document.querySelector("#refreshTtsJobs").addEventListener("click", () => {
   refreshTtsJobs().catch((error) => {
     ttsStatus.textContent = error instanceof Error ? error.message : String(error);
   });
+});
+
+document.querySelector("#clearFailedTtsJobs")?.addEventListener("click", () => {
+  clearTtsJobs("failed").catch((error) => { ttsStatus.textContent = error instanceof Error ? error.message : String(error); });
+});
+
+document.querySelector("#clearTtsJobs")?.addEventListener("click", () => {
+  clearTtsJobs("all").catch((error) => { ttsStatus.textContent = error instanceof Error ? error.message : String(error); });
+});
+
+ttsHistory?.addEventListener("click", (event) => {
+  const button = event.target.closest(".tts-job-delete");
+  const row = event.target.closest("[data-tts-job-id]");
+  if (!button || !row) return;
+  deleteTtsJob(Number(row.dataset.ttsJobId || 0)).catch((error) => { ttsStatus.textContent = error instanceof Error ? error.message : String(error); });
 });
 
 document.querySelector("#newVoiceAsset").addEventListener("click", () => {
@@ -4826,10 +4892,22 @@ document.querySelector("#refreshDirectorProjects").addEventListener("click", () 
   });
 });
 
+document.querySelector("#clearDirectorProjects")?.addEventListener("click", () => {
+  clearDirectorProjects().catch((error) => { directorStatus.textContent = error instanceof Error ? error.message : String(error); });
+});
+
 directorProjects.addEventListener("click", (event) => {
+  const deleteButton = event.target.closest(".director-project-delete");
   const button = event.target.closest(".director-project-open");
   const row = event.target.closest(".director-project-row");
-  if (!button || !row) return;
+  if (!row) return;
+  if (deleteButton) {
+    deleteDirectorProject(Number(row.dataset.directorProjectId || 0)).catch((error) => {
+      directorStatus.textContent = error instanceof Error ? error.message : String(error);
+    });
+    return;
+  }
+  if (!button) return;
   openDirectorProject(Number(row.dataset.directorProjectId || 0)).catch((error) => {
     directorStatus.textContent = error instanceof Error ? error.message : String(error);
   });
@@ -5001,6 +5079,7 @@ addVideoProductBgmAssetBtn?.addEventListener("click", () => {
 });
 
 autoBindTimelineBtn?.addEventListener("click", () => {
+  if (window.__modularVideoOutputReady) return;
   previewVideoProductTimeline().catch((error) => {
     videoProductStatus.textContent = error instanceof Error ? error.message : String(error);
   });
@@ -5026,20 +5105,24 @@ refreshVideoProductProjectsBtn?.addEventListener("click", () => {
 });
 
 videoProductDirector?.addEventListener("change", () => {
+  if (window.__modularVideoOutputReady) return;
   videoProductManualBindings = {};
   renderVideoProductSourceOptions({ preferredDirectorId: Number(videoProductDirector.value || 0) });
   previewVideoProductTimeline().catch(() => {});
 });
 
 videoProductAudio?.addEventListener("change", () => {
+  if (window.__modularVideoOutputReady) return;
   previewVideoProductTimeline().catch(() => {});
 });
 
 videoProductImageSource?.addEventListener("change", () => {
+  if (window.__modularVideoOutputReady) return;
   previewVideoProductTimeline().catch(() => {});
 });
 
 videoProductOutputType?.addEventListener("change", () => {
+  if (window.__modularVideoOutputReady) return;
   const label = videoProductOutputType.options[videoProductOutputType.selectedIndex]?.textContent || "输出方式";
   videoProductStatus.textContent = `已选择：${label}`;
   document.querySelectorAll(".video-route-card[data-video-output]").forEach((item) => {
@@ -5053,25 +5136,30 @@ videoProductOutputType?.addEventListener("change", () => {
 });
 
 videoProductRouteAStyle?.addEventListener("change", () => {
+  if (window.__modularVideoOutputReady) return;
   previewVideoProductTimeline().catch(() => {});
 });
 
 videoProductRouteACustomStyle?.addEventListener("change", () => {
+  if (window.__modularVideoOutputReady) return;
   previewVideoProductTimeline().catch(() => {});
 });
 
 videoProductBgmStrategy?.addEventListener("change", () => {
+  if (window.__modularVideoOutputReady) return;
   if (videoProductBgmStrategy.value !== "manual" && videoProductBgm) videoProductBgm.value = "";
   previewVideoProductTimeline().catch(() => {});
 });
 
 videoProductBgm?.addEventListener("change", () => {
+  if (window.__modularVideoOutputReady) return;
   if (videoProductBgm.value && videoProductBgmStrategy) videoProductBgmStrategy.value = "manual";
   previewVideoProductTimeline().catch(() => {});
 });
 
 document.querySelectorAll(".video-route-card[data-video-output]").forEach((card) => {
   card.addEventListener("click", () => {
+    if (window.__modularVideoOutputReady) return;
     const outputType = card.dataset.videoOutput || "";
     if (!outputType || !videoProductOutputType) return;
     videoProductOutputType.value = outputType;
@@ -5107,6 +5195,7 @@ document.querySelector(".status-rail")?.addEventListener("click", (event) => {
 });
 
 videoProductScenes?.addEventListener("change", (event) => {
+  if (window.__modularVideoOutputReady) return;
   const select = event.target.closest(".video-product-image-select");
   if (!select) return;
   const sceneIndex = select.dataset.sceneIndex || "";
@@ -5118,6 +5207,7 @@ videoProductScenes?.addEventListener("change", (event) => {
 });
 
 videoProductProjects?.addEventListener("click", (event) => {
+  if (window.__modularVideoOutputReady) return;
   const button = event.target.closest(".video-product-open");
   const row = event.target.closest(".video-product-project-row");
   if (!button || !row) return;

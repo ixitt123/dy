@@ -9,9 +9,9 @@ export const REWRITE_VERSION_DEFS = [
   ["conversion", "成交转化版"],
 ];
 export const REWRITE_VERSION_DEFAULTS = {
-  strongHook: { direction: "招生引流", wordCount: "150字左右" },
-  parentAnxiety: { direction: "家长焦虑", wordCount: "150字左右" },
-  shortVideoScript: { direction: "短视频口播", wordCount: "220字左右" },
-  moments: { direction: "朋友圈文案", wordCount: "220字左右" },
-  conversion: { direction: "暑假班转化", wordCount: "150字左右" },
+  strongHook: { direction: "招生引流", wordCount: "160字左右" },
+  parentAnxiety: { direction: "家长焦虑", wordCount: "160字左右" },
+  shortVideoScript: { direction: "短视频口播", wordCount: "160字左右" },
+  moments: { direction: "朋友圈文案", wordCount: "160字左右" },
+  conversion: { direction: "暑假班转化", wordCount: "160字左右" },
 };

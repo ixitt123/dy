@@ -83,7 +83,7 @@ const DEFAULT_BASIC_INFO = {
   category: "其他",
   tags: [],
   targetAudience: "通用",
-  duration: 60,
+  duration: 30,
 };
 
 const DEFAULT_STRUCTURE = {

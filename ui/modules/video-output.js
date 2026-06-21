@@ -14,6 +14,8 @@ const state = {
   sources: null,
   projects: [],
   activeTimeline: null,
+  preview: null,
+  manualBindings: {},
   pollTimer: 0,
 };
 
@@ -51,6 +53,31 @@ function outputLabel(type) {
 
 function currentVideoProject() {
   return window.videoProjects?.current?.() || null;
+}
+
+function projectSourcePreferences(project = currentVideoProject()) {
+  return {
+    directorId: String(project?.directorScript?.id || project?.directorScript?.assetId || ""),
+    audioId: String(project?.selectedTtsAudio?.id || project?.selectedTtsAudio?.assetId || ""),
+    bgmId: String(project?.bgm?.id || project?.bgm?.assetId || ""),
+  };
+}
+
+function canAttemptGeneration() {
+  return Boolean(
+    currentVideoProject()?.id
+    && document.querySelector("#videoProductDirector")?.value
+    && document.querySelector("#videoProductAudio")?.value
+  );
+}
+
+function updateGenerateAvailability() {
+  const button = document.querySelector("#generateVideoProduct");
+  if (!button) return;
+  button.disabled = !canAttemptGeneration();
+  button.title = button.disabled
+    ? "请先选择当前项目、导演稿和已完成语音"
+    : "先同步当前选择并检查素材，再创建成片任务";
 }
 
 function renderToolStatus(container, status) {
@@ -98,11 +125,19 @@ function setOptions(select, rows, label, preferred) {
 export async function loadVideoProductSources() {
   const data = await getJson("/api/video-product/sources");
   state.sources = data;
-  setOptions(document.querySelector("#videoProductDirector"), data.directors || [], (row) => `#${row.id} ${row.title || "导演稿"} · ${row.scene_count || 0} 镜头`);
-  setOptions(document.querySelector("#videoProductAudio"), data.audioJobs || [], (row) => row.label || `#${row.id} ${row.voice_name || "配音"}`);
-  setOptions(document.querySelector("#videoProductBgm"), [{ id: "", filename: "自动匹配" }, ...(data.bgmAssets || [])], (row) => row.filename || row.title || "自动匹配");
+  const preferred = projectSourcePreferences();
+  const directorSelect = document.querySelector("#videoProductDirector");
+  const audioSelect = document.querySelector("#videoProductAudio");
+  if (!preferred.directorId && directorSelect) directorSelect.value = "";
+  if (!preferred.audioId && audioSelect) audioSelect.value = "";
+  setOptions(directorSelect, [{ id: "", title: "请选择当前项目的导演稿", scene_count: 0 }, ...(data.directors || [])], (row) => row.id ? `#${row.id} ${row.title || "导演稿"} · ${row.scene_count || 0} 镜头` : row.title, preferred.directorId);
+  setOptions(audioSelect, [{ id: "", label: "请选择当前项目的已完成语音" }, ...(data.audioJobs || [])], (row) => row.label || `#${row.id} ${row.voice_name || "配音"}`, preferred.audioId);
+  setOptions(document.querySelector("#videoProductBgm"), [{ id: "", filename: "自动匹配本地 BGM；没有则基础生成" }, ...(data.bgmAssets || [])], (row) => row.filename || row.title || "自动匹配", preferred.bgmId);
   setOptions(document.querySelector("#videoProductRouteAStyle"), data.routeAStyles || [], (row) => row.label || row.id);
   setOptions(document.querySelector("#videoProductBgmStrategy"), data.bgmStrategies || [], (row) => row.label || row.id);
+  state.manualBindings = {};
+  state.preview = null;
+  updateGenerateAvailability();
   return data;
 }
 
@@ -115,7 +150,7 @@ function renderProjectRows() {
       <div class="vfo-project-title"><strong>${escapeHtml(project.metadata?.title || `成片 #${project.project_id || project.id}`)}</strong><span>${escapeHtml(outputLabel(project.output_type))}</span></div>
       <span>${escapeHtml(project.ratio || "9:16")} · ${escapeHtml(project.resolution || "1080x1920")}</span>
       <span>${Number(project.progress || 0)}%</span>
-      <div><span class="vfo-project-status ${escapeHtml(project.status)}">${escapeHtml(statusText(project.status))}</span><button class="ghost small" type="button" data-timeline-action="view">查看</button></div>
+      <div><span class="vfo-project-status ${escapeHtml(project.status)}">${escapeHtml(statusText(project.status))}</span><button class="ghost small" type="button" data-timeline-action="view">查看</button><button class="ghost small danger-action" type="button" data-timeline-action="delete" ${RUNNING_STATUSES.has(project.status) ? "disabled" : ""}>删除</button></div>
     </div>`).join("") : '<div class="vfo-empty">当前短视频项目还没有成片输出记录。</div>';
 }
 
@@ -125,6 +160,34 @@ export async function loadVideoProductProjects() {
   state.projects = (data.projects || []).filter((project) => !activeId || !project.metadata?.video_project_id || project.metadata.video_project_id === activeId);
   renderProjectRows();
   return state.projects;
+}
+
+async function deleteVideoProductProject(id) {
+  const project = state.projects.find((item) => String(item.project_id || item.id) === String(id));
+  if (!project) return;
+  if (!window.confirm(`确定删除成片记录 #${id} 和整个输出文件夹吗？\n\nMP4、字幕、封面、报告和素材包都会一起删除，此操作不可撤销。`)) return;
+  const data = await postJson("/api/video-product/delete", { id, deleteFiles: true });
+  if (String(state.activeTimeline?.project_id || state.activeTimeline?.id) === String(id)) {
+    state.activeTimeline = null;
+    renderOutputFiles(null);
+    renderScenes([]);
+  }
+  const status = document.querySelector("#videoProductStatus");
+  if (status) status.textContent = `已删除 ${data.deleted || 0} 条成片记录。`;
+  await Promise.allSettled([loadVideoProductProjects(), refreshReadiness(), refreshQualityCheck()]);
+}
+
+async function clearVideoProductProjects() {
+  const deletable = state.projects.filter((item) => !RUNNING_STATUSES.has(item.status));
+  if (!deletable.length) return;
+  if (!window.confirm(`确定清空 ${deletable.length} 条已结束成片记录和对应输出文件夹吗？\n\n正在运行的任务会保留，此操作不可撤销。`)) return;
+  const data = await postJson("/api/video-product/clear", { scope: "all", deleteFiles: true });
+  state.activeTimeline = null;
+  renderOutputFiles(null);
+  renderScenes([]);
+  const status = document.querySelector("#videoProductStatus");
+  if (status) status.textContent = `已清理 ${data.deleted || 0} 条成片记录。`;
+  await Promise.allSettled([loadVideoProductProjects(), refreshReadiness(), refreshQualityCheck()]);
 }
 
 export function renderReadiness(readiness) {
@@ -162,11 +225,7 @@ export async function refreshReadiness() {
   renderReadiness(data.readiness);
   renderBlockers(data.readiness.blockers || []);
   window.videoProjects?.setReadiness?.(data.readiness);
-  const button = document.querySelector("#generateVideoProduct");
-  if (button) {
-    button.disabled = !data.readiness.ready;
-    button.title = data.readiness.ready ? "生成成片输出" : "请先补齐右侧缺失项";
-  }
+  updateGenerateAvailability();
   return data.readiness;
 }
 
@@ -186,10 +245,14 @@ function renderScenes(scenes = []) {
   const meta = document.querySelector("#videoProductSceneMeta");
   if (!container) return;
   if (meta) meta.textContent = scenes.length ? `${scenes.length} 个镜头` : "尚未生成预览";
-  container.innerHTML = scenes.length ? scenes.map((scene) => `
+  const imageAssets = state.sources?.imageAssets || [];
+  container.innerHTML = scenes.length ? scenes.map((scene) => {
+    const selectedId = String(state.manualBindings[scene.scene_index] || scene.image_asset_id || "");
+    return `
     <article class="video-product-scene ${scene.status === "blocked" ? "blocked" : ""}">
-      <div class="video-product-scene-main"><div class="video-product-scene-top"><strong>#${Number(scene.scene_index || 0)} ${escapeHtml(scene.title_text || "")}</strong><span>${Number(scene.duration || 0).toFixed(1)}s</span></div><p>${escapeHtml(scene.narration_text || scene.subtitle_text || "")}</p><small>${escapeHtml(scene.visual_prompt || scene.image_path || "等待素材")}</small></div>
-    </article>`).join("") : '<div class="vfo-empty">生成预览或成片任务后显示镜头素材。</div>';
+      <div class="video-product-scene-main"><div class="video-product-scene-top"><strong>#${Number(scene.scene_index || 0)} ${escapeHtml(scene.title_text || "")}</strong><span>${Number(scene.duration || 0).toFixed(1)}s</span></div><p>${escapeHtml(scene.narration_text || scene.subtitle_text || "")}</p><small>${escapeHtml(scene.visual_prompt || scene.image_path || "等待素材")}</small><select class="video-product-image-select" data-scene-index="${Number(scene.scene_index || 0)}" aria-label="镜头 ${Number(scene.scene_index || 0)} 图片素材"><option value="">未绑定</option>${imageAssets.map((asset) => `<option value="${escapeHtml(asset.id)}" ${String(asset.id) === selectedId ? "selected" : ""}>${escapeHtml(asset.filename || asset.id)} · ${escapeHtml(String(asset.prompt || "").slice(0, 24))}</option>`).join("")}</select></div>
+    </article>`;
+  }).join("") : '<div class="vfo-empty">生成预览或成片任务后显示镜头素材。</div>';
 }
 
 export function renderOutputFiles(project = state.activeTimeline) {
@@ -226,11 +289,36 @@ async function loadTimelineProject(id) {
   return data.project;
 }
 
-async function syncSelectionsToProject() {
+export async function previewVideoProductTimeline() {
+  const status = document.querySelector("#videoProductStatus");
+  if (!document.querySelector("#videoProductDirector")?.value || !document.querySelector("#videoProductAudio")?.value) {
+    if (status) status.textContent = "请先选择导演稿和已完成的 TTS 音频。";
+    updateGenerateAvailability();
+    return null;
+  }
+  if (status) status.textContent = "正在按当前导演稿和音频匹配镜头素材...";
+  const data = await postJson("/api/video-product/preview", payload());
+  state.preview = data;
+  for (const scene of data.scenes || []) {
+    if (scene.image_asset_id) state.manualBindings[scene.scene_index] = String(scene.image_asset_id);
+  }
+  renderScenes(data.scenes || []);
+  if (status) status.textContent = data.blockers?.length
+    ? `预览已更新，还有 ${data.blockers.length} 个素材问题。`
+    : "预览已更新，点击生成后会先写入当前项目并做最终检查。";
+  updateGenerateAvailability();
+  return data;
+}
+
+export async function syncSelectionsToProject({ preview = state.preview } = {}) {
   const project = currentVideoProject();
   if (!project) throw new Error("请先在首页新建或选择短视频项目。");
   const outputType = document.querySelector("#videoProductOutputType")?.value || "jianying_template";
   await window.videoProjects.updateCurrent({ outputMode: outputType });
+  await postJson("/api/projects/clear-assets", {
+    projectId: project.id,
+    assetTypes: ["tts", "director", "image", "video", "bgm", "template"],
+  });
   const audioId = document.querySelector("#videoProductAudio")?.value || "";
   const audio = state.sources?.audioJobs?.find((item) => String(item.id) === String(audioId));
   if (audio) {
@@ -244,17 +332,27 @@ async function syncSelectionsToProject() {
     const value = full.project || director;
     await window.videoProjects.linkCurrent("director", directorId, value.title || `导演稿 #${directorId}`, { ...value, sceneCount: value.result?.storyboard?.length || value.scene_count || 0, subtitleTimeline: value.result?.subtitle_timeline || value.subtitle_timeline || [], source: "ai_generated" });
   }
-  for (const asset of (state.sources?.imageAssets || []).slice(0, 20)) {
+  const selectedImageIds = new Set([
+    ...Object.values(state.manualBindings || {}).map(String),
+    ...(preview?.scenes || []).map((scene) => String(scene.image_asset_id || "")),
+  ].filter(Boolean));
+  const selectedImages = (state.sources?.imageAssets || []).filter((asset) => selectedImageIds.has(String(asset.id)));
+  for (const asset of selectedImages) {
     await window.videoProjects.linkCurrent("image", asset.id, asset.filename || `图片 ${asset.id}`, { path: asset.original_path || asset.path || "", ratio: asset.aspect_ratio || "9:16", source: asset.source_type === "director" ? "ai_generated" : "local_upload", status: "ready" });
   }
-  const bgmId = document.querySelector("#videoProductBgm")?.value || "auto-bgm";
-  const bgm = state.sources?.bgmAssets?.find((item) => String(item.id) === String(bgmId));
-  await window.videoProjects.linkCurrent("bgm", bgmId, bgm?.filename || bgm?.title || "自动匹配 BGM", { path: bgm?.path || "", strategy: document.querySelector("#videoProductBgmStrategy")?.value || "auto", source: bgm ? "local_upload" : "ai_generated", status: "ready" });
+  const strategy = document.querySelector("#videoProductBgmStrategy")?.value || "auto";
+  const selectedBgmId = document.querySelector("#videoProductBgm")?.value || "";
+  const bgm = state.sources?.bgmAssets?.find((item) => String(item.id) === String(selectedBgmId))
+    || (strategy !== "generated_default" ? state.sources?.bgmAssets?.[0] : null);
+  const bgmId = String(bgm?.id || "generated-default-bgm");
+  const bgmSelect = document.querySelector("#videoProductBgm");
+  if (bgm && bgmSelect) bgmSelect.value = String(bgm.id);
+  await window.videoProjects.linkCurrent("bgm", bgmId, bgm?.filename || bgm?.title || "默认基础氛围 BGM", { path: bgm?.path || "", strategy: bgm ? (selectedBgmId ? "manual" : "auto") : "generated_default", source: bgm ? "local_upload" : "ai_generated", status: "ready" });
   if (["jianying", "jianying_template"].includes(outputType)) {
     const template = document.querySelector("#videoProductJianyingTemplate");
     await window.videoProjects.linkCurrent("template", template?.value || "education_tips", template?.selectedOptions?.[0]?.textContent || "学习技巧模板", { ratio: "9:16", source: "local_upload", status: "ready" });
   }
-  return project;
+  return currentVideoProject();
 }
 
 function payload() {
@@ -271,6 +369,8 @@ function payload() {
     route_a_custom_style: document.querySelector("#videoProductRouteACustomStyle")?.value.trim() || "",
     bgm_strategy: document.querySelector("#videoProductBgmStrategy")?.value || "auto",
     bgm_asset_id: document.querySelector("#videoProductBgm")?.value || "",
+    manual_bindings: { ...state.manualBindings },
+    target_duration: 30,
   };
 }
 
@@ -284,8 +384,9 @@ export async function generateVideoProduct() {
   }
   if (button) button.disabled = true;
   try {
-    if (status) status.textContent = "正在同步项目文案、语音、导演稿和素材...";
-    await syncSelectionsToProject();
+    if (!state.preview) await previewVideoProductTimeline();
+    if (status) status.textContent = "正在同步项目文案、语音、导演稿、素材和 BGM...";
+    await syncSelectionsToProject({ preview: state.preview });
     const readiness = await refreshReadiness();
     await refreshQualityCheck();
     if (!readiness?.ready) throw new Error(`暂不能生成：${readiness?.blockers?.map((item) => `${item.label}${item.detail}`).join("、") || "关键内容未完成"}`);
@@ -297,7 +398,7 @@ export async function generateVideoProduct() {
     if (status) status.textContent = error.message;
     throw error;
   } finally {
-    if (button) button.disabled = !window.videoProjects?.canGenerate?.();
+    updateGenerateAvailability();
   }
 }
 
@@ -343,19 +444,60 @@ function selectOutputType(outputType) {
 }
 
 function bindEvents() {
-  document.querySelectorAll("[data-main-output]").forEach((button) => button.addEventListener("click", () => selectOutputType(button.dataset.mainOutput)));
+  document.querySelectorAll("[data-main-output]").forEach((button) => button.addEventListener("click", () => {
+    selectOutputType(button.dataset.mainOutput);
+  }));
+  document.querySelectorAll(".video-route-card[data-video-output]").forEach((card) => card.addEventListener("click", () => {
+    selectOutputType(card.dataset.videoOutput);
+    document.querySelectorAll(".video-route-card[data-video-output]").forEach((item) => item.classList.toggle("primary", item === card));
+  }));
   document.querySelector("#refreshVideoOutputTools")?.addEventListener("click", refreshToolStatus);
   document.querySelector("#openJianyingApp")?.addEventListener("click", openJianyingApp);
-  document.querySelector("#refreshVideoProductSources")?.addEventListener("click", () => loadVideoProductSources().catch(() => {}));
+  document.querySelector("#refreshVideoProductSources")?.addEventListener("click", () => loadVideoProductSources().then(() => previewVideoProductTimeline()).catch(() => {}));
   document.querySelector("#refreshVideoProductProjects")?.addEventListener("click", () => loadVideoProductProjects().catch(() => {}));
   document.querySelector("#refreshVideoProjectReadiness")?.addEventListener("click", () => Promise.allSettled([refreshReadiness(), refreshQualityCheck()]));
+  document.querySelector("#autoBindTimeline")?.addEventListener("click", async () => {
+    try {
+      const preview = await previewVideoProductTimeline();
+      await syncSelectionsToProject({ preview });
+      await Promise.allSettled([refreshReadiness(), refreshQualityCheck()]);
+    } catch (error) {
+      const status = document.querySelector("#videoProductStatus");
+      if (status) status.textContent = error.message;
+    }
+  });
   document.querySelector("#generateVideoProduct")?.addEventListener("click", () => generateVideoProduct().catch(() => {}));
   document.querySelector("#openVideoProductOutput")?.addEventListener("click", () => openVideoProductOutput().catch(() => {}));
+  document.querySelector("#clearVideoProductProjects")?.addEventListener("click", () => clearVideoProductProjects().catch((error) => window.alert(error.message)));
   document.querySelector("#videoProductProjects")?.addEventListener("click", (event) => {
     const row = event.target.closest("[data-timeline-project-id]");
-    if (row && event.target.closest("[data-timeline-action]")) loadTimelineProject(row.dataset.timelineProjectId).catch(() => {});
+    const action = event.target.closest("[data-timeline-action]")?.dataset.timelineAction;
+    if (!row || !action) return;
+    if (action === "delete") deleteVideoProductProject(row.dataset.timelineProjectId).catch((error) => window.alert(error.message));
+    else loadTimelineProject(row.dataset.timelineProjectId).catch(() => {});
   });
-  window.addEventListener("video-project-changed", () => Promise.allSettled([loadVideoProductProjects(), refreshReadiness(), refreshQualityCheck()]));
+  document.querySelector("#videoProductScenes")?.addEventListener("change", (event) => {
+    const select = event.target.closest(".video-product-image-select");
+    if (!select) return;
+    if (select.value) state.manualBindings[select.dataset.sceneIndex] = select.value;
+    else delete state.manualBindings[select.dataset.sceneIndex];
+    state.preview = null;
+    previewVideoProductTimeline().catch(() => {});
+  });
+  ["videoProductDirector", "videoProductAudio", "videoProductImageSource", "videoProductOutputType", "videoProductBgmStrategy", "videoProductBgm", "videoProductRouteAStyle", "videoProductRouteACustomStyle"].forEach((id) => {
+    document.querySelector(`#${id}`)?.addEventListener("change", () => {
+      state.preview = null;
+      updateGenerateAvailability();
+      previewVideoProductTimeline().catch(() => {});
+    });
+  });
+  const handleProjectChange = () => {
+    state.preview = null;
+    state.manualBindings = {};
+    Promise.allSettled([loadVideoProductSources(), loadVideoProductProjects(), refreshReadiness(), refreshQualityCheck()])
+      .then(() => previewVideoProductTimeline().catch(() => {}));
+  };
+  window.addEventListener("video-project-changed", handleProjectChange);
 }
 
 export async function initVideoOutputModule() {
@@ -363,6 +505,7 @@ export async function initVideoOutputModule() {
   if (page) page.dataset.module = "video-output";
   window.__modularVideoOutputReady = true;
   bindEvents();
-  window.videoOutputModule = { loadVideoProductSources, loadVideoProductProjects, refreshReadiness, refreshQualityCheck, generateVideoProduct, pollVideoProductProject, openVideoProductOutput };
+  window.videoOutputModule = { loadVideoProductSources, loadVideoProductProjects, refreshReadiness, refreshQualityCheck, previewVideoProductTimeline, syncSelectionsToProject, generateVideoProduct, pollVideoProductProject, openVideoProductOutput };
   await Promise.allSettled([refreshToolStatus(), loadVideoProductSources(), loadVideoProductProjects(), refreshReadiness(), refreshQualityCheck()]);
+  await previewVideoProductTimeline().catch(() => {});
 }

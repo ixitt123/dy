@@ -4,9 +4,9 @@
     "video_type": "douyin-knowledge",
     "visual_style": "knowledge-blogger",
     "platform": "douyin",
-    "pace": "standard",
-    "shot_count": "10-20",
-    "estimated_duration": 60
+    "pace": "hook-fast-cut",
+    "shot_count": "8-12",
+    "estimated_duration": 30
   },
   "video_types": [
     { "id": "education-enrollment", "label": "教育招生", "audience": "学生家长" },

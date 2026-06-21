@@ -93,16 +93,27 @@ export function createCapcutCliAdapter(options = {}) {
     return { ...lastResult, planPath };
   }
 
-  function openJianying() {
+  async function openJianying() {
     const status = detector.detect();
     const appPath = String(status.jianying?.appPath || "").trim();
     if (!appPath) return { ok: false, message: "未检测到剪映专业版，请先安装或在系统设置中配置程序路径。" };
     try {
       const args = String(status.jianying?.arguments || "").match(/(?:[^\s"]+|"[^"]*")+/g)?.map((value) => value.replace(/^"|"$/g, "")) || [];
       const child = spawn(appPath, args, { detached: true, stdio: "ignore", windowsHide: false });
-      child.once("error", () => {});
-      child.unref();
-      return { ok: true, message: "已启动剪映专业版。", appPath };
+      return await new Promise((resolve) => {
+        let settled = false;
+        const finish = (result) => {
+          if (settled) return;
+          settled = true;
+          resolve(result);
+        };
+        child.once("error", (error) => finish({ ok: false, message: `剪映专业版启动失败：${error.message}`, appPath }));
+        child.once("spawn", () => {
+          child.unref();
+          finish({ ok: true, launched: true, pid: child.pid || 0, message: "剪映启动请求已发送，请等待客户端窗口出现。", appPath });
+        });
+        setTimeout(() => finish({ ok: false, message: "剪映启动超时，请检查程序路径或在桌面手动打开。", appPath }), 5000);
+      });
     } catch (error) {
       return { ok: false, message: `剪映专业版启动失败：${error instanceof Error ? error.message : String(error)}`, appPath };
     }
