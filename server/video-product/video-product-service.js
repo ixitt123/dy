@@ -2366,7 +2366,7 @@ ${sceneMarkup}
         }));
       }
 
-      updateProject(project.id, {
+      const completedProject = updateProject(project.id, {
         status: "completed",
         progress: 100,
         current_step: MP4_OUTPUT_TYPES.has(outputType) ? `${OUTPUT_TYPE_LABELS[outputType] || "MP4"} 已生成` : `${OUTPUT_TYPE_LABELS[outputType] || "素材包"}已生成`,
@@ -2378,6 +2378,7 @@ ${sceneMarkup}
         mp4_path: mp4Path,
         completed_at: new Date().toISOString(),
       });
+      syncOutputToVideoProject(completedProject, timeline, timelineFiles, { draftPath, mp4Path });
     } catch (error) {
       updateProject(project.id, {
         status: "failed",
@@ -2422,6 +2423,7 @@ ${sceneMarkup}
       progress: 0,
       current_step: "等待进入视频成片队列",
       metadata_json: JSON.stringify({
+        video_project_id: String(input.video_project_id || input.projectId || ""),
         title: String(input.title || ""),
         output_type: outputType,
         route_label: OUTPUT_TYPE_LABELS[outputType] || outputType,
