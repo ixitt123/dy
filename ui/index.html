@@ -748,6 +748,17 @@
           </div>
           <div class="video-output-tool-status" id="videoOutputToolStatus" aria-live="polite"></div>
           <p id="videoOutputCompatibilityNote" class="video-output-compatibility-note">正在检测本机成片工具...</p>
+          <div class="local-jianying-config">
+            <label>
+              剪映程序路径
+              <input id="jianyingAppPathInput" type="text" placeholder="例如：C:\\Users\\...\\JianyingPro.exe" />
+            </label>
+            <label>
+              剪映草稿目录
+              <input id="jianyingDraftDirInput" type="text" placeholder="例如：C:\\Users\\...\\com.lveditor.draft" />
+            </label>
+            <button class="ghost small" id="saveJianyingLocalConfig" type="button">保存本地对接</button>
+          </div>
         </section>
 
         <details class="advanced-output-routes">
@@ -896,7 +907,16 @@
                   <option value="clean_knowledge_card">清爽知识卡片</option>
                   <option value="campus_education">校园教育</option>
                 </select>
+                <small id="videoProductTemplateRecommendation">系统会按项目类型和导演视觉风格自动推荐模板。</small>
               </label>
+              <div class="template-import-tools">
+                <label>
+                  导入本地模板母版目录
+                  <input id="jianyingTemplateSourcePath" type="text" placeholder="粘贴已解压的剪映模板母版目录路径" />
+                </label>
+                <button class="ghost small" id="importJianyingTemplate" type="button">导入模板</button>
+                <small id="jianyingTemplateStatus">可把你提供的模板包解压后导入，系统会自动分类并参与推荐。</small>
+              </div>
               <div class="video-product-actions">
                 <button class="ghost" id="autoBindTimeline" type="button">自动匹配镜头素材</button>
                 <button class="primary" id="generateVideoProduct" type="button">生成输出</button>

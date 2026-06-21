@@ -6309,6 +6309,47 @@ audio {
   font-size: 12px;
 }
 
+.local-jianying-config,
+.template-import-tools {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) minmax(220px, 1fr) auto;
+  gap: 10px;
+  align-items: end;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid #263141;
+}
+
+.template-import-tools {
+  grid-template-columns: minmax(260px, 1fr) auto;
+  align-items: end;
+}
+
+.local-jianying-config label,
+.template-import-tools label {
+  display: grid;
+  min-width: 0;
+  gap: 6px;
+  color: #aab4c2;
+  font-size: 12px;
+}
+
+.local-jianying-config input,
+.template-import-tools input {
+  min-width: 0;
+}
+
+.template-import-tools small,
+#videoProductTemplateRecommendation {
+  color: #8f9caf;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.template-import-tools small {
+  grid-column: 1 / -1;
+}
+
 .advanced-output-routes {
   margin-top: 12px;
   border: 1px solid #2f3743;
