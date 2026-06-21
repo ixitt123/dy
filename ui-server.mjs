@@ -179,6 +179,7 @@ function sendJson(res, status, value) {
   res.writeHead(status, {
     "content-type": "application/json; charset=utf-8",
     "content-length": Buffer.byteLength(body),
+    "cache-control": "no-store",
   });
   res.end(body);
 }
@@ -3796,7 +3797,10 @@ function serveStatic(req, res) {
       return;
     }
     const type = mimeTypes.get(path.extname(requested)) || "application/octet-stream";
-    res.writeHead(200, { "content-type": type });
+    res.writeHead(200, {
+      "content-type": type,
+      "cache-control": "no-store",
+    });
     res.end(data);
   });
 }

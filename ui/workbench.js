@@ -17,7 +17,7 @@ const workbenchPages = {
   },
   rewrite: {
     title: "AI改写",
-    description: "选择视频类型，一键生成 3 个版本并选出最佳文案。",
+    description: "选择视频类型，默认生成 1 个版本，需要时可增加输出框。",
   },
   tts: {
     title: "TTS语音",
@@ -539,8 +539,8 @@ function setupRewriteStudio() {
       </select>
     </label>
     <div class="rewrite-simple-note">
-      <strong>默认生成 3 个不同版本</strong>
-      <span>生成后选择最佳版本，再发送到配音或 AI 导演。</span>
+      <strong>默认生成 1 个版本</strong>
+      <span>需要更多风格时可增加输出框，再选择最佳版本发送到配音或 AI 导演。</span>
     </div>
   `;
   settingsLane.appendChild(simpleControls);
@@ -559,14 +559,14 @@ function setupRewriteStudio() {
 
   addLaneHeading(sourceLane, "原始文案与分析", "确认输入内容和已有分析");
   addLaneHeading(settingsLane, "生成方式", "默认只需选择视频类型");
-  addLaneHeading(outputLane, "3 个改写版本", "选择最佳版本，再发送到配音或导演");
+  addLaneHeading(outputLane, "改写版本", "默认生成 1 个版本，需要时再增加输出框");
 
   originalGrid.remove();
   studio.append(sourceLane, settingsLane, outputLane);
   body.appendChild(studio);
   const countInput = document.querySelector("#rewriteVersionCountInput");
-  if (countInput && Number(countInput.value || 0) < 3) {
-    countInput.value = "3";
+  if (countInput && Number(countInput.value || 0) !== 1) {
+    countInput.value = "1";
     countInput.dispatchEvent(new Event("change", { bubbles: true }));
   }
   const videoType = simpleControls.querySelector("#rewriteVideoType");
