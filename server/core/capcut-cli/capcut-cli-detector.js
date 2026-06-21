@@ -160,12 +160,19 @@ export function createCapcutCliDetector({ baseDir, ffmpegPath = "", getSettings 
     ]);
     const capcutCommand = WINDOWS ? "capcut.cmd" : "capcut";
     const localCapcutCommand = path.join(baseDir, "node_modules", ".bin", WINDOWS ? "capcut-cli.cmd" : "capcut-cli");
-    const localResult = fs.existsSync(localCapcutCommand) ? run(localCapcutCommand, ["--version"], 3000) : null;
+    const localCapcutModule = path.join(baseDir, "node_modules", "capcut-cli", "dist", "index.js");
+    const localResult = fs.existsSync(localCapcutModule)
+      ? run(process.execPath, [localCapcutModule, "--version"], 3000)
+      : fs.existsSync(localCapcutCommand)
+        ? run(localCapcutCommand, ["--version"], 3000)
+        : null;
     const globalLookup = localResult?.ok ? null : run(WINDOWS ? "where.exe" : "which", [capcutCommand], 2000);
     const directResult = globalLookup?.ok ? run(capcutCommand, ["--version"], 3000) : null;
     const capcutResult = localResult?.ok ? localResult : directResult;
     const capcutInvocation = localResult?.ok
-      ? { command: localCapcutCommand, prefixArgs: [] }
+      ? fs.existsSync(localCapcutModule)
+        ? { command: process.execPath, prefixArgs: [localCapcutModule] }
+        : { command: localCapcutCommand, prefixArgs: [] }
       : directResult?.ok
         ? { command: capcutCommand, prefixArgs: [] }
         : null;
