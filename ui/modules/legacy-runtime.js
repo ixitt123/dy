@@ -156,6 +156,7 @@ const videoProductDirector = document.querySelector("#videoProductDirector");
 const videoProductAudio = document.querySelector("#videoProductAudio");
 const videoProductImageSource = document.querySelector("#videoProductImageSource");
 const videoProductOutputType = document.querySelector("#videoProductOutputType");
+const videoProductJianyingTemplate = document.querySelector("#videoProductJianyingTemplate");
 const videoProductLocalImagePath = document.querySelector("#videoProductLocalImagePath");
 const videoProductLocalBgmPath = document.querySelector("#videoProductLocalBgmPath");
 const videoProductRouteAOptions = document.querySelector("#videoProductRouteAOptions");
@@ -3066,11 +3067,12 @@ function videoProductStatusLabel(status) {
 
 function videoProductOutputLabel(outputType) {
   return {
-    jianying: "路线 C：剪映半成品素材包",
-    mp4: "路线 B：AI 图文成片 MP4",
+    jianying_template: "剪映模板草稿【推荐】",
+    jianying: "路线 C：历史剪映素材包",
+    mp4: "MP4 预览",
     template_mp4: "路线 A：模板快剪 MP4",
     mix_mp4: "路线 D：下载素材混剪 MP4",
-    package: "标准素材包",
+    package: "标准素材包 / 兼容导出",
   }[outputType] || outputType || "视频成片";
 }
 
@@ -3079,7 +3081,7 @@ function videoProductCompletedSteps(project = {}) {
     ["pending", "进入 SQLite 队列"],
     ["binding_assets", "绑定导演稿、音频和素材"],
     ["building_timeline", "生成成片草稿"],
-    [project.output_type === "jianying" || project.output_type === "package" ? "exporting_draft" : "rendering", project.output_type === "jianying" ? "导出剪映半成品" : project.output_type === "package" ? "导出素材包" : "渲染 MP4"],
+    [["jianying_template", "jianying", "package"].includes(project.output_type) ? "exporting_draft" : "rendering", project.output_type === "jianying_template" ? "生成剪映模板草稿" : project.output_type === "jianying" ? "导出历史剪映素材包" : project.output_type === "package" ? "导出素材包" : "渲染 MP4"],
     ["completed", "写入输出文件"],
   ];
   const statusIndex = order.findIndex(([status]) => status === project.status);
@@ -3180,7 +3182,8 @@ function videoProductPayload() {
     source_director_project_id: Number(videoProductDirector.value || 0),
     audio_asset_id: Number(videoProductAudio.value || 0),
     image_source: videoProductImageSource.value || "director",
-    output_type: videoProductOutputType.value || "jianying",
+    output_type: videoProductOutputType.value || "jianying_template",
+    jianying_template: videoProductJianyingTemplate?.value || "education_tips",
     route_a_style_id: videoProductRouteAStyle?.value || "black_gold_knowledge",
     route_a_custom_style: videoProductRouteACustomStyle?.value.trim() || "",
     bgm_strategy: videoProductBgmStrategy?.value || "auto",

@@ -137,7 +137,7 @@ export function createProjectCenter(baseDir) {
     ["selected_assets_json", "TEXT DEFAULT '[]'"],
     ["bgm_json", "TEXT DEFAULT '{}'"],
     ["subtitle_timeline_json", "TEXT DEFAULT '[]'"],
-    ["output_mode", "TEXT DEFAULT 'jianying'"],
+    ["output_mode", "TEXT DEFAULT 'jianying_template'"],
     ["jianying_draft_json", "TEXT DEFAULT '{}'"],
     ["output_history_json", "TEXT DEFAULT '[]'"],
   ].forEach(([column, definition]) => ensureColumn("projects", column, definition));
@@ -176,7 +176,7 @@ export function createProjectCenter(baseDir) {
       selectedAssets: safeJson(row.selected_assets_json, []),
       bgm: safeJson(row.bgm_json, {}),
       subtitleTimeline: safeJson(row.subtitle_timeline_json, []),
-      outputMode: row.output_mode || "jianying",
+      outputMode: row.output_mode || "jianying_template",
       jianyingDraft: safeJson(row.jianying_draft_json, {}),
       outputHistory: safeJson(row.output_history_json, []),
       description: row.description || "",
@@ -218,7 +218,7 @@ export function createProjectCenter(baseDir) {
     const id = makeId("vp");
     const title = String(payload.title || payload.name || "新短视频项目").trim() || "新短视频项目";
     const videoType = String(payload.videoType || "宣传类");
-    const outputMode = String(payload.outputMode || "jianying");
+    const outputMode = String(payload.outputMode || "jianying_template");
     const now = nowLocal();
     db.prepare(`
       INSERT INTO projects (id, name, title, description, status, video_type, output_mode, created_at, updated_at)
@@ -407,7 +407,7 @@ export function createProjectCenter(baseDir) {
       { id: "subtitle", label: "字幕时间轴", ok: hasValue(project.subtitleTimeline), ready: "已完成", missing: "缺失", page: "director", action: "补齐字幕", critical: true },
       { id: "assets", label: "素材", ok: mediaAssets.length > 0 && missingAssets === 0, ready: `已完成 · ${mediaAssets.length} 个`, missing: `缺少 ${missingAssets || expectedAssets} 个`, page: "files", action: "匹配素材", critical: true },
       { id: "bgm", label: "BGM", ok: hasValue(project.bgm), ready: "已完成", missing: "未选择", page: "files", action: "选择 BGM", critical: true },
-      { id: "template", label: "剪映模板", ok: project.outputMode !== "jianying" || templateAssets.length > 0, ready: project.outputMode === "jianying" ? "已选择" : "当前路线不需要", missing: "未选择", page: "vfo", action: "选择模板", critical: project.outputMode === "jianying" },
+      { id: "template", label: "剪映模板", ok: !["jianying", "jianying_template"].includes(project.outputMode) || templateAssets.length > 0, ready: ["jianying", "jianying_template"].includes(project.outputMode) ? "已选择" : "当前路线不需要", missing: "未选择", page: "video-output", action: "选择模板", critical: ["jianying", "jianying_template"].includes(project.outputMode) },
       { id: "output", label: "输出目录", ok: outputReady, ready: "正常", missing: "异常", page: "settings", action: "检查目录", critical: true },
     ].map((item) => ({ ...item, detail: item.ok ? item.ready : item.missing }));
     const blockers = checks.filter((item) => item.critical && !item.ok);
