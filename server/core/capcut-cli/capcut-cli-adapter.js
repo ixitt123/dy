@@ -1,8 +1,19 @@
+import fs from "node:fs";
 import path from "node:path";
 import { spawn } from "node:child_process";
 import { createCapcutCliDetector } from "./capcut-cli-detector.js";
-import { buildCapcutCliPlan, writeCapcutCliPlan } from "./capcut-cli-plan-builder.js";
+import { buildCapcutCliPlan, buildCapcutCompileSpec, writeCapcutCliPlan } from "./capcut-cli-plan-builder.js";
 import { parseCapcutCliResult } from "./capcut-cli-result-parser.js";
+
+function safeDraftName(value) {
+  const cleaned = String(value || "codex_video")
+    .replace(/[<>:"/\\|?*\x00-\x1F]/g, "_")
+    .replace(/\s+/g, "_")
+    .replace(/_+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .slice(0, 80);
+  return cleaned || "codex_video";
+}
 
 export function createCapcutCliAdapter(options = {}) {
   const detector = options.detector || createCapcutCliDetector(options);
@@ -13,10 +24,7 @@ export function createCapcutCliAdapter(options = {}) {
       doctor: ["doctor"],
       version: ["--version"],
       help: ["--help"],
-      applyTemplate: ["apply-template", "--help"],
-      importSrt: ["import-srt", "--help"],
-      addAudio: ["add-audio", "--help"],
-      addImage: ["add-image", "--help"],
+      describe: ["describe"],
     };
     const commands = {};
     const warnings = [];
