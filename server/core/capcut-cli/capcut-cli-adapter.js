@@ -100,6 +100,7 @@ export function createCapcutCliAdapter(options = {}) {
     try {
       const args = String(status.jianying?.arguments || "").match(/(?:[^\s"]+|"[^"]*")+/g)?.map((value) => value.replace(/^"|"$/g, "")) || [];
       const child = spawn(appPath, args, { detached: true, stdio: "ignore", windowsHide: false });
+      child.once("error", () => {});
       child.unref();
       return { ok: true, message: "已启动剪映专业版。", appPath };
     } catch (error) {
