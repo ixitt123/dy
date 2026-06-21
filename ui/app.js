@@ -303,7 +303,7 @@ const rewriteVersionOptions = [
   { key: "moments", name: "朋友圈版", direction: "朋友圈文案", wordCount: "220字左右" },
   { key: "conversion", name: "成交转化版", direction: "暑假班转化", wordCount: "150字左右" },
 ];
-const defaultRewriteVersionCount = 1;
+const defaultRewriteVersionCount = 3;
 const maxRewriteVersionCount = 50;
 
 function setBusy(label) {
@@ -609,12 +609,15 @@ function renderRewriteVersions(rewrite = {}, { allowDefaults = true } = {}) {
     .map((version) => `
       <div class="rewrite-version" data-version-key="${escapeHtml(version.key)}">
         <div class="rewrite-version-head">
+          <button class="primary small rewrite-select-best" type="button" data-version-key="${escapeHtml(version.key)}">选择最佳版本</button>
           <button class="ghost small rewrite-generate-one" type="button" data-version-key="${escapeHtml(version.key)}">生成</button>
           <button class="ghost small rewrite-save-one" type="button" data-version-key="${escapeHtml(version.key)}">保存</button>
           <button class="ghost small rewrite-tts-one" type="button" data-version-key="${escapeHtml(version.key)}">生成语音</button>
           <button class="ghost small rewrite-director-one" type="button" data-version-key="${escapeHtml(version.key)}">导演稿</button>
           <button class="ghost small rewrite-copy" type="button" data-version-key="${escapeHtml(version.key)}">复制</button>
         </div>
+        <details class="rewrite-version-advanced">
+          <summary>这个版本的高级设置</summary>
         <div class="rewrite-version-options">
           <label>
             模型
@@ -667,6 +670,7 @@ function renderRewriteVersions(rewrite = {}, { allowDefaults = true } = {}) {
           参考风格输入
           <textarea class="rewrite-version-reference" rows="3" placeholder="给这个输出框单独指定参考风格">${escapeHtml(version.referenceStyle || rewriteReference.value || defaultRewriteReference)}</textarea>
         </label>
+        </details>
         <textarea class="rewrite-version-text" rows="8" data-version-key="${escapeHtml(version.key)}" placeholder="生成后可继续手动编辑">${escapeHtml(version.content)}</textarea>
         <div class="rewrite-revision-box">
           <label>

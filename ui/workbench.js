@@ -492,7 +492,31 @@ function setupRewriteStudio() {
   outputLane.className = "studio-lane rewrite-output-lane";
 
   if (columns[0]) sourceLane.appendChild(columns[0]);
-  if (columns[1]) settingsLane.appendChild(columns[1]);
+  const simpleControls = document.createElement("div");
+  simpleControls.className = "rewrite-simple-controls";
+  simpleControls.innerHTML = `
+    <label>
+      选择视频类型
+      <select id="rewriteVideoType">
+        <option value="宣传类">宣传类</option>
+        <option value="学习技巧类">学习技巧类</option>
+        <option value="招生转化类">招生转化类</option>
+        <option value="科普类">科普类</option>
+      </select>
+    </label>
+    <div class="rewrite-simple-note">
+      <strong>默认生成 3 个不同版本</strong>
+      <span>生成后选择最佳版本，再发送到配音或 AI 导演。</span>
+    </div>
+  `;
+  settingsLane.appendChild(simpleControls);
+  const advanced = document.createElement("details");
+  advanced.className = "rewrite-advanced-settings";
+  advanced.innerHTML = "<summary>高级设置</summary>";
+  if (columns[1]) advanced.appendChild(columns[1]);
+  const countControl = body.querySelector(".rewrite-result-meta");
+  if (countControl) advanced.appendChild(countControl);
+  settingsLane.appendChild(advanced);
   [
     body.querySelector(".rewrite-result-head"),
     body.querySelector(".rewrite-progress"),
@@ -500,12 +524,28 @@ function setupRewriteStudio() {
   ].filter(Boolean).forEach((element) => outputLane.appendChild(element));
 
   addLaneHeading(sourceLane, "原始文案与分析", "确认输入内容和已有分析");
-  addLaneHeading(settingsLane, "改写设置", "模型、方向、风格和修改要求");
-  addLaneHeading(outputLane, "生成结果", "独立编辑、保存和发送到下一环节");
+  addLaneHeading(settingsLane, "生成方式", "默认只需选择视频类型");
+  addLaneHeading(outputLane, "3 个改写版本", "选择最佳版本，再发送到配音或导演");
 
   originalGrid.remove();
   studio.append(sourceLane, settingsLane, outputLane);
   body.appendChild(studio);
+  const countInput = document.querySelector("#rewriteVersionCountInput");
+  if (countInput && Number(countInput.value || 0) < 3) {
+    countInput.value = "3";
+    countInput.dispatchEvent(new Event("change", { bubbles: true }));
+  }
+  const videoType = simpleControls.querySelector("#rewriteVideoType");
+  videoType?.addEventListener("change", () => {
+    const directionMap = {
+      宣传类: "朋友圈文案",
+      学习技巧类: "短视频口播",
+      招生转化类: "招生引流",
+      科普类: "短视频口播",
+    };
+    if (typeof rewriteDirection !== "undefined") rewriteDirection.value = directionMap[videoType.value] || "短视频口播";
+    if (activeVideoProject) updateCurrentVideoProject({ videoType: videoType.value }).catch(() => {});
+  });
 }
 
 function setupTtsStudio() {
@@ -536,9 +576,9 @@ function setupTtsStudio() {
   if (historyHead) resultLane.appendChild(historyHead);
   if (history) resultLane.appendChild(history);
 
-  addLaneHeading(inputLane, "输入文案", "手动输入或从改写结果带入");
-  addLaneHeading(settingsLane, "声音设置", "平台、音色、语速、音量和情绪");
-  addLaneHeading(resultLane, "试听结果", "播放、检查并管理生成记录");
+  addLaneHeading(inputLane, "项目文案", "手动输入或从当前项目的最佳改写带入");
+  addLaneHeading(settingsLane, "选择声音", "我的克隆音色、平台预设和最近使用");
+  addLaneHeading(resultLane, "试听与发送", "确认语音后继续进入成片中心");
 
   oldWorkbench.remove();
   studio.append(inputLane, settingsLane, resultLane);
@@ -700,8 +740,7 @@ function buildWorkbenchInformationArchitecture() {
     transcript: [transcriptVault],
     analysis: ["#analysisPanel"],
     rewrite: ["#rewritePanel"],
-    tts: ["#ttsLab"],
-    voices: ["#voiceAssetCenter"],
+    tts: ["#ttsLab", "#voiceAssetCenter"],
     director: ["#directorSystem"],
     vfo: ["#vfoSystem"],
     files: [".files-area"],
@@ -894,7 +933,7 @@ function railVideoProductStatusLabel(status) {
   return {
     pending: "等待",
     binding_assets: "绑定素材",
-    building_timeline: "生成时间线",
+    building_timeline: "生成成片草稿",
     rendering: "渲染 MP4",
     exporting_draft: "导出草稿",
     completed: "完成",
@@ -905,7 +944,7 @@ function railVideoProductStatusLabel(status) {
 function railVideoProductCard(project, variant = "normal") {
   const id = Number(project.project_id || project.id || 0);
   const progress = Math.max(0, Math.min(100, Number(project.progress || 0)));
-  const title = escapeHtml(project.metadata?.title || `Timeline #${id}`);
+  const title = escapeHtml(project.metadata?.title || `成片 #${id}`);
   const status = railVideoProductStatusLabel(project.status);
   const blockers = Array.isArray(project.blockers) ? project.blockers.filter(Boolean) : [];
   const detail = [
@@ -1011,7 +1050,7 @@ function renderRail(tasks, directors, vfoProjects, audioJobs, videoProducts = []
       })),
       ...videoProducts.filter((item) => item.status === "completed").slice(0, 3).map((item) => ({
         type: item.output_type === "mp4" ? "MP4成片" : "剪映草稿",
-        title: item.metadata?.title || `Timeline #${item.project_id || item.id}`,
+        title: item.metadata?.title || `成片 #${item.project_id || item.id}`,
         time: item.completed_at || item.updated_at,
         page: "vfo",
       })),
@@ -1041,7 +1080,7 @@ function renderRail(tasks, directors, vfoProjects, audioJobs, videoProducts = []
       `),
         ...failedTimelines.map((project) => `
         <button type="button" class="rail-list-item error-item rail-video-product-open" data-video-product-id="${Number(project.project_id || project.id || 0)}">
-          <span>Timeline #${Number(project.project_id || project.id || 0)}</span>
+          <span>成片 #${Number(project.project_id || project.id || 0)}</span>
           <strong>${escapeHtml(project.error || project.current_step || "成片任务失败")}</strong>
         </button>
       `),
@@ -1358,6 +1397,7 @@ function startWorkbenchObservers() {
 
 function initWorkbench() {
   buildWorkbenchInformationArchitecture();
+  setupProjectWorkbench();
   bindWorkbenchInteractions();
   startWorkbenchObservers();
 
