@@ -41,6 +41,11 @@ export function createVideoOutputRoutes({ videoProductService, readBody, sendJso
       sendJson(res, 200, videoProductService.getToolStatus());
       return true;
     }
+    if (req.method === "POST" && route === "open-jianying") {
+      const result = videoProductService.openJianying();
+      sendJson(res, result.ok ? 200 : 400, result);
+      return true;
+    }
     if (req.method === "POST" && route === "add-bgm") {
       const body = JSON.parse(await readBody(req) || "{}");
       try {

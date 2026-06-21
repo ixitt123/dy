@@ -732,7 +732,10 @@
         <section class="video-output-primary" aria-label="常用输出方式">
           <div class="video-product-toolbar">
             <div><h3>选择输出结果</h3><p>默认使用剪映母版替换素材；工具不可用时自动切换为兼容素材包。</p></div>
-            <button class="ghost small" id="refreshVideoOutputTools" type="button">重新检测工具</button>
+            <div class="video-product-toolbar-actions">
+              <button class="ghost small" id="openJianyingApp" type="button" disabled>打开剪映专业版</button>
+              <button class="ghost small" id="refreshVideoOutputTools" type="button">重新检测工具</button>
+            </div>
           </div>
           <div class="video-output-primary-actions">
             <button class="video-output-choice active" type="button" data-main-output="jianying_template"><strong>生成剪映模板草稿【推荐】</strong><small>母版替换、字幕、配音、BGM 与封面</small></button>

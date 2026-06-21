@@ -2481,6 +2481,10 @@ ${sceneMarkup}
     };
   }
 
+  function openJianying() {
+    return capcutCliAdapter?.openJianying?.() || { ok: false, message: "剪映启动适配器未启用。" };
+  }
+
   function syncOutputToVideoProject(project, timeline, timelineFiles, { draftPath = "", mp4Path = "" } = {}) {
     const metadata = safeJson(project.metadata_json, {});
     const videoProjectId = String(metadata.video_project_id || metadata.projectId || "").trim();
@@ -2598,6 +2602,7 @@ ${sceneMarkup}
     listProjects,
     listSources,
     getToolStatus,
+    openJianying,
     importBgmAsset,
     resolveOutputPath,
     outputRoot,

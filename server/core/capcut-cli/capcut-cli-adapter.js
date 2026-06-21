@@ -1,4 +1,5 @@
 import path from "node:path";
+import { spawn } from "node:child_process";
 import { createCapcutCliDetector } from "./capcut-cli-detector.js";
 import { buildCapcutCliPlan, writeCapcutCliPlan } from "./capcut-cli-plan-builder.js";
 import { parseCapcutCliResult } from "./capcut-cli-result-parser.js";
@@ -92,6 +93,20 @@ export function createCapcutCliAdapter(options = {}) {
     return { ...lastResult, planPath };
   }
 
+  function openJianying() {
+    const status = detector.detect();
+    const appPath = String(status.jianying?.appPath || "").trim();
+    if (!appPath) return { ok: false, message: "未检测到剪映专业版，请先安装或在系统设置中配置程序路径。" };
+    try {
+      const args = String(status.jianying?.arguments || "").match(/(?:[^\s"]+|"[^"]*")+/g)?.map((value) => value.replace(/^"|"$/g, "")) || [];
+      const child = spawn(appPath, args, { detached: true, stdio: "ignore", windowsHide: false });
+      child.unref();
+      return { ok: true, message: "已启动剪映专业版。", appPath };
+    } catch (error) {
+      return { ok: false, message: `剪映专业版启动失败：${error instanceof Error ? error.message : String(error)}`, appPath };
+    }
+  }
+
   return {
     detect: detectCapabilities,
     detectCapabilities,
@@ -110,5 +125,6 @@ export function createCapcutCliAdapter(options = {}) {
     applyTemplate: (planPath, outputPath) => execute(["apply-template", "--plan", planPath, "--output", outputPath]),
     renderPreview: (draftPath, outputPath) => execute(["render", "preview", "--draft", draftPath, "--output", outputPath], { previewPath: outputPath }),
     buildTemplateDraft,
+    openJianying,
   };
 }

@@ -1,6 +1,7 @@
 import { getJson, postJson } from "./api.js";
 
 const STATUS_LABELS = {
+  jianyingApp: "剪映专业版",
   capcutCli: "capcut-cli",
   ffmpeg: "FFmpeg",
   draftDirectory: "剪映草稿目录",
@@ -59,10 +60,17 @@ function renderToolStatus(container, status) {
     const ok = Boolean(item.ok);
     return `<div class="video-tool-check ${ok ? "ready" : "missing"}"><span>${label}</span><strong>${item.label || (ok ? "可用" : "不可用")}</strong>${item.detail ? `<small>${escapeHtml(item.detail)}</small>` : ""}</div>`;
   }).join("");
+  const openJianyingButton = document.querySelector("#openJianyingApp");
+  if (openJianyingButton) {
+    openJianyingButton.disabled = !checks.jianyingApp?.ok;
+    openJianyingButton.title = checks.jianyingApp?.ok ? "启动本机剪映专业版" : "未检测到剪映专业版";
+  }
   const note = document.querySelector("#videoOutputCompatibilityNote");
   if (note) note.textContent = status?.mode === "capcut_cli"
     ? "capcut-cli 和模板母版已就绪，当前使用剪映模板命令模式。"
-    : "capcut-cli 未安装、命令不完整或母版缺失，当前使用素材包兼容模式，不会中断任务。";
+    : checks.jianyingApp?.ok
+      ? "剪映客户端已安装；capcut-cli、命令或母版未就绪时，系统会输出兼容素材包，可直接打开剪映继续制作。"
+      : "capcut-cli 未安装、命令不完整或母版缺失，当前使用素材包兼容模式，不会中断任务。";
 }
 
 async function refreshToolStatus() {
@@ -316,6 +324,16 @@ export async function openVideoProductOutput() {
   if (status) status.textContent = "已打开视频成片输出目录。";
 }
 
+async function openJianyingApp() {
+  const note = document.querySelector("#videoOutputCompatibilityNote");
+  try {
+    const result = await postJson("/api/video-product/open-jianying", {});
+    if (note) note.textContent = result.message || "已启动剪映专业版。";
+  } catch (error) {
+    if (note) note.textContent = error.message;
+  }
+}
+
 function selectOutputType(outputType) {
   const select = document.querySelector("#videoProductOutputType");
   if (!select) return;
@@ -327,6 +345,7 @@ function selectOutputType(outputType) {
 function bindEvents() {
   document.querySelectorAll("[data-main-output]").forEach((button) => button.addEventListener("click", () => selectOutputType(button.dataset.mainOutput)));
   document.querySelector("#refreshVideoOutputTools")?.addEventListener("click", refreshToolStatus);
+  document.querySelector("#openJianyingApp")?.addEventListener("click", openJianyingApp);
   document.querySelector("#refreshVideoProductSources")?.addEventListener("click", () => loadVideoProductSources().catch(() => {}));
   document.querySelector("#refreshVideoProductProjects")?.addEventListener("click", () => loadVideoProductProjects().catch(() => {}));
   document.querySelector("#refreshVideoProjectReadiness")?.addEventListener("click", () => Promise.allSettled([refreshReadiness(), refreshQualityCheck()]));

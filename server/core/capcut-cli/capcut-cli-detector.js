@@ -38,12 +38,57 @@ function directoryHasTemplate(directory) {
   return fs.readdirSync(directory, { withFileTypes: true }).some((entry) => entry.name !== ".gitkeep");
 }
 
+function firstExistingPath(candidates = []) {
+  return candidates.map((value) => String(value || "").trim()).find((value) => value && fs.existsSync(value)) || "";
+}
+
+function readWindowsShortcut(shortcutPath) {
+  if (!WINDOWS || !shortcutPath || !fs.existsSync(shortcutPath)) return null;
+  const escapedPath = shortcutPath.replaceAll("'", "''");
+  const script = [
+    "[Console]::OutputEncoding = [Text.UTF8Encoding]::new()",
+    "$shell = New-Object -ComObject WScript.Shell",
+    `$shortcut = $shell.CreateShortcut('${escapedPath}')`,
+    "@{ targetPath = $shortcut.TargetPath; arguments = $shortcut.Arguments } | ConvertTo-Json -Compress",
+  ].join("; ");
+  const result = run("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", script]);
+  if (!result.ok || !result.stdout) return null;
+  try {
+    return JSON.parse(result.stdout);
+  } catch {
+    return null;
+  }
+}
+
 export function createCapcutCliDetector({ baseDir, ffmpegPath = "", getSettings = () => ({}) } = {}) {
   const templatesRoot = path.join(baseDir, "templates", "jianying");
   const outputRoot = path.join(baseDir, "video-products");
+  let windowsDiscovery = { checkedAt: 0, shortcut: null };
+
+  function discoverWindowsInstall() {
+    if (!WINDOWS) return null;
+    if (Date.now() - windowsDiscovery.checkedAt < 30000) return windowsDiscovery.shortcut;
+    const appData = process.env.APPDATA || "";
+    const shortcutPath = appData
+      ? path.join(appData, "Microsoft", "Windows", "Start Menu", "Programs", "剪映专业版", "剪映专业版.lnk")
+      : "";
+    windowsDiscovery = { checkedAt: Date.now(), shortcut: readWindowsShortcut(shortcutPath) };
+    return windowsDiscovery.shortcut;
+  }
 
   function detect(overrides = {}) {
     const settings = { ...getSettings(), ...overrides };
+    const discoveredInstall = discoverWindowsInstall();
+    const localAppData = process.env.LOCALAPPDATA || "";
+    const configuredAppPath = String(
+      settings.jianyingAppPath || settings.jianying_app_path || settings.jianying?.appPath || "",
+    ).trim();
+    const jianyingAppPath = firstExistingPath([
+      configuredAppPath,
+      discoveredInstall?.targetPath,
+      localAppData && path.join(localAppData, "JianyingPro", "JianyingPro.exe"),
+      localAppData && path.join(localAppData, "CapCut", "CapCut.exe"),
+    ]);
     const npxCommand = WINDOWS ? "npx.cmd" : "npx";
     const capcutCommand = WINDOWS ? "capcut.cmd" : "capcut";
     const npxResult = run(npxCommand, ["--no-install", "capcut-cli", "--version"]);
@@ -67,7 +112,11 @@ export function createCapcutCliDetector({ baseDir, ffmpegPath = "", getSettings 
     const configuredDraftDirectory = String(
       settings.jianyingDraftDir || settings.jianying_draft_dir || settings.jianying?.draftDir || "",
     ).trim();
-    const draftDirectory = configuredDraftDirectory ? path.resolve(configuredDraftDirectory) : "";
+    const draftDirectory = firstExistingPath([
+      configuredDraftDirectory ? path.resolve(configuredDraftDirectory) : "",
+      localAppData && path.join(localAppData, "JianyingPro", "User Data", "Projects", "com.lveditor.draft"),
+      localAppData && path.join(localAppData, "CapCut", "User Data", "Projects", "com.lveditor.draft"),
+    ]);
     const templateDirectories = fs.existsSync(templatesRoot)
       ? fs.readdirSync(templatesRoot, { withFileTypes: true }).filter((entry) => entry.isDirectory())
       : [];
@@ -83,6 +132,11 @@ export function createCapcutCliDetector({ baseDir, ffmpegPath = "", getSettings 
     }
 
     const checks = {
+      jianyingApp: {
+        ok: Boolean(jianyingAppPath),
+        label: jianyingAppPath ? "已安装" : "未检测到",
+        detail: jianyingAppPath || "未从系统设置或开始菜单找到剪映专业版",
+      },
       capcutCli: {
         ok: Boolean(capcutResult?.ok),
         label: capcutResult?.ok ? "已安装" : "未安装",
@@ -126,6 +180,11 @@ export function createCapcutCliDetector({ baseDir, ffmpegPath = "", getSettings 
       checks,
       invocation: capcutInvocation,
       paths: { templatesRoot, draftDirectory, outputRoot },
+      jianying: {
+        appPath: jianyingAppPath,
+        arguments: String(discoveredInstall?.arguments || "").trim(),
+        canOpen: Boolean(jianyingAppPath),
+      },
       detectedTemplates: detectedTemplates.map((entry) => entry.name),
     };
   }
