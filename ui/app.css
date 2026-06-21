@@ -6071,6 +6071,128 @@ audio {
   gap: 6px;
 }
 
+.video-output-primary {
+  margin-top: 14px;
+  padding: 14px;
+  border: 1px solid #303846;
+  border-radius: 8px;
+  background: #11161e;
+}
+
+.video-output-primary-actions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.video-output-choice {
+  min-height: 82px;
+  padding: 12px;
+  border: 1px solid #343e4c;
+  border-radius: 7px;
+  background: #0d1219;
+  color: #eef3f7;
+  text-align: left;
+}
+
+.video-output-choice strong,
+.video-output-choice small {
+  display: block;
+}
+
+.video-output-choice strong {
+  font-size: 14px;
+}
+
+.video-output-choice small {
+  margin-top: 7px;
+  color: #8f9caf;
+  line-height: 1.45;
+}
+
+.video-output-choice.active {
+  border-color: #7257ff;
+  box-shadow: inset 3px 0 0 #7257ff;
+  background: #17152a;
+}
+
+.video-output-tool-status {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.video-tool-check {
+  min-width: 0;
+  padding: 9px 10px;
+  border: 1px solid #343e4c;
+  border-radius: 6px;
+  background: #0c1118;
+}
+
+.video-tool-check span,
+.video-tool-check strong,
+.video-tool-check small {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.video-tool-check span,
+.video-tool-check small {
+  color: #8f9caf;
+  font-size: 11px;
+}
+
+.video-tool-check strong {
+  margin: 5px 0 3px;
+  color: #ffb86b;
+  font-size: 12px;
+}
+
+.video-tool-check.ready strong {
+  color: #62d9a3;
+}
+
+.video-output-compatibility-note {
+  margin: 10px 0 0;
+  color: #aab4c2;
+  font-size: 12px;
+}
+
+.advanced-output-routes {
+  margin-top: 12px;
+  border: 1px solid #2f3743;
+  border-radius: 7px;
+  background: #0d1219;
+}
+
+.advanced-output-routes > summary {
+  padding: 11px 13px;
+  color: #c8d0dc;
+  cursor: pointer;
+}
+
+.advanced-output-routes .video-route-map {
+  margin: 0;
+  padding: 0 12px 12px;
+}
+
+@media (max-width: 1050px) {
+  .video-output-primary-actions,
+  .video-output-tool-status {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 680px) {
+  .video-output-primary-actions,
+  .video-output-tool-status {
+    grid-template-columns: 1fr;
+  }
+}
+
 @media (max-width: 1580px) {
   .recent-project-list {
     grid-template-columns: repeat(3, minmax(210px, 1fr));
