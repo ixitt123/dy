@@ -995,6 +995,15 @@ function railVideoProductStatusLabel(status) {
   }[status] || status || "未知";
 }
 
+function friendlyVideoProductError(value) {
+  const message = String(value || "").trim();
+  if (!message) return "";
+  if (/ffmpeg|stream specifier|filtergraph|invalid argument|libavcodec/i.test(message)) {
+    return "成片合成失败，请检查音频、素材和输出设置后重试。";
+  }
+  return message.length > 140 ? `${message.slice(0, 140)}…` : message;
+}
+
 function railVideoProductCard(project, variant = "normal") {
   const id = Number(project.project_id || project.id || 0);
   const progress = Math.max(0, Math.min(100, Number(project.progress || 0)));
@@ -1004,7 +1013,7 @@ function railVideoProductCard(project, variant = "normal") {
   const detail = [
     project.current_step || status,
     blockers.length ? `阻塞 ${blockers.length} 项` : "",
-    project.error || "",
+    friendlyVideoProductError(project.error),
   ].filter(Boolean).join(" · ");
   const output = project.mp4_path || project.output_dir || project.timeline_path || project.srt_path || "";
   const hasOutput = Boolean(output);
@@ -1135,7 +1144,7 @@ function renderRail(tasks, directors, vfoProjects, audioJobs, videoProducts = []
         ...failedTimelines.map((project) => `
         <button type="button" class="rail-list-item error-item rail-video-product-open" data-video-product-id="${Number(project.project_id || project.id || 0)}">
           <span>成片 #${Number(project.project_id || project.id || 0)}</span>
-          <strong>${escapeHtml(project.error || project.current_step || "成片任务失败")}</strong>
+          <strong>${escapeHtml(friendlyVideoProductError(project.error) || project.current_step || "成片任务失败")}</strong>
         </button>
       `),
       ].join("")
