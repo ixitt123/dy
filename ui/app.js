@@ -4559,8 +4559,29 @@ transcriptList.addEventListener("click", (event) => {
 });
 
 rewriteVersions.addEventListener("click", async (event) => {
-  const button = event.target.closest(".rewrite-generate-one, .rewrite-save-one, .rewrite-revise-one, .rewrite-tts-one, .rewrite-director-one, .rewrite-copy");
+  const button = event.target.closest(".rewrite-select-best, .rewrite-generate-one, .rewrite-save-one, .rewrite-revise-one, .rewrite-tts-one, .rewrite-director-one, .rewrite-copy");
   if (!button) return;
+  if (button.classList.contains("rewrite-select-best")) {
+    const card = button.closest(".rewrite-version");
+    const text = card?.querySelector(".rewrite-version-text")?.value.trim() || "";
+    if (!text) {
+      rewriteStatus.textContent = "这个版本还没有文案，请先生成。";
+      return;
+    }
+    rewriteVersions.querySelectorAll(".rewrite-version").forEach((item) => item.classList.toggle("selected-best", item === card));
+    rewriteVersions.querySelectorAll(".rewrite-select-best").forEach((item) => { item.textContent = item === button ? "已选为最佳" : "选择最佳版本"; });
+    const version = collectRewriteVersions().find((item) => item.key === button.dataset.versionKey) || {};
+    await window.videoProjects?.linkCurrent?.("selected_rewrite", `task-${rewriteTaskId.value}-${button.dataset.versionKey}`, version.name || "最佳改写版本", {
+      text,
+      taskId: Number(rewriteTaskId.value || 0),
+      versionKey: button.dataset.versionKey,
+      direction: version.direction,
+      style: version.style,
+      source: "ai_generated",
+    });
+    rewriteStatus.textContent = "已选为当前项目的最佳文案，可以发送到 TTS 或 AI 导演。";
+    return;
+  }
   if (button.classList.contains("rewrite-generate-one")) {
     button.disabled = true;
     try {
