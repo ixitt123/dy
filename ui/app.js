@@ -3303,16 +3303,11 @@ function renderVideoProductSourceOptions({ preferredDirectorId = 0, preferredAud
   const routeA = isRouteAVideoProduct();
   const directorOptions = directors
     .map((project) => `<option value="${project.id}">#${project.id} ${escapeHtml(project.title || "未命名导演稿")} · ${Number(project.scene_count || 0)} 镜头</option>`);
-  if (routeA) {
-    directorOptions.unshift('<option value="">路线 A：按 TTS 文案自动生成导演稿</option>');
-  }
   videoProductDirector.innerHTML = directorOptions.length
     ? directorOptions.join("")
     : '<option value="">暂无已完成导演项目</option>';
   if (preferredDirectorId && directors.some((item) => Number(item.id) === Number(preferredDirectorId))) {
     videoProductDirector.value = String(preferredDirectorId);
-  } else if (routeA && !preferredDirectorId) {
-    videoProductDirector.value = "";
   }
   const selectedDirector = directors.find((item) => Number(item.id) === Number(videoProductDirector.value || preferredDirectorId || 0))
     || (routeA ? null : directors[0] || null);
@@ -3471,7 +3466,7 @@ function renderVideoProductScenes(preview = videoProductPreview) {
 }
 
 async function previewVideoProductTimeline() {
-  if (!isRouteAVideoProduct() && !Number(videoProductDirector.value || 0)) {
+  if (!Number(videoProductDirector.value || 0)) {
     videoProductStatus.textContent = "请先选择导演项目。";
     return null;
   }
@@ -3607,7 +3602,7 @@ async function generateVideoProduct() {
     window.workbenchNavigate?.("dashboard");
     return;
   }
-  if (!isRouteAVideoProduct() && !Number(videoProductDirector.value || 0)) {
+  if (!Number(videoProductDirector.value || 0)) {
     videoProductStatus.textContent = "请先选择导演项目。";
     return;
   }

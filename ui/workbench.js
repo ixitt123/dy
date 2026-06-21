@@ -843,6 +843,8 @@ function navigateWorkbench(pageId, options = {}) {
 
   if (target === "analysis" && analysisPanel) analysisPanel.hidden = false;
   if (target === "rewrite" && rewritePanel) rewritePanel.hidden = false;
+  if (target === "vfo") refreshProjectReadiness().catch(() => {});
+  if (target === "files") refreshProjectAssets().catch(() => {});
   localStorage.setItem("short-video-workbench-page", target);
   if (!options.fromHash && window.location.hash !== `#${target}`) {
     window.history.replaceState(null, "", `#${target}`);
