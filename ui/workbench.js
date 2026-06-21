@@ -1,7 +1,7 @@
 const workbenchPages = {
   dashboard: {
     title: "首页",
-    description: "查看任务进度、最近生成和内容生产流程。",
+    description: "管理短视频项目、当前进度和下一步制作动作。",
   },
   collector: {
     title: "视频下载",
@@ -17,11 +17,11 @@ const workbenchPages = {
   },
   rewrite: {
     title: "AI改写",
-    description: "原文、改写设置和多版本结果。",
+    description: "选择视频类型，一键生成 3 个版本并选出最佳文案。",
   },
   tts: {
     title: "TTS语音",
-    description: "选择声音、调整表达并生成配音。",
+    description: "选择项目文案和声音，生成、试听并发送到成片中心。",
   },
   voices: {
     title: "声音资产",
@@ -33,11 +33,11 @@ const workbenchPages = {
   },
   vfo: {
     title: "视频成片中心",
-    description: "统一 Timeline、剪映草稿、素材包和 MP4 输出。",
+    description: "检查文案、语音、导演稿、素材和 BGM 后生成成片草稿。",
   },
   files: {
-    title: "文件资产",
-    description: "集中查看、打开和清理本地文件。",
+    title: "素材资产库",
+    description: "按类型、用途、风格和项目管理成片素材。",
   },
   settings: {
     title: "系统设置",
@@ -56,6 +56,21 @@ let dashboardVideoProducts = [];
 let workbenchOverviewTimer = 0;
 let importedDirectorImagePrompts = [];
 let activeDirectorImageImport = null;
+let videoProjectsState = [];
+let activeVideoProject = null;
+let projectReadinessState = null;
+
+const VIDEO_PROJECT_STEPS = [
+  ["created", "采集素材", "collector"],
+  ["collected", "提取文案", "transcript"],
+  ["transcribed", "AI 改写", "rewrite"],
+  ["rewritten", "TTS 配音", "tts"],
+  ["voiced", "AI 导演", "director"],
+  ["directed", "素材匹配", "files"],
+  ["assets_ready", "成片草稿", "vfo"],
+  ["draft_ready", "打开剪映", "vfo"],
+  ["exported", "已导出", "vfo"],
+];
 
 function createWorkbenchPage(pageId) {
   const page = document.createElement("section");
