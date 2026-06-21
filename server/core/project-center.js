@@ -405,8 +405,8 @@ export function createProjectCenter(baseDir) {
       { id: "voice", label: "语音", ok: hasValue(project.selectedTtsAudio), ready: "已完成", missing: "缺失", page: "tts", action: "生成语音", critical: true },
       { id: "director", label: "导演稿", ok: hasValue(project.directorScript), ready: "已完成", missing: "缺失", page: "director", action: "生成导演稿", critical: true },
       { id: "subtitle", label: "字幕时间轴", ok: hasValue(project.subtitleTimeline), ready: "已完成", missing: "缺失", page: "director", action: "补齐字幕", critical: true },
-      { id: "assets", label: "素材", ok: mediaAssets.length > 0 && missingAssets === 0, ready: `已完成 · ${mediaAssets.length} 个`, missing: `缺少 ${missingAssets || expectedAssets} 个`, page: "files", action: "匹配素材", critical: true },
-      { id: "bgm", label: "BGM", ok: hasValue(project.bgm), ready: "已完成", missing: "未选择", page: "files", action: "选择 BGM", critical: true },
+      { id: "assets", label: "素材", ok: mediaAssets.length > 0 && missingAssets === 0, ready: `已完成 · ${mediaAssets.length} 个`, missing: `缺少 ${missingAssets || expectedAssets} 个`, page: "assets", action: "匹配素材", critical: true },
+      { id: "bgm", label: "BGM", ok: hasValue(project.bgm), ready: "已完成", missing: "未选择", page: "assets", action: "选择 BGM", critical: true },
       { id: "template", label: "剪映模板", ok: !["jianying", "jianying_template"].includes(project.outputMode) || templateAssets.length > 0, ready: ["jianying", "jianying_template"].includes(project.outputMode) ? "已选择" : "当前路线不需要", missing: "未选择", page: "video-output", action: "选择模板", critical: ["jianying", "jianying_template"].includes(project.outputMode) },
       { id: "output", label: "输出目录", ok: outputReady, ready: "正常", missing: "异常", page: "settings", action: "检查目录", critical: true },
     ].map((item) => ({ ...item, detail: item.ok ? item.ready : item.missing }));

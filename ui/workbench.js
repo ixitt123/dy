@@ -75,9 +75,9 @@ const VIDEO_PROJECT_STEPS = [
   ["transcribed", "AI 改写", "rewrite"],
   ["rewritten", "TTS 配音", "tts"],
   ["voiced", "AI 导演", "director"],
-  ["directed", "素材匹配", "files"],
-  ["assets_ready", "成片草稿", "vfo"],
-  ["draft_ready", "打开剪映", "vfo"],
+  ["directed", "素材匹配", "assets"],
+  ["assets_ready", "成片草稿", "video-output"],
+  ["draft_ready", "打开剪映", "video-output"],
   ["exported", "已导出", "vfo"],
 ];
 
@@ -198,7 +198,7 @@ function renderCurrentVideoProject() {
       <span>${Number(activeVideoProject.progress || 0)}%</span>
     </div>
     <div class="project-progress-track"><i style="width:${Number(activeVideoProject.progress || 0)}%"></i></div>
-    <small>${escapeHtml(activeVideoProject.videoType || "短视频")} · ${escapeHtml(activeVideoProject.outputMode === "jianying" ? "剪映成片草稿" : "MP4 成片")}</small>
+    <small>${escapeHtml(activeVideoProject.videoType || "短视频")} · ${escapeHtml(["jianying", "jianying_template"].includes(activeVideoProject.outputMode) ? "剪映模板草稿" : activeVideoProject.outputMode === "package" ? "标准素材包" : "MP4 预览")}</small>
   `;
   if (nextTitle) nextTitle.textContent = action.label;
   if (nextDescription) nextDescription.textContent = `当前已完成“${projectStatusLabel(activeVideoProject.status)}”，建议继续完成下一环节。`;
@@ -380,7 +380,7 @@ async function refreshProjectReadiness() {
 
 async function syncCurrentVideoProductSelections() {
   if (!currentVideoProjectId()) throw new Error("请先在首页新建或选择一个短视频项目。");
-  const outputType = typeof videoProductOutputType !== "undefined" ? videoProductOutputType.value : "jianying";
+  const outputType = typeof videoProductOutputType !== "undefined" ? videoProductOutputType.value : "jianying_template";
   await updateCurrentVideoProject({ outputMode: outputType });
 
   const audioId = Number(typeof videoProductAudio !== "undefined" ? videoProductAudio.value : 0);
@@ -427,10 +427,10 @@ async function syncCurrentVideoProductSelections() {
       status: "ready",
     });
   }
-  if (outputType === "jianying") {
+  if (["jianying", "jianying_template"].includes(outputType)) {
     const templateSelect = document.querySelector("#videoProductJianyingTemplate");
-    const templateId = templateSelect?.value || "vertical_knowledge";
-    const templateName = templateSelect?.selectedOptions?.[0]?.textContent || "竖屏知识口播模板";
+    const templateId = templateSelect?.value || "education_tips";
+    const templateName = templateSelect?.selectedOptions?.[0]?.textContent || "学习技巧模板";
     await linkCurrentProjectAsset("template", templateId, templateName, {
       source: "local_upload",
       ratio: "9:16",
@@ -451,7 +451,7 @@ function setupProjectWorkbench() {
     event.preventDefault();
     const title = document.querySelector("#videoProjectTitle")?.value.trim() || "新短视频项目";
     const videoType = document.querySelector("#videoProjectType")?.value || "宣传类";
-    const outputMode = document.querySelector("#videoProjectOutputMode")?.value || "jianying";
+    const outputMode = document.querySelector("#videoProjectOutputMode")?.value || "jianying_template";
     const data = await projectApi("/api/projects/create", { method: "POST", body: JSON.stringify({ title, videoType, outputMode }) });
     form.hidden = true;
     form.reset();
