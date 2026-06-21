@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { spawn } from "node:child_process";
+import { ROUTE_A_DEFAULT_STYLE_ID, ROUTE_A_STYLE_PRESETS } from "../config/video-style-presets.js";
 
 const TIMELINE_STATUSES = new Set([
   "pending",
@@ -57,79 +58,6 @@ const ROUTE_A_SKILL_CHAIN = [
   "ffmpeg-final-render",
   "video-quality-review",
 ];
-
-const ROUTE_A_STYLE_PRESETS = {
-  black_gold_knowledge: {
-    label: "黑金知识口播",
-    directorStyle: "knowledge-blogger",
-    videoType: "douyin-knowledge",
-    pace: "hook-fast-cut",
-    tone: "专业、有冲击力、有节奏",
-    palette: {
-      background: "0x07101B",
-      panel: "0x101827",
-      accent: "0xE7C76C",
-      accent2: "0x49D6C8",
-      text: "0xFFFFFF",
-      muted: "0xAAB7C7",
-    },
-    bgmKeywords: ["premium", "cinematic", "black", "gold", "knowledge", "dark", "商业", "黑金", "知识"],
-    visualRules: ["深色高级背景", "金色重点词", "强钩子片头", "信息卡节奏切换"],
-  },
-  clean_education: {
-    label: "清爽教育商业",
-    directorStyle: "education-premium",
-    videoType: "education-enrollment",
-    pace: "standard",
-    tone: "可信、清楚、适合家长理解",
-    palette: {
-      background: "0xEEF5F2",
-      panel: "0xFFFFFF",
-      accent: "0x1E8A69",
-      accent2: "0xF0B84C",
-      text: "0x12221D",
-      muted: "0x5F716B",
-    },
-    bgmKeywords: ["education", "light", "warm", "campus", "clean", "教育", "校园", "清爽"],
-    visualRules: ["明亮教育感", "可信信息卡", "字幕留足安全区", "结尾转化 CTA"],
-  },
-  tech_info: {
-    label: "科技信息流",
-    directorStyle: "apple-keynote",
-    videoType: "douyin-knowledge",
-    pace: "fast",
-    tone: "理性、干净、数据感",
-    palette: {
-      background: "0x08131F",
-      panel: "0x0F2233",
-      accent: "0x4CC9F0",
-      accent2: "0xA7F3D0",
-      text: "0xF3FAFF",
-      muted: "0x9FB6C8",
-    },
-    bgmKeywords: ["tech", "digital", "data", "future", "信息流", "科技", "数据"],
-    visualRules: ["网格信息层", "科技蓝高亮", "数据卡片动效", "干净切换"],
-  },
-  enrollment_ad: {
-    label: "高冲击招生广告",
-    directorStyle: "clean-commercial",
-    videoType: "education-enrollment",
-    pace: "hook-fast-cut",
-    tone: "强钩子、强转化、强行动",
-    palette: {
-      background: "0x160B12",
-      panel: "0x24121E",
-      accent: "0xFFCF5A",
-      accent2: "0xFF5C7A",
-      text: "0xFFF8ED",
-      muted: "0xD9B6A7",
-    },
-    bgmKeywords: ["ad", "promo", "impact", "trailer", "招生", "广告", "促销", "冲击"],
-    visualRules: ["前三秒强利益点", "痛点对比卡", "金句大字", "片尾明确行动"],
-  },
-};
-
-const ROUTE_A_DEFAULT_STYLE_ID = "black_gold_knowledge";
 
 function safeJson(value, fallback = {}) {
   if (value && typeof value === "object") return value;

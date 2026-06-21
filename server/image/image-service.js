@@ -7,6 +7,20 @@ import { callProviderGenerate } from "./provider-adapter.js";
 
 const DEFAULT_IMAGE_PROVIDER = "volcengine_ark";
 const DEFAULT_IMAGE_MODEL = "doubao-seedream-5-0-lite-260128";
+const FALLBACK_STORYBOARD_STYLE_TEMPLATE = `统一项目：{{title}}
+统一风格：{{visual_style}}，商业短视频质感，真实摄影感，电影级布光，干净高级，不廉价，不像PPT。
+统一画幅：{{aspectRatio}}，平台：{{platform}}，所有分镜保持同一色调、同一镜头语言、同一人物/场景风格。
+统一色彩：深色高级背景，克制的金色或电光蓝点缀，高对比但不过曝，画面有层次和空间感。
+统一构图：主体明确，前景/中景/背景有纵深，保留字幕安全区，适合竖屏短视频发布。
+统一质感：高端商业广告、知识口播视觉包装、高清、锐利、无廉价海报感、无普通插画感。
+禁止：乱码文字、水印、奇怪logo、低清、脏乱背景、随机人物变脸、颜色漂移、过度卡通、塑料感。`;
+
+function renderStyleTemplate(template, values) {
+  return Object.entries(values).reduce(
+    (result, [key, value]) => result.replaceAll(`{{${key}}}`, String(value ?? "")),
+    template,
+  );
+}
 
 function normalizeVolcengineArkModel(model) {
   const value = String(model || "").trim();
@@ -23,6 +37,13 @@ function normalizeVolcengineArkModel(model) {
 export function createImageService({ baseDir, getSettings, taskStore = null }) {
   const outputDir = path.join(baseDir, "image-assets", "generated");
   const dbPath = path.join(baseDir, ".data", "image-studio.sqlite");
+  const styleTemplatePath = path.join(baseDir, "prompts", "storyboard-image", "default-commercial.md");
+  let storyboardStyleTemplate = FALLBACK_STORYBOARD_STYLE_TEMPLATE;
+  try {
+    storyboardStyleTemplate = fs.readFileSync(styleTemplatePath, "utf8").trim() || FALLBACK_STORYBOARD_STYLE_TEMPLATE;
+  } catch {
+    storyboardStyleTemplate = FALLBACK_STORYBOARD_STYLE_TEMPLATE;
+  }
   fs.mkdirSync(outputDir, { recursive: true });
 
   const db = new DatabaseSync(dbPath);
@@ -165,15 +186,12 @@ export function createImageService({ baseDir, getSettings, taskStore = null }) {
     const title = String(project?.title || "短视频分镜").trim();
     const style = String(project?.visual_style || "高级商业短视频").trim();
     const platform = String(project?.platform || "douyin").trim();
-    return [
-      `统一项目：${title}`,
-      `统一风格：${style}，商业短视频质感，真实摄影感，电影级布光，干净高级，不廉价，不像PPT。`,
-      `统一画幅：${aspectRatio}，平台：${platform}，所有分镜保持同一色调、同一镜头语言、同一人物/场景风格。`,
-      "统一色彩：深色高级背景，克制的金色或电光蓝点缀，高对比但不过曝，画面有层次和空间感。",
-      "统一构图：主体明确，前景/中景/背景有纵深，保留字幕安全区，适合竖屏短视频发布。",
-      "统一质感：高端商业广告、知识口播视觉包装、高清、锐利、无廉价海报感、无普通插画感。",
-      "禁止：乱码文字、水印、奇怪logo、低清、脏乱背景、随机人物变脸、颜色漂移、过度卡通、塑料感。",
-    ].join("\n");
+    return renderStyleTemplate(storyboardStyleTemplate, {
+      title,
+      visual_style: style,
+      platform,
+      aspectRatio,
+    });
   }
 
   function buildStoryboardImagePrompt({ project, scene, index = 0, total = 1, aspectRatio = "9:16" }) {

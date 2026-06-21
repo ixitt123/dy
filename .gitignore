@@ -26,6 +26,9 @@ video-products/*
 !video-products/.gitkeep
 
 settings.json
+.env
+.env.*
+package-lock.json
 ui-server.pid
 ui-server.url
 
