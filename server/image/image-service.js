@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { spawn } from "node:child_process";
 import { DatabaseSync } from "node:sqlite";
 import { randomUUID } from "node:crypto";
 import { createImageProvider } from "./providers/index.js";
@@ -22,6 +23,29 @@ function renderStyleTemplate(template, values) {
   );
 }
 
+function targetImageSize(aspectRatio = "1:1") {
+  return {
+    "9:16": { width: 1080, height: 1920 },
+    "16:9": { width: 1920, height: 1080 },
+    "1:1": { width: 1080, height: 1080 },
+    "3:4": { width: 1080, height: 1440 },
+    "4:3": { width: 1440, height: 1080 },
+  }[String(aspectRatio || "1:1")] || { width: 1080, height: 1080 };
+}
+
+function runProcess(command, args) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(command, args, { windowsHide: true });
+    let stderr = "";
+    child.stderr.on("data", (chunk) => { stderr += chunk.toString(); });
+    child.on("error", reject);
+    child.on("close", (code) => {
+      if (code === 0) resolve();
+      else reject(new Error(stderr.trim() || `${path.basename(command)} exited with ${code}`));
+    });
+  });
+}
+
 function normalizeVolcengineArkModel(model) {
   const value = String(model || "").trim();
   const lower = value.toLowerCase().replace(/_/g, "-");
@@ -34,7 +58,7 @@ function normalizeVolcengineArkModel(model) {
   return value;
 }
 
-export function createImageService({ baseDir, getSettings, taskStore = null }) {
+export function createImageService({ baseDir, getSettings, taskStore = null, ffmpegPath = "" }) {
   const outputDir = path.join(baseDir, "image-assets", "generated");
   const dbPath = path.join(baseDir, ".data", "image-studio.sqlite");
   const styleTemplatePath = path.join(baseDir, "prompts", "storyboard-image", "default-commercial.md");
@@ -124,6 +148,30 @@ export function createImageService({ baseDir, getSettings, taskStore = null }) {
     throw new Error("图片下载失败：Provider 未返回图片 URL 或 Base64。");
   }
 
+  async function normalizeImageTo1080(filePath, aspectRatio = "1:1") {
+    const target = targetImageSize(aspectRatio);
+    if (!ffmpegPath || !fs.existsSync(ffmpegPath)) {
+      throw new Error("本地 FFmpeg 不可用，无法把图片压到 1080 规格。");
+    }
+    const tempPath = filePath.replace(/(\.[^.]+)?$/, `_1080_tmp.png`);
+    await runProcess(ffmpegPath, [
+      "-y",
+      "-hide_banner",
+      "-loglevel",
+      "error",
+      "-i",
+      filePath,
+      "-vf",
+      `scale=${target.width}:${target.height}:force_original_aspect_ratio=cover,crop=${target.width}:${target.height},setsar=1`,
+      "-frames:v",
+      "1",
+      tempPath,
+    ]);
+    fs.rmSync(filePath, { force: true });
+    fs.renameSync(tempPath, filePath);
+    return target;
+  }
+
   function publicAsset(row) {
     if (!row) return row;
     return {
@@ -144,21 +192,24 @@ export function createImageService({ baseDir, getSettings, taskStore = null }) {
     const filename = `local_${Date.now()}_${assetId.slice(0, 8)}${ext}`;
     const outputPath = path.join(outputDir, filename);
     fs.copyFileSync(resolved, outputPath);
+    const size = await normalizeImageTo1080(outputPath, aspectRatio);
     const stats = fs.statSync(outputPath);
     const assetPrompt = String(prompt || "").trim() || `本地图片素材：${path.basename(resolved)}`;
 
     db.prepare(`
       INSERT INTO image_assets (
-        id, job_id, filename, original_path, file_path, file_size, provider, model,
+        id, job_id, filename, original_path, file_path, width, height, file_size, provider, model,
         prompt, revised_prompt, aspect_ratio, source_url, source_type, source_id
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       assetId,
       "",
       filename,
       outputPath,
       outputPath,
+      size.width,
+      size.height,
       stats.size,
       "local",
       "local-file",
@@ -269,21 +320,24 @@ export function createImageService({ baseDir, getSettings, taskStore = null }) {
 
         const localPath = await downloadImage(result, outputPath);
 
+        const size = await normalizeImageTo1080(localPath, aspectRatio);
         const stats = fs.statSync(localPath);
         const assetId = randomUUID();
 
         db.prepare(`
           INSERT INTO image_assets (
-            id, job_id, filename, original_path, file_path, file_size, provider, model,
+            id, job_id, filename, original_path, file_path, width, height, file_size, provider, model,
             prompt, revised_prompt, aspect_ratio, source_url, source_type, source_id
           )
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `).run(
           assetId,
           jobId,
           filename,
           localPath,
           localPath,
+          size.width,
+          size.height,
           stats.size,
           selected.provider,
           result.model || selected.model,

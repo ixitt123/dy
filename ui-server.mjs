@@ -96,6 +96,7 @@ const imageService = createImageService({
   baseDir: __dirname,
   getSettings: readSettings,
   taskStore,
+  ffmpegPath,
 });
 
 // VideoProject 是主项目；TimelineProject 作为每次成片输出记录回写到这里。
