@@ -876,6 +876,16 @@ async function sendTranscriptToTts(taskId) {
   const transcripts = await refreshTranscripts();
   const item = transcripts.find((row) => String(row.id) === String(taskId));
   if (!item) return;
+  await window.videoProjects?.linkCurrent?.("transcript", item.id, item.title || `文案 ${item.id}`, {
+    text: item.text || "",
+    taskId: Number(item.id || 0),
+    source: "downloaded",
+  });
+  await window.videoProjects?.linkCurrent?.("selected_rewrite", `transcript-${item.id}`, item.title || `文案 ${item.id}`, {
+    text: item.text || "",
+    taskId: Number(item.id || 0),
+    source: "downloaded",
+  });
   ttsText.value = item.text || "";
   ttsCharacterCount.textContent = `${(item.text || "").replace(/\s/g, "").length} 字`;
   window.workbenchNavigate?.("tts", { preserveScroll: true });
@@ -887,6 +897,16 @@ async function sendTranscriptToDirector(taskId) {
   const transcripts = await refreshTranscripts();
   const item = transcripts.find((row) => String(row.id) === String(taskId));
   if (!item) return;
+  await window.videoProjects?.linkCurrent?.("transcript", item.id, item.title || `文案 ${item.id}`, {
+    text: item.text || "",
+    taskId: Number(item.id || 0),
+    source: "downloaded",
+  });
+  await window.videoProjects?.linkCurrent?.("selected_rewrite", `transcript-${item.id}`, item.title || `文案 ${item.id}`, {
+    text: item.text || "",
+    taskId: Number(item.id || 0),
+    source: "downloaded",
+  });
   directorSourceMode.value = "manual";
   updateDirectorSourceOptions({ preserveText: true });
   directorTitle.value = conciseDirectorTitle(item.title || `任务 ${item.id}`);
@@ -1140,6 +1160,13 @@ async function enqueueTasks(action) {
       }),
     });
     const imported = data.imported || {};
+    const projectTasks = [...(imported.tasks || []), ...(imported.duplicates || [])];
+    await Promise.allSettled(projectTasks.map((task) => window.videoProjects?.linkCurrent?.(
+      "source_video",
+      task.id,
+      task.title || task.url || `采集任务 ${task.id}`,
+      { taskId: Number(task.id || 0), url: task.url || "", action, source: "downloaded", status: task.status || "pending" },
+    )));
     trackImportedTasks(action, imported);
     batchStatus.textContent = `已导入 ${imported.inserted || 0} 条，去重 ${imported.duplicate || 0} 条，跳过已下载 ${imported.skippedDownloaded || 0} 条`;
     renderTaskStats(data.summary, data.running, data.concurrency);
@@ -1609,6 +1636,12 @@ async function waitForTtsJob(jobId) {
     generateTtsButton.disabled = false;
     ttsStatus.textContent = "生成完成，可以试听。";
     showTtsPreview(job);
+    await window.videoProjects?.linkCurrent?.("tts", job.id, job.voice_name || `配音 #${job.id}`, {
+      ...job,
+      text: job.text || ttsText.value.trim(),
+      source: "ai_generated",
+      status: "ready",
+    });
     await refreshTtsJobs();
     return;
   }
@@ -2405,6 +2438,13 @@ function renderDirectorProject(project) {
     meta.model || meta.provider,
   ].filter(Boolean).join(" · ");
   directorStatus.textContent = `导演稿 #${project.id} 已完成并保存。`;
+  window.videoProjects?.linkCurrent?.("director", project.id, project.title || `导演稿 #${project.id}`, {
+    ...project,
+    sceneCount: project.result?.storyboard?.length || meta.scene_count || 0,
+    subtitleTimeline: project.result?.subtitle_timeline || [],
+    source: "ai_generated",
+    status: "ready",
+  }).catch(() => {});
   renderDirectorResultView();
   directorResult.scrollIntoView({ behavior: "smooth", block: "start" });
 }
