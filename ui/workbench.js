@@ -1657,6 +1657,48 @@ function setupImageStudio() {
     if (activeDirectorImageImport?.scene) importSelect.value = String(activeDirectorImageImport.scene);
   }
 
+  function imageLinkMetadata(result, { prompt = "", aspectRatio = "9:16", imported = null, providerId = "" } = {}) {
+    const activeAudio = activeVideoProject?.selectedTtsAudio || {};
+    return {
+      path: result.imagePath || result.file_path || "",
+      ratio: aspectRatio,
+      style: imported?.style || imported?.visualStyle || directorVisualStyle?.value || "",
+      useCase: activeVideoProject?.videoType || "",
+      source: "ai_generated",
+      sourceType: imported ? "director" : "manual",
+      sourceId: imported ? `${imported.projectId || ""}:${imported.scene || ""}` : "",
+      directorProjectId: imported?.projectId || 0,
+      sceneIndex: imported?.scene || "",
+      audioAssetId: activeAudio.id || activeAudio.assetId || "",
+      prompt,
+      provider: providerId,
+      model: result.model || "",
+      status: "ready",
+    };
+  }
+
+  async function linkGeneratedImagesToCurrentProject(results = [], context = {}) {
+    const success = (Array.isArray(results) ? results : []).filter((item) => item?.success && item.assetId);
+    if (!success.length || !currentVideoProjectId()) return 0;
+    let linked = 0;
+    for (const result of success) {
+      await linkCurrentProjectAsset(
+        "image",
+        result.assetId,
+        result.filename || `AI 图片 ${result.assetId}`,
+        imageLinkMetadata(result, context),
+      );
+      linked += 1;
+    }
+    await Promise.allSettled([
+      refreshProjectAssets(),
+      refreshProjectReadiness(),
+      typeof loadVideoProductSources === "function" ? loadVideoProductSources() : Promise.resolve(),
+      window.videoOutputModule?.loadVideoProductSources ? window.videoOutputModule.loadVideoProductSources() : Promise.resolve(),
+    ]);
+    return linked;
+  }
+
   async function refreshImageConfigStatus() {
     if (!configStatus) return;
     try {
