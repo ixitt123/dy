@@ -96,13 +96,88 @@
             <section class="dashboard-page" id="dashboardPage">
               <div class="dashboard-intro">
                 <div>
-                  <span class="section-eyebrow">Production Overview</span>
-                  <h2>今天从这里开始</h2>
-                  <p>采集、改写、配音、导演和视频策划按流程集中管理。</p>
+                  <span class="section-eyebrow">短视频项目工作台</span>
+                  <h2>一条视频，一个完整项目</h2>
+                  <p>采集、文案、配音、导演、素材和成片记录统一归入当前项目。</p>
                 </div>
-                <button class="primary" type="button" data-nav="collector">开始采集</button>
+                <div class="dashboard-project-actions">
+                  <label class="active-project-select">
+                    <span>当前项目</span>
+                    <select id="activeVideoProjectSelect"></select>
+                  </label>
+                  <button class="primary" id="newVideoProject" type="button">新建短视频项目</button>
+                </div>
               </div>
 
+              <form class="video-project-create" id="videoProjectCreateForm" hidden>
+                <label>
+                  项目名称
+                  <input id="videoProjectTitle" type="text" maxlength="100" placeholder="例如：半年说好英语的正确方法" required />
+                </label>
+                <label>
+                  视频类型
+                  <select id="videoProjectType">
+                    <option>宣传类</option>
+                    <option>学习技巧类</option>
+                    <option>招生转化类</option>
+                    <option>科普类</option>
+                  </select>
+                </label>
+                <label>
+                  默认输出
+                  <select id="videoProjectOutputMode">
+                    <option value="jianying">剪映成片草稿</option>
+                    <option value="template_mp4">模板 MP4</option>
+                    <option value="mp4">图文 MP4</option>
+                  </select>
+                </label>
+                <div class="video-project-create-actions">
+                  <button class="primary" type="submit">创建并开始</button>
+                  <button class="ghost" id="cancelVideoProject" type="button">取消</button>
+                </div>
+              </form>
+
+              <div class="project-workbench-grid">
+                <section class="dashboard-panel current-project-panel">
+                  <div class="panel-heading">
+                    <div>
+                      <span class="section-eyebrow">继续制作</span>
+                      <h2 id="currentVideoProjectTitle">还没有短视频项目</h2>
+                    </div>
+                    <span class="project-id-badge" id="currentVideoProjectId">未选择</span>
+                  </div>
+                  <div id="currentVideoProjectProgress" class="project-progress-panel"></div>
+                  <div id="currentVideoProjectSteps" class="project-step-strip"></div>
+                </section>
+
+                <section class="dashboard-panel next-action-panel">
+                  <div class="panel-heading">
+                    <div>
+                      <span class="section-eyebrow">下一步推荐</span>
+                      <h2 id="projectNextActionTitle">先新建项目</h2>
+                    </div>
+                  </div>
+                  <p id="projectNextActionDescription">创建项目后，系统会根据当前进度推荐下一步。</p>
+                  <button class="primary" id="projectNextAction" type="button">新建短视频项目</button>
+                </section>
+              </div>
+
+              <section class="recent-project-section">
+                <div class="panel-heading">
+                  <div>
+                    <span class="section-eyebrow">最近项目</span>
+                    <h2>继续上次的制作</h2>
+                  </div>
+                </div>
+                <div class="recent-project-list" id="recentVideoProjects">
+                  <div class="empty">正在读取项目...</div>
+                </div>
+              </section>
+
+              <div class="dashboard-section-heading">
+                <span class="section-eyebrow">今日数据统计</span>
+                <h2>生产进度</h2>
+              </div>
               <div class="dashboard-metrics">
                 <article class="metric-card">
                   <span>今日处理视频</span>
@@ -130,9 +205,9 @@
                   <small>Storyboard</small>
                 </article>
                 <article class="metric-card">
-                  <span>渲染计划</span>
+                  <span>成片草稿</span>
                   <strong id="metricRenderPlans">0</strong>
-                  <small>VFO 项目</small>
+                  <small>可继续导出</small>
                 </article>
               </div>
 
@@ -158,11 +233,11 @@
                     </div>
                   </div>
                   <div class="quick-entry-grid">
-                    <button type="button" data-nav="collector"><strong>粘贴抖音链接</strong><span>进入采集队列</span></button>
+                    <button type="button" data-nav="collector"><strong>采集项目素材</strong><span>下载或导入视频</span></button>
                     <button type="button" data-nav="rewrite"><strong>打开AI改写</strong><span>生成多版本文案</span></button>
                     <button type="button" data-nav="tts"><strong>生成TTS</strong><span>配音与试听</span></button>
                     <button type="button" data-nav="director"><strong>进入AI导演</strong><span>生成专业分镜</span></button>
-                    <button type="button" data-nav="vfo"><strong>进入视频工厂</strong><span>素材与渲染计划</span></button>
+                    <button type="button" data-nav="vfo"><strong>进入成片中心</strong><span>检查并生成草稿</span></button>
                   </div>
                 </section>
               </div>
@@ -173,20 +248,24 @@
                     <span class="section-eyebrow">Workflow</span>
                     <h2>内容生产流程</h2>
                   </div>
-                  <span class="phase-badge">当前到渲染计划</span>
+                  <span class="phase-badge">项目制生产流程</span>
                 </div>
                 <div class="workflow-steps">
-                  <button type="button" data-nav="collector"><span>1</span><strong>采集</strong><small>链接与视频</small></button>
+                  <button type="button" data-nav="collector"><span>1</span><strong>采集素材</strong><small>链接与视频</small></button>
                   <i></i>
-                  <button type="button" data-nav="transcript"><span>2</span><strong>文案</strong><small>提取与分析</small></button>
+                  <button type="button" data-nav="transcript"><span>2</span><strong>提取文案</strong><small>语音转文字</small></button>
                   <i></i>
-                  <button type="button" data-nav="rewrite"><span>3</span><strong>改写</strong><small>多版本创作</small></button>
+                  <button type="button" data-nav="rewrite"><span>3</span><strong>AI 改写</strong><small>选择最佳版本</small></button>
                   <i></i>
-                  <button type="button" data-nav="tts"><span>4</span><strong>语音</strong><small>TTS 配音</small></button>
+                  <button type="button" data-nav="tts"><span>4</span><strong>TTS 配音</strong><small>声音与试听</small></button>
                   <i></i>
-                  <button type="button" data-nav="director"><span>5</span><strong>导演</strong><small>Storyboard</small></button>
+                  <button type="button" data-nav="director"><span>5</span><strong>AI 导演</strong><small>分镜与字幕</small></button>
                   <i></i>
-                  <button type="button" data-nav="vfo"><span>6</span><strong>计划</strong><small>APS + VFO</small></button>
+                  <button type="button" data-nav="files"><span>6</span><strong>素材匹配</strong><small>画面与 BGM</small></button>
+                  <i></i>
+                  <button type="button" data-nav="vfo"><span>7</span><strong>成片草稿</strong><small>生成剪映草稿</small></button>
+                  <i></i>
+                  <button type="button" data-nav="vfo"><span>8</span><strong>打开剪映</strong><small>检查并导出</small></button>
                 </div>
               </section>
             </section>
@@ -218,6 +297,18 @@
           </div>
 
           <div class="settings-summary" id="v2SettingsSummary"></div>
+
+          <div class="settings-category-grid" aria-label="设置分区">
+            <span>AI 文本模型</span>
+            <span>语音识别模型</span>
+            <span>TTS 配音模型</span>
+            <span>图片生成模型</span>
+            <span>视频生成模型</span>
+            <span>下载设置</span>
+            <span>输出设置</span>
+            <span>剪映模板设置</span>
+            <span>系统状态检测</span>
+          </div>
 
           <section class="settings-card provider-card">
             <div class="settings-card-head">
@@ -520,7 +611,7 @@
             <div class="rewrite-result-meta">
               <label class="rewrite-count-control" for="rewriteVersionCountInput">
                 <span>输出框数量</span>
-                <input id="rewriteVersionCountInput" type="number" min="1" max="50" value="1" />
+                <input id="rewriteVersionCountInput" type="number" min="1" max="50" value="3" />
               </label>
             </div>
           </div>
@@ -673,21 +764,21 @@
         <div class="result-head vfo-head">
           <div>
             <h2>视频成片中心</h2>
-            <p>Director Project → Asset Binding → Timeline Project → Render Plan → Output。</p>
+            <p>从导演稿、配音和素材开始，检查完整度后生成成片草稿或 MP4。</p>
           </div>
-          <span class="vfo-stage-badge">Timeline First</span>
+          <span class="vfo-stage-badge">成片草稿</span>
         </div>
 
         <div class="vfo-pipeline" aria-label="视频工厂工作流">
           <span>AI 改写</span>
           <strong>→</strong>
-          <span>Director</span>
+          <span>导演稿</span>
           <strong>→</strong>
-          <span class="active">APS</span>
+          <span class="active">素材匹配</span>
           <strong>→</strong>
-          <span class="active">VFO</span>
+          <span class="active">字幕与配音</span>
           <strong>→</strong>
-          <span class="active">Timeline</span>
+          <span class="active">成片草稿</span>
           <strong>→</strong>
           <span class="active">剪映草稿</span>
           <strong>→</strong>
@@ -756,8 +847,8 @@
         <section class="video-product-center" id="videoProductCenter">
           <div class="video-product-toolbar">
             <div>
-              <h3>Video Product Center</h3>
-              <p>第一阶段优先生成剪映半成品素材包，同时提供第一版 MP4 渲染。</p>
+              <h3>成片草稿工作台</h3>
+              <p>先检查文案、语音、导演稿、素材和 BGM，再生成剪映草稿或 MP4。</p>
             </div>
             <button class="ghost small" id="refreshVideoProductSources" type="button">刷新素材</button>
           </div>
@@ -834,7 +925,15 @@
             </section>
 
             <section class="video-product-panel">
-              <h3>阻塞项</h3>
+              <div class="video-product-preflight-head">
+                <h3>生成前检查</h3>
+                <button class="ghost small" id="refreshVideoProjectReadiness" type="button">重新检查</button>
+              </div>
+              <div class="video-product-readiness" id="videoProjectReadiness">
+                <span>选择当前短视频项目后显示检查结果。</span>
+              </div>
+              <div class="video-quality-summary" id="videoProjectQuality"></div>
+              <h3>需要补齐</h3>
               <div class="video-product-blockers" id="videoProductBlockers">
                 <span>刷新后会显示缺失音频、缺失图片和时间线问题。</span>
               </div>
@@ -849,7 +948,7 @@
           </div>
 
           <div class="video-product-scene-head">
-            <h3>Timeline 镜头列表</h3>
+            <h3>分镜素材列表</h3>
             <span id="videoProductSceneMeta">尚未生成预览</span>
           </div>
           <div class="video-product-scenes" id="videoProductScenes"></div>
@@ -861,9 +960,11 @@
           <div class="video-product-projects" id="videoProductProjects"></div>
         </section>
 
+        <details class="advanced-production-planner">
+          <summary>高级成片规划</summary>
         <div class="vfo-section-title">
-          <h3>Render Plan 规划区</h3>
-          <p>保留原 VFO 能力，用于素材规划、平台渲染策略和 QA。</p>
+          <h3>成片草稿规划区</h3>
+          <p>用于素材规划、平台适配和成片检查。</p>
         </div>
 
         <div class="vfo-workbench">
@@ -921,14 +1022,14 @@
               <span>不接 Provider</span>
             </div>
             <div class="vfo-generate-row">
-              <button class="primary" id="generateVfo" type="button">生成 Render Plan</button>
+              <button class="primary" id="generateVfo" type="button">生成成片草稿计划</button>
               <span id="vfoStatus" role="status">等待调度。</span>
             </div>
           </div>
         </div>
 
         <div class="vfo-history-head">
-          <h2>调度项目</h2>
+          <h2>成片草稿记录</h2>
           <button class="ghost small" id="refreshVfoProjects" type="button">刷新</button>
         </div>
         <div class="vfo-projects" id="vfoProjects"></div>
@@ -936,12 +1037,12 @@
         <section class="vfo-result" id="vfoResult" hidden>
           <div class="vfo-result-head">
             <div>
-              <h2 id="vfoResultTitle">Render Plan</h2>
+              <h2 id="vfoResultTitle">成片草稿计划</h2>
               <p id="vfoResultMeta"></p>
             </div>
             <div class="vfo-result-actions">
               <button class="ghost small" id="copyVfoResult" type="button">复制当前结果</button>
-              <button class="ghost small" id="exportRenderPlan" type="button">导出 Render Plan</button>
+              <button class="ghost small" id="exportRenderPlan" type="button">导出成片草稿计划</button>
               <button class="ghost small" id="exportAssetPlan" type="button">导出 Asset Plan</button>
               <button class="ghost small" id="exportAssetPackage" type="button">导出 Asset Package</button>
               <button class="ghost small" id="openVfoFile" type="button">打开文件位置</button>
@@ -956,13 +1057,14 @@
           </div>
           <div class="vfo-result-view" id="vfoResultView"></div>
         </section>
+        </details>
       </section>
 
       <section class="tts-area" id="ttsLab">
         <div class="result-head tts-head">
           <div>
-            <h2>语音克隆与 TTS 语音实验室</h2>
-            <p>国内供应商优先 · 当前可用：阿里云百炼 CosyVoice / Qwen-TTS</p>
+            <h2>TTS 配音与声音</h2>
+            <p>选择项目文案和声音，生成、试听后直接发送到成片中心。</p>
           </div>
           <span class="tts-stage-badge">第一阶段</span>
         </div>
@@ -1200,6 +1302,50 @@
       </section>
 
       <section class="files-area">
+        <section class="project-asset-library" id="projectAssetLibrary">
+          <div class="result-head">
+            <div>
+              <h2>素材资产库</h2>
+              <p>按类型、用途、风格和项目查找素材，并发送到当前成片项目。</p>
+            </div>
+            <button class="ghost small" id="refreshProjectAssets" type="button">刷新素材</button>
+          </div>
+          <div class="project-asset-filters">
+            <select id="projectAssetTypeFilter" aria-label="素材类型">
+              <option value="all">全部类型</option>
+              <option value="image">图片</option>
+              <option value="video">视频</option>
+              <option value="bgm">BGM</option>
+              <option value="sfx">音效</option>
+              <option value="subtitle">字幕</option>
+              <option value="cover">封面</option>
+            </select>
+            <select id="projectAssetUseCaseFilter" aria-label="素材用途">
+              <option value="all">全部用途</option>
+              <option>宣传</option>
+              <option>学习技巧</option>
+              <option>招生</option>
+              <option>科普</option>
+              <option>课程介绍</option>
+            </select>
+            <select id="projectAssetStyleFilter" aria-label="素材风格">
+              <option value="all">全部风格</option>
+              <option>商业</option>
+              <option>校园</option>
+              <option>黑金</option>
+              <option>极简</option>
+              <option>真实拍摄</option>
+              <option>知识卡片</option>
+            </select>
+            <select id="projectAssetProjectFilter" aria-label="所属项目">
+              <option value="all">全部项目</option>
+            </select>
+          </div>
+          <div class="project-asset-grid" id="projectAssetGrid">
+            <div class="empty">当前项目还没有素材。</div>
+          </div>
+        </section>
+
         <div class="result-head">
           <h2>已下载</h2>
           <div class="files-tools">
