@@ -35,9 +35,17 @@ const workbenchPages = {
     title: "视频成片中心",
     description: "检查文案、语音、导演稿、素材和 BGM 后生成成片草稿。",
   },
+  "video-output": {
+    title: "视频成片中心",
+    description: "优先生成剪映模板草稿，也可生成 MP4 预览或兼容素材包。",
+  },
   files: {
     title: "素材资产库",
     description: "按类型、用途、风格和项目管理成片素材。",
+  },
+  assets: {
+    title: "素材资产库",
+    description: "统一管理图片、视频、BGM、封面和项目素材。",
   },
   settings: {
     title: "系统设置",
@@ -774,46 +782,9 @@ function buildWorkbenchInformationArchitecture() {
   const dashboard = document.querySelector("#dashboardPage");
   if (!content || !dashboard) return;
 
-  dashboard.classList.add("workbench-page");
-  dashboard.dataset.page = "dashboard";
-
-  const apiPanel = document.querySelector(".api-panel");
-  const settingsPage = createWorkbenchPage("settings");
-  const settingsTopbar = appendExisting(settingsPage, ".topbar");
-  if (settingsTopbar) {
-    const title = settingsTopbar.querySelector("h1");
-    if (title) title.textContent = "目录与存储";
-  }
-  setupCodexTaskWorkbench(settingsPage);
-  if (apiPanel) settingsPage.appendChild(apiPanel);
+  const settingsPage = document.querySelector('[data-page="settings"]');
   const v2Settings = document.getElementById("v2SettingsPanel");
-  if (v2Settings) settingsPage.appendChild(v2Settings);
-  const transcriptVault = createTranscriptVault();
-
-  const pageMap = {
-    collector: [".workspace", ".result-area"],
-    transcript: [transcriptVault],
-    analysis: ["#analysisPanel"],
-    rewrite: ["#rewritePanel"],
-    tts: ["#ttsLab", "#voiceAssetCenter"],
-    director: ["#directorSystem"],
-    vfo: ["#vfoSystem"],
-    files: [".files-area"],
-    "image-studio": ["#imageStudioPanel"],
-  };
-
-  const pages = [dashboard];
-  Object.entries(pageMap).forEach(([pageId, selectors]) => {
-    const page = createWorkbenchPage(pageId);
-    selectors.forEach((selector) => {
-      if (!selector) return;
-      if (typeof selector === "string") appendExisting(page, selector);
-      else page.appendChild(selector);
-    });
-    pages.push(page);
-  });
-  pages.push(settingsPage);
-  content.replaceChildren(...pages);
+  if (settingsPage && v2Settings) settingsPage.appendChild(v2Settings);
 
   setupRewriteStudio();
   setupTtsStudio();
@@ -824,13 +795,15 @@ function buildWorkbenchInformationArchitecture() {
 }
 
 function navigateWorkbench(pageId, options = {}) {
-  const target = workbenchPages[pageId] ? pageId : "dashboard";
+  const aliases = { analysis: "transcript", files: "assets", "image-studio": "assets", vfo: "video-output" };
+  const normalized = aliases[pageId] || pageId;
+  const target = workbenchPages[normalized] ? normalized : "dashboard";
   activeWorkbenchPage = target;
   document.querySelectorAll(".workbench-page").forEach((page) => {
     page.classList.toggle("active", page.dataset.page === target);
   });
   document.querySelectorAll(".nav-item").forEach((button) => {
-    const active = button.dataset.nav === target;
+    const active = (aliases[button.dataset.nav] || button.dataset.nav) === target;
     button.classList.toggle("active", active);
     if (active) button.setAttribute("aria-current", "page");
     else button.removeAttribute("aria-current");
@@ -842,10 +815,10 @@ function navigateWorkbench(pageId, options = {}) {
   if (title) title.textContent = config.title;
   if (description) description.textContent = config.description;
 
-  if (target === "analysis" && analysisPanel) analysisPanel.hidden = false;
+  if ((pageId === "analysis" || target === "transcript") && analysisPanel && pageId === "analysis") analysisPanel.hidden = false;
   if (target === "rewrite" && rewritePanel) rewritePanel.hidden = false;
-  if (target === "vfo") refreshProjectReadiness().catch(() => {});
-  if (target === "files") refreshProjectAssets().catch(() => {});
+  if (target === "video-output") refreshProjectReadiness().catch(() => {});
+  if (target === "assets") refreshProjectAssets().catch(() => {});
   localStorage.setItem("short-video-workbench-page", target);
   if (!options.fromHash && window.location.hash !== `#${target}`) {
     window.history.replaceState(null, "", `#${target}`);
@@ -858,6 +831,7 @@ function navigateWorkbench(pageId, options = {}) {
   if (target === "collector" && options.focusPrimary) {
     setTimeout(() => shareLink?.focus(), 120);
   }
+  document.dispatchEvent(new CustomEvent("workbench:route", { detail: { page: target } }));
 }
 
 function isToday(value) {
