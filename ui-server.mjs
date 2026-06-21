@@ -5349,7 +5349,7 @@ const server = http.createServer(async (req, res) => {
       if (req.method === "POST" && route === "add-local") {
         const body = await readJsonBody(req);
         try {
-          const asset = imageService.addLocalImageAsset({
+          const asset = await imageService.addLocalImageAsset({
             filePath: body.filePath || "",
             prompt: body.prompt || "",
             aspectRatio: body.aspectRatio || "9:16",

@@ -213,7 +213,7 @@ export function createImageService({ baseDir, getSettings, taskStore = null, ffm
     };
   }
 
-  function addLocalImageAsset({ filePath, prompt = "", aspectRatio = "9:16", sourceId = "" } = {}) {
+  async function addLocalImageAsset({ filePath, prompt = "", aspectRatio = "9:16", sourceId = "" } = {}) {
     const resolved = path.resolve(String(filePath || "").trim());
     if (!resolved || !fs.existsSync(resolved)) throw new Error("请选择存在的本地图片文件。");
     const ext = path.extname(resolved).toLowerCase();
