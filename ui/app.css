@@ -5635,6 +5635,15 @@ audio {
   color: #ffffff;
 }
 
+.project-step.empty-step {
+  grid-column: 1 / -1;
+  min-width: 100%;
+  min-height: 42px;
+  color: #727d90;
+  font-size: 10px;
+  text-align: left;
+}
+
 .next-action-panel {
   display: flex;
   flex-direction: column;
@@ -6058,9 +6067,12 @@ audio {
 }
 
 @media (max-width: 1320px) {
-  .dashboard-intro,
-  .dashboard-project-actions {
+  .dashboard-intro {
     align-items: stretch;
+  }
+
+  .dashboard-project-actions {
+    align-items: end;
   }
 
   .dashboard-intro {
