@@ -1775,9 +1775,16 @@ function setupImageStudio() {
       });
       const data = await res.json();
       if (!res.ok || data.ok === false) throw new Error(data.error || data.message || `HTTP ${res.status}`);
+      const linked = await linkGeneratedImagesToCurrentProject(data.results || [], {
+        prompt: `Director #${projectId} 整套分镜图`,
+        aspectRatio,
+        imported: activeDirectorImageImport || importedDirectorImagePrompts[0] || null,
+        providerId,
+      });
       const firstError = (data.results || []).find((item) => !item.success)?.error || "";
       setStatus(
         `整套分镜图完成：成功 ${data.success || 0} 张，失败 ${data.failed || 0} 张`
+          + (linked ? `，已自动归档 ${linked} 张到当前项目素材库` : currentVideoProjectId() ? "" : "，未选择当前项目，仅保存到图片中心")
           + (firstError ? `；首个错误：${firstError}` : ""),
         data.success > 0 ? "ok" : "error",
       );
@@ -1812,6 +1819,7 @@ function setupImageStudio() {
         prompt: String(scene.prompt || "").trim(),
         motionPrompt: String(scene.motionPrompt || "").trim(),
         subtitle: String(scene.subtitle || "").trim(),
+        style: String(scene.style || scene.visualStyle || "").trim(),
       }))
       .filter((scene) => scene.prompt);
     if (!importedDirectorImagePrompts.length) return false;
@@ -1865,7 +1873,18 @@ function setupImageStudio() {
       const data = await res.json();
       if (!res.ok || data.ok === false) throw new Error(data.error || data.message || `HTTP ${res.status}`);
       if (data.jobId && Number(data.success || 0) > 0) {
-        setStatus(`生成完成：成功 ${data.success} 张` + (data.failed > 0 ? `，失败 ${data.failed} 张` : ""), "ok");
+        const linked = await linkGeneratedImagesToCurrentProject(data.results || [], {
+          prompt,
+          aspectRatio,
+          imported,
+          providerId,
+        });
+        setStatus(
+          `生成完成：成功 ${data.success} 张`
+            + (data.failed > 0 ? `，失败 ${data.failed} 张` : "")
+            + (linked ? `，已自动归档 ${linked} 张到当前项目素材库` : currentVideoProjectId() ? "" : "，未选择当前项目，仅保存到图片中心"),
+          "ok",
+        );
         renderResults(data.results || [], prompt);
       } else {
         const firstError = (data.results || []).find((item) => !item.success)?.error;
