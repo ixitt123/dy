@@ -1459,10 +1459,10 @@ function initWorkbench() {
   } catch {}
   window.addEventListener("hashchange", () => {
     const pageId = window.location.hash.replace(/^#/, "");
-    if (workbenchPages[pageId]) navigateWorkbench(pageId, { instant: true, fromHash: true });
+    navigateWorkbench(pageId || "dashboard", { instant: true, fromHash: true });
   });
-  localStorage.setItem("short-video-workbench-page", "dashboard");
-  navigateWorkbench("dashboard", { instant: true });
+  const initialPage = window.location.hash.replace(/^#/, "") || localStorage.getItem("short-video-workbench-page") || "dashboard";
+  navigateWorkbench(initialPage, { instant: true, fromHash: true });
 }
 
 function setupImageStudio() {
