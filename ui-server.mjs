@@ -282,6 +282,9 @@ const imageService = createImageService({
   taskStore,
 });
 
+// VideoProject 是主项目；TimelineProject 作为每次成片输出记录回写到这里。
+const projectCenter = createProjectCenter(__dirname);
+
 const capcutCliAdapter = createCapcutCliAdapter({
   baseDir: __dirname,
   ffmpegPath,
@@ -295,6 +298,7 @@ const videoProductService = createVideoProductService({
   directorService,
   ffmpegPath,
   capcutCliAdapter,
+  projectCenter,
   onProgress: (data) => broadcastProgress({ type: "video-product", ...data }),
   onIdle: scheduleShutdownIfIdle,
 });
@@ -330,9 +334,6 @@ const pipelineRunner = new PipelineRunner({
   state: pipelineState,
   handlers: {},
 });
-
-// 项目中心
-const projectCenter = createProjectCenter(__dirname);
 
 // 流水线事件 → WebSocket 广播
 for (const event of Object.values(PIPELINE_EVENTS)) {

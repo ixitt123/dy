@@ -4966,6 +4966,7 @@ document.querySelector("#openVfoFile").addEventListener("click", () => {
 });
 
 refreshVideoProductSourcesBtn?.addEventListener("click", () => {
+  if (window.__modularVideoOutputReady) return;
   loadVideoProductSources()
     .then(() => {
       videoProductStatus.textContent = "视频成片素材已刷新。";
@@ -5006,16 +5007,19 @@ autoBindTimelineBtn?.addEventListener("click", () => {
 });
 
 generateVideoProductBtn?.addEventListener("click", () => {
+  if (window.__modularVideoOutputReady) return;
   generateVideoProduct();
 });
 
 openVideoProductOutputBtn?.addEventListener("click", () => {
+  if (window.__modularVideoOutputReady) return;
   openVideoProductOutput().catch((error) => {
     videoProductStatus.textContent = error instanceof Error ? error.message : String(error);
   });
 });
 
 refreshVideoProductProjectsBtn?.addEventListener("click", () => {
+  if (window.__modularVideoOutputReady) return;
   loadVideoProductProjects().catch((error) => {
     videoProductStatus.textContent = error instanceof Error ? error.message : String(error);
   });

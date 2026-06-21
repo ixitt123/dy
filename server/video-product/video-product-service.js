@@ -791,6 +791,7 @@ export function createVideoProductService({
   directorService = null,
   ffmpegPath,
   capcutCliAdapter = null,
+  projectCenter = null,
   onProgress = () => {},
   onIdle = () => {},
 }) {
@@ -2476,6 +2477,75 @@ ${sceneMarkup}
         outputDirectory: { ok: true, label: "正常", detail: outputRoot },
       },
     };
+  }
+
+  function syncOutputToVideoProject(project, timeline, timelineFiles, { draftPath = "", mp4Path = "" } = {}) {
+    const metadata = safeJson(project.metadata_json, {});
+    const videoProjectId = String(metadata.video_project_id || metadata.projectId || "").trim();
+    if (!videoProjectId || !projectCenter) return null;
+    const videoProject = projectCenter.getById(videoProjectId);
+    if (!videoProject) return null;
+
+    const generatedAssets = (timelineFiles.packagedScenes || []).map((scene) => ({
+      id: scene.image_asset_id || `timeline-${project.id}-scene-${scene.scene_index}`,
+      name: `镜头 ${scene.scene_index}`,
+      assetType: "image",
+      path: scene.packaged_image_path || scene.image_path || "",
+      sceneIndex: scene.scene_index,
+      source: "timeline_output",
+      status: scene.packaged_image_path || scene.image_path ? "ready" : "pending",
+    }));
+    const selectedAssets = [...(videoProject.selectedAssets || []), ...generatedAssets]
+      .filter((asset, index, rows) => rows.findIndex((item) => String(item.id || item.path) === String(asset.id || asset.path)) === index);
+    const subtitleTimeline = (timeline.scenes || []).map((scene) => ({
+      sceneIndex: scene.scene_index,
+      startTime: Number(scene.start_time || 0),
+      endTime: Number(scene.end_time || 0),
+      duration: Number(scene.duration || 0),
+      text: scene.subtitle_text || scene.narration_text || "",
+    }));
+    const outputRecord = {
+      id: `timeline-${project.id}`,
+      timelineProjectId: project.id,
+      outputType: project.output_type,
+      status: project.status,
+      outputDir: timelineFiles.projectDir,
+      draftPath,
+      mp4Path,
+      timelinePath: timelineFiles.timelinePath,
+      subtitlesPath: timelineFiles.srtPath,
+      createdAt: new Date().toISOString(),
+    };
+    const outputHistory = [...(videoProject.outputHistory || []).filter((item) => item.id !== outputRecord.id), outputRecord];
+    const isExported = MP4_OUTPUT_TYPES.has(project.output_type) && Boolean(mp4Path);
+    const changes = {
+      selectedAssets,
+      subtitleTimeline,
+      outputHistory,
+      status: isExported ? "exported" : "draft_ready",
+    };
+    if (timelineFiles.packagedBgm) {
+      changes.bgm = {
+        ...(videoProject.bgm || {}),
+        id: videoProject.bgm?.id || `timeline-${project.id}-bgm`,
+        name: timelineFiles.bgmLabel || path.basename(timelineFiles.packagedBgm),
+        path: timelineFiles.packagedBgm,
+        source: timelineFiles.bgmSourceKind || "timeline_output",
+        status: "ready",
+      };
+    }
+    if (!isExported) {
+      changes.jianyingDraft = {
+        id: `timeline-${project.id}`,
+        timelineProjectId: project.id,
+        outputType: project.output_type,
+        path: draftPath || timelineFiles.projectDir,
+        outputDir: timelineFiles.projectDir,
+        compatibilityMode: !draftPath || String(draftPath).endsWith("capcut-plan.json"),
+        status: "ready",
+      };
+    }
+    return projectCenter.update(videoProjectId, changes);
   }
 
   function resolveOutputPath(id, type = "dir") {
