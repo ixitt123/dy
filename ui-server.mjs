@@ -5099,18 +5099,64 @@ const server = http.createServer(async (req, res) => {
       const route = url.pathname.replace("/api/projects/", "");
       if (req.method === "POST" && route === "create") {
         const body = JSON.parse(await readBody(req) || "{}");
-        sendJson(res, 200, { ok: true, project: projectCenter.create(body.name || "新项目", body.description || "") });
+        sendJson(res, 200, { ok: true, project: projectCenter.create(body) });
         return;
       }
-      if (req.method === "GET" && route === "list") { sendJson(res, 200, { ok: true, projects: projectCenter.list() }); return; }
+      if (req.method === "GET" && route === "list") {
+        sendJson(res, 200, { ok: true, projects: projectCenter.list({ limit: url.searchParams.get("limit") || 100 }) });
+        return;
+      }
+      if (req.method === "GET" && route === "get") {
+        const project = projectCenter.getById(url.searchParams.get("id") || "");
+        sendJson(res, project ? 200 : 404, project ? { ok: true, project } : { ok: false, message: "短视频项目不存在。" });
+        return;
+      }
+      if (req.method === "POST" && route === "update") {
+        const body = JSON.parse(await readBody(req) || "{}");
+        const project = projectCenter.update(body.id, body.changes || body);
+        sendJson(res, project ? 200 : 404, project ? { ok: true, project } : { ok: false, message: "短视频项目不存在。" });
+        return;
+      }
       if (req.method === "GET" && route === "stats") { sendJson(res, 200, { ok: true, ...projectCenter.getStats() }); return; }
       if (req.method === "POST" && route === "link-asset") {
         const body = JSON.parse(await readBody(req) || "{}");
-        sendJson(res, 200, { ok: true, id: projectCenter.linkAsset(body.projectId, body.assetType, body.assetId, body.name) });
+        try {
+          const linked = projectCenter.linkAsset(body.projectId, body.assetType, body.assetId, body.name, body.metadata || {});
+          sendJson(res, 200, { ok: true, ...linked });
+        } catch (error) {
+          sendJson(res, 400, { ok: false, message: error instanceof Error ? error.message : String(error) });
+        }
         return;
       }
       if (req.method === "GET" && route === "assets") {
-        sendJson(res, 200, { ok: true, assets: projectCenter.getAssets(url.searchParams.get("projectId") || "") });
+        sendJson(res, 200, {
+          ok: true,
+          assets: projectCenter.listAssets({
+            projectId: url.searchParams.get("projectId") || "",
+            assetType: url.searchParams.get("assetType") || "",
+            useCase: url.searchParams.get("useCase") || "",
+            style: url.searchParams.get("style") || "",
+            ratio: url.searchParams.get("ratio") || "",
+            source: url.searchParams.get("source") || "",
+            status: url.searchParams.get("status") || "",
+          }),
+        });
+        return;
+      }
+      if (req.method === "GET" && route === "readiness") {
+        const readiness = projectCenter.getReadiness(url.searchParams.get("id") || "");
+        sendJson(res, readiness ? 200 : 404, readiness ? { ok: true, readiness } : { ok: false, message: "短视频项目不存在。" });
+        return;
+      }
+      if (req.method === "GET" && route === "quality") {
+        const qualityCheck = projectCenter.getQualityCheck(url.searchParams.get("id") || "");
+        sendJson(res, qualityCheck ? 200 : 404, qualityCheck ? { ok: true, qualityCheck } : { ok: false, message: "短视频项目不存在。" });
+        return;
+      }
+      if (req.method === "POST" && route === "delete") {
+        const body = JSON.parse(await readBody(req) || "{}");
+        projectCenter.remove(body.id);
+        sendJson(res, 200, { ok: true });
         return;
       }
       sendJson(res, 404, { ok: false });
