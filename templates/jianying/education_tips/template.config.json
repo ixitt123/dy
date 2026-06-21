@@ -1,1 +1,12 @@
-{"id":"education_tips","name":"学习技巧","ratio":"9:16","resolution":"1080x1920","fps":30,"version":1}
+{
+  "id": "education_tips",
+  "name": "学习技巧",
+  "category": "知识教育",
+  "ratio": "9:16",
+  "resolution": "1080x1920",
+  "fps": 30,
+  "version": 1,
+  "recommendedVideoTypes": ["learning-method", "english-improvement", "douyin-knowledge", "学习技巧"],
+  "recommendedStyles": ["knowledge-blogger", "sketch-line", "clean-commercial", "tech-data"],
+  "tags": ["学习方法", "知识口播", "字幕强化", "教程"]
+}

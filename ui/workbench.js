@@ -296,12 +296,16 @@ async function linkCurrentProjectAsset(assetType, assetId, name = "", metadata =
 
 function projectAssetCard(asset) {
   const typeLabels = { image: "图片", video: "视频", bgm: "BGM", sfx: "音效", subtitle: "字幕", cover: "封面", tts: "配音", director: "导演稿" };
+  const imagePath = asset.assetType === "image" ? String(asset.metadata?.path || asset.metadata?.file_path || "") : "";
+  const thumbnail = imagePath ? `/api/image/thumbnail?width=320&path=${encodeURIComponent(imagePath)}` : "";
+  const original = imagePath ? `/api/image/file?path=${encodeURIComponent(imagePath)}` : "";
   return `
     <article class="project-asset-card" data-project-asset-id="${escapeHtml(asset.id)}">
       <div class="project-asset-card-top">
         <span>${escapeHtml(typeLabels[asset.assetType] || asset.assetType || "素材")}</span>
         <strong class="asset-status-${escapeHtml(asset.status)}">${asset.status === "ready" ? "可用" : asset.status === "pending" ? "处理中" : "异常"}</strong>
       </div>
+      ${thumbnail ? `<button class="project-asset-thumb" type="button" onclick="window.open('${original}')"><img src="${thumbnail}" alt="图片素材缩略图" loading="lazy" /></button>` : ""}
       <h3>${escapeHtml(asset.name || asset.assetId || "未命名素材")}</h3>
       <div class="asset-tag-list">
         ${[asset.useCase, asset.style, asset.ratio, asset.source === "ai_generated" ? "AI 生成" : asset.source === "downloaded" ? "已下载" : "本地上传"].filter(Boolean).map((tag) => `<span>${escapeHtml(tag)}</span>`).join("")}
