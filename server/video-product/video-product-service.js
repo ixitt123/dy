@@ -2449,6 +2449,9 @@ ${sceneMarkup}
           warnings: ["capcut-cli 适配器未启用，已输出兼容素材包。"],
           files: [],
         };
+        if (capcutResult && capcutResult.ok === false) {
+          throw new Error(`剪映草稿生成失败：${[...(capcutResult.errors || []), ...(capcutResult.warnings || [])].filter(Boolean).join("；") || "未知错误"}`);
+        }
         draftPath = capcutResult.draftPath || capcutResult.planPath || "";
         localJianyingDraftPath = syncDraftToLocalJianying(capcutResult.draftPath || "", project, input.jianying_template || "education_tips");
         if (localJianyingDraftPath) {
