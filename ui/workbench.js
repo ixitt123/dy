@@ -464,6 +464,18 @@ function setupProjectWorkbench() {
   document.querySelector("#projectAssetGrid")?.addEventListener("click", async (event) => {
     const card = event.target.closest("[data-project-asset-id]");
     if (!card || !event.target.closest(".send-project-asset")) return;
+    const asset = projectAssetsState.find((item) => item.id === card.dataset.projectAssetId);
+    if (asset && asset.projectId !== currentVideoProjectId()) {
+      await linkCurrentProjectAsset(asset.assetType, asset.assetId, asset.name, {
+        ...asset.metadata,
+        useCase: asset.useCase,
+        style: asset.style,
+        ratio: asset.ratio,
+        source: asset.source,
+        usedCount: Number(asset.usedCount || 0) + 1,
+        status: asset.status,
+      });
+    }
     navigateWorkbench("vfo");
     document.querySelector("#videoProductCenter")?.scrollIntoView({ behavior: "smooth", block: "start" });
   });
@@ -1925,6 +1937,8 @@ function setupV2Settings() {
               <div class="provider-meta">
                 <span>功能：${html(provider.feature || "")}</span>
                 <span>Key：${provider.configured ? html(provider.apiKeyMask || "已保存") : "未保存"}</span>
+                <span>默认模型：${html(provider.model || provider.models?.[0] || "跟随模型中心")}</span>
+                <span>备用模型：${html(provider.models?.[1] || "未设置")}</span>
               </div>
             </div>
             <div class="provider-fields">
