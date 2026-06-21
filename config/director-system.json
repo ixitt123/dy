@@ -19,14 +19,171 @@
     { "id": "douyin-knowledge", "label": "抖音知识短视频", "audience": "短视频知识用户" }
   ],
   "visual_styles": [
-    { "id": "education-premium", "label": "高级教育机构风" },
-    { "id": "parent-anxiety", "label": "家长焦虑情绪风" },
-    { "id": "knowledge-blogger", "label": "抖音知识博主风" },
-    { "id": "apple-keynote", "label": "苹果发布会极简风" },
-    { "id": "documentary", "label": "纪录片风" },
-    { "id": "cinematic", "label": "电影感" },
-    { "id": "clean-commercial", "label": "干净商业广告风" },
-    { "id": "warm-campus", "label": "温暖校区生活风" }
+    {
+      "id": "education-premium",
+      "label": "高级教育机构风",
+      "prompt_short": "明亮、可信、克制的高端教育机构视觉。",
+      "image_prompt": "clean premium education brand visual system, bright classroom and campus details, trustworthy commercial photography, refined layout, restrained accents, professional but warm",
+      "palette": "中性白、深绿、暖木色、少量金色点缀",
+      "texture": "真实摄影感，干净玻璃、木质、纸张和校区环境细节",
+      "composition": "明确主体，前中后景有层次，底部保留字幕安全区",
+      "character": "中国老师/学生/家长形象自然可信，服装简洁，不摆拍",
+      "negative": "廉价招生海报、红黄大字报、PPT模板、夸张成功学、虚假承诺"
+    },
+    {
+      "id": "parent-anxiety",
+      "label": "家长焦虑情绪风",
+      "prompt_short": "现实生活压迫感，表现家长焦虑和升学压力。",
+      "image_prompt": "realistic Chinese family education tension, low-saturation interior light, exam papers, phone notifications, parents waiting outside school, emotional but restrained documentary commercial look",
+      "palette": "低饱和冷暖对比、夜晚台灯暖光、灰蓝阴影",
+      "texture": "真实家庭、校门口、试卷、手机、书桌细节",
+      "composition": "近景情绪细节与环境建立交替，画面有压迫感但不恐吓",
+      "character": "中国家长和学生自然表情，焦虑克制，不夸张哭喊",
+      "negative": "恐吓式营销、过度煽动、血红警告、灾难化画面、廉价表情包"
+    },
+    {
+      "id": "knowledge-blogger",
+      "label": "抖音知识博主风",
+      "prompt_short": "高信息密度、强字幕安全区、观点型知识短视频。",
+      "image_prompt": "short-form knowledge creator visual, punchy vertical composition, creator desk, abstract evidence cards without readable text, clean data shapes, high contrast commercial social video style",
+      "palette": "深色背景、白色主体信息、蓝紫或金色小面积强调",
+      "texture": "现代工作台、屏幕光、信息卡、抽象数据图形",
+      "composition": "人物口播、信息图、细节插入和文字卡安全区交替",
+      "character": "同一位中国知识博主/老师形象，专业、有亲和力",
+      "negative": "无意义空镜、重复人物镜头、低级课程海报、随机AI图库拼贴"
+    },
+    {
+      "id": "tech-data",
+      "label": "科技数据风",
+      "prompt_short": "科技感、数据感、适合知识拆解和商业分析。",
+      "image_prompt": "futuristic data-driven commercial visual, dark interface glow, translucent charts without readable text, glass panels, precise geometry, premium tech explainer look",
+      "palette": "深墨黑、冷白、青蓝、电光紫、少量荧光绿",
+      "texture": "玻璃拟态、微光线框、抽象图表、干净金属",
+      "composition": "中心主体清晰，数据层作为背景结构，避免信息糊成一团",
+      "character": "人物可出现为剪影或专业讲解者，不抢数据主视觉",
+      "negative": "赛博脏乱、满屏乱码、廉价蓝光特效、复杂不可读UI"
+    },
+    {
+      "id": "pixar-3d-cartoon",
+      "label": "3D动画电影风（类皮克斯）",
+      "prompt_short": "温暖圆润的3D动画电影质感，适合轻松讲知识。",
+      "image_prompt": "warm 3D animated film look, rounded stylized Chinese characters, expressive but natural faces, soft cinematic lighting, detailed classroom and family scenes, family-friendly commercial animation, not copying any existing IP",
+      "palette": "暖黄色、柔和蓝、奶油白、低饱和校园色",
+      "texture": "圆润3D材质、柔和皮肤、干净环境、电影级软光",
+      "composition": "角色动作清楚，背景简洁，表情服务当前镜头情绪",
+      "character": "同一套原创中国动画人物设定，不能像已有动画角色",
+      "negative": "直接模仿已有IP、塑料玩具感、过度夸张五官、儿童化招生广告"
+    },
+    {
+      "id": "chinese-ink",
+      "label": "中国风水墨画系",
+      "prompt_short": "东方水墨留白，适合情绪、观点和升学隐喻。",
+      "image_prompt": "modern Chinese ink wash illustration, elegant brush strokes, rice paper texture, restrained composition, symbolic school gate, exam paper, parent silhouette, poetic commercial editorial mood",
+      "palette": "墨黑、宣纸白、淡青灰、少量朱砂红",
+      "texture": "宣纸肌理、墨迹晕染、干湿笔触、淡彩点染",
+      "composition": "大量留白，主体用笔墨聚焦，字幕安全区干净",
+      "character": "人物以剪影或水墨轮廓呈现，动作明确但不过度写实",
+      "negative": "古装武侠跑题、廉价国潮贴纸、大红大金堆叠、画面太空"
+    },
+    {
+      "id": "sketch-line",
+      "label": "素描简笔画",
+      "prompt_short": "黑白线稿、手绘草图、适合讲逻辑和风险点。",
+      "image_prompt": "clean hand-drawn sketch style, black and white line art, minimal shading, notebook paper feeling, simple characters and objects, clear educational explainer composition",
+      "palette": "黑白灰，少量浅蓝或淡黄提示色",
+      "texture": "铅笔线、针管笔、纸张颗粒、少量阴影",
+      "composition": "用少量物件讲清楚信息，线条干净，画面不拥挤",
+      "character": "简洁原创人物轮廓，动作清晰，表情克制",
+      "negative": "儿童涂鸦、复杂乱线、漫画分镜格、可读文字、低清扫描感"
+    },
+    {
+      "id": "healing-illustration",
+      "label": "治愈插画风",
+      "prompt_short": "温柔、明亮、缓解焦虑的教育生活插画。",
+      "image_prompt": "soft healing editorial illustration, warm sunlight, gentle Chinese family and campus moments, calm study desk, rounded shapes, cozy but professional education visual",
+      "palette": "米白、浅绿、暖橙、天空蓝、低饱和粉",
+      "texture": "柔和颗粒、轻微水彩、纸感、干净光影",
+      "composition": "舒展留白，情绪温和，适合字幕覆盖",
+      "character": "家长和学生自然互动，温暖不煽情",
+      "negative": "幼稚贴纸、糖果色过曝、网红滤镜、无关风景空镜"
+    },
+    {
+      "id": "anime-commercial",
+      "label": "二次元商业动画风",
+      "prompt_short": "日系动画质感但保持商业短视频清晰度。",
+      "image_prompt": "premium anime commercial key visual, clean cel shading, expressive Chinese student and parent scenes, dynamic camera, crisp lighting, modern education setting, original characters",
+      "palette": "清透蓝、暖白、夕阳橙、深色校服点缀",
+      "texture": "赛璐璐上色、干净线条、电影动画光影",
+      "composition": "动态但不乱，镜头情绪明确，人物与环境统一",
+      "character": "原创中国学生/家长动画人物，不复制任何番剧角色",
+      "negative": "低俗萌化、夸张擦边、已有IP脸、杂乱漫画格、文字海报"
+    },
+    {
+      "id": "retro-futurism",
+      "label": "复古未来风",
+      "prompt_short": "复古科幻与商业知识表达结合，适合强钩子内容。",
+      "image_prompt": "retro-futuristic editorial commercial visual, 1980s science museum mood, geometric panels, warm neon accents, analog screens without readable text, education planning as future map metaphor",
+      "palette": "深蓝黑、复古橙、薄荷绿、奶油白",
+      "texture": "胶片颗粒、复古屏幕、几何面板、轻微霓虹",
+      "composition": "几何秩序强，主体明确，科技隐喻服务文案",
+      "character": "人物可作为讲解者或剪影，造型简洁复古",
+      "negative": "脏乱赛博朋克、满屏英文乱码、廉价霓虹、跑题太科幻"
+    },
+    {
+      "id": "apple-keynote",
+      "label": "苹果发布会极简风",
+      "prompt_short": "极简留白、精致产品感，适合高端课程表达。",
+      "image_prompt": "minimal premium keynote visual, black white gray with one accent color, elegant negative space, refined light, product-launch clarity for education service",
+      "palette": "黑、白、灰与单一品牌强调色",
+      "texture": "磨砂玻璃、干净金属、柔和渐变光",
+      "composition": "大留白、中心重点、强秩序，字幕区稳定",
+      "character": "人物少量出现，偏专业品牌发布会姿态",
+      "negative": "杂乱背景、过多装饰、低级特效、信息堆叠"
+    },
+    {
+      "id": "documentary",
+      "label": "纪录片风",
+      "prompt_short": "真实观察式镜头，适合案例和校区故事。",
+      "image_prompt": "observational documentary still, real Chinese education environment, natural light, authentic parent and student details, restrained emotion, cinematic realism",
+      "palette": "自然肤色、环境灰、暖灯光、低饱和校园色",
+      "texture": "真实摄影、自然颗粒、现场光、生活细节",
+      "composition": "观察式跟拍、环境建立、人物细节穿插",
+      "character": "真实普通人气质，不明星化、不摆拍",
+      "negative": "假大空、仪式感摆拍、过度美颜、虚假宣传片"
+    },
+    {
+      "id": "cinematic",
+      "label": "电影感",
+      "prompt_short": "强光影、纵深和情绪氛围。",
+      "image_prompt": "cinematic commercial frame, strong motivated lighting, depth, foreground midground background, emotional atmosphere, premium short video visual",
+      "palette": "深色基底、暖冷对比、少量高光强调",
+      "texture": "电影颗粒、镜头景深、真实材质、空间光影",
+      "composition": "前中后景明确，镜头有动机，情绪先行",
+      "character": "人物动作和眼神服务情绪，不浮夸",
+      "negative": "空洞氛围、AI图库拼贴、重复镜头、过暗看不清"
+    },
+    {
+      "id": "clean-commercial",
+      "label": "干净商业广告风",
+      "prompt_short": "现代商业广告，卖点清楚，画面干净。",
+      "image_prompt": "clean modern commercial advertising visual, productized education service, clear subject, premium lighting, uncluttered background, trustworthy short video asset",
+      "palette": "白、浅灰、品牌蓝绿、少量暖色",
+      "texture": "干净背景、柔和反光、真实纸张和设备",
+      "composition": "主体和卖点明确，背景轻，画面可直接入剪辑",
+      "character": "专业老师或家长形象自然可信",
+      "negative": "过度包装、复杂背景、信息堆叠、廉价促销"
+    },
+    {
+      "id": "warm-campus",
+      "label": "温暖校区生活风",
+      "prompt_short": "真实校区、师生互动和成长感。",
+      "image_prompt": "warm campus life commercial still, Chinese classroom, teacher-student interaction, golden hour light, natural smiles, authentic growth story mood",
+      "palette": "暖阳黄、木色、校区绿、干净白",
+      "texture": "自然光、木桌、书本、校区环境细节",
+      "composition": "生活化镜头，人物和环境同等重要，情绪温暖",
+      "character": "师生互动自然，不摆拍，不假笑",
+      "negative": "过曝滤镜、千篇一律特写、空泛校园风景、廉价招生照"
+    }
   ],
   "platforms": [
     { "id": "douyin", "label": "抖音 9:16", "ratio": "9:16" },
