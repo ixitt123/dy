@@ -243,6 +243,7 @@ async function refreshVideoProjects({ preserveSelection = true } = {}) {
   const preferred = preserveSelection ? currentVideoProjectId() : "";
   activeVideoProject = videoProjectsState.find((item) => item.id === preferred) || videoProjectsState[0] || null;
   if (activeVideoProject) localStorage.setItem("active-video-project-id", activeVideoProject.id);
+  else localStorage.removeItem("active-video-project-id");
   renderActiveProjectSelector();
   renderCurrentVideoProject();
   renderRecentVideoProjects();
