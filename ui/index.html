@@ -202,7 +202,7 @@
                 <article class="metric-card">
                   <span>导演稿</span>
                   <strong id="metricDirectors">0</strong>
-                  <small>Storyboard</small>
+                  <small>专业分镜稿</small>
                 </article>
                 <article class="metric-card">
                   <span>成片草稿</span>
@@ -634,7 +634,7 @@
             <h2>AI 导演系统</h2>
             <p>先完成故事弧、分镜、视觉、字幕和声音设计，只生成专业导演稿。</p>
           </div>
-          <span class="director-stage-badge">Storyboard First</span>
+          <span class="director-stage-badge">专业分镜</span>
         </div>
 
         <div class="director-workbench">
@@ -744,17 +744,17 @@
               <button class="ghost small" id="exportDirectorChatGptPrompts" type="button">导出 ChatGPT 生图词</button>
               <button class="ghost small" id="sendDirectorToImage" type="button">发送到图片生成</button>
               <button class="ghost small" id="sendDirectorToVideoProduct" type="button">发送到成片中心</button>
-              <button class="ghost small" id="sendDirectorToVfo" type="button">发送到 VFO</button>
+              <button class="ghost small" id="sendDirectorToVfo" type="button">发送到成片规划</button>
               <button class="ghost small" id="openDirectorFile" type="button">打开文件位置</button>
             </div>
           </div>
           <div class="director-result-tabs" id="directorResultTabs" role="tablist" aria-label="导演稿结果">
             <button class="active" type="button" data-director-tab="shot-list">Shot List</button>
-            <button type="button" data-director-tab="storyboard-json">Storyboard JSON</button>
-            <button type="button" data-director-tab="subtitle">Subtitle Timeline</button>
-            <button type="button" data-director-tab="visual">Visual / Motion Prompts</button>
-            <button type="button" data-director-tab="bgm">BGM Plan</button>
-            <button type="button" data-director-tab="review">Aesthetic Review</button>
+            <button type="button" data-director-tab="storyboard-json">分镜数据</button>
+            <button type="button" data-director-tab="subtitle">字幕时间轴</button>
+            <button type="button" data-director-tab="visual">画面提示词</button>
+            <button type="button" data-director-tab="bgm">BGM 方案</button>
+            <button type="button" data-director-tab="review">审美检查</button>
           </div>
           <div class="director-result-view" id="directorResultView"></div>
         </section>
@@ -809,7 +809,7 @@
             <div class="video-route-flow">
               <span>Shot List</span>
               <span>AI 图片</span>
-              <span>Timeline</span>
+              <span>成片时间线</span>
               <span>MP4</span>
             </div>
             <small>未来主力路线，适合故事、分镜、教育宣传和电影感图文视频。</small>
@@ -979,10 +979,10 @@
           <div class="vfo-source-panel">
             <div class="vfo-source-row">
               <label>
-                Storyboard 来源
+                导演稿来源
                 <select id="vfoSourceMode">
                   <option value="director">已完成的 Director 项目</option>
-                  <option value="manual">手动粘贴 Storyboard JSON</option>
+                  <option value="manual">手动粘贴分镜数据</option>
                 </select>
               </label>
               <label id="vfoDirectorSourceField">
@@ -996,11 +996,11 @@
               <input id="vfoManualTitle" type="text" maxlength="100" placeholder="手动 Storyboard 的项目名称" />
             </label>
             <label id="vfoManualJsonField" hidden>
-              Storyboard JSON
-              <textarea id="vfoManualJson" rows="14" placeholder="粘贴 Director System 输出的完整 Storyboard JSON"></textarea>
+              分镜数据
+              <textarea id="vfoManualJson" rows="14" placeholder="粘贴 AI 导演输出的完整分镜数据"></textarea>
             </label>
             <div class="vfo-source-summary" id="vfoSourceSummary">
-              <strong>等待选择 Storyboard</strong>
+              <strong>等待选择导演稿</strong>
               <span>选择后会显示镜头数、平台和导演评分。</span>
             </div>
           </div>
@@ -1019,9 +1019,9 @@
             <div class="vfo-output-contract">
               <h3>本次输出</h3>
               <dl>
-                <div><dt>APS</dt><dd>Asset Package + Asset Review + Render Readiness</dd></div>
-                <div><dt>VFO</dt><dd>素材路由 + 渲染策略 + QA Review</dd></div>
-                <div><dt>文件</dt><dd>render_plan.json</dd></div>
+                <div><dt>素材</dt><dd>素材包、素材检查和完整度</dd></div>
+                <div><dt>成片</dt><dd>素材匹配、输出策略和质量检查</dd></div>
+                <div><dt>文件</dt><dd>成片草稿计划</dd></div>
               </dl>
             </div>
             <div class="vfo-guardrails">
@@ -1051,17 +1051,17 @@
             <div class="vfo-result-actions">
               <button class="ghost small" id="copyVfoResult" type="button">复制当前结果</button>
               <button class="ghost small" id="exportRenderPlan" type="button">导出成片草稿计划</button>
-              <button class="ghost small" id="exportAssetPlan" type="button">导出 Asset Plan</button>
-              <button class="ghost small" id="exportAssetPackage" type="button">导出 Asset Package</button>
+              <button class="ghost small" id="exportAssetPlan" type="button">导出素材计划</button>
+              <button class="ghost small" id="exportAssetPackage" type="button">导出素材包</button>
               <button class="ghost small" id="openVfoFile" type="button">打开文件位置</button>
             </div>
           </div>
-          <div class="vfo-result-tabs" id="vfoResultTabs" role="tablist" aria-label="VFO 结果">
+          <div class="vfo-result-tabs" id="vfoResultTabs" role="tablist" aria-label="成片规划结果">
             <button class="active" type="button" data-vfo-tab="overview">调度总览</button>
-            <button type="button" data-vfo-tab="assets">Asset Package</button>
-            <button type="button" data-vfo-tab="render">Render Strategy</button>
-            <button type="button" data-vfo-tab="qa">QA Review</button>
-            <button type="button" data-vfo-tab="json">Render Plan JSON</button>
+            <button type="button" data-vfo-tab="assets">素材包</button>
+            <button type="button" data-vfo-tab="render">输出策略</button>
+            <button type="button" data-vfo-tab="qa">质量检查</button>
+            <button type="button" data-vfo-tab="json">草稿数据</button>
           </div>
           <div class="vfo-result-view" id="vfoResultView"></div>
         </section>

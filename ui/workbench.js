@@ -29,7 +29,7 @@ const workbenchPages = {
   },
   director: {
     title: "AI导演",
-    description: "从文案生成 Storyboard、镜头列表和导演稿。",
+    description: "从文案生成专业分镜、字幕时间轴和导演稿。",
   },
   vfo: {
     title: "视频成片中心",
@@ -667,7 +667,7 @@ function setupDirectorStudio() {
 
   addLaneHeading(sourceLane, "文案来源", "手动输入或选择已有内容");
   addLaneHeading(settingsLane, "导演设置", "类型、风格、平台、节奏和镜头");
-  addLaneHeading(resultLane, "Storyboard结果", "镜头、字幕、Prompt和导出");
+  addLaneHeading(resultLane, "导演稿结果", "镜头、字幕、画面提示词和导出");
 
   oldWorkbench.remove();
   studio.append(sourceLane, settingsLane, resultLane);
@@ -1011,7 +1011,7 @@ function railVideoProductCard(project, variant = "normal") {
   return `
     <article class="rail-task-card rail-video-product-card ${variant}">
       <div class="rail-task-top">
-        <span class="rail-task-id">Timeline #${id}</span>
+        <span class="rail-task-id">成片 #${id}</span>
         <span class="status-badge ${workbenchStatusClass(project.status)}">${escapeHtml(status)}</span>
       </div>
       <strong title="${title}">${title}</strong>
@@ -1070,7 +1070,7 @@ function renderRail(tasks, directors, vfoProjects, audioJobs, videoProducts = []
           <div class="rail-task-list">${activeList}</div>
         </div>
         <div class="rail-task-group">
-          <div class="rail-subheading"><span>成片 Timeline</span><em>${runningVideoProducts.length || latestVideoProducts.length}</em></div>
+          <div class="rail-subheading"><span>成片任务</span><em>${runningVideoProducts.length || latestVideoProducts.length}</em></div>
           <div class="rail-task-list compact">${videoList}</div>
         </div>
         <div class="rail-task-group">
