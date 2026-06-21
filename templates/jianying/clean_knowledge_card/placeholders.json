@@ -1,1 +1,27 @@
-{"voiceover":"voiceover_placeholder","bgm":"bgm_placeholder","scenes":["scene_01_placeholder","scene_02_placeholder","scene_03_placeholder"],"text":{"hook":"hook_text","cta":"cta_text","cover":"cover_text"}}
+{
+  "voiceover": "voiceover_placeholder",
+  "bgm": "bgm_placeholder",
+  "scenes": [
+    "scene_01_placeholder",
+    "scene_02_placeholder",
+    "scene_03_placeholder",
+    "scene_04_placeholder",
+    "scene_05_placeholder",
+    "scene_06_placeholder",
+    "scene_07_placeholder",
+    "scene_08_placeholder"
+  ],
+  "text": {
+    "hook": "hook_text",
+    "cta": "cta_text",
+    "cover": "cover_text",
+    "keyword": "keyword_text",
+    "subtitleStyle": "subtitle_style"
+  },
+  "brand": {
+    "logo": "brand_logo",
+    "endingQr": "ending_qr",
+    "teacherAvatar": "teacher_avatar",
+    "courseCard": "course_card"
+  }
+}
