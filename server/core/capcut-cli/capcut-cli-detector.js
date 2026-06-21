@@ -140,6 +140,7 @@ export function createCapcutCliDetector({ baseDir, ffmpegPath = "", getSettings 
     const jianyingAppPath = firstExistingPath([
       configuredAppPath,
       discoveredInstall?.targetPath,
+      localAppData && path.join(localAppData, "JianyingPro", "Apps", "JianyingPro.exe"),
       localAppData && path.join(localAppData, "JianyingPro", "JianyingPro.exe"),
       localAppData && path.join(localAppData, "CapCut", "CapCut.exe"),
     ]);

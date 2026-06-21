@@ -6370,14 +6370,18 @@ audio {
 
 @media (max-width: 1050px) {
   .video-output-primary-actions,
-  .video-output-tool-status {
+  .video-output-tool-status,
+  .local-jianying-config,
+  .template-import-tools {
     grid-template-columns: 1fr 1fr;
   }
 }
 
 @media (max-width: 680px) {
   .video-output-primary-actions,
-  .video-output-tool-status {
+  .video-output-tool-status,
+  .local-jianying-config,
+  .template-import-tools {
     grid-template-columns: 1fr;
   }
 }

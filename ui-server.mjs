@@ -720,6 +720,7 @@ function normalizeSettings(settings) {
   const batch = next.batch && typeof next.batch === "object" ? { ...next.batch } : {};
   const tts = next.tts && typeof next.tts === "object" ? { ...next.tts } : {};
   const imageProviders = next.imageProviders && typeof next.imageProviders === "object" ? { ...next.imageProviders } : {};
+  const jianying = next.jianying && typeof next.jianying === "object" ? { ...next.jianying } : {};
   const modelMapping = next.modelMap && typeof next.modelMap === "object"
     ? next.modelMap
     : next.modelMapping && typeof next.modelMapping === "object"
@@ -752,6 +753,12 @@ function normalizeSettings(settings) {
 
   delete next.dashscopeApiKey;
   next.downloadsDir = setDownloadsDir(next.downloadsDir || defaultDownloadsDir);
+  next.jianyingAppPath = String(next.jianyingAppPath || next.jianying_app_path || jianying.appPath || "").trim();
+  next.jianyingDraftDir = String(next.jianyingDraftDir || next.jianying_draft_dir || jianying.draftDir || "").trim();
+  next.jianying = {
+    appPath: next.jianyingAppPath,
+    draftDir: next.jianyingDraftDir,
+  };
   next.activeProvider = next.activeProvider || "dashscope";
   next.providers = providers;
   next.rewriteProviders = rewriteProviders;
@@ -4335,6 +4342,9 @@ const server = http.createServer(async (req, res) => {
         rewrite: publicRewriteSettings(settings),
         tts: publicTtsSettings(settings),
         batch: settings.batch,
+        jianying: settings.jianying,
+        jianyingAppPath: settings.jianyingAppPath,
+        jianyingDraftDir: settings.jianyingDraftDir,
         downloadsDir,
       });
       return;
@@ -5149,6 +5159,44 @@ const server = http.createServer(async (req, res) => {
     // ===== 剪映导出 API =====
     if (url.pathname.startsWith("/api/jianying")) {
       const route = url.pathname.replace("/api/jianying", "").replace(/^\//, "");
+
+      if (req.method === "GET" && route === "local-config") {
+        const settings = readSettings();
+        sendJson(res, 200, {
+          ok: true,
+          appPath: settings.jianyingAppPath || "",
+          draftDir: settings.jianyingDraftDir || "",
+        });
+        return;
+      }
+
+      if (req.method === "POST" && route === "local-config") {
+        const body = await readJsonBody(req);
+        try {
+          const appPath = String(body.appPath || body.jianyingAppPath || "").trim();
+          const draftDir = String(body.draftDir || body.jianyingDraftDir || "").trim();
+          if (appPath && (!fs.existsSync(appPath) || !fs.statSync(appPath).isFile())) {
+            throw new Error("剪映程序路径不存在，请填写 JianyingPro.exe 的完整路径。");
+          }
+          if (draftDir) fs.mkdirSync(path.resolve(draftDir), { recursive: true });
+          const settings = readSettings();
+          settings.jianyingAppPath = appPath;
+          settings.jianyingDraftDir = draftDir ? path.resolve(draftDir) : "";
+          settings.jianying = {
+            appPath: settings.jianyingAppPath,
+            draftDir: settings.jianyingDraftDir,
+          };
+          writeSettings(settings);
+          sendJson(res, 200, {
+            ok: true,
+            appPath: settings.jianyingAppPath,
+            draftDir: settings.jianyingDraftDir,
+          });
+        } catch (e) {
+          sendJson(res, 400, { ok: false, error: e.message, message: e.message });
+        }
+        return;
+      }
 
       if (req.method === "POST" && route === "export") {
         const body = await readJsonBody(req);
