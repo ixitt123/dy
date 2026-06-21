@@ -93,7 +93,7 @@
 
         <div class="workbench-body">
           <main class="shell" id="workbenchContent">
-            <section class="dashboard-page" id="dashboardPage">
+            <section class="dashboard-page workbench-page active" id="dashboardPage" data-page="dashboard">
               <div class="dashboard-intro">
                 <div>
                   <span class="section-eyebrow">短视频项目工作台</span>
@@ -261,87 +261,19 @@
                   <i></i>
                   <button type="button" data-nav="director"><span>5</span><strong>AI 导演</strong><small>分镜与字幕</small></button>
                   <i></i>
-                  <button type="button" data-nav="files"><span>6</span><strong>素材匹配</strong><small>画面与 BGM</small></button>
+                  <button type="button" data-nav="assets"><span>6</span><strong>素材匹配</strong><small>画面与 BGM</small></button>
                   <i></i>
-                  <button type="button" data-nav="vfo"><span>7</span><strong>成片草稿</strong><small>生成剪映草稿</small></button>
+                  <button type="button" data-nav="video-output"><span>7</span><strong>成片草稿</strong><small>生成剪映草稿</small></button>
                   <i></i>
-                  <button type="button" data-nav="vfo"><span>8</span><strong>打开剪映</strong><small>检查并导出</small></button>
+                  <button type="button" data-nav="video-output"><span>8</span><strong>打开剪映</strong><small>检查并导出</small></button>
                 </div>
               </section>
             </section>
-      <section class="topbar">
-        <div>
-          <h1>系统设置</h1>
-          <p id="savePath">下载位置: 加载中...</p>
-        </div>
-        <div class="download-settings">
-          <input id="downloadDirInput" type="text" placeholder="下载位置" style="width:300px" />
-          <button class="ghost" id="chooseDownloadDir" type="button">选择文件夹</button>
-          <button class="ghost" id="saveDownloadDir" type="button">保存位置</button>
-          <button class="ghost" id="openFolder" type="button">打开下载文件夹</button>
-        </div>
-      </section>
 
+      <section class="workbench-page" data-page="collector" id="collectorPage">
       <section class="workspace">
         <label for="shareLink">抖音分享链接 / 批量导入链接</label>
         <textarea id="shareLink" rows="8" placeholder="粘贴 1 条或多条抖音分享内容；有 1 条就处理 1 条，有多条会自动识别并加入队列"></textarea>
-
-        <div class="api-panel settings-hub" id="unifiedSettingsPanel">
-          <div class="settings-hub-head">
-            <div>
-              <span class="section-eyebrow">API Center</span>
-              <h2>API 与模型设置</h2>
-              <p>保存一次，全局读取；每个功能会按下方分配使用对应 API。</p>
-            </div>
-            <button class="ghost small" id="v2RefreshSettings" type="button">刷新状态</button>
-          </div>
-
-          <div class="settings-summary" id="v2SettingsSummary"></div>
-
-          <div class="settings-category-grid" aria-label="设置分区">
-            <span>AI 文本模型</span>
-            <span>语音识别模型</span>
-            <span>TTS 配音模型</span>
-            <span>图片生成模型</span>
-            <span>视频生成模型</span>
-            <span>下载设置</span>
-            <span>输出设置</span>
-            <span>剪映模板设置</span>
-            <span>系统状态检测</span>
-          </div>
-
-          <section class="settings-card provider-card">
-            <div class="settings-card-head">
-              <div>
-                <h3>API 服务中心</h3>
-                <p class="text-secondary">API Key 只保存在本机 settings.json；页面只显示脱敏状态。</p>
-              </div>
-            </div>
-            <div id="v2ProviderList" class="provider-grid"></div>
-          </section>
-
-          <section class="settings-card task-card">
-            <div class="settings-card-head">
-              <div>
-                <h3>功能使用说明</h3>
-                <p class="text-secondary">这里说明每个功能会调用哪类 API，方便排查为什么某个功能不可用。</p>
-              </div>
-            </div>
-            <div id="v2TaskGuide" class="task-guide-grid"></div>
-          </section>
-
-          <section class="settings-card model-card">
-            <div class="settings-card-head">
-              <div>
-                <h3>模型中心</h3>
-                <p class="text-secondary">设置各功能默认使用的服务和模型；保存后全局生效。</p>
-              </div>
-              <button class="primary" id="v2SaveMapping" type="button">保存模型分配</button>
-            </div>
-            <div class="model-mapping-grid" id="v2ModelMap"></div>
-            <p id="saveMappingStatus" class="settings-status" role="status"></p>
-          </section>
-        </div>
 
         <div class="actions">
           <button id="parseBtn" type="button">解析信息</button>
