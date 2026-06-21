@@ -60,6 +60,7 @@ function normalizeVolcengineArkModel(model) {
 
 export function createImageService({ baseDir, getSettings, taskStore = null, ffmpegPath = "" }) {
   const outputDir = path.join(baseDir, "image-assets", "generated");
+  const thumbnailDir = path.join(baseDir, "image-assets", "thumbnails");
   const dbPath = path.join(baseDir, ".data", "image-studio.sqlite");
   const styleTemplatePath = path.join(baseDir, "prompts", "storyboard-image", "default-commercial.md");
   let storyboardStyleTemplate = FALLBACK_STORYBOARD_STYLE_TEMPLATE;
@@ -69,6 +70,7 @@ export function createImageService({ baseDir, getSettings, taskStore = null, ffm
     storyboardStyleTemplate = FALLBACK_STORYBOARD_STYLE_TEMPLATE;
   }
   fs.mkdirSync(outputDir, { recursive: true });
+  fs.mkdirSync(thumbnailDir, { recursive: true });
 
   const db = new DatabaseSync(dbPath);
   db.exec("PRAGMA journal_mode=WAL");
@@ -172,12 +174,42 @@ export function createImageService({ baseDir, getSettings, taskStore = null, ffm
     return target;
   }
 
+  async function thumbnailForImage(filePath, { width = 360 } = {}) {
+    const resolved = path.resolve(String(filePath || "").trim());
+    if (!resolved || !fs.existsSync(resolved)) throw new Error("图片文件不存在。");
+    if (!ffmpegPath || !fs.existsSync(ffmpegPath)) return resolved;
+    const ext = path.extname(resolved).toLowerCase() || ".png";
+    const safeName = Buffer.from(resolved).toString("hex").slice(0, 48);
+    const thumbPath = path.join(thumbnailDir, `${safeName}_${width}.jpg`);
+    if (fs.existsSync(thumbPath)) return thumbPath;
+    await runProcess(ffmpegPath, [
+      "-y",
+      "-hide_banner",
+      "-loglevel",
+      "error",
+      "-i",
+      resolved,
+      "-vf",
+      `scale=${Math.max(120, Math.min(720, Number(width) || 360))}:-2`,
+      "-frames:v",
+      "1",
+      "-q:v",
+      "4",
+      thumbPath,
+    ]).catch(() => {
+      if (ext === ".jpg" || ext === ".jpeg" || ext === ".png" || ext === ".webp") return resolved;
+      throw new Error("缩略图生成失败。");
+    });
+    return fs.existsSync(thumbPath) ? thumbPath : resolved;
+  }
+
   function publicAsset(row) {
     if (!row) return row;
     return {
       ...row,
       file_path: row.file_path || row.original_path || "",
       ratio: row.aspect_ratio || "",
+      thumbnail_url: `/api/image/thumbnail?path=${encodeURIComponent(row.file_path || row.original_path || "")}`,
     };
   }
 
@@ -356,6 +388,7 @@ export function createImageService({ baseDir, getSettings, taskStore = null, ffm
           filename,
           imagePath: localPath,
           file_path: localPath,
+          thumbnailUrl: `/api/image/thumbnail?path=${encodeURIComponent(localPath)}`,
           provider: selected.provider,
           model: result.model || selected.model,
           source_url: result.sourceUrl || result.imageUrl || "",
@@ -470,6 +503,7 @@ export function createImageService({ baseDir, getSettings, taskStore = null, ffm
     generateStoryboardImages,
     storyboardImagePrompts,
     addLocalImageAsset,
+    thumbnailForImage,
     testProviderConnection,
     getJobs,
     getAssets,
