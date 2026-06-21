@@ -117,6 +117,7 @@ export function createCapcutCliAdapter(options = {}) {
       : { ok: false, warnings: [], errors: [] };
     return {
       ...compileResult,
+      draftPath: compileResult.ok ? compileResult.draftPath : "",
       warnings: [
         ...(compileResult.warnings || []),
         ...(infoResult.ok ? ["已生成可在剪映专业版项目列表中打开的本地草稿。"] : []),
@@ -125,7 +126,11 @@ export function createCapcutCliAdapter(options = {}) {
         ...(compileResult.errors || []),
         ...(compileResult.ok && !infoResult.ok ? (infoResult.errors || []) : []),
       ],
-      files: [...new Set([...(compileResult.files || []), ...commonFiles, draftDirectory].filter(Boolean))],
+      files: [...new Set([
+        ...(compileResult.files || []),
+        ...commonFiles,
+        ...(compileResult.ok ? [draftDirectory] : []),
+      ].filter(Boolean))],
       fallback: !compileResult.ok,
       planPath,
       specPath,

@@ -116,7 +116,6 @@ export function buildCapcutCompileSpec({ project = {}, timeline = {}, timelineFi
       ref: "bgm",
       path: timelineFiles.packagedBgm,
       start: 0,
-      duration: duration || undefined,
       volume: 0.16,
     });
   }
