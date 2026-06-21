@@ -23,7 +23,7 @@ function renderStyleTemplate(template, values) {
   );
 }
 
-function targetImageSize(aspectRatio = "1:1") {
+export function targetImageSize(aspectRatio = "1:1") {
   return {
     "9:16": { width: 1080, height: 1920 },
     "16:9": { width: 1920, height: 1080 },
@@ -31,6 +31,11 @@ function targetImageSize(aspectRatio = "1:1") {
     "3:4": { width: 1080, height: 1440 },
     "4:3": { width: 1440, height: 1080 },
   }[String(aspectRatio || "1:1")] || { width: 1080, height: 1080 };
+}
+
+export function coverScaleCropFilter(aspectRatio = "1:1") {
+  const target = targetImageSize(aspectRatio);
+  return `scale=${target.width}:${target.height}:force_original_aspect_ratio=increase,crop=${target.width}:${target.height},setsar=1`;
 }
 
 function runProcess(command, args) {
@@ -164,7 +169,7 @@ export function createImageService({ baseDir, getSettings, taskStore = null, ffm
       "-i",
       filePath,
       "-vf",
-      `scale=${target.width}:${target.height}:force_original_aspect_ratio=cover,crop=${target.width}:${target.height},setsar=1`,
+      coverScaleCropFilter(aspectRatio),
       "-frames:v",
       "1",
       tempPath,
@@ -346,7 +351,7 @@ export function createImageService({ baseDir, getSettings, taskStore = null, ffm
         const result = await callProviderGenerate(providerInstance, { prompt: cleanPrompt, aspectRatio, outputPath });
 
         if (!result.success) {
-          results.push({ index: i, success: false, error: result.error });
+          results.push({ index: i, success: false, error: result.error, duration: result.duration || 0 });
           continue;
         }
 
@@ -400,12 +405,17 @@ export function createImageService({ baseDir, getSettings, taskStore = null, ffm
 
     const successCount = results.filter(r => r.success).length;
     const imagePaths = results.filter(r => r.success).map(r => r.imagePath);
+    const failureMessage = results
+      .filter((item) => !item.success && item.error)
+      .map((item) => item.error)
+      .join("\n")
+      .slice(0, 4000);
 
     db.prepare(`
-      UPDATE image_jobs SET status=?, progress=100, image_paths_json=?, duration_ms=?,
+      UPDATE image_jobs SET status=?, progress=100, image_paths_json=?, error=?, duration_ms=?,
       updated_at=datetime('now','localtime'), completed_at=datetime('now','localtime') WHERE id=?
     `).run(successCount === count ? "完成" : successCount > 0 ? "部分完成" : "失败",
-      JSON.stringify(imagePaths), results.reduce((s, r) => s + (r.duration || 0), 0), jobId);
+      JSON.stringify(imagePaths), failureMessage, results.reduce((s, r) => s + (r.duration || 0), 0), jobId);
 
     return { jobId, results, total: count, success: successCount, failed: count - successCount };
   }
