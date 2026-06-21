@@ -1,17 +1,7 @@
 // 统一设置中心
 import fs from "node:fs";
 import path from "node:path";
-
-const DEFAULT_MODEL_MAPPING = {
-  analyze: { provider: "deepseek", model: "deepseek-chat" },
-  rewrite: { provider: "deepseek", model: "deepseek-chat" },
-  director: { provider: "deepseek", model: "deepseek-chat" },
-  storyboard: { provider: "deepseek", model: "deepseek-chat" },
-  image_prompt: { provider: "deepseek", model: "deepseek-chat" },
-  image: { provider: "volcengine_ark", model: "doubao-seedream-5-0-lite-260128" },
-  video: { provider: "kling", model: "kling" },
-  tts: { provider: "aliyun_bailian", model: "cosyvoice-v2" },
-};
+import { DEFAULT_MODEL_MAPPING } from "../config/model-defaults.js";
 
 export function createSettingsCenter(baseDir, settingsPath) {
   const settingsPathResolved = settingsPath || path.join(baseDir, "settings.json");
