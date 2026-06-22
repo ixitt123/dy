@@ -1681,6 +1681,25 @@ function setupImageStudio() {
     };
   }
 
+  function isImageNetworkFetchError(error) {
+    const message = error instanceof Error ? error.message : String(error || "");
+    return error instanceof TypeError && /failed to fetch|networkerror|load failed/i.test(message);
+  }
+
+  function formatImageFetchError(error, action = "图片 API 请求") {
+    const message = error instanceof Error ? error.message : String(error || "未知错误");
+    if (isImageNetworkFetchError(error)) {
+      return `${action}失败：本地服务连接断开或页面端口已失效。请确认启动脚本仍在运行，并用当前地址刷新页面：${window.location.origin}`;
+    }
+    return `${action}失败：${message}`;
+  }
+
+  async function assertImageApiReachable() {
+    const res = await fetch("/api/image/stats", { cache: "no-store" });
+    if (!res.ok) throw new Error(`图片 API 预检 HTTP ${res.status}`);
+    await res.json().catch(() => null);
+  }
+
   async function linkGeneratedImagesToCurrentProject(results = [], context = {}) {
     const success = (Array.isArray(results) ? results : []).filter((item) => item?.success && item.assetId);
     if (!success.length || !currentVideoProjectId()) return 0;
@@ -1731,7 +1750,7 @@ function setupImageStudio() {
         : `图片 API 未配置：请到系统设置里的“图片生成 / ${provider.label}”保存 API Key。`;
     } catch (error) {
       configStatus.dataset.state = "error";
-      configStatus.querySelector("span").textContent = `图片 API 状态读取失败：${error instanceof Error ? error.message : String(error)}`;
+      configStatus.querySelector("span").textContent = formatImageFetchError(error, "图片 API 状态读取");
     }
   }
 
@@ -1767,6 +1786,7 @@ function setupImageStudio() {
     btn.textContent = "整套生成中...";
     setStatus(`正在生成整套分镜图：${importedDirectorImagePrompts.length || ""} 个镜头，统一风格锁定中...`, "info");
     try {
+      await assertImageApiReachable();
       const res = await fetch("/api/image/generate-storyboard", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1794,7 +1814,7 @@ function setupImageStudio() {
       );
       renderResults(data.results || [], `Director #${projectId} 整套分镜图`);
     } catch (error) {
-      setStatus(`整套分镜图生成失败：${error instanceof Error ? error.message : String(error)}`, "error");
+      setStatus(formatImageFetchError(error, "整套分镜图生成"), "error");
       await refreshImageConfigStatus();
     } finally {
       btn.disabled = false;
@@ -1862,6 +1882,7 @@ function setupImageStudio() {
     setStatus(`正在通过 ${provider?.label || "图片 Provider"} 生成 ${count} 张图片...`);
 
     try {
+      await assertImageApiReachable();
       const res = await fetch("/api/image/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1896,7 +1917,7 @@ function setupImageStudio() {
         renderResults(data.results || [], prompt);
       }
     } catch (e) {
-      setStatus("请求失败：" + e.message, "error");
+      setStatus(formatImageFetchError(e, "图片生成请求"), "error");
       await refreshImageConfigStatus();
     } finally {
       btn.disabled = false;
