@@ -1715,6 +1715,30 @@ function setupImageStudio() {
     await res.json().catch(() => null);
   }
 
+  async function waitForImageJob(jobId, { label = "图片生成中" } = {}) {
+    let latest = null;
+    while (true) {
+      await new Promise((resolve) => setTimeout(resolve, 900));
+      const res = await fetch(`/api/image/job?id=${encodeURIComponent(jobId)}`, { cache: "no-store" });
+      const data = await res.json();
+      if (!res.ok || data.ok === false) throw new Error(data.message || data.error || `HTTP ${res.status}`);
+      latest = data.job;
+      const progress = Math.max(0, Math.min(100, Number(latest.progress || 0)));
+      setImageProgress(progress, `${label} · ${latest.status || "生成中"}`);
+      if (!["等待", "生成中", "processing", "pending"].includes(String(latest.status || ""))) return latest;
+    }
+  }
+
+  function imageResultsFromJob(job = {}) {
+    return (Array.isArray(job.image_paths) ? job.image_paths : []).map((imagePath, index) => ({
+      index,
+      success: true,
+      assetId: "",
+      filename: imagePath.split(/[\\/]/).pop() || `image-${index + 1}`,
+      imagePath,
+    }));
+  }
+
   async function linkGeneratedImagesToCurrentProject(results = [], context = {}) {
     const success = (Array.isArray(results) ? results : []).filter((item) => item?.success && item.assetId);
     if (!success.length || !currentVideoProjectId()) return 0;
@@ -1812,25 +1836,23 @@ function setupImageStudio() {
           projectId,
           aspectRatio,
           countPerScene: 1,
+          async: true,
         }),
       });
       const data = await res.json();
       if (!res.ok || data.ok === false) throw new Error(data.error || data.message || `HTTP ${res.status}`);
+      const job = await waitForImageJob(data.jobId, { label: "整套分镜图生成中" });
       setImageProgress(100, "整套分镜图完成");
-      const linked = await linkGeneratedImagesToCurrentProject(data.results || [], {
-        prompt: `Director #${projectId} 整套分镜图`,
-        aspectRatio,
-        imported: activeDirectorImageImport || importedDirectorImagePrompts[0] || null,
-        providerId,
-      });
-      const firstError = (data.results || []).find((item) => !item.success)?.error || "";
+      await loadImageAssets();
+      const results = imageResultsFromJob(job);
+      const success = results.length;
+      const failed = Math.max(0, Number(job.count_requested || 0) - success);
       setStatus(
-        `整套分镜图完成：成功 ${data.success || 0} 张，失败 ${data.failed || 0} 张`
-          + (linked ? `，已自动归档 ${linked} 张到当前项目素材库` : currentVideoProjectId() ? "" : "，未选择当前项目，仅保存到图片中心")
-          + (firstError ? `；首个错误：${firstError}` : ""),
-        data.success > 0 ? "ok" : "error",
+        `整套分镜图完成：成功 ${success} 张，失败 ${failed} 张`
+          + (job.error ? `；错误：${String(job.error).slice(0, 120)}` : ""),
+        success > 0 ? "ok" : "error",
       );
-      renderResults(data.results || [], `Director #${projectId} 整套分镜图`);
+      renderResults(results, `Director #${projectId} 整套分镜图`);
     } catch (error) {
       setImageProgress(100, "整套分镜图失败");
       setStatus(formatImageFetchError(error, "整套分镜图生成"), "error");
@@ -1914,29 +1936,28 @@ function setupImageStudio() {
           aspectRatio,
           sourceType: imported ? "director" : "manual",
           sourceId: imported ? `${imported.projectId || ""}:${imported.scene || ""}` : "",
+          async: true,
         }),
       });
       const data = await res.json();
       if (!res.ok || data.ok === false) throw new Error(data.error || data.message || `HTTP ${res.status}`);
-      setImageProgress(100, Number(data.success || 0) > 0 ? "图片生成完成" : "图片生成失败");
-      if (data.jobId && Number(data.success || 0) > 0) {
-        const linked = await linkGeneratedImagesToCurrentProject(data.results || [], {
-          prompt,
-          aspectRatio,
-          imported,
-          providerId,
-        });
+      const job = await waitForImageJob(data.jobId, { label: "图片生成中" });
+      const results = imageResultsFromJob(job);
+      const success = results.length;
+      const failed = Math.max(0, Number(job.count_requested || count) - success);
+      setImageProgress(100, success > 0 ? "图片生成完成" : "图片生成失败");
+      await loadImageAssets();
+      if (success > 0) {
         setStatus(
-          `生成完成：成功 ${data.success} 张`
-            + (data.failed > 0 ? `，失败 ${data.failed} 张` : "")
-            + (linked ? `，已自动归档 ${linked} 张到当前项目素材库` : currentVideoProjectId() ? "" : "，未选择当前项目，仅保存到图片中心"),
+          `生成完成：成功 ${success} 张`
+            + (failed > 0 ? `，失败 ${failed} 张` : "")
+            + "，已保存到图片资产库",
           "ok",
         );
-        renderResults(data.results || [], prompt);
+        renderResults(results, prompt);
       } else {
-        const firstError = (data.results || []).find((item) => !item.success)?.error;
-        setStatus(`生成失败：${firstError || data.error || "没有成功生成图片"}`, "error");
-        renderResults(data.results || [], prompt);
+        setStatus(`生成失败：${job.error || data.error || "没有成功生成图片"}`, "error");
+        renderResults([{ success: false, error: job.error || data.error || "没有成功生成图片", prompt }], prompt);
       }
     } catch (e) {
       setImageProgress(100, "图片生成失败");
