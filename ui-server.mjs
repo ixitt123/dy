@@ -22,6 +22,7 @@ import { PipelineRunner } from "./server/core/pipeline-bus/PipelineRunner.js";
 import { PipelineState } from "./server/core/pipeline-bus/PipelineState.js";
 import { PIPELINE_EVENTS } from "./server/core/pipeline-bus/PipelineEvents.js";
 import { createProjectCenter } from "./server/core/project-center.js";
+import { generatePlatformTitles } from "./server/core/title-generator.js";
 import { TTS_PROVIDER_LABELS } from "./server/tts/providers/index.js";
 import { createVoiceAssetService } from "./server/voices/voice-asset-service.js";
 import { createDirectorService } from "./server/director/director-service.js";
