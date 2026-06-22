@@ -3798,6 +3798,15 @@ async function generateVideoProduct() {
   }
 }
 
+async function generateJianyingDraftAndOpenLegacy() {
+  if (videoProductOutputType) {
+    videoProductOutputType.value = "jianying_template";
+    videoProductOutputType.dispatchEvent(new Event("change", { bubbles: true }));
+  }
+  await generateVideoProduct();
+  await openJianyingApp();
+}
+
 function sendDirectorProjectToVideoProduct() {
   if (!activeDirectorProject?.id || activeDirectorProject.status !== "completed") {
     directorStatus.textContent = "请先生成或打开一份已完成的导演稿。";
@@ -5206,7 +5215,17 @@ autoBindTimelineBtn?.addEventListener("click", () => {
 
 generateVideoProductBtn?.addEventListener("click", () => {
   if (window.__modularVideoOutputReady) return;
-  generateVideoProduct();
+  generateJianyingDraftAndOpenLegacy();
+});
+
+document.addEventListener("keydown", (event) => {
+  if (window.__modularVideoOutputReady) return;
+  if (!(event.ctrlKey && event.shiftKey && event.key.toLowerCase() === "j")) return;
+  if (document.querySelector("#videoOutputPage")?.classList.contains("active") === false) return;
+  event.preventDefault();
+  generateJianyingDraftAndOpenLegacy().catch((error) => {
+    if (videoProductStatus) videoProductStatus.textContent = error instanceof Error ? error.message : String(error);
+  });
 });
 
 openVideoProductOutputBtn?.addEventListener("click", () => {

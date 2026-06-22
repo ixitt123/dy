@@ -510,6 +510,16 @@ export async function generateVideoProduct() {
   }
 }
 
+async function generateJianyingDraftAndOpen() {
+  selectOutputType("jianying_template");
+  const status = document.querySelector("#videoProductStatus");
+  if (status) status.textContent = "正在一键生成剪映模板草稿...";
+  const project = await generateVideoProduct();
+  if (status) status.textContent = "剪映草稿任务完成，正在尝试打开剪映专业版...";
+  await openJianyingApp();
+  return project;
+}
+
 export async function pollVideoProductProject(id) {
   if (state.pollTimer) window.clearTimeout(state.pollTimer);
   const project = await loadTimelineProject(id);
@@ -582,8 +592,14 @@ function bindEvents() {
       if (status) status.textContent = error.message;
     }
   });
-  document.querySelector("#generateVideoProduct")?.addEventListener("click", () => generateVideoProduct().catch(() => {}));
+  document.querySelector("#generateVideoProduct")?.addEventListener("click", () => generateJianyingDraftAndOpen().catch(() => {}));
   document.querySelector("#openVideoProductOutput")?.addEventListener("click", () => openVideoProductOutput().catch(() => {}));
+  document.addEventListener("keydown", (event) => {
+    if (!(event.ctrlKey && event.shiftKey && event.key.toLowerCase() === "j")) return;
+    if (document.querySelector("#videoOutputPage")?.classList.contains("active") === false) return;
+    event.preventDefault();
+    generateJianyingDraftAndOpen().catch(() => {});
+  });
   document.querySelector("#clearVideoProductProjects")?.addEventListener("click", () => clearVideoProductProjects().catch((error) => window.alert(error.message)));
   document.querySelector("#videoProductProjects")?.addEventListener("click", (event) => {
     const row = event.target.closest("[data-timeline-project-id]");
@@ -628,7 +644,7 @@ export async function initVideoOutputModule() {
   if (page) page.dataset.module = "video-output";
   window.__modularVideoOutputReady = true;
   bindEvents();
-  window.videoOutputModule = { loadVideoProductSources, loadVideoProductProjects, refreshReadiness, refreshQualityCheck, previewVideoProductTimeline, syncSelectionsToProject, generateVideoProduct, pollVideoProductProject, openVideoProductOutput };
+  window.videoOutputModule = { loadVideoProductSources, loadVideoProductProjects, refreshReadiness, refreshQualityCheck, previewVideoProductTimeline, syncSelectionsToProject, generateVideoProduct, generateJianyingDraftAndOpen, pollVideoProductProject, openVideoProductOutput };
   await Promise.allSettled([loadJianyingLocalConfig(), refreshToolStatus(), loadVideoProductSources(), loadVideoProductProjects(), refreshReadiness(), refreshQualityCheck()]);
   await previewVideoProductTimeline().catch(() => {});
 }

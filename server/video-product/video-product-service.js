@@ -108,6 +108,38 @@ const DEFAULT_JIANYING_TEMPLATES = [
     recommendedStyles: ["warm-campus", "healing-illustration", "parent-anxiety", "chinese-ink"],
     tags: ["校园", "教育", "家长", "学生"],
   },
+  {
+    id: "three_d_story",
+    name: "3D动画故事",
+    category: "动画叙事",
+    recommendedVideoTypes: ["story", "douyin-knowledge", "口播", "动画", "科普"],
+    recommendedStyles: ["pixar-3d-cartoon", "healing-illustration", "cinematic"],
+    tags: ["3D", "动画", "故事", "分镜"],
+  },
+  {
+    id: "parent_dialogue",
+    name: "家长对话",
+    category: "教育转化",
+    recommendedVideoTypes: ["parent-anxiety", "education-enrollment", "招生", "家长沟通"],
+    recommendedStyles: ["parent-anxiety", "warm-campus", "pixar-3d-cartoon"],
+    tags: ["家长", "对话", "痛点", "转化"],
+  },
+  {
+    id: "fast_hook_talk",
+    name: "强钩子口播",
+    category: "短视频口播",
+    recommendedVideoTypes: ["douyin-knowledge", "moments-talking", "短视频口播", "观点"],
+    recommendedStyles: ["knowledge-blogger", "clean-commercial", "tech-data", "pixar-3d-cartoon"],
+    tags: ["钩子", "口播", "快节奏", "观点"],
+  },
+  {
+    id: "case_breakdown",
+    name: "案例拆解",
+    category: "知识拆解",
+    recommendedVideoTypes: ["case-study", "learning-method", "admission-planning", "案例"],
+    recommendedStyles: ["tech-data", "clean-commercial", "knowledge-blogger"],
+    tags: ["案例", "拆解", "逻辑", "步骤"],
+  },
 ];
 
 function safeJson(value, fallback = {}) {
