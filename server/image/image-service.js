@@ -425,13 +425,16 @@ export function createImageService({ baseDir, getSettings, taskStore = null, ffm
     const jobId = requestedJobId || randomUUID();
     const results = [];
     const sceneIndex = sceneIndexFromSourceId(sourceId);
+    const folderName = imageJobFolderName({ jobId, prompt: cleanPrompt, sourceType, sourceId });
+    const folderPath = path.join(outputDir, folderName);
+    fs.mkdirSync(folderPath, { recursive: true });
 
     const providerInstance = createImageProvider(selected.provider, { config: providers });
     if (!providerInstance) throw new Error("未知图片 Provider。");
     db.prepare(`
-      INSERT INTO image_jobs (id, source_type, source_id, provider, model, prompt, aspect_ratio, count_requested, status)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(jobId, sourceType, sourceId, selected.provider, selected.model, cleanPrompt, aspectRatio, count, "生成中");
+      INSERT INTO image_jobs (id, source_type, source_id, provider, model, prompt, aspect_ratio, count_requested, status, folder_name, folder_path)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(jobId, sourceType, sourceId, selected.provider, selected.model, cleanPrompt, aspectRatio, count, "生成中", folderName, folderPath);
 
     const validation = await providerInstance.validateConfig();
     if (!validation.valid) {
@@ -444,7 +447,7 @@ export function createImageService({ baseDir, getSettings, taskStore = null, ffm
 
     for (let i = 0; i < count; i++) {
       const filename = `img_${jobId.slice(0, 6)}_${i}_${Date.now()}.png`;
-      const outputPath = path.join(outputDir, filename);
+      const outputPath = path.join(folderPath, filename);
 
       try {
         const result = await callProviderGenerate(providerInstance, { prompt: cleanPrompt, aspectRatio, outputPath });
@@ -463,9 +466,9 @@ export function createImageService({ baseDir, getSettings, taskStore = null, ffm
         db.prepare(`
           INSERT INTO image_assets (
             id, job_id, filename, original_path, file_path, width, height, file_size, provider, model,
-            prompt, revised_prompt, aspect_ratio, source_url, source_type, source_id, scene_index, asset_order
+            prompt, revised_prompt, aspect_ratio, source_url, source_type, source_id, folder_name, folder_path, scene_index, asset_order
           )
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `).run(
           assetId,
           jobId,
@@ -483,6 +486,8 @@ export function createImageService({ baseDir, getSettings, taskStore = null, ffm
           result.sourceUrl || result.imageUrl || "",
           sourceType,
           sourceId,
+          folderName,
+          folderPath,
           sceneIndex,
           sceneIndex || i + 1,
         );
@@ -498,6 +503,8 @@ export function createImageService({ baseDir, getSettings, taskStore = null, ffm
           provider: selected.provider,
           model: result.model || selected.model,
           source_url: result.sourceUrl || result.imageUrl || "",
+          folderName,
+          folderPath,
           sceneIndex,
           assetOrder: sceneIndex || i + 1,
         });
