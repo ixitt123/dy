@@ -1951,9 +1951,17 @@ function setupImageStudio() {
   function renderResults(results, sourcePrompt = "") {
     const grid = document.getElementById("imageResultsGrid");
     if (!results.length) { grid.innerHTML = '<div class="empty-state">无结果</div>'; return; }
-    grid.innerHTML = results.map((r, i) => {
-      if (!r.success) return `<div class="img-card error">第${i+1}张: ${r.error || "失败"}</div>`;
-      const safePrompt = String(sourcePrompt || "").replace(/\\/g, "\\\\").replace(/'/g, "\\'");
+    const hasSuccess = results.some((item) => item.success && item.assetId);
+    grid.innerHTML = `${hasSuccess ? '<div class="image-result-toolbar"><button class="primary small" type="button" id="importImagesToVideoProduct">一键导入视频成片</button></div>' : ""}${
+      results.map((r, i) => {
+      const safePrompt = String(sourcePrompt || r.prompt || "").replace(/\\/g, "\\\\").replace(/'/g, "\\'");
+      if (!r.success) return `<div class="img-card error">
+        <div class="img-meta"><span>第${i + 1}张生成失败</span><small>${escapeHtml(r.error || "失败")}</small></div>
+        <div class="img-actions">
+          <button class="btn-sm danger-action" type="button" onclick="this.closest('.img-card').remove()">删除</button>
+          <button class="btn-sm" type="button" onclick="document.getElementById('imagePrompt').value='${safePrompt}';document.getElementById('imageGenerateBtn').click()">重新生成</button>
+        </div>
+      </div>`;
       const originalUrl = `/api/image/file?path=${encodeURIComponent(r.imagePath || "")}`;
       const thumbUrl = r.thumbnailUrl || `/api/image/thumbnail?width=360&path=${encodeURIComponent(r.imagePath || "")}`;
       return `<div class="img-card" data-asset-id="${r.assetId || ""}">
@@ -1966,7 +1974,16 @@ function setupImageStudio() {
           <button class="btn-sm" type="button" onclick="document.getElementById('imagePrompt').value='${safePrompt}';document.getElementById('imageGenerateBtn').click()">重新生成</button>
         </div>
       </div>`;
-    }).join("");
+    }).join("")}`;
+    document.getElementById("importImagesToVideoProduct")?.addEventListener("click", () => {
+      navigateWorkbench("video-output", { preserveScroll: true });
+      Promise.allSettled([
+        window.videoOutputModule?.loadVideoProductSources?.(),
+        typeof loadVideoProductSources === "function" ? loadVideoProductSources() : Promise.resolve(),
+      ]).then(() => {
+        window.videoOutputModule?.previewVideoProductTimeline?.().catch?.(() => {});
+      });
+    });
   }
 
   async function loadImageAssets() {
@@ -1976,20 +1993,36 @@ function setupImageStudio() {
       const data = await res.json();
       const assets = data.assets || [];
       if (!assets.length) { grid.innerHTML = '<div class="empty-state">暂无保存的图片资产</div>'; return; }
-      grid.innerHTML = assets.map(a => `
-        <div class="img-card">
-          <button class="img-preview" type="button" onclick="window.open('/api/image/file?path=${encodeURIComponent(a.original_path || "")}')">
-            <img src="${a.thumbnail_url || `/api/image/thumbnail?width=360&path=${encodeURIComponent(a.original_path || "")}`}" alt="图片资产缩略图" loading="lazy" />
-          </button>
-          <div class="img-meta">
-            <span>${(a.prompt || "").slice(0, 30)}</span>
-            <span class="text-xs text-secondary">${(a.created_at || "").slice(0, 10)} · ${a.width || 1080}x${a.height || 1080}</span>
+      const groups = new Map();
+      for (const asset of assets) {
+        const sourceId = String(asset.source_id || "");
+        const projectKey = sourceId.includes(":") ? sourceId.split(":")[0] : "";
+        const label = projectKey ? `导演项目 #${projectKey}` : `手动/通用素材 · ${(asset.created_at || "").slice(0, 10)}`;
+        if (!groups.has(label)) groups.set(label, []);
+        groups.get(label).push(asset);
+      }
+      grid.innerHTML = [...groups.entries()].map(([label, rows]) => `
+        <section class="image-asset-group">
+          <div class="image-asset-group-title"><strong>${escapeHtml(label)}</strong><span>${rows.length} 张</span></div>
+          <div class="image-asset-group-grid">
+            ${rows.map(a => `
+              <div class="img-card">
+                <button class="img-preview" type="button" onclick="window.open('/api/image/file?path=${encodeURIComponent(a.original_path || "")}')">
+                  <img src="${a.thumbnail_url || `/api/image/thumbnail?width=360&path=${encodeURIComponent(a.original_path || "")}`}" alt="图片资产缩略图" loading="lazy" />
+                </button>
+                <div class="img-meta">
+                  <span>#${Number(a.scene_index || 0) || "-"} ${(a.prompt || "").slice(0, 30)}</span>
+                  <span class="text-xs text-secondary">${(a.created_at || "").slice(0, 10)} · ${a.width || 1080}x${a.height || 1080}</span>
+                </div>
+                <div class="img-actions">
+                  <button class="btn-sm" onclick="window.open('/api/image/file?path=${encodeURIComponent(a.original_path || "")}')">预览原图</button>
+                  <button class="btn-sm" onclick="document.getElementById('imagePrompt').value='${String(a.prompt || "").replace(/\\/g, "\\\\").replace(/'/g, "\\'")}';document.getElementById('imageGenerateBtn').click()">重新生成</button>
+                  <button class="btn-sm danger-action" onclick="fetch('/api/image/assets/${a.id}/delete',{method:'POST'}).then(()=>this.closest('.img-card').remove())">删除</button>
+                </div>
+              </div>
+            `).join("")}
           </div>
-          <div class="img-actions">
-            <button class="btn-sm" onclick="window.open('/api/image/file?path=${encodeURIComponent(a.original_path || "")}')">预览原图</button>
-            <button class="btn-sm" onclick="fetch('/api/image/assets/${a.id}/delete',{method:'POST'}).then(()=>this.closest('.img-card').remove())">删除</button>
-          </div>
-        </div>
+        </section>
       `).join("");
     } catch (e) {
       grid.innerHTML = `<div class="empty-state">加载失败: ${e.message}</div>`;
