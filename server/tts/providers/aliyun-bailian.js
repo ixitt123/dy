@@ -320,8 +320,10 @@ export class AliyunBailianProvider extends TtsProviderAdapter {
     const normalizedSpeed = clampNumber(speed, 0.5, 2, 1);
     const normalizedVolume = Math.round(clampNumber(volume, 0, 100, 50));
     const normalizedPitch = clampNumber(pitch, 0.5, 2, 1);
-    const instruction = buildInstruction(emotion, stylePrompt);
     const qwen = isQwenModel(model);
+    const instruction = qwen
+      ? buildInstruction(emotion, stylePrompt)
+      : buildCosyVoiceInstruction(emotion, stylePrompt);
     const preset = PRESET_VOICES.find((item) => item.id === voice);
     const cosyInstructionSupported = /cosyvoice-v3\.5/i.test(model)
       || (/cosyvoice-v3-(?:flash|plus)/i.test(model) && (!preset || preset.supportsInstruction));
@@ -356,7 +358,7 @@ export class AliyunBailianProvider extends TtsProviderAdapter {
       locallyConvertedParameters.push("format");
     } else if (instruction && cosyInstructionSupported) {
       input.instruction = instruction;
-    } else if (instruction) {
+    } else if (emotion || stylePrompt) {
       ignoredParameters.push("emotion", "stylePrompt");
     }
 
@@ -400,6 +402,7 @@ export class AliyunBailianProvider extends TtsProviderAdapter {
           model,
           request_id: data.request_id || "",
           characters: data.usage?.characters || 0,
+          instruction_sent: instruction,
           ignored_parameters: [...new Set(ignoredParameters)],
           locally_converted_parameters: [...new Set(locallyConvertedParameters)],
           source_format: path.extname(new URL(audioUrl).pathname).slice(1) || "unknown",
