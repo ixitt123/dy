@@ -1210,14 +1210,14 @@ export function createVideoProductService({
       ? assets.find((asset) => String(asset.id) === String(preferredId) || path.resolve(asset.path) === path.resolve(String(preferredId)))
       : null;
     if (preferred) return { path: preferred.path, source: "manual", label: preferred.filename, asset: preferred };
-    if (strategy === "manual") return { path: "", source: "generated_default", label: "系统默认基础 BGM", asset: null };
+    if (strategy === "manual" || strategy === "none") return { path: "", source: "none", label: "", asset: null };
     if (assets.length) {
       const selected = assets
         .map((asset) => ({ asset, score: scoreBgmAsset(asset, styleId) }))
         .sort((a, b) => b.score - a.score || String(a.asset.filename).localeCompare(String(b.asset.filename)))[0]?.asset;
       if (selected) return { path: selected.path, source: "local_auto", label: selected.filename, asset: selected };
     }
-    return { path: "", source: "generated_default", label: "系统默认基础 BGM", asset: null };
+    return { path: "", source: "none", label: "", asset: null };
   }
 
   function writeDefaultBgmWav(outputPath, durationSeconds, styleId = ROUTE_A_DEFAULT_STYLE_ID) {
@@ -1857,15 +1857,6 @@ ${sceneMarkup}
       fs.copyFileSync(bgmSelection.path, packagedBgm);
       bgmSourceKind = bgmSelection.source || "local_auto";
       bgmLabel = bgmSelection.label || path.basename(bgmSelection.path);
-    } else if (project.output_type === "template_mp4") {
-      const generated = writeDefaultBgmWav(
-        path.join(audioDir, "bgm_generated_default.wav"),
-        timeline.duration,
-        routeAStyle,
-      );
-      packagedBgm = generated.path;
-      bgmSourceKind = generated.source;
-      bgmLabel = generated.label;
     }
     let packagedTemplateBackground = "";
     if (project.output_type === "template_mp4") {

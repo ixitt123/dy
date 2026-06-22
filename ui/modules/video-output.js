@@ -472,10 +472,16 @@ export async function syncSelectionsToProject({ preview = state.preview } = {}) 
   const selectedBgmId = document.querySelector("#videoProductBgm")?.value || "";
   const bgm = state.sources?.bgmAssets?.find((item) => String(item.id) === String(selectedBgmId))
     || (strategy !== "generated_default" ? state.sources?.bgmAssets?.[0] : null);
-  const bgmId = String(bgm?.id || "generated-default-bgm");
   const bgmSelect = document.querySelector("#videoProductBgm");
   if (bgm && bgmSelect) bgmSelect.value = String(bgm.id);
-  await window.videoProjects.linkCurrent("bgm", bgmId, bgm?.filename || bgm?.title || "默认基础氛围 BGM", { path: bgm?.path || "", strategy: bgm ? (selectedBgmId ? "manual" : "auto") : "generated_default", source: bgm ? "local_upload" : "ai_generated", status: "ready" });
+  if (bgm) {
+    await window.videoProjects.linkCurrent("bgm", String(bgm.id), bgm.filename || bgm.title || "BGM", {
+      path: bgm.path || "",
+      strategy: selectedBgmId ? "manual" : strategy,
+      source: "local_upload",
+      status: "ready",
+    });
+  }
   if (["jianying", "jianying_template"].includes(outputType)) {
     const template = document.querySelector("#videoProductJianyingTemplate");
     const templateConfig = state.sources?.jianyingTemplates?.find((item) => String(item.id) === String(template?.value || ""));
@@ -501,7 +507,7 @@ function payload() {
     jianying_template: document.querySelector("#videoProductJianyingTemplate")?.value || "education_tips",
     route_a_style_id: document.querySelector("#videoProductRouteAStyle")?.value || "black_gold_knowledge",
     route_a_custom_style: document.querySelector("#videoProductRouteACustomStyle")?.value.trim() || "",
-    bgm_strategy: document.querySelector("#videoProductBgmStrategy")?.value || "auto",
+    bgm_strategy: document.querySelector("#videoProductBgm")?.value ? (document.querySelector("#videoProductBgmStrategy")?.value || "manual") : "none",
     bgm_asset_id: document.querySelector("#videoProductBgm")?.value || "",
     manual_bindings: { ...state.manualBindings },
     target_duration: 30,
