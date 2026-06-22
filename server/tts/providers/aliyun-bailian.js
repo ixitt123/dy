@@ -206,8 +206,8 @@ function isValidCosyVoiceInstruction(value) {
   const text = String(value || "").trim();
   if (!text || text.length > 100) return false;
   const emotions = [...COSYVOICE_INSTRUCT_EMOTIONS].join("|");
-  return new RegExp(`^你说话的情感是\\s*(${emotions})。$`).test(text)
-    || new RegExp(`^你正在进行.+，你说话的情感是\\s*(${emotions})。$`).test(text);
+  return new RegExp(`^你说话的情感是(${emotions})。$`).test(text)
+    || new RegExp(`^你正在进行.+，你说话的情感是(${emotions})。$`).test(text);
 }
 
 function buildInstruction(emotion, stylePrompt) {
@@ -217,7 +217,7 @@ function buildInstruction(emotion, stylePrompt) {
 function buildCosyVoiceInstruction(emotion, stylePrompt) {
   if (isValidCosyVoiceInstruction(stylePrompt)) return String(stylePrompt).trim();
   const normalizedEmotion = normalizeCosyVoiceEmotion(emotion);
-  return normalizedEmotion ? `你说话的情感是 ${normalizedEmotion}。` : "";
+  return normalizedEmotion ? `你说话的情感是${normalizedEmotion}。` : "";
 }
 
 export class AliyunBailianProvider extends TtsProviderAdapter {
@@ -384,6 +384,7 @@ export class AliyunBailianProvider extends TtsProviderAdapter {
         const detail = [
           data.request_id ? `request_id=${data.request_id}` : "",
           data.code ? `code=${data.code}` : "",
+          instruction ? `instruction_sent=${instruction}` : "",
           raw ? raw.slice(0, 600) : "",
         ].filter(Boolean).join("；");
         return this.failure(message, detail);
