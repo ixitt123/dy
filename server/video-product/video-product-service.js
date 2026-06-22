@@ -1394,6 +1394,18 @@ export function createVideoProductService({
     const explicit = Number(asset.scene_index || asset.sceneIndex || 0);
     if (explicit > 0) return explicit;
     const name = `${asset.filename || ""} ${asset.source_url || ""} ${asset.original_path || ""}`;
+    const basename = path.basename(name);
+    const patterns = [
+      /^0*(\d{1,3})(?:[._\-\s]|$)/,
+      /(?:^|[._\-\s#])0*(\d{1,3})(?:[._\-\s]|$)/,
+      /(?:scene|shot|jing|fenjing|s|img|image)[._\-\s#]*0*(\d{1,3})(?:[._\-\s.]|$)/i,
+      /(?:场景|镜头|分镜|第)[._\-\s#]*0*(\d{1,3})(?:[._\-\s号张.]|$)/,
+    ];
+    for (const pattern of patterns) {
+      const found = basename.match(pattern);
+      const number = Number(found?.[1] || 0);
+      if (number > 0) return number;
+    }
     const match = path.basename(name).match(/^(?:scene|shot|镜头|分镜|第)?[_\-\s]*(\d{1,3})(?:[_\-\s.]|$)|(?:scene|shot|镜头|分镜|第)[_\-\s]*(\d{1,3})/i);
     return Number(match?.[1] || match?.[2] || 0);
   }

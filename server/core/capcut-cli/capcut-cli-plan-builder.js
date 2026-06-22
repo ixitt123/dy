@@ -11,12 +11,13 @@ export function buildCapcutCliPlan({ project = {}, timeline = {}, timelineFiles 
   const media = scenes.map((scene, index) => ({
     placeholder: `scene_${String(index + 1).padStart(2, "0")}_placeholder`,
     sceneIndex: Number(scene.scene_index || index + 1),
-    type: scene.video_path ? "video" : "image",
-    path: firstValue(packagedScenes[index]?.packaged_image_path, scene.image_path, scene.video_path),
+    type: firstValue(packagedScenes[index]?.packaged_video_path, scene.video_path) ? "video" : "image",
+    path: firstValue(packagedScenes[index]?.packaged_video_path, packagedScenes[index]?.packaged_image_path, scene.video_path, scene.image_path),
     startTime: Number(scene.start_time || 0),
     endTime: Number(scene.end_time || 0),
     duration: Number(scene.duration || 0),
     motion: scene.motion_type || "none",
+    transition: scene.transition_type || "dissolve",
   }));
 
   return {
@@ -95,10 +96,13 @@ export function buildCapcutCompileSpec({ project = {}, timeline = {}, timelineFi
         text,
         start: Number(scene.start_time || 0),
         duration: Math.max(0.1, Number(scene.duration || 0)),
-        fontSize: 13,
+        fontSize: 34,
         color: "#FFFFFF",
+        strokeColor: "#000000",
+        strokeWidth: 5,
+        backgroundColor: "rgba(0,0,0,0.28)",
         x: 0,
-        y: 0.66,
+        y: 0.72,
       };
     })
     .filter(Boolean);
@@ -108,6 +112,7 @@ export function buildCapcutCompileSpec({ project = {}, timeline = {}, timelineFi
       ref: "voiceover",
       path: timelineFiles.packagedAudio,
       start: 0,
+      duration,
       volume: 1,
     });
   }
@@ -116,6 +121,7 @@ export function buildCapcutCompileSpec({ project = {}, timeline = {}, timelineFi
       ref: "bgm",
       path: timelineFiles.packagedBgm,
       start: 0,
+      duration,
       volume: 0.16,
     });
   }
@@ -130,12 +136,14 @@ export function buildCapcutCompileSpec({ project = {}, timeline = {}, timelineFi
       { op: "keyframe", target: item.ref, property: "uniform_scale", time: item.start + item.duration, value: 1.06 },
     ];
     if (index < videoItems.length - 1) {
-      ops.push({ op: "transition", target: item.ref, slug: "dissolve", duration: 0.25 });
+      const scene = scenes[index] || {};
+      ops.push({ op: "transition", target: item.ref, slug: scene.transition_type || "dissolve", duration: 0.32 });
     }
     return ops;
   });
   if (duration > 0) {
     operations.push({ op: "filter", slug: "vivid", start: 0, duration, intensity: 0.18, trackName: "color-grade" });
+    operations.push({ op: "effect", slug: "soft_zoom_blur", start: 0, duration, intensity: 0.12, trackName: "scene-polish" });
   }
   return {
     name: title,
