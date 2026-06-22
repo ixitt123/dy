@@ -3511,7 +3511,8 @@ async function addVideoProductLocalImage() {
       filePath,
       aspectRatio: "9:16",
       prompt: `本地成片素材：${filePath.split(/[\\/]/).pop() || "image"}`,
-      sourceId: "video-product",
+      sourceType: "manual_import",
+      directorProjectId: Number(videoProductDirector?.value || 0),
     }),
   });
   if (videoProductImageSource) videoProductImageSource.value = "all";

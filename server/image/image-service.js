@@ -359,6 +359,7 @@ export function createImageService({ baseDir, getSettings, taskStore = null, ffm
 
     const jobId = randomUUID();
     const results = [];
+    const sceneIndex = sceneIndexFromSourceId(sourceId);
 
     const providerInstance = createImageProvider(selected.provider, { config: providers });
     if (!providerInstance) throw new Error("未知图片 Provider。");
@@ -393,9 +394,9 @@ export function createImageService({ baseDir, getSettings, taskStore = null, ffm
         db.prepare(`
           INSERT INTO image_assets (
             id, job_id, filename, original_path, file_path, width, height, file_size, provider, model,
-            prompt, revised_prompt, aspect_ratio, source_url, source_type, source_id
+            prompt, revised_prompt, aspect_ratio, source_url, source_type, source_id, scene_index, asset_order
           )
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `).run(
           assetId,
           jobId,
@@ -413,6 +414,8 @@ export function createImageService({ baseDir, getSettings, taskStore = null, ffm
           result.sourceUrl || result.imageUrl || "",
           sourceType,
           sourceId,
+          sceneIndex,
+          sceneIndex || i + 1,
         );
 
         results.push({
@@ -426,6 +429,8 @@ export function createImageService({ baseDir, getSettings, taskStore = null, ffm
           provider: selected.provider,
           model: result.model || selected.model,
           source_url: result.sourceUrl || result.imageUrl || "",
+          sceneIndex,
+          assetOrder: sceneIndex || i + 1,
         });
       } catch (err) {
         results.push({ index: i, success: false, error: err.message });

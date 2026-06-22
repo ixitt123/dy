@@ -5602,6 +5602,9 @@ const server = http.createServer(async (req, res) => {
             aspectRatio: body.aspectRatio || "9:16",
             sourceId: body.sourceId || "",
             sourceType: body.sourceType || "local",
+            directorProjectId: Number(body.directorProjectId || body.director_project_id || 0),
+            sceneIndex: Number(body.sceneIndex || body.scene_index || 0),
+            assetOrder: Number(body.assetOrder || body.asset_order || 0),
           });
           sendJson(res, 200, { ok: true, asset });
         } catch (e) {

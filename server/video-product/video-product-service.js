@@ -1349,11 +1349,19 @@ export function createVideoProductService({
       .map((id) => String(id || ""))
       .filter(Boolean));
     const selected = selectedSet.size ? all.filter((asset) => selectedSet.has(String(asset.id))) : all;
-    const directorScoped = selected.filter((asset) => (
-      asset.source_type === "director" && String(asset.source_id || "").startsWith(`${directorId}:`)
-    ));
+    const directorScoped = selected.filter((asset) => String(asset.source_id || "").startsWith(`${directorId}:`));
     const pool = imageSource === "director" && directorScoped.length ? directorScoped : selected;
     return { pool, all, directorScoped, manualBindings };
+  }
+
+  function imageAssetSceneIndex(asset = {}) {
+    const sourceMatch = String(asset.source_id || "").match(/:(\d{1,3})$/);
+    if (sourceMatch) return Number(sourceMatch[1] || 0);
+    const explicit = Number(asset.scene_index || asset.sceneIndex || 0);
+    if (explicit > 0) return explicit;
+    const name = `${asset.filename || ""} ${asset.source_url || ""} ${asset.original_path || ""}`;
+    const match = path.basename(name).match(/^(?:scene|shot|镜头|分镜|第)?[_\-\s]*(\d{1,3})(?:[_\-\s.]|$)|(?:scene|shot|镜头|分镜|第)[_\-\s]*(\d{1,3})/i);
+    return Number(match?.[1] || match?.[2] || 0);
   }
 
   function bindSceneImage(scene, index, bindingContext) {
@@ -1362,10 +1370,12 @@ export function createVideoProductService({
       const manual = bindingContext.all.find((asset) => String(asset.id) === manualAssetId);
       if (manual) return manual;
     }
-    const exact = bindingContext.pool.find((asset) => (
-      asset.source_type === "director" && String(asset.source_id || "") === `${bindingContext.directorId}:${scene.scene_index}`
-    ));
+    const exact = bindingContext.pool.find((asset) => String(asset.source_id || "") === `${bindingContext.directorId}:${scene.scene_index}`);
     if (exact) return exact;
+    const bySceneIndex = bindingContext.pool.find((asset) => imageAssetSceneIndex(asset) === Number(scene.scene_index || index + 1));
+    if (bySceneIndex) return bySceneIndex;
+    const byAssetOrder = bindingContext.pool.find((asset) => Number(asset.asset_order || asset.assetOrder || 0) === Number(scene.scene_index || index + 1));
+    if (byAssetOrder) return byAssetOrder;
     return bindingContext.pool[index % Math.max(1, bindingContext.pool.length)] || null;
   }
 
