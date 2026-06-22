@@ -419,6 +419,9 @@ async function syncCurrentVideoProductSelections() {
       ratio: asset.aspect_ratio || "9:16",
       style: typeof videoProductRouteAStyle !== "undefined" ? videoProductRouteAStyle.value : "",
       source: asset.source_type === "director" ? "ai_generated" : "local_upload",
+      sourceId: asset.source_id || "",
+      sceneIndex: Number(asset.scene_index || 0),
+      assetOrder: Number(asset.asset_order || 0),
       useCase: activeVideoProject?.videoType || "",
       status: "ready",
     });

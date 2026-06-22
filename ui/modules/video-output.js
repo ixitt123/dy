@@ -432,7 +432,15 @@ export async function syncSelectionsToProject({ preview = state.preview } = {}) 
   ].filter(Boolean));
   const selectedImages = (state.sources?.imageAssets || []).filter((asset) => selectedImageIds.has(String(asset.id)));
   for (const asset of selectedImages) {
-    await window.videoProjects.linkCurrent("image", asset.id, asset.filename || `图片 ${asset.id}`, { path: asset.original_path || asset.path || "", ratio: asset.aspect_ratio || "9:16", source: asset.source_type === "director" ? "ai_generated" : "local_upload", status: "ready" });
+    await window.videoProjects.linkCurrent("image", asset.id, asset.filename || `图片 ${asset.id}`, {
+      path: asset.original_path || asset.path || "",
+      ratio: asset.aspect_ratio || "9:16",
+      source: asset.source_type === "director" ? "ai_generated" : "local_upload",
+      sourceId: asset.source_id || "",
+      sceneIndex: Number(asset.scene_index || 0),
+      assetOrder: Number(asset.asset_order || 0),
+      status: "ready",
+    });
   }
   const strategy = document.querySelector("#videoProductBgmStrategy")?.value || "auto";
   const selectedBgmId = document.querySelector("#videoProductBgm")?.value || "";
