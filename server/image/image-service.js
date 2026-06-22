@@ -272,6 +272,8 @@ export function createImageService({ baseDir, getSettings, taskStore = null, ffm
     return {
       ...row,
       file_path: row.file_path || row.original_path || "",
+      folder_name: row.folder_name || path.basename(path.dirname(row.file_path || row.original_path || "")) || "",
+      folder_path: row.folder_path || path.dirname(row.file_path || row.original_path || ""),
       ratio: row.aspect_ratio || "",
       scene_index: Number(row.scene_index || 0),
       asset_order: Number(row.asset_order || 0),
@@ -287,23 +289,32 @@ export function createImageService({ baseDir, getSettings, taskStore = null, ffm
     if (!supported.has(ext)) throw new Error("暂只支持 PNG、JPG、WEBP、GIF 图片素材。");
 
     const assetId = randomUUID();
-    const filename = `local_${Date.now()}_${assetId.slice(0, 8)}${ext}`;
-    const outputPath = path.join(outputDir, filename);
-    fs.copyFileSync(resolved, outputPath);
-    const size = await normalizeImageTo1080(outputPath, aspectRatio);
-    const stats = fs.statSync(outputPath);
-    const assetPrompt = String(prompt || "").trim() || `本地图片素材：${path.basename(resolved)}`;
     const cleanSourceType = String(sourceType || "local").trim() || "local";
+    const assetPrompt = String(prompt || "").trim() || `本地图片素材：${path.basename(resolved)}`;
     const parsedSceneIndex = Number(sceneIndex || parseSceneIndexFromFilename(resolved) || sceneIndexFromSourceId(sourceId) || 0);
     const cleanSourceId = String(sourceId || (directorProjectId && parsedSceneIndex ? `${directorProjectId}:${parsedSceneIndex}` : "")).trim();
     const cleanAssetOrder = Number(assetOrder || parsedSceneIndex || 0);
+    const folderName = imageJobFolderName({
+      jobId: assetId,
+      prompt: assetPrompt,
+      sourceType: cleanSourceType,
+      sourceId: cleanSourceId,
+      folderName: "",
+    });
+    const folderPath = path.join(outputDir, folderName);
+    fs.mkdirSync(folderPath, { recursive: true });
+    const filename = `local_${Date.now()}_${assetId.slice(0, 8)}${ext}`;
+    const outputPath = path.join(folderPath, filename);
+    fs.copyFileSync(resolved, outputPath);
+    const size = await normalizeImageTo1080(outputPath, aspectRatio);
+    const stats = fs.statSync(outputPath);
 
     db.prepare(`
       INSERT INTO image_assets (
         id, job_id, filename, original_path, file_path, width, height, file_size, provider, model,
-        prompt, revised_prompt, aspect_ratio, source_url, source_type, source_id, scene_index, asset_order
+        prompt, revised_prompt, aspect_ratio, source_url, source_type, source_id, folder_name, folder_path, scene_index, asset_order
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       assetId,
       "",
@@ -321,6 +332,8 @@ export function createImageService({ baseDir, getSettings, taskStore = null, ffm
       resolved,
       cleanSourceType,
       cleanSourceId,
+      folderName,
+      folderPath,
       parsedSceneIndex,
       cleanAssetOrder,
     );
