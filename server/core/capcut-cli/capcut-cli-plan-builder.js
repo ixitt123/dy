@@ -7,7 +7,7 @@ function firstValue(...values) {
 
 function capcutTransitionSlug(value) {
   const raw = String(value || "").trim().toLowerCase();
-  if (!raw || raw === "straight_cut" || raw === "cut" || raw === "none") return "";
+  if (!raw || raw === "straight_cut" || raw === "cut" || raw === "none") return "dissolve";
   const aliases = {
     fade: "dissolve",
     fade_in: "dissolve",
