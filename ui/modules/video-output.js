@@ -82,10 +82,9 @@ function generationMissingReason() {
 function updateGenerateAvailability() {
   const button = document.querySelector("#generateVideoProduct");
   if (!button) return;
-  button.disabled = !canAttemptGeneration();
-  button.title = button.disabled
-    ? "请先选择当前项目、导演稿和已完成语音"
-    : "先同步当前选择并检查素材，再创建成片任务";
+  if (button.dataset.running === "true") return;
+  button.disabled = false;
+  button.title = generationMissingReason() || "先同步当前选择并检查素材，再创建成片任务";
 }
 
 function renderToolStatus(container, status) {
