@@ -361,9 +361,11 @@ export function createProjectCenter(baseDir) {
     if (asset.assetType === "tts") {
       changes.ttsAudios = uniqueById([...project.ttsAudios, item]);
       changes.selectedTtsAudio = item;
+      changes.lastTtsJobId = Number(asset.assetId || metadata.id || 0);
     }
     if (asset.assetType === "director") {
       changes.directorScript = item;
+      changes.lastDirectorProjectId = Number(asset.assetId || metadata.id || 0);
       const timeline = metadata.subtitleTimeline || metadata.subtitle_timeline || metadata.result?.subtitle_timeline;
       if (Array.isArray(timeline)) changes.subtitleTimeline = timeline;
     }

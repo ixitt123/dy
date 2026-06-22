@@ -1764,6 +1764,7 @@ async function generateTts() {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
         provider: ttsProvider.value,
+        project_id: window.videoProjects?.current?.()?.id || "",
         text,
         voice_id: voiceId,
         voice_name: selectedVoiceForModel?.name || selectedVoice?.name || voiceId,

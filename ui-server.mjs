@@ -105,8 +105,6 @@ const imageService = createImageService({
 });
 
 // VideoProject 是主项目；TimelineProject 作为每次成片输出记录回写到这里。
-const projectCenter = createProjectCenter(__dirname);
-
 const capcutCliAdapter = createCapcutCliAdapter({
   baseDir: __dirname,
   ffmpegPath,
@@ -3799,6 +3797,100 @@ function updateProjectFromTranscript({ projectId = "", taskId = 0, transcriptTex
     task,
     titles: generated,
   };
+}
+
+function probeAudioDuration(mediaPath = "") {
+  const target = path.resolve(String(mediaPath || ""));
+  if (!ffmpegPath || !target || !fs.existsSync(target)) return Promise.resolve(0);
+  return new Promise((resolve) => {
+    const child = spawn(ffmpegPath, ["-hide_banner", "-i", target], { windowsHide: true });
+    let text = "";
+    child.stdout.on("data", (chunk) => { text += chunk.toString(); });
+    child.stderr.on("data", (chunk) => { text += chunk.toString(); });
+    child.on("error", () => resolve(0));
+    child.on("close", () => {
+      const match = text.match(/Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)/);
+      resolve(match ? Number(match[1]) * 3600 + Number(match[2]) * 60 + Number(match[3]) : 0);
+    });
+  });
+}
+
+async function handleTtsJobCompleted(job) {
+  if (!job || job.status !== "completed") return;
+  const metadata = safeJsonParse(job.metadata_json);
+  const projectId = String(metadata.project_id || metadata.projectId || "").trim();
+  if (!projectId || metadata.workflow_auto_director === false) return;
+  const project = projectCenter.getById(projectId);
+  if (!project) return;
+
+  try {
+    const audioDuration = await probeAudioDuration(job.audio_path);
+    const linked = projectCenter.linkAsset(project.id, "tts", job.id, job.voice_name || `配音 #${job.id}`, {
+      ...job,
+      text: job.text || project.selectedRewriteText || project.transcriptText || "",
+      audioDuration,
+      source: "ai_generated",
+      status: "ready",
+    }).project;
+    projectCenter.setWorkflowState(project.id, "tts_ready", {
+      lastTtsJobId: job.id,
+      selectedTtsAudio: {
+        ...(linked.selectedTtsAudio || {}),
+        audioDuration,
+      },
+    });
+
+    const latest = projectCenter.getById(project.id);
+    if (latest?.directorScript?.id || latest?.lastDirectorProjectId) return;
+    const sourceText = String(latest?.selectedRewriteText || job.text || latest?.transcriptText || "").trim();
+    if (!sourceText || !directorService) return;
+    const result = directorService.enqueue({
+      project_id: latest.id,
+      video_project_id: latest.id,
+      task_id: Number(job.task_id || latest.lastTaskId || 0),
+      rewrite_id: Number(job.rewrite_id || 0),
+      tts_job_id: Number(job.id || 0),
+      source_key: `project-${latest.id}-tts-${job.id}`,
+      source_type: "tts",
+      title: latest.platformTitles?.douyinTitle || latest.title,
+      source_text: sourceText,
+      tts_duration: audioDuration,
+      estimated_duration: audioDuration || 30,
+      video_type: latest.videoType || "douyin-knowledge",
+      platform: "douyin",
+      shot_count: "auto",
+    });
+    if (result.error) throw new Error(result.error);
+    projectCenter.setWorkflowState(latest.id, "tts_ready", {
+      lastDirectorProjectId: result.project?.id || 0,
+    });
+  } catch (error) {
+    projectCenter.setWorkflowState(project.id, "tts_ready", {
+      workflowError: {
+        ...(project.workflowError || {}),
+        tts_to_director: error instanceof Error ? error.message : String(error),
+      },
+    });
+  }
+}
+
+function handleDirectorProjectCompleted(project) {
+  if (!project || project.status !== "completed") return;
+  const metadata = project.metadata || {};
+  const projectId = String(metadata.video_project_id || metadata.project_id || "").trim();
+  if (!projectId) return;
+  const videoProject = projectCenter.getById(projectId);
+  if (!videoProject) return;
+  projectCenter.linkAsset(projectId, "director", project.id, project.title || `导演稿 #${project.id}`, {
+    ...project,
+    sceneCount: project.result?.storyboard?.length || metadata.scene_count || 0,
+    subtitleTimeline: project.result?.subtitle_timeline || [],
+    source: "ai_generated",
+    status: "ready",
+  });
+  projectCenter.setWorkflowState(projectId, "director_ready", {
+    lastDirectorProjectId: project.id,
+  });
 }
 
 function directorSourceRows() {
