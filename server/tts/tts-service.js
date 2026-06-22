@@ -84,6 +84,43 @@ function resolveVoiceSelection(provider, config = {}, input = {}) {
   };
 }
 
+function voicePreviewTone(voiceId = "") {
+  const text = String(voiceId || "voice");
+  let hash = 0;
+  for (const char of text) hash = ((hash * 31) + char.charCodeAt(0)) >>> 0;
+  return 220 + (hash % 380);
+}
+
+function createVoicePreviewWav(voiceId = "") {
+  const sampleRate = 16000;
+  const duration = 0.7;
+  const frames = Math.floor(sampleRate * duration);
+  const dataSize = frames * 2;
+  const buffer = Buffer.alloc(44 + dataSize);
+  buffer.write("RIFF", 0);
+  buffer.writeUInt32LE(36 + dataSize, 4);
+  buffer.write("WAVE", 8);
+  buffer.write("fmt ", 12);
+  buffer.writeUInt32LE(16, 16);
+  buffer.writeUInt16LE(1, 20);
+  buffer.writeUInt16LE(1, 22);
+  buffer.writeUInt32LE(sampleRate, 24);
+  buffer.writeUInt32LE(sampleRate * 2, 28);
+  buffer.writeUInt16LE(2, 32);
+  buffer.writeUInt16LE(16, 34);
+  buffer.write("data", 36);
+  buffer.writeUInt32LE(dataSize, 40);
+  const base = voicePreviewTone(voiceId);
+  for (let i = 0; i < frames; i += 1) {
+    const t = i / sampleRate;
+    const envelope = Math.max(0, Math.min(1, i / (sampleRate * 0.04), (frames - i) / (sampleRate * 0.05)));
+    const value = Math.sin(2 * Math.PI * base * t) * 0.25
+      + Math.sin(2 * Math.PI * (base * 1.5) * t) * 0.08;
+    buffer.writeInt16LE(Math.round(Math.max(-1, Math.min(1, value * envelope)) * 32767), 44 + i * 2);
+  }
+  return buffer;
+}
+
 export function createTtsService({ baseDir, taskStore, getSettings, ffmpegPath, onJobCompleted = () => {} }) {
   const outputDir = path.join(baseDir, ".data", "tts", "audio");
   const promptsDir = path.join(baseDir, "prompts");
@@ -328,7 +365,14 @@ export function createTtsService({ baseDir, taskStore, getSettings, ffmpegPath, 
         metadata_json: JSON.stringify(voice),
       });
     }
-    return presets;
+    return presets.map((voice) => ({
+      ...voice,
+      sample_url: `/api/tts/voice-preview?provider=${encodeURIComponent(providerId)}&voice_id=${encodeURIComponent(voice.id)}`,
+    }));
+  }
+
+  function voicePreview(voiceId = "") {
+    return createVoicePreviewWav(voiceId);
   }
 
   for (const job of taskStore.listTtsJobs({ limit: 500 })) {
@@ -346,6 +390,7 @@ export function createTtsService({ baseDir, taskStore, getSettings, ffmpegPath, 
     removeJob,
     clearJobs,
     listVoices,
+    voicePreview,
     outputDir,
   };
 }

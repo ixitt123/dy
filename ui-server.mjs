@@ -4577,6 +4577,18 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
+    if (req.method === "GET" && url.pathname === "/api/tts/voice-preview") {
+      const voiceId = String(url.searchParams.get("voice_id") || "");
+      const audio = ttsService.voicePreview(voiceId);
+      res.writeHead(200, {
+        "content-type": "audio/wav",
+        "content-length": audio.length,
+        "cache-control": "public, max-age=86400",
+      });
+      res.end(audio);
+      return;
+    }
+
     if (req.method === "GET" && url.pathname === "/api/tts/job") {
       const job = ttsService.getJob(Number(url.searchParams.get("id") || 0));
       if (!job) {
