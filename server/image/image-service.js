@@ -350,28 +350,46 @@ export function createImageService({ baseDir, getSettings, taskStore = null, ffm
     }));
   }
 
-  async function generateImage({ prompt, aspectRatio = "1:1", count = 1, sourceType = "manual", sourceId = "", provider = "" } = {}) {
+  function publicJob(row) {
+    if (!row) return null;
+    return {
+      ...row,
+      image_paths: safeJson(row.image_paths_json, []),
+    };
+  }
+
+  function updateImageJobProgress(jobId, { progress = 0, paths = [], error = "" } = {}) {
+    db.prepare(`
+      UPDATE image_jobs SET progress=?, image_paths_json=?, error=?, updated_at=datetime('now','localtime') WHERE id=?
+    `).run(Math.max(0, Math.min(100, Math.round(Number(progress || 0)))), JSON.stringify(paths), String(error || "").slice(0, 4000), jobId);
+  }
+
+  async function generateImage({ prompt, aspectRatio = "1:1", count = 1, sourceType = "manual", sourceId = "", provider = "", jobId: requestedJobId = "" } = {}) {
     const cleanPrompt = String(prompt || "").trim();
     if (!cleanPrompt) throw new Error("请先输入图片描述。");
     const settings = getSettings();
     const providers = settings.imageProviders || {};
     const selected = imageProviderFromSettings(settings, provider);
 
-    const jobId = randomUUID();
+    const jobId = requestedJobId || randomUUID();
     const results = [];
     const sceneIndex = sceneIndexFromSourceId(sourceId);
 
     const providerInstance = createImageProvider(selected.provider, { config: providers });
     if (!providerInstance) throw new Error("未知图片 Provider。");
-    const validation = await providerInstance.validateConfig();
-    if (!validation.valid) {
-      throw new Error(`${validation.error || "图片生成 API 未配置"} 请到系统设置 > API 服务中心 > 图片生成保存 API Key。`);
-    }
-
     db.prepare(`
       INSERT INTO image_jobs (id, source_type, source_id, provider, model, prompt, aspect_ratio, count_requested, status)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(jobId, sourceType, sourceId, selected.provider, selected.model, cleanPrompt, aspectRatio, count, "生成中");
+
+    const validation = await providerInstance.validateConfig();
+    if (!validation.valid) {
+      const message = `${validation.error || "图片生成 API 未配置"} 请到系统设置 > API 服务中心 > 图片生成保存 API Key。`;
+      db.prepare(`
+        UPDATE image_jobs SET status='失败', progress=100, error=?, updated_at=datetime('now','localtime'), completed_at=datetime('now','localtime') WHERE id=?
+      `).run(message, jobId);
+      throw new Error(message);
+    }
 
     for (let i = 0; i < count; i++) {
       const filename = `img_${jobId.slice(0, 6)}_${i}_${Date.now()}.png`;
@@ -435,6 +453,11 @@ export function createImageService({ baseDir, getSettings, taskStore = null, ffm
       } catch (err) {
         results.push({ index: i, success: false, error: err.message });
       }
+      updateImageJobProgress(jobId, {
+        progress: Math.round(((i + 1) / count) * 95),
+        paths: results.filter(r => r.success).map(r => r.imagePath),
+        error: results.filter((item) => !item.success && item.error).map((item) => item.error).join("\n"),
+      });
     }
 
     const successCount = results.filter(r => r.success).length;
@@ -452,6 +475,12 @@ export function createImageService({ baseDir, getSettings, taskStore = null, ffm
       JSON.stringify(imagePaths), failureMessage, results.reduce((s, r) => s + (r.duration || 0), 0), jobId);
 
     return { jobId, results, total: count, success: successCount, failed: count - successCount };
+  }
+
+  function generateImageAsync(input = {}) {
+    const jobId = randomUUID();
+    generateImage({ ...input, jobId }).catch(() => {});
+    return { jobId };
   }
 
   async function generateStoryboardImages({ projectId, aspectRatio = "9:16", provider = "", countPerScene = 1 } = {}) {
@@ -499,6 +528,56 @@ export function createImageService({ baseDir, getSettings, taskStore = null, ffm
     };
   }
 
+  function generateStoryboardImagesAsync({ projectId, aspectRatio = "9:16", provider = "", countPerScene = 1 } = {}) {
+    const prompts = storyboardImagePrompts({ projectId, aspectRatio });
+    const perScene = Math.max(1, Math.min(4, Number(countPerScene) || 1));
+    const jobId = randomUUID();
+    const total = prompts.length * perScene;
+    const selected = imageProviderFromSettings(getSettings(), provider);
+    db.prepare(`
+      INSERT INTO image_jobs (id, source_type, source_id, provider, model, prompt, aspect_ratio, count_requested, status, progress)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(jobId, "storyboard", String(projectId || ""), selected.provider, selected.model, `Director #${Number(projectId || 0)} 整套分镜图`, aspectRatio, total, "生成中", 3);
+    (async () => {
+      const results = [];
+      try {
+        for (const [index, item] of prompts.entries()) {
+          try {
+            const generated = await generateImage({
+              provider,
+              prompt: item.prompt,
+              aspectRatio: item.aspectRatio,
+              count: perScene,
+              sourceType: "director",
+              sourceId: `${item.projectId}:${item.scene}`,
+            });
+            for (const result of generated.results || []) {
+              results.push({ ...result, scene: item.scene, prompt: item.prompt, subtitle: item.subtitle, jobId: generated.jobId });
+            }
+          } catch (error) {
+            results.push({ success: false, scene: item.scene, prompt: item.prompt, subtitle: item.subtitle, error: error instanceof Error ? error.message : String(error) });
+          }
+          updateImageJobProgress(jobId, {
+            progress: Math.round(((index + 1) / Math.max(1, prompts.length)) * 95),
+            paths: results.filter((row) => row.success).map((row) => row.imagePath),
+            error: results.filter((row) => !row.success && row.error).map((row) => row.error).join("\n"),
+          });
+        }
+        const success = results.filter((item) => item.success).length;
+        const imagePaths = results.filter((item) => item.success).map((item) => item.imagePath);
+        const failureMessage = results.filter((item) => !item.success && item.error).map((item) => item.error).join("\n").slice(0, 4000);
+        db.prepare(`
+          UPDATE image_jobs SET status=?, progress=100, image_paths_json=?, error=?, updated_at=datetime('now','localtime'), completed_at=datetime('now','localtime') WHERE id=?
+        `).run(success === total ? "完成" : success > 0 ? "部分完成" : "失败", JSON.stringify(imagePaths), failureMessage, jobId);
+      } catch (error) {
+        db.prepare(`
+          UPDATE image_jobs SET status='失败', progress=100, error=?, updated_at=datetime('now','localtime'), completed_at=datetime('now','localtime') WHERE id=?
+        `).run(error instanceof Error ? error.message : String(error), jobId);
+      }
+    })();
+    return { jobId, total, totalScenes: prompts.length };
+  }
+
   async function testProviderConnection(provider = "") {
     const settings = getSettings();
     const selected = imageProviderFromSettings(settings, provider);
@@ -521,7 +600,11 @@ export function createImageService({ baseDir, getSettings, taskStore = null, ffm
   }
 
   function getJobs({ limit = 50, offset = 0 } = {}) {
-    return db.prepare("SELECT * FROM image_jobs ORDER BY created_at DESC LIMIT ? OFFSET ?").all(limit, offset);
+    return db.prepare("SELECT * FROM image_jobs ORDER BY created_at DESC LIMIT ? OFFSET ?").all(limit, offset).map(publicJob);
+  }
+
+  function getJob(id) {
+    return publicJob(db.prepare("SELECT * FROM image_jobs WHERE id=?").get(String(id || "")));
   }
 
   function getAssets({ limit = 50, offset = 0 } = {}) {
@@ -544,12 +627,15 @@ export function createImageService({ baseDir, getSettings, taskStore = null, ffm
 
   return {
     generateImage,
+    generateImageAsync,
     generateStoryboardImages,
+    generateStoryboardImagesAsync,
     storyboardImagePrompts,
     addLocalImageAsset,
     thumbnailForImage,
     testProviderConnection,
     getJobs,
+    getJob,
     getAssets,
     deleteAsset,
     getStats,

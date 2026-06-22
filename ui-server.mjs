@@ -5574,15 +5574,16 @@ const server = http.createServer(async (req, res) => {
       if (req.method === "POST" && route === "generate") {
         const body = await readJsonBody(req);
         try {
-          const result = await imageService.generateImage({
+          const input = {
             provider: body.provider || "",
             prompt: body.prompt || "",
             aspectRatio: body.aspectRatio || "1:1",
             count: Math.min(Math.max(Number(body.count) || 1, 1), 9),
             sourceType: body.sourceType || "manual",
             sourceId: body.sourceId || "",
-          });
-          sendJson(res, 200, result);
+          };
+          const result = body.async === true ? imageService.generateImageAsync(input) : await imageService.generateImage(input);
+          sendJson(res, body.async === true ? 202 : 200, { ok: true, ...result });
         } catch (e) {
           sendJson(res, 400, { ok: false, error: e.message });
         }
@@ -5592,13 +5593,14 @@ const server = http.createServer(async (req, res) => {
       if (req.method === "POST" && route === "generate-storyboard") {
         const body = await readJsonBody(req);
         try {
-          const result = await imageService.generateStoryboardImages({
+          const input = {
             provider: body.provider || "",
             projectId: Number(body.projectId || body.directorProjectId || 0),
             aspectRatio: body.aspectRatio || "9:16",
             countPerScene: Math.min(Math.max(Number(body.countPerScene) || 1, 1), 4),
-          });
-          sendJson(res, 200, { ok: true, ...result });
+          };
+          const result = body.async === true ? imageService.generateStoryboardImagesAsync(input) : await imageService.generateStoryboardImages(input);
+          sendJson(res, body.async === true ? 202 : 200, { ok: true, ...result });
         } catch (e) {
           sendJson(res, 400, { ok: false, error: e.message });
         }
@@ -5627,6 +5629,12 @@ const server = http.createServer(async (req, res) => {
 
       if (req.method === "GET" && route === "jobs") {
         sendJson(res, 200, { jobs: imageService.getJobs({ limit: Number(url.searchParams.get("limit")) || 50 }) });
+        return;
+      }
+
+      if (req.method === "GET" && route === "job") {
+        const job = imageService.getJob(url.searchParams.get("id") || "");
+        sendJson(res, job ? 200 : 404, job ? { ok: true, job } : { ok: false, message: "图片任务不存在。" });
         return;
       }
 
