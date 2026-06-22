@@ -3299,6 +3299,7 @@ function renderVideoProductRailLists(projects = videoProductProjectsState) {
 }
 
 function videoProductPayload() {
+  const selectedBgmId = videoProductBgm?.value || "";
   return {
     source_director_project_id: Number(videoProductDirector.value || 0),
     audio_asset_id: Number(videoProductAudio.value || 0),
@@ -3307,8 +3308,8 @@ function videoProductPayload() {
     jianying_template: videoProductJianyingTemplate?.value || "education_tips",
     route_a_style_id: videoProductRouteAStyle?.value || "black_gold_knowledge",
     route_a_custom_style: videoProductRouteACustomStyle?.value.trim() || "",
-    bgm_strategy: videoProductBgmStrategy?.value || "auto",
-    bgm_asset_id: videoProductBgm?.value || "",
+    bgm_strategy: selectedBgmId ? (videoProductBgmStrategy?.value || "manual") : "none",
+    bgm_asset_id: selectedBgmId,
     render_engine: "auto",
     manual_bindings: videoProductManualBindings,
   };
@@ -3420,13 +3421,14 @@ function renderRouteAOptionControls() {
   const strategies = videoProductSources.bgmStrategies?.length
     ? videoProductSources.bgmStrategies
     : [
+      { id: "none", label: "不使用 BGM" },
       { id: "auto", label: "自动匹配" },
       { id: "manual", label: "手动本地 BGM" },
       { id: "generated_default", label: "基础氛围生成" },
     ];
   const bgmAssets = videoProductSources.bgmAssets || [];
   const currentStyle = videoProductRouteAStyle?.value || "black_gold_knowledge";
-  const currentStrategy = videoProductBgmStrategy?.value || "auto";
+  const currentStrategy = videoProductBgmStrategy?.value || "none";
   const currentBgm = videoProductBgm?.value || "";
   if (videoProductRouteAStyle) {
     videoProductRouteAStyle.innerHTML = styles
@@ -3438,11 +3440,11 @@ function renderRouteAOptionControls() {
     videoProductBgmStrategy.innerHTML = strategies
       .map((item) => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.label)}</option>`)
       .join("");
-    videoProductBgmStrategy.value = strategies.some((item) => item.id === currentStrategy) ? currentStrategy : "auto";
+    videoProductBgmStrategy.value = strategies.some((item) => item.id === currentStrategy) ? currentStrategy : "none";
   }
   if (videoProductBgm) {
     const options = [
-      '<option value="">自动匹配本地 BGM；没有则基础生成</option>',
+      '<option value="">不使用 BGM；选择音乐后才会加入</option>',
       ...bgmAssets.map((asset) => {
         const title = asset.title || asset.filename || asset.path || asset.id;
         return `<option value="${escapeHtml(asset.id)}">${escapeHtml(title)}</option>`;
