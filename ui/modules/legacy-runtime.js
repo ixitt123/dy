@@ -3778,6 +3778,10 @@ async function waitForLegacyVideoProductCompletion(id, { timeoutMs = 180000, int
 }
 
 async function generateVideoProduct() {
+  const readiness = await window.videoProjects?.syncSelections?.().catch((error) => {
+    videoProductStatus.textContent = error instanceof Error ? error.message : String(error);
+    return null;
+  });
   if (!window.videoProjects?.current?.()) {
     videoProductStatus.textContent = "请先在首页新建或选择一个短视频项目。";
     document.querySelector("#videoProjectReadiness")?.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -3794,7 +3798,6 @@ async function generateVideoProduct() {
   generateVideoProductBtn.disabled = true;
   videoProductStatus.textContent = "正在检查当前项目的文案、语音、导演稿、素材和 BGM...";
   try {
-    const readiness = await window.videoProjects.syncSelections();
     if (!readiness?.ready) {
       const missing = readiness?.blockers?.map((item) => `${item.label}${item.detail}`).join("、") || "关键内容未完成";
       videoProductStatus.textContent = `暂不能生成：${missing}。请使用右侧按钮补齐。`;
