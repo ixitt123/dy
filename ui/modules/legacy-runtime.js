@@ -1746,6 +1746,11 @@ async function generateTts() {
     ttsStatus.textContent = "请选择音色或填写 voice_id。";
     return;
   }
+  syncDirectorSourceFromText(text, {
+    title: directorTitle?.value.trim() || "配音文案导演稿",
+    sourceKey: `tts:${Date.now()}`,
+    sourceType: "tts",
+  });
   generateTtsButton.disabled = true;
   ttsStatus.textContent = "正在提交生成任务...";
   renderTtsRail({
@@ -2134,6 +2139,12 @@ async function generateDefaultVoiceFromRewrite(versionKey) {
     rewriteStatus.textContent = "当前输出框没有文案，请先生成文案。";
     return;
   }
+  syncDirectorSourceFromText(text, {
+    title: "AI 改写导演稿",
+    sourceKey: `task-${rewriteTaskId.value || 0}-rewrite-${versionKey}`,
+    sourceType: "rewrite",
+    taskId: Number(rewriteTaskId.value || 0),
+  });
   ttsText.value = text;
   ttsCharacterCount.textContent = `${text.replace(/\s/g, "").length} 字`;
   window.workbenchNavigate?.("tts", { preserveScroll: true });
@@ -2174,6 +2185,23 @@ function directorCurrentStep(project = {}) {
   if (project.status === "processing") return "正在生成专业导演稿";
   if (project.status === "waiting" || project.status === "pending") return "任务已进入队列";
   return directorStatusLabel(project.status);
+}
+
+function syncDirectorSourceFromText(text, { title = "配音文案导演稿", sourceKey = "tts:text", sourceType = "tts", taskId = 0, rewriteId = 0 } = {}) {
+  const sourceText = String(text || "").trim();
+  if (!sourceText || !directorSourceText) return false;
+  directorSourceMode.value = "manual";
+  updateDirectorSourceOptions({ preserveText: true });
+  directorSourceText.value = sourceText;
+  if (directorTitle && !directorTitle.value.trim()) directorTitle.value = title;
+  directorSourceContext = {
+    taskId: Number(taskId || 0),
+    rewriteId: Number(rewriteId || 0),
+    sourceKey,
+    sourceType,
+  };
+  updateDirectorCharacterCount();
+  return true;
 }
 
 function directorOutputLinks(project = {}) {
@@ -2637,17 +2665,12 @@ function sendRewriteToDirector(versionKey) {
     return;
   }
   const version = collectRewriteVersions().find((item) => item.key === versionKey);
-  directorSourceMode.value = "manual";
-  updateDirectorSourceOptions({ preserveText: true });
-  directorSourceText.value = text;
-  directorTitle.value = `${version?.name || "AI 改写"}导演稿`;
-  directorSourceContext = {
-    taskId: Number(rewriteTaskId.value || 0),
-    rewriteId: 0,
+  syncDirectorSourceFromText(text, {
+    title: `${version?.name || "AI 改写"}导演稿`,
     sourceKey: `task-${rewriteTaskId.value || 0}-rewrite-${versionKey}`,
     sourceType: "rewrite",
-  };
-  updateDirectorCharacterCount();
+    taskId: Number(rewriteTaskId.value || 0),
+  });
   directorStatus.textContent = "已从 AI 改写载入文案，请设置导演参数。";
   window.workbenchNavigate?.("director", { preserveScroll: true });
   document.querySelector("#directorSystem").scrollIntoView({ behavior: "smooth", block: "start" });
