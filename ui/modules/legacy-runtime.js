@@ -537,11 +537,11 @@ function rewriteProviderOptionsMarkup(selected = rewriteProvider?.value || "dash
 
 function defaultRewriteVersionSettings() {
   return {
-    provider: rewriteProvider?.value || "dashscope",
+    provider: rewriteProvider?.value || "deepseek",
     style: rewriteStyle?.value || "痞里带刺",
     referenceStyle: rewriteReference?.value || defaultRewriteReference,
     params: rewriteParams(),
-    humanizeLevel: rewriteHumanizeLevel?.value || "普通",
+    humanizeLevel: rewriteHumanizeLevel?.value || "极强",
   };
 }
 
@@ -554,7 +554,7 @@ function rewriteVersionAt(index) {
   const base = rewriteVersionOptions[index] || {
     key: `version-${index + 1}`,
     name: `版本 ${index + 1}`,
-    direction: rewriteDirection.value || "招生引流",
+    direction: rewriteDirection.value || "短视频口播",
     wordCount: "160字左右",
   };
   return rewriteVersionDrafts.get(base.key) || { ...base, ...defaultRewriteVersionSettings(), content: "" };
@@ -582,7 +582,7 @@ function normalizeRewriteVersions(rewrite = {}, allowDefaults = true) {
     return {
       key,
       name: item.name || base.name || `版本 ${index + 1}`,
-      direction: item.direction || cached.direction || base.direction || rewriteDirection.value || "招生引流",
+      direction: item.direction || cached.direction || base.direction || rewriteDirection.value || "短视频口播",
       wordCount: item.wordCount || cached.wordCount || base.wordCount || "160字左右",
       content: typeof item.content === "string" ? item.content : cached.content || "",
       revisionInstruction: item.revisionInstruction || cached.revisionInstruction || "",
@@ -663,7 +663,7 @@ function renderRewriteVersions(rewrite = {}, { allowDefaults = true } = {}) {
           <label>
             去AI强度
             <select class="rewrite-version-humanize-level">
-              ${selectOptionsMarkup(rewriteHumanizeOptions, version.humanizeLevel || "普通")}
+              ${selectOptionsMarkup(rewriteHumanizeOptions, version.humanizeLevel || "极强")}
             </select>
           </label>
         </div>
@@ -704,7 +704,7 @@ function collectRewriteVersions() {
         emotionLevel: Number(card.querySelector(".rewrite-version-emotion-level")?.value || 7),
         salesLevel: Number(card.querySelector(".rewrite-version-sales-level")?.value || 6),
       },
-      humanizeLevel: card.querySelector(".rewrite-version-humanize-level")?.value || rewriteHumanizeLevel.value,
+      humanizeLevel: card.querySelector(".rewrite-version-humanize-level")?.value || rewriteHumanizeLevel.value || "极强",
       referenceStyle: card.querySelector(".rewrite-version-reference")?.value.trim() || rewriteReference.value,
       content: card.querySelector(".rewrite-version-text")?.value || "",
       revisionInstruction: card.querySelector(".rewrite-version-suggestion")?.value.trim() || "",
@@ -747,7 +747,7 @@ function rewriteParams() {
     conflictLevel: Number(rewriteConflictLevel.value || 7),
     emotionLevel: Number(rewriteEmotionLevel.value || 7),
     salesLevel: Number(rewriteSalesLevel.value || 6),
-    humanizeLevel: rewriteHumanizeLevel.value || "普通",
+    humanizeLevel: rewriteHumanizeLevel.value || "极强",
   };
 }
 
@@ -759,7 +759,7 @@ function rewritePayloadForVersion(id, version, extra = {}) {
     style: version.style || rewriteStyle.value,
     referenceStyle: version.referenceStyle || rewriteReference.value,
     params: version.params || rewriteParams(),
-    humanizeLevel: version.humanizeLevel || rewriteHumanizeLevel.value,
+    humanizeLevel: version.humanizeLevel || rewriteHumanizeLevel.value || "极强",
     referenceExamples: collectReferenceExamplesText(),
     versionSpecs: [version],
     text: rewriteOriginal.value,
@@ -892,8 +892,8 @@ async function continueWorkflowFromTranscript(job = {}, { sourceUrl = "", title 
   if (data.project?.id) await window.videoProjects?.select?.(data.project.id);
   await refreshTranscripts();
   if (data.task?.id) {
-    await openRewriteEditor(data.task.id);
-    rewriteStatus.textContent = `已自动生成标题和项目名，并载入 AI 改写：${data.titles?.projectTitle || data.project?.title || ""}`;
+    window.workbenchNavigate?.("transcript", { preserveScroll: true });
+    resultBox.textContent = `文案提取成功，已自动生成标题和项目名：${data.titles?.projectTitle || data.project?.title || ""}`;
   }
   return data;
 }
@@ -3823,11 +3823,12 @@ async function loadSettings() {
     const rewrite = data.rewrite;
     const providers = rewrite.providers || {};
     rewriteProviderConfigs = providers;
-    const selectedProvider = rewrite.defaults?.defaultProvider || "dashscope";
+    const selectedProvider = rewrite.defaults?.defaultProvider || "deepseek";
     renderProviderOptions(rewriteProvider, providers, selectedProvider, { disableUnconfigured: true });
     renderProviderOptions(rewriteSettingsProvider, providers, selectedProvider);
-    rewriteDirection.value = rewrite.defaults?.defaultDirection || "招生引流";
+    rewriteDirection.value = rewrite.defaults?.defaultDirection || "短视频口播";
     rewriteStyle.value = rewrite.defaults?.defaultStyle || "痞里带刺";
+    rewriteHumanizeLevel.value = rewrite.defaults?.humanizeLevel || "极强";
     rewriteReference.value = rewrite.defaults?.referenceStyle || rewrite.options?.defaultReference || defaultRewriteReference;
     updateRewritePresetFields();
     const statusParts = Object.values(providers)
