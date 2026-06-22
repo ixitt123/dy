@@ -129,11 +129,14 @@ export function createVoiceAssetService({ baseDir, taskStore, ttsService, getSet
       : 0;
     const previewTest = taskStore.listVoiceTests({ voiceAssetId: row.id })
       .find((test) => test.status === "completed" && test.tts_job_id);
+    const presetPreviewUrl = row.voice_type === "preset" && row.voice_id
+      ? `/api/tts/voice-preview?provider=${encodeURIComponent(row.provider || "aliyun_bailian")}&voice_id=${encodeURIComponent(row.voice_id)}`
+      : "";
     return {
       ...row,
       tags,
       metadata,
-      sample_url: row.sample_path ? `/api/voice-assets/audio?id=${row.id}&kind=sample` : "",
+      sample_url: row.sample_path ? `/api/voice-assets/audio?id=${row.id}&kind=sample` : metadata.sample_url || presetPreviewUrl,
       preview_url: previewTest ? `/api/tts/audio?id=${previewTest.tts_job_id}` : "",
       rating_count: ownRatings.length,
       average_score: averageScore,
