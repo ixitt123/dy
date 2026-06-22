@@ -626,6 +626,27 @@ export async function pollVideoProductProject(id) {
   return project;
 }
 
+async function waitForVideoProductCompletion(id, { timeoutMs = 180000, intervalMs = 1500 } = {}) {
+  const startedAt = Date.now();
+  let project = null;
+  while (Date.now() - startedAt < timeoutMs) {
+    project = await loadTimelineProject(id);
+    await loadVideoProductProjects();
+    if (!RUNNING_STATUSES.has(project.status)) {
+      if (project.status === "completed") {
+        await window.videoProjects?.setActiveProject?.(currentVideoProject()?.id);
+        await Promise.allSettled([refreshReadiness(), refreshQualityCheck()]);
+        return project;
+      }
+      throw new Error(project.error || project.blockers?.join("；") || "剪映草稿生成失败。");
+    }
+    const status = document.querySelector("#videoProductStatus");
+    if (status) status.textContent = `${project.current_step || "正在生成剪映草稿"} · ${Number(project.progress || 0)}%`;
+    await new Promise((resolve) => window.setTimeout(resolve, intervalMs));
+  }
+  throw new Error("剪映草稿生成超时，请到成片任务列表查看失败原因。");
+}
+
 export async function openVideoProductOutput() {
   const status = document.querySelector("#videoProductStatus");
   if (!state.activeTimeline?.output_dir) {
