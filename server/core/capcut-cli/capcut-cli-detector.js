@@ -186,13 +186,16 @@ export function createCapcutCliDetector({ baseDir, ffmpegPath = "", getSettings 
       ? probeExecutable(bundledFfprobe)
       : probeExecutable(WINDOWS ? "ffprobe.exe" : "ffprobe");
 
+    const defaultDraftCandidates = [
+      localAppData && path.join(localAppData, "JianyingPro", "User Data", "Projects", "com.lveditor.draft"),
+      localAppData && path.join(localAppData, "CapCut", "User Data", "Projects", "com.lveditor.draft"),
+    ].filter(Boolean);
     const configuredDraftDirectory = String(
       settings.jianyingDraftDir || settings.jianying_draft_dir || settings.jianying?.draftDir || "",
     ).trim();
     const draftDirectory = firstExistingPath([
       configuredDraftDirectory ? path.resolve(configuredDraftDirectory) : "",
-      localAppData && path.join(localAppData, "JianyingPro", "User Data", "Projects", "com.lveditor.draft"),
-      localAppData && path.join(localAppData, "CapCut", "User Data", "Projects", "com.lveditor.draft"),
+      ...defaultDraftCandidates,
     ]);
     const templateDirectories = fs.existsSync(templatesRoot)
       ? fs.readdirSync(templatesRoot, { withFileTypes: true }).filter((entry) => entry.isDirectory())
@@ -237,7 +240,7 @@ export function createCapcutCliDetector({ baseDir, ffmpegPath = "", getSettings 
       draftDirectory: {
         ok: Boolean(draftDirectory && fs.existsSync(draftDirectory)),
         label: draftDirectory && fs.existsSync(draftDirectory) ? "已配置" : "未配置",
-        detail: draftDirectory || "请在系统设置中选择剪映草稿目录",
+        detail: draftDirectory || defaultDraftCandidates[0] || "请在系统设置中选择剪映草稿目录",
       },
       templateMaster: {
         ok: detectedTemplates.length > 0,
@@ -257,6 +260,16 @@ export function createCapcutCliDetector({ baseDir, ffmpegPath = "", getSettings 
       checks,
       invocation: capcutInvocation,
       paths: { templatesRoot, draftDirectory, outputRoot },
+      suggestions: {
+        appPaths: [
+          discoveredInstall?.targetPath,
+          localAppData && path.join(localAppData, "JianyingPro", "Apps", "JianyingPro.exe"),
+          localAppData && path.join(localAppData, "JianyingPro", "JianyingPro.exe"),
+          localAppData && path.join(localAppData, "CapCut", "CapCut.exe"),
+        ].filter(Boolean),
+        draftDirs: defaultDraftCandidates,
+        templatesRoot,
+      },
       jianying: {
         appPath: jianyingAppPath,
         discoveredPath: String(discoveredInstall?.targetPath || "").trim(),
