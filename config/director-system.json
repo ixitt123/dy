@@ -2,10 +2,10 @@
   "version": 1,
   "defaults": {
     "video_type": "douyin-knowledge",
-    "visual_style": "knowledge-blogger",
+    "visual_style": "pixar-3d-cartoon",
     "platform": "douyin",
     "pace": "hook-fast-cut",
-    "shot_count": "8-12",
+    "shot_count": "auto",
     "estimated_duration": 30
   },
   "video_types": [
