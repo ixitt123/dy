@@ -898,6 +898,20 @@ async function continueWorkflowFromTranscript(job = {}, { sourceUrl = "", title 
   return data;
 }
 
+async function selectRewriteForCurrentProject(version = {}, taskId = rewriteTaskId?.value || "") {
+  const text = String(version.content || "").trim();
+  if (!text || !window.videoProjects?.current?.()) return null;
+  const versionKey = version.key || "first";
+  return window.videoProjects.linkCurrent("selected_rewrite", `task-${taskId}-${versionKey}`, version.name || "默认改写版本", {
+    text,
+    taskId: Number(taskId || 0),
+    versionKey,
+    direction: version.direction,
+    style: version.style,
+    source: "ai_generated",
+  });
+}
+
 async function sendTranscriptToTts(taskId) {
   const transcripts = await refreshTranscripts();
   const item = transcripts.find((row) => String(row.id) === String(taskId));
@@ -3935,6 +3949,7 @@ async function generateRewrite() {
     stopRewriteProgress("正在保存结果", 96);
     await refreshTasks();
     await refreshFiles();
+    await selectRewriteForCurrentProject(first, id);
     stopRewriteProgress("改写完成", 100);
     lastRewritePath = saved.task?.rewrite_path || latestTask?.rewrite_path || lastRewritePath;
     rewriteStatus.textContent = `改写已生成并写入 SQLite：${saved.task?.rewrite_path || latestTask?.rewrite_path || ""}`;
@@ -4039,6 +4054,7 @@ async function saveSingleRewrite(versionKey) {
     renderTranscripts(data.transcripts);
     await refreshTasks();
     await refreshFiles();
+    await selectRewriteForCurrentProject(target, id);
     lastRewritePath = data.filePath || data.task?.rewrite_path || lastRewritePath;
     rewriteStatus.textContent = "当前输出框已保存。";
   } catch (error) {
@@ -4073,6 +4089,7 @@ async function saveRewrite(format = "txt") {
     renderTranscripts(data.transcripts);
     await refreshTasks();
     await refreshFiles();
+    await selectRewriteForCurrentProject(first, id);
     lastRewritePath = data.filePath || data.task?.rewrite_path || lastRewritePath;
     rewriteStatus.textContent = `已保存：${data.filePath || data.task?.rewrite_path || ""}`;
   } catch (error) {

@@ -354,7 +354,10 @@ export function createProjectCenter(baseDir) {
     if (asset.assetType === "source_video") changes.sourceVideos = uniqueById([...project.sourceVideos, item]);
     if (asset.assetType === "transcript") changes.transcriptText = String(metadata.text || asset.name || "");
     if (asset.assetType === "rewrite") changes.rewriteVersions = uniqueById([...project.rewriteVersions, item]);
-    if (asset.assetType === "selected_rewrite") changes.selectedRewriteText = String(metadata.text || asset.name || "");
+    if (asset.assetType === "selected_rewrite") {
+      changes.selectedRewriteText = String(metadata.text || asset.name || "");
+      changes.lastRewriteId = String(asset.assetId || metadata.rewriteId || metadata.versionKey || "");
+    }
     if (asset.assetType === "tts") {
       changes.ttsAudios = uniqueById([...project.ttsAudios, item]);
       changes.selectedTtsAudio = item;
