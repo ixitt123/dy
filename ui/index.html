@@ -1428,6 +1428,15 @@
               </div>
             </div>
             <button class="primary" id="imageGenerateBtn" type="button">生成图片</button>
+            <div class="image-progress" id="imageProgress" hidden>
+              <div class="rewrite-progress-line">
+                <span id="imageProgressLabel">等待生成</span>
+                <strong id="imageProgressPercent">0%</strong>
+              </div>
+              <div class="progress-track" aria-hidden="true">
+                <div class="progress-bar" id="imageProgressBar"></div>
+              </div>
+            </div>
             <div id="imageGenerateStatus" class="status-text"></div>
           </div>
           <div class="image-studio-results">

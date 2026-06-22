@@ -1641,6 +1641,18 @@ function setupImageStudio() {
     }
   }
 
+  function setImageProgress(value = 0, label = "等待生成", visible = true) {
+    const progress = Math.max(0, Math.min(100, Number(value || 0)));
+    const wrap = document.getElementById("imageProgress");
+    const bar = document.getElementById("imageProgressBar");
+    const text = document.getElementById("imageProgressLabel");
+    const percent = document.getElementById("imageProgressPercent");
+    if (wrap) wrap.hidden = !visible;
+    if (bar) bar.style.width = `${progress}%`;
+    if (text) text.textContent = label;
+    if (percent) percent.textContent = `${progress}%`;
+  }
+
   function selectedImportedPrompt() {
     if (!importSelect || !importedDirectorImagePrompts.length) return null;
     const sceneKey = importSelect.value;
@@ -1787,9 +1799,11 @@ function setupImageStudio() {
     const aspectRatio = document.getElementById("imageAspectRatio")?.value || "9:16";
     btn.disabled = true;
     btn.textContent = "整套生成中...";
+    setImageProgress(8, "整套分镜图排队中");
     setStatus(`正在生成整套分镜图：${importedDirectorImagePrompts.length || ""} 个镜头，统一风格锁定中...`, "info");
     try {
       await assertImageApiReachable();
+      setImageProgress(22, "图片 API 已连接");
       const res = await fetch("/api/image/generate-storyboard", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1802,6 +1816,7 @@ function setupImageStudio() {
       });
       const data = await res.json();
       if (!res.ok || data.ok === false) throw new Error(data.error || data.message || `HTTP ${res.status}`);
+      setImageProgress(100, "整套分镜图完成");
       const linked = await linkGeneratedImagesToCurrentProject(data.results || [], {
         prompt: `Director #${projectId} 整套分镜图`,
         aspectRatio,
@@ -1817,6 +1832,7 @@ function setupImageStudio() {
       );
       renderResults(data.results || [], `Director #${projectId} 整套分镜图`);
     } catch (error) {
+      setImageProgress(100, "整套分镜图失败");
       setStatus(formatImageFetchError(error, "整套分镜图生成"), "error");
       await refreshImageConfigStatus();
     } finally {
@@ -1882,10 +1898,12 @@ function setupImageStudio() {
     }
     btn.disabled = true;
     btn.textContent = "生成中...";
+    setImageProgress(8, "图片生成排队中");
     setStatus(`正在通过 ${provider?.label || "图片 Provider"} 生成 ${count} 张图片...`);
 
     try {
       await assertImageApiReachable();
+      setImageProgress(25, "图片 API 已连接");
       const res = await fetch("/api/image/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1900,6 +1918,7 @@ function setupImageStudio() {
       });
       const data = await res.json();
       if (!res.ok || data.ok === false) throw new Error(data.error || data.message || `HTTP ${res.status}`);
+      setImageProgress(100, Number(data.success || 0) > 0 ? "图片生成完成" : "图片生成失败");
       if (data.jobId && Number(data.success || 0) > 0) {
         const linked = await linkGeneratedImagesToCurrentProject(data.results || [], {
           prompt,
@@ -1920,6 +1939,7 @@ function setupImageStudio() {
         renderResults(data.results || [], prompt);
       }
     } catch (e) {
+      setImageProgress(100, "图片生成失败");
       setStatus(formatImageFetchError(e, "图片生成请求"), "error");
       await refreshImageConfigStatus();
     } finally {

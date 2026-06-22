@@ -263,6 +263,7 @@ let directorProjectsState = [];
 let activeDirectorProject = null;
 let activeDirectorRailProject = null;
 let activeDirectorRailSignature = "";
+const autoImportedDirectorImageProjectIds = new Set();
 let activeDirectorTab = "shot-list";
 let directorSourceContext = { taskId: 0, rewriteId: 0, sourceKey: "", sourceType: "manual" };
 let directorPollTimer = 0;
@@ -2545,7 +2546,12 @@ function renderDirectorProject(project) {
     status: "ready",
   }).catch(() => {});
   renderDirectorResultView();
-  directorResult.scrollIntoView({ behavior: "smooth", block: "start" });
+  if (!autoImportedDirectorImageProjectIds.has(Number(project.id))) {
+    autoImportedDirectorImageProjectIds.add(Number(project.id));
+    sendDirectorProjectToImage();
+  } else {
+    directorResult.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
 }
 
 async function openDirectorProject(id) {
