@@ -32,6 +32,27 @@ function safeJsonArray(value) {
   }
 }
 
+function safeFolderName(value, fallback = "image-job") {
+  const cleaned = String(value || "")
+    .replace(/[\\/:*?"<>|\x00-\x1F]/g, "_")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 64);
+  return cleaned || fallback;
+}
+
+function imageJobFolderName({ jobId = "", prompt = "", sourceType = "", sourceId = "", folderName = "" } = {}) {
+  if (folderName) return safeFolderName(folderName, `image-${String(jobId).slice(0, 8)}`);
+  const date = new Date().toISOString().slice(0, 10).replaceAll("-", "");
+  const sourceLabel = String(sourceType || "") === "director" && String(sourceId || "").includes(":")
+    ? `导演项目-${String(sourceId).split(":")[0]}-镜头-${String(sourceId).split(":")[1]}`
+    : String(sourceType || "") === "storyboard" && sourceId
+      ? `导演项目-${sourceId}-整套分镜图`
+      : "图片生成";
+  const promptLabel = safeFolderName(String(prompt || "").replace(/\n+/g, " ").slice(0, 18), "未命名");
+  return safeFolderName(`${date}-${sourceLabel}-${promptLabel}-${String(jobId).slice(0, 6)}`);
+}
+
 export function targetImageSize(aspectRatio = "1:1") {
   return {
     "9:16": { width: 1080, height: 1920 },
@@ -120,6 +141,8 @@ export function createImageService({ baseDir, getSettings, taskStore = null, ffm
       status TEXT DEFAULT '等待',
       progress INTEGER DEFAULT 0,
       image_paths_json TEXT DEFAULT '[]',
+      folder_name TEXT DEFAULT '',
+      folder_path TEXT DEFAULT '',
       error TEXT,
       duration_ms INTEGER,
       created_at TEXT DEFAULT (datetime('now','localtime')),
@@ -141,6 +164,8 @@ export function createImageService({ baseDir, getSettings, taskStore = null, ffm
       revised_prompt TEXT,
       aspect_ratio TEXT,
       file_path TEXT DEFAULT '',
+      folder_name TEXT DEFAULT '',
+      folder_path TEXT DEFAULT '',
       source_url TEXT DEFAULT '',
       source_type TEXT DEFAULT 'manual',
       source_id TEXT DEFAULT '',
@@ -152,10 +177,14 @@ export function createImageService({ baseDir, getSettings, taskStore = null, ffm
   if (!assetColumns.has("model")) db.exec("ALTER TABLE image_assets ADD COLUMN model TEXT DEFAULT ''");
   if (!assetColumns.has("file_path")) db.exec("ALTER TABLE image_assets ADD COLUMN file_path TEXT DEFAULT ''");
   if (!assetColumns.has("source_url")) db.exec("ALTER TABLE image_assets ADD COLUMN source_url TEXT DEFAULT ''");
+  if (!assetColumns.has("folder_name")) db.exec("ALTER TABLE image_assets ADD COLUMN folder_name TEXT DEFAULT ''");
+  if (!assetColumns.has("folder_path")) db.exec("ALTER TABLE image_assets ADD COLUMN folder_path TEXT DEFAULT ''");
   if (!assetColumns.has("scene_index")) db.exec("ALTER TABLE image_assets ADD COLUMN scene_index INTEGER DEFAULT 0");
   if (!assetColumns.has("asset_order")) db.exec("ALTER TABLE image_assets ADD COLUMN asset_order INTEGER DEFAULT 0");
   const jobColumns = new Set(db.prepare("PRAGMA table_info(image_jobs)").all().map((column) => column.name));
   if (!jobColumns.has("model")) db.exec("ALTER TABLE image_jobs ADD COLUMN model TEXT DEFAULT ''");
+  if (!jobColumns.has("folder_name")) db.exec("ALTER TABLE image_jobs ADD COLUMN folder_name TEXT DEFAULT ''");
+  if (!jobColumns.has("folder_path")) db.exec("ALTER TABLE image_jobs ADD COLUMN folder_path TEXT DEFAULT ''");
 
   function imageProviderFromSettings(settings, explicitProvider = "") {
     const mapped = settings.modelMap?.image || settings.modelMapping?.image || {};
