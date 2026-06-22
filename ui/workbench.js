@@ -2018,15 +2018,19 @@ function setupImageStudio() {
       for (const asset of assets) {
         const sourceId = String(asset.source_id || "");
         const projectKey = sourceId.includes(":") ? sourceId.split(":")[0] : "";
-        const label = projectKey ? `导演项目 #${projectKey}` : `手动/通用素材 · ${(asset.created_at || "").slice(0, 10)}`;
-        if (!groups.has(label)) groups.set(label, []);
-        groups.get(label).push(asset);
+        const folderName = String(asset.folder_name || "").trim();
+        const label = folderName || (projectKey ? `导演项目 #${projectKey}` : `手动/通用素材 · ${(asset.created_at || "").slice(0, 10)}`);
+        const groupKey = `${label}::${asset.folder_path || projectKey || "local"}`;
+        if (!groups.has(groupKey)) groups.set(groupKey, { label, rows: [] });
+        groups.get(groupKey).rows.push(asset);
       }
-      grid.innerHTML = [...groups.entries()].map(([label, rows]) => `
+      grid.innerHTML = [...groups.values()].map(({ label, rows }) => `
         <section class="image-asset-group">
           <div class="image-asset-group-title"><strong>${escapeHtml(label)}</strong><span>${rows.length} 张</span></div>
           <div class="image-asset-group-grid">
-            ${rows.map(a => `
+            ${rows
+              .sort((a, b) => (Number(a.scene_index || 0) - Number(b.scene_index || 0)) || String(a.created_at || "").localeCompare(String(b.created_at || "")))
+              .map(a => `
               <div class="img-card">
                 <button class="img-preview" type="button" onclick="window.open('/api/image/file?path=${encodeURIComponent(a.original_path || "")}')">
                   <img src="${a.thumbnail_url || `/api/image/thumbnail?width=360&path=${encodeURIComponent(a.original_path || "")}`}" alt="图片资产缩略图" loading="lazy" />

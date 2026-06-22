@@ -6076,6 +6076,38 @@ audio {
   gap: 10px;
 }
 
+.image-asset-group {
+  grid-column: 1 / -1;
+  min-width: 0;
+  border: 1px solid #2b3340;
+  border-radius: 7px;
+  padding: 10px;
+  background: #0d121a;
+}
+
+.image-asset-group-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+  color: #e5ecf8;
+  font-size: 13px;
+}
+
+.image-asset-group-title strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.image-asset-group-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+}
+
 .img-card {
   min-width: 0;
   border: 1px solid #2b3340;
