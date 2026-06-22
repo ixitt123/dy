@@ -541,6 +541,39 @@ async function generateJianyingDraftAndOpen() {
   return project;
 }
 
+async function autoRunWorkflowFromCurrentProject() {
+  const status = document.querySelector("#videoProductStatus");
+  const project = currentVideoProject();
+  if (!project?.id) {
+    if (status) status.textContent = "请先选择当前短视频项目。";
+    window.appNavigate?.("dashboard");
+    return null;
+  }
+  if (!project.selectedRewriteText && !project.transcriptText) {
+    if (status) status.textContent = "当前项目还没有可用文案，请先完成文案提取并选择改写文案。";
+    return null;
+  }
+  if (!project.selectedTtsAudio?.id) {
+    const text = project.selectedRewriteText || project.transcriptText || "";
+    const ttsText = document.querySelector("#ttsText");
+    if (ttsText) {
+      ttsText.value = text;
+      ttsText.dispatchEvent(new Event("input", { bubbles: true }));
+    }
+    if (status) status.textContent = "已把当前文案送入 TTS，点击或等待默认语音生成后会自动进入导演稿。";
+    window.appNavigate?.("tts");
+    document.querySelector("#generateTts")?.click();
+    return null;
+  }
+  if (!project.directorScript?.id) {
+    if (status) status.textContent = "语音已有，但导演稿还未完成；请稍等后刷新，或在 AI 导演页手动生成。";
+    window.appNavigate?.("director");
+    return null;
+  }
+  if (!state.preview) await previewVideoProductTimeline();
+  return generateJianyingDraftAndOpen();
+}
+
 export async function pollVideoProductProject(id) {
   if (state.pollTimer) window.clearTimeout(state.pollTimer);
   const project = await loadTimelineProject(id);
@@ -613,6 +646,10 @@ function bindEvents() {
       if (status) status.textContent = error.message;
     }
   });
+  document.querySelector("#autoRunWorkflow")?.addEventListener("click", () => autoRunWorkflowFromCurrentProject().catch((error) => {
+    const status = document.querySelector("#videoProductStatus");
+    if (status) status.textContent = error.message;
+  }));
   document.querySelector("#generateVideoProduct")?.addEventListener("click", () => generateJianyingDraftAndOpen().catch(() => {}));
   document.querySelector("#openVideoProductOutput")?.addEventListener("click", () => openVideoProductOutput().catch(() => {}));
   document.addEventListener("keydown", (event) => {
@@ -665,7 +702,7 @@ export async function initVideoOutputModule() {
   if (page) page.dataset.module = "video-output";
   window.__modularVideoOutputReady = true;
   bindEvents();
-  window.videoOutputModule = { loadVideoProductSources, loadVideoProductProjects, refreshReadiness, refreshQualityCheck, previewVideoProductTimeline, syncSelectionsToProject, generateVideoProduct, generateJianyingDraftAndOpen, pollVideoProductProject, openVideoProductOutput };
+  window.videoOutputModule = { loadVideoProductSources, loadVideoProductProjects, refreshReadiness, refreshQualityCheck, previewVideoProductTimeline, syncSelectionsToProject, generateVideoProduct, generateJianyingDraftAndOpen, autoRunWorkflowFromCurrentProject, pollVideoProductProject, openVideoProductOutput };
   await Promise.allSettled([loadJianyingLocalConfig(), refreshToolStatus(), loadVideoProductSources(), loadVideoProductProjects(), refreshReadiness(), refreshQualityCheck()]);
   await previewVideoProductTimeline().catch(() => {});
 }

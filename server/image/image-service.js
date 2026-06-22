@@ -23,6 +23,15 @@ function renderStyleTemplate(template, values) {
   );
 }
 
+function safeJsonArray(value) {
+  try {
+    const parsed = JSON.parse(value || "[]");
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
 export function targetImageSize(aspectRatio = "1:1") {
   return {
     "9:16": { width: 1080, height: 1920 },
@@ -354,7 +363,7 @@ export function createImageService({ baseDir, getSettings, taskStore = null, ffm
     if (!row) return null;
     return {
       ...row,
-      image_paths: safeJson(row.image_paths_json, []),
+      image_paths: safeJsonArray(row.image_paths_json),
     };
   }
 
