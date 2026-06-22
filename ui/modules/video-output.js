@@ -72,6 +72,13 @@ function canAttemptGeneration() {
   );
 }
 
+function generationMissingReason() {
+  if (!currentVideoProject()?.id) return "请先在首页新建或选择一个短视频项目。";
+  if (!document.querySelector("#videoProductDirector")?.value) return "请先选择已完成的导演稿。";
+  if (!document.querySelector("#videoProductAudio")?.value) return "请先选择已完成的 TTS 语音。";
+  return "";
+}
+
 function updateGenerateAvailability() {
   const button = document.querySelector("#generateVideoProduct");
   if (!button) return;
