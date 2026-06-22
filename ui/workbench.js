@@ -1611,6 +1611,73 @@ function setupImageStudio() {
   const importPanel = document.getElementById("imageDirectorImportPanel");
   const importSelect = document.getElementById("imageDirectorPromptSelect");
   let imageProviderConfigs = [];
+  const imagePreviewGroups = new Map();
+  let activeImagePreview = { groupId: "", index: 0 };
+
+  function imageAssetPath(asset = {}) {
+    return asset.original_path || asset.file_path || asset.path || "";
+  }
+
+  function closeImageAssetPreview() {
+    const modal = document.getElementById("imageAssetPreviewModal");
+    if (modal) modal.hidden = true;
+  }
+
+  function ensureImagePreviewModal() {
+    let modal = document.getElementById("imageAssetPreviewModal");
+    if (modal) return modal;
+    modal = document.createElement("div");
+    modal.id = "imageAssetPreviewModal";
+    modal.className = "image-preview-modal";
+    modal.hidden = true;
+    modal.innerHTML = `
+      <div class="image-preview-backdrop" data-image-preview-close></div>
+      <div class="image-preview-dialog" role="dialog" aria-modal="true" aria-label="图片预览">
+        <div class="image-preview-head">
+          <strong id="imagePreviewTitle">图片预览</strong>
+          <button class="btn-sm" type="button" data-image-preview-close>关闭</button>
+        </div>
+        <div class="image-preview-body">
+          <button class="image-preview-nav prev" type="button" data-image-preview-prev>上一张</button>
+          <img id="imagePreviewFull" src="" alt="图片预览" />
+          <button class="image-preview-nav next" type="button" data-image-preview-next>下一张</button>
+        </div>
+        <div class="image-preview-foot">
+          <span id="imagePreviewCounter"></span>
+          <button class="btn-sm" type="button" id="imagePreviewOpenOriginal">打开原图</button>
+        </div>
+      </div>`;
+    document.body.appendChild(modal);
+    modal.addEventListener("click", (event) => {
+      if (event.target.closest("[data-image-preview-close]")) closeImageAssetPreview();
+      if (event.target.closest("[data-image-preview-prev]")) showImageAssetPreview(activeImagePreview.groupId, activeImagePreview.index - 1);
+      if (event.target.closest("[data-image-preview-next]")) showImageAssetPreview(activeImagePreview.groupId, activeImagePreview.index + 1);
+    });
+    document.addEventListener("keydown", (event) => {
+      if (modal.hidden) return;
+      if (event.key === "Escape") closeImageAssetPreview();
+      if (event.key === "ArrowLeft") showImageAssetPreview(activeImagePreview.groupId, activeImagePreview.index - 1);
+      if (event.key === "ArrowRight") showImageAssetPreview(activeImagePreview.groupId, activeImagePreview.index + 1);
+    });
+    return modal;
+  }
+
+  function showImageAssetPreview(groupId, index) {
+    const rows = imagePreviewGroups.get(groupId) || [];
+    if (!rows.length || index < 0 || index >= rows.length) return;
+    activeImagePreview = { groupId, index };
+    const modal = ensureImagePreviewModal();
+    const asset = rows[index];
+    const filePath = imageAssetPath(asset);
+    const url = `/api/image/file?path=${encodeURIComponent(filePath)}`;
+    modal.querySelector("#imagePreviewTitle").textContent = asset.folder_name || asset.filename || `图片 ${index + 1}`;
+    modal.querySelector("#imagePreviewFull").src = url;
+    modal.querySelector("#imagePreviewCounter").textContent = `${index + 1} / ${rows.length}`;
+    modal.querySelector("[data-image-preview-prev]").hidden = index === 0;
+    modal.querySelector("[data-image-preview-next]").hidden = index === rows.length - 1;
+    modal.querySelector("#imagePreviewOpenOriginal").onclick = () => window.open(url);
+    modal.hidden = false;
+  }
 
   // 生成数量切换
   panel.querySelectorAll(".btn-count").forEach(btn => {
@@ -2015,6 +2082,7 @@ function setupImageStudio() {
       const assets = data.assets || [];
       if (!assets.length) { grid.innerHTML = '<div class="empty-state">暂无保存的图片资产</div>'; return; }
       const groups = new Map();
+      imagePreviewGroups.clear();
       for (const asset of assets) {
         const sourceId = String(asset.source_id || "");
         const projectKey = sourceId.includes(":") ? sourceId.split(":")[0] : "";
@@ -2024,23 +2092,26 @@ function setupImageStudio() {
         if (!groups.has(groupKey)) groups.set(groupKey, { label, rows: [] });
         groups.get(groupKey).rows.push(asset);
       }
-      grid.innerHTML = [...groups.values()].map(({ label, rows }) => `
+      grid.innerHTML = [...groups.values()].map(({ label, rows }, groupIndex) => {
+        const groupId = `asset-group-${groupIndex}`;
+        const sortedRows = rows
+          .sort((a, b) => (Number(a.scene_index || 0) - Number(b.scene_index || 0)) || String(a.created_at || "").localeCompare(String(b.created_at || "")));
+        imagePreviewGroups.set(groupId, sortedRows);
+        return `
         <section class="image-asset-group">
           <div class="image-asset-group-title"><strong>${escapeHtml(label)}</strong><span>${rows.length} 张</span></div>
           <div class="image-asset-group-grid">
-            ${rows
-              .sort((a, b) => (Number(a.scene_index || 0) - Number(b.scene_index || 0)) || String(a.created_at || "").localeCompare(String(b.created_at || "")))
-              .map(a => `
+            ${sortedRows.map((a, assetIndex) => `
               <div class="img-card">
-                <button class="img-preview" type="button" onclick="window.open('/api/image/file?path=${encodeURIComponent(a.original_path || "")}')">
-                  <img src="${a.thumbnail_url || `/api/image/thumbnail?width=360&path=${encodeURIComponent(a.original_path || "")}`}" alt="图片资产缩略图" loading="lazy" />
+                <button class="img-preview" type="button" data-image-preview-group="${groupId}" data-image-preview-index="${assetIndex}">
+                  <img src="${a.thumbnail_url || `/api/image/thumbnail?width=360&path=${encodeURIComponent(imageAssetPath(a))}`}" alt="图片资产缩略图" loading="lazy" />
                 </button>
                 <div class="img-meta">
                   <span>#${Number(a.scene_index || 0) || "-"} ${(a.prompt || "").slice(0, 30)}</span>
                   <span class="text-xs text-secondary">${(a.created_at || "").slice(0, 10)} · ${a.width || 1080}x${a.height || 1080}</span>
                 </div>
                 <div class="img-actions">
-                  <button class="btn-sm" onclick="window.open('/api/image/file?path=${encodeURIComponent(a.original_path || "")}')">预览原图</button>
+                  <button class="btn-sm" type="button" data-image-preview-group="${groupId}" data-image-preview-index="${assetIndex}">预览原图</button>
                   <button class="btn-sm" onclick="document.getElementById('imagePrompt').value='${String(a.prompt || "").replace(/\\/g, "\\\\").replace(/'/g, "\\'")}';document.getElementById('imageGenerateBtn').click()">重新生成</button>
                   <button class="btn-sm danger-action" onclick="fetch('/api/image/assets/${a.id}/delete',{method:'POST'}).then(()=>this.closest('.img-card').remove())">删除</button>
                 </div>
@@ -2048,7 +2119,8 @@ function setupImageStudio() {
             `).join("")}
           </div>
         </section>
-      `).join("");
+      `;
+      }).join("");
     } catch (e) {
       grid.innerHTML = `<div class="empty-state">加载失败: ${e.message}</div>`;
     }
@@ -2062,6 +2134,12 @@ function setupImageStudio() {
     }
   };
   document.addEventListener("click", (e) => {
+    const previewTrigger = e.target.closest("[data-image-preview-group]");
+    if (previewTrigger) {
+      e.preventDefault();
+      showImageAssetPreview(previewTrigger.dataset.imagePreviewGroup, Number(previewTrigger.dataset.imagePreviewIndex || 0));
+      return;
+    }
     const nav = e.target.closest("[data-nav]");
     if (nav && nav.dataset.nav === "image-studio") {
       setTimeout(() => {
