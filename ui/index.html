@@ -94,7 +94,34 @@
         <div class="workbench-body">
           <main class="shell" id="workbenchContent">
             <section class="dashboard-page workbench-page active" id="dashboardPage" data-page="dashboard">
-              <div class="dashboard-intro">
+              <section class="workflow-overview">
+                <div class="panel-heading">
+                  <div>
+                    <span class="section-eyebrow">制作流程</span>
+                    <h2>内容生产流程</h2>
+                  </div>
+                  <span class="phase-badge">项目制生产流程</span>
+                </div>
+                <div class="workflow-steps">
+                  <button type="button" data-nav="collector"><span>1</span><strong>采集素材</strong><small>链接与视频</small></button>
+                  <i></i>
+                  <button type="button" data-nav="transcript"><span>2</span><strong>提取文案</strong><small>语音转文字</small></button>
+                  <i></i>
+                  <button type="button" data-nav="rewrite"><span>3</span><strong>AI 改写</strong><small>选择最佳版本</small></button>
+                  <i></i>
+                  <button type="button" data-nav="tts"><span>4</span><strong>TTS 配音</strong><small>声音与试听</small></button>
+                  <i></i>
+                  <button type="button" data-nav="director"><span>5</span><strong>AI 导演</strong><small>分镜与字幕</small></button>
+                  <i></i>
+                  <button type="button" data-nav="assets"><span>6</span><strong>素材匹配</strong><small>画面与 BGM</small></button>
+                  <i></i>
+                  <button type="button" data-nav="video-output"><span>7</span><strong>成片草稿</strong><small>生成剪映草稿</small></button>
+                  <i></i>
+                  <button type="button" data-nav="video-output"><span>8</span><strong>打开剪映</strong><small>检查并导出</small></button>
+                </div>
+              </section>
+
+              <div class="dashboard-intro" hidden>
                 <div>
                   <span class="section-eyebrow">短视频项目工作台</span>
                   <h2>一条视频，一个完整项目</h2>
@@ -137,7 +164,7 @@
                 </div>
               </form>
 
-              <div class="project-workbench-grid">
+              <div class="project-workbench-grid" hidden>
                 <section class="dashboard-panel current-project-panel">
                   <div class="panel-heading">
                     <div>
@@ -243,32 +270,6 @@
                 </section>
               </div>
 
-              <section class="workflow-overview">
-                <div class="panel-heading">
-                  <div>
-                    <span class="section-eyebrow">制作流程</span>
-                    <h2>内容生产流程</h2>
-                  </div>
-                  <span class="phase-badge">项目制生产流程</span>
-                </div>
-                <div class="workflow-steps">
-                  <button type="button" data-nav="collector"><span>1</span><strong>采集素材</strong><small>链接与视频</small></button>
-                  <i></i>
-                  <button type="button" data-nav="transcript"><span>2</span><strong>提取文案</strong><small>语音转文字</small></button>
-                  <i></i>
-                  <button type="button" data-nav="rewrite"><span>3</span><strong>AI 改写</strong><small>选择最佳版本</small></button>
-                  <i></i>
-                  <button type="button" data-nav="tts"><span>4</span><strong>TTS 配音</strong><small>声音与试听</small></button>
-                  <i></i>
-                  <button type="button" data-nav="director"><span>5</span><strong>AI 导演</strong><small>分镜与字幕</small></button>
-                  <i></i>
-                  <button type="button" data-nav="assets"><span>6</span><strong>素材匹配</strong><small>画面与 BGM</small></button>
-                  <i></i>
-                  <button type="button" data-nav="video-output"><span>7</span><strong>成片草稿</strong><small>生成剪映草稿</small></button>
-                  <i></i>
-                  <button type="button" data-nav="video-output"><span>8</span><strong>打开剪映</strong><small>检查并导出</small></button>
-                </div>
-              </section>
             </section>
 
       <section class="workbench-page" data-page="collector" id="collectorPage">
@@ -467,7 +468,7 @@
                   模型选择
                   <select id="rewriteProvider">
                     <option value="dashscope">DashScope</option>
-                    <option value="deepseek">DeepSeek</option>
+                    <option value="deepseek" selected>DeepSeek</option>
                     <option value="custom">自定义 OpenAI 兼容接口</option>
                   </select>
                 </label>
@@ -480,7 +481,7 @@
                     <option>暑假班转化</option>
                     <option>英语提分</option>
                     <option>朋友圈文案</option>
-                    <option>短视频口播</option>
+                    <option selected>短视频口播</option>
                   </select>
                 </label>
                 <label>
@@ -516,9 +517,9 @@
                   去AI味强度
                   <select id="rewriteHumanizeLevel">
                     <option>关闭</option>
-                    <option selected>普通</option>
+                    <option>普通</option>
                     <option>强</option>
-                    <option>极强</option>
+                    <option selected>极强</option>
                   </select>
                 </label>
               </div>
