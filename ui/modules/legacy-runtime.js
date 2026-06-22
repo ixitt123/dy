@@ -3730,7 +3730,7 @@ async function openVideoProductProject(id) {
   return data.project;
 }
 
-async function pollVideoProductProject(id) {
+async function pollVideoProductProject(id, { schedule = true } = {}) {
   if (videoProductPollTimer) clearTimeout(videoProductPollTimer);
   const project = await openVideoProductProject(id);
   await loadVideoProductProjects();
@@ -3751,20 +3751,35 @@ async function pollVideoProductProject(id) {
       status: "ready",
     });
   }
-  if (["pending", "binding_assets", "building_timeline", "rendering", "exporting_draft"].includes(project.status)) {
+  if (schedule && ["pending", "binding_assets", "building_timeline", "rendering", "exporting_draft"].includes(project.status)) {
     videoProductPollTimer = setTimeout(() => {
       pollVideoProductProject(id).catch((error) => {
         videoProductStatus.textContent = error instanceof Error ? error.message : String(error);
       });
     }, 1500);
   }
+  return project;
+}
+
+async function waitForLegacyVideoProductCompletion(id, { timeoutMs = 180000, intervalMs = 1500 } = {}) {
+  const startedAt = Date.now();
+  while (Date.now() - startedAt < timeoutMs) {
+    const project = await pollVideoProductProject(id, { schedule: false });
+    if (!["pending", "binding_assets", "building_timeline", "rendering", "exporting_draft"].includes(project.status)) {
+      if (project.status === "completed") return project;
+      throw new Error(project.error || project.blockers?.join("；") || "剪映草稿生成失败。");
+    }
+    videoProductStatus.textContent = `${project.current_step || "正在生成剪映草稿"} · ${Number(project.progress || 0)}%`;
+    await new Promise((resolve) => setTimeout(resolve, intervalMs));
+  }
+  throw new Error("剪映草稿生成超时，请到成片任务列表查看失败原因。");
 }
 
 async function generateVideoProduct() {
   if (!window.videoProjects?.current?.()) {
     videoProductStatus.textContent = "请先在首页新建或选择一个短视频项目。";
-    window.workbenchNavigate?.("dashboard");
-    return;
+    document.querySelector("#videoProjectReadiness")?.scrollIntoView({ behavior: "smooth", block: "center" });
+    return null;
   }
   if (!Number(videoProductDirector.value || 0)) {
     videoProductStatus.textContent = "请先选择导演项目。";
@@ -3790,9 +3805,10 @@ async function generateVideoProduct() {
       body: JSON.stringify({ ...videoProductPayload(), video_project_id: window.videoProjects.current().id }),
     });
     videoProductStatus.textContent = `成片任务 #${data.project.project_id} 已进入队列。`;
-    await pollVideoProductProject(data.project.project_id);
+    return await waitForLegacyVideoProductCompletion(data.project.project_id);
   } catch (error) {
     videoProductStatus.textContent = error instanceof Error ? error.message : String(error);
+    throw error;
   } finally {
     generateVideoProductBtn.disabled = !window.videoProjects?.canGenerate?.();
   }
@@ -3803,8 +3819,13 @@ async function generateJianyingDraftAndOpenLegacy() {
     videoProductOutputType.value = "jianying_template";
     videoProductOutputType.dispatchEvent(new Event("change", { bubbles: true }));
   }
-  await generateVideoProduct();
+  const project = await generateVideoProduct();
+  if (!project) return null;
+  if (!project.draft_path) throw new Error("成片任务完成了，但没有返回剪映草稿路径；请检查模板母版和 capcut-result.json。");
+  videoProductStatus.textContent = `剪映草稿已生成：${project.draft_path}，正在打开剪映专业版...`;
   await openJianyingApp();
+  videoProductStatus.textContent = `剪映草稿已导入并请求打开剪映：${project.draft_path}`;
+  return project;
 }
 
 function sendDirectorProjectToVideoProduct() {
