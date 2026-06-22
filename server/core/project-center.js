@@ -1,6 +1,11 @@
 import fs from "node:fs";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
+import {
+  normalizeWorkflowState,
+  workflowStateFromProject,
+  workflowStatusForState,
+} from "./workflow-state.js";
 
 export const VIDEO_PROJECT_STATUSES = [
   "created",
@@ -24,6 +29,11 @@ const PROJECT_JSON_FIELDS = {
   selectedAssets: "selected_assets_json",
   bgm: "bgm_json",
   subtitleTimeline: "subtitle_timeline_json",
+  platformTitles: "platform_titles_json",
+  seoKeywords: "seo_keywords_json",
+  hashtags: "hashtags_json",
+  titleScore: "title_score_json",
+  workflowError: "workflow_error_json",
   jianyingDraft: "jianying_draft_json",
   outputHistory: "output_history_json",
 };
@@ -34,6 +44,7 @@ const PROJECT_TEXT_FIELDS = {
   status: "status",
   transcriptText: "transcript_text",
   selectedRewriteText: "selected_rewrite_text",
+  workflowState: "workflow_state",
   outputMode: "output_mode",
   description: "description",
   cover: "cover",
@@ -137,6 +148,17 @@ export function createProjectCenter(baseDir) {
     ["selected_assets_json", "TEXT DEFAULT '[]'"],
     ["bgm_json", "TEXT DEFAULT '{}'"],
     ["subtitle_timeline_json", "TEXT DEFAULT '[]'"],
+    ["workflow_state", "TEXT DEFAULT 'input_ready'"],
+    ["platform_titles_json", "TEXT DEFAULT '{}'"],
+    ["seo_keywords_json", "TEXT DEFAULT '[]'"],
+    ["hashtags_json", "TEXT DEFAULT '[]'"],
+    ["title_score_json", "TEXT DEFAULT '{}'"],
+    ["workflow_error_json", "TEXT DEFAULT '{}'"],
+    ["last_task_id", "INTEGER DEFAULT 0"],
+    ["last_rewrite_id", "TEXT DEFAULT ''"],
+    ["last_tts_job_id", "INTEGER DEFAULT 0"],
+    ["last_director_project_id", "INTEGER DEFAULT 0"],
+    ["last_timeline_project_id", "INTEGER DEFAULT 0"],
     ["output_mode", "TEXT DEFAULT 'jianying_template'"],
     ["jianying_draft_json", "TEXT DEFAULT '{}'"],
     ["output_history_json", "TEXT DEFAULT '[]'"],
@@ -176,6 +198,17 @@ export function createProjectCenter(baseDir) {
       selectedAssets: safeJson(row.selected_assets_json, []),
       bgm: safeJson(row.bgm_json, {}),
       subtitleTimeline: safeJson(row.subtitle_timeline_json, []),
+      platformTitles: safeJson(row.platform_titles_json, {}),
+      seoKeywords: safeJson(row.seo_keywords_json, []),
+      hashtags: safeJson(row.hashtags_json, []),
+      titleScore: safeJson(row.title_score_json, {}),
+      workflowError: safeJson(row.workflow_error_json, {}),
+      workflowState: normalizeWorkflowState(row.workflow_state || ""),
+      lastTaskId: Number(row.last_task_id || 0),
+      lastRewriteId: row.last_rewrite_id || "",
+      lastTtsJobId: Number(row.last_tts_job_id || 0),
+      lastDirectorProjectId: Number(row.last_director_project_id || 0),
+      lastTimelineProjectId: Number(row.last_timeline_project_id || 0),
       outputMode: row.output_mode || "jianying_template",
       jianyingDraft: safeJson(row.jianying_draft_json, {}),
       outputHistory: safeJson(row.output_history_json, []),
@@ -184,6 +217,7 @@ export function createProjectCenter(baseDir) {
       createdAt: row.created_at,
       updatedAt: row.updated_at,
     };
+    project.workflowState = normalizeWorkflowState(project.workflowState, workflowStateFromProject(project));
     project.progress = statusProgress(project.status);
     project.nextAction = nextAction(project);
     return project;
@@ -251,6 +285,17 @@ export function createProjectCenter(baseDir) {
       assignments.push(`${column}=?`);
       values.push(JSON.stringify(changes[key] ?? (Array.isArray(current[key]) ? [] : {})));
     });
+    [
+      ["lastTaskId", "last_task_id", (value) => Number(value || 0)],
+      ["lastRewriteId", "last_rewrite_id", (value) => String(value || "")],
+      ["lastTtsJobId", "last_tts_job_id", (value) => Number(value || 0)],
+      ["lastDirectorProjectId", "last_director_project_id", (value) => Number(value || 0)],
+      ["lastTimelineProjectId", "last_timeline_project_id", (value) => Number(value || 0)],
+    ].forEach(([key, column, normalize]) => {
+      if (changes[key] === undefined) return;
+      assignments.push(`${column}=?`);
+      values.push(normalize(changes[key]));
+    });
     if (!assignments.length) return current;
     assignments.push("updated_at=?");
     values.push(nowLocal(), String(id));
@@ -259,6 +304,7 @@ export function createProjectCenter(baseDir) {
   }
 
   function deriveStatus(project) {
+    if (project.workflowState) return workflowStatusForState(project.workflowState);
     if (hasValue(project.outputHistory)) return "exported";
     if (hasValue(project.jianyingDraft)) return "draft_ready";
     if (hasValue(project.selectedAssets) && hasValue(project.bgm)) return "assets_ready";
@@ -326,9 +372,22 @@ export function createProjectCenter(baseDir) {
     if (asset.assetType === "bgm") changes.bgm = item;
     if (asset.assetType === "jianying") changes.jianyingDraft = item;
     if (asset.assetType === "output") changes.outputHistory = uniqueById([...project.outputHistory, item]);
-    const next = { ...project, ...changes };
+    const workflowState = workflowStateFromProject({ ...project, ...changes });
+    const next = { ...project, ...changes, workflowState };
+    changes.workflowState = workflowState;
     changes.status = deriveStatus(next);
     return update(project.id, changes);
+  }
+
+  function setWorkflowState(id, state, extraChanges = {}) {
+    const project = getById(id);
+    if (!project) return null;
+    const workflowState = normalizeWorkflowState(state, project.workflowState);
+    return update(id, {
+      ...extraChanges,
+      workflowState,
+      status: workflowStatusForState(workflowState),
+    });
   }
 
   function linkAsset(projectId, assetType, assetId, name = "", metadata = {}) {
@@ -558,5 +617,6 @@ export function createProjectCenter(baseDir) {
     getReadiness,
     getQualityCheck,
     getStats,
+    setWorkflowState,
   };
 }
