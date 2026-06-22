@@ -547,8 +547,8 @@ export async function generateVideoProduct() {
     if (!readiness?.ready) throw new Error(`暂不能生成：${readiness?.blockers?.map((item) => `${item.label}${item.detail}`).join("、") || "关键内容未完成"}`);
     if (status) status.textContent = "检查通过，正在创建剪映模板草稿任务...";
     const data = await postJson("/api/video-product/generate", payload());
-    await pollVideoProductProject(data.project.project_id || data.project.id);
-    return data.project;
+    const projectId = data.project.project_id || data.project.id;
+    return await waitForVideoProductCompletion(projectId);
   } catch (error) {
     if (status) status.textContent = error.message;
     throw error;
@@ -575,8 +575,14 @@ async function generateJianyingDraftAndOpen() {
   if (status) status.textContent = "正在一键生成剪映模板草稿...";
   await assertJianyingReadyForDraft();
   const project = await generateVideoProduct();
-  if (status) status.textContent = "剪映草稿任务完成，正在尝试打开剪映专业版...";
-  await openJianyingApp();
+  if (!project?.draft_path) {
+    throw new Error("成片任务完成了，但没有返回剪映草稿路径；请检查模板母版和 capcut-result.json。");
+  }
+  if (status) status.textContent = `剪映草稿已生成：${project.draft_path}，正在打开剪映专业版...`;
+  const openResult = await openJianyingApp();
+  if (status) status.textContent = openResult?.ok
+    ? `剪映草稿已导入并请求打开剪映：${project.draft_path}`
+    : `剪映草稿已生成：${project.draft_path}；但剪映未打开：${openResult?.message || "未知原因"}`;
   return project;
 }
 
@@ -662,8 +668,10 @@ async function openJianyingApp() {
   try {
     const result = await postJson("/api/video-product/open-jianying", {});
     if (note) note.textContent = result.message || "已启动剪映专业版。";
+    return result;
   } catch (error) {
     if (note) note.textContent = error.message;
+    return { ok: false, message: error.message };
   }
 }
 

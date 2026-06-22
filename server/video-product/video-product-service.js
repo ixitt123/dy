@@ -2492,6 +2492,9 @@ ${sceneMarkup}
           capcutResult.files = [...(capcutResult.files || []), localJianyingDraftPath];
           capcutResult.warnings = [...(capcutResult.warnings || []), "已同步到本机剪映草稿目录。"];
         }
+        if (!localJianyingDraftPath) {
+          throw new Error(`剪映草稿未写入本机草稿目录：${[...(capcutResult.errors || []), ...(capcutResult.warnings || [])].filter(Boolean).join("；") || "capcut-cli 没有返回真实 draftPath"}`);
+        }
         writeJson(path.join(timelineFiles.projectDir, "capcut-result.json"), capcutResult);
       } else if (outputType === "jianying" || outputType === "package") {
         draftPath = writeDraftReference(timelineFiles.projectDir, project, timelineFiles);
