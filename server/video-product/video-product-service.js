@@ -2736,9 +2736,11 @@ ${sceneMarkup}
     const outputHistory = [...(videoProject.outputHistory || []).filter((item) => item.id !== outputRecord.id), outputRecord];
     const isExported = MP4_OUTPUT_TYPES.has(project.output_type) && Boolean(mp4Path);
     const changes = {
+      lastTimelineProjectId: project.id,
       selectedAssets,
       subtitleTimeline,
       outputHistory,
+      workflowState: "draft_ready",
       status: isExported ? "exported" : "draft_ready",
     };
     if (timelineFiles.packagedBgm) {
