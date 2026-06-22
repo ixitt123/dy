@@ -167,7 +167,6 @@ export function buildCapcutCompileSpec({ project = {}, timeline = {}, timelineFi
   });
   if (duration > 0) {
     operations.push({ op: "filter", slug: "vivid", start: 0, duration, intensity: 0.18, trackName: "color-grade" });
-    operations.push({ op: "effect", slug: "soft_zoom_blur", start: 0, duration, intensity: 0.12, trackName: "scene-polish" });
   }
   return {
     name: title,
