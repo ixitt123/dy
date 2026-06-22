@@ -96,6 +96,10 @@ function normalizeVolcengineArkModel(model) {
 export function parseSceneIndexFromFilename(value = "") {
   const name = path.basename(String(value || ""), path.extname(String(value || ""))).trim();
   const patterns = [
+    /^0*(\d{1,3})(?:[._\-\s]|$)/,
+    /(?:^|[._\-\s#])0*(\d{1,3})(?:[._\-\s]|$)/,
+    /(?:scene|shot|jing|fenjing|s|img|image)[._\-\s#]*0*(\d{1,3})(?:[._\-\s]|$)/i,
+    /(?:场景|镜头|分镜|第)[._\-\s#]*0*(\d{1,3})(?:[._\-\s号张]|$)/,
     /^(?:scene|shot|镜头|分镜|第)?[_\-\s]*(\d{1,3})(?:[_\-\s]|$)/i,
     /(?:scene|shot|镜头|分镜|第)[_\-\s]*(\d{1,3})/i,
   ];
