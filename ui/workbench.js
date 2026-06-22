@@ -800,6 +800,7 @@ function buildWorkbenchInformationArchitecture() {
   setupRewriteStudio();
   setupTtsStudio();
   setupDirectorStudio();
+  setupProjectWorkbench();
   setupVfoFutureStep();
   setupImageStudio();
   setupV2Settings();
@@ -2558,4 +2559,6 @@ function setupV2Settings() {
 }
 
 window.workbenchNavigate = navigateWorkbench;
+window.navigateWorkbench = navigateWorkbench;
+window.appNavigate = window.appNavigate || ((pageId, options = {}) => navigateWorkbench(pageId, options));
 initWorkbench();
