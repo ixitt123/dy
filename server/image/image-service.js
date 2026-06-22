@@ -63,6 +63,25 @@ function normalizeVolcengineArkModel(model) {
   return value;
 }
 
+export function parseSceneIndexFromFilename(value = "") {
+  const name = path.basename(String(value || ""), path.extname(String(value || ""))).trim();
+  const patterns = [
+    /^(?:scene|shot|镜头|分镜|第)?[_\-\s]*(\d{1,3})(?:[_\-\s]|$)/i,
+    /(?:scene|shot|镜头|分镜|第)[_\-\s]*(\d{1,3})/i,
+  ];
+  for (const pattern of patterns) {
+    const match = name.match(pattern);
+    const number = Number(match?.[1] || 0);
+    if (number > 0) return number;
+  }
+  return 0;
+}
+
+function sceneIndexFromSourceId(value = "") {
+  const match = String(value || "").match(/:(\d{1,3})$/);
+  return match ? Number(match[1] || 0) : 0;
+}
+
 export function createImageService({ baseDir, getSettings, taskStore = null, ffmpegPath = "" }) {
   const outputDir = path.join(baseDir, "image-assets", "generated");
   const thumbnailDir = path.join(baseDir, "image-assets", "thumbnails");
@@ -124,6 +143,8 @@ export function createImageService({ baseDir, getSettings, taskStore = null, ffm
   if (!assetColumns.has("model")) db.exec("ALTER TABLE image_assets ADD COLUMN model TEXT DEFAULT ''");
   if (!assetColumns.has("file_path")) db.exec("ALTER TABLE image_assets ADD COLUMN file_path TEXT DEFAULT ''");
   if (!assetColumns.has("source_url")) db.exec("ALTER TABLE image_assets ADD COLUMN source_url TEXT DEFAULT ''");
+  if (!assetColumns.has("scene_index")) db.exec("ALTER TABLE image_assets ADD COLUMN scene_index INTEGER DEFAULT 0");
+  if (!assetColumns.has("asset_order")) db.exec("ALTER TABLE image_assets ADD COLUMN asset_order INTEGER DEFAULT 0");
   const jobColumns = new Set(db.prepare("PRAGMA table_info(image_jobs)").all().map((column) => column.name));
   if (!jobColumns.has("model")) db.exec("ALTER TABLE image_jobs ADD COLUMN model TEXT DEFAULT ''");
 
@@ -214,11 +235,13 @@ export function createImageService({ baseDir, getSettings, taskStore = null, ffm
       ...row,
       file_path: row.file_path || row.original_path || "",
       ratio: row.aspect_ratio || "",
+      scene_index: Number(row.scene_index || 0),
+      asset_order: Number(row.asset_order || 0),
       thumbnail_url: `/api/image/thumbnail?path=${encodeURIComponent(row.file_path || row.original_path || "")}`,
     };
   }
 
-  async function addLocalImageAsset({ filePath, prompt = "", aspectRatio = "9:16", sourceId = "", sourceType = "local" } = {}) {
+  async function addLocalImageAsset({ filePath, prompt = "", aspectRatio = "9:16", sourceId = "", sourceType = "local", directorProjectId = 0, sceneIndex = 0, assetOrder = 0 } = {}) {
     const resolved = path.resolve(String(filePath || "").trim());
     if (!resolved || !fs.existsSync(resolved)) throw new Error("请选择存在的本地图片文件。");
     const ext = path.extname(resolved).toLowerCase();
@@ -233,13 +256,16 @@ export function createImageService({ baseDir, getSettings, taskStore = null, ffm
     const stats = fs.statSync(outputPath);
     const assetPrompt = String(prompt || "").trim() || `本地图片素材：${path.basename(resolved)}`;
     const cleanSourceType = String(sourceType || "local").trim() || "local";
+    const parsedSceneIndex = Number(sceneIndex || parseSceneIndexFromFilename(resolved) || sceneIndexFromSourceId(sourceId) || 0);
+    const cleanSourceId = String(sourceId || (directorProjectId && parsedSceneIndex ? `${directorProjectId}:${parsedSceneIndex}` : "")).trim();
+    const cleanAssetOrder = Number(assetOrder || parsedSceneIndex || 0);
 
     db.prepare(`
       INSERT INTO image_assets (
         id, job_id, filename, original_path, file_path, width, height, file_size, provider, model,
-        prompt, revised_prompt, aspect_ratio, source_url, source_type, source_id
+        prompt, revised_prompt, aspect_ratio, source_url, source_type, source_id, scene_index, asset_order
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       assetId,
       "",
@@ -256,7 +282,9 @@ export function createImageService({ baseDir, getSettings, taskStore = null, ffm
       aspectRatio,
       resolved,
       cleanSourceType,
-      sourceId,
+      cleanSourceId,
+      parsedSceneIndex,
+      cleanAssetOrder,
     );
 
     return publicAsset(db.prepare("SELECT * FROM image_assets WHERE id=?").get(assetId));
