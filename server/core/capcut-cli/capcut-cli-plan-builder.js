@@ -5,6 +5,22 @@ function firstValue(...values) {
   return values.find((value) => value !== undefined && value !== null && value !== "") || "";
 }
 
+function capcutTransitionSlug(value) {
+  const raw = String(value || "").trim().toLowerCase();
+  if (!raw || raw === "straight_cut" || raw === "cut" || raw === "none") return "";
+  const aliases = {
+    fade: "dissolve",
+    fade_in: "dissolve",
+    fade_out: "dissolve",
+    match_cut: "dissolve",
+    whip_pan: "dissolve",
+    push_slide: "dissolve",
+    slide: "dissolve",
+    crossfade: "dissolve",
+  };
+  return aliases[raw] || "dissolve";
+}
+
 export function buildCapcutCliPlan({ project = {}, timeline = {}, timelineFiles = {}, templateName = "education_tips" } = {}) {
   const scenes = Array.isArray(timeline.scenes) ? timeline.scenes : [];
   const packagedScenes = Array.isArray(timelineFiles.packagedScenes) ? timelineFiles.packagedScenes : [];
@@ -107,12 +123,19 @@ export function buildCapcutCompileSpec({ project = {}, timeline = {}, timelineFi
     })
     .filter(Boolean);
   const audioItems = [];
+  const voiceoverDuration = Math.max(
+    0.1,
+    Math.min(
+      duration || Number(timeline.metadata?.audio_duration || 0) || 0,
+      Math.max(0.1, Number(timeline.metadata?.audio_duration || duration || 0) - 0.05),
+    ),
+  );
   if (timelineFiles.packagedAudio) {
     audioItems.push({
       ref: "voiceover",
       path: timelineFiles.packagedAudio,
       start: 0,
-      duration,
+      duration: voiceoverDuration,
       volume: 1,
     });
   }
@@ -137,7 +160,8 @@ export function buildCapcutCompileSpec({ project = {}, timeline = {}, timelineFi
     ];
     if (index < videoItems.length - 1) {
       const scene = scenes[index] || {};
-      ops.push({ op: "transition", target: item.ref, slug: scene.transition_type || "dissolve", duration: 0.32 });
+      const transitionSlug = capcutTransitionSlug(scene.transition_type);
+      if (transitionSlug) ops.push({ op: "transition", target: item.ref, slug: transitionSlug, duration: 0.32 });
     }
     return ops;
   });
