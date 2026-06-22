@@ -99,6 +99,10 @@ function renderToolStatus(container, status) {
     : checks.jianyingApp?.ok
       ? "剪映客户端已安装；capcut-cli、命令或母版未就绪时，系统会输出兼容素材包，可直接打开剪映继续制作。"
       : "capcut-cli 未安装、命令不完整或母版缺失，当前使用素材包兼容模式，不会中断任务。";
+  const appInput = document.querySelector("#jianyingAppPathInput");
+  const draftInput = document.querySelector("#jianyingDraftDirInput");
+  if (appInput && !appInput.value.trim() && status?.suggestions?.appPaths?.[0]) appInput.placeholder = status.suggestions.appPaths[0];
+  if (draftInput && !draftInput.value.trim() && status?.suggestions?.draftDirs?.[0]) draftInput.placeholder = status.suggestions.draftDirs[0];
 }
 
 async function refreshToolStatus() {
@@ -121,6 +125,22 @@ function setOptions(select, rows, label, preferred) {
     ? rows.map((row) => `<option value="${escapeHtml(row.id)}">${escapeHtml(label(row))}</option>`).join("")
     : '<option value="">暂无可用数据</option>';
   if ([...select.options].some((option) => option.value === current)) select.value = current;
+}
+
+async function assertJianyingReadyForDraft() {
+  const status = await getJson("/api/video-product/tools");
+  const checks = status.checks || {};
+  const container = document.querySelector("#videoOutputToolStatus");
+  if (container) renderToolStatus(container, status);
+  const missing = [];
+  if (!checks.jianyingApp?.ok) missing.push(`剪映程序路径：${status.suggestions?.appPaths?.[0] || "请填写 JianyingPro.exe 完整路径"}`);
+  if (!checks.draftDirectory?.ok) missing.push(`剪映草稿目录：${status.suggestions?.draftDirs?.[0] || "请填写 com.lveditor.draft 目录"}`);
+  if (!checks.templateMaster?.ok) missing.push(`剪映模板母版：请放到 ${status.suggestions?.templatesRoot || "templates/jianying/<模板ID>/draft_template"}`);
+  if (!missing.length) return status;
+  const message = `一键导入剪映草稿前还缺少：\n\n${missing.join("\n")}\n\n请在本页“本地剪映对接”填写路径或导入模板母版后重试。`;
+  window.alert(message);
+  document.querySelector(".local-jianying-config")?.scrollIntoView({ behavior: "smooth", block: "center" });
+  throw new Error(message);
 }
 
 function compactText(value) {
@@ -514,6 +534,7 @@ async function generateJianyingDraftAndOpen() {
   selectOutputType("jianying_template");
   const status = document.querySelector("#videoProductStatus");
   if (status) status.textContent = "正在一键生成剪映模板草稿...";
+  await assertJianyingReadyForDraft();
   const project = await generateVideoProduct();
   if (status) status.textContent = "剪映草稿任务完成，正在尝试打开剪映专业版...";
   await openJianyingApp();
