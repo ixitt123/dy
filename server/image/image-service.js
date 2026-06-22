@@ -415,7 +415,17 @@ export function createImageService({ baseDir, getSettings, taskStore = null, ffm
     `).run(Math.max(0, Math.min(100, Math.round(Number(progress || 0)))), JSON.stringify(paths), String(error || "").slice(0, 4000), jobId);
   }
 
-  async function generateImage({ prompt, aspectRatio = "1:1", count = 1, sourceType = "manual", sourceId = "", provider = "", jobId: requestedJobId = "" } = {}) {
+  async function generateImage({
+    prompt,
+    aspectRatio = "1:1",
+    count = 1,
+    sourceType = "manual",
+    sourceId = "",
+    provider = "",
+    jobId: requestedJobId = "",
+    folderName: requestedFolderName = "",
+    folderPath: requestedFolderPath = "",
+  } = {}) {
     const cleanPrompt = String(prompt || "").trim();
     if (!cleanPrompt) throw new Error("请先输入图片描述。");
     const settings = getSettings();
@@ -425,8 +435,8 @@ export function createImageService({ baseDir, getSettings, taskStore = null, ffm
     const jobId = requestedJobId || randomUUID();
     const results = [];
     const sceneIndex = sceneIndexFromSourceId(sourceId);
-    const folderName = imageJobFolderName({ jobId, prompt: cleanPrompt, sourceType, sourceId });
-    const folderPath = path.join(outputDir, folderName);
+    const folderName = imageJobFolderName({ jobId, prompt: cleanPrompt, sourceType, sourceId, folderName: requestedFolderName });
+    const folderPath = String(requestedFolderPath || "").trim() || path.join(outputDir, folderName);
     fs.mkdirSync(folderPath, { recursive: true });
 
     const providerInstance = createImageProvider(selected.provider, { config: providers });
@@ -505,6 +515,8 @@ export function createImageService({ baseDir, getSettings, taskStore = null, ffm
           source_url: result.sourceUrl || result.imageUrl || "",
           folderName,
           folderPath,
+          folder_name: folderName,
+          folder_path: folderPath,
           sceneIndex,
           assetOrder: sceneIndex || i + 1,
         });
@@ -544,6 +556,14 @@ export function createImageService({ baseDir, getSettings, taskStore = null, ffm
   async function generateStoryboardImages({ projectId, aspectRatio = "9:16", provider = "", countPerScene = 1 } = {}) {
     const prompts = storyboardImagePrompts({ projectId, aspectRatio });
     const perScene = Math.max(1, Math.min(4, Number(countPerScene) || 1));
+    const folderName = imageJobFolderName({
+      jobId: `storyboard-${projectId}-${Date.now()}`,
+      prompt: `Director #${Number(projectId || 0)} 整套分镜图`,
+      sourceType: "storyboard",
+      sourceId: String(projectId || ""),
+    });
+    const folderPath = path.join(outputDir, folderName);
+    fs.mkdirSync(folderPath, { recursive: true });
     const results = [];
     for (const item of prompts) {
       try {
@@ -554,6 +574,8 @@ export function createImageService({ baseDir, getSettings, taskStore = null, ffm
           count: perScene,
           sourceType: "director",
           sourceId: `${item.projectId}:${item.scene}`,
+          folderName,
+          folderPath,
         });
         for (const result of generated.results || []) {
           results.push({
@@ -583,6 +605,8 @@ export function createImageService({ baseDir, getSettings, taskStore = null, ffm
       failed: results.length - success,
       results,
       prompts,
+      folderName,
+      folderPath,
     };
   }
 
@@ -592,10 +616,18 @@ export function createImageService({ baseDir, getSettings, taskStore = null, ffm
     const jobId = randomUUID();
     const total = prompts.length * perScene;
     const selected = imageProviderFromSettings(getSettings(), provider);
+    const folderName = imageJobFolderName({
+      jobId,
+      prompt: `Director #${Number(projectId || 0)} 整套分镜图`,
+      sourceType: "storyboard",
+      sourceId: String(projectId || ""),
+    });
+    const folderPath = path.join(outputDir, folderName);
+    fs.mkdirSync(folderPath, { recursive: true });
     db.prepare(`
-      INSERT INTO image_jobs (id, source_type, source_id, provider, model, prompt, aspect_ratio, count_requested, status, progress)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(jobId, "storyboard", String(projectId || ""), selected.provider, selected.model, `Director #${Number(projectId || 0)} 整套分镜图`, aspectRatio, total, "生成中", 3);
+      INSERT INTO image_jobs (id, source_type, source_id, provider, model, prompt, aspect_ratio, count_requested, status, progress, folder_name, folder_path)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(jobId, "storyboard", String(projectId || ""), selected.provider, selected.model, `Director #${Number(projectId || 0)} 整套分镜图`, aspectRatio, total, "生成中", 3, folderName, folderPath);
     (async () => {
       const results = [];
       try {
@@ -608,6 +640,8 @@ export function createImageService({ baseDir, getSettings, taskStore = null, ffm
               count: perScene,
               sourceType: "director",
               sourceId: `${item.projectId}:${item.scene}`,
+              folderName,
+              folderPath,
             });
             for (const result of generated.results || []) {
               results.push({ ...result, scene: item.scene, prompt: item.prompt, subtitle: item.subtitle, jobId: generated.jobId });
@@ -633,7 +667,7 @@ export function createImageService({ baseDir, getSettings, taskStore = null, ffm
         `).run(error instanceof Error ? error.message : String(error), jobId);
       }
     })();
-    return { jobId, total, totalScenes: prompts.length };
+    return { jobId, total, totalScenes: prompts.length, folderName, folderPath };
   }
 
   async function testProviderConnection(provider = "") {
