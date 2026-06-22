@@ -4189,6 +4189,7 @@ async function runTranscript() {
         resultBox.textContent = job.text || "文案提取完成";
         setTranscriptActions(job.text || "", job.transcriptPath || "");
         renderFiles(job.files);
+        await continueWorkflowFromTranscript(job, { sourceUrl: text, title: job.title || "" });
         setReady("完成", true);
         finished = true;
       }
@@ -4247,6 +4248,7 @@ async function runLocalVideoTranscript() {
         renderFiles(job.files || allFiles);
         await refreshTasks();
         await refreshTranscripts();
+        await continueWorkflowFromTranscript(job, { sourceUrl: filePath, title: job.title || "" });
         setReady("完成", true);
         finished = true;
       }
