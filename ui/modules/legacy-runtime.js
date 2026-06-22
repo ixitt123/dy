@@ -5240,7 +5240,6 @@ generateVideoProductBtn?.addEventListener("click", () => {
 });
 
 generateVideoProductBtn?.addEventListener("click", (event) => {
-  if (window.__modularVideoOutputReady) return;
   event.preventDefault();
   event.stopImmediatePropagation();
   generateJianyingDraftAndOpenLegacy().catch((error) => {
