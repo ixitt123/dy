@@ -521,7 +521,7 @@ export async function generateVideoProduct() {
   if (missingReason) {
     if (status) status.textContent = missingReason;
     if (!currentVideoProject()?.id) {
-      window.appNavigate?.("dashboard");
+      document.querySelector("#videoProjectReadiness")?.scrollIntoView({ behavior: "smooth", block: "center" });
     } else if (!document.querySelector("#videoProductDirector")?.value) {
       document.querySelector("#videoProductDirector")?.focus();
     } else {
@@ -531,7 +531,7 @@ export async function generateVideoProduct() {
   }
   if (!currentVideoProject()) {
     if (status) status.textContent = "请先在首页新建或选择短视频项目。";
-    window.appNavigate?.("dashboard");
+    document.querySelector("#videoProjectReadiness")?.scrollIntoView({ behavior: "smooth", block: "center" });
     return null;
   }
   if (button) {
@@ -567,7 +567,7 @@ async function generateJianyingDraftAndOpen() {
   const missingReason = generationMissingReason();
   if (missingReason) {
     if (status) status.textContent = missingReason;
-    if (!currentVideoProject()?.id) window.appNavigate?.("dashboard");
+    if (!currentVideoProject()?.id) document.querySelector("#videoProjectReadiness")?.scrollIntoView({ behavior: "smooth", block: "center" });
     else if (!document.querySelector("#videoProductDirector")?.value) document.querySelector("#videoProductDirector")?.focus();
     else document.querySelector("#videoProductAudio")?.focus();
     return null;
