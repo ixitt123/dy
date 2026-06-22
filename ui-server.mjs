@@ -65,11 +65,14 @@ fs.mkdirSync(downloadsDir, { recursive: true });
 fs.mkdirSync(rewritesDir, { recursive: true });
 const taskStore = openTaskStore(__dirname);
 taskStore.resetActiveTasks();
+const projectCenter = createProjectCenter(__dirname);
+let directorService;
 const ttsService = createTtsService({
   baseDir: __dirname,
   taskStore,
   getSettings: readSettings,
   ffmpegPath,
+  onJobCompleted: handleTtsJobCompleted,
 });
 const voiceAssetService = createVoiceAssetService({
   baseDir: __dirname,
@@ -78,11 +81,12 @@ const voiceAssetService = createVoiceAssetService({
   getSettings: readSettings,
   ffmpegPath,
 });
-const directorService = createDirectorService({
+directorService = createDirectorService({
   baseDir: __dirname,
   taskStore,
   generateJson: generateDirectorJson,
   onIdle: scheduleShutdownIfIdle,
+  onProjectCompleted: handleDirectorProjectCompleted,
 });
 const vfoService = createVfoService({
   baseDir: __dirname,

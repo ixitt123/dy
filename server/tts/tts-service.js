@@ -84,7 +84,7 @@ function resolveVoiceSelection(provider, config = {}, input = {}) {
   };
 }
 
-export function createTtsService({ baseDir, taskStore, getSettings, ffmpegPath }) {
+export function createTtsService({ baseDir, taskStore, getSettings, ffmpegPath, onJobCompleted = () => {} }) {
   const outputDir = path.join(baseDir, ".data", "tts", "audio");
   const promptsDir = path.join(baseDir, "prompts");
   const pending = [];
@@ -207,6 +207,7 @@ export function createTtsService({ baseDir, taskStore, getSettings, ffmpegPath }
       }),
       completed_at: new Date().toISOString(),
     });
+    Promise.resolve(onJobCompleted(taskStore.getTtsJob(job.id))).catch(() => {});
   }
 
   async function drain() {
@@ -247,6 +248,8 @@ export function createTtsService({ baseDir, taskStore, getSettings, ffmpegPath }
         queued: true,
         model: voiceSelection.model,
         voice_asset_id: Number(input.voice_asset_id || 0),
+        project_id: String(input.project_id || input.projectId || ""),
+        workflow_auto_director: input.workflow_auto_director !== false,
         default_voice_fallback: voiceSelection.usedFallback,
       }),
     });

@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { createHash } from "node:crypto";
 
 const REQUIRED_SKILLS = [
   "director-system",
@@ -422,7 +423,7 @@ function chatGptImagePromptsMarkdown(project, result) {
   return lines.join("\n");
 }
 
-export function createDirectorService({ baseDir, taskStore, generateJson, onIdle = () => {} }) {
+export function createDirectorService({ baseDir, taskStore, generateJson, onIdle = () => {}, onProjectCompleted = () => {} }) {
   const configPath = path.join(baseDir, "config", "director-system.json");
   const config = JSON.parse(readText(configPath));
   const storyboardsDir = path.join(baseDir, "storyboards");
@@ -621,6 +622,7 @@ export function createDirectorService({ baseDir, taskStore, generateJson, onIdle
           error: "",
         }),
       });
+      Promise.resolve(onProjectCompleted(publicProject(taskStore.getDirectorProject(project.id)))).catch(() => {});
     } catch (error) {
       const latest = taskStore.getDirectorProject(project.id);
       const latestMetadata = safeJson(latest?.metadata_json, metadata);
@@ -678,6 +680,12 @@ export function createDirectorService({ baseDir, taskStore, generateJson, onIdle
         provider: String(input.provider || ""),
         source_type: String(input.source_type || "manual"),
         source_key: String(input.source_key || ""),
+        project_id: String(input.project_id || input.projectId || input.video_project_id || ""),
+        video_project_id: String(input.video_project_id || input.project_id || input.projectId || ""),
+        rewrite_id: String(input.rewrite_id || ""),
+        tts_job_id: Number(input.tts_job_id || input.ttsJobId || 0),
+        audio_duration: ttsDuration,
+        source_text_hash: createHash("sha1").update(sourceText).digest("hex"),
         reference_style: String(input.reference_style || "").trim(),
         save_reference_style: input.save_reference_style !== false,
         shot_count: range.id,
