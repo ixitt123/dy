@@ -160,8 +160,64 @@ function isQwenModel(model) {
   return /^qwen/i.test(model);
 }
 
+const COSYVOICE_INSTRUCT_EMOTIONS = new Set([
+  "neutral",
+  "fearful",
+  "angry",
+  "sad",
+  "surprised",
+  "happy",
+  "disgusted",
+]);
+
+const COSYVOICE_EMOTION_ALIASES = new Map([
+  ["自然", "neutral"],
+  ["中性", "neutral"],
+  ["平静", "neutral"],
+  ["普通", "neutral"],
+  ["默认", "neutral"],
+  ["开心", "happy"],
+  ["高兴", "happy"],
+  ["快乐", "happy"],
+  ["愉快", "happy"],
+  ["兴奋", "happy"],
+  ["惊喜", "surprised"],
+  ["惊讶", "surprised"],
+  ["悲伤", "sad"],
+  ["难过", "sad"],
+  ["伤心", "sad"],
+  ["生气", "angry"],
+  ["愤怒", "angry"],
+  ["害怕", "fearful"],
+  ["恐惧", "fearful"],
+  ["厌恶", "disgusted"],
+  ["嫌弃", "disgusted"],
+]);
+
+function normalizeCosyVoiceEmotion(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  const lower = raw.toLowerCase();
+  if (COSYVOICE_INSTRUCT_EMOTIONS.has(lower)) return lower;
+  return COSYVOICE_EMOTION_ALIASES.get(raw.replace(/\s+/g, "")) || "";
+}
+
+function isValidCosyVoiceInstruction(value) {
+  const text = String(value || "").trim();
+  if (!text || text.length > 100) return false;
+  const emotions = [...COSYVOICE_INSTRUCT_EMOTIONS].join("|");
+  return new RegExp(`^你说话的情感是\\s*(${emotions})。$`).test(text)
+    || new RegExp(`^你正在进行.+，你说话的情感是\\s*(${emotions})。$`).test(text);
+}
+
 function buildInstruction(emotion, stylePrompt) {
   return [emotion ? `情绪：${emotion}` : "", stylePrompt].filter(Boolean).join("；").slice(0, 100);
+}
+
+function buildCosyVoiceInstruction(emotion, stylePrompt) {
+  if (isValidCosyVoiceInstruction(stylePrompt)) return String(stylePrompt).trim();
+  const normalizedEmotion = normalizeCosyVoiceEmotion(emotion);
+  return normalizedEmotion ? `你说话的情感是 ${normalizedEmotion}。` : "";
 }
 
 export class AliyunBailianProvider extends TtsProviderAdapter {
