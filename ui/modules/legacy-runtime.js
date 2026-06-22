@@ -873,6 +873,31 @@ async function openRewriteEditor(taskId) {
   rewritePanel.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
+async function continueWorkflowFromTranscript(job = {}, { sourceUrl = "", title = "" } = {}) {
+  const text = String(job.text || "").trim();
+  if (!text) return null;
+  const currentProject = window.videoProjects?.current?.();
+  const data = await fetchJson("/api/workflow/from-transcript", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      projectId: currentProject?.id || "",
+      taskId: Number(job.taskId || 0),
+      transcriptText: text,
+      title: title || job.title || "",
+      sourceUrl,
+    }),
+  });
+  await window.videoProjects?.refresh?.({ preserveSelection: false });
+  if (data.project?.id) await window.videoProjects?.select?.(data.project.id);
+  await refreshTranscripts();
+  if (data.task?.id) {
+    await openRewriteEditor(data.task.id);
+    rewriteStatus.textContent = `已自动生成标题和项目名，并载入 AI 改写：${data.titles?.projectTitle || data.project?.title || ""}`;
+  }
+  return data;
+}
+
 async function sendTranscriptToTts(taskId) {
   const transcripts = await refreshTranscripts();
   const item = transcripts.find((row) => String(row.id) === String(taskId));

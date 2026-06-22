@@ -3719,6 +3719,84 @@ function transcriptRows() {
     }));
 }
 
+function ensureWorkflowTranscriptTask({ taskId = 0, transcriptText = "", title = "", sourceUrl = "" } = {}) {
+  const existing = taskId ? taskStore.getTask(Number(taskId || 0)) : null;
+  if (existing?.txt_path && fs.existsSync(existing.txt_path)) return existing;
+
+  const text = String(transcriptText || "").trim();
+  if (!text) throw new Error("文案为空，无法创建工作流任务。");
+  const workflowTranscriptDir = path.join(__dirname, ".data", "workflow-transcripts");
+  fs.mkdirSync(workflowTranscriptDir, { recursive: true });
+  const hash = createHash("sha1").update(`${sourceUrl}\n${text}`).digest("hex").slice(0, 16);
+  const transcriptPath = path.join(workflowTranscriptDir, `transcript-${hash}.txt`);
+  fs.writeFileSync(transcriptPath, `${text}\n`, "utf8");
+
+  const imported = taskStore.importTasks([{
+    kind: "workflow-transcript",
+    taskAction: "transcript",
+    url: sourceUrl || `workflow:${hash}`,
+    normalizedUrl: `workflow:${hash}`,
+    sourceText: text.slice(0, 500),
+    transcriptEnabled: true,
+    analysisEnabled: false,
+    onlyTranscript: true,
+  }]);
+  const task = imported.tasks[0] || imported.duplicates[0];
+  if (!task) throw new Error("工作流文案任务创建失败。");
+  return taskStore.updateTask(task.id, {
+    status: TASK_STATUS.DONE,
+    progress: 100,
+    title: title || "自动文案",
+    txt_path: transcriptPath,
+    source_text: text,
+    message: "工作流文案已就绪",
+    completed_at: new Date().toISOString(),
+  });
+}
+
+function updateProjectFromTranscript({ projectId = "", taskId = 0, transcriptText = "", title = "", videoType = "", sourceUrl = "" } = {}) {
+  const task = ensureWorkflowTranscriptTask({ taskId, transcriptText, title, sourceUrl });
+  const text = String(transcriptText || (task.txt_path && fs.existsSync(task.txt_path) ? fs.readFileSync(task.txt_path, "utf8") : "")).trim();
+  if (!text) throw new Error("文案为空，无法推进工作流。");
+  const generated = generatePlatformTitles({
+    transcriptText: text,
+    videoType,
+    fallbackTitle: title || task.title || "",
+  });
+  const existingProject = projectId ? projectCenter.getById(projectId) : null;
+  const project = existingProject || projectCenter.create({
+    title: generated.projectTitle,
+    videoType: videoType || "douyin-knowledge",
+  });
+  const updated = projectCenter.setWorkflowState(project.id, "titles_ready", {
+    title: generated.projectTitle,
+    videoType: videoType || project.videoType || "douyin-knowledge",
+    transcriptText: text,
+    platformTitles: {
+      douyinTitle: generated.douyinTitle,
+      xiaohongshuTitle: generated.xiaohongshuTitle,
+      shipinhaoTitle: generated.shipinhaoTitle,
+      projectTitle: generated.projectTitle,
+      riskNotes: generated.riskNotes,
+    },
+    seoKeywords: generated.seoKeywords,
+    hashtags: generated.hashtags,
+    lastTaskId: task.id,
+    workflowError: {},
+  });
+  projectCenter.linkAsset(updated.id, "transcript", task.id, title || task.title || generated.projectTitle, {
+    text,
+    taskId: task.id,
+    txtPath: task.txt_path,
+    source: sourceUrl ? "downloaded" : "workflow",
+  });
+  return {
+    project: projectCenter.setWorkflowState(updated.id, "titles_ready"),
+    task,
+    titles: generated,
+  };
+}
+
 function directorSourceRows() {
   const sources = [];
   for (const item of transcriptRows()) {
@@ -4981,6 +5059,30 @@ const server = http.createServer(async (req, res) => {
     }
 
     // ===== ProjectCenter API =====
+    if (url.pathname === "/api/workflow/from-transcript" && req.method === "POST") {
+      try {
+        const body = await readJsonBody(req);
+        const result = updateProjectFromTranscript({
+          projectId: body.projectId || "",
+          taskId: Number(body.taskId || 0),
+          transcriptText: body.transcriptText || body.text || "",
+          title: body.title || "",
+          videoType: body.videoType || "",
+          sourceUrl: body.sourceUrl || body.url || "",
+        });
+        sendJson(res, 200, { ok: true, ...result });
+      } catch (error) {
+        sendJson(res, 400, { ok: false, message: error instanceof Error ? error.message : String(error) });
+      }
+      return;
+    }
+
+    if (url.pathname === "/api/workflow/status" && req.method === "GET") {
+      const project = projectCenter.getById(url.searchParams.get("id") || "");
+      sendJson(res, project ? 200 : 404, project ? { ok: true, project, workflowState: project.workflowState } : { ok: false, message: "短视频项目不存在。" });
+      return;
+    }
+
     if (url.pathname === "/api/projects" && req.method === "GET") {
       sendJson(res, 200, { ok: true, projects: projectCenter.list({ limit: url.searchParams.get("limit") || 100 }) });
       return;
