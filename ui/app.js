@@ -24,7 +24,11 @@ const modules = [
 
 async function startApplication() {
   for (const initialize of modules) {
-    await initialize();
+    try {
+      await initialize();
+    } catch (error) {
+      console.error("模块初始化失败", initialize.name || "anonymous", error);
+    }
   }
   document.documentElement.dataset.appReady = "true";
 }

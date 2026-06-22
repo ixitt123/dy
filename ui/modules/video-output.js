@@ -511,12 +511,27 @@ function payload() {
 export async function generateVideoProduct() {
   const status = document.querySelector("#videoProductStatus");
   const button = document.querySelector("#generateVideoProduct");
+  const missingReason = generationMissingReason();
+  if (missingReason) {
+    if (status) status.textContent = missingReason;
+    if (!currentVideoProject()?.id) {
+      window.appNavigate?.("dashboard");
+    } else if (!document.querySelector("#videoProductDirector")?.value) {
+      document.querySelector("#videoProductDirector")?.focus();
+    } else {
+      document.querySelector("#videoProductAudio")?.focus();
+    }
+    return null;
+  }
   if (!currentVideoProject()) {
     if (status) status.textContent = "请先在首页新建或选择短视频项目。";
     window.appNavigate?.("dashboard");
     return null;
   }
-  if (button) button.disabled = true;
+  if (button) {
+    button.dataset.running = "true";
+    button.disabled = true;
+  }
   try {
     if (!state.preview) await previewVideoProductTimeline();
     if (status) status.textContent = "正在同步项目文案、语音、导演稿、素材和 BGM...";
@@ -532,6 +547,10 @@ export async function generateVideoProduct() {
     if (status) status.textContent = error.message;
     throw error;
   } finally {
+    if (button) {
+      button.dataset.running = "false";
+      button.disabled = false;
+    }
     updateGenerateAvailability();
   }
 }
@@ -539,6 +558,14 @@ export async function generateVideoProduct() {
 async function generateJianyingDraftAndOpen() {
   selectOutputType("jianying_template");
   const status = document.querySelector("#videoProductStatus");
+  const missingReason = generationMissingReason();
+  if (missingReason) {
+    if (status) status.textContent = missingReason;
+    if (!currentVideoProject()?.id) window.appNavigate?.("dashboard");
+    else if (!document.querySelector("#videoProductDirector")?.value) document.querySelector("#videoProductDirector")?.focus();
+    else document.querySelector("#videoProductAudio")?.focus();
+    return null;
+  }
   if (status) status.textContent = "正在一键生成剪映模板草稿...";
   await assertJianyingReadyForDraft();
   const project = await generateVideoProduct();
@@ -656,13 +683,20 @@ function bindEvents() {
     const status = document.querySelector("#videoProductStatus");
     if (status) status.textContent = error.message;
   }));
-  document.querySelector("#generateVideoProduct")?.addEventListener("click", () => generateJianyingDraftAndOpen().catch(() => {}));
+  document.querySelector("#generateVideoProduct")?.addEventListener("click", () => generateJianyingDraftAndOpen().catch((error) => {
+    const status = document.querySelector("#videoProductStatus");
+    if (status) status.textContent = error.message || "生成剪映草稿失败，请检查生成前检查面板。";
+    else window.alert(error.message || "生成剪映草稿失败，请检查生成前检查面板。");
+  }));
   document.querySelector("#openVideoProductOutput")?.addEventListener("click", () => openVideoProductOutput().catch(() => {}));
   document.addEventListener("keydown", (event) => {
     if (!(event.ctrlKey && event.shiftKey && event.key.toLowerCase() === "j")) return;
     if (document.querySelector("#videoOutputPage")?.classList.contains("active") === false) return;
     event.preventDefault();
-    generateJianyingDraftAndOpen().catch(() => {});
+    generateJianyingDraftAndOpen().catch((error) => {
+      const status = document.querySelector("#videoProductStatus");
+      if (status) status.textContent = error.message || "生成剪映草稿失败，请检查生成前检查面板。";
+    });
   });
   document.querySelector("#clearVideoProductProjects")?.addEventListener("click", () => clearVideoProductProjects().catch((error) => window.alert(error.message)));
   document.querySelector("#videoProductProjects")?.addEventListener("click", (event) => {
