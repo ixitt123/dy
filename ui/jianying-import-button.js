@@ -115,9 +115,11 @@
   }
 
   window.importJianyingDraftNow = importJianyingDraft;
-  window.addEventListener("DOMContentLoaded", () => {
+  function bind() {
     const button = document.querySelector("#generateVideoProduct");
     if (!button) return;
     button.addEventListener("click", importJianyingDraft, { capture: true });
-  });
+  }
+  if (document.readyState === "loading") window.addEventListener("DOMContentLoaded", bind);
+  else bind();
 })();

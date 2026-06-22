@@ -5239,14 +5239,6 @@ generateVideoProductBtn?.addEventListener("click", () => {
   generateJianyingDraftAndOpenLegacy();
 });
 
-generateVideoProductBtn?.addEventListener("click", (event) => {
-  event.preventDefault();
-  event.stopImmediatePropagation();
-  generateJianyingDraftAndOpenLegacy().catch((error) => {
-    if (videoProductStatus) videoProductStatus.textContent = error instanceof Error ? error.message : String(error);
-  });
-}, { capture: true });
-
 document.addEventListener("keydown", (event) => {
   if (window.__modularVideoOutputReady) return;
   if (!(event.ctrlKey && event.shiftKey && event.key.toLowerCase() === "j")) return;
