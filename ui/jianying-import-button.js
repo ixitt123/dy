@@ -26,6 +26,32 @@
     return projects[0]?.id || "";
   }
 
+  async function ensureProjectId() {
+    const existing = await currentProjectId();
+    if (existing) return existing;
+    const director = document.querySelector("#videoProductDirector");
+    const title = director?.selectedOptions?.[0]?.textContent?.replace(/^#\d+\s*/, "").replace(/·.*$/, "").trim()
+      || "剪映草稿项目";
+    const created = await requestJson("/api/projects", {
+      method: "POST",
+      body: JSON.stringify({
+        title,
+        videoType: "短视频",
+        outputMode: "jianying_template",
+      }),
+    });
+    const projectId = created.project?.id || "";
+    if (!projectId) throw new Error("自动创建短视频项目失败。");
+    localStorage.setItem("active-video-project-id", projectId);
+    const selector = document.querySelector("#activeVideoProjectSelect");
+    if (selector) {
+      selector.innerHTML = `<option value="${projectId}">${title}</option>`;
+      selector.value = projectId;
+    }
+    status(`已自动创建短视频项目：${title}`);
+    return projectId;
+  }
+
   function payload(projectId) {
     const manualBindings = {};
     document.querySelectorAll(".video-product-image-select").forEach((select) => {
@@ -74,11 +100,7 @@
       button.disabled = true;
     }
     try {
-      const projectId = await currentProjectId();
-      if (!projectId) {
-        status("请先新建或选择一个短视频项目；当前不会跳转页面。");
-        return;
-      }
+      const projectId = await ensureProjectId();
       const body = payload(projectId);
       if (!body.source_director_project_id) {
         status("请先选择已完成的导演稿。");
