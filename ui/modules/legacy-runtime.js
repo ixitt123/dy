@@ -262,6 +262,7 @@ let directorSources = [];
 let directorProjectsState = [];
 let activeDirectorProject = null;
 let activeDirectorRailProject = null;
+let activeDirectorRailSignature = "";
 let activeDirectorTab = "shot-list";
 let directorSourceContext = { taskId: 0, rewriteId: 0, sourceKey: "", sourceType: "manual" };
 let directorPollTimer = 0;
@@ -2198,6 +2199,9 @@ function renderDirectorRail(project = activeDirectorRailProject) {
   const scenes = meta.scene_count || project.result?.storyboard?.length || project.scenes?.length || meta.shot_count || directorShotCount?.value || "-";
   const textPreview = String(project.source_text || directorSourceText?.value || "").trim().slice(0, 72);
   const error = meta.error || project.error || "";
+  const signature = [project.id || "", project.status || "", progress, scenes, title, textPreview, error].join("|");
+  if (signature === activeDirectorRailSignature) return;
+  activeDirectorRailSignature = signature;
   railCurrentTask.innerHTML = `
     <div class="rail-video-product-card rail-director-card">
       <strong>#${project.id || "-"} ${escapeHtml(title)}</strong>
