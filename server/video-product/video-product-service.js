@@ -1204,13 +1204,14 @@ export function createVideoProductService({
     return score;
   }
 
-  function selectBgmAsset({ preferredId = "", strategy = "auto", styleId = ROUTE_A_DEFAULT_STYLE_ID } = {}) {
+  function selectBgmAsset({ preferredId = "", strategy = "none", styleId = ROUTE_A_DEFAULT_STYLE_ID } = {}) {
     const assets = listBgmAssets();
     const preferred = preferredId
       ? assets.find((asset) => String(asset.id) === String(preferredId) || path.resolve(asset.path) === path.resolve(String(preferredId)))
       : null;
     if (preferred) return { path: preferred.path, source: "manual", label: preferred.filename, asset: preferred };
     if (strategy === "manual" || strategy === "none") return { path: "", source: "none", label: "", asset: null };
+    if (strategy === "generated_default") return { path: "", source: "generated_default", label: "generated_default", asset: null };
     if (assets.length) {
       const selected = assets
         .map((asset) => ({ asset, score: scoreBgmAsset(asset, styleId) }))
@@ -1349,6 +1350,7 @@ export function createVideoProductService({
         bgm_keywords: preset.bgmKeywords,
       })),
       bgmStrategies: [
+        { id: "none", label: "不使用 BGM", description: "默认选项；没有手动选择音乐时，不向剪映草稿写入背景音乐。" },
         { id: "auto", label: "自动匹配", description: "手动选择优先；未选时按风格匹配本地 BGM；本地没有时生成基础氛围 BGM。" },
         { id: "manual", label: "手动本地 BGM", description: "只使用下方指定的本地 BGM，适合已经有授权音乐的成片。" },
         { id: "local_auto", label: "本地库自动匹配", description: "根据路线 A 风格从本地 BGM 库自动选择，找不到时再基础生成。" },
@@ -1583,7 +1585,7 @@ export function createVideoProductService({
         route_a_intro_seconds: routeAIntroSeconds,
         route_a_style_id: routeAStyleId(input.route_a_style_id || input.style_id),
         route_a_style: routeAStyleContract(input),
-        route_a_bgm_strategy: String(input.bgm_strategy || "auto"),
+        route_a_bgm_strategy: String(input.bgm_strategy || "none"),
         route_a_bgm_asset_id: String(input.bgm_asset_id || ""),
         route_a_auto_preview: routeAAutoPreview,
         route_a_skill_chain: ROUTE_A_SKILL_CHAIN,
@@ -1844,13 +1846,17 @@ ${sceneMarkup}
     let packagedBgm = "";
     let bgmSourceKind = "none";
     let bgmLabel = "";
-    const bgmSelection = project.output_type === "template_mp4"
-      ? selectBgmAsset({
-        preferredId: projectMetadata.bgm_asset_id || timeline.metadata?.route_a_bgm_asset_id || "",
-        strategy: projectMetadata.bgm_strategy || timeline.metadata?.route_a_bgm_strategy || "auto",
-        styleId: routeAStyle,
-      })
-      : { path: findBgmAsset(), source: "local_auto", label: "本地 BGM", asset: null };
+    const bgmSelection = selectBgmAsset({
+      preferredId: projectMetadata.bgm_asset_id || timeline.metadata?.route_a_bgm_asset_id || "",
+      strategy: projectMetadata.bgm_strategy || timeline.metadata?.route_a_bgm_strategy || "none",
+      styleId: routeAStyle,
+    });
+    if (bgmSelection.source === "generated_default") {
+      const generatedPath = path.join(audioDir, "bgm_generated_default.wav");
+      const generated = writeDefaultBgmWav(generatedPath, timeline.duration, routeAStyle);
+      bgmSelection.path = generated.path;
+      bgmSelection.label = generated.label;
+    }
     if (bgmSelection.path && fs.existsSync(bgmSelection.path)) {
       const ext = path.extname(bgmSelection.path) || ".mp3";
       packagedBgm = path.join(audioDir, `bgm${ext}`);
@@ -2613,7 +2619,7 @@ ${sceneMarkup}
         manual_bindings: input.manual_bindings || {},
         route_a_style_id: routeAStyleId(input.route_a_style_id || input.style_id),
         route_a_custom_style: String(input.route_a_custom_style || input.custom_style || ""),
-        bgm_strategy: String(input.bgm_strategy || "auto"),
+        bgm_strategy: String(input.bgm_strategy || "none"),
         bgm_asset_id: String(input.bgm_asset_id || ""),
         jianying_template: String(input.jianying_template || "education_tips"),
         render_engine: outputType === "template_mp4" ? "ffmpeg_stable_with_hyperframes_package" : "ffmpeg",

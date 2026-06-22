@@ -387,6 +387,21 @@ async function refreshProjectReadiness() {
 }
 
 async function syncCurrentVideoProductSelections() {
+  if (!currentVideoProjectId()) {
+    const directorSelect = typeof videoProductDirector !== "undefined" ? videoProductDirector : null;
+    const title = directorSelect?.selectedOptions?.[0]?.textContent
+      ?.replace(/^#\d+\s*/, "")
+      .replace(/路.*$/, "")
+      .trim() || "剪映草稿项目";
+    const created = await createVideoProject({
+      title,
+      videoType: "短视频",
+      outputMode: "jianying_template",
+    });
+    if (!created?.id) throw new Error("自动创建短视频项目失败。");
+    await loadVideoProjects();
+    setActiveVideoProject(created.id);
+  }
   if (!currentVideoProjectId()) throw new Error("请先在首页新建或选择一个短视频项目。");
   const outputType = typeof videoProductOutputType !== "undefined" ? videoProductOutputType.value : "jianying_template";
   await updateCurrentVideoProject({ outputMode: outputType });
@@ -427,8 +442,8 @@ async function syncCurrentVideoProductSelections() {
     });
   }
 
-  if (typeof videoProductBgmStrategy !== "undefined") {
-    const selectedBgmId = videoProductBgm?.value || `${videoProductBgmStrategy.value || "auto"}-bgm`;
+  if (typeof videoProductBgmStrategy !== "undefined" && videoProductBgm?.value) {
+    const selectedBgmId = videoProductBgm.value;
     const selectedBgm = videoProductSources.bgmAssets?.find((item) => String(item.id) === String(selectedBgmId));
     await linkCurrentProjectAsset("bgm", selectedBgmId, selectedBgm?.title || selectedBgm?.filename || "自动匹配本地 BGM", {
       path: selectedBgm?.path || "",
