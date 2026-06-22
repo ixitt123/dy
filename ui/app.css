@@ -4084,6 +4084,11 @@ a {
   display: none !important;
 }
 
+.dashboard-intro[hidden],
+.project-workbench-grid[hidden] {
+  display: none !important;
+}
+
 .module-page-head,
 .dashboard-intro,
 .panel-heading {
