@@ -68,6 +68,22 @@ function providerConfig(settings, providerId) {
   return tts[providerId] || {};
 }
 
+function resolveVoiceSelection(provider, config = {}, input = {}) {
+  const requestedVoice = String(input.voice_id || config.default_voice || "").trim();
+  const requestedModel = String(input.model || config.default_model || "").trim();
+  const presets = typeof provider?.listPresetVoices === "function" ? provider.listPresetVoices() : [];
+  const selectedPreset = requestedVoice
+    ? presets.find((voice) => voice.id === requestedVoice)
+    : presets.find((voice) => requestedModel && voice.model === requestedModel) || presets[0] || null;
+  const voiceId = requestedVoice || selectedPreset?.id || "";
+  return {
+    voiceId,
+    voiceName: String(input.voice_name || selectedPreset?.name || "").trim(),
+    model: String(input.model || selectedPreset?.model || "").trim(),
+    usedFallback: !requestedVoice && Boolean(voiceId),
+  };
+}
+
 export function createTtsService({ baseDir, taskStore, getSettings, ffmpegPath }) {
   const outputDir = path.join(baseDir, ".data", "tts", "audio");
   const promptsDir = path.join(baseDir, "prompts");
@@ -211,12 +227,14 @@ export function createTtsService({ baseDir, taskStore, getSettings, ffmpegPath }
     if (validationError) return { error: validationError };
     const settings = getSettings();
     const provider = String(input.provider || settings.tts?.default_provider || "aliyun_bailian");
+    const providerAdapter = getProvider(provider);
+    const voiceSelection = resolveVoiceSelection(providerAdapter, providerConfig(settings, provider), input);
     const job = taskStore.createTtsJob({
       task_id: input.task_id,
       rewrite_id: input.rewrite_id,
       provider,
-      voice_id: String(input.voice_id || providerConfig(settings, provider).default_voice || ""),
-      voice_name: String(input.voice_name || ""),
+      voice_id: voiceSelection.voiceId,
+      voice_name: voiceSelection.voiceName,
       text: String(input.text || "").trim(),
       emotion: String(input.emotion || "自然"),
       style_prompt: String(input.style_prompt || ""),
@@ -227,8 +245,9 @@ export function createTtsService({ baseDir, taskStore, getSettings, ffmpegPath }
       status: "waiting",
       metadata_json: JSON.stringify({
         queued: true,
-        model: String(input.model || ""),
+        model: voiceSelection.model,
         voice_asset_id: Number(input.voice_asset_id || 0),
+        default_voice_fallback: voiceSelection.usedFallback,
       }),
     });
     if (Number(input.voice_asset_id || 0) > 0) taskStore.recordVoiceUse(Number(input.voice_asset_id));
