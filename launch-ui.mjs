@@ -52,7 +52,7 @@ if (url) {
   process.exit(0);
 }
 
-spawn(process.execPath, ["ui-server.mjs", "--open", "--auto-close"], {
+spawn(process.execPath, ["ui-server.mjs", "--open"], {
   cwd: __dirname,
   detached: true,
   stdio: "ignore",
