@@ -1036,6 +1036,19 @@ export function createVideoProductService({
     return targetPath;
   }
 
+  function removeInvalidGeneratedDraftPath(draftPath) {
+    const draftPathInput = String(draftPath || "").trim();
+    if (!draftPathInput || hasJianyingDraftFiles(draftPathInput)) return false;
+    const status = capcutCliAdapter?.detect?.() || {};
+    const draftDirectory = String(status.paths?.draftDirectory || "").trim();
+    if (!draftDirectory || !fs.existsSync(draftDirectory)) return false;
+    const resolvedDraftPath = path.resolve(draftPathInput);
+    if (!isInsideDirectory(draftDirectory, resolvedDraftPath)) return false;
+    if (!/^codex_/i.test(path.basename(resolvedDraftPath))) return false;
+    fs.rmSync(resolvedDraftPath, { recursive: true, force: true });
+    return true;
+  }
+
   function collectVisibleDraftSeeds(rootDir, { maxDepth = 2, includeCodex = false } = {}) {
     const seeds = [];
     function visit(dir, depth) {
@@ -2689,6 +2702,9 @@ ${sceneMarkup}
           capcutResult.localJianyingDraftPath = localJianyingDraftPath;
           capcutResult.files = [...(capcutResult.files || []), localJianyingDraftPath];
           capcutResult.warnings = [...(capcutResult.warnings || []), "已同步到本机剪映草稿目录。"];
+        }
+        if (!localJianyingDraftPath && removeInvalidGeneratedDraftPath(capcutResult.draftPath || "")) {
+          capcutResult.warnings = [...(capcutResult.warnings || []), "已清理 capcut-cli 生成的空草稿目录。"];
         }
         if (!localJianyingDraftPath) {
           const fallbackDraft = createVisibleJianyingDraftFallback(
