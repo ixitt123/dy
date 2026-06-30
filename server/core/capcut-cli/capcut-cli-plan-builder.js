@@ -144,6 +144,14 @@ function buildTextRangeOperation(target, text, keywords, style = {}) {
   return { op: "text-ranges", target, ranges };
 }
 
+function sceneMetadata(scene = {}) {
+  try {
+    return typeof scene.metadata_json === "string" ? JSON.parse(scene.metadata_json) : (scene.metadata_json || {});
+  } catch {
+    return {};
+  }
+}
+
 export function buildCapcutCliPlan({ project = {}, timeline = {}, timelineFiles = {}, templateName = "education_tips" } = {}) {
   const templatePreset = getJianyingTemplatePreset(templateName);
   const scenes = Array.isArray(timeline.scenes) ? timeline.scenes : [];
@@ -214,24 +222,38 @@ export function buildCapcutCompileSpec({ project = {}, timeline = {}, timelineFi
   const [width, height] = String(project.resolution || timeline.resolution || "1080x1920")
     .split("x")
     .map((value) => Number(value) || 0);
-  const videoItems = scenes
+  const rawVideoItems = scenes
     .map((scene, index) => {
       const packaged = packagedScenes[index] || {};
       const source = firstValue(packaged.packaged_video_path, packaged.packaged_image_path, scene.video_path, scene.image_path);
       if (!source) return null;
       const isPhoto = !String(source).toLowerCase().match(/\.(mp4|mov|m4v|webm|avi|mkv)$/);
+      const metadata = sceneMetadata(scene);
       return {
         ref: `scene_${String(index + 1).padStart(2, "0")}`,
         path: source,
+        visualKey: firstValue(metadata.source_scene_index, scene.source_scene_index, scene.director_scene_index, scene.scene_index, index + 1),
         type: isPhoto ? "photo" : undefined,
         start: Number(scene.start_time || 0),
         duration: Math.max(0.1, Number(scene.duration || 0)),
         width: width || 1080,
         height: height || 1920,
         scale: Number(templatePreset.motion?.fromScale || 1.04),
+        sourceScene: scene,
       };
     })
     .filter(Boolean);
+  const videoItems = rawVideoItems.reduce((items, item) => {
+    const previous = items.at(-1);
+    if (previous && String(previous.visualKey) === String(item.visualKey)) {
+      const previousEnd = previous.start + previous.duration;
+      const itemEnd = item.start + item.duration;
+      previous.duration = Number((Math.max(previousEnd, itemEnd) - previous.start).toFixed(3));
+      return items;
+    }
+    items.push({ ...item, ref: `scene_${String(items.length + 1).padStart(2, "0")}` });
+    return items;
+  }, []);
   const captionStyle = templatePreset.caption || {};
   const titleStyle = templatePreset.titleCard || {};
   const ctaStyle = templatePreset.ctaCard || {};
@@ -299,7 +321,7 @@ export function buildCapcutCompileSpec({ project = {}, timeline = {}, timelineFi
     });
   }
   const tracks = [
-    videoItems.length ? { type: "video", name: "director-images", items: videoItems } : null,
+    videoItems.length ? { type: "video", name: "director-images", items: videoItems.map(({ visualKey, sourceScene, ...item }) => item) } : null,
     audioItems.length ? { type: "audio", name: "audio", items: audioItems } : null,
     textItems.length ? { type: "text", name: "subtitles", items: textItems } : null,
   ].filter(Boolean);
@@ -309,7 +331,7 @@ export function buildCapcutCompileSpec({ project = {}, timeline = {}, timelineFi
       { op: "keyframe", target: item.ref, property: "uniform_scale", time: item.start + item.duration, value: Number(templatePreset.motion?.toScale || 1.06) },
     ];
     if (index < videoItems.length - 1) {
-      const scene = scenes[index] || {};
+      const scene = item.sourceScene || scenes[index] || {};
       const transitionSlug = pickTemplateTransition(templatePreset, index, scene.transition_type);
       if (transitionSlug) ops.push({ op: "transition", target: item.ref, slug: transitionSlug, duration: 0.32 });
     }
