@@ -1291,25 +1291,31 @@ function publicUnifiedProviders(settings = readSettings()) {
     });
   }
 
-  const jamendo = settings.bgmProviders?.jamendo || {};
-  providers.push({
-    id: "jamendo_bgm",
-    label: jamendo.label || "Jamendo",
-    group: "BGM 音乐",
-    feature: "BGM 自动匹配、下载入库、120-150 BPM 合拍筛选",
-    description: "用于自动搜索可下载的 Creative Commons 音乐。自动流程会过滤 NC/ND 授权，并只使用能确认 120-150 BPM 的曲目；未配置时不影响本地 BGM 和基础节奏。",
-    configured: Boolean(jamendo.client_id || jamendo.clientId || jamendo.apiKey),
-    apiKeyMask: maskApiKey(jamendo.client_id || jamendo.clientId || jamendo.apiKey || ""),
-    baseUrl: jamendo.base_url || jamendo.baseUrl || "https://api.jamendo.com/v3.0",
-    model: "tracks",
-    models: ["tracks"],
-    applyUrl: "https://developer.jamendo.com/v3.0",
-    balanceUrl: "https://developer.jamendo.com/v3.0",
-    activeDefault: false,
-    supportsBaseUrl: true,
-    supportsModel: false,
-    enabled: jamendo.enabled !== false,
-  });
+  for (const def of BGM_PROVIDER_DEFS) {
+    const config = settings.bgmProviders?.[def.key] || {};
+    const apiKey = config[def.apiKeyField || "api_key"] || config.apiKey || "";
+    providers.push({
+      id: def.id,
+      label: config.label || def.label,
+      group: "BGM 音乐",
+      feature: def.feature,
+      description: def.description,
+      configured: Boolean(apiKey),
+      apiKeyMask: maskApiKey(apiKey),
+      baseUrl: config.base_url || config.baseUrl || def.baseUrl,
+      workspaceId: def.workspaceField ? config[def.workspaceField] || "" : "",
+      model: config.model || def.model,
+      models: def.models,
+      applyUrl: def.applyUrl,
+      balanceUrl: def.balanceUrl,
+      activeDefault: false,
+      supportsBaseUrl: true,
+      supportsWorkspace: Boolean(def.workspaceField),
+      supportsModel: true,
+      enabled: config.enabled !== false,
+      paymentMethods: Array.isArray(config.payment_methods) ? config.payment_methods : ["alipay", "wechat_pay"],
+    });
+  }
 
   return providers;
 }
@@ -1395,15 +1401,24 @@ function saveUnifiedProvider(settings, body) {
     return;
   }
 
-  if (id === "jamendo_bgm") {
+  const bgmDef = BGM_PROVIDER_DEFS.find((item) => item.id === id);
+  if (bgmDef) {
     if (!settings.bgmProviders) settings.bgmProviders = {};
-    settings.bgmProviders.jamendo = {
-      ...(settings.bgmProviders.jamendo || {}),
-      label: "Jamendo",
-      ...(apiKey ? { client_id: apiKey } : {}),
-      ...(body.baseUrl !== undefined ? { base_url: baseUrl || "https://api.jamendo.com/v3.0" } : {}),
+    const existing = settings.bgmProviders[bgmDef.key] || {};
+    const apiKeyField = bgmDef.apiKeyField || "api_key";
+    const workspaceField = bgmDef.workspaceField || "app_id";
+    const secretField = bgmDef.secretField || "secret";
+    const nextProvider = {
+      ...existing,
+      label: bgmDef.label,
+      ...(apiKey ? { [apiKeyField]: apiKey } : {}),
+      ...(body.baseUrl !== undefined ? { base_url: baseUrl || bgmDef.baseUrl || "" } : {}),
+      ...(body.model !== undefined ? { model: model || bgmDef.model || "" } : {}),
       enabled: body.enabled !== false,
     };
+    if (workspaceField && body.workspaceId !== undefined) nextProvider[workspaceField] = workspaceId;
+    if (secretField && body.secret !== undefined) nextProvider[secretField] = String(body.secret || "").trim();
+    settings.bgmProviders[bgmDef.key] = nextProvider;
     return;
   }
 
@@ -3931,14 +3946,6 @@ function updateProjectFromTranscript({ projectId = "", taskId = 0, transcriptTex
     project: projectCenter.setWorkflowState(updated.id, "titles_ready"),
     task,
     titles: generated,
-  };
-  next.bgmProviders = {
-    jamendo: {
-      label: "Jamendo",
-      base_url: String(bgmProviders.jamendo?.base_url || bgmProviders.jamendo?.baseUrl || "https://api.jamendo.com/v3.0").trim(),
-      client_id: String(bgmProviders.jamendo?.client_id || bgmProviders.jamendo?.clientId || bgmProviders.jamendo?.apiKey || "").trim(),
-      enabled: bgmProviders.jamendo?.enabled !== false,
-    },
   };
 }
 
