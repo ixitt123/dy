@@ -74,6 +74,61 @@
       "model": "flux-dev"
     }
   },
+  "bgmProviders": {
+    "hifive": {
+      "label": "HIFIVE 音加加 / 曲多多",
+      "base_url": "https://open.haifanwu.com",
+      "app_id": "",
+      "api_key": "",
+      "secret": "",
+      "model": "short_video",
+      "license_plan": "",
+      "payment_methods": ["alipay", "wechat_pay"],
+      "enabled": true
+    },
+    "vfine": {
+      "label": "Vfine Music",
+      "base_url": "https://www.vfinemusic.com",
+      "app_id": "",
+      "api_key": "",
+      "secret": "",
+      "model": "commercial_music",
+      "license_plan": "",
+      "payment_methods": ["alipay", "wechat_pay"],
+      "enabled": true
+    },
+    "kanjian_starlink": {
+      "label": "看见音乐 STARLINK",
+      "base_url": "https://open.kanjian.com",
+      "app_id": "",
+      "api_key": "",
+      "secret": "",
+      "model": "soundtrack",
+      "license_plan": "",
+      "payment_methods": ["alipay", "wechat_pay"],
+      "enabled": true
+    },
+    "tme_opencloud": {
+      "label": "腾讯音乐音乐云",
+      "base_url": "https://opencloud.tencentmusic.com",
+      "app_id": "",
+      "api_key": "",
+      "secret": "",
+      "model": "commercial_catalog",
+      "license_plan": "",
+      "payment_methods": ["alipay", "wechat_pay"],
+      "enabled": true
+    },
+    "jamendo": {
+      "label": "Jamendo",
+      "base_url": "https://api.jamendo.com/v3.0",
+      "client_id": "",
+      "model": "tracks",
+      "license_plan": "license_review",
+      "payment_methods": [],
+      "enabled": true
+    }
+  },
   "modelMap": {
     "image": { "provider": "volcengine_ark", "model": "doubao-seedream-5-0-lite-260128" },
     "tts": { "provider": "aliyun_bailian", "model": "cosyvoice-v2" }
