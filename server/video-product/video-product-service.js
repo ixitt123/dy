@@ -3236,6 +3236,9 @@ ${sceneMarkup}
         bgm_strategy: String(input.bgm_strategy || "auto"),
         bgm_asset_id: String(input.bgm_asset_id || ""),
         jianying_template: String(input.jianying_template || "education_tips"),
+        force_execution: input.force_execution === true,
+        force_timeline_blockers: input.force_timeline_blockers === true || input.force_execution === true,
+        force_quality_review: input.force_quality_review === true || input.force_execution === true,
         render_engine: outputType === "template_mp4"
           ? "ffmpeg_stable_with_hyperframes_package"
           : outputType === "jianying_template"
