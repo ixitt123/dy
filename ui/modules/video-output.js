@@ -334,8 +334,14 @@ export async function loadVideoProductSources() {
   setOptions(document.querySelector("#videoProductBgm"), [{ id: "", filename: "自动匹配本地 BGM；没有则基础生成" }, ...(data.bgmAssets || [])], bgmOptionLabel, preferred.bgmId);
   setOptions(document.querySelector("#videoProductRouteAStyle"), data.routeAStyles || [], (row) => row.label || row.id);
   setOptions(document.querySelector("#videoProductBgmStrategy"), data.bgmStrategies || [], (row) => row.label || row.id, "none");
-  if (!preferred.directorId && directorSelect && !directorSelect.value && data.directors?.[0]?.id) directorSelect.value = String(data.directors[0].id);
-  if (!preferred.audioId && audioSelect && !audioSelect.value && data.audioJobs?.[0]?.id) audioSelect.value = String(data.audioJobs[0].id);
+  if (directorSelect && !directorSelect.value && data.directors?.length) {
+    const latestDirector = data.directors.slice().sort((a, b) => Number(b.id || 0) - Number(a.id || 0))[0];
+    if (latestDirector?.id) directorSelect.value = String(latestDirector.id);
+  }
+  if (audioSelect && !audioSelect.value && data.audioJobs?.length) {
+    const latestAudio = data.audioJobs.slice().sort((a, b) => Number(b.id || 0) - Number(a.id || 0))[0];
+    if (latestAudio?.id) audioSelect.value = String(latestAudio.id);
+  }
   renderJianyingTemplateOptions();
   state.manualBindings = {};
   state.preview = null;
@@ -548,6 +554,7 @@ async function handleReadinessAction(action) {
   const status = document.querySelector("#videoProductStatus");
   if (!action) return;
   if (action === "voice") {
+    await ensureVideoProjectForOutput();
     await loadVideoProductSources();
     const audio = selectLatestAvailableAudio();
     if (!audio) {
@@ -561,10 +568,12 @@ async function handleReadinessAction(action) {
     return;
   }
   if (action === "assets") {
+    await ensureVideoProjectForOutput();
     await autoMatchExistingImageAssets();
     return;
   }
   if (action === "template") {
+    await ensureVideoProjectForOutput();
     await selectAndLinkTemplate();
     return;
   }
@@ -631,8 +640,9 @@ export async function syncSelectionsToProject({ preview = state.preview } = {}) 
     await window.videoProjects.linkCurrent("template", template?.value || "education_tips", templateConfig?.name || template?.selectedOptions?.[0]?.textContent || "学习技巧模板", {
       ...templateConfig,
       ratio: templateConfig?.ratio || "9:16",
-      source: "local_upload",
-      status: templateConfig?.hasMaster === false ? "missing_master" : "ready",
+      source: templateConfig?.hasMaster === false ? "built_in_preset" : "local_upload",
+      status: "ready",
+      note: templateConfig?.hasMaster === false ? "未导入真实剪映母版，生成时使用内置模板预设或兼容素材包。" : "",
     });
   }
   return currentVideoProject();
@@ -873,11 +883,22 @@ function bindEvents() {
   document.querySelector("#refreshVideoProductSources")?.addEventListener("click", () => loadVideoProductSources().then(() => previewVideoProductTimeline()).catch(() => {}));
   document.querySelector("#refreshVideoProductProjects")?.addEventListener("click", () => loadVideoProductProjects().catch(() => {}));
   document.querySelector("#refreshVideoProjectReadiness")?.addEventListener("click", () => Promise.allSettled([refreshReadiness(), refreshQualityCheck()]));
+  document.querySelector("#videoProjectReadiness")?.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-readiness-action]");
+    if (!button) return;
+    const action = button.dataset.readinessAction || "";
+    if (["voice", "assets", "template"].includes(action)) {
+      event.preventDefault();
+      event.stopPropagation();
+      handleReadinessAction(action).catch((error) => {
+        const status = document.querySelector("#videoProductStatus");
+        if (status) status.textContent = error.message || "检查项处理失败。";
+      });
+    }
+  });
   document.querySelector("#autoBindTimeline")?.addEventListener("click", async () => {
     try {
-      const preview = await previewVideoProductTimeline();
-      await syncSelectionsToProject({ preview });
-      await Promise.allSettled([refreshReadiness(), refreshQualityCheck()]);
+      await autoMatchExistingImageAssets();
     } catch (error) {
       const status = document.querySelector("#videoProductStatus");
       if (status) status.textContent = error.message;
