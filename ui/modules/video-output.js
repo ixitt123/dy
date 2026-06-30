@@ -161,6 +161,58 @@ function setOptions(select, rows, label, preferred) {
   if ([...select.options].some((option) => option.value === current)) select.value = current;
 }
 
+function selectLatestAvailableAudio() {
+  const select = document.querySelector("#videoProductAudio");
+  const jobs = state.sources?.audioJobs || [];
+  if (!select || !jobs.length) return null;
+  const preferred = projectSourcePreferences().audioId;
+  const selected = jobs.find((job) => String(job.id) === String(preferred))
+    || jobs.slice().sort((a, b) => Number(b.id || 0) - Number(a.id || 0))[0];
+  if (selected) {
+    select.value = String(selected.id);
+    select.dispatchEvent(new Event("change", { bubbles: true }));
+  }
+  return selected || null;
+}
+
+function selectBestDirector() {
+  const select = document.querySelector("#videoProductDirector");
+  const directors = state.sources?.directors || [];
+  if (!select || select.value || !directors.length) return directors.find((item) => String(item.id) === String(select?.value || "")) || null;
+  const preferred = projectSourcePreferences().directorId;
+  const selected = directors.find((director) => String(director.id) === String(preferred))
+    || directors.slice().sort((a, b) => Number(b.id || 0) - Number(a.id || 0))[0];
+  if (selected) {
+    select.value = String(selected.id);
+    select.dispatchEvent(new Event("change", { bubbles: true }));
+  }
+  return selected || null;
+}
+
+async function selectAndLinkTemplate() {
+  await loadVideoProductSources();
+  const select = document.querySelector("#videoProductJianyingTemplate");
+  renderJianyingTemplateOptions();
+  const templateConfig = state.sources?.jianyingTemplates?.find((item) => String(item.id) === String(select?.value || ""))
+    || sortedJianyingTemplates()[0];
+  if (!select || !templateConfig) throw new Error("没有可用剪映模板配置。");
+  select.value = String(templateConfig.id);
+  state.templateManuallySelected = true;
+  const project = currentVideoProject() || await ensureVideoProjectForOutput();
+  await window.videoProjects?.setActiveProject?.(project.id);
+  await window.videoProjects.linkCurrent("template", templateConfig.id, templateConfig.name || templateConfig.label || templateConfig.id, {
+    ...templateConfig,
+    ratio: templateConfig.ratio || "9:16",
+    source: templateConfig.hasMaster ? "local_upload" : "built_in_preset",
+    status: "ready",
+    note: templateConfig.hasMaster ? "" : "未导入真实剪映母版，生成时使用内置模板预设或兼容素材包。",
+  });
+  const status = document.querySelector("#videoProductStatus");
+  if (status) status.textContent = `已选择剪映模板：${templateConfig.name || templateConfig.label || templateConfig.id}${templateConfig.hasMaster ? "" : "（内置预设）"}`;
+  await Promise.allSettled([refreshReadiness(), refreshQualityCheck()]);
+  return templateConfig;
+}
+
 async function assertJianyingReadyForDraft() {
   const status = await getJson("/api/video-product/tools");
   const checks = status.checks || {};
@@ -344,7 +396,7 @@ export function renderReadiness(readiness) {
   const container = document.querySelector("#videoProjectReadiness");
   if (!container) return;
   container.innerHTML = readiness?.checks?.length ? readiness.checks.map((item) => `
-    <div class="readiness-row ${item.ok ? "ready" : "missing"}"><span>${escapeHtml(item.label)}</span><strong>${escapeHtml(item.detail)}</strong>${item.ok ? "" : `<button class="ghost small" type="button" data-nav="${escapeHtml(item.page)}">${escapeHtml(item.action)}</button>`}</div>`).join("") : '<span>选择短视频项目后显示检查结果。</span>';
+    <div class="readiness-row ${item.ok ? "ready" : "missing"}"><span>${escapeHtml(item.label)}</span><strong>${escapeHtml(item.detail)}</strong>${item.ok ? "" : `<button class="ghost small" type="button" data-readiness-action="${escapeHtml(item.id)}" data-nav="${escapeHtml(item.page)}">${escapeHtml(item.action)}</button>`}</div>`).join("") : '<span>选择短视频项目后显示检查结果。</span>';
 }
 
 export function renderQualityCheck(quality) {
@@ -465,6 +517,60 @@ export async function previewVideoProductTimeline() {
     : "预览已更新，点击生成后会先写入当前项目并做最终检查。";
   updateGenerateAvailability();
   return data;
+}
+
+async function autoMatchExistingImageAssets() {
+  const status = document.querySelector("#videoProductStatus");
+  await loadVideoProductSources();
+  selectBestDirector();
+  selectLatestAvailableAudio();
+  const imageSource = document.querySelector("#videoProductImageSource");
+  const imageCount = state.sources?.imageAssets?.length || 0;
+  if (!imageCount) {
+    if (status) status.textContent = "图片资产库暂无可用图片，请先在图片生成页生成或加入现有图片。";
+    window.appNavigate?.("image");
+    return null;
+  }
+  if (imageSource) imageSource.value = "director";
+  let preview = await previewVideoProductTimeline();
+  if (preview?.blockers?.some((item) => String(item).includes("缺少镜头图片") || String(item).includes("图片素材"))) {
+    if (imageSource) imageSource.value = "all";
+    preview = await previewVideoProductTimeline();
+  }
+  await syncSelectionsToProject({ preview });
+  const matched = Object.keys(state.manualBindings || {}).length;
+  if (status) status.textContent = `已从图片资产库自动匹配 ${matched || preview?.scenes?.filter((scene) => scene.image_asset_id).length || 0} 张素材；图片文件地址已写入镜头下方。`;
+  await Promise.allSettled([refreshReadiness(), refreshQualityCheck()]);
+  return preview;
+}
+
+async function handleReadinessAction(action) {
+  const status = document.querySelector("#videoProductStatus");
+  if (!action) return;
+  if (action === "voice") {
+    await loadVideoProductSources();
+    const audio = selectLatestAvailableAudio();
+    if (!audio) {
+      if (status) status.textContent = "没有找到已完成且可用的 TTS 音频，请先生成语音。";
+      window.appNavigate?.("tts");
+      return;
+    }
+    await syncSelectionsToProject({ preview: state.preview });
+    if (status) status.textContent = `已选择语音：${audio.label || audio.voice_name || `#${audio.id}`}`;
+    await Promise.allSettled([refreshReadiness(), refreshQualityCheck()]);
+    return;
+  }
+  if (action === "assets") {
+    await autoMatchExistingImageAssets();
+    return;
+  }
+  if (action === "template") {
+    await selectAndLinkTemplate();
+    return;
+  }
+  const row = document.querySelector(`[data-readiness-action="${CSS.escape(action)}"]`);
+  const target = row?.dataset.nav;
+  if (target) window.appNavigate?.(target);
 }
 
 export async function syncSelectionsToProject({ preview = state.preview } = {}) {
