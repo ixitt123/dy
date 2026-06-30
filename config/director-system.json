@@ -65,14 +65,14 @@
     },
     {
       "id": "pixar-3d-cartoon",
-      "label": "3D动画电影风（类皮克斯）",
-      "prompt_short": "温暖圆润的3D动画电影质感，适合轻松讲知识。",
-      "image_prompt": "warm 3D animated film look, rounded stylized Chinese characters, expressive but natural faces, soft cinematic lighting, detailed classroom and family scenes, family-friendly commercial animation, not copying any existing IP",
+      "label": "原创高级3D动画电影风",
+      "prompt_short": "原创高级3D动画电影质感，温暖、细腻、有电影镜头层次，适合知识口播和情绪故事。",
+      "image_prompt": "original premium 3D animated film frame, stylized Chinese characters with consistent identity, expressive natural faces, refined skin and fabric materials, soft cinematic lighting, shallow depth of field, detailed classroom and family scenes, warm commercial short-film look, high-end art direction, not copying any existing IP",
       "palette": "暖黄色、柔和蓝、奶油白、低饱和校园色",
-      "texture": "圆润3D材质、柔和皮肤、干净环境、电影级软光",
-      "composition": "角色动作清楚，背景简洁，表情服务当前镜头情绪",
-      "character": "同一套原创中国动画人物设定，不能像已有动画角色",
-      "negative": "直接模仿已有IP、塑料玩具感、过度夸张五官、儿童化招生广告"
+      "texture": "细腻3D材质、柔和皮肤、真实布料、干净环境、电影级软光和空间纵深",
+      "composition": "角色动作清晰，主体在上方80%，背景简洁但有生活细节，底部保留字幕安全区",
+      "character": "同一套原创中国动画人物设定，年龄、发型、服装和脸型跨镜头保持一致，不能像已有动画角色",
+      "negative": "直接模仿已有IP、塑料玩具感、过度夸张五官、廉价儿童动画、低质招生广告、随机换脸、随机换服装"
     },
     {
       "id": "chinese-ink",
