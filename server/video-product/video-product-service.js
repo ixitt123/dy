@@ -182,6 +182,18 @@ function hasDirectoryEntries(dir) {
   }
 }
 
+function hasJianyingDraftFiles(dir) {
+  try {
+    if (!dir || !fs.existsSync(dir) || !fs.statSync(dir).isDirectory()) return false;
+    const contentPath = path.join(dir, "draft_content.json");
+    const metaPath = path.join(dir, "draft_meta_info.json");
+    const infoPath = path.join(dir, "draft_info.json");
+    return fs.existsSync(contentPath) && (fs.existsSync(metaPath) || fs.existsSync(infoPath));
+  } catch {
+    return false;
+  }
+}
+
 function isInsideDirectory(parent, child) {
   const relative = path.relative(path.resolve(parent), path.resolve(child));
   return Boolean(relative) && !relative.startsWith("..") && !path.isAbsolute(relative);
@@ -977,7 +989,7 @@ export function createVideoProductService({
     const draftPathInput = String(draftPath || "").trim();
     if (!draftPathInput) return "";
     const resolvedDraftPath = path.resolve(draftPathInput);
-    if (!hasDirectoryEntries(resolvedDraftPath)) return "";
+    if (!hasJianyingDraftFiles(resolvedDraftPath)) return "";
     const status = capcutCliAdapter?.detect?.() || {};
     const draftDirectory = String(status.paths?.draftDirectory || "").trim();
     if (!draftDirectory || !fs.existsSync(draftDirectory) || !fs.statSync(draftDirectory).isDirectory()) return "";
@@ -1002,6 +1014,127 @@ export function createVideoProductService({
       syncedAt: new Date().toISOString(),
     });
     return targetPath;
+  }
+
+  function collectVisibleDraftSeeds(rootDir, { maxDepth = 2, includeCodex = false } = {}) {
+    const seeds = [];
+    function visit(dir, depth) {
+      if (!dir || depth > maxDepth || !fs.existsSync(dir) || !fs.statSync(dir).isDirectory()) return;
+      if (hasJianyingDraftFiles(dir)) {
+        seeds.push(dir);
+        return;
+      }
+      for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+        if (!entry.isDirectory()) continue;
+        if (!includeCodex && (/^codex_/i.test(entry.name) || /^Codex/.test(entry.name))) continue;
+        visit(path.join(dir, entry.name), depth + 1);
+      }
+    }
+    visit(rootDir, 0);
+    return seeds.sort((a, b) => {
+      try {
+        return fs.statSync(b).mtimeMs - fs.statSync(a).mtimeMs;
+      } catch {
+        return 0;
+      }
+    });
+  }
+
+  function listDraftSeedCandidates(templateId = "", draftDirectory = "") {
+    const candidates = [];
+    const push = (value) => {
+      const resolved = String(value || "").trim();
+      if (resolved) candidates.push(path.resolve(resolved));
+    };
+
+    const requestedTemplate = readJianyingTemplate(templateId);
+    push(requestedTemplate?.draftTemplatePath);
+    for (const template of listJianyingTemplates()) {
+      if (template.id !== requestedTemplate?.id) push(template.draftTemplatePath);
+    }
+
+    if (draftDirectory && fs.existsSync(draftDirectory)) {
+      collectVisibleDraftSeeds(draftDirectory, { maxDepth: 1, includeCodex: true }).forEach(push);
+      const recycleBin = path.join(draftDirectory, ".recycle_bin");
+      collectVisibleDraftSeeds(recycleBin, { maxDepth: 2, includeCodex: true }).forEach(push);
+    }
+
+    return [...new Set(candidates)].filter(hasJianyingDraftFiles);
+  }
+
+  function updateVisibleDraftMeta(targetPath, project, timelineFiles) {
+    const metaPath = path.join(targetPath, "draft_meta_info.json");
+    if (!fs.existsSync(metaPath)) return;
+    let meta = {};
+    try {
+      meta = JSON.parse(fs.readFileSync(metaPath, "utf8"));
+    } catch {
+      meta = {};
+    }
+    const title = safeFileName(
+      safeJson(project.metadata_json, {})?.title
+      || timelineFiles?.timelineJson?.publish_title
+      || `成片 ${project.id}`,
+    );
+    const now = Date.now() * 1000;
+    meta.draft_name = `Codex成片-${project.id}-${title}`.slice(0, 80);
+    meta.draft_fold_path = targetPath.replace(/\\/g, "/");
+    meta.draft_root_path = path.dirname(targetPath).replace(/\\/g, "/");
+    meta.draft_id = cryptoRandomId();
+    meta.draft_is_invisible = false;
+    meta.tm_draft_create = now;
+    meta.tm_draft_modified = now;
+    meta.tm_draft_removed = 0;
+    if (Number(timelineFiles?.timelineJson?.duration || 0) > 0) {
+      meta.tm_duration = Math.round(Number(timelineFiles.timelineJson.duration) * 1000000);
+    }
+    fs.writeFileSync(metaPath, JSON.stringify(meta), "utf8");
+  }
+
+  function cryptoRandomId() {
+    return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (token) => {
+      const value = Math.floor(Math.random() * 16);
+      return (token === "x" ? value : (value & 0x3) | 0x8).toString(16);
+    }).toUpperCase();
+  }
+
+  function createVisibleJianyingDraftFallback(project, timelineFiles, templateId = "", reason = "") {
+    const status = capcutCliAdapter?.detect?.() || {};
+    const draftDirectory = String(status.paths?.draftDirectory || "").trim();
+    if (!draftDirectory || !fs.existsSync(draftDirectory) || !fs.statSync(draftDirectory).isDirectory()) {
+      return { path: "", warning: "剪映草稿目录未配置，无法写入本地草稿。" };
+    }
+    const seed = listDraftSeedCandidates(templateId, draftDirectory)[0] || "";
+    if (!seed) {
+      return { path: "", warning: "没有找到可复制的真实剪映母版草稿，请先在剪映里保留一个母版草稿或导入模板母版。" };
+    }
+    const title = safeJson(project.metadata_json, {})?.title || timelineFiles?.timelineJson?.publish_title || `timeline-${project.id}`;
+    const targetName = safeFileName(`codex_${project.id}_${title}_${Date.now()}`);
+    const targetPath = path.join(draftDirectory, targetName);
+    if (!isInsideDirectory(draftDirectory, targetPath)) return { path: "", warning: "剪映草稿目标路径不合法。" };
+    fs.rmSync(targetPath, { recursive: true, force: true });
+    fs.cpSync(seed, targetPath, { recursive: true, force: true });
+    updateVisibleDraftMeta(targetPath, project, timelineFiles);
+    const outputRefDir = path.join(targetPath, "codex-output");
+    ensureDir(outputRefDir);
+    for (const file of ["capcut-plan.json", "capcut-compile-spec.json", "timeline.json", "subtitles.srt", "subtitles.ass", "project_manifest.json"]) {
+      const source = path.join(timelineFiles.projectDir, file);
+      if (fs.existsSync(source)) fs.copyFileSync(source, path.join(outputRefDir, file));
+    }
+    writeJson(path.join(targetPath, "codex-import.json"), {
+      mode: "visible_draft_fallback",
+      sourceSeedDraftPath: seed,
+      outputDir: timelineFiles.projectDir,
+      timelineProjectId: project.id,
+      templateId,
+      reason,
+      syncedAt: new Date().toISOString(),
+    });
+    return {
+      path: targetPath,
+      seed,
+      warning: `capcut-cli 未生成可用草稿，已复制真实剪映母版到本地草稿目录：${targetPath}`,
+    };
   }
 
   function wait(ms) {
@@ -2501,15 +2634,47 @@ ${sceneMarkup}
           warnings: ["capcut-cli 适配器未启用，已输出兼容素材包。"],
           files: [],
         };
-        if (capcutResult && capcutResult.ok === false) {
-          throw new Error(`剪映草稿生成失败：${[...(capcutResult.errors || []), ...(capcutResult.warnings || [])].filter(Boolean).join("；") || "未知错误"}`);
-        }
+        const capcutMessages = [...(capcutResult.errors || []), ...(capcutResult.warnings || [])].filter(Boolean);
         draftPath = capcutResult.draftPath || capcutResult.planPath || "";
         localJianyingDraftPath = syncDraftToLocalJianying(capcutResult.draftPath || "", project, input.jianying_template || "education_tips");
         if (localJianyingDraftPath) {
           capcutResult.localJianyingDraftPath = localJianyingDraftPath;
           capcutResult.files = [...(capcutResult.files || []), localJianyingDraftPath];
           capcutResult.warnings = [...(capcutResult.warnings || []), "已同步到本机剪映草稿目录。"];
+        }
+        if (!localJianyingDraftPath) {
+          const fallbackDraft = createVisibleJianyingDraftFallback(
+            project,
+            timelineFiles,
+            input.jianying_template || "education_tips",
+            capcutMessages.join("；"),
+          );
+          if (fallbackDraft.path) {
+            localJianyingDraftPath = fallbackDraft.path;
+            draftPath = fallbackDraft.path;
+            capcutResult = {
+              ...capcutResult,
+              ok: true,
+              fallback: true,
+              visibleDraftFallback: true,
+              draftPath: fallbackDraft.path,
+              localJianyingDraftPath: fallbackDraft.path,
+              seedDraftPath: fallbackDraft.seed,
+              warnings: [
+                ...(capcutResult.warnings || []),
+                fallbackDraft.warning,
+              ],
+              errors: capcutResult.errors || [],
+              files: [...new Set([
+                ...(capcutResult.files || []),
+                fallbackDraft.path,
+                path.join(fallbackDraft.path, "codex-import.json"),
+              ].filter(Boolean))],
+            };
+          }
+        }
+        if (!localJianyingDraftPath && capcutResult && capcutResult.ok === false) {
+          throw new Error(`剪映草稿生成失败：${capcutMessages.join("；") || "未知错误"}`);
         }
         if (!localJianyingDraftPath) {
           compatibilityMode = true;
