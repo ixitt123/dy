@@ -39,6 +39,98 @@ function styleTextItem(base = {}, overrides = {}) {
   };
 }
 
+function captionVisualLength(value = "") {
+  return String(value || "").replace(/\s+/g, "").length;
+}
+
+function splitCaptionSegment(segment = "", maxCharsPerLine = 15) {
+  const text = String(segment || "").replace(/\s+/g, " ").trim();
+  if (!text) return [];
+  if (captionVisualLength(text) <= maxCharsPerLine) return [text];
+  if (/[A-Za-z]/.test(text)) {
+    const tokens = text.match(/[A-Za-z]+(?:'[A-Za-z]+)?|[0-9]+(?:\.[0-9]+)?|[\u4e00-\u9fa5]+|[^\s]/g) || [];
+    const chunks = [];
+    let current = "";
+    for (const token of tokens) {
+      const joinsAsWord = current && /^[A-Za-z0-9]/.test(token) && /[A-Za-z0-9]$/.test(current);
+      const candidate = current ? `${current}${joinsAsWord ? " " : ""}${token}` : token;
+      if (captionVisualLength(candidate) <= maxCharsPerLine) {
+        current = candidate;
+        continue;
+      }
+      if (current) chunks.push(current.trim());
+      current = token;
+    }
+    if (current) chunks.push(current.trim());
+    return chunks.filter(Boolean);
+  }
+  const chars = Array.from(text.replace(/\s+/g, ""));
+  const chunks = [];
+  for (let index = 0; index < chars.length; index += maxCharsPerLine) {
+    chunks.push(chars.slice(index, index + maxCharsPerLine).join("").trim());
+  }
+  return chunks.filter(Boolean);
+}
+
+function wrapCaptionText(value = "", maxCharsPerLine = 15, maxLines = 2) {
+  const text = String(value || "").replace(/\s+/g, " ").trim();
+  if (!text) return "";
+  const parts = text.split(/(?<=[\u3002\uff01\uff1f!?\uff1b;\uff0c\u3001,])/u).map((item) => item.trim()).filter(Boolean);
+  const lines = [];
+  let current = "";
+  const pushCurrent = () => {
+    if (current) lines.push(current);
+    current = "";
+  };
+  for (const part of (parts.length ? parts : [text])) {
+    const candidate = current ? `${current}${part}` : part;
+    if (captionVisualLength(candidate) <= maxCharsPerLine) {
+      current = candidate;
+      continue;
+    }
+    pushCurrent();
+    for (const chunk of splitCaptionSegment(part, maxCharsPerLine)) {
+      lines.push(chunk);
+      if (lines.length >= maxLines) break;
+    }
+    if (lines.length >= maxLines) break;
+  }
+  pushCurrent();
+  return lines.slice(0, maxLines).filter(Boolean).join("\n");
+}
+
+function captionKeywordCandidates(scene = {}, text = "") {
+  const explicit = Array.isArray(scene.caption_keywords) ? scene.caption_keywords : [];
+  const title = String(scene.title_text || scene.purpose || "").replace(/^Scene\s+\d+/i, "").trim();
+  const matches = String(text || "").match(/英语|单词|开口|成绩|技术|方法|家长|孩子|招生|报名|提分|改变|行动|不要|必须|核心|关键|解决|流量|成交|客户|AI|系统|效率/g) || [];
+  return [...explicit, title, ...matches]
+    .map((item) => String(item || "").replace(/[，。！？!?,、\s]/g, "").trim())
+    .filter((item) => item.length >= 2 && item.length <= 8)
+    .filter((item, index, arr) => arr.indexOf(item) === index)
+    .slice(0, 2);
+}
+
+function buildTextRangeOperation(target, text, keywords, style = {}) {
+  const ranges = [];
+  const color = style.highlightColor || style.keywordColor || "#FFD15A";
+  const fontSize = Number(style.highlightFontSize || style.fontSize || 38) + 4;
+  for (const keyword of keywords) {
+    const start = text.indexOf(keyword);
+    if (start < 0) continue;
+    const end = start + keyword.length;
+    if (ranges.some((range) => start < range.end && end > range.start)) continue;
+    ranges.push({
+      start,
+      end,
+      font_color: color,
+      font_size: fontSize,
+      bold: true,
+    });
+  }
+  if (!ranges.length) return null;
+  return { op: "text-ranges", target, ranges };
+}
+
 export function buildCapcutCliPlan({ project = {}, timeline = {}, timelineFiles = {}, templateName = "education_tips" } = {}) {
   const templatePreset = getJianyingTemplatePreset(templateName);
   const scenes = Array.isArray(timeline.scenes) ? timeline.scenes : [];
@@ -132,6 +224,22 @@ export function buildCapcutCompileSpec({ project = {}, timeline = {}, timelineFi
   const ctaStyle = templatePreset.ctaCard || {};
   const titleText = firstValue(timeline.publish_title, timeline.name, title);
   const ctaText = firstValue(timeline.cta_text, scenes.at(-1)?.title_text, "关注账号，获取更多实用内容");
+  const captionItems = scenes
+    .map((scene, index) => {
+      const rawText = firstValue(scene.subtitle_text, scene.narration_text, scene.title_text);
+      const text = wrapCaptionText(rawText);
+      if (!text) return null;
+      return {
+        ref: `caption_${String(index + 1).padStart(2, "0")}`,
+        text,
+        rawText,
+        scene,
+        start: Number(scene.start_time || 0),
+        duration: Math.max(0.1, Number(scene.duration || 0)),
+        ...styleTextItem(captionStyle, { y: captionStyle.y ?? -0.62 }),
+      };
+    })
+    .filter(Boolean);
   const textItems = [
     titleText ? {
       ref: "title_card",
@@ -140,18 +248,7 @@ export function buildCapcutCompileSpec({ project = {}, timeline = {}, timelineFi
       duration: Math.max(1.2, Math.min(2.2, duration || 1.6)),
       ...styleTextItem(captionStyle, titleStyle),
     } : null,
-    ...scenes
-    .map((scene, index) => {
-      const text = firstValue(scene.subtitle_text, scene.narration_text, scene.title_text);
-      if (!text) return null;
-      return {
-        ref: `caption_${String(index + 1).padStart(2, "0")}`,
-        text,
-        start: Number(scene.start_time || 0),
-        duration: Math.max(0.1, Number(scene.duration || 0)),
-        ...styleTextItem(captionStyle),
-      };
-    }),
+    ...captionItems.map(({ rawText, scene, ...item }) => item),
     ctaText && duration > 2 ? {
       ref: "cta_card",
       text: ctaText,
@@ -161,18 +258,20 @@ export function buildCapcutCompileSpec({ project = {}, timeline = {}, timelineFi
     } : null,
   ].filter(Boolean);
   const audioItems = [];
+  const audioTrack = Array.isArray(timeline.tracks?.audio) ? timeline.tracks.audio[0] : null;
+  const voiceStart = Math.max(0, Number(audioTrack?.start || 0));
   const voiceoverDuration = Math.max(
     0.1,
     Math.min(
-      duration || Number(timeline.metadata?.audio_duration || 0) || 0,
-      Math.max(0.1, Number(timeline.metadata?.audio_duration || duration || 0) - 0.05),
+      Math.max(0.1, duration - voiceStart),
+      Math.max(0.1, Number(audioTrack?.duration || timeline.metadata?.audio_duration || duration || 0) - 0.05),
     ),
   );
   if (timelineFiles.packagedAudio) {
     audioItems.push({
       ref: "voiceover",
       path: timelineFiles.packagedAudio,
-      start: 0,
+      start: voiceStart,
       duration: voiceoverDuration,
       volume: 1,
     });
@@ -203,6 +302,10 @@ export function buildCapcutCompileSpec({ project = {}, timeline = {}, timelineFi
     }
     return ops;
   });
+  const textRangeOperations = captionItems
+    .map((item) => buildTextRangeOperation(item.ref, item.text, captionKeywordCandidates(item.scene, item.text), captionStyle))
+    .filter(Boolean);
+  operations.push(...textRangeOperations);
   if (duration > 0) {
     operations.push({
       op: "filter",
@@ -224,6 +327,9 @@ export function buildCapcutCompileSpec({ project = {}, timeline = {}, timelineFi
       templateName,
       templatePreset: templatePreset.label,
       targetBpm: templatePreset.bgmBpm || 132,
+      voiceStart,
+      voiceoverDuration,
+      captionPlacement: "bottom_safe_area",
       generatedBy: "dy-video-product-service",
     },
     tracks,

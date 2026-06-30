@@ -16,6 +16,7 @@ const TIMELINE_STATUSES = new Set([
 const OUTPUT_TYPES = new Set(["jianying_template", "jianying", "mp4", "package", "template_mp4", "mix_mp4"]);
 const IMAGE_REQUIRED_OUTPUT_TYPES = new Set(["jianying_template", "jianying", "mp4", "package"]);
 const MP4_OUTPUT_TYPES = new Set(["mp4", "template_mp4", "mix_mp4"]);
+const ROUTE_A_VOICE_CLOCK_OUTPUT_TYPES = new Set(["jianying_template", "template_mp4"]);
 const ROUTE_A_INTRO_SECONDS = 1.35;
 
 const OUTPUT_TYPE_LABELS = {
@@ -295,9 +296,10 @@ function timelineToSrt(scenes) {
 
 function timelineToAss(scenes, { width = 1080, height = 1920, style = null } = {}) {
   const palette = style?.palette || {};
-  const marginV = Math.max(230, Math.round(height * 0.16));
-  const fontSize = Math.max(56, Math.round(height * 0.034));
-  const titleSize = Math.max(64, Math.round(height * 0.042));
+  const marginV = Math.max(120, Math.round(height * 0.075));
+  const marginH = Math.max(86, Math.round(width * 0.08));
+  const fontSize = Math.max(48, Math.round(height * 0.031));
+  const titleSize = Math.max(56, Math.round(height * 0.038));
   const accent = assColor(palette.accent, "#E7C76C");
   const accent2 = assColor(palette.accent2, "#49D6C8");
   const textColor = assColor(palette.text, "#FFFFFF");
@@ -313,9 +315,9 @@ function timelineToAss(scenes, { width = 1080, height = 1920, style = null } = {
     "",
     "[V4+ Styles]",
     "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding",
-    `Style: Premium,Microsoft YaHei,${fontSize},${textColor},${accent},${outlineColor},${boxColor},-1,0,0,0,100,100,0,0,3,5,0,2,86,86,${marginV},1`,
-    `Style: Keyword,Microsoft YaHei,${titleSize},${accent},${textColor},${outlineColor},${boxColor},-1,0,0,0,104,104,0,0,3,5,0,2,86,86,${marginV + 10},1`,
-    `Style: CTA,Microsoft YaHei,${titleSize},${textColor},${accent2},${outlineColor},${boxColor},-1,0,0,0,104,104,0,0,3,5,0,2,86,86,${marginV + 12},1`,
+    `Style: Premium,Microsoft YaHei,${fontSize},${textColor},${accent},${outlineColor},${boxColor},-1,0,0,0,100,100,0,0,3,5,0,2,${marginH},${marginH},${marginV},1`,
+    `Style: Keyword,Microsoft YaHei,${titleSize},${accent},${textColor},${outlineColor},${boxColor},-1,0,0,0,104,104,0,0,3,5,0,2,${marginH},${marginH},${marginV},1`,
+    `Style: CTA,Microsoft YaHei,${titleSize},${textColor},${accent2},${outlineColor},${boxColor},-1,0,0,0,104,104,0,0,3,5,0,2,${marginH},${marginH},${marginV},1`,
     "",
     "[Events]",
     "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text",
@@ -351,6 +353,36 @@ function textDurationWeight(text) {
   return Math.max(1.8, Math.min(12, length / 5.5));
 }
 
+function chunkSpeechText(value = "", maxChars = 18) {
+  const text = String(value || "").replace(/\s+/g, " ").trim();
+  if (!text) return [];
+  if (text.replace(/\s+/g, "").length <= maxChars) return [text];
+  const hasLatinWords = /[A-Za-z]/.test(text);
+  if (hasLatinWords) {
+    const tokens = text.match(/[A-Za-z]+(?:'[A-Za-z]+)?|[0-9]+(?:\.[0-9]+)?|[\u4e00-\u9fa5]+|[^\s]/g) || [];
+    const chunks = [];
+    let current = "";
+    for (const token of tokens) {
+      const joinsAsWord = /^[A-Za-z0-9]/.test(token) && /[A-Za-z0-9]$/.test(current);
+      const candidate = current ? `${current}${joinsAsWord ? " " : ""}${token}` : token;
+      if (candidate.replace(/\s+/g, "").length <= maxChars) {
+        current = candidate;
+        continue;
+      }
+      if (current) chunks.push(current.trim());
+      current = token;
+    }
+    if (current) chunks.push(current.trim());
+    return chunks.filter(Boolean);
+  }
+  const chars = Array.from(text.replace(/\s+/g, ""));
+  const chunks = [];
+  for (let index = 0; index < chars.length; index += Math.max(6, maxChars)) {
+    chunks.push(chars.slice(index, index + Math.max(6, maxChars)).join(""));
+  }
+  return chunks.filter(Boolean);
+}
+
 function splitSpeechUnits(text) {
   const source = String(text || "")
     .replace(/\s+/g, " ")
@@ -366,15 +398,28 @@ function splitSpeechUnits(text) {
     }
   }
   if (current.trim()) units.push(current.trim());
-  return units
+  const chunks = units
     .flatMap((unit) => {
       const compact = unit.replace(/\s+/g, "");
-      if (compact.length <= 26) return [unit];
+      if (compact.length <= 18) return [unit];
       const parts = unit.split(/(?<=[，、,])/).map((item) => item.trim()).filter(Boolean);
-      return parts.length > 1 ? parts : [unit];
+      if (parts.length > 1) return parts.flatMap((part) => {
+        const chunks = chunkSpeechText(part, 18);
+        return chunks.length ? chunks : [part];
+      });
+      const chunks = chunkSpeechText(unit, 18);
+      return chunks.length ? chunks : [unit];
     })
     .map((unit) => unit.replace(/\s+/g, " ").trim())
     .filter(Boolean);
+  return chunks.reduce((merged, unit) => {
+    if (/^[\u3002\uff01\uff1f\uff0c\u3001\uff1b;,.!?'"`“”‘’]+$/.test(unit) && merged.length) {
+      merged[merged.length - 1] = `${merged[merged.length - 1]}${unit}`;
+      return merged;
+    }
+    merged.push(unit);
+    return merged;
+  }, []);
 }
 
 function speechUnitWeight(text) {
@@ -398,10 +443,12 @@ function buildRouteASubtitleScenes({ audioText = "", directorScenes = [], target
     const sourceScene = directorScenes.find((scene) => textSimilarityScore(scene.voice_text || scene.subtitle || "", unit) >= 32)
       || directorScenes[Math.min(index, Math.max(0, directorScenes.length - 1))]
       || {};
+    const sourceSceneIndex = Number(sourceScene.scene_index || sourceScene.scene_no || sourceScene.shot_id || sourceScene.id || index + 1) || index + 1;
     cursor += duration;
     return {
       ...sourceScene,
       scene_index: index + 1,
+      source_scene_index: sourceSceneIndex,
       duration: Number(duration.toFixed(3)),
       voice_text: unit,
       subtitle: unit,
@@ -451,12 +498,17 @@ function textSimilarityScore(a, b) {
   return Math.round((overlap / Math.max(leftGrams.size, rightGrams.size)) * 100);
 }
 
+function ttsJobText(audio) {
+  return String(audio?.text || audio?.source_text || audio?.input_text || "").trim();
+}
+
 function audioDirectorBinding(director, audio, directorScenes = []) {
   if (!director || !audio) return { accepted: false, score: 0, reason: "缺少导演稿或音频。" };
   const narrationText = directorScenes.map((scene) => scene.voice_text || scene.subtitle || "").join("");
+  const audioText = ttsJobText(audio);
   const score = Math.max(
-    textSimilarityScore(audio.text, narrationText),
-    textSimilarityScore(audio.text, director.source_text),
+    textSimilarityScore(audioText, narrationText),
+    textSimilarityScore(audioText, director.source_text),
   );
   const sameTask = Number(director.task_id || 0) > 0
     && Number(director.task_id || 0) === Number(audio.task_id || 0);
@@ -705,7 +757,7 @@ function routeAVisualKit(input = {}) {
 function routeAAutoTitle(audio, input = {}) {
   const explicit = String(input.title || "").trim();
   if (explicit) return titleClip(explicit, 28);
-  const text = String(audio?.text || "").trim();
+  const text = ttsJobText(audio);
   const first = sentenceParts(text)[0] || text.slice(0, 28);
   if (/英语/.test(text) && /背单词/.test(text)) return "半年说流利英语？先别死背单词";
   if (/招生|家长|报名|升学|补课/.test(text)) return titleClip(`${first}，家长一定要听`, 28);
@@ -720,9 +772,10 @@ function estimateSpeechDuration(text) {
 
 function buildRouteAAutoDirectorScenes(audio, input = {}, targetDuration = 0) {
   const style = routeAStyleContract(input);
-  const units = splitSpeechUnits(audio?.text || "");
-  const safeUnits = units.length ? units : [String(audio?.text || "").trim()].filter(Boolean);
-  const duration = Number(targetDuration || 0) > 0 ? Number(targetDuration) : estimateSpeechDuration(audio?.text || "");
+  const audioText = ttsJobText(audio);
+  const units = splitSpeechUnits(audioText);
+  const safeUnits = units.length ? units : [audioText].filter(Boolean);
+  const duration = Number(targetDuration || 0) > 0 ? Number(targetDuration) : estimateSpeechDuration(audioText);
   const weights = safeUnits.map(speechUnitWeight);
   const totalWeight = weights.reduce((sum, value) => sum + value, 0) || safeUnits.length || 1;
   return safeUnits.map((unit, index) => {
@@ -850,12 +903,12 @@ function renderReport(project, timelineFiles, { mp4Path = "", bgmPath = "", qual
       bgm_source: timelineFiles.bgmSourceKind || (bgmPath ? "local_auto" : "none"),
       bgm_label: timelineFiles.bgmLabel || "",
       ass_subtitles: Boolean(timelineFiles.assPath),
-      title_card: project.output_type === "template_mp4",
-      end_cta: project.output_type === "template_mp4",
+      title_card: ROUTE_A_VOICE_CLOCK_OUTPUT_TYPES.has(project.output_type),
+      end_cta: ROUTE_A_VOICE_CLOCK_OUTPUT_TYPES.has(project.output_type),
       cover: Boolean(timelineFiles.coverPath),
       publish_text: true,
       hyperframes_package: Boolean(timelineFiles.hyperframesIndexPath),
-      motion_template_version: project.output_type === "template_mp4" ? "route-a-premium-ffmpeg-v5" : "",
+      motion_template_version: project.output_type === "template_mp4" ? "route-a-premium-ffmpeg-v5" : project.output_type === "jianying_template" ? "jianying-template-voice-clock-v2" : "",
       template_background_mode: project.output_type === "template_mp4"
         ? (timelineFiles.packagedTemplateBackground ? "image_asset_dark_blur_motion" : "procedural_premium_motion")
         : "",
@@ -1241,13 +1294,14 @@ export function createVideoProductService({
   function createLocalRouteADirector(audio, input = {}, fallbackReason = "") {
     const style = routeAStyleContract(input);
     const title = routeAAutoTitle(audio, input);
-    const estimatedDuration = estimateSpeechDuration(audio?.text || "");
+    const audioText = ttsJobText(audio);
+    const estimatedDuration = estimateSpeechDuration(audioText);
     const scenes = buildRouteAAutoDirectorScenes(audio, input, estimatedDuration);
     const project = taskStore.createDirectorProject({
       task_id: Number(audio?.task_id || input.task_id || 0),
       rewrite_id: Number(audio?.rewrite_id || input.rewrite_id || 0),
       title,
-      source_text: String(audio?.text || ""),
+      source_text: audioText,
       video_type: routeAStylePreset(style.id).videoType,
       visual_style: routeAStylePreset(style.id).directorStyle,
       platform: String(input.platform || "douyin"),
@@ -1287,7 +1341,7 @@ export function createVideoProductService({
       task_id: Number(audio?.task_id || 0),
       rewrite_id: Number(audio?.rewrite_id || 0),
       title: routeAAutoTitle(audio, input),
-      source_text: String(audio?.text || ""),
+      source_text: ttsJobText(audio),
       source_type: "route_a_tts",
       source_key: `tts:${audio?.id || 0}`,
       provider: String(input.director_provider || ""),
@@ -1296,7 +1350,7 @@ export function createVideoProductService({
       platform: String(input.platform || "douyin"),
       pace: preset.pace,
       shot_count: "auto",
-      estimated_duration: estimateSpeechDuration(audio?.text || ""),
+      estimated_duration: estimateSpeechDuration(ttsJobText(audio)),
       tts_duration: 0,
       reference_style: [
         `路线 A 高质量成片风格：${style.label}`,
@@ -1315,9 +1369,10 @@ export function createVideoProductService({
 
   function ensureRouteADirectorForEnqueue(input = {}) {
     const outputType = OUTPUT_TYPES.has(String(input.output_type || "")) ? String(input.output_type) : "jianying_template";
+    const isRouteAVoiceClock = ROUTE_A_VOICE_CLOCK_OUTPUT_TYPES.has(outputType);
     let directorId = Number(input.source_director_project_id || input.director_project_id || 0);
     const audioId = Number(input.audio_asset_id || input.tts_job_id || 0);
-    if (outputType !== "template_mp4" || directorId > 0) {
+    if (!ROUTE_A_VOICE_CLOCK_OUTPUT_TYPES.has(outputType) || directorId > 0) {
       return { directorId, metadata: {} };
     }
     const audio = taskStore.getTtsJob(audioId);
@@ -1350,7 +1405,7 @@ export function createVideoProductService({
   }
 
   async function ensureRouteADirectorReady(project, input = {}) {
-    if (project.output_type !== "template_mp4") return project;
+    if (!ROUTE_A_VOICE_CLOCK_OUTPUT_TYPES.has(project.output_type)) return project;
     const metadata = safeJson(project.metadata_json, {});
     if (!metadata.route_a_auto_director) return project;
     let director = taskStore.getDirectorProject(project.source_director_project_id);
@@ -1740,11 +1795,12 @@ export function createVideoProductService({
       const manual = bindingContext.all.find((asset) => String(asset.id) === manualAssetId);
       if (manual) return manual;
     }
-    const exact = bindingContext.pool.find((asset) => String(asset.source_id || "") === `${bindingContext.directorId}:${scene.scene_index}`);
+    const sourceSceneIndex = Number(scene.source_scene_index || scene.director_scene_index || scene.original_scene_index || scene.scene_index || index + 1) || index + 1;
+    const exact = bindingContext.pool.find((asset) => String(asset.source_id || "") === `${bindingContext.directorId}:${sourceSceneIndex}`);
     if (exact) return exact;
-    const bySceneIndex = bindingContext.pool.find((asset) => imageAssetSceneIndex(asset) === Number(scene.scene_index || index + 1));
+    const bySceneIndex = bindingContext.pool.find((asset) => imageAssetSceneIndex(asset) === sourceSceneIndex);
     if (bySceneIndex) return bySceneIndex;
-    const byAssetOrder = bindingContext.pool.find((asset) => Number(asset.asset_order || asset.assetOrder || 0) === Number(scene.scene_index || index + 1));
+    const byAssetOrder = bindingContext.pool.find((asset) => Number(asset.asset_order || asset.assetOrder || 0) === sourceSceneIndex);
     if (byAssetOrder) return byAssetOrder;
     return bindingContext.pool[index % Math.max(1, bindingContext.pool.length)] || null;
   }
@@ -1753,6 +1809,7 @@ export function createVideoProductService({
     const directorId = Number(input.source_director_project_id || input.director_project_id || 0);
     const audioAssetId = Number(input.audio_asset_id || input.tts_job_id || 0);
     const outputType = OUTPUT_TYPES.has(String(input.output_type || "")) ? String(input.output_type) : "jianying_template";
+    const isRouteAVoiceClock = ROUTE_A_VOICE_CLOCK_OUTPUT_TYPES.has(outputType);
     const needsImages = IMAGE_REQUIRED_OUTPUT_TYPES.has(outputType);
     const needsDownloadedVideo = outputType === "mix_mp4";
     let director = taskStore.getDirectorProject(directorId);
@@ -1767,7 +1824,7 @@ export function createVideoProductService({
 
     let directorScenes = director ? taskStore.listDirectorScenes(director.id) : [];
     let routeAAutoPreview = false;
-    if (outputType === "template_mp4" && (!director || director.status !== "completed") && audio && audio.status === "completed") {
+    if (isRouteAVoiceClock && (!director || director.status !== "completed") && audio && audio.status === "completed") {
       const style = routeAStyleContract(input);
       directorScenes = buildRouteAAutoDirectorScenes(audio, input, 0);
       director = {
@@ -1775,7 +1832,7 @@ export function createVideoProductService({
         task_id: audio.task_id || 0,
         rewrite_id: audio.rewrite_id || 0,
         title: routeAAutoTitle(audio, input),
-        source_text: audio.text || "",
+        source_text: ttsJobText(audio),
         platform: platformId,
         status: "completed",
         metadata_json: JSON.stringify({
@@ -1791,7 +1848,7 @@ export function createVideoProductService({
     const audioBinding = director && audio
       ? audioDirectorBinding(director, audio, directorScenes)
       : { accepted: false, score: 0, reason: "缺少导演稿或音频，无法绑定。" };
-    if (outputType === "template_mp4" && director && audio && !audioBinding.accepted) {
+    if (isRouteAVoiceClock && director && audio && !audioBinding.accepted) {
       blockers.push(`路线 A 已阻止随机音频匹配：${audioBinding.reason}`);
     }
 
@@ -1808,9 +1865,9 @@ export function createVideoProductService({
     if (needsDownloadedVideo && !downloadedVideos.length) blockers.push("缺少可用于混剪的已下载视频素材。");
 
     const audioDuration = await probeMediaDuration(ffmpegPath, audio?.audio_path || "");
-    const routeASubtitleScenes = outputType === "template_mp4"
+    const routeASubtitleScenes = isRouteAVoiceClock
       ? buildRouteASubtitleScenes({
-        audioText: audio?.text || "",
+        audioText: ttsJobText(audio),
         directorScenes,
         targetDuration: audioDuration,
       })
@@ -1841,6 +1898,7 @@ export function createVideoProductService({
         scene_index: scene.scene_index || index + 1,
         narration_text: scene.voice_text || "",
         subtitle_text: scene.subtitle || scene.voice_text || "",
+        caption_keywords: Array.isArray(scene.caption_keywords) ? scene.caption_keywords : [],
         start_time: start,
         end_time: end,
         duration,
@@ -1853,6 +1911,8 @@ export function createVideoProductService({
         status,
         metadata_json: JSON.stringify({
           director_scene_id: scene.id,
+          source_scene_index: scene.source_scene_index || scene.scene_index || index + 1,
+          timeline_scene_index: scene.scene_index || index + 1,
           purpose: scene.purpose || "",
           emotion: scene.emotion || "",
           asset_type: scene.asset_type || "",
@@ -1921,7 +1981,7 @@ export function createVideoProductService({
         route_a_intro_seconds: routeAIntroSeconds,
         route_a_style_id: routeAStyleId(input.route_a_style_id || input.style_id),
         route_a_style: routeAStyleContract(input),
-        route_a_bgm_strategy: String(input.bgm_strategy || "none"),
+        route_a_bgm_strategy: String(input.bgm_strategy || "auto"),
         route_a_bgm_asset_id: String(input.bgm_asset_id || ""),
         route_a_auto_preview: routeAAutoPreview,
         route_a_skill_chain: ROUTE_A_SKILL_CHAIN,
@@ -2346,7 +2406,7 @@ ${sceneMarkup}
         optimized_publish_title: titleText,
         publish_keywords: publishMeta.keywords,
         publish_hashtags: publishMeta.hashtags,
-        route_a_caption_policy: project.output_type === "template_mp4" ? "premium_ass_boxed_keyword_highlight" : "",
+        route_a_caption_policy: ROUTE_A_VOICE_CLOCK_OUTPUT_TYPES.has(project.output_type) ? "bottom_safe_keyword_highlight" : "",
         template_background: packagedTemplateBackground ? "image_asset_dark_blur_motion" : "procedural_premium_motion",
         publish_package: true,
       },
@@ -2774,10 +2834,13 @@ ${sceneMarkup}
           : "",
         publish_title: publishTitle,
         title_optimized: !titleLooksGeneric(publishTitle),
-        motion_template_version: project.output_type === "template_mp4" ? "route-a-premium-ffmpeg-v5" : "",
-        alignment_source: project.output_type === "template_mp4"
-          ? timelineFiles.packagedScenes[0]?.metadata?.alignment_source || safeJson(timelineFiles.packagedScenes[0]?.metadata_json, {})?.alignment_source || ""
+        motion_template_version: project.output_type === "template_mp4" ? "route-a-premium-ffmpeg-v5" : project.output_type === "jianying_template" ? "jianying-template-voice-clock-v2" : "",
+        alignment_source: ROUTE_A_VOICE_CLOCK_OUTPUT_TYPES.has(project.output_type)
+          ? timelineFiles.packagedScenes[0]?.metadata?.alignment_source || safeJson(timelineFiles.packagedScenes[0]?.metadata_json, {})?.alignment_source || timelineFiles.timelineJson?.metadata?.alignment_source || ""
           : "",
+        audio_start: Number(timelineFiles.timelineJson?.tracks?.audio?.[0]?.start || 0),
+        audio_duration: Number(timelineFiles.timelineJson?.metadata?.audio_duration || timelineFiles.timelineJson?.tracks?.audio?.[0]?.duration || 0),
+        subtitle_count: Array.isArray(timelineFiles.timelineJson?.tracks?.subtitles) ? timelineFiles.timelineJson.tracks.subtitles.length : 0,
         duration: Number((media.duration || 0).toFixed(3)),
         file_size: stats?.size || 0,
       },
@@ -3050,8 +3113,12 @@ ${sceneMarkup}
         bgm_strategy: String(input.bgm_strategy || "auto"),
         bgm_asset_id: String(input.bgm_asset_id || ""),
         jianying_template: String(input.jianying_template || "education_tips"),
-        render_engine: outputType === "template_mp4" ? "ffmpeg_stable_with_hyperframes_package" : "ffmpeg",
-        route_a_skill_chain: outputType === "template_mp4" ? ROUTE_A_SKILL_CHAIN : [],
+        render_engine: outputType === "template_mp4"
+          ? "ffmpeg_stable_with_hyperframes_package"
+          : outputType === "jianying_template"
+            ? "capcut_cli_template_draft"
+            : "ffmpeg",
+        route_a_skill_chain: ROUTE_A_VOICE_CLOCK_OUTPUT_TYPES.has(outputType) ? ROUTE_A_SKILL_CHAIN : [],
         ...routeA.metadata,
       }),
     });
