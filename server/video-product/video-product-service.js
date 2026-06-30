@@ -1607,12 +1607,29 @@ export function createVideoProductService({
     const filename = `bgm_local_${Date.now()}_${safeFileName(path.basename(resolved, ext))}${ext}`;
     const outputPath = path.join(bgmDir, filename);
     fs.copyFileSync(resolved, outputPath);
+    for (const sidecar of [
+      `${resolved}.json`,
+      path.join(path.dirname(resolved), `${path.basename(resolved, ext)}.json`),
+      path.join(path.dirname(resolved), `${path.basename(resolved, ext)}.bgm.json`),
+    ]) {
+      if (!fs.existsSync(sidecar)) continue;
+      fs.copyFileSync(sidecar, `${outputPath}.json`);
+      break;
+    }
     const stats = fs.statSync(outputPath);
+    const metadata = readBgmMetadata(outputPath);
     return {
       id: createStableAssetId(outputPath),
       path: outputPath,
       filename,
       file_size: stats.size,
+      bpm: metadata.bpm,
+      mood: metadata.mood,
+      tags: metadata.tags,
+      license: metadata.license,
+      license_url: metadata.license_url,
+      source: metadata.source,
+      license_status: metadata.license_status,
     };
   }
 
