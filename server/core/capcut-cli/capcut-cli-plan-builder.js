@@ -309,7 +309,7 @@ export function buildCapcutCompileSpec({ project = {}, timeline = {}, timelineFi
   const keywordItems = captionItems
     .map((item, index) => {
       const keyword = primaryCaptionKeyword(item.scene, item.rawText || item.text);
-      if (!keyword) return null;
+      if (!keyword || captionVisualLength(keyword) > 6) return null;
       return {
         ref: `keyword_${String(index + 1).padStart(2, "0")}`,
         text: keyword,
