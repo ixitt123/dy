@@ -282,6 +282,8 @@ export async function loadVideoProductSources() {
   setOptions(document.querySelector("#videoProductBgm"), [{ id: "", filename: "自动匹配本地 BGM；没有则基础生成" }, ...(data.bgmAssets || [])], bgmOptionLabel, preferred.bgmId);
   setOptions(document.querySelector("#videoProductRouteAStyle"), data.routeAStyles || [], (row) => row.label || row.id);
   setOptions(document.querySelector("#videoProductBgmStrategy"), data.bgmStrategies || [], (row) => row.label || row.id, "none");
+  if (!preferred.directorId && directorSelect && !directorSelect.value && data.directors?.[0]?.id) directorSelect.value = String(data.directors[0].id);
+  if (!preferred.audioId && audioSelect && !audioSelect.value && data.audioJobs?.[0]?.id) audioSelect.value = String(data.audioJobs[0].id);
   renderJianyingTemplateOptions();
   state.manualBindings = {};
   state.preview = null;
