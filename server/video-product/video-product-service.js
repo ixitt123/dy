@@ -958,6 +958,7 @@ export function createVideoProductService({
   ffmpegPath,
   capcutCliAdapter = null,
   projectCenter = null,
+  getSettings = () => ({}),
   onProgress = () => {},
   onIdle = () => {},
 }) {

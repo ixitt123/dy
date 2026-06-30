@@ -119,6 +119,7 @@ const videoProductService = createVideoProductService({
   ffmpegPath,
   capcutCliAdapter,
   projectCenter,
+  getSettings: readSettings,
   onProgress: (data) => broadcastProgress({ type: "video-product", ...data }),
   onIdle: scheduleShutdownIfIdle,
 });
