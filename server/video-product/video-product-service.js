@@ -2970,6 +2970,7 @@ ${sceneMarkup}
     let project = taskStore.getTimelineProject(projectId);
     if (!project) return;
     let input = safeJson(project.metadata_json, {});
+    const forceExecution = input.force_execution === true || input.force_quality_review === true || input.force_timeline_blockers === true;
 
     try {
       project = await ensureRouteADirectorReady(project, input);
@@ -3134,13 +3135,17 @@ ${sceneMarkup}
         }
         await makePublishPackage(project, timelineFiles, mp4Path);
         const quality = await reviewRenderedVideo(project, timelineFiles, mp4Path);
+        if (!quality.passed && forceExecution) {
+          quality.forced = true;
+          quality.force_reason = "用户确认后强制执行，保留质量错误但不中断成片输出。";
+        }
         const reportPath = path.join(timelineFiles.projectDir, "render_report.json");
         writeJson(reportPath, renderReport(project, timelineFiles, {
           mp4Path,
           bgmPath: timelineFiles.packagedBgm,
           quality,
         }));
-        if (!quality.passed) {
+        if (!quality.passed && !forceExecution) {
           throw new Error(`质量审查未通过：${quality.errors.join(" ")}`);
         }
       } else {

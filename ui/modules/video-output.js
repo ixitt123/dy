@@ -532,7 +532,7 @@ export async function syncSelectionsToProject({ preview = state.preview } = {}) 
   return currentVideoProject();
 }
 
-function payload() {
+function payload({ forceExecution = false } = {}) {
   const project = currentVideoProject();
   return {
     projectId: project?.id || "",
@@ -548,10 +548,22 @@ function payload() {
     bgm_asset_id: document.querySelector("#videoProductBgm")?.value || "",
     manual_bindings: { ...state.manualBindings },
     target_duration: 30,
+    force_execution: Boolean(forceExecution),
+    force_timeline_blockers: Boolean(forceExecution),
+    force_quality_review: Boolean(forceExecution),
   };
 }
 
-export async function generateVideoProduct() {
+function isForceableVideoProductError(message = "") {
+  const text = String(message || "");
+  return /相似度|随机音频匹配|质量审查未通过|码率偏低|标题仍是内部导演稿名称|缺少 BGM 素材/.test(text);
+}
+
+function confirmForceVideoProduct(message = "") {
+  return window.confirm(`当前成片检查有风险：\n\n${message}\n\n确定后将强制继续生成剪映草稿/成片，并在报告里保留风险记录。是否继续？`);
+}
+
+export async function generateVideoProduct({ forceExecution = false } = {}) {
   const status = document.querySelector("#videoProductStatus");
   const button = document.querySelector("#generateVideoProduct");
   await ensureVideoProjectForOutput();
@@ -583,8 +595,8 @@ export async function generateVideoProduct() {
     const readiness = await refreshReadiness();
     await refreshQualityCheck();
     if (!readiness?.ready) throw new Error(`暂不能生成：${readiness?.blockers?.map((item) => `${item.label}${item.detail}`).join("、") || "关键内容未完成"}`);
-    if (status) status.textContent = "检查通过，正在创建剪映模板草稿任务...";
-    const data = await postJson("/api/video-product/generate", payload());
+    if (status) status.textContent = forceExecution ? "已确认风险，正在强制创建剪映模板草稿任务..." : "检查通过，正在创建剪映模板草稿任务...";
+    const data = await postJson("/api/video-product/generate", payload({ forceExecution }));
     const projectId = data.project.project_id || data.project.id;
     return await waitForVideoProductCompletion(projectId);
   } catch (error) {
@@ -599,7 +611,7 @@ export async function generateVideoProduct() {
   }
 }
 
-async function generateJianyingDraftAndOpen() {
+async function generateJianyingDraftAndOpen({ forceExecution = false } = {}) {
   selectOutputType("jianying_template");
   const status = document.querySelector("#videoProductStatus");
   await ensureVideoProjectForOutput();
@@ -613,7 +625,7 @@ async function generateJianyingDraftAndOpen() {
   }
   if (status) status.textContent = "正在一键生成剪映模板草稿...";
   await assertJianyingReadyForDraft();
-  const project = await generateVideoProduct();
+  const project = await generateVideoProduct({ forceExecution });
   if (!project?.draft_path) {
     throw new Error("成片任务完成了，但没有返回剪映草稿路径；请检查模板母版和 capcut-result.json。");
   }
@@ -771,6 +783,13 @@ function bindEvents() {
   }));
   document.querySelector("#generateVideoProduct")?.addEventListener("click", () => generateJianyingDraftAndOpen().catch((error) => {
     const status = document.querySelector("#videoProductStatus");
+    if (isForceableVideoProductError(error.message) && confirmForceVideoProduct(error.message)) {
+      generateJianyingDraftAndOpen({ forceExecution: true }).catch((retryError) => {
+        if (status) status.textContent = retryError.message || "强制生成剪映草稿失败。";
+        else window.alert(retryError.message || "强制生成剪映草稿失败。");
+      });
+      return;
+    }
     if (status) status.textContent = error.message || "生成剪映草稿失败，请检查生成前检查面板。";
     else window.alert(error.message || "生成剪映草稿失败，请检查生成前检查面板。");
   }));
@@ -781,6 +800,12 @@ function bindEvents() {
     event.preventDefault();
     generateJianyingDraftAndOpen().catch((error) => {
       const status = document.querySelector("#videoProductStatus");
+      if (isForceableVideoProductError(error.message) && confirmForceVideoProduct(error.message)) {
+        generateJianyingDraftAndOpen({ forceExecution: true }).catch((retryError) => {
+          if (status) status.textContent = retryError.message || "强制生成剪映草稿失败。";
+        });
+        return;
+      }
       if (status) status.textContent = error.message || "生成剪映草稿失败，请检查生成前检查面板。";
     });
   });
