@@ -298,8 +298,8 @@ function timelineToAss(scenes, { width = 1080, height = 1920, style = null } = {
   const palette = style?.palette || {};
   const marginV = Math.max(150, Math.round(height * 0.09));
   const marginH = Math.max(86, Math.round(width * 0.08));
-  const fontSize = Math.max(40, Math.round(height * 0.022));
-  const titleSize = Math.max(44, Math.round(height * 0.026));
+  const fontSize = Math.max(28, Math.round(height * 0.016));
+  const titleSize = Math.max(34, Math.round(height * 0.019));
   const accent = assColor(palette.accent, "#E7C76C");
   const accent2 = assColor(palette.accent2, "#49D6C8");
   const textColor = assColor(palette.text, "#FFFFFF");

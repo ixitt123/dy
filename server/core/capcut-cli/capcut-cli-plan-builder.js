@@ -66,6 +66,7 @@ function textStyleOperation(target, style = {}, overrides = {}) {
       borderWidth: Number(overrides.borderWidth ?? style.borderWidth ?? style.strokeWidth ?? 2),
       borderColor: overrides.borderColor || style.borderColor || style.strokeColor || "#000000",
       borderAlpha: Number(overrides.borderAlpha ?? style.borderAlpha ?? 0.95),
+      fixedWidth: Number(overrides.fixedWidth ?? style.fixedWidth ?? 0.74),
       bgColor: overrides.bgColor || style.bgColor || style.backgroundColor || "#000000",
       bgAlpha: Number(overrides.bgAlpha ?? style.bgAlpha ?? 0.14),
       bgStyle: Number(overrides.bgStyle ?? style.bgStyle ?? 1),
@@ -292,7 +293,7 @@ export function buildCapcutCompileSpec({ project = {}, timeline = {}, timelineFi
   const captionItems = scenes
     .map((scene, index) => {
       const rawText = firstValue(scene.subtitle_text, scene.narration_text, scene.title_text);
-      const text = wrapCaptionText(rawText, 16, 2);
+      const text = wrapCaptionText(rawText, 10, 2);
       if (!text) return null;
       return {
         ref: `caption_${String(index + 1).padStart(2, "0")}`,
@@ -314,13 +315,13 @@ export function buildCapcutCompileSpec({ project = {}, timeline = {}, timelineFi
         text: keyword,
         start: Number((item.start + Math.min(0.18, item.duration * 0.18)).toFixed(3)),
         duration: Math.max(0.45, Math.min(0.95, item.duration - 0.08)),
-        fontSize: Number(captionStyle.keywordFontSize || captionStyle.highlightFontSize || captionStyle.fontSize || 24) + 5,
+        fontSize: Number(captionStyle.keywordFontSize || captionStyle.highlightFontSize || captionStyle.fontSize || 14) + 3,
         color: captionStyle.highlightColor || captionStyle.keywordColor || "#FFD15A",
         strokeColor: captionStyle.strokeColor || "#000000",
         strokeWidth: Math.max(2, Number(captionStyle.strokeWidth || 2) + 1),
         backgroundColor: "rgba(0,0,0,0.10)",
         x: 0,
-        y: Number(captionStyle.keywordY ?? -0.67),
+        y: Number(captionStyle.keywordY ?? -0.69),
       };
     })
     .filter(Boolean);
@@ -380,6 +381,7 @@ export function buildCapcutCompileSpec({ project = {}, timeline = {}, timelineFi
   operations.push(...captionItems.map((item) => textStyleOperation(item.ref, captionStyle, {
     bgAlpha: 0.10,
     borderWidth: Math.max(1.5, Number(captionStyle.strokeWidth || 2)),
+    fixedWidth: 0.74,
   })));
   operations.push(...keywordItems.flatMap((item) => [
     textStyleOperation(item.ref, captionStyle, {
@@ -388,12 +390,13 @@ export function buildCapcutCompileSpec({ project = {}, timeline = {}, timelineFi
       bgHeight: 0.12,
       borderWidth: Math.max(3, Number(captionStyle.strokeWidth || 2) + 1),
       borderColor: "#000000",
+      fixedWidth: 0.46,
       shadowAlpha: 0.86,
       shadowDistance: 6,
       shadowSmoothing: 0.40,
     }),
-    { op: "keyframe", target: item.ref, property: "uniform_scale", time: item.start, value: 0.86 },
-    { op: "keyframe", target: item.ref, property: "uniform_scale", time: Number((item.start + 0.14).toFixed(3)), value: 1.14 },
+    { op: "keyframe", target: item.ref, property: "uniform_scale", time: item.start, value: 0.94 },
+    { op: "keyframe", target: item.ref, property: "uniform_scale", time: Number((item.start + 0.14).toFixed(3)), value: 1.04 },
     { op: "keyframe", target: item.ref, property: "uniform_scale", time: Number((item.start + 0.32).toFixed(3)), value: 1 },
   ]));
   if (timelineFiles.packagedAudio) {
