@@ -52,6 +52,31 @@ function styleTextItem(base = {}, overrides = {}) {
   };
 }
 
+function textStyleOperation(target, style = {}, overrides = {}) {
+  return {
+    op: "text-style",
+    target,
+    style: {
+      shadow: true,
+      shadowAlpha: Number(overrides.shadowAlpha ?? style.shadowAlpha ?? 0.72),
+      shadowAngle: Number(overrides.shadowAngle ?? style.shadowAngle ?? -45),
+      shadowColor: overrides.shadowColor || style.shadowColor || "#000000",
+      shadowDistance: Number(overrides.shadowDistance ?? style.shadowDistance ?? 4),
+      shadowSmoothing: Number(overrides.shadowSmoothing ?? style.shadowSmoothing ?? 0.35),
+      borderWidth: Number(overrides.borderWidth ?? style.borderWidth ?? style.strokeWidth ?? 2),
+      borderColor: overrides.borderColor || style.borderColor || style.strokeColor || "#000000",
+      borderAlpha: Number(overrides.borderAlpha ?? style.borderAlpha ?? 0.95),
+      bgColor: overrides.bgColor || style.bgColor || style.backgroundColor || "#000000",
+      bgAlpha: Number(overrides.bgAlpha ?? style.bgAlpha ?? 0.14),
+      bgStyle: Number(overrides.bgStyle ?? style.bgStyle ?? 1),
+      bgRoundRadius: Number(overrides.bgRoundRadius ?? style.bgRoundRadius ?? 0.18),
+      bgWidth: Number(overrides.bgWidth ?? style.bgWidth ?? 0.16),
+      bgHeight: Number(overrides.bgHeight ?? style.bgHeight ?? 0.12),
+      bgVOffset: Number(overrides.bgVOffset ?? style.bgVOffset ?? 0),
+    },
+  };
+}
+
 function captionVisualLength(value = "") {
   return String(value || "").replace(/\s+/g, "").length;
 }
@@ -121,6 +146,11 @@ function captionKeywordCandidates(scene = {}, text = "") {
     .filter((item) => item.length >= 2 && item.length <= 8)
     .filter((item, index, arr) => arr.indexOf(item) === index)
     .slice(0, 2);
+}
+
+function primaryCaptionKeyword(scene = {}, text = "") {
+  const candidates = captionKeywordCandidates(scene, text);
+  return candidates.find((item) => String(item || "").length >= 2) || "";
 }
 
 function buildTextRangeOperation(target, text, keywords, style = {}) {
@@ -262,7 +292,7 @@ export function buildCapcutCompileSpec({ project = {}, timeline = {}, timelineFi
   const captionItems = scenes
     .map((scene, index) => {
       const rawText = firstValue(scene.subtitle_text, scene.narration_text, scene.title_text);
-      const text = wrapCaptionText(rawText, 12, 2);
+      const text = wrapCaptionText(rawText, 16, 2);
       if (!text) return null;
       return {
         ref: `caption_${String(index + 1).padStart(2, "0")}`,
@@ -271,26 +301,32 @@ export function buildCapcutCompileSpec({ project = {}, timeline = {}, timelineFi
         scene,
         start: Number(scene.start_time || 0),
         duration: Math.max(0.1, Number(scene.duration || 0)),
-        ...styleTextItem(captionStyle, { y: captionStyle.y ?? -0.70 }),
+        ...styleTextItem(captionStyle, { y: captionStyle.y ?? -0.82 }),
+      };
+    })
+    .filter(Boolean);
+  const keywordItems = captionItems
+    .map((item, index) => {
+      const keyword = primaryCaptionKeyword(item.scene, item.rawText || item.text);
+      if (!keyword) return null;
+      return {
+        ref: `keyword_${String(index + 1).padStart(2, "0")}`,
+        text: keyword,
+        start: Number((item.start + Math.min(0.18, item.duration * 0.18)).toFixed(3)),
+        duration: Math.max(0.45, Math.min(0.95, item.duration - 0.08)),
+        fontSize: Number(captionStyle.keywordFontSize || captionStyle.highlightFontSize || captionStyle.fontSize || 24) + 5,
+        color: captionStyle.highlightColor || captionStyle.keywordColor || "#FFD15A",
+        strokeColor: captionStyle.strokeColor || "#000000",
+        strokeWidth: Math.max(2, Number(captionStyle.strokeWidth || 2) + 1),
+        backgroundColor: "rgba(0,0,0,0.10)",
+        x: 0,
+        y: Number(captionStyle.keywordY ?? -0.67),
       };
     })
     .filter(Boolean);
   const textItems = [
-    titleText ? {
-      ref: "title_card",
-      text: titleText,
-      start: 0,
-      duration: Math.max(1.2, Math.min(2.2, duration || 1.6)),
-      ...styleTextItem(captionStyle, titleStyle),
-    } : null,
     ...captionItems.map(({ rawText, scene, ...item }) => item),
-    ctaText && duration > 2 ? {
-      ref: "cta_card",
-      text: ctaText,
-      start: Math.max(0, duration - 2.2),
-      duration: Math.min(2.2, duration),
-      ...styleTextItem(captionStyle, ctaStyle),
-    } : null,
+    ...keywordItems,
   ].filter(Boolean);
   const audioItems = [];
   const audioTrack = Array.isArray(timeline.tracks?.audio) ? timeline.tracks.audio[0] : null;
@@ -341,6 +377,25 @@ export function buildCapcutCompileSpec({ project = {}, timeline = {}, timelineFi
     .map((item) => buildTextRangeOperation(item.ref, item.text, captionKeywordCandidates(item.scene, item.text), captionStyle))
     .filter(Boolean);
   operations.push(...textRangeOperations);
+  operations.push(...captionItems.map((item) => textStyleOperation(item.ref, captionStyle, {
+    bgAlpha: 0.10,
+    borderWidth: Math.max(1.5, Number(captionStyle.strokeWidth || 2)),
+  })));
+  operations.push(...keywordItems.flatMap((item) => [
+    textStyleOperation(item.ref, captionStyle, {
+      bgAlpha: 0.18,
+      bgWidth: 0.20,
+      bgHeight: 0.12,
+      borderWidth: Math.max(3, Number(captionStyle.strokeWidth || 2) + 1),
+      borderColor: "#000000",
+      shadowAlpha: 0.86,
+      shadowDistance: 6,
+      shadowSmoothing: 0.40,
+    }),
+    { op: "keyframe", target: item.ref, property: "uniform_scale", time: item.start, value: 0.86 },
+    { op: "keyframe", target: item.ref, property: "uniform_scale", time: Number((item.start + 0.14).toFixed(3)), value: 1.14 },
+    { op: "keyframe", target: item.ref, property: "uniform_scale", time: Number((item.start + 0.32).toFixed(3)), value: 1 },
+  ]));
   if (timelineFiles.packagedAudio) {
     operations.push({ op: "audio-fade", target: "voiceover", fadeIn: 0.08, fadeOut: 0.2 });
   }
