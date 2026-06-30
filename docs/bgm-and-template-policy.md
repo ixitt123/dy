@@ -33,9 +33,21 @@ Supported sidecar names:
 
 ## API Candidates
 
-- Pixabay Music: best first candidate for free commercial-use music discovery. Store the source URL, author, license link, BPM when available, and downloaded file metadata. Official reference: https://pixabay.com/service/license-summary/
-- Freesound: better for SFX and short loops, but the free API terms are non-commercial. Commercial API usage needs separate permission, and every downloaded asset still needs license filtering. Official references: https://freesound.org/docs/api/resources_apiv2.html and https://freesound.org/docs/api/terms_of_use.html
+Domestic paid providers are preferred when the user needs Alipay or WeChat Pay:
+
+- HIFIVE 音加加 / 曲多多: primary domestic paid candidate for API/SDK music catalog access, short-video editing tools, online tools, ecommerce, and enterprise content. Ask for usage-based billing, annual billing, Alipay/WeChat Pay, bank transfer, and fapiao support. Official reference: https://open.haifanwu.com/
+- Vfine Music: domestic commercial music candidate for ads, enterprise video, and brand content. Ask for API or enterprise access, license certificate output, and short-video export rights. Official reference: https://www.vfinemusic.com/
+- 看见音乐 STARLINK: platform/API/SDK candidate for global commercial music assets, scene music, short-drama soundtrack, and distribution. Official reference: https://open.kanjian.com/
+- 腾讯音乐音乐云: enterprise candidate for commercial catalog, custom music, copyright protection, and business cooperation. Official reference: https://opencloud.tencentmusic.com/index
+
+Free or overseas backup candidates:
+
 - Jamendo: useful catalog and API, but commercial video usage can require explicit licensing. Treat as review-required unless a project-specific license is stored. Official reference: https://developer.jamendo.com/v3.0
+- Pixabay Music: useful for manually reviewed free commercial-use music discovery. Store the source URL, author, license link, BPM when available, and downloaded file metadata. Official reference: https://pixabay.com/service/license-summary/
+- Freesound: better for SFX and short loops, but the free API terms are non-commercial. Commercial API usage needs separate permission, and every downloaded asset still needs license filtering. Official references: https://freesound.org/docs/api/resources_apiv2.html and https://freesound.org/docs/api/terms_of_use.html
+- Mubert API: good for generated BGM by prompt/BPM/duration, but it is an overseas provider and is not preferred when Alipay or WeChat Pay is required. Official reference: https://mubert.com/api
+
+See `docs/bgm-paid-api-application-guide.md` for application steps and fee-standard questions.
 
 ## Jianying Template Rules
 
