@@ -854,6 +854,7 @@ function normalizeSettings(settings) {
       model: String(imageProviders.jimeng?.model || "flux-dev").trim() || "flux-dev",
     },
   };
+  next.bgmProviders = normalizeBgmProviders(bgmProviders);
   next.modelMap = { ...DEFAULT_MODEL_MAPPING, ...modelMapping };
   if (next.modelMap.image?.provider === "volcengine_ark") {
     next.modelMap.image = {
@@ -1022,6 +1023,106 @@ function rewriteProviderIdFromMapping(providerId) {
   const id = String(providerId || "");
   if (id === "qwen" || id === "ali-bailian") return "dashscope";
   return id;
+}
+
+const BGM_PROVIDER_DEFS = [
+  {
+    key: "hifive",
+    id: "hifive_bgm",
+    label: "HIFIVE 音加加 / 曲多多",
+    feature: "正版商用曲库、短视频/在线工具 API、授权下载",
+    description: "国内优先的商用音乐 API 候选，适合短视频、在线工具、电商和企业自媒体。申请后保存 App ID/Key/Secret，自动配乐只在授权范围明确后启用。",
+    baseUrl: "https://open.haifanwu.com",
+    model: "short_video",
+    models: ["short_video", "online_tool", "ecommerce", "commercial_license"],
+    applyUrl: "https://open.haifanwu.com/",
+    balanceUrl: "https://haifanwu.com/",
+    apiKeyField: "api_key",
+    workspaceField: "app_id",
+    secretField: "secret",
+  },
+  {
+    key: "vfine",
+    id: "vfine_bgm",
+    label: "Vfine Music",
+    feature: "商用版权音乐、API/服务端接入、企业授权",
+    description: "国内商用版权音乐平台，适合广告、宣传片、短视频和企业内容。申请 API 或企业服务后，把授权素材入库并保留授权证明。",
+    baseUrl: "https://www.vfinemusic.com",
+    model: "commercial_music",
+    models: ["commercial_music", "short_video", "advertising", "enterprise"],
+    applyUrl: "https://www.vfinemusic.com/access",
+    balanceUrl: "https://www.vfinemusic.com/",
+    apiKeyField: "api_key",
+    workspaceField: "app_id",
+    secretField: "secret",
+  },
+  {
+    key: "kanjian_starlink",
+    id: "kanjian_starlink_bgm",
+    label: "看见音乐 STARLINK",
+    feature: "全球商用音乐资产、API/SDK、配乐/分销授权",
+    description: "面向平台或应用的正版音乐 API/SDK 接入方案，适合需要全球授权、短剧配乐、场景 BGM 和批量商业版权的流程。",
+    baseUrl: "https://open.kanjian.com",
+    model: "soundtrack",
+    models: ["soundtrack", "distribution", "scene_music", "short_drama"],
+    applyUrl: "https://open.kanjian.com/",
+    balanceUrl: "https://open.kanjian.com/",
+    apiKeyField: "api_key",
+    workspaceField: "app_id",
+    secretField: "secret",
+  },
+  {
+    key: "tme_opencloud",
+    id: "tme_opencloud_bgm",
+    label: "腾讯音乐音乐云",
+    feature: "商用版权曲库、音乐定制、版权保护",
+    description: "腾讯音乐集团的音乐商业化解决方案，适合企业级商用曲库、版权结算、音乐定制和版权保护。通常需要商务开通。",
+    baseUrl: "https://opencloud.tencentmusic.com",
+    model: "commercial_catalog",
+    models: ["commercial_catalog", "custom_music", "copyright_protection"],
+    applyUrl: "https://opencloud.tencentmusic.com/index",
+    balanceUrl: "https://opencloud.tencentmusic.com/index",
+    apiKeyField: "api_key",
+    workspaceField: "app_id",
+    secretField: "secret",
+  },
+  {
+    key: "jamendo",
+    id: "jamendo_bgm",
+    label: "Jamendo",
+    feature: "BGM 自动匹配、下载入库、120-150 BPM 合拍筛选",
+    description: "免费/海外备用，用于自动搜索可下载的 Creative Commons 音乐。自动流程会过滤 NC/ND 授权，并只使用能确认 120-150 BPM 的曲目；未配置时不影响本地 BGM 和基础节奏。",
+    baseUrl: "https://api.jamendo.com/v3.0",
+    model: "tracks",
+    models: ["tracks"],
+    applyUrl: "https://developer.jamendo.com/v3.0",
+    balanceUrl: "https://developer.jamendo.com/v3.0",
+    apiKeyField: "client_id",
+    workspaceField: "",
+    secretField: "",
+  },
+];
+
+function normalizeBgmProviders(bgmProviders = {}) {
+  const normalized = {};
+  for (const def of BGM_PROVIDER_DEFS) {
+    const current = bgmProviders[def.key] && typeof bgmProviders[def.key] === "object" ? bgmProviders[def.key] : {};
+    const apiKeyField = def.apiKeyField || "api_key";
+    const workspaceField = def.workspaceField || "app_id";
+    const secretField = def.secretField || "secret";
+    normalized[def.key] = {
+      label: def.label,
+      base_url: String(current.base_url || current.baseUrl || def.baseUrl || "").trim(),
+      [apiKeyField]: String(current[apiKeyField] || current.apiKey || current.api_key || current.client_id || "").trim(),
+      enabled: current.enabled !== false,
+      model: String(current.model || def.model || "").trim(),
+      license_plan: String(current.license_plan || current.licensePlan || "").trim(),
+      payment_methods: Array.isArray(current.payment_methods) ? current.payment_methods : ["alipay", "wechat_pay"],
+    };
+    if (workspaceField) normalized[def.key][workspaceField] = String(current[workspaceField] || current.workspaceId || current.workspace_id || current.appId || "").trim();
+    if (secretField) normalized[def.key][secretField] = String(current[secretField] || current.secretKey || current.secret_key || "").trim();
+  }
+  return normalized;
 }
 
 function publicUnifiedProviders(settings = readSettings()) {
