@@ -52,7 +52,7 @@
     return projectId;
   }
 
-  function payload(projectId) {
+  function payload(projectId, { forceExecution = false } = {}) {
     const manualBindings = {};
     document.querySelectorAll(".video-product-image-select").forEach((select) => {
       if (select.value) manualBindings[select.dataset.sceneIndex || ""] = select.value;
@@ -72,7 +72,18 @@
       bgm_asset_id: bgmId,
       manual_bindings: manualBindings,
       target_duration: 30,
+      force_execution: Boolean(forceExecution),
+      force_timeline_blockers: Boolean(forceExecution),
+      force_quality_review: Boolean(forceExecution),
     };
+  }
+
+  function isForceableError(message = "") {
+    return /相似度|随机音频匹配|质量审查未通过|码率偏低|标题仍是内部导演稿名称|缺少 BGM 素材/.test(String(message || ""));
+  }
+
+  function confirmForce(message = "") {
+    return window.confirm(`当前成片检查有风险：\n\n${message}\n\n确定后将强制继续生成剪映草稿，并在报告里保留风险记录。是否继续？`);
   }
 
   async function waitForProject(id) {
@@ -90,6 +101,36 @@
     throw new Error("剪映草稿生成超时，请查看成片任务列表。");
   }
 
+  async function runImportJianyingDraft({ forceExecution = false } = {}) {
+    const projectId = await ensureProjectId();
+    const body = payload(projectId, { forceExecution });
+    if (!body.source_director_project_id) {
+      status("请先选择已完成的导演稿。");
+      document.querySelector("#videoProductDirector")?.focus();
+      return null;
+    }
+    if (!body.audio_asset_id) {
+      status("请先选择已完成的 TTS 语音。");
+      document.querySelector("#videoProductAudio")?.focus();
+      return null;
+    }
+    status(forceExecution ? "已确认风险，正在强制创建剪映草稿任务..." : "正在创建剪映草稿任务...");
+    const created = await requestJson("/api/video-product/generate", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+    const timelineId = created.project?.project_id || created.project?.id;
+    if (!timelineId) throw new Error("后端没有返回成片任务 ID。");
+    const project = await waitForProject(timelineId);
+    if (!project.draft_path) throw new Error("任务完成了，但没有返回剪映草稿路径。");
+    status(`剪映草稿已生成：${project.draft_path}，正在打开剪映...`);
+    const opened = await requestJson("/api/video-product/open-jianying", { method: "POST", body: "{}" });
+    status(opened.ok
+      ? `剪映草稿已导入并请求打开剪映：${project.draft_path}`
+      : `剪映草稿已生成：${project.draft_path}；但剪映未打开：${opened.message || "未知原因"}`);
+    return project;
+  }
+
   async function importJianyingDraft(event) {
     event?.preventDefault?.();
     event?.stopImmediatePropagation?.();
@@ -100,34 +141,18 @@
       button.disabled = true;
     }
     try {
-      const projectId = await ensureProjectId();
-      const body = payload(projectId);
-      if (!body.source_director_project_id) {
-        status("请先选择已完成的导演稿。");
-        document.querySelector("#videoProductDirector")?.focus();
-        return;
-      }
-      if (!body.audio_asset_id) {
-        status("请先选择已完成的 TTS 语音。");
-        document.querySelector("#videoProductAudio")?.focus();
-        return;
-      }
-      status("正在创建剪映草稿任务...");
-      const created = await requestJson("/api/video-product/generate", {
-        method: "POST",
-        body: JSON.stringify(body),
-      });
-      const timelineId = created.project?.project_id || created.project?.id;
-      if (!timelineId) throw new Error("后端没有返回成片任务 ID。");
-      const project = await waitForProject(timelineId);
-      if (!project.draft_path) throw new Error("任务完成了，但没有返回剪映草稿路径。");
-      status(`剪映草稿已生成：${project.draft_path}，正在打开剪映...`);
-      const opened = await requestJson("/api/video-product/open-jianying", { method: "POST", body: "{}" });
-      status(opened.ok
-        ? `剪映草稿已导入并请求打开剪映：${project.draft_path}`
-        : `剪映草稿已生成：${project.draft_path}；但剪映未打开：${opened.message || "未知原因"}`);
+      await runImportJianyingDraft();
     } catch (error) {
-      status(error instanceof Error ? error.message : String(error));
+      const message = error instanceof Error ? error.message : String(error);
+      if (isForceableError(message) && confirmForce(message)) {
+        try {
+          await runImportJianyingDraft({ forceExecution: true });
+        } catch (retryError) {
+          status(retryError instanceof Error ? retryError.message : String(retryError));
+        }
+      } else {
+        status(message);
+      }
     } finally {
       if (button) {
         button.dataset.running = "false";
