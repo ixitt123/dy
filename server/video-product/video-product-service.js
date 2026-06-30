@@ -2488,6 +2488,7 @@ ${sceneMarkup}
       let draftPath = "";
       let localJianyingDraftPath = "";
       let capcutResult = null;
+      let compatibilityMode = false;
       if (outputType === "jianying_template") {
         capcutResult = capcutCliAdapter?.buildTemplateDraft({
           project: { ...project, metadata: safeJson(project.metadata_json, {}) },
@@ -2511,7 +2512,25 @@ ${sceneMarkup}
           capcutResult.warnings = [...(capcutResult.warnings || []), "已同步到本机剪映草稿目录。"];
         }
         if (!localJianyingDraftPath) {
-          throw new Error(`剪映草稿未写入本机草稿目录：${[...(capcutResult.errors || []), ...(capcutResult.warnings || [])].filter(Boolean).join("；") || "capcut-cli 没有返回真实 draftPath"}`);
+          compatibilityMode = true;
+          draftPath = capcutResult.planPath || timelineFiles.projectDir;
+          capcutResult = {
+            ...capcutResult,
+            ok: true,
+            fallback: true,
+            draftPath: "",
+            compatibilityPath: timelineFiles.projectDir,
+            warnings: [
+              ...(capcutResult.warnings || []),
+              "未写入本机剪映草稿目录，已完成兼容素材包和执行计划输出。",
+            ],
+            files: [...new Set([
+              ...(capcutResult.files || []),
+              capcutResult.planPath,
+              capcutResult.specPath,
+              timelineFiles.projectDir,
+            ].filter(Boolean))],
+          };
         }
         writeJson(path.join(timelineFiles.projectDir, "capcut-result.json"), capcutResult);
       } else if (outputType === "jianying" || outputType === "package") {
@@ -2568,12 +2587,16 @@ ${sceneMarkup}
       const completedProject = updateProject(project.id, {
         status: "completed",
         progress: 100,
-        current_step: MP4_OUTPUT_TYPES.has(outputType) ? `${OUTPUT_TYPE_LABELS[outputType] || "MP4"} 已生成` : `${OUTPUT_TYPE_LABELS[outputType] || "素材包"}已生成`,
+        current_step: MP4_OUTPUT_TYPES.has(outputType)
+          ? `${OUTPUT_TYPE_LABELS[outputType] || "MP4"} 已生成`
+          : compatibilityMode
+            ? "capcut-cli 未就绪，已生成兼容素材包和执行计划"
+            : `${OUTPUT_TYPE_LABELS[outputType] || "素材包"}已生成`,
         output_dir: timelineFiles.projectDir,
         timeline_path: timelineFiles.timelinePath,
         srt_path: timelineFiles.srtPath,
         manifest_path: timelineFiles.manifestPath,
-        draft_path: draftPath,
+        draft_path: localJianyingDraftPath || draftPath,
         mp4_path: mp4Path,
         completed_at: new Date().toISOString(),
       });
