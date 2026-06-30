@@ -3,6 +3,7 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 
 const WINDOWS = process.platform === "win32";
+let compatibleNodeCache = { checkedAt: 0, runtime: null };
 
 function run(command, args, timeout = 8000) {
   try {
@@ -54,6 +55,60 @@ function directoryHasTemplate(directory) {
 
 function firstExistingPath(candidates = []) {
   return candidates.map((value) => String(value || "").trim()).find((value) => value && fs.existsSync(value)) || "";
+}
+
+function parseNodeMajor(versionText) {
+  const match = String(versionText || "").match(/v?(\d+)\./);
+  return match ? Number(match[1]) : 0;
+}
+
+function getNodeVersion(nodePath) {
+  if (!nodePath || !fs.existsSync(nodePath)) return null;
+  const result = run(nodePath, ["-v"], 3000);
+  if (!result.ok) return null;
+  const version = firstLine(result);
+  return { path: nodePath, version, major: parseNodeMajor(version) };
+}
+
+function listUvPlaywrightNodeCandidates() {
+  const localAppData = process.env.LOCALAPPDATA || "";
+  const uvArchiveRoot = localAppData && path.join(localAppData, "uv", "cache", "archive-v0");
+  if (!uvArchiveRoot || !fs.existsSync(uvArchiveRoot)) return [];
+  try {
+    return fs.readdirSync(uvArchiveRoot, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => path.join(uvArchiveRoot, entry.name, "playwright", "driver", WINDOWS ? "node.exe" : "node"))
+      .filter((candidate) => fs.existsSync(candidate));
+  } catch {
+    return [];
+  }
+}
+
+function findCompatibleNodeRuntime(settings = {}) {
+  if (Date.now() - compatibleNodeCache.checkedAt < 30000) return compatibleNodeCache.runtime;
+  const candidates = [
+    settings.capcutNodePath,
+    settings.capcut_node_path,
+    process.env.CAPCUT_CLI_NODE,
+    process.execPath,
+    ...listUvPlaywrightNodeCandidates(),
+  ].filter(Boolean);
+  const seen = new Set();
+  const runtimes = [];
+  for (const candidate of candidates) {
+    const resolved = path.resolve(String(candidate));
+    if (seen.has(resolved)) continue;
+    seen.add(resolved);
+    const runtime = getNodeVersion(resolved);
+    if (runtime) runtimes.push(runtime);
+  }
+  compatibleNodeCache = {
+    checkedAt: Date.now(),
+    runtime: runtimes.find((runtime) => runtime.major >= 18 && runtime.major <= 22)
+      || runtimes.find((runtime) => runtime.path === process.execPath)
+      || null,
+  };
+  return compatibleNodeCache.runtime;
 }
 
 function readNullTerminated(buffer, offset, encoding) {
