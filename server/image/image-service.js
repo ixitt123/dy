@@ -381,6 +381,27 @@ export function createImageService({ baseDir, getSettings, taskStore = null, ffm
     });
   }
 
+  function projectContinuityLock(project = {}) {
+    const title = String(project?.title || "").trim();
+    const style = String(project?.visual_style || "").trim();
+    return [
+      "连续性锁定：同一项目所有图片必须像同一部短片的连续镜头。",
+      "角色锁定：人物年龄、脸型、发型、服装风格、比例和表情语言保持一致，不要每张图换一批人。",
+      "空间锁定：场景道具、光线方向、色调和镜头焦段保持一致，只按本镜头任务改变动作和构图。",
+      "短视频可用性：主体必须大、清楚、手机小屏可读，画面不要做成海报、PPT、截图或拼贴。",
+      title ? `项目主题：${title}` : "",
+      style ? `项目视觉风格：${style}` : "",
+    ].filter(Boolean).join("\n");
+  }
+
+  function negativePromptLock() {
+    return [
+      "负面约束：不要生成任何可读文字、汉字、英文单词、字幕、二维码、logo、水印、海报标题、UI界面。",
+      "不要畸形脸、歪眼、坏手、多手指、多余人物、重复人物、塑料皮肤、低清噪点、过曝、脏乱背景。",
+      "底部 20% 不要出现人脸、手、主体物、复杂纹理或高对比元素，必须留给后期字幕。",
+    ].join("\n");
+  }
+
   function buildStoryboardImagePrompt({ project, scene, index = 0, total = 1, aspectRatio = "9:16" }) {
     const title = String(project?.title || "短视频分镜").trim();
     const sceneIndex = Number(scene?.scene_index || scene?.scene || index + 1);
@@ -392,6 +413,16 @@ export function createImageService({ baseDir, getSettings, taskStore = null, ffm
     const composition = String(scene?.composition || "").trim();
     return [
       styleLockForProject(project, aspectRatio),
+      projectContinuityLock(project),
+      storyboardQualityRules,
+      `分镜编号：${sceneIndex}/${total}`,
+      `本镜头任务：${purpose || "承接上一镜头，推动叙事和情绪"}`,
+      `情绪：${emotion || "专业、有冲击力、可信"}`,
+      `镜头语言：${camera || "中近景，轻微推进，电影感纵深"}；构图：${composition || "主体位于画面上方 80%，底部留出干净字幕安全区"}`,
+      `画面主体：${basePrompt}`,
+      `口播语义参考：${subtitle.slice(0, 80)}`,
+      "生成要求：一张可直接用于竖屏短视频成片的电影分镜图，画面真实可用、风格统一、没有文字、没有二维码、没有水印。",
+      negativePromptLock(),
       `分镜编号：${sceneIndex}/${total}`,
       `本镜头任务：${purpose || "承接上一镜头，推动叙事"}`,
       `情绪：${emotion || "专业、有冲击力"}`,
