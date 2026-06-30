@@ -724,6 +724,7 @@ function normalizeSettings(settings) {
   const batch = next.batch && typeof next.batch === "object" ? { ...next.batch } : {};
   const tts = next.tts && typeof next.tts === "object" ? { ...next.tts } : {};
   const imageProviders = next.imageProviders && typeof next.imageProviders === "object" ? { ...next.imageProviders } : {};
+  const bgmProviders = next.bgmProviders && typeof next.bgmProviders === "object" ? { ...next.bgmProviders } : {};
   const jianying = next.jianying && typeof next.jianying === "object" ? { ...next.jianying } : {};
   const modelMapping = next.modelMap && typeof next.modelMap === "object"
     ? next.modelMap
@@ -3797,6 +3798,14 @@ function updateProjectFromTranscript({ projectId = "", taskId = 0, transcriptTex
     project: projectCenter.setWorkflowState(updated.id, "titles_ready"),
     task,
     titles: generated,
+  };
+  next.bgmProviders = {
+    jamendo: {
+      label: "Jamendo",
+      base_url: String(bgmProviders.jamendo?.base_url || bgmProviders.jamendo?.baseUrl || "https://api.jamendo.com/v3.0").trim(),
+      client_id: String(bgmProviders.jamendo?.client_id || bgmProviders.jamendo?.clientId || bgmProviders.jamendo?.apiKey || "").trim(),
+      enabled: bgmProviders.jamendo?.enabled !== false,
+    },
   };
 }
 

@@ -1525,6 +1525,10 @@ export function createVideoProductService({
     return "unknown_review_required";
   }
 
+  function isCommerciallyBlockedLicense(value = "") {
+    return /noncommercial|non-commercial|cc[- ]?by[- ]?nc|by-nc|nc|no derivatives|no-derivatives|cc[- ]?by[- ]?nd|by-nd/i.test(String(value || ""));
+  }
+
   function isBgmLegalForAuto(asset) {
     return ["authorized", "attribution_required"].includes(String(asset?.license_status || ""));
   }
@@ -1563,7 +1567,103 @@ export function createVideoProductService({
     ].filter(Boolean);
   }
 
-  function selectBgmAsset({ preferredId = "", strategy = "none", styleId = ROUTE_A_DEFAULT_STYLE_ID, timeline = null } = {}) {
+  function jamendoConfig() {
+    const settings = getSettings();
+    const config = settings?.bgmProviders?.jamendo || {};
+    return {
+      enabled: config.enabled !== false,
+      clientId: String(config.client_id || config.clientId || config.apiKey || "").trim(),
+      baseUrl: String(config.base_url || config.baseUrl || "https://api.jamendo.com/v3.0").replace(/\/+$/, ""),
+    };
+  }
+
+  function jamendoBpm(row = {}) {
+    const haystack = [
+      row.name,
+      row.album_name,
+      row.artist_name,
+      row.license_ccurl,
+      JSON.stringify(row.musicinfo || {}),
+    ].join(" ");
+    return inferBgmBpm(haystack);
+  }
+
+  function jamendoLicenseStatus(row = {}) {
+    const license = `${row.license_ccurl || ""} ${row.license || ""}`;
+    if (!license) return "unknown_review_required";
+    if (isCommerciallyBlockedLicense(license)) return "unknown_review_required";
+    if (/creativecommons\.org\/publicdomain|cc0|publicdomain/i.test(license)) return "authorized";
+    if (/creativecommons\.org\/licenses\/by\//i.test(license)) return "attribution_required";
+    return normalizeBgmLicenseStatus({ license, source: "jamendo" });
+  }
+
+  async function importJamendoBgm({ styleId = ROUTE_A_DEFAULT_STYLE_ID, timeline = null } = {}) {
+    const config = jamendoConfig();
+    if (!config.enabled || !config.clientId) return null;
+    const preset = routeAStylePreset(styleId);
+    const preferredBpm = Number(preset.bgmBpm || 132);
+    const keywords = [
+      ...bgmMatchKeywords(timeline || {}),
+      ...(preset.bgmKeywords || []),
+      "instrumental",
+      "background",
+    ].join(" ");
+    const url = new URL(`${config.baseUrl}/tracks/`);
+    url.searchParams.set("client_id", config.clientId);
+    url.searchParams.set("format", "json");
+    url.searchParams.set("limit", "30");
+    url.searchParams.set("include", "licenses+musicinfo");
+    url.searchParams.set("audioformat", "mp32");
+    url.searchParams.set("audiodlformat", "mp32");
+    url.searchParams.set("order", "popularity_total");
+    url.searchParams.set("namesearch", keywords.slice(0, 120));
+    const response = await fetch(url, { headers: { accept: "application/json" } });
+    if (!response.ok) return null;
+    const data = await response.json().catch(() => null);
+    const rows = Array.isArray(data?.results) ? data.results : [];
+    const selected = rows
+      .map((row) => ({
+        row,
+        bpm: jamendoBpm(row),
+        licenseStatus: jamendoLicenseStatus(row),
+      }))
+      .filter((item) => item.bpm >= 120 && item.bpm <= 150)
+      .filter((item) => ["authorized", "attribution_required"].includes(item.licenseStatus))
+      .sort((a, b) => Math.abs(a.bpm - preferredBpm) - Math.abs(b.bpm - preferredBpm))[0];
+    const audioUrl = selected?.row?.audiodownload || selected?.row?.audio || "";
+    if (!selected || !audioUrl) return null;
+    const audioResponse = await fetch(audioUrl);
+    if (!audioResponse.ok) return null;
+    const bgmDir = ensureDir(path.join(baseDir, "assets", "bgm", "jamendo"));
+    const safeName = safeFileName(`${selected.row.artist_name || "jamendo"}-${selected.row.name || selected.row.id || "bgm"}-${selected.bpm}bpm`);
+    const outputPath = path.join(bgmDir, `${safeName}.mp3`);
+    const arrayBuffer = await audioResponse.arrayBuffer();
+    fs.writeFileSync(outputPath, Buffer.from(arrayBuffer));
+    const metadataPath = path.join(bgmDir, `${safeName}.json`);
+    writeJson(metadataPath, {
+      provider: "jamendo",
+      source: "jamendo",
+      source_id: String(selected.row.id || ""),
+      title: selected.row.name || "",
+      artist: selected.row.artist_name || "",
+      bpm: selected.bpm,
+      preferred_bpm: preferredBpm,
+      license: selected.row.license_ccurl || selected.row.license || "Creative Commons",
+      license_url: selected.row.license_ccurl || "",
+      license_status: selected.licenseStatus,
+      commercial_use: selected.licenseStatus === "authorized",
+      attribution_required: selected.licenseStatus === "attribution_required",
+      source_url: selected.row.shareurl || "",
+      downloaded_at: new Date().toISOString(),
+    });
+    return publicBgmAssetFromPath(outputPath);
+  }
+
+  function publicBgmAssetFromPath(filePath) {
+    return listBgmAssets().find((asset) => path.resolve(asset.path) === path.resolve(filePath)) || null;
+  }
+
+  async function selectBgmAsset({ preferredId = "", strategy = "none", styleId = ROUTE_A_DEFAULT_STYLE_ID, timeline = null } = {}) {
     const assets = listBgmAssets();
     const preferred = preferredId
       ? assets.find((asset) => String(asset.id) === String(preferredId) || path.resolve(asset.path) === path.resolve(String(preferredId)))
@@ -1582,6 +1682,12 @@ export function createVideoProductService({
         }) }))
         .sort((a, b) => b.score - a.score || String(a.asset.filename).localeCompare(String(b.asset.filename)))[0]?.asset;
       if (selected) return { path: selected.path, source: "local_auto", label: selected.filename, asset: selected };
+    }
+    if (strategy === "auto") {
+      const imported = await importJamendoBgm({ styleId, timeline }).catch(() => null);
+      if (imported && isBgmLegalForAuto(imported) && Number(imported.bpm || 0) >= 120 && Number(imported.bpm || 0) <= 150) {
+        return { path: imported.path, source: "jamendo_auto", label: imported.filename, asset: imported };
+      }
     }
     if (strategy === "auto" || strategy === "local_auto") return { path: "", source: "generated_default", label: "generated_default", asset: null };
     return { path: "", source: "none", label: "", asset: null };
@@ -2205,7 +2311,7 @@ ${sceneMarkup}
     return { hyperframesDir, indexPath, designPath, dataPath };
   }
 
-  function writeTimelineFiles(project, timeline) {
+  async function writeTimelineFiles(project, timeline) {
     const baseName = `${project.id}_${safeFileName(timeline.director?.title || "video-product")}`;
     const projectDir = ensureDir(project.output_dir || path.join(outputRoot, baseName));
     const mediaDir = ensureDir(path.join(projectDir, "media"));
@@ -2246,7 +2352,7 @@ ${sceneMarkup}
     let packagedBgm = "";
     let bgmSourceKind = "none";
     let bgmLabel = "";
-    const bgmSelection = selectBgmAsset({
+    const bgmSelection = await selectBgmAsset({
       preferredId: projectMetadata.bgm_asset_id || timeline.metadata?.route_a_bgm_asset_id || "",
       strategy: projectMetadata.bgm_strategy || timeline.metadata?.route_a_bgm_strategy || "none",
       styleId: routeAStyle,
@@ -2909,7 +3015,7 @@ ${sceneMarkup}
         current_step: MP4_OUTPUT_TYPES.has(outputType) ? `正在准备 ${OUTPUT_TYPE_LABELS[outputType] || "MP4"} 渲染素材` : `正在导出${OUTPUT_TYPE_LABELS[outputType] || "素材包"}`,
       });
 
-      const timelineFiles = writeTimelineFiles(project, timeline);
+      const timelineFiles = await writeTimelineFiles(project, timeline);
       let draftPath = "";
       let localJianyingDraftPath = "";
       let capcutResult = null;
