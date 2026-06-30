@@ -1028,6 +1028,10 @@ function friendlyVideoProductError(value) {
   return message.length > 140 ? `${message.slice(0, 140)}…` : message;
 }
 
+function isForceableVideoProductError(message = "") {
+  return /相似度|随机音频匹配|质量审查未通过|码率偏低|标题仍是内部导演稿名称|缺少 BGM 素材/.test(String(message || ""));
+}
+
 function railVideoProductCard(project, variant = "normal") {
   const id = railVideoProductId(project);
   const progress = Math.max(0, Math.min(100, Number(project.progress || 0)));
@@ -1042,6 +1046,7 @@ function railVideoProductCard(project, variant = "normal") {
   const output = project.mp4_path || project.output_dir || project.timeline_path || project.srt_path || "";
   const hasOutput = Boolean(output);
   const canDelete = railVideoProductCanDelete(project);
+  const canForce = project.status === "failed" && isForceableVideoProductError(project.error || blockers.join(" "));
   return `
     <article class="rail-task-card rail-video-product-card ${variant}">
       <div class="rail-task-top">
@@ -1058,6 +1063,7 @@ function railVideoProductCard(project, variant = "normal") {
       ${blockers.length ? `<ul class="rail-video-blockers">${blockers.slice(0, 3).map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>` : ""}
       <div class="rail-task-actions">
         <button type="button" class="rail-video-product-open" data-video-product-id="${id}">查看</button>
+        ${canForce ? `<button type="button" class="rail-video-product-force" data-video-product-id="${id}">强制执行</button>` : ""}
         ${hasOutput ? `<button type="button" class="rail-video-product-folder" data-video-product-id="${id}">打开</button>` : ""}
         ${canDelete ? `<button type="button" class="rail-video-product-delete danger-action" data-video-product-id="${id}">删除</button>` : ""}
       </div>
@@ -1321,6 +1327,40 @@ async function openRailVideoProductLocation(projectId) {
   }
 }
 
+async function forceRailVideoProduct(projectId) {
+  const id = Number(projectId || 0);
+  if (!id) return;
+  const project = dashboardVideoProducts.find((item) => railVideoProductId(item) === id);
+  if (!project) throw new Error("没有找到要强制执行的成片任务。");
+  const reason = project.error || (project.blockers || []).join("；") || "未知风险";
+  if (!isForceableVideoProductError(reason)) {
+    throw new Error("这个失败不是软拦截，不能强制执行。请先补齐缺失的音频、导演稿或图片。");
+  }
+  if (!window.confirm(`当前成片任务有风险：\n\n${reason}\n\n确定后将用原参数重新创建强制执行任务，并在报告里保留风险记录。是否继续？`)) return;
+  const metadata = project.metadata && typeof project.metadata === "object" ? project.metadata : {};
+  const body = {
+    ...metadata,
+    projectId: metadata.video_project_id || metadata.projectId || "",
+    video_project_id: metadata.video_project_id || metadata.projectId || "",
+    source_director_project_id: project.source_director_project_id || metadata.source_director_project_id || metadata.director_project_id || 0,
+    audio_asset_id: project.audio_asset_id || metadata.audio_asset_id || metadata.tts_job_id || 0,
+    platform: project.platform || metadata.platform || "douyin",
+    output_type: project.output_type || metadata.output_type || "jianying_template",
+    ratio: project.ratio || metadata.ratio || "9:16",
+    resolution: project.resolution || metadata.resolution || "1080x1920",
+    force_execution: true,
+    force_timeline_blockers: true,
+    force_quality_review: true,
+  };
+  const data = await fetchJson("/api/video-product/generate", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  setRailActionStatus(`已确认风险并重新创建强制执行任务 #${data.project?.project_id || data.project?.id || ""}`);
+  await refreshVideoProductSurfaces();
+}
+
 function setRailActionStatus(message) {
   if (typeof batchStatus !== "undefined") batchStatus.textContent = message;
   if (typeof resultBox !== "undefined") resultBox.textContent = message;
@@ -1479,6 +1519,7 @@ function bindWorkbenchInteractions() {
     const videoProductOpen = event.target.closest(".rail-video-product-open");
     const videoProductFolder = event.target.closest(".rail-video-product-folder");
     const videoProductDelete = event.target.closest(".rail-video-product-delete");
+    const videoProductForce = event.target.closest(".rail-video-product-force");
     const videoProductClear = event.target.closest(".rail-video-product-clear");
     const railTaskClearFinished = event.target.closest(".rail-task-clear-finished");
     if (videoProductClear) {
@@ -1498,6 +1539,13 @@ function bindWorkbenchInteractions() {
     if (videoProductDelete) {
       event.preventDefault();
       deleteRailVideoProduct(videoProductDelete.dataset.videoProductId).catch((error) => {
+        setRailActionStatus(error instanceof Error ? error.message : String(error));
+      });
+      return;
+    }
+    if (videoProductForce) {
+      event.preventDefault();
+      forceRailVideoProduct(videoProductForce.dataset.videoProductId).catch((error) => {
         setRailActionStatus(error instanceof Error ? error.message : String(error));
       });
       return;
