@@ -64,6 +64,17 @@ function projectSourcePreferences(project = currentVideoProject()) {
   };
 }
 
+function bgmOptionLabel(row = {}) {
+  if (!row.id) return row.filename || "自动匹配本地 BGM；没有则基础生成";
+  const bpm = Number(row.bpm || 0) ? `${Number(row.bpm)} BPM` : "BPM 未标注";
+  const license = {
+    authorized: "已授权",
+    attribution_required: "需署名",
+    unknown_review_required: "授权待确认",
+  }[row.license_status] || "授权待确认";
+  return `${row.filename || row.title || "BGM"} · ${bpm} · ${license}`;
+}
+
 function canAttemptGeneration() {
   return Boolean(
     currentVideoProject()?.id
@@ -251,7 +262,7 @@ export async function loadVideoProductSources() {
   if (!preferred.audioId && audioSelect) audioSelect.value = "";
   setOptions(directorSelect, [{ id: "", title: "请选择当前项目的导演稿", scene_count: 0 }, ...(data.directors || [])], (row) => row.id ? `#${row.id} ${row.title || "导演稿"} · ${row.scene_count || 0} 镜头` : row.title, preferred.directorId);
   setOptions(audioSelect, [{ id: "", label: "请选择当前项目的已完成语音" }, ...(data.audioJobs || [])], (row) => row.label || `#${row.id} ${row.voice_name || "配音"}`, preferred.audioId);
-  setOptions(document.querySelector("#videoProductBgm"), [{ id: "", filename: "自动匹配本地 BGM；没有则基础生成" }, ...(data.bgmAssets || [])], (row) => row.filename || row.title || "自动匹配", preferred.bgmId);
+  setOptions(document.querySelector("#videoProductBgm"), [{ id: "", filename: "自动匹配本地 BGM；没有则基础生成" }, ...(data.bgmAssets || [])], bgmOptionLabel, preferred.bgmId);
   setOptions(document.querySelector("#videoProductRouteAStyle"), data.routeAStyles || [], (row) => row.label || row.id);
   setOptions(document.querySelector("#videoProductBgmStrategy"), data.bgmStrategies || [], (row) => row.label || row.id, "auto");
   renderJianyingTemplateOptions();
