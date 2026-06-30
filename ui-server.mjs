@@ -1025,7 +1025,7 @@ function rewriteProviderIdFromMapping(providerId) {
   return id;
 }
 
-const BGM_PROVIDER_DEFS = [
+var BGM_PROVIDER_DEFS = [
   {
     key: "hifive",
     id: "hifive_bgm",
@@ -1105,7 +1105,7 @@ const BGM_PROVIDER_DEFS = [
 
 function normalizeBgmProviders(bgmProviders = {}) {
   const normalized = {};
-  for (const def of BGM_PROVIDER_DEFS) {
+  for (const def of BGM_PROVIDER_DEFS || []) {
     const current = bgmProviders[def.key] && typeof bgmProviders[def.key] === "object" ? bgmProviders[def.key] : {};
     const apiKeyField = def.apiKeyField || "api_key";
     const workspaceField = def.workspaceField || "app_id";
