@@ -198,6 +198,21 @@ function hasJianyingDraftFiles(dir) {
   }
 }
 
+function copyDirectoryTree(sourceDir, targetDir, { skip = [] } = {}) {
+  const skipSet = new Set(skip);
+  fs.mkdirSync(targetDir, { recursive: true });
+  for (const entry of fs.readdirSync(sourceDir, { withFileTypes: true })) {
+    if (skipSet.has(entry.name)) continue;
+    const sourcePath = path.join(sourceDir, entry.name);
+    const targetPath = path.join(targetDir, entry.name);
+    if (entry.isDirectory()) {
+      copyDirectoryTree(sourcePath, targetPath, { skip });
+    } else if (entry.isFile()) {
+      fs.copyFileSync(sourcePath, targetPath);
+    }
+  }
+}
+
 function isInsideDirectory(parent, child) {
   const relative = path.relative(path.resolve(parent), path.resolve(child));
   return Boolean(relative) && !relative.startsWith("..") && !path.isAbsolute(relative);
@@ -1010,7 +1025,8 @@ export function createVideoProductService({
     const targetName = safeFileName(`codex_${project.id}_${templateId || "template"}_${Date.now()}`);
     const targetPath = path.join(draftDirectory, targetName);
     if (!isInsideDirectory(draftDirectory, targetPath)) return "";
-    fs.cpSync(resolvedDraftPath, targetPath, { recursive: true, force: true });
+    fs.rmSync(targetPath, { recursive: true, force: true });
+    copyDirectoryTree(resolvedDraftPath, targetPath, { skip: [".backup"] });
     writeJson(path.join(targetPath, "codex-import.json"), {
       sourceDraftPath: resolvedDraftPath,
       timelineProjectId: project.id,
@@ -1130,7 +1146,7 @@ export function createVideoProductService({
       }
       try {
         fs.rmSync(targetPath, { recursive: true, force: true });
-        fs.cpSync(seed, targetPath, { recursive: true, force: true });
+        copyDirectoryTree(seed, targetPath, { skip: [".backup"] });
         updateVisibleDraftMeta(targetPath, project, timelineFiles);
         if (!hasJianyingDraftFiles(targetPath)) {
           tried.push(`${seed}: 复制后缺少剪映核心草稿文件`);
