@@ -72,7 +72,8 @@ function bgmOptionLabel(row = {}) {
     attribution_required: "需署名",
     unknown_review_required: "授权待确认",
   }[row.license_status] || "授权待确认";
-  return `${row.filename || row.title || "BGM"} · ${bpm} · ${license}`;
+  const source = row.source_label ? `${row.source_label} · ` : "";
+  return `${source}${row.filename || row.title || "BGM"} · ${bpm} · ${license}`;
 }
 
 function canAttemptGeneration() {

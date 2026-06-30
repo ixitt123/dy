@@ -1516,16 +1516,18 @@ export function createVideoProductService({
       .map((candidate) => fs.existsSync(candidate) ? safeJson(fs.readFileSync(candidate, "utf8"), {}) : null)
       .find(Boolean) || {};
     const inferredBpm = inferBgmBpm(`${path.basename(filePath)} ${JSON.stringify(metadata)}`);
-    const license = String(metadata.license || metadata.licenseName || "").trim();
-    const source = String(metadata.source || metadata.provider || "").trim();
-    const licenseStatus = normalizeBgmLicenseStatus({ license, source, filePath, metadata });
+    const license = String(metadata.license || metadata.licenseName || rootDef.license || "").trim();
+    const source = String(metadata.source || metadata.provider || rootDef.source || "").trim();
+    const licenseStatus = String(metadata.license_status || rootDef.license_status || "").trim()
+      || normalizeBgmLicenseStatus({ license, source, filePath, metadata });
     return {
       bpm: Number(metadata.bpm || metadata.tempo || inferredBpm || 0) || 0,
-      mood: String(metadata.mood || metadata.style || "").trim(),
-      tags: stringArray(metadata.tags || metadata.keywords),
+      mood: String(metadata.mood || metadata.style || rootDef.label || "").trim(),
+      tags: [...new Set([...stringArray(rootDef.tags), ...stringArray(metadata.tags || metadata.keywords)])],
       license,
       license_url: String(metadata.license_url || metadata.licenseUrl || metadata.source_url || "").trim(),
       source,
+      source_label: String(metadata.source_label || rootDef.label || source || "").trim(),
       license_status: licenseStatus,
     };
   }
