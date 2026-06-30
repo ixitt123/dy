@@ -281,7 +281,7 @@ export async function loadVideoProductSources() {
   setOptions(audioSelect, [{ id: "", label: "请选择当前项目的已完成语音" }, ...(data.audioJobs || [])], (row) => row.label || `#${row.id} ${row.voice_name || "配音"}`, preferred.audioId);
   setOptions(document.querySelector("#videoProductBgm"), [{ id: "", filename: "自动匹配本地 BGM；没有则基础生成" }, ...(data.bgmAssets || [])], bgmOptionLabel, preferred.bgmId);
   setOptions(document.querySelector("#videoProductRouteAStyle"), data.routeAStyles || [], (row) => row.label || row.id);
-  setOptions(document.querySelector("#videoProductBgmStrategy"), data.bgmStrategies || [], (row) => row.label || row.id, "auto");
+  setOptions(document.querySelector("#videoProductBgmStrategy"), data.bgmStrategies || [], (row) => row.label || row.id, "none");
   renderJianyingTemplateOptions();
   state.manualBindings = {};
   state.preview = null;
@@ -542,7 +542,7 @@ function payload() {
     jianying_template: document.querySelector("#videoProductJianyingTemplate")?.value || "education_tips",
     route_a_style_id: document.querySelector("#videoProductRouteAStyle")?.value || "black_gold_knowledge",
     route_a_custom_style: document.querySelector("#videoProductRouteACustomStyle")?.value.trim() || "",
-    bgm_strategy: document.querySelector("#videoProductBgm")?.value ? (document.querySelector("#videoProductBgmStrategy")?.value || "manual") : (document.querySelector("#videoProductBgmStrategy")?.value || "auto"),
+    bgm_strategy: document.querySelector("#videoProductBgm")?.value ? (document.querySelector("#videoProductBgmStrategy")?.value || "manual") : (document.querySelector("#videoProductBgmStrategy")?.value || "none"),
     bgm_asset_id: document.querySelector("#videoProductBgm")?.value || "",
     manual_bindings: { ...state.manualBindings },
     target_duration: 30,
