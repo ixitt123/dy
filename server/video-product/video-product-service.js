@@ -2703,7 +2703,7 @@ ${sceneMarkup}
           capcutResult.files = [...(capcutResult.files || []), localJianyingDraftPath];
           capcutResult.warnings = [...(capcutResult.warnings || []), "已同步到本机剪映草稿目录。"];
         }
-        if (!localJianyingDraftPath && removeInvalidGeneratedDraftPath(capcutResult.draftPath || "")) {
+        if (!localJianyingDraftPath && removeInvalidGeneratedDraftPath(capcutResult.draftPath || capcutResult.attemptedDraftPath || "")) {
           capcutResult.warnings = [...(capcutResult.warnings || []), "已清理 capcut-cli 生成的空草稿目录。"];
         }
         if (!localJianyingDraftPath) {

@@ -118,6 +118,7 @@ export function createCapcutCliAdapter(options = {}) {
     return {
       ...compileResult,
       draftPath: compileResult.ok ? compileResult.draftPath : "",
+      attemptedDraftPath: draftDirectory,
       warnings: [
         ...(compileResult.warnings || []),
         "已使用 --force-write 写入新剪映草稿，避免剪映专业版前台运行时阻塞自动生成。",
