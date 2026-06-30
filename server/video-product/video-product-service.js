@@ -1924,6 +1924,7 @@ export function createVideoProductService({
     const isRouteAVoiceClock = ROUTE_A_VOICE_CLOCK_OUTPUT_TYPES.has(outputType);
     const needsImages = IMAGE_REQUIRED_OUTPUT_TYPES.has(outputType);
     const needsDownloadedVideo = outputType === "mix_mp4";
+    const forceExecution = input.force_execution === true || input.force_quality_review === true || input.force_timeline_blockers === true;
     let director = taskStore.getDirectorProject(directorId);
     const audio = taskStore.getTtsJob(audioAssetId);
     const platformId = String(input.platform || director?.platform || "douyin");
@@ -1961,7 +1962,8 @@ export function createVideoProductService({
       ? audioDirectorBinding(director, audio, directorScenes)
       : { accepted: false, score: 0, reason: "缺少导演稿或音频，无法绑定。" };
     if (isRouteAVoiceClock && director && audio && !audioBinding.accepted) {
-      blockers.push(`路线 A 已阻止随机音频匹配：${audioBinding.reason}`);
+      const message = `路线 A 已阻止随机音频匹配：${audioBinding.reason}`;
+      if (!forceExecution) blockers.push(message);
     }
 
     const imageSource = String(input.image_source || "director");
@@ -2101,6 +2103,10 @@ export function createVideoProductService({
         timeline_scene_count: scenes.length,
         alignment_source: routeASubtitleScenes.length ? "tts_text_sentence_chunks" : "director_scene_duration_scaled",
         audio_binding: audioBinding,
+        force_execution: forceExecution,
+        force_notes: forceExecution && isRouteAVoiceClock && director && audio && !audioBinding.accepted
+          ? [`用户确认后强制执行：${audioBinding.reason}`]
+          : [],
         premium_workflow_skills: premiumWorkflowSkillStatus(),
       },
     };
