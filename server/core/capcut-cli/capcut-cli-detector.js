@@ -216,8 +216,12 @@ export function createCapcutCliDetector({ baseDir, ffmpegPath = "", getSettings 
     const capcutCommand = WINDOWS ? "capcut.cmd" : "capcut";
     const localCapcutCommand = path.join(baseDir, "node_modules", ".bin", WINDOWS ? "capcut-cli.cmd" : "capcut-cli");
     const localCapcutModule = path.join(baseDir, "node_modules", "capcut-cli", "dist", "index.js");
+    const compatibleNodeRuntime = fs.existsSync(localCapcutModule)
+      ? findCompatibleNodeRuntime(settings)
+      : null;
+    const capcutNodePath = compatibleNodeRuntime?.path || process.execPath;
     const localResult = fs.existsSync(localCapcutModule)
-      ? run(process.execPath, [localCapcutModule, "--version"], 3000)
+      ? run(capcutNodePath, [localCapcutModule, "--version"], 3000)
       : fs.existsSync(localCapcutCommand)
         ? run(localCapcutCommand, ["--version"], 3000)
         : null;
@@ -226,7 +230,7 @@ export function createCapcutCliDetector({ baseDir, ffmpegPath = "", getSettings 
     const capcutResult = localResult?.ok ? localResult : directResult;
     const capcutInvocation = localResult?.ok
       ? fs.existsSync(localCapcutModule)
-        ? { command: process.execPath, prefixArgs: [localCapcutModule] }
+        ? { command: capcutNodePath, prefixArgs: [localCapcutModule], nodeRuntime: compatibleNodeRuntime }
         : { command: localCapcutCommand, prefixArgs: [] }
       : directResult?.ok
         ? { command: capcutCommand, prefixArgs: [] }
@@ -314,6 +318,7 @@ export function createCapcutCliDetector({ baseDir, ffmpegPath = "", getSettings 
       mode: checks.capcutCli.ok && checks.templateMaster.ok ? "capcut_cli" : "compatibility_package",
       checks,
       invocation: capcutInvocation,
+      capcutRuntime: compatibleNodeRuntime,
       paths: { templatesRoot, draftDirectory, outputRoot },
       suggestions: {
         appPaths: [
