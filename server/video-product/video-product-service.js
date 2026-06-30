@@ -296,10 +296,10 @@ function timelineToSrt(scenes) {
 
 function timelineToAss(scenes, { width = 1080, height = 1920, style = null } = {}) {
   const palette = style?.palette || {};
-  const marginV = Math.max(120, Math.round(height * 0.075));
+  const marginV = Math.max(150, Math.round(height * 0.09));
   const marginH = Math.max(86, Math.round(width * 0.08));
-  const fontSize = Math.max(48, Math.round(height * 0.031));
-  const titleSize = Math.max(56, Math.round(height * 0.038));
+  const fontSize = Math.max(40, Math.round(height * 0.022));
+  const titleSize = Math.max(44, Math.round(height * 0.026));
   const accent = assColor(palette.accent, "#E7C76C");
   const accent2 = assColor(palette.accent2, "#49D6C8");
   const textColor = assColor(palette.text, "#FFFFFF");
@@ -315,9 +315,9 @@ function timelineToAss(scenes, { width = 1080, height = 1920, style = null } = {
     "",
     "[V4+ Styles]",
     "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding",
-    `Style: Premium,Microsoft YaHei,${fontSize},${textColor},${accent},${outlineColor},${boxColor},-1,0,0,0,100,100,0,0,3,5,0,2,${marginH},${marginH},${marginV},1`,
-    `Style: Keyword,Microsoft YaHei,${titleSize},${accent},${textColor},${outlineColor},${boxColor},-1,0,0,0,104,104,0,0,3,5,0,2,${marginH},${marginH},${marginV},1`,
-    `Style: CTA,Microsoft YaHei,${titleSize},${textColor},${accent2},${outlineColor},${boxColor},-1,0,0,0,104,104,0,0,3,5,0,2,${marginH},${marginH},${marginV},1`,
+    `Style: Premium,Microsoft YaHei,${fontSize},${textColor},${accent},${outlineColor},${boxColor},-1,0,0,0,100,100,0,0,3,3,0,2,${marginH},${marginH},${marginV},1`,
+    `Style: Keyword,Microsoft YaHei,${titleSize},${accent},${textColor},${outlineColor},${boxColor},-1,0,0,0,102,102,0,0,3,3,0,2,${marginH},${marginH},${marginV},1`,
+    `Style: CTA,Microsoft YaHei,${titleSize},${textColor},${accent2},${outlineColor},${boxColor},-1,0,0,0,102,102,0,0,3,3,0,2,${marginH},${marginH},${marginV},1`,
     "",
     "[Events]",
     "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text",
@@ -330,7 +330,7 @@ function timelineToAss(scenes, { width = 1080, height = 1920, style = null } = {
       resetStyle: styleName,
     });
     if (!text) continue;
-    const effectText = `{\\fad(80,120)\\t(0,180,\\fscx106\\fscy106)\\t(180,360,\\fscx100\\fscy100)}${text}`;
+    const effectText = `{\\fad(80,120)\\t(0,160,\\fscx102\\fscy102)\\t(160,320,\\fscx100\\fscy100)}${text}`;
     lines.push([
       "Dialogue: 1",
       assTimestamp(scene.start_time),
