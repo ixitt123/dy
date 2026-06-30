@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { spawn } from "node:child_process";
+import { LOCAL_BGM_LIBRARY_DIRS } from "../config/local-bgm-library.js";
 import { ROUTE_A_DEFAULT_STYLE_ID, ROUTE_A_STYLE_PRESETS } from "../config/video-style-presets.js";
 
 const TIMELINE_STATUSES = new Set([
