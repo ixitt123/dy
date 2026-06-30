@@ -9,17 +9,30 @@ function firstValue(...values) {
 function capcutTransitionSlug(value) {
   const raw = String(value || "").trim().toLowerCase();
   if (!raw || raw === "straight_cut" || raw === "cut" || raw === "none") return "dissolve";
+  const supported = new Set([
+    "dissolve",
+    "slide",
+    "pull-in",
+    "white-flash",
+    "flash",
+    "twinkle-zoom",
+    "rgb-glitch",
+    "camera-flash",
+    "blur",
+    "fold",
+  ]);
   const aliases = {
     fade: "dissolve",
     fade_in: "dissolve",
     fade_out: "dissolve",
+    zoom: "twinkle-zoom",
     match_cut: "dissolve",
-    whip_pan: "dissolve",
-    push_slide: "dissolve",
-    slide: "dissolve",
+    whip_pan: "slide",
+    push_slide: "slide",
     crossfade: "dissolve",
   };
-  return aliases[raw] || "dissolve";
+  const slug = aliases[raw] || raw;
+  return supported.has(slug) ? slug : "dissolve";
 }
 
 function pickTemplateTransition(preset, index, fallback = "") {
@@ -306,6 +319,12 @@ export function buildCapcutCompileSpec({ project = {}, timeline = {}, timelineFi
     .map((item) => buildTextRangeOperation(item.ref, item.text, captionKeywordCandidates(item.scene, item.text), captionStyle))
     .filter(Boolean);
   operations.push(...textRangeOperations);
+  if (timelineFiles.packagedAudio) {
+    operations.push({ op: "audio-fade", target: "voiceover", fadeIn: 0.08, fadeOut: 0.2 });
+  }
+  if (timelineFiles.packagedBgm) {
+    operations.push({ op: "audio-fade", target: "bgm", fadeIn: 0.65, fadeOut: 1 });
+  }
   if (duration > 0) {
     operations.push({
       op: "filter",

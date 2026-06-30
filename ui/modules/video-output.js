@@ -505,10 +505,10 @@ export async function syncSelectionsToProject({ preview = state.preview } = {}) 
       status: "ready",
     });
   }
-  const strategy = document.querySelector("#videoProductBgmStrategy")?.value || "auto";
+  const strategy = document.querySelector("#videoProductBgmStrategy")?.value || "none";
   const selectedBgmId = document.querySelector("#videoProductBgm")?.value || "";
   const bgm = state.sources?.bgmAssets?.find((item) => String(item.id) === String(selectedBgmId))
-    || (strategy !== "generated_default" ? state.sources?.bgmAssets?.[0] : null);
+    || (["auto", "local_auto", "manual"].includes(strategy) ? state.sources?.bgmAssets?.[0] : null);
   const bgmSelect = document.querySelector("#videoProductBgm");
   if (bgm && bgmSelect) bgmSelect.value = String(bgm.id);
   if (bgm) {
@@ -722,6 +722,18 @@ function selectOutputType(outputType) {
   document.querySelectorAll("[data-main-output]").forEach((button) => button.classList.toggle("active", button.dataset.mainOutput === outputType));
 }
 
+function simplifyVideoOutputActions() {
+  const generateButton = document.querySelector("#generateVideoProduct");
+  if (generateButton) {
+    generateButton.textContent = "一键导入剪映草稿";
+    generateButton.title = "自动绑定导演稿、语音和镜头素材，生成剪映草稿并尝试打开剪映。";
+  }
+  ["autoBindTimeline", "autoRunWorkflow"].forEach((id) => {
+    const button = document.querySelector(`#${id}`);
+    if (button) button.hidden = true;
+  });
+}
+
 function bindEvents() {
   document.querySelectorAll("[data-main-output]").forEach((button) => button.addEventListener("click", () => {
     selectOutputType(button.dataset.mainOutput);
@@ -795,6 +807,14 @@ function bindEvents() {
   });
   ["videoProductDirector", "videoProductAudio", "videoProductImageSource", "videoProductOutputType", "videoProductBgmStrategy", "videoProductBgm", "videoProductRouteAStyle", "videoProductRouteACustomStyle"].forEach((id) => {
     document.querySelector(`#${id}`)?.addEventListener("change", () => {
+      if (id === "videoProductBgmStrategy" && document.querySelector("#videoProductBgmStrategy")?.value !== "manual") {
+        const bgmSelect = document.querySelector("#videoProductBgm");
+        if (bgmSelect) bgmSelect.value = "";
+      }
+      if (id === "videoProductBgm" && document.querySelector("#videoProductBgm")?.value) {
+        const strategySelect = document.querySelector("#videoProductBgmStrategy");
+        if (strategySelect) strategySelect.value = "manual";
+      }
       state.preview = null;
       if (id === "videoProductDirector") renderJianyingTemplateOptions();
       updateGenerateAvailability();
@@ -815,6 +835,7 @@ export async function initVideoOutputModule() {
   const page = document.querySelector('[data-page="video-output"]');
   if (page) page.dataset.module = "video-output";
   window.__modularVideoOutputReady = true;
+  simplifyVideoOutputActions();
   bindEvents();
   window.videoOutputModule = { loadVideoProductSources, loadVideoProductProjects, refreshReadiness, refreshQualityCheck, previewVideoProductTimeline, syncSelectionsToProject, generateVideoProduct, generateJianyingDraftAndOpen, autoRunWorkflowFromCurrentProject, pollVideoProductProject, openVideoProductOutput };
   await Promise.allSettled([loadJianyingLocalConfig(), refreshToolStatus(), loadVideoProductSources(), loadVideoProductProjects(), refreshReadiness(), refreshQualityCheck()]);

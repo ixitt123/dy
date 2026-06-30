@@ -11,7 +11,7 @@ const BASE_CAPTION = {
 export const JIANYING_TEMPLATE_PRESETS = {
   education_tips: {
     label: "Education tips",
-    transitions: ["dissolve", "slide", "zoom"],
+    transitions: ["dissolve", "slide", "twinkle-zoom"],
     motion: { fromScale: 1, toScale: 1.07 },
     filter: { slug: "soft", intensity: 0.12 },
     caption: { ...BASE_CAPTION, fontSize: 36, y: -0.62, backgroundColor: "rgba(3,16,28,0.36)" },
@@ -22,7 +22,7 @@ export const JIANYING_TEMPLATE_PRESETS = {
   },
   black_gold_business: {
     label: "Black gold business",
-    transitions: ["rgb-glitch", "dissolve", "zoom"],
+    transitions: ["rgb-glitch", "dissolve", "twinkle-zoom"],
     motion: { fromScale: 1.02, toScale: 1.10 },
     filter: { slug: "dramatic", intensity: 0.18 },
     caption: { ...BASE_CAPTION, fontSize: 39, color: "#FFFFFF", strokeColor: "#050505", backgroundColor: "rgba(5,8,15,0.42)" },
@@ -44,7 +44,7 @@ export const JIANYING_TEMPLATE_PRESETS = {
   },
   promo_commercial: {
     label: "Promo commercial",
-    transitions: ["zoom", "flash", "rgb-glitch"],
+    transitions: ["twinkle-zoom", "flash", "rgb-glitch"],
     motion: { fromScale: 1.03, toScale: 1.13 },
     filter: { slug: "contrast", intensity: 0.20 },
     caption: { ...BASE_CAPTION, fontSize: 40, backgroundColor: "rgba(10,10,10,0.44)" },
@@ -66,7 +66,7 @@ export const JIANYING_TEMPLATE_PRESETS = {
   },
   campus_education: {
     label: "Campus education",
-    transitions: ["dissolve", "slide", "fade"],
+    transitions: ["dissolve", "slide", "white-flash"],
     motion: { fromScale: 1, toScale: 1.06 },
     filter: { slug: "warm", intensity: 0.14 },
     caption: { ...BASE_CAPTION, fontSize: 36, color: "#FFFFFF", backgroundColor: "rgba(25,48,42,0.38)" },
@@ -77,7 +77,7 @@ export const JIANYING_TEMPLATE_PRESETS = {
   },
   "8_14_83": {
     label: "Motion caption pack",
-    transitions: ["zoom", "dissolve", "slide"],
+    transitions: ["twinkle-zoom", "dissolve", "slide"],
     motion: { fromScale: 1.02, toScale: 1.10 },
     filter: { slug: "vivid", intensity: 0.16 },
     caption: { ...BASE_CAPTION, fontSize: 39, color: "#FFFFFF", backgroundColor: "rgba(0,0,0,0.40)" },
