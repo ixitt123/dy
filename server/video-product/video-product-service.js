@@ -1450,26 +1450,44 @@ export function createVideoProductService({
     });
   }
 
+  function collectBgmFiles(root, extensions, { recursive = false } = {}) {
+    const files = [];
+    if (!root || !fs.existsSync(root)) return files;
+    for (const entry of fs.readdirSync(root, { withFileTypes: true })) {
+      const filePath = path.join(root, entry.name);
+      if (entry.isDirectory()) {
+        if (recursive) files.push(...collectBgmFiles(filePath, extensions, { recursive }));
+        continue;
+      }
+      if (entry.isFile() && extensions.has(path.extname(filePath).toLowerCase())) files.push(filePath);
+    }
+    return files;
+  }
+
   function listBgmAssets() {
     const roots = [
-      path.join(baseDir, "assets", "bgm"),
-      path.join(baseDir, "media", "bgm"),
-      path.join(baseDir, "bgm"),
+      { directory: path.join(baseDir, "assets", "bgm"), label: "项目 BGM", recursive: true, source: "project_assets" },
+      { directory: path.join(baseDir, "media", "bgm"), label: "项目媒体 BGM", recursive: true, source: "project_media" },
+      { directory: path.join(baseDir, "bgm"), label: "项目根 BGM", recursive: true, source: "project_bgm" },
+      ...LOCAL_BGM_LIBRARY_DIRS.map((item) => ({ ...item, recursive: true })),
     ];
     const extensions = new Set([".mp3", ".wav", ".m4a", ".aac", ".ogg"]);
     const assets = [];
-    for (const root of roots) {
+    const seen = new Set();
+    for (const rootDef of roots) {
+      const root = rootDef.directory;
       if (!fs.existsSync(root)) continue;
-      const files = fs.readdirSync(root)
-        .map((name) => path.join(root, name))
-        .filter((filePath) => fs.statSync(filePath).isFile() && extensions.has(path.extname(filePath).toLowerCase()))
-        .sort();
+      const files = collectBgmFiles(root, extensions, { recursive: rootDef.recursive !== false }).sort();
       for (const filePath of files) {
+        const resolved = path.resolve(filePath);
+        if (seen.has(resolved)) continue;
+        seen.add(resolved);
         const stats = fs.statSync(filePath);
-        const metadata = readBgmMetadata(filePath);
+        const metadata = readBgmMetadata(filePath, rootDef);
         assets.push({
           id: createStableAssetId(filePath),
           path: filePath,
+          title: path.basename(filePath, path.extname(filePath)),
           filename: path.basename(filePath),
           file_size: stats.size,
           bpm: metadata.bpm,
@@ -1478,15 +1496,16 @@ export function createVideoProductService({
           license: metadata.license,
           license_url: metadata.license_url,
           source: metadata.source,
+          source_label: metadata.source_label,
           license_status: metadata.license_status,
           created_at: stats.birthtime?.toISOString?.() || stats.mtime?.toISOString?.() || "",
         });
       }
     }
-    return assets.sort((a, b) => String(a.filename).localeCompare(String(b.filename)));
+    return assets.sort((a, b) => String(a.source_label || "").localeCompare(String(b.source_label || ""), "zh-CN") || String(a.filename).localeCompare(String(b.filename), "zh-CN"));
   }
 
-  function readBgmMetadata(filePath) {
+  function readBgmMetadata(filePath, rootDef = {}) {
     const ext = path.extname(filePath);
     const sidecars = [
       `${filePath}.json`,
