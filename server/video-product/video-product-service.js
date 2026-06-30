@@ -188,7 +188,11 @@ function hasJianyingDraftFiles(dir) {
     const contentPath = path.join(dir, "draft_content.json");
     const metaPath = path.join(dir, "draft_meta_info.json");
     const infoPath = path.join(dir, "draft_info.json");
-    return fs.existsSync(contentPath) && (fs.existsSync(metaPath) || fs.existsSync(infoPath));
+    const metaLikePath = fs.existsSync(metaPath) ? metaPath : infoPath;
+    return fs.existsSync(contentPath)
+      && fs.existsSync(metaLikePath)
+      && fs.statSync(contentPath).size > 256
+      && fs.statSync(metaLikePath).size > 64;
   } catch {
     return false;
   }
@@ -1041,10 +1045,15 @@ export function createVideoProductService({
   }
 
   function listDraftSeedCandidates(templateId = "", draftDirectory = "") {
-    const candidates = [];
+    const primaryCandidates = [];
+    const fallbackCandidates = [];
     const push = (value) => {
       const resolved = String(value || "").trim();
-      if (resolved) candidates.push(path.resolve(resolved));
+      if (resolved) primaryCandidates.push(path.resolve(resolved));
+    };
+    const pushFallback = (value) => {
+      const resolved = String(value || "").trim();
+      if (resolved) fallbackCandidates.push(path.resolve(resolved));
     };
 
     const requestedTemplate = readJianyingTemplate(templateId);
@@ -1054,12 +1063,15 @@ export function createVideoProductService({
     }
 
     if (draftDirectory && fs.existsSync(draftDirectory)) {
-      collectVisibleDraftSeeds(draftDirectory, { maxDepth: 1, includeCodex: true }).forEach(push);
+      collectVisibleDraftSeeds(draftDirectory, { maxDepth: 1, includeCodex: false }).forEach(push);
       const recycleBin = path.join(draftDirectory, ".recycle_bin");
       collectVisibleDraftSeeds(recycleBin, { maxDepth: 2, includeCodex: true }).forEach(push);
+      collectVisibleDraftSeeds(draftDirectory, { maxDepth: 1, includeCodex: true })
+        .filter((seed) => /[\\/]Codex|[\\/]codex_/i.test(seed))
+        .forEach(pushFallback);
     }
 
-    return [...new Set(candidates)].filter(hasJianyingDraftFiles);
+    return [...new Set([...primaryCandidates, ...fallbackCandidates])].filter(hasJianyingDraftFiles);
   }
 
   function updateVisibleDraftMeta(targetPath, project, timelineFiles) {
@@ -1104,37 +1116,57 @@ export function createVideoProductService({
     if (!draftDirectory || !fs.existsSync(draftDirectory) || !fs.statSync(draftDirectory).isDirectory()) {
       return { path: "", warning: "剪映草稿目录未配置，无法写入本地草稿。" };
     }
-    const seed = listDraftSeedCandidates(templateId, draftDirectory)[0] || "";
-    if (!seed) {
+    const seeds = listDraftSeedCandidates(templateId, draftDirectory);
+    if (!seeds.length) {
       return { path: "", warning: "没有找到可复制的真实剪映母版草稿，请先在剪映里保留一个母版草稿或导入模板母版。" };
     }
-    const title = safeJson(project.metadata_json, {})?.title || timelineFiles?.timelineJson?.publish_title || `timeline-${project.id}`;
-    const targetName = safeFileName(`codex_${project.id}_${title}_${Date.now()}`);
-    const targetPath = path.join(draftDirectory, targetName);
-    if (!isInsideDirectory(draftDirectory, targetPath)) return { path: "", warning: "剪映草稿目标路径不合法。" };
-    fs.rmSync(targetPath, { recursive: true, force: true });
-    fs.cpSync(seed, targetPath, { recursive: true, force: true });
-    updateVisibleDraftMeta(targetPath, project, timelineFiles);
-    const outputRefDir = path.join(targetPath, "codex-output");
-    ensureDir(outputRefDir);
-    for (const file of ["capcut-plan.json", "capcut-compile-spec.json", "timeline.json", "subtitles.srt", "subtitles.ass", "project_manifest.json"]) {
-      const source = path.join(timelineFiles.projectDir, file);
-      if (fs.existsSync(source)) fs.copyFileSync(source, path.join(outputRefDir, file));
+    const tried = [];
+    for (const seed of seeds) {
+      const targetName = safeFileName(`codex_${project.id}_${Date.now()}`);
+      const targetPath = path.join(draftDirectory, targetName);
+      if (!isInsideDirectory(draftDirectory, targetPath)) {
+        tried.push(`${seed}: 目标路径不合法`);
+        continue;
+      }
+      try {
+        fs.rmSync(targetPath, { recursive: true, force: true });
+        fs.cpSync(seed, targetPath, { recursive: true, force: true });
+        updateVisibleDraftMeta(targetPath, project, timelineFiles);
+        if (!hasJianyingDraftFiles(targetPath)) {
+          tried.push(`${seed}: 复制后缺少剪映核心草稿文件`);
+          fs.rmSync(targetPath, { recursive: true, force: true });
+          continue;
+        }
+        const outputRefDir = path.join(targetPath, "codex-output");
+        ensureDir(outputRefDir);
+        for (const file of ["capcut-plan.json", "capcut-compile-spec.json", "timeline.json", "subtitles.srt", "subtitles.ass", "project_manifest.json"]) {
+          const source = path.join(timelineFiles.projectDir, file);
+          if (fs.existsSync(source)) fs.copyFileSync(source, path.join(outputRefDir, file));
+        }
+        writeJson(path.join(targetPath, "codex-import.json"), {
+          mode: "visible_draft_fallback",
+          sourceSeedDraftPath: seed,
+          outputDir: timelineFiles.projectDir,
+          timelineProjectId: project.id,
+          templateId,
+          reason,
+          syncedAt: new Date().toISOString(),
+        });
+        return {
+          path: targetPath,
+          seed,
+          warning: `capcut-cli 未生成可用草稿，已复制真实剪映母版到本地草稿目录：${targetPath}`,
+        };
+      } catch (error) {
+        tried.push(`${seed}: ${error instanceof Error ? error.message : String(error)}`);
+        try {
+          fs.rmSync(targetPath, { recursive: true, force: true });
+        } catch {
+          // Best effort cleanup only.
+        }
+      }
     }
-    writeJson(path.join(targetPath, "codex-import.json"), {
-      mode: "visible_draft_fallback",
-      sourceSeedDraftPath: seed,
-      outputDir: timelineFiles.projectDir,
-      timelineProjectId: project.id,
-      templateId,
-      reason,
-      syncedAt: new Date().toISOString(),
-    });
-    return {
-      path: targetPath,
-      seed,
-      warning: `capcut-cli 未生成可用草稿，已复制真实剪映母版到本地草稿目录：${targetPath}`,
-    };
+    return { path: "", warning: `剪映母版草稿复制失败：${tried.join("；")}` };
   }
 
   function wait(ms) {
