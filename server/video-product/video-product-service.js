@@ -440,7 +440,10 @@ function buildRouteASubtitleScenes({ audioText = "", directorScenes = [], target
     const duration = index === units.length - 1
       ? Math.max(0.75, targetDuration - cursor)
       : Math.max(0.75, Number(((weights[index] / totalWeight) * targetDuration).toFixed(3)));
-    const sourceScene = directorScenes.find((scene) => textSimilarityScore(scene.voice_text || scene.subtitle || "", unit) >= 32)
+    const proportionalIndex = directorScenes.length
+      ? Math.min(directorScenes.length - 1, Math.floor((index / Math.max(1, units.length)) * directorScenes.length))
+      : 0;
+    const sourceScene = directorScenes[proportionalIndex]
       || directorScenes[Math.min(index, Math.max(0, directorScenes.length - 1))]
       || {};
     const sourceSceneIndex = Number(sourceScene.scene_index || sourceScene.scene_no || sourceScene.shot_id || sourceScene.id || index + 1) || index + 1;
