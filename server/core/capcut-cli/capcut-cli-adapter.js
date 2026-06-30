@@ -15,6 +15,47 @@ function safeDraftName(value) {
   return cleaned || "codex_video";
 }
 
+function hardenDraftTextLayout(draftDirectory) {
+  const contentPath = path.join(draftDirectory || "", "draft_content.json");
+  if (!contentPath || !fs.existsSync(contentPath)) return { ok: false, warnings: [] };
+  try {
+    const draft = JSON.parse(fs.readFileSync(contentPath, "utf8"));
+    const texts = Array.isArray(draft.materials?.texts) ? draft.materials.texts : [];
+    let changed = 0;
+    for (const text of texts) {
+      const currentSize = Number(text.font_size || text.text_size || 0);
+      if (currentSize > 0) {
+        const maxSize = currentSize > 15 ? 18 : 15;
+        text.font_size = Math.min(currentSize, maxSize);
+        text.text_size = Math.min(Number(text.text_size || currentSize), maxSize);
+      }
+      text.line_max_width = Math.min(Number(text.line_max_width || 0.82), 0.70);
+      text.force_apply_line_max_width = true;
+      text.fixed_width = Number(text.fixed_width || 0) > 0
+        ? Math.min(Number(text.fixed_width), 0.70)
+        : 0.70;
+      if (typeof text.content === "string") {
+        try {
+          const content = JSON.parse(text.content);
+          if (Array.isArray(content.styles)) {
+            for (const style of content.styles) {
+              if (style?.size) style.size = Math.min(Number(style.size), currentSize > 15 ? 18 : 15);
+            }
+            text.content = JSON.stringify(content);
+          }
+        } catch {
+          // Keep CapCut's original text payload if it cannot be parsed.
+        }
+      }
+      changed += 1;
+    }
+    fs.writeFileSync(contentPath, JSON.stringify(draft, null, 2), "utf8");
+    return { ok: true, changed, warnings: changed ? [`已强制收紧 ${changed} 条剪映字幕宽度和字号。`] : [] };
+  } catch (error) {
+    return { ok: false, warnings: [`剪映字幕布局后处理失败：${error.message}`] };
+  }
+}
+
 export function createCapcutCliAdapter(options = {}) {
   const detector = options.detector || createCapcutCliDetector(options);
 
