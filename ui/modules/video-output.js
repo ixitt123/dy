@@ -97,6 +97,24 @@ function updateGenerateAvailability() {
   button.title = generationMissingReason() || "先同步当前选择并检查素材，再创建成片任务";
 }
 
+async function ensureVideoProjectForOutput() {
+  const current = currentVideoProject();
+  if (current?.id) return current;
+  const directorText = document.querySelector("#videoProductDirector")?.selectedOptions?.[0]?.textContent || "";
+  const title = directorText
+    .replace(/^#\d+\s*/, "")
+    .replace(/路.*$/, "")
+    .trim() || "高质量剪映草稿";
+  const created = await window.videoProjects?.create?.({
+    title,
+    videoType: "短视频",
+    outputMode: "jianying_template",
+  });
+  if (!created?.id) throw new Error("自动创建短视频项目失败。");
+  await window.videoProjects?.setActiveProject?.(created.id, { fetch: false });
+  return created;
+}
+
 function renderToolStatus(container, status) {
   const checks = status?.checks || {};
   container.innerHTML = Object.entries(STATUS_LABELS).map(([key, label]) => {
@@ -534,6 +552,7 @@ function payload() {
 export async function generateVideoProduct() {
   const status = document.querySelector("#videoProductStatus");
   const button = document.querySelector("#generateVideoProduct");
+  await ensureVideoProjectForOutput();
   const missingReason = generationMissingReason();
   if (missingReason) {
     if (status) status.textContent = missingReason;
@@ -581,6 +600,7 @@ export async function generateVideoProduct() {
 async function generateJianyingDraftAndOpen() {
   selectOutputType("jianying_template");
   const status = document.querySelector("#videoProductStatus");
+  await ensureVideoProjectForOutput();
   const missingReason = generationMissingReason();
   if (missingReason) {
     if (status) status.textContent = missingReason;
