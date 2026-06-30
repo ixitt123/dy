@@ -42,13 +42,13 @@ function pickTemplateTransition(preset, index, fallback = "") {
 
 function styleTextItem(base = {}, overrides = {}) {
   return {
-    fontSize: Number(overrides.fontSize || base.fontSize || 34),
+    fontSize: Number(overrides.fontSize || base.fontSize || 30),
     color: overrides.color || base.color || "#FFFFFF",
     strokeColor: overrides.strokeColor || base.strokeColor || "#000000",
-    strokeWidth: Number(overrides.strokeWidth ?? base.strokeWidth ?? 5),
-    backgroundColor: overrides.backgroundColor || base.backgroundColor || "rgba(0,0,0,0.28)",
+    strokeWidth: Number(overrides.strokeWidth ?? base.strokeWidth ?? 3),
+    backgroundColor: overrides.backgroundColor || base.backgroundColor || "rgba(8,12,20,0.20)",
     x: Number(overrides.x ?? base.x ?? 0),
-    y: Number(overrides.y ?? base.y ?? 0.72),
+    y: Number(overrides.y ?? base.y ?? -0.70),
   };
 }
 
@@ -85,7 +85,7 @@ function splitCaptionSegment(segment = "", maxCharsPerLine = 15) {
   return chunks.filter(Boolean);
 }
 
-function wrapCaptionText(value = "", maxCharsPerLine = 15, maxLines = 2) {
+function wrapCaptionText(value = "", maxCharsPerLine = 12, maxLines = 2) {
   const text = String(value || "").replace(/\s+/g, " ").trim();
   if (!text) return "";
   const parts = text.split(/(?<=[\u3002\uff01\uff1f!?\uff1b;\uff0c\u3001,])/u).map((item) => item.trim()).filter(Boolean);
@@ -126,7 +126,7 @@ function captionKeywordCandidates(scene = {}, text = "") {
 function buildTextRangeOperation(target, text, keywords, style = {}) {
   const ranges = [];
   const color = style.highlightColor || style.keywordColor || "#FFD15A";
-  const fontSize = Number(style.highlightFontSize || style.fontSize || 38) + 4;
+  const fontSize = Number(style.highlightFontSize || style.fontSize || 30) + 2;
   for (const keyword of keywords) {
     const start = text.indexOf(keyword);
     if (start < 0) continue;
@@ -262,7 +262,7 @@ export function buildCapcutCompileSpec({ project = {}, timeline = {}, timelineFi
   const captionItems = scenes
     .map((scene, index) => {
       const rawText = firstValue(scene.subtitle_text, scene.narration_text, scene.title_text);
-      const text = wrapCaptionText(rawText);
+      const text = wrapCaptionText(rawText, 12, 2);
       if (!text) return null;
       return {
         ref: `caption_${String(index + 1).padStart(2, "0")}`,
@@ -271,7 +271,7 @@ export function buildCapcutCompileSpec({ project = {}, timeline = {}, timelineFi
         scene,
         start: Number(scene.start_time || 0),
         duration: Math.max(0.1, Number(scene.duration || 0)),
-        ...styleTextItem(captionStyle, { y: captionStyle.y ?? -0.62 }),
+        ...styleTextItem(captionStyle, { y: captionStyle.y ?? -0.70 }),
       };
     })
     .filter(Boolean);

@@ -1294,6 +1294,18 @@ function saveUnifiedProvider(settings, body) {
     return;
   }
 
+  if (id === "jamendo_bgm") {
+    if (!settings.bgmProviders) settings.bgmProviders = {};
+    settings.bgmProviders.jamendo = {
+      ...(settings.bgmProviders.jamendo || {}),
+      label: "Jamendo",
+      ...(apiKey ? { client_id: apiKey } : {}),
+      ...(body.baseUrl !== undefined ? { base_url: baseUrl || "https://api.jamendo.com/v3.0" } : {}),
+      enabled: body.enabled !== false,
+    };
+    return;
+  }
+
   throw new Error("未知 API 服务");
 }
 

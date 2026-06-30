@@ -423,14 +423,6 @@ export function createImageService({ baseDir, getSettings, taskStore = null, ffm
       `口播语义参考：${subtitle.slice(0, 80)}`,
       "生成要求：一张可直接用于竖屏短视频成片的电影分镜图，画面真实可用、风格统一、没有文字、没有二维码、没有水印。",
       negativePromptLock(),
-      `分镜编号：${sceneIndex}/${total}`,
-      `本镜头任务：${purpose || "承接上一镜头，推动叙事"}`,
-      `情绪：${emotion || "专业、有冲击力"}`,
-      `镜头语言：${camera || "中近景，轻微推近"}；构图：${composition || "主体居中偏上，底部留字幕区"}`,
-      "字幕留白硬规则：画面最下面约 20%（底部 1/5）必须干净、低对比、低信息密度，不能放人脸、手、产品主体、重要物体、可读文字或复杂纹理；主体和视觉重点放在上方 80%。",
-      `画面主体：${basePrompt}`,
-      `字幕关键词参考：${subtitle.slice(0, 60)}`,
-      "生成要求：像一套完整商业短视频分镜里的同一支片子，不要像不同软件随机生成；画面高级、清晰、统一、能直接用于视频成片。",
     ].filter(Boolean).join("\n");
   }
 
