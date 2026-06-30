@@ -303,9 +303,9 @@ function timelineToAss(scenes, { width = 1080, height = 1920, style = null } = {
   const titleSize = Math.max(34, Math.round(height * 0.019));
   const accent = assColor(palette.accent, "#E7C76C");
   const accent2 = assColor(palette.accent2, "#49D6C8");
-  const textColor = assColor(palette.text, "#FFFFFF");
-  const outlineColor = assColor("#05070C", "#05070C");
-  const boxColor = assColor(palette.background, "#07101B", "88");
+  const textColor = assColor(palette.subtitleText || palette.captionText, "#101827");
+  const outlineColor = assColor("#FFFFFF", "#FFFFFF");
+  const boxColor = assColor("#FFFFFF", "#FFFFFF", "99");
   const lines = [
     "[Script Info]",
     "ScriptType: v4.00+",
