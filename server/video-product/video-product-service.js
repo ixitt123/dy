@@ -957,6 +957,7 @@ export function createVideoProductService({
     return {
       id,
       name: String(merged.name || defaults.name || id).trim(),
+      label: String(merged.label || merged.name || defaults.name || id).trim(),
       category: String(merged.category || defaults.category || "自定义模板").trim(),
       ratio: String(merged.ratio || "9:16").trim(),
       resolution: String(merged.resolution || "1080x1920").trim(),
@@ -3029,7 +3030,7 @@ ${sceneMarkup}
         manual_bindings: input.manual_bindings || {},
         route_a_style_id: routeAStyleId(input.route_a_style_id || input.style_id),
         route_a_custom_style: String(input.route_a_custom_style || input.custom_style || ""),
-        bgm_strategy: String(input.bgm_strategy || "none"),
+        bgm_strategy: String(input.bgm_strategy || "auto"),
         bgm_asset_id: String(input.bgm_asset_id || ""),
         jianying_template: String(input.jianying_template || "education_tips"),
         render_engine: outputType === "template_mp4" ? "ffmpeg_stable_with_hyperframes_package" : "ffmpeg",
