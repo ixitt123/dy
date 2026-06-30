@@ -77,8 +77,7 @@ function bgmOptionLabel(row = {}) {
 
 function canAttemptGeneration() {
   return Boolean(
-    currentVideoProject()?.id
-    && document.querySelector("#videoProductDirector")?.value
+    document.querySelector("#videoProductDirector")?.value
     && document.querySelector("#videoProductAudio")?.value
   );
 }
