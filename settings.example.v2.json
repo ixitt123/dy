@@ -25,6 +25,55 @@
     "elevenlabs": { "apiKey": "" },
     "aliyun_bailian": { "apiKey": "" }
   },
+  "bgmProviders": {
+    "hifive": {
+      "base_url": "https://open.haifanwu.com",
+      "app_id": "",
+      "api_key": "",
+      "secret": "",
+      "model": "short_video",
+      "license_plan": "",
+      "payment_methods": ["alipay", "wechat_pay"],
+      "enabled": true
+    },
+    "vfine": {
+      "base_url": "https://www.vfinemusic.com",
+      "app_id": "",
+      "api_key": "",
+      "secret": "",
+      "model": "commercial_music",
+      "license_plan": "",
+      "payment_methods": ["alipay", "wechat_pay"],
+      "enabled": true
+    },
+    "kanjian_starlink": {
+      "base_url": "https://open.kanjian.com",
+      "app_id": "",
+      "api_key": "",
+      "secret": "",
+      "model": "soundtrack",
+      "license_plan": "",
+      "payment_methods": ["alipay", "wechat_pay"],
+      "enabled": true
+    },
+    "tme_opencloud": {
+      "base_url": "https://opencloud.tencentmusic.com",
+      "app_id": "",
+      "api_key": "",
+      "secret": "",
+      "model": "commercial_catalog",
+      "license_plan": "",
+      "payment_methods": ["alipay", "wechat_pay"],
+      "enabled": true
+    },
+    "jamendo": {
+      "base_url": "https://api.jamendo.com/v3.0",
+      "client_id": "",
+      "model": "tracks",
+      "license_plan": "license_review",
+      "enabled": true
+    }
+  },
   "streamingEnabled": true,
   "downloadsDir": "D:\\douyin-video-tool-source-code\\douyin-video-tool-source-code\\douyin-mcp-local\\downloads"
 }
