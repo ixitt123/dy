@@ -626,6 +626,41 @@ function optimizedPublishTitle({ directorTitle = "", scenes = [] } = {}) {
   return titleClip(contrast ? `${hook}，${contrast}` : hook, 22);
 }
 
+function buildPublishMeta({ publishTitle = "", scenes = [], platform = "douyin", videoType = "" } = {}) {
+  const text = `${publishTitle} ${videoType} ${scenes.map((scene) => `${scene.title_text || ""} ${scene.narration_text || ""} ${scene.subtitle_text || ""}`).join(" ")}`;
+  const title = titleClip(publishTitle, platform === "xiaohongshu" ? 20 : 28);
+  const keywordRules = [
+    [/英语|单词|口语|听力|english/i, ["英语学习", "口语提升", "学习方法"]],
+    [/招生|报名|家长|课程|补课|升学/, ["招生转化", "家长必看", "教育规划"]],
+    [/AI|人工智能|效率|工具/i, ["AI工具", "效率提升", "知识干货"]],
+    [/商业|成交|客户|流量|赚钱/, ["商业思维", "流量增长", "成交技巧"]],
+    [/数学|高考|中考|提分|考试/, ["提分方法", "考试规划", "学习技巧"]],
+  ];
+  const keywords = [];
+  for (const [pattern, values] of keywordRules) {
+    if (pattern.test(text)) keywords.push(...values);
+  }
+  const safeKeywords = [...new Set([...(keywords.length ? keywords : ["知识口播", "短视频", "干货分享"]), "抖音", "视频号", "小红书"])]
+    .slice(0, 8);
+  const hashtags = safeKeywords.map((item) => `#${item.replace(/^#+/u, "").replace(/\s+/g, "")}`);
+  const description = [
+    title,
+    "",
+    "本条内容围绕一个明确问题展开：先抓住开头钩子，再用分镜、配音、字幕和素材同步表达。",
+    "适合发布前再结合账号定位补充案例、课程信息或行动引导。",
+    "",
+    hashtags.join(" "),
+  ].join("\n");
+  return {
+    title,
+    description,
+    hashtags,
+    keywords: safeKeywords,
+    platform,
+    policy_note: "标题避免夸大承诺；标签只保留内容相关词，不使用无关蹭热词。",
+  };
+}
+
 function routeAStylePreset(styleId = "") {
   return ROUTE_A_STYLE_PRESETS[String(styleId || "")] || ROUTE_A_STYLE_PRESETS[ROUTE_A_DEFAULT_STYLE_ID];
 }
@@ -1370,11 +1405,19 @@ export function createVideoProductService({
         .sort();
       for (const filePath of files) {
         const stats = fs.statSync(filePath);
+        const metadata = readBgmMetadata(filePath);
         assets.push({
           id: createStableAssetId(filePath),
           path: filePath,
           filename: path.basename(filePath),
           file_size: stats.size,
+          bpm: metadata.bpm,
+          mood: metadata.mood,
+          tags: metadata.tags,
+          license: metadata.license,
+          license_url: metadata.license_url,
+          source: metadata.source,
+          license_status: metadata.license_status,
           created_at: stats.birthtime?.toISOString?.() || stats.mtime?.toISOString?.() || "",
         });
       }
@@ -1382,23 +1425,85 @@ export function createVideoProductService({
     return assets.sort((a, b) => String(a.filename).localeCompare(String(b.filename)));
   }
 
+  function readBgmMetadata(filePath) {
+    const ext = path.extname(filePath);
+    const sidecars = [
+      `${filePath}.json`,
+      path.join(path.dirname(filePath), `${path.basename(filePath, ext)}.json`),
+      path.join(path.dirname(filePath), `${path.basename(filePath, ext)}.bgm.json`),
+    ];
+    const metadata = sidecars
+      .map((candidate) => fs.existsSync(candidate) ? safeJson(fs.readFileSync(candidate, "utf8"), {}) : null)
+      .find(Boolean) || {};
+    const inferredBpm = inferBgmBpm(`${path.basename(filePath)} ${JSON.stringify(metadata)}`);
+    const license = String(metadata.license || metadata.licenseName || "").trim();
+    const source = String(metadata.source || metadata.provider || "").trim();
+    const licenseStatus = normalizeBgmLicenseStatus({ license, source, filePath, metadata });
+    return {
+      bpm: Number(metadata.bpm || metadata.tempo || inferredBpm || 0) || 0,
+      mood: String(metadata.mood || metadata.style || "").trim(),
+      tags: stringArray(metadata.tags || metadata.keywords),
+      license,
+      license_url: String(metadata.license_url || metadata.licenseUrl || metadata.source_url || "").trim(),
+      source,
+      license_status: licenseStatus,
+    };
+  }
+
+  function inferBgmBpm(value) {
+    const match = String(value || "").match(/(?:^|[^0-9])([1-2][0-9]{2})\s*bpm(?:[^0-9]|$)/i);
+    const bpm = match ? Number(match[1]) : 0;
+    return bpm >= 60 && bpm <= 220 ? bpm : 0;
+  }
+
+  function normalizeBgmLicenseStatus({ license = "", source = "", filePath = "", metadata = {} } = {}) {
+    const haystack = `${license} ${source} ${filePath} ${metadata.license_status || ""}`.toLowerCase();
+    if (metadata.authorized === true || metadata.commercial_use === true) return "authorized";
+    if (/owned|licensed|purchased|pixabay|cc0|public[_ -]?domain|royalty[_ -]?free|commercial[_ -]?use/.test(haystack)) return "authorized";
+    if (/cc[- ]?by|creative commons attribution/.test(haystack)) return "attribution_required";
+    if (/noncommercial|nc|personal only|unknown/.test(haystack)) return "unknown_review_required";
+    return "unknown_review_required";
+  }
+
+  function isBgmLegalForAuto(asset) {
+    return ["authorized", "attribution_required"].includes(String(asset?.license_status || ""));
+  }
+
   function findBgmAsset() {
     return listBgmAssets()[0]?.path || "";
   }
 
-  function scoreBgmAsset(asset, styleId = ROUTE_A_DEFAULT_STYLE_ID) {
+  function scoreBgmAsset(asset, styleId = ROUTE_A_DEFAULT_STYLE_ID, context = {}) {
     const preset = routeAStylePreset(styleId);
-    const haystack = `${asset.filename || ""} ${asset.path || ""}`.toLowerCase();
+    const haystack = `${asset.filename || ""} ${asset.path || ""} ${asset.mood || ""} ${(asset.tags || []).join(" ")}`.toLowerCase();
     let score = 0;
     for (const keyword of preset.bgmKeywords || []) {
       if (haystack.includes(String(keyword).toLowerCase())) score += 8;
     }
+    for (const keyword of context.keywords || []) {
+      if (keyword && haystack.includes(String(keyword).toLowerCase())) score += 5;
+    }
+    const bpm = Number(asset.bpm || 0);
+    const preferredBpm = Number(context.preferredBpm || preset.bgmBpm || 132);
+    if (bpm >= 120 && bpm <= 150) score += 16;
+    if (bpm) score += Math.max(0, 10 - Math.abs(bpm - preferredBpm) / 2);
+    if (isBgmLegalForAuto(asset)) score += 18;
     if (/bgm|music|loop|背景|音乐/i.test(haystack)) score += 2;
     if (/default|generated|tts/i.test(haystack)) score -= 2;
     return score;
   }
 
-  function selectBgmAsset({ preferredId = "", strategy = "none", styleId = ROUTE_A_DEFAULT_STYLE_ID } = {}) {
+  function bgmMatchKeywords(timeline = {}) {
+    const text = `${timeline.name || ""} ${timeline.publish_title || ""} ${(timeline.scenes || []).map((scene) => `${scene.narration_text || ""} ${scene.subtitle_text || ""}`).join(" ")}`;
+    return [
+      /英语|单词|口语|听力|english/i.test(text) ? "english education clean" : "",
+      /招生|报名|家长|课程|补课/.test(text) ? "education enrollment promo" : "",
+      /科技|AI|数据|系统|效率/i.test(text) ? "tech data future" : "",
+      /成交|商业|赚钱|客户|流量/.test(text) ? "business premium impact" : "",
+    ].filter(Boolean);
+  }
+
+  function selectBgmAsset({ preferredId = "", strategy = "none", styleId = ROUTE_A_DEFAULT_STYLE_ID, timeline = null } = {}) {
     const assets = listBgmAssets();
     const preferred = preferredId
       ? assets.find((asset) => String(asset.id) === String(preferredId) || path.resolve(asset.path) === path.resolve(String(preferredId)))
@@ -1406,12 +1511,19 @@ export function createVideoProductService({
     if (preferred) return { path: preferred.path, source: "manual", label: preferred.filename, asset: preferred };
     if (strategy === "manual" || strategy === "none") return { path: "", source: "none", label: "", asset: null };
     if (strategy === "generated_default") return { path: "", source: "generated_default", label: "generated_default", asset: null };
-    if (assets.length) {
+    const legalAssets = assets.filter(isBgmLegalForAuto);
+    if (legalAssets.length) {
+      const preset = routeAStylePreset(styleId);
       const selected = assets
-        .map((asset) => ({ asset, score: scoreBgmAsset(asset, styleId) }))
+        .filter(isBgmLegalForAuto)
+        .map((asset) => ({ asset, score: scoreBgmAsset(asset, styleId, {
+          keywords: bgmMatchKeywords(timeline || {}),
+          preferredBpm: preset.bgmBpm || 132,
+        }) }))
         .sort((a, b) => b.score - a.score || String(a.asset.filename).localeCompare(String(b.asset.filename)))[0]?.asset;
       if (selected) return { path: selected.path, source: "local_auto", label: selected.filename, asset: selected };
     }
+    if (strategy === "auto" || strategy === "local_auto") return { path: "", source: "generated_default", label: "generated_default", asset: null };
     return { path: "", source: "none", label: "", asset: null };
   }
 
@@ -1437,10 +1549,10 @@ export function createVideoProductService({
     buffer.writeUInt32LE(dataSize, 40);
 
     const tonalMap = {
-      black_gold_knowledge: { tones: [110, 165, 220], bpm: 92, hit: 74 },
-      clean_education: { tones: [147, 196, 247], bpm: 86, hit: 92 },
-      tech_info: { tones: [130.81, 196, 261.63], bpm: 104, hit: 82 },
-      enrollment_ad: { tones: [98, 146.83, 196], bpm: 112, hit: 68 },
+      black_gold_knowledge: { tones: [110, 165, 220], bpm: 128, hit: 74 },
+      clean_education: { tones: [147, 196, 247], bpm: 124, hit: 92 },
+      tech_info: { tones: [130.81, 196, 261.63], bpm: 136, hit: 82 },
+      enrollment_ad: { tones: [98, 146.83, 196], bpm: 144, hit: 68 },
     };
     const music = tonalMap[routeAStyleId(styleId)] || tonalMap.black_gold_knowledge;
     const tones = music.tones;
@@ -1544,16 +1656,16 @@ export function createVideoProductService({
         bgm_keywords: preset.bgmKeywords,
       })),
       bgmStrategies: [
-        { id: "none", label: "不使用 BGM", description: "默认选项；没有手动选择音乐时，不向剪映草稿写入背景音乐。" },
-        { id: "auto", label: "自动匹配", description: "手动选择优先；未选时按风格匹配本地 BGM；本地没有时生成基础氛围 BGM。" },
-        { id: "manual", label: "手动本地 BGM", description: "只使用下方指定的本地 BGM，适合已经有授权音乐的成片。" },
-        { id: "local_auto", label: "本地库自动匹配", description: "根据路线 A 风格从本地 BGM 库自动选择，找不到时再基础生成。" },
-        { id: "generated_default", label: "基础氛围生成", description: "不调用付费 API，生成简单节奏垫，报告会标记 generated_default。" },
+        { id: "none", label: "不使用 BGM", description: "不写入背景音乐，只保留配音和字幕。" },
+        { id: "auto", label: "自动匹配合法 BGM", description: "手动优先；未选时只从授权明确的本地库匹配 120-150 BPM 音乐；没有合规素材时生成基础节奏垫。" },
+        { id: "manual", label: "手动本地 BGM", description: "只使用指定本地音乐。适合已经购买、授权或自有版权的素材。" },
+        { id: "local_auto", label: "本地库自动匹配", description: "根据文案关键词、风格和 BPM 匹配本地授权 BGM；未知授权不会自动使用。" },
+        { id: "generated_default", label: "基础氛围生成", description: "不调用付费 API，本地生成 120-150 BPM 基础节奏垫，报告标记 generated_default。" },
       ],
       bgmProviderSuggestions: [
-        { id: "jamendo", label: "Jamendo", status: "planned", note: "可接免费/授权音乐 API，后续需要用户自己的 API 凭据和授权策略。" },
-        { id: "freesound", label: "Freesound", status: "planned", note: "更适合音效素材，后续可接 OAuth/API Token 并按许可证筛选。" },
-        { id: "pixabay", label: "Pixabay", status: "planned", note: "可作为免版税素材来源候选，接入前需要确认音乐接口和授权范围。" },
+        { id: "pixabay", label: "Pixabay Music", status: "recommended_api", note: "适合作为免费商用音乐候选；接入时需要用户自己的 API Key，并保存曲目来源、作者和授权链接。" },
+        { id: "freesound", label: "Freesound", status: "sfx_first", note: "更适合音效和短循环；必须按 license 过滤 CC0/CC BY，NC 素材不能用于商业成片。" },
+        { id: "jamendo", label: "Jamendo", status: "license_review", note: "有 API，但商业视频通常需要确认授权方案；默认不自动使用，避免版权风险。" },
       ],
       timelines: taskStore.listTimelineProjects({ limit: 50 }).map((row) => sourceProject(row, { includeScenes: false })),
       platforms: Object.entries(PLATFORM_PRESETS).map(([id, value]) => ({ id, ...value })),
@@ -2056,6 +2168,7 @@ ${sceneMarkup}
       preferredId: projectMetadata.bgm_asset_id || timeline.metadata?.route_a_bgm_asset_id || "",
       strategy: projectMetadata.bgm_strategy || timeline.metadata?.route_a_bgm_strategy || "none",
       styleId: routeAStyle,
+      timeline,
     });
     if (bgmSelection.source === "generated_default") {
       const generatedPath = path.join(audioDir, "bgm_generated_default.wav");
@@ -2070,6 +2183,19 @@ ${sceneMarkup}
       bgmSourceKind = bgmSelection.source || "local_auto";
       bgmLabel = bgmSelection.label || path.basename(bgmSelection.path);
     }
+    const bgmAssetMetadata = bgmSelection.asset ? {
+      bpm: Number(bgmSelection.asset.bpm || 0) || 0,
+      license: bgmSelection.asset.license || "",
+      license_url: bgmSelection.asset.license_url || "",
+      source: bgmSelection.asset.source || "",
+      license_status: bgmSelection.asset.license_status || "unknown_review_required",
+    } : (bgmSelection.source === "generated_default" ? {
+      bpm: Number(routeAStylePreset(routeAStyle).bgmBpm || 132),
+      license: "Generated by local algorithm",
+      license_url: "",
+      source: "generated_default",
+      license_status: "authorized",
+    } : {});
     let packagedTemplateBackground = "";
     if (project.output_type === "template_mp4") {
       const backgroundAsset = findTemplateBackgroundAsset({
@@ -2088,11 +2214,19 @@ ${sceneMarkup}
       directorTitle: timeline.director?.title || `Timeline #${project.id}`,
       scenes: packagedScenes,
     });
+    const publishMeta = buildPublishMeta({
+      publishTitle,
+      scenes: packagedScenes,
+      platform: project.platform,
+      videoType: timeline.metadata?.video_type || projectMetadata.videoType || "",
+    });
     const timelineJson = {
       project_id: project.id,
-      name: publishTitle,
+      name: publishMeta.title,
       director_title: timeline.director?.title || "",
-      publish_title: publishTitle,
+      publish_title: publishMeta.title,
+      publish_description: publishMeta.description,
+      publish_hashtags: publishMeta.hashtags,
       source_director_project_id: project.source_director_project_id,
       audio_asset_id: project.audio_asset_id,
       platform: project.platform,
@@ -2125,6 +2259,8 @@ ${sceneMarkup}
           ducking: "voiceover_first",
           source_type: bgmSourceKind,
           label: bgmLabel,
+          bpm: Number(bgmAssetMetadata.bpm || 0) || 0,
+          license_status: bgmAssetMetadata.license_status || "",
         }] : [],
         template_background: packagedTemplateBackground ? [{
           source: path.relative(projectDir, packagedTemplateBackground),
@@ -2134,9 +2270,13 @@ ${sceneMarkup}
         subtitles: timeline.tracks.subtitles,
       },
       output_type: project.output_type,
-      route_a_style: project.output_type === "template_mp4" ? routeAStyleContract(projectMetadata) : null,
+      route_a_style: ["template_mp4", "jianying_template"].includes(project.output_type) ? routeAStyleContract(projectMetadata) : null,
       bgm_source: bgmSourceKind,
       bgm_label: bgmLabel,
+      bgm_bpm: Number(bgmAssetMetadata.bpm || 0) || 0,
+      bgm_license: bgmAssetMetadata.license || "",
+      bgm_license_url: bgmAssetMetadata.license_url || "",
+      bgm_license_status: bgmAssetMetadata.license_status || "",
       status: project.status,
       created_at: project.created_at,
       updated_at: new Date().toISOString(),
@@ -2147,14 +2287,11 @@ ${sceneMarkup}
     fs.writeFileSync(srtPath, timelineToSrt(packagedScenes), "utf8");
     const assPath = path.join(projectDir, "subtitles.ass");
     fs.writeFileSync(assPath, timelineToAss(packagedScenes, { width, height, style: timelineJson.route_a_style }), "utf8");
-    const titleText = publishTitle;
-    fs.writeFileSync(path.join(projectDir, "title.txt"), `${titleText}\n`, "utf8");
-    fs.writeFileSync(path.join(projectDir, "description.txt"), [
-      titleText,
-      "",
-      "如果你也想把知识讲清楚，先把学习方式换成可执行的动作。",
-    ].join("\n"), "utf8");
-    fs.writeFileSync(path.join(projectDir, "hashtags.txt"), "#短视频 #知识口播 #AI成片 #抖音 #视频号 #小红书\n", "utf8");
+    const titleText = publishMeta.title;
+    fs.writeFileSync(path.join(projectDir, "title.txt"), `${publishMeta.title}\n`, "utf8");
+    fs.writeFileSync(path.join(projectDir, "description.txt"), `${publishMeta.description}\n`, "utf8");
+    fs.writeFileSync(path.join(projectDir, "hashtags.txt"), `${publishMeta.hashtags.join(" ")}\n`, "utf8");
+    writeJson(path.join(projectDir, "publish_meta.json"), publishMeta);
     const hyperframesPackage = writeHyperframesPackage(project, {
       projectDir,
       packagedAudio,
@@ -2165,7 +2302,7 @@ ${sceneMarkup}
       packagedTemplateBackground,
     });
     const manifestPath = writeJson(path.join(projectDir, "project_manifest.json"), {
-      name: publishTitle,
+      name: publishMeta.title,
       kind: "video-product-center",
       generated_at: new Date().toISOString(),
       stable_import_package: true,
@@ -2176,6 +2313,10 @@ ${sceneMarkup}
         bgm: Boolean(packagedBgm),
         bgm_source: bgmSourceKind,
         bgm_label: bgmLabel,
+        bgm_bpm: Number(bgmAssetMetadata.bpm || 0) || 0,
+        bgm_license_status: bgmAssetMetadata.license_status || "",
+        bgm_license: bgmAssetMetadata.license || "",
+        bgm_license_url: bgmAssetMetadata.license_url || "",
         bgm_note: packagedBgm
           ? `已接入 BGM（${bgmSourceKind}），并按语音优先混音。`
           : "未找到 BGM 素材。",
@@ -2185,6 +2326,8 @@ ${sceneMarkup}
         hyperframes_package: Boolean(hyperframesPackage?.indexPath),
         hyperframes_status: hyperframesPackage?.indexPath ? "package_ready_for_future_render_ffmpeg_v5_final" : "",
         optimized_publish_title: titleText,
+        publish_keywords: publishMeta.keywords,
+        publish_hashtags: publishMeta.hashtags,
         route_a_caption_policy: project.output_type === "template_mp4" ? "premium_ass_boxed_keyword_highlight" : "",
         template_background: packagedTemplateBackground ? "image_asset_dark_blur_motion" : "procedural_premium_motion",
         publish_package: true,
@@ -2202,6 +2345,7 @@ ${sceneMarkup}
         title: "title.txt",
         description: "description.txt",
         hashtags: "hashtags.txt",
+        publish_meta: "publish_meta.json",
         render_report: "render_report.json",
         hyperframes_index: hyperframesPackage?.indexPath ? path.relative(projectDir, hyperframesPackage.indexPath) : "",
         hyperframes_design: hyperframesPackage?.designPath ? path.relative(projectDir, hyperframesPackage.designPath) : "",
@@ -2601,6 +2745,8 @@ ${sceneMarkup}
         has_bgm: Boolean(timelineFiles.packagedBgm),
         bgm_source: timelineFiles.bgmSourceKind || "none",
         bgm_label: timelineFiles.bgmLabel || "",
+        bgm_bpm: Number(timelineFiles.timelineJson?.bgm_bpm || 0) || 0,
+        bgm_license_status: timelineFiles.timelineJson?.bgm_license_status || "",
         has_ass_subtitles: Boolean(timelineFiles.assPath && fs.existsSync(timelineFiles.assPath)),
         has_cover: Boolean(timelineFiles.coverPath),
         has_template_background: Boolean(timelineFiles.packagedTemplateBackground) || project.output_type === "template_mp4",
@@ -3079,6 +3225,7 @@ ${sceneMarkup}
       title: project.output_dir ? path.join(project.output_dir, "title.txt") : "",
       description: project.output_dir ? path.join(project.output_dir, "description.txt") : "",
       hashtags: project.output_dir ? path.join(project.output_dir, "hashtags.txt") : "",
+      publish_meta: project.output_dir ? path.join(project.output_dir, "publish_meta.json") : "",
       report: project.output_dir ? path.join(project.output_dir, "render_report.json") : "",
       hyperframes: project.output_dir ? path.join(project.output_dir, "hyperframes", "index.html") : "",
       hyperframes_design: project.output_dir ? path.join(project.output_dir, "hyperframes", "DESIGN.md") : "",

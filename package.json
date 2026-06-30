@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "start": "node ui-server.mjs",
+    "start:hidden": "wscript.exe start-ui-hidden.vbs",
     "start:mcp": "node node_modules/@yc-w-cn/douyin-mcp-server/dist/index.js",
     "dev": "node ui-server.mjs --open",
     "check": "node check-install.mjs",

@@ -253,7 +253,7 @@ export async function loadVideoProductSources() {
   setOptions(audioSelect, [{ id: "", label: "请选择当前项目的已完成语音" }, ...(data.audioJobs || [])], (row) => row.label || `#${row.id} ${row.voice_name || "配音"}`, preferred.audioId);
   setOptions(document.querySelector("#videoProductBgm"), [{ id: "", filename: "自动匹配本地 BGM；没有则基础生成" }, ...(data.bgmAssets || [])], (row) => row.filename || row.title || "自动匹配", preferred.bgmId);
   setOptions(document.querySelector("#videoProductRouteAStyle"), data.routeAStyles || [], (row) => row.label || row.id);
-  setOptions(document.querySelector("#videoProductBgmStrategy"), data.bgmStrategies || [], (row) => row.label || row.id);
+  setOptions(document.querySelector("#videoProductBgmStrategy"), data.bgmStrategies || [], (row) => row.label || row.id, "auto");
   renderJianyingTemplateOptions();
   state.manualBindings = {};
   state.preview = null;
@@ -380,9 +380,16 @@ export function renderOutputFiles(project = state.activeTimeline) {
   if (!container) return;
   const id = Number(project?.project_id || project?.id || 0);
   const files = [
-    ["timeline", "timeline.json", project?.timeline_path], ["srt", "subtitles.srt", project?.srt_path],
-    ["manifest", "project_manifest.json", project?.manifest_path], ["draft", "剪映草稿 / 执行计划", project?.draft_path],
-    ["mp4", "MP4 预览", project?.mp4_path], ["report", "render_report.json", project?.output_dir],
+    ["timeline", "timeline.json", project?.timeline_path],
+    ["srt", "subtitles.srt", project?.srt_path],
+    ["manifest", "project_manifest.json", project?.manifest_path],
+    ["draft", "剪映草稿 / 执行计划", project?.draft_path],
+    ["mp4", "MP4 预览", project?.mp4_path],
+    ["title", "标题 title.txt", project?.output_dir],
+    ["description", "描述 description.txt", project?.output_dir],
+    ["hashtags", "标签 hashtags.txt", project?.output_dir],
+    ["publish_meta", "发布元数据 publish_meta.json", project?.output_dir],
+    ["report", "render_report.json", project?.output_dir],
   ].filter(([, , value]) => value);
   container.innerHTML = files.length ? files.map(([type, label]) => `<a href="/api/video-product/export?id=${id}&type=${type}" target="_blank" rel="noreferrer">${escapeHtml(label)}</a>`).join("") : '<span>输出文件生成后会显示在这里。</span>';
 }
@@ -507,7 +514,7 @@ function payload() {
     jianying_template: document.querySelector("#videoProductJianyingTemplate")?.value || "education_tips",
     route_a_style_id: document.querySelector("#videoProductRouteAStyle")?.value || "black_gold_knowledge",
     route_a_custom_style: document.querySelector("#videoProductRouteACustomStyle")?.value.trim() || "",
-    bgm_strategy: document.querySelector("#videoProductBgm")?.value ? (document.querySelector("#videoProductBgmStrategy")?.value || "manual") : "none",
+    bgm_strategy: document.querySelector("#videoProductBgm")?.value ? (document.querySelector("#videoProductBgmStrategy")?.value || "manual") : (document.querySelector("#videoProductBgmStrategy")?.value || "auto"),
     bgm_asset_id: document.querySelector("#videoProductBgm")?.value || "",
     manual_bindings: { ...state.manualBindings },
     target_duration: 30,

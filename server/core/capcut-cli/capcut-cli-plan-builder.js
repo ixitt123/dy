@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { getJianyingTemplatePreset } from "../../config/jianying-template-presets.js";
 
 function firstValue(...values) {
   return values.find((value) => value !== undefined && value !== null && value !== "") || "";
@@ -21,7 +22,25 @@ function capcutTransitionSlug(value) {
   return aliases[raw] || "dissolve";
 }
 
+function pickTemplateTransition(preset, index, fallback = "") {
+  const transitions = Array.isArray(preset.transitions) ? preset.transitions : [];
+  return capcutTransitionSlug(fallback || transitions[index % Math.max(1, transitions.length)] || "dissolve");
+}
+
+function styleTextItem(base = {}, overrides = {}) {
+  return {
+    fontSize: Number(overrides.fontSize || base.fontSize || 34),
+    color: overrides.color || base.color || "#FFFFFF",
+    strokeColor: overrides.strokeColor || base.strokeColor || "#000000",
+    strokeWidth: Number(overrides.strokeWidth ?? base.strokeWidth ?? 5),
+    backgroundColor: overrides.backgroundColor || base.backgroundColor || "rgba(0,0,0,0.28)",
+    x: Number(overrides.x ?? base.x ?? 0),
+    y: Number(overrides.y ?? base.y ?? 0.72),
+  };
+}
+
 export function buildCapcutCliPlan({ project = {}, timeline = {}, timelineFiles = {}, templateName = "education_tips" } = {}) {
+  const templatePreset = getJianyingTemplatePreset(templateName);
   const scenes = Array.isArray(timeline.scenes) ? timeline.scenes : [];
   const packagedScenes = Array.isArray(timelineFiles.packagedScenes) ? timelineFiles.packagedScenes : [];
   const media = scenes.map((scene, index) => ({
@@ -48,6 +67,10 @@ export function buildCapcutCliPlan({ project = {}, timeline = {}, timelineFiles 
     template: {
       name: templateName,
       directory: `templates/jianying/${templateName}/draft_template`,
+      preset: templatePreset.label,
+      captionStyle: templatePreset.caption,
+      transitions: templatePreset.transitions,
+      targetBpm: templatePreset.bgmBpm,
     },
     audio: {
       voiceover: firstValue(timelineFiles.packagedAudio, timeline.audio_path),
@@ -78,6 +101,7 @@ export function buildCapcutCliPlan({ project = {}, timeline = {}, timelineFiles 
 }
 
 export function buildCapcutCompileSpec({ project = {}, timeline = {}, timelineFiles = {}, templateName = "education_tips" } = {}) {
+  const templatePreset = getJianyingTemplatePreset(templateName);
   const scenes = Array.isArray(timeline.scenes) ? timeline.scenes : [];
   const packagedScenes = Array.isArray(timelineFiles.packagedScenes) ? timelineFiles.packagedScenes : [];
   const duration = Number(timeline.duration || timelineFiles.timelineJson?.duration || 0);
@@ -99,11 +123,24 @@ export function buildCapcutCompileSpec({ project = {}, timeline = {}, timelineFi
         duration: Math.max(0.1, Number(scene.duration || 0)),
         width: width || 1080,
         height: height || 1920,
-        scale: 1.04,
+        scale: Number(templatePreset.motion?.fromScale || 1.04),
       };
     })
     .filter(Boolean);
-  const textItems = scenes
+  const captionStyle = templatePreset.caption || {};
+  const titleStyle = templatePreset.titleCard || {};
+  const ctaStyle = templatePreset.ctaCard || {};
+  const titleText = firstValue(timeline.publish_title, timeline.name, title);
+  const ctaText = firstValue(timeline.cta_text, scenes.at(-1)?.title_text, "关注账号，获取更多实用内容");
+  const textItems = [
+    titleText ? {
+      ref: "title_card",
+      text: titleText,
+      start: 0,
+      duration: Math.max(1.2, Math.min(2.2, duration || 1.6)),
+      ...styleTextItem(captionStyle, titleStyle),
+    } : null,
+    ...scenes
     .map((scene, index) => {
       const text = firstValue(scene.subtitle_text, scene.narration_text, scene.title_text);
       if (!text) return null;
@@ -112,16 +149,17 @@ export function buildCapcutCompileSpec({ project = {}, timeline = {}, timelineFi
         text,
         start: Number(scene.start_time || 0),
         duration: Math.max(0.1, Number(scene.duration || 0)),
-        fontSize: 34,
-        color: "#FFFFFF",
-        strokeColor: "#000000",
-        strokeWidth: 5,
-        backgroundColor: "rgba(0,0,0,0.28)",
-        x: 0,
-        y: 0.72,
+        ...styleTextItem(captionStyle),
       };
-    })
-    .filter(Boolean);
+    }),
+    ctaText && duration > 2 ? {
+      ref: "cta_card",
+      text: ctaText,
+      start: Math.max(0, duration - 2.2),
+      duration: Math.min(2.2, duration),
+      ...styleTextItem(captionStyle, ctaStyle),
+    } : null,
+  ].filter(Boolean);
   const audioItems = [];
   const voiceoverDuration = Math.max(
     0.1,
@@ -156,17 +194,24 @@ export function buildCapcutCompileSpec({ project = {}, timeline = {}, timelineFi
   const operations = videoItems.flatMap((item, index) => {
     const ops = [
       { op: "keyframe", target: item.ref, property: "uniform_scale", time: item.start, value: 1 },
-      { op: "keyframe", target: item.ref, property: "uniform_scale", time: item.start + item.duration, value: 1.06 },
+      { op: "keyframe", target: item.ref, property: "uniform_scale", time: item.start + item.duration, value: Number(templatePreset.motion?.toScale || 1.06) },
     ];
     if (index < videoItems.length - 1) {
       const scene = scenes[index] || {};
-      const transitionSlug = capcutTransitionSlug(scene.transition_type);
+      const transitionSlug = pickTemplateTransition(templatePreset, index, scene.transition_type);
       if (transitionSlug) ops.push({ op: "transition", target: item.ref, slug: transitionSlug, duration: 0.32 });
     }
     return ops;
   });
   if (duration > 0) {
-    operations.push({ op: "filter", slug: "vivid", start: 0, duration, intensity: 0.18, trackName: "color-grade" });
+    operations.push({
+      op: "filter",
+      slug: templatePreset.filter?.slug || "vivid",
+      start: 0,
+      duration,
+      intensity: Number(templatePreset.filter?.intensity || 0.18),
+      trackName: "color-grade",
+    });
   }
   return {
     name: title,
@@ -177,6 +222,8 @@ export function buildCapcutCompileSpec({ project = {}, timeline = {}, timelineFi
     metadata: {
       projectId: Number(project.id || 0),
       templateName,
+      templatePreset: templatePreset.label,
+      targetBpm: templatePreset.bgmBpm || 132,
       generatedBy: "dy-video-product-service",
     },
     tracks,

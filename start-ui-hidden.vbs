@@ -1,6 +1,16 @@
 Set shell = CreateObject("WScript.Shell")
 Set fso = CreateObject("Scripting.FileSystemObject")
 base = fso.GetParentFolderName(WScript.ScriptFullName)
+logFile = base & "\.data\launcher.log"
+
+Sub LogLine(message)
+  On Error Resume Next
+  If Not fso.FolderExists(base & "\.data") Then fso.CreateFolder(base & "\.data")
+  Set log = fso.OpenTextFile(logFile, 8, True)
+  log.WriteLine Now & " " & message
+  log.Close
+  On Error GoTo 0
+End Sub
 
 Function FindNode()
   candidates = Array( _
@@ -32,15 +42,16 @@ End Function
 
 nodePath = FindNode()
 If nodePath = "" Then
-  shell.Popup "Node.js was not found. Install Node.js 22 or newer, then run the dependency installer.", 10, "Douyin Video Tool", 48
+  LogLine "Node.js was not found. Install Node.js 22 or newer, then run the dependency installer."
   WScript.Quit 1
 End If
 
 packagePath = base & "\node_modules\@yc-w-cn\douyin-mcp-server\package.json"
 If Not fso.FileExists(packagePath) Then
-  shell.Popup "First launch may install project dependencies. Please wait a moment after closing this message.", 5, "Douyin Video Tool", 64
+  LogLine "Dependencies are missing. Run pnpm install before launching the workbench."
 End If
 
 cmd = """" & nodePath & """ """ & base & "\launch-ui.mjs"""
 shell.CurrentDirectory = base
+LogLine "Launching UI in hidden mode."
 shell.Run cmd, 0, False
