@@ -153,6 +153,7 @@ export function createCapcutCliAdapter(options = {}) {
       draftPath: draftDirectory,
       files: [...commonFiles, draftDirectory],
     });
+    const textLayoutResult = compileResult.ok ? hardenDraftTextLayout(draftDirectory) : { ok: false, warnings: [] };
     const infoResult = compileResult.ok
       ? execute(["info", draftDirectory], { draftPath: draftDirectory, files: [...commonFiles, draftDirectory] })
       : { ok: false, warnings: [], errors: [] };
@@ -162,6 +163,7 @@ export function createCapcutCliAdapter(options = {}) {
       attemptedDraftPath: draftDirectory,
       warnings: [
         ...(compileResult.warnings || []),
+        ...(textLayoutResult.warnings || []),
         "已使用 --force-write 写入新剪映草稿，避免剪映专业版前台运行时阻塞自动生成。",
         ...(infoResult.ok ? ["已生成可在剪映专业版项目列表中打开的本地草稿。"] : []),
       ],
