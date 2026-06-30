@@ -1190,6 +1190,26 @@ function publicUnifiedProviders(settings = readSettings()) {
     });
   }
 
+  const jamendo = settings.bgmProviders?.jamendo || {};
+  providers.push({
+    id: "jamendo_bgm",
+    label: jamendo.label || "Jamendo",
+    group: "BGM 音乐",
+    feature: "BGM 自动匹配、下载入库、120-150 BPM 合拍筛选",
+    description: "用于自动搜索可下载的 Creative Commons 音乐。自动流程会过滤 NC/ND 授权，并只使用能确认 120-150 BPM 的曲目；未配置时不影响本地 BGM 和基础节奏。",
+    configured: Boolean(jamendo.client_id || jamendo.clientId || jamendo.apiKey),
+    apiKeyMask: maskApiKey(jamendo.client_id || jamendo.clientId || jamendo.apiKey || ""),
+    baseUrl: jamendo.base_url || jamendo.baseUrl || "https://api.jamendo.com/v3.0",
+    model: "tracks",
+    models: ["tracks"],
+    applyUrl: "https://developer.jamendo.com/v3.0",
+    balanceUrl: "https://developer.jamendo.com/v3.0",
+    activeDefault: false,
+    supportsBaseUrl: true,
+    supportsModel: false,
+    enabled: jamendo.enabled !== false,
+  });
+
   return providers;
 }
 
