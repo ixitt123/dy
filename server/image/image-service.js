@@ -12,17 +12,17 @@ const FALLBACK_IMAGE_QUALITY_RULES = `One vertical 9:16 cinematic frame for a sh
 Default visual direction: warm 3D animated film, original Chinese characters, expressive natural faces, soft cinematic lighting, coherent set design.
 Keep the same character design, age, outfit family, color palette, lens language and lighting across every scene in the same project.
 Use clear foreground, midground and background depth. The main subject must be readable on a phone screen.
-Put faces, hands, products and important objects in the upper 80 percent of the frame.
-Leave the bottom 20 percent clean and low-detail for subtitles and CTA.
+Keep faces, hands, products and important objects fully visible with normal edge-safe margins.
+Do not reserve a blank subtitle band; the image should remain visually complete and balanced.
 The image should look like a real frame from one commercial short film, not a poster, PPT slide, collage, random stock image or app screenshot.
 Negative lock: no readable text, no Chinese characters in the picture, no QR code, no logo, no watermark, no subtitles baked into the image, no UI screenshot, no poster layout, no messy background, no distorted face, no extra fingers, no broken hands, no duplicated people, no style drift, no low-resolution artifacts, no overexposed plastic look.`;
 const FALLBACK_STORYBOARD_STYLE_TEMPLATE = `统一项目：{{title}}
 统一风格：{{visual_style}}，商业短视频质感，真实摄影感，电影级布光，干净高级，不廉价，不像PPT。
 统一画幅：{{aspectRatio}}，平台：{{platform}}，所有分镜保持同一色调、同一镜头语言、同一人物/场景风格。
 统一色彩：深色高级背景，克制的金色或电光蓝点缀，高对比但不过曝，画面有层次和空间感。
-统一构图：主体明确，前景/中景/背景有纵深，主体和关键信息放在画面上方约 4/5 区域；画面最下方约 1/5 必须保留干净留白或低信息密度区域，专门给后期文案、动态字幕和 CTA 使用。
+统一构图：主体明确，前景/中景/背景有纵深，主体和关键信息完整可见；画面保持饱满和平衡，只保留正常安全边距，不再强制底部留白。
 统一质感：高端商业广告、知识口播视觉包装、高清、锐利、无廉价海报感、无普通插画感。
-禁止：底部 1/5 出现人脸、手部、关键产品、重要图标、复杂纹理、可读文字、乱码文字、水印、奇怪logo、低清、脏乱背景、随机人物变脸、颜色漂移、过度卡通、塑料感。`;
+禁止：可读文字、乱码文字、水印、奇怪logo、低清、脏乱背景、随机人物变脸、颜色漂移、过度卡通、塑料感。`;
 
 function renderStyleTemplate(template, values) {
   return Object.entries(values).reduce(
@@ -398,7 +398,7 @@ export function createImageService({ baseDir, getSettings, taskStore = null, ffm
     return [
       "负面约束：不要生成任何可读文字、汉字、英文单词、字幕、二维码、logo、水印、海报标题、UI界面。",
       "不要畸形脸、歪眼、坏手、多手指、多余人物、重复人物、塑料皮肤、低清噪点、过曝、脏乱背景。",
-      "底部 20% 不要出现人脸、手、主体物、复杂纹理或高对比元素，必须留给后期字幕。",
+      "不要为了字幕预留大面积空白；保持画面完整、主体清晰和正常安全边距。",
     ].join("\n");
   }
 
@@ -418,7 +418,7 @@ export function createImageService({ baseDir, getSettings, taskStore = null, ffm
       `分镜编号：${sceneIndex}/${total}`,
       `本镜头任务：${purpose || "承接上一镜头，推动叙事和情绪"}`,
       `情绪：${emotion || "专业、有冲击力、可信"}`,
-      `镜头语言：${camera || "中近景，轻微推进，电影感纵深"}；构图：${composition || "主体位于画面上方 80%，底部留出干净字幕安全区"}`,
+      `镜头语言：${camera || "中近景，轻微推进，电影感纵深"}；构图：${composition || "主体完整可见，画面饱满，保留正常安全边距"}`,
       `画面主体：${basePrompt}`,
       `口播语义参考：${subtitle.slice(0, 80)}`,
       "生成要求：一张可直接用于竖屏短视频成片的电影分镜图，画面真实可用、风格统一、没有文字、没有二维码、没有水印。",

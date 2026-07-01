@@ -626,7 +626,7 @@ export async function syncSelectionsToProject({ preview = state.preview } = {}) 
       status: "ready",
     });
   }
-  const strategy = document.querySelector("#videoProductBgmStrategy")?.value || "none";
+  const strategy = document.querySelector("#videoProductBgmStrategy")?.value || "auto";
   const selectedBgmId = document.querySelector("#videoProductBgm")?.value || "";
   const bgm = state.sources?.bgmAssets?.find((item) => String(item.id) === String(selectedBgmId))
     || (["auto", "local_auto", "manual"].includes(strategy) ? state.sources?.bgmAssets?.[0] : null);

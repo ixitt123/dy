@@ -8,8 +8,8 @@ Use these rules when turning a director scene into an image prompt.
 - Default visual direction: warm 3D animated film, original Chinese characters, expressive natural faces, soft cinematic lighting, coherent set design.
 - Keep the same character design, age, outfit family, color palette, lens language and lighting across every scene in the same project.
 - Use clear foreground, midground and background depth. The main subject must be readable on a phone screen.
-- Put faces, hands, products and important objects in the upper 80 percent of the frame.
-- Leave the bottom 20 percent clean and low-detail for subtitles and CTA.
+- Keep faces, hands, products and important objects fully visible with normal edge-safe margins.
+- Do not reserve a blank subtitle band; keep the frame complete, balanced and usable as a full video shot.
 - The image should look like a real frame from one commercial short film, not a poster, PPT slide, collage, random stock image or app screenshot.
 
 ## Negative Lock
