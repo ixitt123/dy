@@ -21,25 +21,35 @@ function hardenDraftTextLayout(draftDirectory) {
   try {
     const draft = JSON.parse(fs.readFileSync(contentPath, "utf8"));
     const texts = Array.isArray(draft.materials?.texts) ? draft.materials.texts : [];
+    const textMaterialIds = new Set(texts.map((text) => String(text.id || text.material_id || "")).filter(Boolean));
     let changed = 0;
     for (const text of texts) {
       const currentSize = Number(text.font_size || text.text_size || 0);
-      if (currentSize > 0) {
-        const maxSize = currentSize > 15 ? 18 : 15;
-        text.font_size = Math.min(currentSize, maxSize);
-        text.text_size = Math.min(Number(text.text_size || currentSize), maxSize);
-      }
-      text.line_max_width = Math.min(Number(text.line_max_width || 0.82), 0.70);
+      const safeSize = Math.max(currentSize || 0, 24);
+      text.font_size = safeSize;
+      text.text_size = Math.max(Number(text.text_size || safeSize), safeSize);
+      text.text_color = "#FFFFFF";
+      text.color = "#FFFFFF";
+      text.border_color = "#000000";
+      text.border_width = Math.max(Number(text.border_width || 0), 3);
+      text.border_alpha = 1;
+      text.has_border = true;
+      text.background_color = "rgba(0,0,0,0.34)";
+      text.background_alpha = 0.34;
+      text.background_style = Number(text.background_style || 1);
+      text.line_max_width = Math.min(Number(text.line_max_width || 0.78), 0.78);
       text.force_apply_line_max_width = true;
       text.fixed_width = Number(text.fixed_width || 0) > 0
-        ? Math.min(Number(text.fixed_width), 0.70)
-        : 0.70;
+        ? Math.min(Number(text.fixed_width), 0.78)
+        : 0.78;
       if (typeof text.content === "string") {
         try {
           const content = JSON.parse(text.content);
           if (Array.isArray(content.styles)) {
             for (const style of content.styles) {
-              if (style?.size) style.size = Math.min(Number(style.size), currentSize > 15 ? 18 : 15);
+              if (style?.size) style.size = Math.max(Number(style.size), safeSize);
+              if (style?.fill) style.fill = "#FFFFFF";
+              if (style?.color) style.color = "#FFFFFF";
             }
             text.content = JSON.stringify(content);
           }
@@ -48,6 +58,22 @@ function hardenDraftTextLayout(draftDirectory) {
         }
       }
       changed += 1;
+    }
+    const tracks = Array.isArray(draft.tracks) ? draft.tracks : [];
+    for (const track of tracks) {
+      const segments = Array.isArray(track.segments) ? track.segments : [];
+      const trackLooksLikeText = /text|subtitle|caption/i.test(String(track.type || track.name || track.track_name || ""));
+      for (const segment of segments) {
+        const materialId = String(segment.material_id || segment.materialId || segment.extra_material_refs?.[0] || "");
+        if (!trackLooksLikeText && !textMaterialIds.has(materialId)) continue;
+        segment.visible = true;
+        const clip = segment.clip || (segment.clip = {});
+        const transform = clip.transform || (clip.transform = {});
+        transform.x = Number(transform.x || 0);
+        transform.y = -0.66;
+        transform.scale = Number(transform.scale || 1);
+        changed += 1;
+      }
     }
     fs.writeFileSync(contentPath, JSON.stringify(draft, null, 2), "utf8");
     return { ok: true, changed, warnings: changed ? [`已强制收紧 ${changed} 条剪映字幕宽度和字号。`] : [] };
