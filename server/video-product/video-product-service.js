@@ -566,34 +566,61 @@ function assEscape(text) {
     .replace(/\r?\n/g, "\\N");
 }
 
-function assCaptionText(text, { accent = "&H0000D7FF", resetStyle = "Premium" } = {}) {
-  const value = String(text || "").trim();
-  const highlightPattern = /(半年|英语|背单词|开口|关键|核心|方法|不是|不要|别|先|真正|立刻|马上|免费|报名|家长|解决|\d+(?:\.\d+)?%?)/g;
-  const emphasize = (source) => assEscape(source)
-    .replace(highlightPattern, `{\\c${accent}\\b1}$1{\\r${resetStyle}}`);
-  if (value.length <= 16) return emphasize(value);
+function escapeRegex(value) {
+  return String(value || "").replace(/[.*+?^\${}()|[\]\\]/g, "\\$&");
+}
+
+function assCaptionKeywords(text, explicit = []) {
+  const value = String(text || "");
+  const fixed = [
+    "\u82f1\u8bed", "\u5355\u8bcd", "\u5f00\u53e3", "\u6210\u7ee9", "\u65b9\u6cd5", "\u6838\u5fc3", "\u5173\u952e", "\u89e3\u51b3", "\u62a5\u540d", "\u5bb6\u957f",
+    "\u5b69\u5b50", "\u63d0\u5206", "\u8bfe\u7a0b", "\u514d\u8d39", "\u7acb\u523b", "\u9a6c\u4e0a", "\u4e0d\u8981", "\u4e0d\u662f", "\u771f\u6b63",
+  ];
+  const numeric = value.match(/\d+(?:\.\d+)?%?|[A-Za-z]{2,}/g) || [];
+  const candidates = [
+    ...(Array.isArray(explicit) ? explicit : []),
+    ...numeric,
+    ...fixed.filter((word) => value.includes(word)),
+  ]
+    .map((word) => String(word || "").trim())
+    .filter((word) => word.length >= 2 && word.length <= 8);
+  return [...new Set(candidates)].slice(0, 3);
+}
+
+function assCaptionText(text, { accent = "&H0000D7FF", resetStyle = "Premium", keywords = [] } = {}) {
+  const value = String(text || "").replace(/\s+/g, " ").trim();
+  const accentTag = accent.endsWith("&") ? accent : accent + "&";
+  const keyList = assCaptionKeywords(value, keywords);
+  const emphasize = (source) => {
+    let escaped = assEscape(source);
+    for (const keyword of keyList) {
+      const pattern = new RegExp(escapeRegex(assEscape(keyword)), "g");
+      escaped = escaped.replace(pattern, "{\\c" + accentTag + "\\b1\\fs+8}$&{\\r" + resetStyle + "}");
+    }
+    return escaped;
+  };
+  if (value.length <= 13) return emphasize(value);
   const chunks = [];
-  const sentenceChunks = value.split(/(?<=[，、。！？!?；;])/).map((item) => item.trim()).filter(Boolean);
+  const sentenceChunks = value.split(/(?<=[\uFF0C\u3001\u3002\uFF01\uFF1F\uFF1B,.!?;])/).map((item) => item.trim()).filter(Boolean);
   let current = "";
   for (const chunk of sentenceChunks.length ? sentenceChunks : [value]) {
-    if (current && current.length + chunk.length > 14) {
+    if (current && current.length + chunk.length > 13) {
       chunks.push(current);
       current = "";
     }
-    if (chunk.length > 18) {
+    if (chunk.length > 16) {
       if (current) {
         chunks.push(current);
         current = "";
       }
-      for (let index = 0; index < chunk.length; index += 14) chunks.push(chunk.slice(index, index + 14));
+      for (let index = 0; index < chunk.length; index += 13) chunks.push(chunk.slice(index, index + 13));
       continue;
     }
     current += chunk;
   }
   if (current) chunks.push(current);
-  return chunks.slice(0, 3).map(emphasize).join("\\N");
+  return chunks.slice(0, 2).map(emphasize).join("\\N");
 }
-
 function normalizeSceneDuration(scene) {
   const explicit = Number(scene.duration || 0);
   if (Number.isFinite(explicit) && explicit > 0) return Math.max(1, explicit);
