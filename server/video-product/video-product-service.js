@@ -331,6 +331,7 @@ function timelineToAss(scenes, { width = 1080, height = 1920, style = null } = {
     const text = assCaptionText(scene.subtitle_text || scene.narration_text || "", {
       accent,
       resetStyle: styleName,
+      keywords: scene.caption_keywords,
     });
     if (!text) continue;
     const effectText = `{\\fad(90,130)\\blur0.35\\t(0,170,\\fscx106\\fscy106)\\t(170,360,\\fscx100\\fscy100)}${text}`;
