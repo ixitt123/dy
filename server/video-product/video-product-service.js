@@ -996,6 +996,25 @@ export function createVideoProductService({
       .filter((asset) => asset.original_path && fs.existsSync(asset.original_path));
   }
 
+  function validateVideoProjectSourceChain(input = {}) {
+    const projectId = String(input.video_project_id || input.projectId || input.project_id || "").trim();
+    if (!projectId || !projectCenter) return { project: null, blockers: [] };
+    const project = projectCenter.getById(projectId);
+    if (!project) return { project: null, blockers: [`短视频项目 ${projectId} 不存在，已阻止跨项目成片。`] };
+    const blockers = [];
+    const audioId = Number(input.audio_asset_id || input.tts_job_id || 0);
+    const directorId = Number(input.source_director_project_id || input.director_project_id || 0);
+    const linkedAudioId = Number(project.lastTtsJobId || project.selectedTtsAudio?.id || project.selectedTtsAudio?.assetId || 0);
+    const linkedDirectorId = Number(project.lastDirectorProjectId || project.directorScript?.id || project.directorScript?.assetId || 0);
+    if (audioId && linkedAudioId && audioId !== linkedAudioId) {
+      blockers.push(`当前 TTS #${audioId} 不属于项目 ${project.id} 绑定的语音 #${linkedAudioId}，已阻止旧语音/新项目混用。`);
+    }
+    if (directorId && linkedDirectorId && directorId !== linkedDirectorId) {
+      blockers.push(`当前导演稿 #${directorId} 不属于项目 ${project.id} 绑定的导演稿 #${linkedDirectorId}，已阻止旧导演稿/新语音混用。`);
+    }
+    return { project, blockers };
+  }
+
   function listDownloadedVideoAssets(limit = 200) {
     const seen = new Set();
     return taskStore.allTasks()
@@ -2000,6 +2019,8 @@ export function createVideoProductService({
     const platformId = String(input.platform || director?.platform || "douyin");
     const platform = platformPreset(platformId);
     const blockers = [];
+    const projectChain = validateVideoProjectSourceChain(input);
+    blockers.push(...projectChain.blockers);
 
     if (!audio || audio.status !== "completed" || !audio.audio_path || !fs.existsSync(audio.audio_path)) {
       blockers.push("缺少已生成的 TTS 音频。");
