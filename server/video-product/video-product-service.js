@@ -2804,7 +2804,9 @@ ${sceneMarkup}
     const outroEnable = `enable='gte(t\\,${outroStart})'`;
     const fontPath = "C:/Windows/Fonts/msyh.ttc";
     const boldFontPath = fs.existsSync("C:/Windows/Fonts/msyhbd.ttc") ? "C:/Windows/Fonts/msyhbd.ttc" : fontPath;
-    const outputPath = path.join(timelineFiles.projectDir, `${safeFileName(timelineFiles.timelineJson.name || `timeline_${project.id}`)}_template.mp4`);
+    const outputPath = project.output_type === "jianying_template"
+      ? path.join(timelineFiles.projectDir, "final_preview_burned_subtitle.mp4")
+      : path.join(timelineFiles.projectDir, `${safeFileName(timelineFiles.timelineJson.name || `timeline_${project.id}`)}_template.mp4`);
     const subtitlePath = timelineFiles.assPath || timelineFiles.srtPath;
     const subtitleFilter = `subtitles='${ffmpegFilterPath(subtitlePath)}'`;
     const titlePanelHeight = Math.round(height * 0.30);
@@ -3250,7 +3252,7 @@ ${sceneMarkup}
           progress: 72,
           current_step: `正在使用 FFmpeg 合成${OUTPUT_TYPE_LABELS[outputType] || "MP4"}`,
         });
-        if (outputType === "template_mp4") {
+        if (outputType === "template_mp4" || outputType === "jianying_template") {
           mp4Path = await renderTemplateMp4({ ...project, metadata: safeJson(project.metadata_json, {}) }, timelineFiles);
         } else if (outputType === "mix_mp4") {
           mp4Path = await renderMixMp4({ ...project, metadata: safeJson(project.metadata_json, {}) }, timelineFiles);
