@@ -1782,6 +1782,15 @@ pre {
   line-height: 1.45;
 }
 
+.video-product-bgm-options {
+  margin-top: 10px;
+}
+
+.video-product-route-a-options .video-product-route-a-grid label:has(.video-product-bgm-strategy-legacy),
+.video-product-route-a-options label:has(.video-product-bgm-legacy) {
+  display: none;
+}
+
 .video-product-local-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto auto;

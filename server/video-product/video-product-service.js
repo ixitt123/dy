@@ -1505,6 +1505,35 @@ export function createVideoProductService({
     return assets.sort((a, b) => String(a.source_label || "").localeCompare(String(b.source_label || ""), "zh-CN") || String(a.filename).localeCompare(String(b.filename), "zh-CN"));
   }
 
+  function isBgmBpmInPublishRange(asset) {
+    const bpm = Number(asset?.bpm || 0);
+    return bpm >= 120 && bpm <= 150;
+  }
+
+  function deleteOutOfRangePresetBgmAssets() {
+    const projectPresetSources = new Set(["project_assets", "project_media", "project_bgm"]);
+    const deleted = [];
+    for (const asset of listBgmAssets()) {
+      if (!projectPresetSources.has(String(asset.source || ""))) continue;
+      const bpm = Number(asset.bpm || 0);
+      if (!bpm || (bpm >= 120 && bpm <= 150)) continue;
+      try {
+        fs.unlinkSync(asset.path);
+        for (const sidecar of [
+          `${asset.path}.json`,
+          path.join(path.dirname(asset.path), `${path.basename(asset.path, path.extname(asset.path))}.json`),
+          path.join(path.dirname(asset.path), `${path.basename(asset.path, path.extname(asset.path))}.bgm.json`),
+        ]) {
+          if (fs.existsSync(sidecar)) fs.unlinkSync(sidecar);
+        }
+        deleted.push({ filename: asset.filename, bpm });
+      } catch {
+        // Keep the UI usable even if a locked file cannot be deleted.
+      }
+    }
+    return deleted;
+  }
+
   function readBgmMetadata(filePath, rootDef = {}) {
     const ext = path.extname(filePath);
     const sidecars = [
@@ -1693,11 +1722,10 @@ export function createVideoProductService({
     if (preferred) return { path: preferred.path, source: "manual", label: preferred.filename, asset: preferred };
     if (strategy === "manual" || strategy === "none") return { path: "", source: "none", label: "", asset: null };
     if (strategy === "generated_default") return { path: "", source: "generated_default", label: "generated_default", asset: null };
-    const legalAssets = assets.filter(isBgmLegalForAuto);
+    const legalAssets = assets.filter((asset) => isBgmLegalForAuto(asset) && isBgmBpmInPublishRange(asset));
     if (legalAssets.length) {
       const preset = routeAStylePreset(styleId);
-      const selected = assets
-        .filter(isBgmLegalForAuto)
+      const selected = legalAssets
         .map((asset) => ({ asset, score: scoreBgmAsset(asset, styleId, {
           keywords: bgmMatchKeywords(timeline || {}),
           preferredBpm: preset.bgmBpm || 132,
@@ -1826,6 +1854,7 @@ export function createVideoProductService({
   }
 
   function listSources() {
+    const deletedOutOfRangeBgmAssets = deleteOutOfRangePresetBgmAssets();
     const directors = taskStore.listDirectorProjects({ limit: 200 })
       .filter((project) => project.status === "completed")
       .map((project) => {
@@ -1852,6 +1881,7 @@ export function createVideoProductService({
       imageAssets,
       downloadedVideos,
       bgmAssets,
+      deletedOutOfRangeBgmAssets,
       jianyingTemplates,
       routeAStyles: Object.entries(ROUTE_A_STYLE_PRESETS).map(([id, preset]) => ({
         id,
