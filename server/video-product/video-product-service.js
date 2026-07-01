@@ -444,7 +444,9 @@ function buildRouteASubtitleScenes({ audioText = "", directorScenes = [], target
     const proportionalIndex = directorScenes.length
       ? Math.min(directorScenes.length - 1, Math.floor((index / Math.max(1, units.length)) * directorScenes.length))
       : 0;
-    const sourceScene = directorScenes[proportionalIndex]
+    const semanticScene = bestDirectorSceneForSpeechUnit(unit, directorScenes);
+    const sourceScene = semanticScene
+      || directorScenes[proportionalIndex]
       || directorScenes[Math.min(index, Math.max(0, directorScenes.length - 1))]
       || {};
     const sourceSceneIndex = Number(sourceScene.scene_index || sourceScene.scene_no || sourceScene.shot_id || sourceScene.id || index + 1) || index + 1;
@@ -466,6 +468,22 @@ function buildRouteASubtitleScenes({ audioText = "", directorScenes = [], target
       metadata_json: "",
     };
   });
+}
+
+function bestDirectorSceneForSpeechUnit(unit, directorScenes = []) {
+  const rows = (Array.isArray(directorScenes) ? directorScenes : [])
+    .map((scene) => {
+      const text = [
+        scene.voice_text,
+        scene.subtitle,
+        scene.purpose,
+        scene.image_prompt,
+        scene.visual_prompt,
+      ].filter(Boolean).join(" ");
+      return { scene, score: textSimilarityScore(unit, text) };
+    })
+    .sort((a, b) => b.score - a.score);
+  return rows[0]?.score >= 14 ? rows[0].scene : null;
 }
 
 function compactMatchText(text) {
@@ -1927,7 +1945,7 @@ export function createVideoProductService({
       .filter(Boolean));
     const selected = selectedSet.size ? all.filter((asset) => selectedSet.has(String(asset.id))) : all;
     const directorScoped = selected.filter((asset) => String(asset.source_id || "").startsWith(`${directorId}:`));
-    const pool = imageSource === "director" && directorScoped.length ? directorScoped : selected;
+    const pool = imageSource === "director" ? directorScoped : selected;
     return { pool, all, directorScoped, manualBindings };
   }
 
