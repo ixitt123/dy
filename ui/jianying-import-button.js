@@ -58,6 +58,7 @@
       if (select.value) manualBindings[select.dataset.sceneIndex || ""] = select.value;
     });
     const bgmId = document.querySelector("#videoProductBgm")?.value || "";
+    const bgmStrategy = document.querySelector("#videoProductBgmStrategy")?.value || "auto";
     return {
       projectId,
       video_project_id: projectId,
@@ -68,7 +69,7 @@
       jianying_template: document.querySelector("#videoProductJianyingTemplate")?.value || "education_tips",
       route_a_style_id: document.querySelector("#videoProductRouteAStyle")?.value || "black_gold_knowledge",
       route_a_custom_style: document.querySelector("#videoProductRouteACustomStyle")?.value.trim() || "",
-      bgm_strategy: bgmId ? (document.querySelector("#videoProductBgmStrategy")?.value || "manual") : "none",
+      bgm_strategy: bgmId ? (bgmStrategy || "manual") : bgmStrategy,
       bgm_asset_id: bgmId,
       manual_bindings: manualBindings,
       target_duration: 30,

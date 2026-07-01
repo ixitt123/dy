@@ -3308,7 +3308,7 @@ function videoProductPayload() {
     jianying_template: videoProductJianyingTemplate?.value || "education_tips",
     route_a_style_id: videoProductRouteAStyle?.value || "black_gold_knowledge",
     route_a_custom_style: videoProductRouteACustomStyle?.value.trim() || "",
-    bgm_strategy: selectedBgmId ? (videoProductBgmStrategy?.value || "manual") : "none",
+    bgm_strategy: selectedBgmId ? (videoProductBgmStrategy?.value || "manual") : (videoProductBgmStrategy?.value || "auto"),
     bgm_asset_id: selectedBgmId,
     render_engine: "auto",
     manual_bindings: videoProductManualBindings,
@@ -3428,7 +3428,7 @@ function renderRouteAOptionControls() {
     ];
   const bgmAssets = videoProductSources.bgmAssets || [];
   const currentStyle = videoProductRouteAStyle?.value || "black_gold_knowledge";
-  const currentStrategy = videoProductBgmStrategy?.value || "none";
+  const currentStrategy = videoProductBgmStrategy?.value || "auto";
   const currentBgm = videoProductBgm?.value || "";
   if (videoProductRouteAStyle) {
     videoProductRouteAStyle.innerHTML = styles
@@ -3440,7 +3440,7 @@ function renderRouteAOptionControls() {
     videoProductBgmStrategy.innerHTML = strategies
       .map((item) => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.label)}</option>`)
       .join("");
-    videoProductBgmStrategy.value = strategies.some((item) => item.id === currentStrategy) ? currentStrategy : "none";
+    videoProductBgmStrategy.value = strategies.some((item) => item.id === currentStrategy) ? currentStrategy : "auto";
   }
   if (videoProductBgm) {
     const options = [

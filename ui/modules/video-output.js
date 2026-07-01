@@ -61,6 +61,7 @@ function projectSourcePreferences(project = currentVideoProject()) {
     directorId: String(project?.directorScript?.id || project?.directorScript?.assetId || ""),
     audioId: String(project?.selectedTtsAudio?.id || project?.selectedTtsAudio?.assetId || ""),
     bgmId: String(project?.bgm?.id || project?.bgm?.assetId || ""),
+    bgmStrategy: String(project?.bgm?.strategy || project?.bgm?.source || ""),
   };
 }
 
@@ -334,7 +335,9 @@ export async function loadVideoProductSources() {
   setOptions(audioSelect, [{ id: "", label: "请选择当前项目的已完成语音" }, ...(data.audioJobs || [])], (row) => row.label || `#${row.id} ${row.voice_name || "配音"}`, preferred.audioId);
   setOptions(document.querySelector("#videoProductBgm"), [{ id: "", filename: "自动匹配本地 BGM；没有则基础生成" }, ...(data.bgmAssets || [])], bgmOptionLabel, preferred.bgmId);
   setOptions(document.querySelector("#videoProductRouteAStyle"), data.routeAStyles || [], (row) => row.label || row.id);
-  setOptions(document.querySelector("#videoProductBgmStrategy"), data.bgmStrategies || [], (row) => row.label || row.id, "none");
+  const strategyIds = new Set((data.bgmStrategies || []).map((row) => String(row.id || "")));
+  const preferredStrategy = strategyIds.has(preferred.bgmStrategy) ? preferred.bgmStrategy : "auto";
+  setOptions(document.querySelector("#videoProductBgmStrategy"), data.bgmStrategies || [], (row) => row.label || row.id, preferredStrategy);
   if (directorSelect && !directorSelect.value && data.directors?.length) {
     const latestDirector = data.directors.slice().sort((a, b) => Number(b.id || 0) - Number(a.id || 0))[0];
     if (latestDirector?.id) directorSelect.value = String(latestDirector.id);
@@ -661,7 +664,7 @@ function payload({ forceExecution = false } = {}) {
     jianying_template: document.querySelector("#videoProductJianyingTemplate")?.value || "education_tips",
     route_a_style_id: document.querySelector("#videoProductRouteAStyle")?.value || "black_gold_knowledge",
     route_a_custom_style: document.querySelector("#videoProductRouteACustomStyle")?.value.trim() || "",
-    bgm_strategy: document.querySelector("#videoProductBgm")?.value ? (document.querySelector("#videoProductBgmStrategy")?.value || "manual") : (document.querySelector("#videoProductBgmStrategy")?.value || "none"),
+    bgm_strategy: document.querySelector("#videoProductBgm")?.value ? (document.querySelector("#videoProductBgmStrategy")?.value || "manual") : (document.querySelector("#videoProductBgmStrategy")?.value || "auto"),
     bgm_asset_id: document.querySelector("#videoProductBgm")?.value || "",
     manual_bindings: { ...state.manualBindings },
     target_duration: 30,
