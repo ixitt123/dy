@@ -595,7 +595,7 @@ function assCaptionText(text, { accent = "&H0000D7FF", resetStyle = "Premium", k
     let escaped = assEscape(source);
     for (const keyword of keyList) {
       const pattern = new RegExp(escapeRegex(assEscape(keyword)), "g");
-      escaped = escaped.replace(pattern, "{\\c" + accentTag + "\\b1\\fs+8}$&{\\r" + resetStyle + "}");
+      escaped = escaped.replace(pattern, "{\\c" + accentTag + "\\b1\\fscx112\\fscy112}$&{\\r" + resetStyle + "}");
     }
     return escaped;
   };
@@ -955,6 +955,8 @@ function renderReport(project, timelineFiles, { mp4Path = "", bgmPath = "", qual
       bgm_source: timelineFiles.bgmSourceKind || (bgmPath ? "local_auto" : "none"),
       bgm_label: timelineFiles.bgmLabel || "",
       ass_subtitles: Boolean(timelineFiles.assPath),
+      burned_subtitles: Boolean(mp4Path),
+      burned_subtitle_mp4: mp4Path ? path.basename(mp4Path) : "",
       title_card: ROUTE_A_VOICE_CLOCK_OUTPUT_TYPES.has(project.output_type),
       end_cta: ROUTE_A_VOICE_CLOCK_OUTPUT_TYPES.has(project.output_type),
       cover: Boolean(timelineFiles.coverPath),
