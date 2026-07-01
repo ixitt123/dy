@@ -48,7 +48,7 @@ function styleTextItem(base = {}, overrides = {}) {
     strokeWidth: Number(overrides.strokeWidth ?? base.strokeWidth ?? 3),
     backgroundColor: overrides.backgroundColor || base.backgroundColor || "rgba(8,12,20,0.20)",
     x: Number(overrides.x ?? base.x ?? 0),
-    y: Number(overrides.y ?? base.y ?? -0.70),
+    y: Number(overrides.y ?? base.y ?? -0.66),
   };
 }
 
@@ -302,7 +302,7 @@ export function buildCapcutCompileSpec({ project = {}, timeline = {}, timelineFi
         scene,
         start: Number(scene.start_time || 0),
         duration: Math.max(0.1, Number(scene.duration || 0)),
-        ...styleTextItem(captionStyle, { y: captionStyle.y ?? -0.82 }),
+        ...styleTextItem(captionStyle, { y: captionStyle.y ?? -0.66 }),
       };
     })
     .filter(Boolean);
@@ -321,7 +321,7 @@ export function buildCapcutCompileSpec({ project = {}, timeline = {}, timelineFi
         strokeWidth: Math.max(2, Number(captionStyle.strokeWidth || 2) + 1),
         backgroundColor: "rgba(0,0,0,0.10)",
         x: 0,
-        y: Number(captionStyle.keywordY ?? -0.69),
+        y: Number(captionStyle.keywordY ?? -0.54),
       };
     })
     .filter(Boolean);
@@ -379,9 +379,10 @@ export function buildCapcutCompileSpec({ project = {}, timeline = {}, timelineFi
     .filter(Boolean);
   operations.push(...textRangeOperations);
   operations.push(...captionItems.map((item) => textStyleOperation(item.ref, captionStyle, {
-    bgAlpha: 0.10,
-    borderWidth: Math.max(1.5, Number(captionStyle.strokeWidth || 2)),
-    fixedWidth: 0.74,
+    bgAlpha: 0.34,
+    borderWidth: Math.max(3, Number(captionStyle.strokeWidth || 3)),
+    borderColor: "#000000",
+    fixedWidth: 0.78,
   })));
   operations.push(...keywordItems.flatMap((item) => [
     textStyleOperation(item.ref, captionStyle, {

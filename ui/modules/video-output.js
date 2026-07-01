@@ -338,6 +338,8 @@ export async function loadVideoProductSources() {
   const strategyIds = new Set((data.bgmStrategies || []).map((row) => String(row.id || "")));
   const preferredStrategy = strategyIds.has(preferred.bgmStrategy) ? preferred.bgmStrategy : "auto";
   setOptions(document.querySelector("#videoProductBgmStrategy"), data.bgmStrategies || [], (row) => row.label || row.id, preferredStrategy);
+  const bgmHint = document.querySelector("#videoProductBgmLibraryHint");
+  if (bgmHint) bgmHint.textContent = `已识别 ${(data.bgmAssets || []).length} 首 BGM；不手动选择时按策略自动匹配，缺失时生成基础 BGM。`;
   if (directorSelect && !directorSelect.value && data.directors?.length) {
     const latestDirector = data.directors.slice().sort((a, b) => Number(b.id || 0) - Number(a.id || 0))[0];
     if (latestDirector?.id) directorSelect.value = String(latestDirector.id);
