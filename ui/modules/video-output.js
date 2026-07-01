@@ -976,6 +976,9 @@ function bindEvents() {
         const strategySelect = document.querySelector("#videoProductBgmStrategy");
         if (strategySelect) strategySelect.value = "manual";
       }
+      if (id === "videoProductDirector" || id === "videoProductAudio") {
+        state.manualBindings = {};
+      }
       state.preview = null;
       if (id === "videoProductDirector") renderJianyingTemplateOptions();
       updateGenerateAvailability();

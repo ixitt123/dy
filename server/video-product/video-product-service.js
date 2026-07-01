@@ -2064,6 +2064,9 @@ export function createVideoProductService({
       directorId,
       ...selectImagesForScenes({ directorId, imageSource, selectedImageIds, manualBindings }),
     };
+    if (needsImages && imageSource === "director" && !bindingContext.directorScoped.length) {
+      blockers.push(`当前导演稿 #${directorId || "未选择"} 没有绑定自己的图片素材，已阻止使用旧图片。请先为该导演稿生成/导入分镜图片。`);
+    }
     if (needsImages && !bindingContext.pool.length) blockers.push("缺少可绑定的 AI 图片素材。");
 
     const downloadedVideos = needsDownloadedVideo ? listDownloadedVideoAssets(200) : [];
