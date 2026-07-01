@@ -16,7 +16,7 @@ const TIMELINE_STATUSES = new Set([
 
 const OUTPUT_TYPES = new Set(["jianying_template", "jianying", "mp4", "package", "template_mp4", "mix_mp4"]);
 const IMAGE_REQUIRED_OUTPUT_TYPES = new Set(["jianying_template", "jianying", "mp4", "package"]);
-const MP4_OUTPUT_TYPES = new Set(["mp4", "template_mp4", "mix_mp4"]);
+const MP4_OUTPUT_TYPES = new Set(["jianying_template", "mp4", "template_mp4", "mix_mp4"]);
 const ROUTE_A_VOICE_CLOCK_OUTPUT_TYPES = new Set(["jianying_template", "template_mp4"]);
 const ROUTE_A_INTRO_SECONDS = 1.35;
 
@@ -297,15 +297,17 @@ function timelineToSrt(scenes) {
 
 function timelineToAss(scenes, { width = 1080, height = 1920, style = null } = {}) {
   const palette = style?.palette || {};
-  const marginV = Math.max(150, Math.round(height * 0.09));
-  const marginH = Math.max(86, Math.round(width * 0.08));
-  const fontSize = Math.max(28, Math.round(height * 0.016));
-  const titleSize = Math.max(34, Math.round(height * 0.019));
-  const accent = assColor(palette.accent, "#E7C76C");
+  const marginV = Math.max(190, Math.round(height * 0.105));
+  const marginH = Math.max(96, Math.round(width * 0.09));
+  const fontSize = Math.max(40, Math.round(height * 0.023));
+  const keywordSize = Math.max(48, Math.round(height * 0.028));
+  const fontName = "Microsoft YaHei UI";
+  const accent = assColor(palette.accent, "#FFD15A");
   const accent2 = assColor(palette.accent2, "#49D6C8");
-  const textColor = assColor(palette.subtitleText || palette.captionText, "#101827");
-  const outlineColor = assColor("#FFFFFF", "#FFFFFF");
-  const boxColor = assColor("#FFFFFF", "#FFFFFF", "99");
+  const textColor = assColor(palette.subtitleText || palette.captionText || palette.text, "#FFFFFF");
+  const outlineColor = assColor("#000000", "#000000");
+  const shadowColor = assColor("#000000", "#000000", "66");
+  const boxColor = assColor("#070B12", "#070B12", "88");
   const lines = [
     "[Script Info]",
     "ScriptType: v4.00+",
@@ -316,9 +318,9 @@ function timelineToAss(scenes, { width = 1080, height = 1920, style = null } = {
     "",
     "[V4+ Styles]",
     "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding",
-    `Style: Premium,Microsoft YaHei,${fontSize},${textColor},${accent},${outlineColor},${boxColor},-1,0,0,0,100,100,0,0,3,3,0,2,${marginH},${marginH},${marginV},1`,
-    `Style: Keyword,Microsoft YaHei,${titleSize},${accent},${textColor},${outlineColor},${boxColor},-1,0,0,0,102,102,0,0,3,3,0,2,${marginH},${marginH},${marginV},1`,
-    `Style: CTA,Microsoft YaHei,${titleSize},${textColor},${accent2},${outlineColor},${boxColor},-1,0,0,0,102,102,0,0,3,3,0,2,${marginH},${marginH},${marginV},1`,
+    `Style: Premium,${fontName},${fontSize},${textColor},${accent},${outlineColor},${boxColor},-1,0,0,0,100,100,0,0,3,4.2,1.4,2,${marginH},${marginH},${marginV},1`,
+    `Style: Keyword,${fontName},${keywordSize},${accent},${textColor},${outlineColor},${shadowColor},-1,0,0,0,104,104,0,0,3,4.8,2,2,${marginH},${marginH},${marginV},1`,
+    `Style: CTA,${fontName},${keywordSize},${textColor},${accent2},${outlineColor},${boxColor},-1,0,0,0,104,104,0,0,3,4.8,2,2,${marginH},${marginH},${marginV},1`,
     "",
     "[Events]",
     "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text",
@@ -331,7 +333,7 @@ function timelineToAss(scenes, { width = 1080, height = 1920, style = null } = {
       resetStyle: styleName,
     });
     if (!text) continue;
-    const effectText = `{\\fad(80,120)\\t(0,160,\\fscx102\\fscy102)\\t(160,320,\\fscx100\\fscy100)}${text}`;
+    const effectText = `{\\fad(90,130)\\blur0.35\\t(0,170,\\fscx106\\fscy106)\\t(170,360,\\fscx100\\fscy100)}${text}`;
     lines.push([
       "Dialogue: 1",
       assTimestamp(scene.start_time),
