@@ -339,7 +339,10 @@ export async function loadVideoProductSources() {
   const preferredStrategy = strategyIds.has(preferred.bgmStrategy) ? preferred.bgmStrategy : "auto";
   setOptions(document.querySelector("#videoProductBgmStrategy"), data.bgmStrategies || [], (row) => row.label || row.id, preferredStrategy);
   const bgmHint = document.querySelector("#videoProductBgmLibraryHint");
-  if (bgmHint) bgmHint.textContent = `已识别 ${(data.bgmAssets || []).length} 首 BGM；不手动选择时按策略自动匹配，缺失时生成基础 BGM。`;
+  if (bgmHint) {
+    const deleted = Array.isArray(data.deletedOutOfRangeBgmAssets) ? data.deletedOutOfRangeBgmAssets.length : 0;
+    bgmHint.textContent = `已识别 ${(data.bgmAssets || []).length} 首 BGM；自动匹配只使用 120-150 BPM${deleted ? `，已删除 ${deleted} 首不合格预设` : ""}。`;
+  }
   if (directorSelect && !directorSelect.value && data.directors?.length) {
     const latestDirector = data.directors.slice().sort((a, b) => Number(b.id || 0) - Number(a.id || 0))[0];
     if (latestDirector?.id) directorSelect.value = String(latestDirector.id);
