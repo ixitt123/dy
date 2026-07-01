@@ -865,16 +865,16 @@
                 </div>
                 <small id="videoProductAssetStatus">本地图片会进入图片资产库；BGM 会用于最终 MP4 混音。</small>
               </div>
-              <div class="video-product-bgm-options" id="videoProductBgmOptions">
-                <strong>背景音乐</strong>
+              <div class="video-product-local-assets video-product-bgm-options" id="videoProductBgmOptions">
+                <strong>本地素材 · 预设 BGM</strong>
                 <div class="video-product-route-a-grid">
                   <label>
                     BGM 策略
-                    <select id="videoProductBgmStrategy"></select>
+                    <select id="videoProductBgmStrategy" data-main-bgm-strategy="true"></select>
                   </label>
                   <label>
                     选择预设 / 本地 BGM
-                    <select id="videoProductBgm"></select>
+                    <select id="videoProductBgm" data-main-bgm-select="true"></select>
                   </label>
                 </div>
                 <small id="videoProductBgmLibraryHint">只显示 120-150 BPM 的 BGM；不选时按策略自动匹配，缺失时生成基础 BGM。</small>
@@ -888,12 +888,12 @@
                   </label>
                   <label>
                     BGM 策略
-                    <select id="videoProductBgmStrategy"></select>
+                    <select class="video-product-bgm-strategy-legacy" disabled></select>
                   </label>
                 </div>
                 <label>
                   指定本地 BGM
-                  <select id="videoProductBgm"></select>
+                  <select class="video-product-bgm-legacy" disabled></select>
                   <small id="videoProductBgmLibraryHint">可选择预设/本地 BGM；不选时按上方策略自动匹配或生成基础 BGM。</small>
                 </label>
                 <label>
