@@ -362,3 +362,216 @@ HyperFrames warm-grain template language: cream paper, grain texture, forest gre
   };
 }
 
+function officialTemplateFiles(model, templateId) {
+  const configs = {
+    "play-mode": {
+      title: "Play Mode",
+      bg: "#101827",
+      accent: "#74f7c8",
+      accent2: "#ffcf5a",
+      text: "#f8fbff",
+      muted: "#b9c5d8",
+      shape: "bubble",
+      motion: "elastic.out(1, 0.55)",
+      label: "SOCIAL ENERGY",
+    },
+    "swiss-grid": {
+      title: "Swiss Grid",
+      bg: "#f5f5f0",
+      accent: "#0057ff",
+      accent2: "#111111",
+      text: "#111111",
+      muted: "#555555",
+      shape: "grid",
+      motion: "expo.out",
+      label: "GRID SYSTEM",
+    },
+    "kinetic-type": {
+      title: "Kinetic Type",
+      bg: "#090909",
+      accent: "#e63946",
+      accent2: "#ffd60a",
+      text: "#ffffff",
+      muted: "#d8d8d8",
+      shape: "type",
+      motion: "back.out(1.8)",
+      label: "KINETIC TYPE",
+    },
+    "decision-tree": {
+      title: "Decision Tree",
+      bg: "#10201c",
+      accent: "#50d890",
+      accent2: "#f6c85f",
+      text: "#f4fff9",
+      muted: "#b5d8cc",
+      shape: "nodes",
+      motion: "power3.out",
+      label: "DECISION PATH",
+    },
+    "product-promo": {
+      title: "Product Promo",
+      bg: "#0d1020",
+      accent: "#8da2ff",
+      accent2: "#ff8f70",
+      text: "#ffffff",
+      muted: "#bac3e8",
+      shape: "product",
+      motion: "power4.out",
+      label: "PRODUCT STORY",
+    },
+    "nyt-graph": {
+      title: "NYT Graph",
+      bg: "#fbf7ef",
+      accent: "#d94f32",
+      accent2: "#2d5f8b",
+      text: "#171717",
+      muted: "#5f5a52",
+      shape: "chart",
+      motion: "power2.out",
+      label: "DATA STORY",
+    },
+    "blank": {
+      title: "Blank",
+      bg: "#151515",
+      accent: "#f2f2f2",
+      accent2: "#8b8b8b",
+      text: "#ffffff",
+      muted: "#c8c8c8",
+      shape: "minimal",
+      motion: "power2.out",
+      label: "BLANK START",
+    },
+    "vignelli": {
+      title: "Vignelli",
+      bg: "#ffffff",
+      accent: "#d71920",
+      accent2: "#111111",
+      text: "#111111",
+      muted: "#4b4b4b",
+      shape: "portrait",
+      motion: "sine.inOut",
+      label: "VIGNELLI",
+      width: 1080,
+      height: 1920,
+    },
+  };
+  const config = configs[templateId] || configs.blank;
+  const width = config.width || 1920;
+  const height = config.height || 1080;
+  const isPortrait = height > width;
+  const title = escapeHtml(model.title);
+  const hook = escapeHtml(model.hook);
+  const question = escapeHtml(model.question);
+  const action = escapeHtml(model.action);
+  const scenePadding = isPortrait ? "116px 82px" : "96px 124px";
+  const headlineSize = isPortrait ? "104px" : "102px";
+  const subSize = isPortrait ? "42px" : "38px";
+  const cardWidth = isPortrait ? "100%" : "1040px";
+  const finalTop = isPortrait ? "1260px" : "720px";
+  const chartBars = templateId === "nyt-graph" || templateId === "swiss-grid"
+    ? `<div class="chart" data-layout-ignore><i style="height:46%"></i><i style="height:68%"></i><i style="height:92%"></i></div>`
+    : "";
+  const nodeMap = templateId === "decision-tree"
+    ? `<div class="nodes" data-layout-ignore><b></b><b></b><b></b><span></span><span></span></div>`
+    : "";
+  const productShape = templateId === "product-promo"
+    ? `<div class="device" data-layout-ignore><em></em><em></em><em></em></div>`
+    : "";
+  const typeShape = templateId === "kinetic-type"
+    ? `<div class="type-wall" data-layout-ignore>NOW NOW NOW NOW</div>`
+    : "";
+
+  return {
+    width,
+    height,
+    design: `## Style Prompt
+
+Official HyperFrames example style: ${config.title}. Template id: \`${templateId}\`.
+
+## Colors
+
+- Background: \`${config.bg}\`
+- Text: \`${config.text}\`
+- Accent: \`${config.accent}\`
+- Secondary: \`${config.accent2}\`
+
+## Typography
+
+- Microsoft YaHei UI for Chinese text
+- Inter or Arial fallback for template labels
+`,
+    index: `<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=${width}, height=${height}" />
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+  <style>
+    *{box-sizing:border-box}
+    @font-face{font-family:"Microsoft YaHei UI";src:local("Microsoft YaHei UI")}
+    @font-face{font-family:"Microsoft YaHei";src:local("Microsoft YaHei")}
+    html,body{margin:0;width:${width}px;height:${height}px;overflow:hidden;background:${config.bg};color:${config.text};font-family:"Microsoft YaHei UI","Microsoft YaHei",Arial,sans-serif}
+    #root{position:relative;width:${width}px;height:${height}px;overflow:hidden;background:${config.bg}}
+    .scene{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:center;gap:${isPortrait ? 34 : 28}px;padding:${scenePadding};background:${config.bg};opacity:0}
+    #scene-1{opacity:1}
+    .kicker{width:max-content;max-width:100%;padding:10px 14px;border:2px solid ${config.accent};color:${config.accent};font:800 ${isPortrait ? 26 : 22}px Arial,sans-serif;letter-spacing:.08em}
+    h1,h2{margin:0;max-width:${cardWidth};font-size:${headlineSize};line-height:1.06;color:${config.text};font-weight:900}
+    p{margin:0;max-width:${cardWidth};font-size:${subSize};line-height:1.35;color:${config.muted};font-weight:700}
+    .accent{color:${config.accent}}
+    .panel{width:${cardWidth};padding:${isPortrait ? 34 : 30}px;border:2px solid ${config.accent};background:${config.bg};box-shadow:14px 14px 0 ${config.accent2};font-size:${subSize};line-height:1.35;font-weight:900;color:${config.text}}
+    .orb{position:absolute;right:${isPortrait ? -180 : 120}px;top:${isPortrait ? 160 : 120}px;width:${isPortrait ? 520 : 420}px;height:${isPortrait ? 520 : 420}px;border-radius:${config.shape === "grid" ? "0" : "50%"};background:${config.accent};opacity:.18}
+    .chart{position:absolute;right:${isPortrait ? 92 : 150}px;bottom:${isPortrait ? 190 : 130}px;display:flex;align-items:end;gap:24px;width:${isPortrait ? 520 : 470}px;height:${isPortrait ? 360 : 280}px;border-left:4px solid ${config.text};border-bottom:4px solid ${config.text}}
+    .chart i{display:block;flex:1;background:${config.accent}}
+    .nodes b{position:absolute;width:${isPortrait ? 210 : 190}px;height:${isPortrait ? 92 : 78}px;border-radius:18px;background:${config.accent};opacity:.95}
+    .nodes b:nth-child(1){right:${isPortrait ? 120 : 300}px;top:${isPortrait ? 330 : 260}px}.nodes b:nth-child(2){right:${isPortrait ? 360 : 560}px;top:${isPortrait ? 500 : 430}px}.nodes b:nth-child(3){right:${isPortrait ? 120 : 300}px;top:${isPortrait ? 670 : 600}px}
+    .device{position:absolute;right:${isPortrait ? 120 : 210}px;top:${isPortrait ? 310 : 230}px;width:${isPortrait ? 360 : 420}px;height:${isPortrait ? 620 : 520}px;border-radius:42px;border:12px solid ${config.accent};background:${config.accent2};box-shadow:0 32px 80px rgba(0,0,0,.25)}
+    .device em{display:block;margin:42px auto;width:70%;height:46px;border-radius:23px;background:${config.bg};opacity:.75}
+    .type-wall{position:absolute;left:-70px;bottom:${isPortrait ? 120 : 40}px;width:130%;font-size:${isPortrait ? 116 : 132}px;line-height:.88;font-weight:900;color:${config.accent};opacity:.18;transform:rotate(-7deg)}
+    .minimal-rule{position:absolute;left:${isPortrait ? 82 : 124}px;right:${isPortrait ? 82 : 124}px;top:${isPortrait ? 260 : 190}px;height:2px;background:${config.accent}}
+    #final{position:absolute;left:${isPortrait ? 82 : 124}px;top:${finalTop};width:${cardWidth}}
+  </style>
+</head>
+<body>
+  <div id="root" data-composition-id="main" data-start="0" data-duration="10" data-width="${width}" data-height="${height}">
+    <div class="orb" data-layout-ignore></div>
+    <div class="minimal-rule" data-layout-ignore></div>
+    ${chartBars}${nodeMap}${productShape}${typeShape}
+    <section id="scene-1" class="scene" data-start="0" data-duration="3.2" data-track-index="1">
+      <div class="kicker">${config.label}</div>
+      <h1>${hook}</h1>
+      <p>${title}</p>
+    </section>
+    <section id="scene-2" class="scene" data-start="3.05" data-duration="3.35" data-track-index="2">
+      <div class="kicker">BEAT TWO</div>
+      <h2>${question}</h2>
+    </section>
+    <section id="scene-3" class="scene" data-start="6.15" data-duration="3.85" data-track-index="3">
+      <div class="kicker">OUTPUT</div>
+      <h2><span class="accent">${config.title}</span></h2>
+      <div id="final" class="panel">${action}</div>
+    </section>
+  </div>
+  <script>
+    window.__timelines=window.__timelines||{};
+    const tl=gsap.timeline({paused:true});
+    tl.from("#scene-1 .kicker",{y:28,opacity:0,duration:.35,ease:"power3.out"},.15)
+      .from("#scene-1 h1",{y:60,opacity:0,duration:.58,ease:${jsString(config.motion)}},.35)
+      .from("#scene-1 p",{x:-34,opacity:0,duration:.42,ease:"power2.out"},.86)
+      .from(".orb",{scale:.72,opacity:0,duration:.82,ease:"sine.out"},.2);
+    tl.fromTo("#scene-2",{opacity:0,x:${isPortrait ? 0 : 120},y:${isPortrait ? 120 : 0}},{opacity:1,x:0,y:0,duration:.45,ease:"power2.inOut"},3.05)
+      .to("#scene-1",{opacity:0,x:${isPortrait ? 0 : -90},y:${isPortrait ? -90 : 0},duration:.45,ease:"power2.inOut"},3.05)
+      .from("#scene-2 .kicker",{y:26,opacity:0,duration:.32,ease:"power3.out"},3.32)
+      .from("#scene-2 h2",{scale:.96,opacity:0,duration:.56,ease:${jsString(config.motion)}},3.58);
+    tl.fromTo("#scene-3",{opacity:0,y:${isPortrait ? 140 : 110}},{opacity:1,y:0,duration:.5,ease:"power3.inOut"},6.15)
+      .to("#scene-2",{opacity:0,y:-90,duration:.5,ease:"power3.inOut"},6.15)
+      .from("#scene-3 .kicker",{y:25,opacity:0,duration:.32,ease:"power2.out"},6.42)
+      .from("#scene-3 h2",{y:54,opacity:0,duration:.5,ease:${jsString(config.motion)}},6.72)
+      .from("#final",{x:${isPortrait ? 0 : 56},y:${isPortrait ? 42 : 0},opacity:0,duration:.44,ease:"power4.out"},7.2)
+      .to("#root",{opacity:0,duration:.35,ease:"sine.in"},9.65);
+    window.__timelines.main=tl;
+  </script>
+</body>
+</html>`,
+  };
+}
+
