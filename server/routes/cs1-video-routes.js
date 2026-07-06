@@ -158,6 +158,8 @@ async function refineStoryModel({ script, title, modelRouter }) {
 
 function writeProject(projectDir, { slug, title, styleId, files }) {
   const compositionDir = path.join(projectDir, "compositions");
+  const width = files.width || 1920;
+  const height = files.height || 1080;
   fs.mkdirSync(compositionDir, { recursive: true });
   fs.writeFileSync(path.join(projectDir, "package.json"), JSON.stringify({
     name: slug,
@@ -179,8 +181,8 @@ function writeProject(projectDir, { slug, title, styleId, files }) {
     style: styleId,
     createdAt: new Date().toISOString(),
     duration: 10,
-    width: 1920,
-    height: 1080,
+    width,
+    height,
   }, null, 2));
   fs.writeFileSync(path.join(projectDir, "DESIGN.md"), files.design);
   fs.writeFileSync(path.join(projectDir, "index.html"), files.index);
