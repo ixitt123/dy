@@ -6595,6 +6595,7 @@ audio {
 }
 
 .cs1-video-form input[type="text"],
+.cs1-video-form select,
 .cs1-video-form textarea {
   width: 100%;
   border: 1px solid rgba(36, 27, 22, 0.18);
@@ -6605,6 +6606,23 @@ audio {
   font: inherit;
 }
 
+.cs1-video-form select {
+  appearance: none;
+  background:
+    linear-gradient(45deg, transparent 50%, #7a6248 50%) calc(100% - 20px) 50% / 7px 7px no-repeat,
+    linear-gradient(135deg, #7a6248 50%, transparent 50%) calc(100% - 14px) 50% / 7px 7px no-repeat,
+    rgba(245, 240, 224, 0.72);
+  padding-right: 42px;
+}
+
+.cs1-style-description {
+  display: block;
+  color: #7a6248;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.45;
+}
+
 .cs1-video-form textarea {
   min-height: 190px;
   resize: vertical;
@@ -6612,7 +6630,7 @@ audio {
 }
 
 .cs1-style-grid {
-  display: grid;
+  display: none;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
 }

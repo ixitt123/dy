@@ -38,6 +38,32 @@ export function initCs1VideoModule() {
     });
   });
 
+  const updateStyleDescription = () => {
+    const style = styleCatalog.find((item) => item.id === selectedStyle());
+    if (styleDescription) styleDescription.textContent = style?.description || "HyperFrames local template.";
+  };
+
+  const loadStyles = async () => {
+    if (!styleSelect) return;
+    try {
+      const response = await fetch("/api/cs1-video/styles", { cache: "no-store" });
+      const data = await response.json();
+      styleCatalog = Array.isArray(data.styles) ? data.styles : [];
+      if (!styleCatalog.length) return;
+      const current = styleSelect.value || "cs1";
+      styleSelect.innerHTML = styleCatalog
+        .map((style) => `<option value="${escapeHtml(style.id)}">${escapeHtml(style.name)}${style.source === "hyperframes" ? " · official" : ""}</option>`)
+        .join("");
+      styleSelect.value = styleCatalog.some((style) => style.id === current) ? current : "cs1";
+      updateStyleDescription();
+    } catch {
+      updateStyleDescription();
+    }
+  };
+
+  styleSelect?.addEventListener("change", updateStyleDescription);
+  loadStyles();
+
   exampleButton?.addEventListener("click", () => {
     titleInput.value = "仪征中考家长提醒";
     textInput.value = EXAMPLE_TEXT;
@@ -67,7 +93,8 @@ export function initCs1VideoModule() {
         result.renderLog || "",
       ].join("\n").trim();
       resultPanel.hidden = false;
-      setStatus("生成完成", `模板：${result.style === "warmgrain" ? "Warm Grain" : "CS1"}。视频已输出到本机。`);
+      const style = styleCatalog.find((item) => item.id === result.style);
+      setStatus("生成完成", `模板：${style?.name || result.style}。视频已输出到本机。`);
     } catch (error) {
       setStatus("生成失败", error instanceof Error ? error.message : String(error));
       logPanel.textContent = error instanceof Error ? error.stack || error.message : String(error);
@@ -93,4 +120,12 @@ export function initCs1VideoModule() {
 
 async function openPath(filePath) {
   await postJson("/api/open-path", { filePath });
+}
+
+function escapeHtml(value) {
+  return String(value || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
 }
