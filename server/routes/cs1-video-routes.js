@@ -6,6 +6,30 @@ import { HttpBodyError, readJsonBody } from "../utils/http-body.js";
 
 const HYPERFRAMES_VERSION = "0.7.37";
 const MAX_SCRIPT_LENGTH = 1200;
+const OFFICIAL_TEMPLATE_IDS = new Set([
+  "warm-grain",
+  "play-mode",
+  "swiss-grid",
+  "kinetic-type",
+  "decision-tree",
+  "product-promo",
+  "nyt-graph",
+  "vignelli",
+  "blank",
+]);
+
+const CS1_VIDEO_STYLES = [
+  { id: "cs1", name: "CS1 dark explainer", description: "Dark canvas, strong warning, three-beat explainer video.", source: "local" },
+  { id: "warm-grain", name: "Warm Grain", description: "Official HyperFrames warm paper and grain example.", source: "hyperframes" },
+  { id: "play-mode", name: "Play Mode", description: "Official HyperFrames energetic elastic social template.", source: "hyperframes" },
+  { id: "swiss-grid", name: "Swiss Grid", description: "Official HyperFrames clean structured technical grid template.", source: "hyperframes" },
+  { id: "kinetic-type", name: "Kinetic Type", description: "Official HyperFrames dramatic typography template.", source: "hyperframes" },
+  { id: "decision-tree", name: "Decision Tree", description: "Official HyperFrames flowchart explainer template.", source: "hyperframes" },
+  { id: "product-promo", name: "Product Promo", description: "Official HyperFrames multi-scene product showcase template.", source: "hyperframes" },
+  { id: "nyt-graph", name: "NYT Graph", description: "Official HyperFrames editorial data-story template.", source: "hyperframes" },
+  { id: "vignelli", name: "Vignelli", description: "Official HyperFrames bold portrait typography template.", source: "hyperframes" },
+  { id: "blank", name: "Blank", description: "Official HyperFrames minimal scaffold for full custom control.", source: "hyperframes" },
+];
 
 export function createCs1VideoRoutes({ baseDir, sendJson, modelRouter }) {
   const runsDir = path.join(baseDir, ".data", "cs1-video-maker");
@@ -18,10 +42,7 @@ export function createCs1VideoRoutes({ baseDir, sendJson, modelRouter }) {
     if (req.method === "GET" && route === "styles") {
       sendJson(res, 200, {
         ok: true,
-        styles: [
-          { id: "cs1", name: "CS1 dark explainer", description: "Dark canvas, strong warning, three-beat explainer video." },
-          { id: "warmgrain", name: "Warm Grain", description: "HyperFrames warm-grain template language with warm paper texture." },
-        ],
+        styles: CS1_VIDEO_STYLES,
       });
       return true;
     }
@@ -67,11 +88,16 @@ async function generateVideo({ runsDir, outputDir, text, style, title, aiRefine,
 
   const refined = aiRefine ? await refineStoryModel({ script, title: videoTitle, modelRouter }) : null;
   const model = refined || buildStoryModel(script, videoTitle);
+  const files = styleId === "cs1"
+    ? cs1Files(model)
+    : styleId === "warm-grain"
+      ? warmGrainFiles(model)
+      : officialTemplateFiles(model, styleId);
   writeProject(projectDir, {
     slug,
     title: videoTitle,
     styleId,
-    files: styleId === "warmgrain" ? warmGrainFiles(model) : cs1Files(model),
+    files,
   });
 
   const checkOutput = [];
@@ -198,7 +224,9 @@ function normalizeScript(value) {
 
 function normalizeStyle(value) {
   const style = String(value || "cs1").toLowerCase().trim();
-  return style === "warmgrain" || style === "warm-grain" ? "warmgrain" : "cs1";
+  const normalized = style === "warmgrain" ? "warm-grain" : style;
+  if (normalized === "cs1" || OFFICIAL_TEMPLATE_IDS.has(normalized)) return normalized;
+  return "cs1";
 }
 
 function sanitizeTitle(value) {
