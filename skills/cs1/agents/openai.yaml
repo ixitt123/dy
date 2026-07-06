@@ -1,0 +1,4 @@
+interface:
+  display_name: "CS1 HyperFrames Explainer"
+  short_description: "Create short HyperFrames explainer videos from a concise topic."
+  default_prompt: "Use $cs1 to create a 10-second HyperFrames explainer video about a technical concept."
