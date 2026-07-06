@@ -8,6 +8,8 @@ export function initCs1VideoModule() {
 
   const titleInput = document.getElementById("cs1VideoTitle");
   const textInput = document.getElementById("cs1VideoText");
+  const styleSelect = document.getElementById("cs1VideoStyleSelect");
+  const styleDescription = document.getElementById("cs1VideoStyleDescription");
   const aiInput = document.getElementById("cs1VideoAiRefine");
   const status = document.getElementById("cs1VideoStatus");
   const message = document.getElementById("cs1VideoMessage");
@@ -20,13 +22,14 @@ export function initCs1VideoModule() {
   const openProjectButton = document.getElementById("cs1VideoOpenProject");
   const openOutputButton = document.getElementById("cs1VideoOpenOutput");
   let lastResult = null;
+  let styleCatalog = [];
 
   const setStatus = (value, detail = "") => {
     status.textContent = value;
     message.textContent = detail;
   };
 
-  const selectedStyle = () => form.querySelector('input[name="cs1VideoStyle"]:checked')?.value || "cs1";
+  const selectedStyle = () => styleSelect?.value || form.querySelector('input[name="cs1VideoStyle"]:checked')?.value || "cs1";
 
   form.querySelectorAll(".cs1-style-card").forEach((card) => {
     card.addEventListener("click", () => {
