@@ -39,6 +39,10 @@ const workbenchPages = {
     title: "视频成片中心",
     description: "优先生成剪映模板草稿，也可生成 MP4 预览或兼容素材包。",
   },
+  "cs1-video": {
+    title: "CS1 生成器",
+    description: "输入文字，选择 CS1 或 warm-grain 模板，生成本地 HyperFrames 视频。",
+  },
   files: {
     title: "素材资产库",
     description: "按类型、用途、风格和项目管理成片素材。",
