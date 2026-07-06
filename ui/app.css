@@ -6552,3 +6552,187 @@ audio {
     grid-template-columns: repeat(3, minmax(120px, 1fr));
   }
 }
+/* CS1 local HyperFrames video maker */
+.cs1-video-maker {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.cs1-video-head {
+  background:
+    radial-gradient(circle at 18% 0%, rgba(196, 93, 62, 0.16), transparent 28%),
+    linear-gradient(135deg, rgba(245, 240, 224, 0.96), rgba(235, 224, 201, 0.86));
+  border: 1px solid rgba(122, 98, 72, 0.18);
+}
+
+.cs1-video-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(340px, 0.8fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.cs1-video-form,
+.cs1-video-status {
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(30, 41, 59, 0.1);
+  border-radius: 8px;
+  padding: 18px;
+  box-shadow: 0 12px 40px rgba(15, 23, 42, 0.08);
+}
+
+.cs1-video-form {
+  display: grid;
+  gap: 16px;
+}
+
+.cs1-video-form label {
+  display: grid;
+  gap: 8px;
+  font-weight: 700;
+  color: #241b16;
+}
+
+.cs1-video-form input[type="text"],
+.cs1-video-form textarea {
+  width: 100%;
+  border: 1px solid rgba(36, 27, 22, 0.18);
+  border-radius: 8px;
+  padding: 12px 14px;
+  color: #241b16;
+  background: rgba(245, 240, 224, 0.72);
+  font: inherit;
+}
+
+.cs1-video-form textarea {
+  min-height: 190px;
+  resize: vertical;
+  line-height: 1.6;
+}
+
+.cs1-style-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.cs1-style-card {
+  position: relative;
+  display: grid;
+  gap: 8px;
+  min-height: 120px;
+  padding: 16px;
+  border: 1px solid rgba(36, 27, 22, 0.16);
+  border-radius: 8px;
+  background: #f5f0e0;
+  cursor: pointer;
+}
+
+.cs1-style-card input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.cs1-style-card strong {
+  color: #2b2118;
+  font-size: 18px;
+}
+
+.cs1-style-card span {
+  color: #7a6248;
+  line-height: 1.45;
+}
+
+.cs1-style-card.active {
+  border-color: #c45d3e;
+  box-shadow: inset 0 0 0 2px rgba(196, 93, 62, 0.18);
+}
+
+.cs1-ai-toggle {
+  display: flex !important;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 10px !important;
+  padding: 12px 14px;
+  border: 1px dashed rgba(59, 94, 58, 0.35);
+  border-radius: 8px;
+  background: rgba(59, 94, 58, 0.07);
+}
+
+.cs1-video-actions,
+.cs1-output-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.cs1-video-status {
+  display: grid;
+  gap: 14px;
+}
+
+.cs1-status-card,
+.cs1-output-card,
+.cs1-log-panel {
+  border: 1px solid rgba(36, 27, 22, 0.12);
+  border-radius: 8px;
+  background: rgba(245, 240, 224, 0.7);
+  padding: 16px;
+}
+
+.cs1-status-card span,
+.cs1-output-card span {
+  display: block;
+  margin-bottom: 8px;
+  color: #7a6248;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.cs1-status-card strong {
+  display: block;
+  color: #3b5e3a;
+  font-size: 24px;
+}
+
+.cs1-status-card p {
+  margin: 10px 0 0;
+  color: #5d4a37;
+  line-height: 1.55;
+}
+
+.cs1-output-card code {
+  display: block;
+  max-height: 92px;
+  margin-bottom: 14px;
+  overflow: auto;
+  color: #241b16;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.cs1-log-panel summary {
+  cursor: pointer;
+  color: #7a6248;
+  font-weight: 800;
+}
+
+.cs1-log-panel pre {
+  max-height: 260px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: #241b16;
+  font-size: 12px;
+}
+
+@media (max-width: 1100px) {
+  .cs1-video-layout,
+  .cs1-style-grid {
+    grid-template-columns: 1fr;
+  }
+}

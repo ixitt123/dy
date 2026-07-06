@@ -60,8 +60,13 @@
             </button>
           </div>
           <div class="nav-group">
+            <button class="nav-item" type="button" data-nav="cs1-video">
+              <span class="nav-index">10</span><span>CS1 生成器</span>
+            </button>
+          </div>
+          <div class="nav-group">
             <button class="nav-item" type="button" data-nav="settings">
-              <span class="nav-index">10</span><span>系统设置</span>
+              <span class="nav-index">11</span><span>系统设置</span>
             </button>
           </div>
         </nav>
@@ -1333,6 +1338,72 @@
         </section>
       </section>
 
+      </section>
+
+      <section class="workbench-page" data-page="cs1-video" id="cs1VideoPage">
+        <section class="cs1-video-maker">
+          <div class="result-head cs1-video-head">
+            <div>
+              <span class="section-eyebrow">CS1 Local Video Maker</span>
+              <h2>输入文字，选择模板，一键输出 HyperFrames 视频</h2>
+              <p>内置 CS1 深色解释风和 HyperFrames warm-grain 暖纸纹模板；生成工程保存在本机，MP4 输出到 jianying-exports。</p>
+            </div>
+            <button class="ghost" id="cs1VideoOpenOutput" type="button">打开输出目录</button>
+          </div>
+
+          <div class="cs1-video-layout">
+            <form class="cs1-video-form" id="cs1VideoForm">
+              <label>
+                视频标题
+                <input id="cs1VideoTitle" type="text" maxlength="80" placeholder="例如：仪征中考家长提醒" />
+              </label>
+              <label>
+                输入文案
+                <textarea id="cs1VideoText" rows="8" maxlength="1200" placeholder="把要做成视频的文字粘贴到这里..." required></textarea>
+              </label>
+              <div class="cs1-style-grid" role="radiogroup" aria-label="选择视频模板">
+                <label class="cs1-style-card active">
+                  <input type="radio" name="cs1VideoStyle" value="cs1" checked />
+                  <strong>CS1 深色解释风</strong>
+                  <span>强提醒、倒计时、三段式观点推进。</span>
+                </label>
+                <label class="cs1-style-card">
+                  <input type="radio" name="cs1VideoStyle" value="warmgrain" />
+                  <strong>Warm Grain 暖纸纹</strong>
+                  <span>HyperFrames 自带 warm-grain 风格模板。</span>
+                </label>
+              </div>
+              <label class="cs1-ai-toggle">
+                <input id="cs1VideoAiRefine" type="checkbox" />
+                <span>使用本机大模型 API 先优化成 3 个视频节拍</span>
+              </label>
+              <div class="cs1-video-actions">
+                <button class="primary" id="cs1VideoGenerate" type="submit">生成视频</button>
+                <button class="ghost" id="cs1VideoExample" type="button">填入示例文案</button>
+              </div>
+            </form>
+
+            <aside class="cs1-video-status">
+              <div class="cs1-status-card">
+                <span>当前状态</span>
+                <strong id="cs1VideoStatus">等待输入</strong>
+                <p id="cs1VideoMessage">选择模板后点击生成，服务器会自动运行 HyperFrames 检查并渲染 MP4。</p>
+              </div>
+              <div class="cs1-output-card" id="cs1VideoResult" hidden>
+                <span>输出文件</span>
+                <code id="cs1VideoOutputPath"></code>
+                <div class="cs1-output-actions">
+                  <button class="secondary" id="cs1VideoOpenFile" type="button">打开视频</button>
+                  <button class="ghost" id="cs1VideoOpenProject" type="button">打开工程目录</button>
+                </div>
+              </div>
+              <details class="cs1-log-panel">
+                <summary>查看生成日志</summary>
+                <pre id="cs1VideoLog"></pre>
+              </details>
+            </aside>
+          </div>
+        </section>
       </section>
 
       <section class="workbench-page" data-page="assets" id="assetsPage">

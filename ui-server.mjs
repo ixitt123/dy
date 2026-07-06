@@ -29,6 +29,7 @@ import { createDirectorService } from "./server/director/director-service.js";
 import { createVfoService } from "./server/vfo/vfo-service.js";
 import { createVideoProductService } from "./server/video-product/video-product-service.js";
 import { createVideoOutputRoutes } from "./server/routes/video-output-routes.js";
+import { createCs1VideoRoutes } from "./server/routes/cs1-video-routes.js";
 import { HttpBodyError, readBody, readJsonBody } from "./server/utils/http-body.js";
 import { DEFAULT_REWRITE_REFERENCE, REWRITE_DIRECTIONS, REWRITE_STYLES, REWRITE_VERSION_DEFS, REWRITE_VERSION_DEFAULTS } from "./server/config/rewrite-presets.js";
 import { DEFAULT_MODEL_MAPPING, DEFAULT_VOLCENGINE_ARK_IMAGE_MODEL, SETTINGS_TASKS } from "./server/config/model-defaults.js";
@@ -128,6 +129,11 @@ const handleVideoOutputRoutes = createVideoOutputRoutes({
   videoProductService,
   sendJson,
   sendBuffer,
+});
+const handleCs1VideoRoutes = createCs1VideoRoutes({
+  baseDir: __dirname,
+  sendJson,
+  modelRouter,
 });
 
 // ModelRouter 统一模型路由
@@ -1803,6 +1809,8 @@ function isInsideManagedFilePath(filePath) {
     vfoService.outputDirs.assetPackagesDir,
     vfoService.outputDirs.vfoDir,
     videoProductService.outputRoot,
+    path.join(__dirname, "jianying-exports"),
+    path.join(__dirname, ".data", "cs1-video-maker"),
   ].map((item) => path.resolve(item));
   return roots.some((root) => resolved === root || resolved.startsWith(`${root}${path.sep}`));
 }
@@ -5716,6 +5724,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (await handleVideoOutputRoutes(req, res, url)) return;
+    if (await handleCs1VideoRoutes(req, res, url)) return;
 
     // ===== Image Studio API =====
     if (url.pathname.startsWith("/api/image/")) {

@@ -7,6 +7,7 @@ import { initTtsModule } from "./modules/tts.js";
 import { initDirectorModule } from "./modules/director.js";
 import { initAssetsModule } from "./modules/assets.js";
 import { initVideoOutputModule } from "./modules/video-output.js";
+import { initCs1VideoModule } from "./modules/cs1-video.js";
 import { initSettingsModule } from "./modules/settings.js";
 
 const modules = [
@@ -19,6 +20,7 @@ const modules = [
   initDirectorModule,
   initAssetsModule,
   initVideoOutputModule,
+  initCs1VideoModule,
   initSettingsModule,
 ];
 
