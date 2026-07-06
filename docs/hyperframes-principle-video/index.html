@@ -1,0 +1,371 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1920, height=1080" />
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <style>
+      * { box-sizing: border-box; }
+      html, body {
+        margin: 0;
+        width: 1920px;
+        height: 1080px;
+        overflow: hidden;
+        background: #10131a;
+      }
+      body {
+        font-family: "Microsoft YaHei UI", "Microsoft YaHei", sans-serif;
+        color: #f1eadc;
+      }
+      @font-face {
+        font-family: "Microsoft YaHei UI";
+        src: local("Microsoft YaHei UI");
+      }
+      @font-face {
+        font-family: "Microsoft YaHei";
+        src: local("Microsoft YaHei");
+      }
+      @font-face {
+        font-family: "Cascadia Mono";
+        src: local("Cascadia Mono");
+      }
+      #root {
+        position: relative;
+        width: 1920px;
+        height: 1080px;
+        overflow: hidden;
+        background:
+          radial-gradient(circle at 20% 18%, rgba(216, 150, 82, 0.2), rgba(216, 150, 82, 0) 28%),
+          radial-gradient(circle at 82% 76%, rgba(131, 201, 159, 0.16), rgba(131, 201, 159, 0) 30%),
+          #10131a;
+      }
+      .grain, .grid {
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+      }
+      .grain {
+        z-index: 8;
+        opacity: 0.18;
+        background-image:
+          linear-gradient(rgba(241, 234, 220, 0.04) 1px, rgba(241, 234, 220, 0) 1px),
+          linear-gradient(90deg, rgba(241, 234, 220, 0.035) 1px, rgba(241, 234, 220, 0) 1px);
+        background-size: 54px 54px;
+      }
+      .grid {
+        z-index: 1;
+        opacity: 0.4;
+        background:
+          linear-gradient(90deg, rgba(216, 150, 82, 0.13) 1px, rgba(216, 150, 82, 0) 1px),
+          linear-gradient(rgba(131, 201, 159, 0.1) 1px, rgba(131, 201, 159, 0) 1px);
+        background-size: 160px 160px;
+        mask-image: radial-gradient(circle at 50% 52%, #000 0%, rgba(0, 0, 0, 0.75) 45%, rgba(0, 0, 0, 0) 82%);
+      }
+      .scene {
+        position: absolute;
+        inset: 0;
+        z-index: 2;
+        display: flex;
+        width: 100%;
+        height: 100%;
+        padding: 108px 132px;
+        background-color: #10131a;
+      }
+      .scene-content {
+        position: relative;
+        z-index: 3;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        width: 100%;
+        height: 100%;
+        gap: 34px;
+      }
+      .kicker, .mono, .step, .tag {
+        font-family: "IBM Plex Mono", "Cascadia Mono", monospace;
+        font-variant-numeric: tabular-nums;
+      }
+      .kicker {
+        width: max-content;
+        padding: 12px 18px;
+        border: 1px solid rgba(216, 150, 82, 0.46);
+        color: #d89652;
+        font-size: 24px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        background: rgba(25, 31, 43, 0.74);
+      }
+      h1, h2 {
+        margin: 0;
+        max-width: 1250px;
+        color: #f1eadc;
+        font-weight: 900;
+        line-height: 1.08;
+        letter-spacing: 0.01em;
+      }
+      h1 { font-size: 116px; }
+      h2 { font-size: 88px; }
+      .subline {
+        margin: 0;
+        max-width: 980px;
+        color: #cfc4ae;
+        font-size: 36px;
+        font-weight: 350;
+        line-height: 1.42;
+      }
+      .flow {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        align-items: stretch;
+        gap: 28px;
+        width: 100%;
+        margin-top: 16px;
+      }
+      .node {
+        min-height: 220px;
+        padding: 30px;
+        border: 1px solid rgba(241, 234, 220, 0.15);
+        background: rgba(25, 31, 43, 0.86);
+        box-shadow: 0 24px 80px rgba(0, 0, 0, 0.24);
+      }
+      .node strong {
+        display: block;
+        margin-bottom: 18px;
+        color: #f1eadc;
+        font-size: 38px;
+        line-height: 1.16;
+      }
+      .node span {
+        display: block;
+        color: #b8ad99;
+        font-size: 25px;
+        line-height: 1.38;
+      }
+      .arrow {
+        position: absolute;
+        top: 684px;
+        width: 130px;
+        height: 2px;
+        background: #d89652;
+        transform-origin: left center;
+      }
+      .arrow::after {
+        content: "";
+        position: absolute;
+        right: -2px;
+        top: -7px;
+        width: 16px;
+        height: 16px;
+        border-top: 2px solid #d89652;
+        border-right: 2px solid #d89652;
+        transform: rotate(45deg);
+      }
+      #arrow-a { left: 686px; }
+      #arrow-b { left: 1252px; }
+      .code-card {
+        width: 760px;
+        padding: 34px;
+        border: 1px solid rgba(216, 150, 82, 0.38);
+        background: rgba(25, 31, 43, 0.9);
+        box-shadow: 0 28px 90px rgba(0, 0, 0, 0.3);
+      }
+      .code-line {
+        display: flex;
+        gap: 24px;
+        color: #b8ad99;
+        font-size: 28px;
+        line-height: 1.7;
+      }
+      .code-line b {
+        color: #83c99f;
+        font-weight: 500;
+      }
+      .code-line em {
+        color: #d89652;
+        font-style: normal;
+      }
+      .split {
+        display: grid;
+        grid-template-columns: 0.92fr 1.08fr;
+        gap: 70px;
+        align-items: center;
+      }
+      .timeline {
+        display: flex;
+        flex-direction: column;
+        gap: 24px;
+        width: 100%;
+      }
+      .track {
+        position: relative;
+        height: 82px;
+        overflow: hidden;
+        border: 1px solid rgba(241, 234, 220, 0.12);
+        background: rgba(25, 31, 43, 0.72);
+      }
+      .track-label {
+        position: absolute;
+        left: 24px;
+        top: 24px;
+        color: #b8ad99;
+        font-size: 22px;
+      }
+      .bar {
+        position: absolute;
+        left: 210px;
+        top: 22px;
+        height: 38px;
+        background: #d89652;
+      }
+      .bar.green { background: #83c99f; }
+      .bar.wide { width: 520px; }
+      .bar.mid { width: 410px; }
+      .bar.short { width: 260px; }
+      .playhead {
+        position: absolute;
+        left: 210px;
+        top: 0;
+        width: 4px;
+        height: 100%;
+        background: #f1eadc;
+      }
+      .tag {
+        position: absolute;
+        right: 132px;
+        bottom: 90px;
+        color: #d89652;
+        font-size: 28px;
+      }
+      .signal {
+        position: absolute;
+        right: 180px;
+        top: 135px;
+        width: 380px;
+        height: 380px;
+        border: 1px solid rgba(216, 150, 82, 0.22);
+        border-radius: 50%;
+      }
+      .signal::before, .signal::after {
+        content: "";
+        position: absolute;
+        border: 1px solid rgba(131, 201, 159, 0.2);
+        border-radius: 50%;
+      }
+      .signal::before { inset: 58px; }
+      .signal::after {
+        inset: 124px;
+        background: rgba(216, 150, 82, 0.12);
+      }
+      #scene-2,
+      #scene-3 {
+        opacity: 0;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root" data-composition-id="main" data-start="0" data-duration="10" data-width="1920" data-height="1080">
+      <div class="grid" data-layout-ignore></div>
+      <div class="grain" data-layout-ignore></div>
+
+      <section id="scene-1" class="scene clip" data-start="0" data-duration="3.7" data-track-index="1">
+        <div class="scene-content">
+          <div class="kicker">HyperFrames Principle</div>
+          <h1>HTML 就是视频的源代码</h1>
+          <p class="subline">画面、文字、媒体和时间都写在一个可检查、可版本管理的 composition 里。</p>
+          <div class="code-card">
+            <div class="code-line mono"><em>&lt;div</em> data-composition-id=<b>"main"</b>&gt;</div>
+            <div class="code-line mono">data-start=<b>"0"</b> data-duration=<b>"10"</b></div>
+            <div class="code-line mono"><em>GSAP timeline</em> controls motion</div>
+          </div>
+        </div>
+        <div class="signal" data-layout-ignore></div>
+      </section>
+
+      <section id="scene-2" class="scene clip" data-start="3.25" data-duration="3.65" data-track-index="2">
+        <div class="scene-content">
+          <div class="kicker">Sync Layer</div>
+          <div class="split">
+            <div>
+              <h2>时间线把所有元素同步</h2>
+              <p class="subline">每个 clip 声明开始时间和持续时间；播放器按同一把尺子驱动媒体、字幕和 GSAP 动画。</p>
+            </div>
+            <div class="timeline">
+              <div class="track">
+                <span class="track-label mono">clip</span>
+                <span class="bar wide"></span>
+                <span class="playhead"></span>
+              </div>
+              <div class="track">
+                <span class="track-label mono">motion</span>
+                <span class="bar green mid"></span>
+                <span class="playhead"></span>
+              </div>
+              <div class="track">
+                <span class="track-label mono">caption</span>
+                <span class="bar short"></span>
+                <span class="playhead"></span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="scene-3" class="scene clip" data-start="6.45" data-duration="3.55" data-track-index="3">
+        <div class="scene-content">
+          <div class="kicker">Render Pipeline</div>
+          <h2>浏览器逐帧捕获，最后编码成 MP4</h2>
+          <div class="flow">
+            <div class="node">
+              <strong>1. HTML/CSS</strong>
+              <span>布局先定稿，保证每一帧都可预览。</span>
+            </div>
+            <div class="node">
+              <strong>2. Timeline</strong>
+              <span>确定性动画让 seek、检查和渲染结果一致。</span>
+            </div>
+            <div class="node">
+              <strong>3. Capture</strong>
+              <span>Headless Chrome 抓帧，再交给 FFmpeg 输出。</span>
+            </div>
+          </div>
+          <div id="arrow-a" class="arrow" data-layout-ignore></div>
+          <div id="arrow-b" class="arrow" data-layout-ignore></div>
+          <div class="tag">source -> timeline -> frames -> mp4</div>
+        </div>
+      </section>
+    </div>
+
+    <script>
+      window.__timelines = window.__timelines || {};
+      const tl = gsap.timeline({ paused: true });
+
+      tl.from("#scene-1 .kicker", { y: 34, opacity: 0, duration: 0.42, ease: "power3.out" }, 0.16);
+      tl.from("#scene-1 h1", { y: 56, opacity: 0, duration: 0.55, ease: "expo.out" }, 0.34);
+      tl.from("#scene-1 .subline", { x: -34, opacity: 0, duration: 0.46, ease: "power2.out" }, 0.72);
+      tl.from("#scene-1 .code-card", { y: 44, scale: 0.96, opacity: 0, duration: 0.52, ease: "back.out(1.4)" }, 1.02);
+      tl.from("#scene-1 .signal", { scale: 0.78, rotation: -18, opacity: 0, duration: 0.68, ease: "sine.out" }, 0.4);
+      tl.to("#scene-1 .signal", { scale: 1.05, rotation: 18, duration: 2.1, repeat: 3, yoyo: true, ease: "sine.inOut" }, 1.12);
+
+      tl.fromTo("#scene-2", { x: 170, opacity: 0 }, { x: 0, opacity: 1, duration: 0.46, ease: "power2.inOut" }, 3.25);
+      tl.to("#scene-1", { x: -110, opacity: 0, duration: 0.46, ease: "power2.inOut" }, 3.25);
+      tl.from("#scene-2 .kicker", { y: 32, opacity: 0, duration: 0.4, ease: "power3.out" }, 3.48);
+      tl.from("#scene-2 h2", { x: -54, opacity: 0, duration: 0.52, ease: "expo.out" }, 3.7);
+      tl.from("#scene-2 .subline", { y: 34, opacity: 0, duration: 0.44, ease: "power2.out" }, 4.08);
+      tl.from("#scene-2 .track", { x: 70, opacity: 0, duration: 0.45, stagger: 0.14, ease: "back.out(1.25)" }, 4.22);
+      tl.from("#scene-2 .bar", { scaleX: 0, duration: 0.55, stagger: 0.13, transformOrigin: "left center", ease: "power4.out" }, 4.52);
+      tl.to("#scene-2 .playhead", { x: 520, duration: 1.85, repeat: 1, yoyo: true, ease: "sine.inOut" }, 4.82);
+
+      tl.fromTo("#scene-3", { y: 145, opacity: 0 }, { y: 0, opacity: 1, duration: 0.5, ease: "power3.inOut" }, 6.45);
+      tl.to("#scene-2", { y: -110, opacity: 0, duration: 0.5, ease: "power3.inOut" }, 6.45);
+      tl.from("#scene-3 .kicker", { y: 30, opacity: 0, duration: 0.4, ease: "power2.out" }, 6.7);
+      tl.from("#scene-3 h2", { y: 58, opacity: 0, duration: 0.55, ease: "expo.out" }, 6.9);
+      tl.from("#scene-3 .node", { y: 52, opacity: 0, scale: 0.96, duration: 0.48, stagger: 0.15, ease: "back.out(1.3)" }, 7.32);
+      tl.from("#scene-3 .arrow", { scaleX: 0, opacity: 0, duration: 0.34, stagger: 0.16, transformOrigin: "left center", ease: "power4.out" }, 7.78);
+      tl.from("#scene-3 .tag", { x: 46, opacity: 0, duration: 0.44, ease: "sine.out" }, 8.15);
+      tl.to("#scene-3 .node", { borderColor: "rgba(216, 150, 82, 0.42)", duration: 0.42, stagger: 0.12, repeat: 2, yoyo: true, ease: "sine.inOut" }, 8.22);
+      tl.to("#root", { opacity: 0, duration: 0.42, ease: "sine.in" }, 9.55);
+
+      window.__timelines["main"] = tl;
+    </script>
+  </body>
+</html>
