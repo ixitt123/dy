@@ -1,0 +1,352 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1920, height=1080" />
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <style>
+      * { box-sizing: border-box; }
+      @font-face { font-family: "Microsoft YaHei UI"; src: local("Microsoft YaHei UI"); }
+      @font-face { font-family: "Microsoft YaHei"; src: local("Microsoft YaHei"); }
+      @font-face { font-family: "Cascadia Mono"; src: local("Cascadia Mono"); }
+      html, body {
+        margin: 0;
+        width: 1920px;
+        height: 1080px;
+        overflow: hidden;
+        background: #12100d;
+      }
+      body {
+        font-family: "Microsoft YaHei UI", "Microsoft YaHei", sans-serif;
+        color: #f0e5ce;
+      }
+      #root {
+        position: relative;
+        width: 1920px;
+        height: 1080px;
+        overflow: hidden;
+        background:
+          radial-gradient(circle at 74% 18%, rgba(201, 54, 44, 0.22), rgba(201, 54, 44, 0) 28%),
+          radial-gradient(circle at 18% 78%, rgba(211, 155, 69, 0.18), rgba(211, 155, 69, 0) 32%),
+          #12100d;
+      }
+      .texture, .exam-lines {
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+      }
+      .texture {
+        z-index: 8;
+        opacity: 0.18;
+        background-image:
+          linear-gradient(rgba(240, 229, 206, 0.05) 1px, rgba(240, 229, 206, 0) 1px),
+          linear-gradient(90deg, rgba(240, 229, 206, 0.04) 1px, rgba(240, 229, 206, 0) 1px);
+        background-size: 72px 72px;
+      }
+      .exam-lines {
+        z-index: 1;
+        opacity: 0.34;
+        background:
+          repeating-linear-gradient(0deg, rgba(240, 229, 206, 0.08) 0 2px, rgba(240, 229, 206, 0) 2px 54px),
+          linear-gradient(90deg, rgba(201, 54, 44, 0.28), rgba(201, 54, 44, 0) 18%);
+        mask-image: radial-gradient(circle at 50% 52%, #000 0%, rgba(0, 0, 0, 0.7) 48%, rgba(0, 0, 0, 0) 88%);
+      }
+      .scene {
+        position: absolute;
+        inset: 0;
+        z-index: 2;
+        display: flex;
+        width: 100%;
+        height: 100%;
+        padding: 106px 132px;
+        background-color: #12100d;
+      }
+      #scene-2, #scene-3 { opacity: 0; }
+      .scene-content {
+        position: relative;
+        z-index: 3;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        width: 100%;
+        height: 100%;
+        gap: 34px;
+      }
+      .mono, .label, .date, .count {
+        font-family: "IBM Plex Mono", "Cascadia Mono", monospace;
+        font-variant-numeric: tabular-nums;
+      }
+      .label {
+        width: max-content;
+        padding: 12px 18px;
+        border: 1px solid rgba(211, 155, 69, 0.46);
+        color: #d39b45;
+        background: rgba(36, 27, 22, 0.76);
+        font-size: 24px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+      h1, h2 {
+        margin: 0;
+        max-width: 1320px;
+        color: #f0e5ce;
+        font-weight: 900;
+        line-height: 1.08;
+        letter-spacing: 0.01em;
+      }
+      h1 { font-size: 122px; }
+      h2 { font-size: 104px; }
+      .question {
+        color: #f0e5ce;
+        font-size: 128px;
+        line-height: 1.06;
+      }
+      .red { color: #ff6258; }
+      .subline {
+        margin: 0;
+        max-width: 1020px;
+        color: #c8b99d;
+        font-size: 39px;
+        font-weight: 350;
+        line-height: 1.42;
+      }
+      .gate {
+        position: absolute;
+        right: 128px;
+        bottom: 98px;
+        width: 650px;
+        height: 430px;
+        border-bottom: 18px solid #d39b45;
+        border-left: 18px solid #d39b45;
+        border-right: 18px solid #d39b45;
+        opacity: 0.82;
+      }
+      .gate::before {
+        content: "考场";
+        position: absolute;
+        top: -92px;
+        left: -18px;
+        width: 650px;
+        height: 96px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: #c9362c;
+        color: #f0e5ce;
+        font-size: 52px;
+        font-weight: 900;
+        letter-spacing: 0.2em;
+      }
+      .students {
+        position: absolute;
+        right: 190px;
+        bottom: 130px;
+        display: flex;
+        gap: 22px;
+      }
+      .person {
+        width: 42px;
+        height: 130px;
+        border-radius: 22px 22px 6px 6px;
+        background: #f0e5ce;
+        box-shadow: 0 -36px 0 -7px #d39b45;
+      }
+      .person:nth-child(2), .person:nth-child(5) { height: 155px; background: #c8b99d; }
+      .person:nth-child(3), .person:nth-child(7) { height: 118px; background: #f6d08a; }
+      .date {
+        position: absolute;
+        right: 132px;
+        top: 106px;
+        color: #ff6258;
+        font-size: 44px;
+      }
+      .split {
+        display: grid;
+        grid-template-columns: 1.05fr 0.95fr;
+        gap: 80px;
+        align-items: center;
+      }
+      .grade-board {
+        display: grid;
+        gap: 28px;
+        width: 100%;
+      }
+      .grade {
+        min-height: 160px;
+        padding: 28px 34px;
+        border: 1px solid rgba(240, 229, 206, 0.16);
+        background: rgba(36, 27, 22, 0.84);
+      }
+      .grade strong {
+        display: block;
+        margin-bottom: 12px;
+        color: #f0e5ce;
+        font-size: 42px;
+      }
+      .grade span {
+        display: block;
+        color: #c8b99d;
+        font-size: 28px;
+        line-height: 1.36;
+      }
+      .stamp {
+        position: absolute;
+        right: 140px;
+        bottom: 92px;
+        width: 300px;
+        height: 300px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border: 12px solid #c9362c;
+        border-radius: 50%;
+        color: #ff6258;
+        font-size: 56px;
+        font-weight: 900;
+        transform: rotate(-12deg);
+      }
+      .countdown {
+        display: grid;
+        grid-template-columns: 0.8fr 1.2fr;
+        gap: 64px;
+        align-items: center;
+      }
+      .count-box {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        min-height: 470px;
+        border: 2px solid rgba(201, 54, 44, 0.55);
+        background: rgba(36, 27, 22, 0.82);
+        box-shadow: 0 28px 90px rgba(0, 0, 0, 0.34);
+      }
+      .count {
+        color: #ff6258;
+        font-size: 188px;
+        font-weight: 900;
+        line-height: 0.92;
+      }
+      .unit {
+        margin-top: 22px;
+        color: #d39b45;
+        font-size: 38px;
+        font-weight: 800;
+      }
+      .action-list {
+        display: grid;
+        gap: 22px;
+      }
+      .action {
+        padding: 26px 32px;
+        border-left: 8px solid #c9362c;
+        background: rgba(36, 27, 22, 0.78);
+        color: #f0e5ce;
+        font-size: 38px;
+        font-weight: 700;
+      }
+      .footer {
+        position: absolute;
+        right: 132px;
+        bottom: 84px;
+        color: #d39b45;
+        font-size: 30px;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root" data-composition-id="main" data-start="0" data-duration="10" data-width="1920" data-height="1080">
+      <div class="exam-lines" data-layout-ignore></div>
+      <div class="texture" data-layout-ignore></div>
+
+      <section id="scene-1" class="scene clip" data-start="0" data-duration="3.35" data-track-index="1">
+        <div class="scene-content">
+          <div class="label">YIZHENG ZHONGKAO</div>
+          <h1>明天，仪征几千名初三学生奔赴考场</h1>
+          <p class="subline">这不是别人的新闻，是下一届家庭马上要面对的现场。</p>
+        </div>
+        <div class="date">TOMORROW / EXAM DAY</div>
+        <div class="gate" data-layout-ignore></div>
+        <div class="students" data-layout-ignore>
+          <span class="person"></span><span class="person"></span><span class="person"></span><span class="person"></span>
+          <span class="person"></span><span class="person"></span><span class="person"></span>
+        </div>
+      </section>
+
+      <section id="scene-2" class="scene clip" data-start="3.05" data-duration="3.35" data-track-index="2">
+        <div class="scene-content">
+          <div class="split">
+            <div>
+              <div class="label">PARENTS CHECK</div>
+              <h2 class="question">新初二、新初三家长，你还觉得<span class="red">中考很远</span>吗？</h2>
+            </div>
+            <div class="grade-board">
+              <div class="grade">
+                <strong>新初三</strong>
+                <span>一开学，就是中考年。</span>
+              </div>
+              <div class="grade">
+                <strong>新初二</strong>
+                <span>现在的每一次松动，都会变成初三的追赶。</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="stamp" data-layout-ignore>不远了</div>
+      </section>
+
+      <section id="scene-3" class="scene clip" data-start="6.15" data-duration="3.85" data-track-index="3">
+        <div class="scene-content">
+          <div class="label">START NOW</div>
+          <div class="countdown">
+            <div class="count-box">
+              <div class="count">0</div>
+              <div class="unit">天可以浪费</div>
+            </div>
+            <div>
+              <h2>真正的差距，从现在开始拉开</h2>
+              <div class="action-list">
+                <div class="action">查短板：语数英先稳住基本盘</div>
+                <div class="action">定节奏：每天固定复盘和订正</div>
+                <div class="action">别等初三：现在就是起跑线</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="footer mono">Tomorrow is their exam. Today is your warning.</div>
+      </section>
+    </div>
+
+    <script>
+      window.__timelines = window.__timelines || {};
+      const tl = gsap.timeline({ paused: true });
+
+      tl.from("#scene-1 .label", { y: 32, opacity: 0, duration: 0.38, ease: "power3.out" }, 0.15);
+      tl.from("#scene-1 h1", { y: 60, opacity: 0, duration: 0.56, ease: "expo.out" }, 0.36);
+      tl.from("#scene-1 .subline", { x: -44, opacity: 0, duration: 0.44, ease: "power2.out" }, 0.82);
+      tl.from("#scene-1 .date", { x: 46, opacity: 0, duration: 0.42, ease: "sine.out" }, 0.58);
+      tl.from("#scene-1 .gate", { y: 80, opacity: 0, duration: 0.55, ease: "back.out(1.25)" }, 0.92);
+      tl.from("#scene-1 .person", { y: 54, opacity: 0, duration: 0.34, stagger: 0.06, ease: "power4.out" }, 1.22);
+
+      tl.fromTo("#scene-2", { x: 170, opacity: 0 }, { x: 0, opacity: 1, duration: 0.42, ease: "power2.inOut" }, 3.05);
+      tl.to("#scene-1", { x: -120, opacity: 0, duration: 0.42, ease: "power2.inOut" }, 3.05);
+      tl.from("#scene-2 .label", { y: 32, opacity: 0, duration: 0.36, ease: "power3.out" }, 3.28);
+      tl.from("#scene-2 h2", { scale: 0.96, opacity: 0, duration: 0.5, ease: "expo.out" }, 3.52);
+      tl.from("#scene-2 .grade", { x: 68, opacity: 0, duration: 0.42, stagger: 0.16, ease: "back.out(1.28)" }, 3.88);
+      tl.from("#scene-2 .stamp", { scale: 1.45, rotation: 8, opacity: 0, duration: 0.34, ease: "power4.out" }, 4.38);
+      tl.to("#scene-2 .stamp", { scale: 1.08, duration: 0.28, repeat: 5, yoyo: true, ease: "sine.inOut" }, 4.72);
+
+      tl.fromTo("#scene-3", { y: 145, opacity: 0 }, { y: 0, opacity: 1, duration: 0.48, ease: "power3.inOut" }, 6.15);
+      tl.to("#scene-2", { y: -115, opacity: 0, duration: 0.48, ease: "power3.inOut" }, 6.15);
+      tl.from("#scene-3 .label", { y: 30, opacity: 0, duration: 0.36, ease: "power2.out" }, 6.42);
+      tl.from("#scene-3 .count-box", { x: -72, opacity: 0, scale: 0.96, duration: 0.48, ease: "back.out(1.22)" }, 6.62);
+      tl.from("#scene-3 h2", { y: 58, opacity: 0, duration: 0.5, ease: "expo.out" }, 6.84);
+      tl.from("#scene-3 .action", { x: 62, opacity: 0, duration: 0.38, stagger: 0.14, ease: "power4.out" }, 7.28);
+      tl.from("#scene-3 .footer", { y: 28, opacity: 0, duration: 0.4, ease: "sine.out" }, 8.05);
+      tl.to("#scene-3 .count", { scale: 1.08, color: "#f0e5ce", duration: 0.22, repeat: 5, yoyo: true, ease: "power2.inOut" }, 7.56);
+      tl.to("#root", { opacity: 0, duration: 0.42, ease: "sine.in" }, 9.55);
+
+      window.__timelines["main"] = tl;
+    </script>
+  </body>
+</html>
