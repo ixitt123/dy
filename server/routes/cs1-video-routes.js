@@ -536,16 +536,16 @@ Official HyperFrames example style: ${config.title}. Template id: \`${templateId
     <div class="orb" data-layout-ignore></div>
     <div class="minimal-rule" data-layout-ignore></div>
     ${chartBars}${nodeMap}${productShape}${typeShape}
-    <section id="scene-1" class="scene" data-start="0" data-duration="3.2" data-track-index="1">
+    <section id="scene-1" class="scene clip" data-start="0" data-duration="3.2" data-track-index="1">
       <div class="kicker">${config.label}</div>
       <h1>${hook}</h1>
       <p>${title}</p>
     </section>
-    <section id="scene-2" class="scene" data-start="3.05" data-duration="3.35" data-track-index="2">
+    <section id="scene-2" class="scene clip" data-start="3.05" data-duration="3.35" data-track-index="2">
       <div class="kicker">BEAT TWO</div>
       <h2>${question}</h2>
     </section>
-    <section id="scene-3" class="scene" data-start="6.15" data-duration="3.85" data-track-index="3">
+    <section id="scene-3" class="scene clip" data-start="6.15" data-duration="3.85" data-track-index="3">
       <div class="kicker">OUTPUT</div>
       <h2><span class="accent">${config.title}</span></h2>
       <div id="final" class="panel">${action}</div>
