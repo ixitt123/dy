@@ -1,0 +1,67 @@
+<template id="captions-template">
+  <div id="captions-root" data-layout-allow-overlap data-composition-id="captions" data-width="1920" data-height="1080" data-duration="10">
+    <div class="captions-container">
+      <div id="caption-box" class="caption-box">
+        <span id="caption-text" class="caption-text"></span>
+      </div>
+    </div>
+    <style>
+      @font-face { font-family: "Microsoft YaHei UI"; src: local("Microsoft YaHei UI"); }
+      @font-face { font-family: "Microsoft YaHei"; src: local("Microsoft YaHei"); }
+      #captions-root .captions-container {
+        width: 100%;
+        height: 100%;
+        display: flex;
+        justify-content: center;
+        align-items: flex-end;
+        padding: 0 130px 112px;
+        pointer-events: none;
+      }
+      #captions-root .caption-box {
+        min-width: 100px;
+        max-width: 1500px;
+        padding: 18px 42px;
+        border-radius: 28px;
+        background-color: #7a6248;
+        opacity: 0;
+        box-shadow: 0 14px 32px rgba(43, 33, 24, 0.18);
+      }
+      #captions-root .caption-text {
+        display: block;
+        color: #f5f0e0;
+        font-family: "Microsoft YaHei UI", "Microsoft YaHei", sans-serif;
+        font-size: 42px;
+        font-weight: 800;
+        text-align: center;
+        line-height: 1.22;
+        white-space: normal;
+      }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <script>
+      (function () {
+        const lines = [
+          { text: "看着明天仪征几千名初三学生奔赴考场", start: 0.2, end: 2.65 },
+          { text: "新初二、新初三的家长们", start: 3.15, end: 4.55 },
+          { text: "你们以为中考离你们还远吗？", start: 4.65, end: 6.25 },
+          { text: "别等初三，现在就开始查短板、定节奏。", start: 6.65, end: 9.25 }
+        ];
+        const tl = gsap.timeline({ paused: true });
+        const box = document.querySelector("#captions-root #caption-box");
+        const textEl = document.querySelector("#captions-root #caption-text");
+        lines.forEach((line) => {
+          tl.to(box, {
+            opacity: 1,
+            duration: 0.14,
+            ease: "power2.out",
+            overwrite: "auto",
+            onStart: () => { textEl.textContent = line.text; }
+          }, line.start);
+          tl.to(box, { opacity: 0, duration: 0.14, ease: "power2.in", overwrite: "auto" }, line.end);
+        });
+        window.__timelines = window.__timelines || {};
+        window.__timelines["captions"] = tl;
+      })();
+    </script>
+  </div>
+</template>

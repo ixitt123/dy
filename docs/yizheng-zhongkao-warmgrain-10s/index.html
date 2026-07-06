@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1920, height=1080" />
+    <title>Yizheng Zhongkao Warm Grain</title>
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <style>
+      * { box-sizing: border-box; }
+      @font-face { font-family: "Microsoft YaHei UI"; src: local("Microsoft YaHei UI"); }
+      @font-face { font-family: "Microsoft YaHei"; src: local("Microsoft YaHei"); }
+      @font-face { font-family: "Cascadia Mono"; src: local("Cascadia Mono"); }
+      body, html {
+        margin: 0;
+        padding: 0;
+        width: 1920px;
+        height: 1080px;
+        overflow: hidden;
+        background-color: #f5f0e0;
+        font-family: "Microsoft YaHei UI", "Microsoft YaHei", sans-serif;
+      }
+      #main-composition {
+        position: relative;
+        width: 1920px;
+        height: 1080px;
+        overflow: hidden;
+        background:
+          radial-gradient(circle at 18% 20%, rgba(196, 93, 62, 0.2), rgba(196, 93, 62, 0) 28%),
+          radial-gradient(circle at 84% 80%, rgba(59, 94, 58, 0.18), rgba(59, 94, 58, 0) 30%),
+          #f5f0e0;
+      }
+      #grain-overlay-comp {
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        z-index: 100;
+      }
+      .grain-texture {
+        position: absolute;
+        inset: -50%;
+        width: 200%;
+        height: 200%;
+        background:
+          repeating-linear-gradient(0deg, rgba(43, 33, 24, 0.045) 0 1px, rgba(43, 33, 24, 0) 1px 4px),
+          repeating-linear-gradient(90deg, rgba(43, 33, 24, 0.032) 0 1px, rgba(43, 33, 24, 0) 1px 5px);
+        opacity: 0.8;
+      }
+      .paper-rule {
+        position: absolute;
+        left: 0;
+        right: 0;
+        top: 155px;
+        height: 2px;
+        background: rgba(122, 98, 72, 0.28);
+      }
+      .paper-rule.bottom { top: auto; bottom: 140px; }
+      .comp-layer {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        pointer-events: none;
+      }
+    </style>
+  </head>
+  <body>
+    <div
+      id="main-composition"
+      data-composition-id="main-video"
+      data-width="1920"
+      data-height="1080"
+      data-start="0"
+      data-duration="10"
+    >
+      <div class="paper-rule" data-layout-ignore></div>
+      <div class="paper-rule bottom" data-layout-ignore></div>
+
+      <div
+        id="grain-overlay-comp"
+        data-composition-id="grain-overlay"
+        data-width="1920"
+        data-height="1080"
+        data-start="0"
+        data-duration="10"
+        data-track-index="100"
+      >
+        <div class="grain-texture"></div>
+        <script>
+          window.__timelines = window.__timelines || {};
+          const grainTl = gsap.timeline({ paused: true });
+          grainTl.fromTo(".grain-texture", { x: -18, y: -12 }, { x: 18, y: 12, duration: 2, repeat: 4, yoyo: true, ease: "steps(4)" }, 0);
+          window.__timelines["grain-overlay"] = grainTl;
+        </script>
+      </div>
+
+      <div
+        id="intro-layer"
+        class="comp-layer"
+        data-composition-id="intro"
+        data-composition-src="compositions/intro.html"
+        data-start="0"
+        data-duration="3.1"
+        data-track-index="1"
+      ></div>
+
+      <div
+        id="graphics-layer"
+        class="comp-layer"
+        data-composition-id="graphics"
+        data-composition-src="compositions/graphics.html"
+        data-start="0"
+        data-duration="10"
+        data-track-index="2"
+      ></div>
+
+      <div
+        id="captions-layer"
+        class="comp-layer"
+        data-composition-id="captions"
+        data-composition-src="compositions/captions.html"
+        data-start="0"
+        data-duration="10"
+        data-track-index="3"
+      ></div>
+
+      <script>
+        window.__timelines = window.__timelines || {};
+        const tl = gsap.timeline({ paused: true });
+        tl.to("#main-composition", { opacity: 0, duration: 0.38, ease: "sine.in" }, 9.62);
+        window.__timelines["main-video"] = tl;
+      </script>
+    </div>
+  </body>
+</html>

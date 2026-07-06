@@ -1,0 +1,128 @@
+<template id="graphics-template">
+  <div id="graphics-root" data-layout-allow-overlap data-composition-id="graphics" data-width="1920" data-height="1080" data-duration="10">
+    <div id="moment-1" class="moment circle-stat">
+      <div class="stat-content">
+        <div class="stat-text">明天</div>
+        <div class="stat-desc">考场开启</div>
+      </div>
+    </div>
+    <div id="moment-2" class="moment pill-stat">
+      <div class="stat-text">不远了</div>
+    </div>
+    <div id="moment-3" class="moment rect-stat">
+      <div class="stat-text">现在就进入中考节奏</div>
+    </div>
+    <div id="notice" class="notice">
+      <strong>新初三</strong><span>一开学，就是中考年。</span>
+      <strong>新初二</strong><span>现在松动，初三追赶。</span>
+    </div>
+    <style>
+      @font-face { font-family: "Microsoft YaHei UI"; src: local("Microsoft YaHei UI"); }
+      @font-face { font-family: "Microsoft YaHei"; src: local("Microsoft YaHei"); }
+      #graphics-root {
+        position: relative;
+        width: 1920px;
+        height: 1080px;
+        font-family: "Microsoft YaHei UI", "Microsoft YaHei", sans-serif;
+        color: #f5f0e0;
+        overflow: hidden;
+      }
+      #graphics-root .moment {
+        position: absolute;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        opacity: 0;
+      }
+      #graphics-root #moment-1 {
+        width: 450px;
+        height: 450px;
+        border-radius: 50%;
+        left: 1240px;
+        top: 258px;
+        background-color: #c45d3e;
+      }
+      #graphics-root #moment-2 {
+        width: 560px;
+        height: 220px;
+        border-radius: 110px;
+        left: 1120px;
+        top: 250px;
+        background-color: #cc8832;
+      }
+      #graphics-root #moment-3 {
+        width: 870px;
+        height: 190px;
+        border-radius: 38px;
+        left: 520px;
+        top: 710px;
+        background-color: #3b5e3a;
+        padding: 0 52px;
+      }
+      #graphics-root .stat-content {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+      }
+      #graphics-root .stat-text {
+        font-size: 78px;
+        font-weight: 900;
+        line-height: 1.08;
+      }
+      #graphics-root #moment-3 .stat-text {
+        font-size: 58px;
+      }
+      #graphics-root #moment-2 .stat-text {
+        color: #2b2118;
+      }
+      #graphics-root .stat-desc {
+        margin-top: 12px;
+        color: #f6d8a0;
+        font-size: 34px;
+        font-weight: 700;
+      }
+      #graphics-root .notice {
+        position: absolute;
+        left: 118px;
+        top: 300px;
+        width: 760px;
+        display: grid;
+        grid-template-columns: 180px 1fr;
+        gap: 24px 30px;
+        padding: 38px 44px;
+        border-radius: 28px;
+        background: rgba(122, 98, 72, 0.14);
+        border: 2px solid rgba(122, 98, 72, 0.22);
+        color: #2b2118;
+        opacity: 0;
+      }
+      #graphics-root .notice strong {
+        color: #8f2b20;
+        font-size: 46px;
+      }
+      #graphics-root .notice span {
+        color: #2b2118;
+        font-size: 36px;
+        line-height: 1.25;
+        font-weight: 700;
+      }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <script>
+      (function () {
+        const tl = gsap.timeline({ paused: true });
+        tl.fromTo("#moment-1", { opacity: 0, x: 40, y: 15, scale: 0.82 }, { opacity: 1, x: 0, y: 0, scale: 1, duration: 0.82, ease: "back.out(1.55)" }, 1.05);
+        tl.to("#moment-1", { opacity: 0, scale: 0.86, duration: 0.32, ease: "power2.in" }, 3.0);
+        tl.fromTo("#moment-2", { opacity: 0, y: -42, scale: 0.82 }, { opacity: 1, y: 0, scale: 1, duration: 0.78, ease: "back.out(1.5)" }, 3.35);
+        tl.fromTo("#notice", { opacity: 0, x: -46, scale: 0.96 }, { opacity: 1, x: 0, scale: 1, duration: 0.62, ease: "power3.out" }, 3.65);
+        tl.to("#moment-2", { scale: 1.06, duration: 0.3, repeat: 4, yoyo: true, ease: "sine.inOut" }, 4.6);
+        tl.to("#moment-2", { opacity: 0, scale: 0.86, duration: 0.32, ease: "power2.in" }, 6.25);
+        tl.to("#notice", { opacity: 0, y: -24, duration: 0.32, ease: "power2.in" }, 6.25);
+        tl.fromTo("#moment-3", { opacity: 0, y: 54, scale: 0.9 }, { opacity: 1, y: 0, scale: 1, duration: 0.72, ease: "back.out(1.35)" }, 6.55);
+        window.__timelines = window.__timelines || {};
+        window.__timelines["graphics"] = tl;
+      })();
+    </script>
+  </div>
+</template>
