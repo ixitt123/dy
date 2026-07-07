@@ -6848,6 +6848,49 @@ audio {
   background: linear-gradient(90deg, #c9362c, #d39b45);
 }
 
+.cs1-output-list {
+  display: grid;
+  gap: 10px;
+  max-height: 260px;
+  overflow: auto;
+}
+
+.cs1-output-list p {
+  margin: 0;
+  color: #6b5a45;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.cs1-output-item {
+  display: grid;
+  gap: 6px;
+  padding: 10px;
+  border: 1px solid rgba(36, 27, 22, 0.12);
+  border-radius: 8px;
+  background: rgba(255, 252, 240, 0.64);
+}
+
+.cs1-output-item strong {
+  color: #2f2b20;
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.cs1-output-item code {
+  display: block;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  color: #435f3c;
+  font-size: 12px;
+  line-height: 1.45;
+  white-space: normal;
+}
+
+.cs1-output-item button {
+  justify-self: start;
+}
+
 .cs1-output-card code {
   display: block;
   max-height: 92px;
