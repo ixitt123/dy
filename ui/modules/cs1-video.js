@@ -46,6 +46,14 @@ export function initCs1VideoModule() {
   let progressTimer = null;
   let progressValue = 0;
 
+  if (beatCountSelect && !beatCountSelect.querySelector('option[value="auto"]')) {
+    beatCountSelect.insertAdjacentHTML("afterbegin", [
+      '<option value="auto">自动 · 按文案结构决定</option>',
+      '<option value="2">2 节拍 · 极简观点</option>',
+    ].join(""));
+    beatCountSelect.value = "auto";
+  }
+
   const setStatus = (value, detail = "") => {
     status.textContent = value;
     message.textContent = detail;
@@ -215,7 +223,7 @@ export function initCs1VideoModule() {
         title: titleInput.value,
         text: textInput.value,
         style: selectedStyle(),
-        beatCount: beatCountSelect?.value || "5",
+        beatCount: beatCountSelect?.value || "auto",
         bgmMode: bgmModeSelect?.value || "builtin_dark_pulse_128",
         bgmPath: bgmPathInput?.value || "",
         aiRefine: aiInput.checked,
@@ -223,7 +231,7 @@ export function initCs1VideoModule() {
       lastResult = result;
       outputPath.textContent = result.outputPath || "";
       logPanel.textContent = [
-        result.aiUsed ? `AI beat refinement: used · ${result.beatCount || beatCountSelect?.value || 5} beats` : `AI beat refinement: local fallback · ${result.beatCount || beatCountSelect?.value || 5} beats`,
+        result.aiUsed ? `Structure refinement: AI used · ${result.beatCount || beatCountSelect?.value || "auto"} cards` : `Structure refinement: local parser · ${result.beatCount || beatCountSelect?.value || "auto"} cards`,
         result.bgm?.label ? `BGM: ${result.bgm.label}` : "BGM: none",
         "",
         result.checkLog || "",
