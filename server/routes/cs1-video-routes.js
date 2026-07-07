@@ -463,6 +463,38 @@ function writeLocalGsapAsset(projectDir) {
   fs.copyFileSync(sourcePath, targetPath);
 }
 
+function normalizeProjectBgm(projectDir, bgmWork, { ffmpegPath = "" } = {}) {
+  if (!bgmWork?.sourcePath || !bgmWork?.loopTarget || !bgmWork?.sourceSrc) return;
+  const sourcePath = path.resolve(bgmWork.sourcePath);
+  if (!fs.existsSync(sourcePath)) return;
+  const ffmpeg = materializeAsciiToolPath(ffmpegPath, process.platform === "win32" ? "ffmpeg.exe" : "ffmpeg");
+  if (!ffmpeg || !fs.existsSync(ffmpeg)) return;
+  const duration = Math.max(1, Math.min(600, Number(bgmWork.duration || 0) || 15));
+  const targetPath = path.join(projectDir, bgmWork.loopTarget);
+  fs.mkdirSync(path.dirname(targetPath), { recursive: true });
+  const fadeOutStart = Math.max(0, duration - 1.8).toFixed(3);
+  const args = [
+    "-y",
+    "-stream_loop", "-1",
+    "-i", sourcePath,
+    "-t", duration.toFixed(3),
+    "-vn",
+    "-ac", "2",
+    "-ar", "44100",
+    "-af", `afade=t=in:st=0:d=0.45,afade=t=out:st=${fadeOutStart}:d=1.8`,
+    targetPath,
+  ];
+  const result = spawnSync(ffmpeg, args, { windowsHide: true, encoding: "utf8" });
+  if (result.status !== 0 || !fs.existsSync(targetPath)) return;
+  const indexPath = path.join(projectDir, "index.html");
+  try {
+    const raw = fs.readFileSync(indexPath, "utf8");
+    fs.writeFileSync(indexPath, raw.replaceAll(bgmWork.sourceSrc, bgmWork.loopTarget.replace(/\\/g, "/")), "utf8");
+  } catch {
+    // Rendering can still use the copied source if patching fails.
+  }
+}
+
 function buildHyperframesEnv({ ffmpegPath, ffprobePath }) {
   const env = { ...process.env };
   const pathKey = Object.keys(env).find((key) => key.toLowerCase() === "path") || "PATH";
@@ -1348,11 +1380,14 @@ function resolveCs1Bgm({ bgmMode = "builtin_dark_pulse_128", bgmPath = "", durat
     if (resolved && fs.existsSync(resolved) && supported.has(ext)) {
       return {
         mode: "local",
-        src: `assets/bgm${ext}`,
-        label: `${path.basename(resolved)} · 按视频时长截取`,
+        src: `assets/bgm-source${ext}`,
+        sourceSrc: `assets/bgm-source${ext}`,
+        loopTarget: "assets/bgm-loop.wav",
+        sourcePath: resolved,
+        label: `${path.basename(resolved)} · 自动循环补齐到 ${duration.toFixed(1)}s · 结尾淡出`,
         duration,
         volume: 0.16,
-        assets: { [`assets/bgm${ext}`]: { copyFrom: resolved } },
+        assets: { [`assets/bgm-source${ext}`]: { copyFrom: resolved } },
       };
     }
   }
