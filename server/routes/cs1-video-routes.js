@@ -493,18 +493,25 @@ function defaultStyleName(styleId) {
 function normalizePackagingOptions(input = {}, context = {}) {
   const introTemplateId = INTRO_TEMPLATE_IDS.has(String(input?.introTemplateId || "none")) ? String(input.introTemplateId || "none") : "none";
   const outroTemplateId = OUTRO_TEMPLATE_IDS.has(String(input?.outroTemplateId || "none")) ? String(input.outroTemplateId || "none") : "none";
-  const watermarkPosition = WATERMARK_POSITIONS.has(String(input?.watermarkPosition || "top-right")) ? String(input.watermarkPosition || "top-right") : "top-right";
-  const watermarkEnabled = input?.watermarkEnabled === true || input?.watermarkEnabled === "true" || input?.watermarkEnabled === "on";
-  const opacityValue = Number.parseFloat(input?.watermarkOpacity);
+  const existingWatermark = input?.watermark && typeof input.watermark === "object" ? input.watermark : {};
+  const rawWatermarkPosition = input?.watermarkPosition ?? existingWatermark.position ?? "top-right";
+  const watermarkPosition = WATERMARK_POSITIONS.has(String(rawWatermarkPosition)) ? String(rawWatermarkPosition) : "top-right";
+  const watermarkEnabled = input?.watermarkEnabled === true
+    || input?.watermarkEnabled === "true"
+    || input?.watermarkEnabled === "on"
+    || existingWatermark.enabled === true
+    || existingWatermark.enabled === "true";
+  const opacityValue = Number.parseFloat(input?.watermarkOpacity ?? existingWatermark.opacity);
   const watermarkOpacity = Number.isFinite(opacityValue) ? Math.max(0.15, Math.min(0.85, opacityValue)) : 0.45;
   const fallbackTitle = sanitizeTitle(context.title) || "短视频";
+  const rawWatermarkText = input?.watermarkText ?? existingWatermark.text;
   return {
     introTemplateId,
     outroTemplateId,
     ctaText: sanitizeOverlayText(input?.ctaText, "关注我，持续升级认知"),
     watermark: {
       enabled: watermarkEnabled,
-      text: sanitizeOverlayText(input?.watermarkText, fallbackTitle),
+      text: sanitizeOverlayText(rawWatermarkText, fallbackTitle),
       position: watermarkPosition,
       opacity: Number(watermarkOpacity.toFixed(2)),
     },
