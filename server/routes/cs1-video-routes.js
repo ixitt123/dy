@@ -711,7 +711,7 @@ Dark CS1 explainer video: cinematic black-brown canvas, exam-red warning blocks,
   };
 }
 
-function aifmanManagerCardFiles(model, { bgmMode = "builtin_dark_pulse_128", bgmPath = "" } = {}) {
+function aifmanManagerCardFiles(model, { bgmMode = "builtin_dark_pulse_128", bgmPath = "", packaging = {} } = {}) {
   const width = 1280;
   const height = 720;
   const cards = buildAifmanCards(model);
@@ -722,6 +722,7 @@ function aifmanManagerCardFiles(model, { bgmMode = "builtin_dark_pulse_128", bgm
   const firstCardStart = snapBeat(beatStep * 8);
   const duration = Math.max(15, snapBeat(firstCardStart + cardCount * cardDuration + beatStep * 3));
   const bgm = resolveCs1Bgm({ bgmMode, bgmPath, duration });
+  const packagingOptions = normalizePackagingOptions(packaging, { title: model.title || "短视频" });
   const title = escapeHtml(model.title || "升到管理岗的必备能力");
   const displayTitle = model.aifmanDisplayTitle || splitAifmanDisplayTitle(model.title || "", cards[0]?.keyword || "必备能力");
   const lead = escapeHtml(displayTitle.lead);
@@ -787,6 +788,11 @@ function aifmanManagerCardFiles(model, { bgmMode = "builtin_dark_pulse_128", bgm
   }).join("\n    ");
   const lastCardSelector = `#card-${cardCount}`;
   const outroStart = Math.max(firstCardStart + cardCount * cardDuration - 0.28, 13.2);
+  const introHtml = renderIntroTemplate(packagingOptions, { title, keyword, duration });
+  const outroHtml = renderOutroTemplate(packagingOptions, { title, keyword, start: outroStart + 0.2, duration: Math.max(1.3, duration - outroStart - 0.25) });
+  const watermarkHtml = renderWatermark(packagingOptions);
+  const introTimeline = buildIntroTimeline(packagingOptions);
+  const outroTimeline = buildOutroTimeline(packagingOptions, { start: outroStart + 0.2 });
 
   return {
     width,
@@ -794,6 +800,7 @@ function aifmanManagerCardFiles(model, { bgmMode = "builtin_dark_pulse_128", bgm
     duration,
     assets: bgm.assets,
     bgm: bgm.label ? { mode: bgm.mode, label: bgm.label } : null,
+    packaging: packagingOptions,
     design: `## Style Prompt
 
 AIfman-inspired knowledge card template. Dark olive cinematic canvas, soft black vignette center, gold headlines, mint-green keyword emphasis, minimal particles, orbit ring, and dynamic 2-6 knowledge cards based on the script.
@@ -826,7 +833,7 @@ AIfman-inspired knowledge card template. Dark olive cinematic canvas, soft black
     #root{position:relative;width:${width}px;height:${height}px;overflow:hidden;background:#252512}
     #root:before{content:"";position:absolute;inset:0;z-index:1;background:radial-gradient(circle at 51% 50%,rgba(0,0,0,.98) 0 15%,rgba(0,0,0,.82) 24%,rgba(0,0,0,.52) 40%,rgba(0,0,0,.18) 60%,rgba(0,0,0,0) 76%),radial-gradient(circle at 44% 22%,rgba(245,219,74,.09),rgba(245,219,74,0) 34%);pointer-events:none}
     .grain,.scan,.glow,.orbit,.hero-halos,.hero-halo,.particle{position:absolute;pointer-events:none}.grain{inset:0;z-index:20;opacity:.13;background:repeating-linear-gradient(0deg,rgba(255,255,255,.026) 0 1px,rgba(255,255,255,0) 1px 4px),repeating-linear-gradient(90deg,rgba(0,0,0,.12) 0 1px,rgba(0,0,0,0) 1px 7px)}.scan{inset:0;z-index:2;background:radial-gradient(circle at 17% 20%,rgba(241,212,74,.08),rgba(241,212,74,0) 32%),radial-gradient(circle at 83% 44%,rgba(241,212,74,.05),rgba(241,212,74,0) 28%);opacity:.86}.glow{left:330px;top:34px;width:450px;height:220px;border-radius:50%;background:radial-gradient(circle,rgba(255,244,135,.34),rgba(255,244,135,.08) 48%,rgba(255,244,135,0) 72%);filter:blur(13px);opacity:0}.orbit{display:none}.hero-halos{left:0;top:0;right:0;bottom:0;z-index:4;opacity:1}.hero-halo{left:50%;top:50%;border-radius:50%;opacity:0;border:2.5px solid rgba(241,212,74,.38);box-shadow:0 0 58px rgba(241,212,74,.18),inset 0 0 58px rgba(37,226,154,.08)}.hero-halo.h1{width:520px;height:520px;margin-left:-260px;margin-top:-260px;border-color:rgba(241,212,74,.48)}.hero-halo.h2{width:680px;height:680px;margin-left:-340px;margin-top:-340px;border-color:rgba(37,226,154,.36)}.hero-halo.h3{width:840px;height:840px;margin-left:-420px;margin-top:-420px;border-color:rgba(255,255,255,.22)}
-    .particle{left:var(--x);top:var(--y);width:var(--s);height:var(--s);border-radius:50%;background:rgba(245,245,232,.76);box-shadow:0 0 13px rgba(255,255,255,.54);opacity:0;z-index:9}.topline{position:absolute;left:0;right:0;top:30px;z-index:12;text-align:center;color:#f1d44a;font-size:24px;font-weight:900;line-height:1.35;text-shadow:0 0 13px rgba(241,212,74,.23);opacity:0}.scene,.ability-card{position:absolute;inset:0;z-index:5;display:flex;align-items:center;justify-content:center;padding:76px 94px}.title-stack{text-align:center;transform:translateY(-12px)}.title-stack h1{margin:0;font-size:72px;line-height:1.22;font-weight:900;letter-spacing:.025em;color:#f1d44a;text-shadow:0 0 18px rgba(241,212,74,.20)}.title-stack h1 span{color:#f06d75}.title-stack h2{margin:34px 0 0;font-size:92px;line-height:1.12;font-weight:900;letter-spacing:.025em;color:#25e29a;text-shadow:0 0 18px rgba(37,226,154,.26)}.title-stack small{display:none}.ability-card{opacity:0;justify-content:flex-start}.card-grid{position:relative;width:100%;height:100%;display:flex;align-items:flex-start;padding-top:82px}.card-copy{position:relative;width:670px;margin-left:18px;padding-left:36px}.card-copy:before{content:"";position:absolute;left:0;top:8px;bottom:14px;width:2px;background:linear-gradient(#f1d44a,rgba(241,212,74,.06))}.card-copy h2{margin:0 0 32px;color:#f1d44a;font-size:58px;line-height:1.26;font-weight:900;letter-spacing:.018em;text-shadow:0 0 18px rgba(241,212,74,.18)}.card-copy h2 span{color:#c99531}.card-copy h3{margin:0 0 26px;color:#d8952c;font-size:36px;font-weight:850;line-height:1.42}.card-copy p{margin:0;max-width:625px;color:#e3dfc7;font-size:22px;font-weight:700;line-height:1.82;opacity:.94}.card-copy b{display:block;width:414px;height:2px;margin-top:30px;background:linear-gradient(90deg,rgba(241,212,74,.82),rgba(241,212,74,0))}.node-map{position:absolute;left:735px;top:126px;width:235px;height:230px}.node-ring{position:absolute;left:55px;top:45px;width:126px;height:126px;border:2px solid rgba(241,212,74,.32);border-radius:50%;box-shadow:0 0 34px rgba(241,212,74,.12),inset 0 0 24px rgba(37,226,154,.08);opacity:.82}.node-ring:before,.node-ring:after{content:"";position:absolute;border-radius:50%;border:1px solid rgba(37,226,154,.28)}.node-ring:before{inset:22px}.node-ring:after{inset:48px;background:rgba(37,226,154,.08)}.node-bubble{position:absolute;width:17px;height:17px;border-radius:50%;background:#25e29a;box-shadow:0 0 0 9px rgba(37,226,154,.08),0 0 23px rgba(37,226,154,.62);opacity:.9}.b1{left:38px;top:78px}.b2{left:132px;top:28px;background:#f1d44a}.b3{left:188px;top:112px}.b4{left:108px;top:166px;background:#d8952c}.b5{left:18px;top:151px}.light-node{position:absolute;left:666px;top:220px;width:13px;height:13px;border-radius:50%;background:#f1d44a;box-shadow:0 0 0 8px rgba(241,212,74,.12),0 0 24px rgba(241,212,74,.82)}.light-node:before{content:"";position:absolute;left:-126px;top:6px;width:118px;height:1px;background:linear-gradient(90deg,rgba(241,212,74,0),rgba(241,212,74,.68))}.transition-wipe{position:absolute;inset:0;z-index:24;opacity:0;background:linear-gradient(90deg,rgba(23,23,12,0),rgba(241,212,74,.16) 34%,rgba(37,226,154,.28) 48%,rgba(241,212,74,.16) 62%,rgba(23,23,12,0));filter:blur(.4px);pointer-events:none}.beat-spark{position:absolute;left:661px;top:216px;z-index:25;width:26px;height:26px;border-radius:50%;border:2px solid rgba(241,212,74,.8);box-shadow:0 0 32px rgba(241,212,74,.42);opacity:0;pointer-events:none}.final-dim{position:absolute;inset:0;background:#17170c;opacity:0;z-index:30}
+    .particle{left:var(--x);top:var(--y);width:var(--s);height:var(--s);border-radius:50%;background:rgba(245,245,232,.76);box-shadow:0 0 13px rgba(255,255,255,.54);opacity:0;z-index:9}.topline{position:absolute;left:0;right:0;top:30px;z-index:12;text-align:center;color:#f1d44a;font-size:24px;font-weight:900;line-height:1.35;text-shadow:0 0 13px rgba(241,212,74,.23);opacity:0}.scene,.ability-card{position:absolute;inset:0;z-index:5;display:flex;align-items:center;justify-content:center;padding:76px 94px}.title-stack{text-align:center;transform:translateY(-12px)}.title-stack h1{margin:0;font-size:72px;line-height:1.22;font-weight:900;letter-spacing:.025em;color:#f1d44a;text-shadow:0 0 18px rgba(241,212,74,.20)}.title-stack h1 span{color:#f06d75}.title-stack h2{margin:34px 0 0;font-size:92px;line-height:1.12;font-weight:900;letter-spacing:.025em;color:#25e29a;text-shadow:0 0 18px rgba(37,226,154,.26)}.title-stack small{display:none}.ability-card{opacity:0;justify-content:flex-start}.card-grid{position:relative;width:100%;height:100%;display:flex;align-items:flex-start;padding-top:82px}.card-copy{position:relative;width:670px;margin-left:18px;padding-left:36px}.card-copy:before{content:"";position:absolute;left:0;top:8px;bottom:14px;width:2px;background:linear-gradient(#f1d44a,rgba(241,212,74,.06))}.card-copy h2{margin:0 0 32px;color:#f1d44a;font-size:58px;line-height:1.26;font-weight:900;letter-spacing:.018em;text-shadow:0 0 18px rgba(241,212,74,.18)}.card-copy h2 span{color:#c99531}.card-copy h3{margin:0 0 26px;color:#d8952c;font-size:36px;font-weight:850;line-height:1.42}.card-copy p{margin:0;max-width:625px;color:#e3dfc7;font-size:22px;font-weight:700;line-height:1.82;opacity:.94}.card-copy b{display:block;width:414px;height:2px;margin-top:30px;background:linear-gradient(90deg,rgba(241,212,74,.82),rgba(241,212,74,0))}.node-map{position:absolute;left:735px;top:126px;width:235px;height:230px}.node-ring{position:absolute;left:55px;top:45px;width:126px;height:126px;border:2px solid rgba(241,212,74,.32);border-radius:50%;box-shadow:0 0 34px rgba(241,212,74,.12),inset 0 0 24px rgba(37,226,154,.08);opacity:.82}.node-ring:before,.node-ring:after{content:"";position:absolute;border-radius:50%;border:1px solid rgba(37,226,154,.28)}.node-ring:before{inset:22px}.node-ring:after{inset:48px;background:rgba(37,226,154,.08)}.node-bubble{position:absolute;width:17px;height:17px;border-radius:50%;background:#25e29a;box-shadow:0 0 0 9px rgba(37,226,154,.08),0 0 23px rgba(37,226,154,.62);opacity:.9}.b1{left:38px;top:78px}.b2{left:132px;top:28px;background:#f1d44a}.b3{left:188px;top:112px}.b4{left:108px;top:166px;background:#d8952c}.b5{left:18px;top:151px}.light-node{position:absolute;left:666px;top:220px;width:13px;height:13px;border-radius:50%;background:#f1d44a;box-shadow:0 0 0 8px rgba(241,212,74,.12),0 0 24px rgba(241,212,74,.82)}.light-node:before{content:"";position:absolute;left:-126px;top:6px;width:118px;height:1px;background:linear-gradient(90deg,rgba(241,212,74,0),rgba(241,212,74,.68))}.transition-wipe{position:absolute;inset:0;z-index:24;opacity:0;background:linear-gradient(90deg,rgba(23,23,12,0),rgba(241,212,74,.16) 34%,rgba(37,226,154,.28) 48%,rgba(241,212,74,.16) 62%,rgba(23,23,12,0));filter:blur(.4px);pointer-events:none}.beat-spark{position:absolute;left:661px;top:216px;z-index:25;width:26px;height:26px;border-radius:50%;border:2px solid rgba(241,212,74,.8);box-shadow:0 0 32px rgba(241,212,74,.42);opacity:0;pointer-events:none}.intro-template,.outro-template{position:absolute;inset:0;z-index:34;display:flex;align-items:center;justify-content:center;background:rgba(5,6,4,.88);color:#f1d44a;opacity:0}.intro-box,.outro-box{width:880px;min-height:260px;padding:46px 58px;border:1px solid rgba(241,212,74,.32);background:linear-gradient(135deg,rgba(23,23,12,.96),rgba(37,37,18,.82));box-shadow:0 0 80px rgba(241,212,74,.12)}.intro-kicker,.outro-kicker{margin:0 0 20px;color:#25e29a;font-size:22px;font-weight:900;letter-spacing:.08em;text-transform:uppercase}.intro-title,.outro-title{margin:0;color:#f1d44a;font-size:58px;font-weight:900;line-height:1.22}.intro-sub,.outro-sub{margin:24px 0 0;color:#e3dfc7;font-size:28px;font-weight:800;line-height:1.55}.watermark{position:absolute;z-index:36;max-width:360px;padding:8px 14px;border:1px solid rgba(241,212,74,.22);border-radius:999px;background:rgba(5,6,4,.38);color:#f1d44a;font-size:18px;font-weight:900;line-height:1.25;letter-spacing:.03em;text-shadow:0 0 10px rgba(0,0,0,.42);pointer-events:none}.watermark.top-right{right:34px;top:26px}.watermark.top-left{left:34px;top:26px}.watermark.bottom-right{right:34px;bottom:28px}.watermark.bottom-left{left:34px;bottom:28px}.final-dim{position:absolute;inset:0;background:#17170c;opacity:0;z-index:30}
   </style>
 </head>
 <body>
@@ -845,6 +852,7 @@ AIfman-inspired knowledge card template. Dark olive cinematic canvas, soft black
     <div class="transition-wipe" data-layout-ignore></div>
     <div class="beat-spark" data-layout-ignore></div>
     <div class="topline">${title}</div>
+    ${introHtml}
     <section id="title-scene" class="scene clip" data-start="0" data-duration="3.8" data-track-index="1">
       <div class="title-stack">
         <h1>${lead}</h1>
@@ -854,6 +862,8 @@ AIfman-inspired knowledge card template. Dark olive cinematic canvas, soft black
     </section>
     <section id="blank-scene" class="scene clip" data-start="3.35" data-duration=".85" data-track-index="2"></section>
     ${cardSections}
+    ${outroHtml}
+    ${watermarkHtml}
     <div class="final-dim" data-layout-ignore></div>
   </div>
   <script>
@@ -869,6 +879,7 @@ AIfman-inspired knowledge card template. Dark olive cinematic canvas, soft black
       .to(".hero-halo.h2",{scale:1.52,opacity:.12,duration:1.96,ease:"sine.inOut"},1.08)
       .to(".hero-halo.h3",{scale:1.68,opacity:.08,duration:2.12,ease:"sine.inOut"},.98)
       .to(".hero-halos",{opacity:0,duration:.42,ease:"sine.in"},3.12);
+    ${introTimeline}
     ${particleSeeds.map((_, index) => {
       const start = 1.34 + (index % 7) * 0.042 + Math.floor(index / 7) * 0.08;
       const x = 36 + (index % 5) * 13;
@@ -883,6 +894,7 @@ AIfman-inspired knowledge card template. Dark olive cinematic canvas, soft black
       .to(".glow",{opacity:.26,scale:1.25,duration:.62,ease:"sine.inOut"},3.1);
     ${transitionSweeps}
     ${cardAnimations}
+    ${outroTimeline}
     tl.to("${lastCardSelector}",{opacity:0,y:-22,duration:.36,ease:"power2.in"},${outroStart.toFixed(2)})
       .to(".topline",{opacity:0,duration:.28,ease:"sine.in"},${(outroStart + 0.15).toFixed(2)})
       .to(".final-dim",{opacity:.96,duration:.62,ease:"sine.inOut"},${(outroStart + 0.3).toFixed(2)})
