@@ -166,6 +166,7 @@ export function createCs1VideoRoutes({ baseDir, sendJson, modelRouter, ffmpegPat
           text: body.text,
           style: body.style,
           title: body.title,
+          aspectRatio: body.aspectRatio,
           beatCount: body.beatCount,
           templateName: body.templateName,
           bgmMode: body.bgmMode,
@@ -219,9 +220,10 @@ function writeHiddenStyleIds(filePath, ids) {
   fs.writeFileSync(filePath, `${JSON.stringify(payload, null, 2)}\n`, "utf8");
 }
 
-async function generateVideo({ runsDir, outputDir, text, style, title, beatCount, templateName, bgmMode, bgmPath, packaging, aiRefine, modelRouter, ffmpegPath, ffprobePath }) {
+async function generateVideo({ runsDir, outputDir, text, style, title, aspectRatio, beatCount, templateName, bgmMode, bgmPath, packaging, aiRefine, modelRouter, ffmpegPath, ffprobePath }) {
   const script = normalizeScript(text);
   const styleId = normalizeStyle(style);
+  const aspect = normalizeAspectRatio(aspectRatio);
   const normalizedBeatCount = styleId === "aifman-manager-card"
     ? resolveAifmanPreferredCount(beatCount, script)
     : normalizeBeatCount(beatCount);
@@ -240,12 +242,12 @@ async function generateVideo({ runsDir, outputDir, text, style, title, beatCount
     ? buildAifmanStoryModel(script, videoTitle, normalizedBeatCount)
     : buildStoryModel(script, videoTitle, normalizedBeatCount));
   const files = styleId === "cs1"
-    ? cs1Files(model)
+    ? cs1Files(model, { aspect })
     : styleId === "aifman-manager-card"
-      ? aifmanManagerCardFiles(model, { bgmMode, bgmPath, packaging: packagingOptions })
+      ? aifmanManagerCardFiles(model, { bgmMode, bgmPath, packaging: packagingOptions, aspect })
       : styleId === "warm-grain"
-      ? warmGrainFiles(model)
-      : officialTemplateFiles(model, styleId);
+      ? warmGrainFiles(model, { aspect })
+      : officialTemplateFiles(model, styleId, { aspect });
   writeProject(projectDir, {
     slug,
     title: videoTitle,
@@ -269,6 +271,7 @@ async function generateVideo({ runsDir, outputDir, text, style, title, beatCount
     style: styleId,
     templateName: styleName,
     beatCount: model.beatCount || normalizedBeatCount,
+    aspectRatio: files.aspectRatio || aspect,
     projectDir,
     outputPath,
     outputDir,
@@ -356,7 +359,7 @@ async function refineAifmanStoryModel({ script, title, beatCount, modelRouter })
   });
 }
 
-function writeProject(projectDir, { slug, title, styleId, styleName, beatCount, files }) {
+function writeProject(projectDir, { slug, title, styleId, styleName, beatCount, aspectRatio, files }) {
   const compositionDir = path.join(projectDir, "compositions");
   const width = files.width || 1920;
   const height = files.height || 1080;
@@ -386,6 +389,7 @@ function writeProject(projectDir, { slug, title, styleId, styleName, beatCount, 
     duration,
     width,
     height,
+    aspectRatio,
   }, null, 2));
   fs.writeFileSync(path.join(projectDir, "DESIGN.md"), files.design);
   fs.writeFileSync(path.join(projectDir, "index.html"), files.index);
@@ -512,6 +516,20 @@ function normalizeStyle(value) {
   const normalized = style === "warmgrain" ? "warm-grain" : style;
   if (LOCAL_TEMPLATE_IDS.has(normalized) || OFFICIAL_TEMPLATE_IDS.has(normalized)) return normalized;
   return "cs1";
+}
+
+function normalizeAspectRatio(value) {
+  const id = String(value || "9:16").trim();
+  return ASPECT_RATIO_PRESETS[id] || ASPECT_RATIO_PRESETS["9:16"];
+}
+
+function buildContainedStageFit({ width, height, baseWidth, baseHeight }) {
+  const scale = Math.min(width / baseWidth, height / baseHeight);
+  return {
+    scale: Number(scale.toFixed(6)),
+    left: Number(((width - baseWidth * scale) / 2).toFixed(3)),
+    top: Number(((height - baseHeight * scale) / 2).toFixed(3)),
+  };
 }
 
 function normalizeBeatCount(value) {
