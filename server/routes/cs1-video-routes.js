@@ -931,7 +931,7 @@ Dark CS1 explainer video: cinematic black-brown canvas, exam-red warning blocks,
   };
 }
 
-function aifmanManagerCardFiles(model, { bgmMode = "builtin_dark_pulse_128", bgmPath = "", packaging = {}, aspect = ASPECT_RATIO_PRESETS["9:16"] } = {}) {
+function aifmanManagerCardFiles(model, { bgmMode = "builtin_dark_pulse_128", bgmPath = "", packaging = {}, aspect = ASPECT_RATIO_PRESETS["9:16"], cardHold = CARD_HOLD_PRESETS.auto } = {}) {
   const baseWidth = 1280;
   const baseHeight = 720;
   const width = aspect.width;
@@ -941,7 +941,8 @@ function aifmanManagerCardFiles(model, { bgmMode = "builtin_dark_pulse_128", bgm
   const cardCount = cards.length;
   const beatStep = 60 / 128;
   const snapBeat = (seconds) => Number((Math.round(seconds / beatStep) * beatStep).toFixed(3));
-  const cardDuration = snapBeat(cardCount <= 3 ? beatStep * 7 : cardCount === 4 ? beatStep * 6 : beatStep * 5);
+  const autoCardDuration = cardCount <= 3 ? beatStep * 7 : cardCount === 4 ? beatStep * 6 : beatStep * 5;
+  const cardDuration = snapBeat(cardHold?.seconds || autoCardDuration);
   const firstCardStart = snapBeat(beatStep * 8);
   const duration = Math.max(15, snapBeat(firstCardStart + cardCount * cardDuration + beatStep * 3));
   const bgm = resolveCs1Bgm({ bgmMode, bgmPath, duration });
@@ -950,6 +951,7 @@ function aifmanManagerCardFiles(model, { bgmMode = "builtin_dark_pulse_128", bgm
   const displayTitle = model.aifmanDisplayTitle || splitAifmanDisplayTitle(model.title || "", cards[0]?.keyword || "必备能力");
   const lead = escapeHtml(displayTitle.lead);
   const keyword = escapeHtml(displayTitle.keyword);
+  const hookLine = escapeHtml(model.hook || model.title || `${displayTitle.lead}${displayTitle.keyword}`);
   const particleSeeds = [
     [404, 48, 5], [446, 58, 8], [512, 36, 4], [584, 38, 7], [648, 52, 11],
     [700, 74, 6], [466, 104, 6], [536, 92, 12], [608, 112, 5], [682, 126, 8],
@@ -1016,11 +1018,13 @@ function aifmanManagerCardFiles(model, { bgmMode = "builtin_dark_pulse_128", bgm
   const watermarkHtml = renderWatermark(packagingOptions);
   const introTimeline = buildIntroTimeline(packagingOptions);
   const outroTimeline = buildOutroTimeline(packagingOptions, { start: outroStart + 0.2 });
+  const watermarkTimeline = buildWatermarkTimeline(packagingOptions, { duration });
 
   return {
     width,
     height,
     aspectRatio: aspect,
+    cardHold,
     duration,
     assets: bgm.assets,
     bgm: bgm.label ? { mode: bgm.mode, label: bgm.label } : null,
