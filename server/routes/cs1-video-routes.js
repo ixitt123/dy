@@ -1430,7 +1430,7 @@ HyperFrames warm-grain template language: cream paper, grain texture, forest gre
   };
 }
 
-function officialTemplateFiles(model, templateId) {
+function officialTemplateFiles(model, templateId, { aspect = ASPECT_RATIO_PRESETS["9:16"] } = {}) {
   const configs = {
     "play-mode": {
       title: "Play Mode",
@@ -1524,8 +1524,8 @@ function officialTemplateFiles(model, templateId) {
     },
   };
   const config = configs[templateId] || configs.blank;
-  const width = config.width || 1920;
-  const height = config.height || 1080;
+  const width = aspect.width;
+  const height = aspect.height;
   const isPortrait = height > width;
   const title = escapeHtml(model.title);
   const hook = escapeHtml(model.hook);
@@ -1552,6 +1552,7 @@ function officialTemplateFiles(model, templateId) {
   return {
     width,
     height,
+    aspectRatio: aspect,
     design: `## Style Prompt
 
 Official HyperFrames example style: ${config.title}. Template id: \`${templateId}\`.
