@@ -777,7 +777,14 @@ function buildAifmanCards(model) {
     { title: "解决问题", subtitle: "深入一线直面问题", detail: "深入一线找真问题，不做浮于表面的分析", keyword: "必备能力" },
     { title: "开会能力", subtitle: "准备目标结果", detail: "明确准备、目标明确、集体讨论出结果", keyword: "必备能力" },
   ];
+  const explicitCards = normalizeAifmanCards(model?.aifmanCards || [], model?.beatCount || DEFAULT_BEAT_COUNT);
+  if (explicitCards.length) return explicitCards;
   const beats = Array.isArray(model?.beats) ? model.beats : [];
+  const beatCards = beats.map((beat, index) => {
+    const parsed = cardFromTextPair(beat?.text || "", beat?.caption || "", index);
+    return parsed;
+  }).filter(Boolean);
+  if (beatCards.length >= 2) return normalizeAifmanCards(beatCards, beats.length);
   return defaults.map((fallback, index) => {
     const beat = beats[index] || {};
     const text = String(beat.text || "").trim();
@@ -789,6 +796,83 @@ function buildAifmanCards(model) {
       keyword: fallback.keyword,
     };
   });
+}
+
+function normalizeAifmanCards(cards, preferredCount = DEFAULT_BEAT_COUNT) {
+  const targetMax = Math.max(2, Math.min(6, Number(preferredCount || DEFAULT_BEAT_COUNT) || DEFAULT_BEAT_COUNT));
+  const rows = (Array.isArray(cards) ? cards : [])
+    .map((card, index) => {
+      const title = compactText(card?.title || card?.name || card?.text || "", 10);
+      const subtitle = compactText(card?.subtitle || card?.caption || card?.summary || "", 18);
+      const detail = compactText(card?.detail || card?.description || card?.body || card?.reason || subtitle || title, 42);
+      const normalizedTitle = title || inferShortTitle(detail, index);
+      if (!normalizedTitle && !subtitle && !detail) return null;
+      return {
+        title: limitChineseTitle(normalizedTitle || `重点${index + 1}`, 10),
+        subtitle: limitChineseTitle(subtitle || detail || normalizedTitle, 18),
+        detail: limitChineseTitle(detail || subtitle || normalizedTitle, 42),
+        keyword: compactText(card?.keyword || "核心动作", 8),
+      };
+    })
+    .filter(Boolean)
+    .slice(0, targetMax);
+  return rows.length >= 2 ? rows : [];
+}
+
+function extractAifmanCardsFromScript(script, preferredCount = DEFAULT_BEAT_COUNT) {
+  const clean = String(script || "").replace(/\s+/g, " ").trim();
+  if (!clean) return [];
+  const markerPattern = /(?:^|[。！？!?；;\n]\s*)(?:第?\s*([一二三四五六七八九十]+)|([1-9]))[、.．:：，]\s*/g;
+  const matches = [...clean.matchAll(markerPattern)];
+  if (matches.length >= 2) {
+    return matches.map((match, index) => {
+      const start = match.index + match[0].length;
+      const end = index + 1 < matches.length ? matches[index + 1].index : clean.length;
+      return cardFromSentence(clean.slice(start, end), index);
+    }).filter(Boolean);
+  }
+  const sentences = splitSentences(clean);
+  const count = Math.max(2, Math.min(6, Number(preferredCount || DEFAULT_BEAT_COUNT) || DEFAULT_BEAT_COUNT, sentences.length || 2));
+  const bodySentences = sentences.length > count ? sentences.slice(1, count + 1) : sentences.slice(0, count);
+  return bodySentences.map((sentence, index) => cardFromSentence(sentence, index)).filter(Boolean);
+}
+
+function cardFromSentence(sentence, index = 0) {
+  const text = String(sentence || "").replace(/^[，。！？、,.!?:：；;\s]+|[，。！？、,.!?:：；;\s]+$/g, "").trim();
+  if (!text) return null;
+  const parts = text.split(/[，,。；;：:]/).map((item) => item.trim()).filter(Boolean);
+  const title = inferShortTitle(parts[0] || text, index);
+  const subtitle = compactText(parts[1] || parts[0] || text, 18);
+  const detail = compactText(parts.slice(1).join("，") || text, 42);
+  return { title, subtitle, detail, keyword: "核心动作" };
+}
+
+function cardFromTextPair(text, caption, index = 0) {
+  const source = String(caption || text || "").trim();
+  if (!source) return null;
+  return cardFromSentence(source, index);
+}
+
+function splitSentences(value = "") {
+  return String(value || "")
+    .split(/(?<=[。！？!?；;])|[|]/)
+    .map((item) => item.replace(/^[，。！？、,.!?:：；;\s]+|[，。！？、,.!?:：；;\s]+$/g, "").trim())
+    .filter(Boolean);
+}
+
+function inferShortTitle(value = "", index = 0) {
+  const text = String(value || "").trim();
+  const quoted = text.match(/[“"「『]?([\u4e00-\u9fa5A-Za-z]{2,8})(?:能力|方法|动作|习惯|思维|技巧|问题|误区|训练|练习)/);
+  if (quoted) return limitChineseTitle(quoted[0].replace(/[“"「『」』]/g, ""), 10);
+  const cleaned = text
+    .replace(/^(不要|别|先|要|必须|一定|就是|所谓|真正|你要|孩子要)/, "")
+    .replace(/[^\u4e00-\u9fa5A-Za-z0-9]/g, "");
+  if (cleaned.length >= 2) return limitChineseTitle(cleaned, 8);
+  return `重点${index + 1}`;
+}
+
+function compactText(value = "", maxLength = 24) {
+  return String(value || "").replace(/\s+/g, " ").trim().slice(0, maxLength);
 }
 
 function splitAifmanDisplayTitle(title = "", fallbackKeyword = "必备能力") {
@@ -822,6 +906,86 @@ function splitAifmanDisplayTitle(title = "", fallbackKeyword = "必备能力") {
     lead: limitChineseTitle(clean, 11),
     keyword: fallbackKeyword || "必备能力",
   };
+}
+
+function inferAifmanKeyword(title = "", script = "") {
+  const text = `${title} ${script}`;
+  if (/避坑|错误|别再|不要/.test(text)) return "避坑指南";
+  if (/方法|怎么|如何|训练|练习/.test(text)) return "正确方法";
+  if (/能力|管理|领导/.test(text)) return "必备能力";
+  if (/动作|步骤|执行/.test(text)) return "核心动作";
+  return "核心动作";
+}
+
+function resolveCs1Bgm({ bgmMode = "builtin_dark_pulse_128", bgmPath = "", duration = 15 } = {}) {
+  const mode = String(bgmMode || "builtin_dark_pulse_128").trim();
+  if (mode === "none") return { mode: "none", src: "", label: "", volume: 0, assets: {} };
+  if (mode === "local") {
+    const resolved = path.resolve(String(bgmPath || "").trim());
+    const ext = path.extname(resolved).toLowerCase();
+    const supported = new Set([".mp3", ".wav", ".m4a", ".aac", ".ogg"]);
+    if (resolved && fs.existsSync(resolved) && supported.has(ext)) {
+      return {
+        mode: "local",
+        src: `assets/bgm${ext}`,
+        label: path.basename(resolved),
+        volume: 0.16,
+        assets: { [`assets/bgm${ext}`]: { copyFrom: resolved } },
+      };
+    }
+  }
+  return {
+    mode: "builtin_dark_pulse_128",
+    src: "assets/bgm-default-128bpm.wav",
+    label: "管理岗卡片风 · 128BPM 暗色律动",
+    volume: 0.16,
+    assets: { "assets/bgm-default-128bpm.wav": writeCs1DefaultBgmWavBuffer(duration) },
+  };
+}
+
+function writeCs1DefaultBgmWavBuffer(durationSeconds = 15) {
+  const sampleRate = 44100;
+  const duration = Math.max(1, Math.min(90, Number(durationSeconds || 0) || 15));
+  const sampleCount = Math.ceil(sampleRate * duration);
+  const dataSize = sampleCount * 2;
+  const buffer = Buffer.alloc(44 + dataSize);
+  buffer.write("RIFF", 0);
+  buffer.writeUInt32LE(36 + dataSize, 4);
+  buffer.write("WAVE", 8);
+  buffer.write("fmt ", 12);
+  buffer.writeUInt32LE(16, 16);
+  buffer.writeUInt16LE(1, 20);
+  buffer.writeUInt16LE(1, 22);
+  buffer.writeUInt32LE(sampleRate, 24);
+  buffer.writeUInt32LE(sampleRate * 2, 28);
+  buffer.writeUInt16LE(2, 32);
+  buffer.writeUInt16LE(16, 34);
+  buffer.write("data", 36);
+  buffer.writeUInt32LE(dataSize, 40);
+  const bpm = 128;
+  const beat = 60 / bpm;
+  const halfBeat = beat / 2;
+  for (let index = 0; index < sampleCount; index += 1) {
+    const t = index / sampleRate;
+    const fadeIn = Math.min(1, t / 1.2);
+    const fadeOut = Math.min(1, (duration - t) / 1.4);
+    const envelope = Math.max(0, Math.min(fadeIn, fadeOut));
+    const beatPhase = t % beat;
+    const halfPhase = t % halfBeat;
+    const bass = Math.sin(2 * Math.PI * 96 * t) * 0.12;
+    const mid = Math.sin(2 * Math.PI * 144 * t) * 0.05;
+    const high = Math.sin(2 * Math.PI * 216 * t) * 0.025;
+    const kick = beatPhase < 0.18
+      ? Math.sin(2 * Math.PI * (70 + 42 * (1 - beatPhase / 0.18)) * t) * Math.exp(-beatPhase * 16) * 0.34
+      : 0;
+    const tickNoise = Math.sin((index + 17) * 12.9898) * 43758.5453;
+    const tick = halfPhase < 0.026
+      ? (tickNoise - Math.floor(tickNoise) - 0.5) * Math.exp(-halfPhase * 105) * 0.07
+      : 0;
+    const value = (bass + mid + high + kick + tick) * envelope;
+    buffer.writeInt16LE(Math.round(Math.max(-1, Math.min(1, value)) * 32767), 44 + index * 2);
+  }
+  return buffer;
 }
 
 function limitChineseTitle(value, maxLength) {
