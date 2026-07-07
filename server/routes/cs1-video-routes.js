@@ -984,7 +984,7 @@ Dark CS1 explainer video: cinematic black-brown canvas, exam-red warning blocks,
   };
 }
 
-function aifmanManagerCardFiles(model, { bgmMode = "builtin_dark_pulse_128", bgmPath = "", packaging = {}, aspect = ASPECT_RATIO_PRESETS["9:16"], cardHold = CARD_HOLD_PRESETS.auto } = {}) {
+function aifmanManagerCardFiles(model, { bgmMode = "builtin_dark_pulse_128", bgmPath = "", packaging = {}, aspect = ASPECT_RATIO_PRESETS["9:16"], cardHold = CARD_HOLD_PRESETS.auto, visualOptions = normalizeAifmanVisualOptions() } = {}) {
   const baseWidth = 1280;
   const baseHeight = 720;
   const width = aspect.width;
@@ -1004,7 +1004,13 @@ function aifmanManagerCardFiles(model, { bgmMode = "builtin_dark_pulse_128", bgm
   const displayTitle = model.aifmanDisplayTitle || splitAifmanDisplayTitle(model.title || "", cards[0]?.keyword || "必备能力");
   const lead = escapeHtml(displayTitle.lead);
   const keyword = escapeHtml(displayTitle.keyword);
-  const hookLine = escapeHtml(model.hook || model.title || `${displayTitle.lead}${displayTitle.keyword}`);
+  const hookLine = escapeHtml(model.title || `${displayTitle.lead}${displayTitle.keyword}`);
+  const stageClass = [
+    `icon-${visualOptions.iconVariant}`,
+    `palette-${visualOptions.textPalette}`,
+    `layout-${visualOptions.layoutVariant}`,
+    `pattern-${visualOptions.backgroundPattern}`,
+  ].join(" ");
   const particleSeeds = [
     [404, 48, 5], [446, 58, 8], [512, 36, 4], [584, 38, 7], [648, 52, 11],
     [700, 74, 6], [466, 104, 6], [536, 92, 12], [608, 112, 5], [682, 126, 8],
@@ -1062,6 +1068,7 @@ function aifmanManagerCardFiles(model, { bgmMode = "builtin_dark_pulse_128", bgm
       `tl.from("${current} .light-node",{scale:.2,opacity:0,duration:.3,ease:"back.out(1.8)"},${(start + 0.54).toFixed(3)});`,
       `tl.to("${current} .node-ring",{scale:1.08,rotation:8,duration:.42,repeat:2,yoyo:true,ease:"sine.inOut"},${(start + 0.82).toFixed(3)});`,
       `tl.to("${current} .light-node",{scale:1.18,duration:${beatStep.toFixed(3)},repeat:4,yoyo:true,ease:"sine.inOut"},${(start + beatStep * 2).toFixed(3)});`,
+      buildAifmanIconTimeline(visualOptions.iconVariant, current, start, cardDuration),
     ].join("\n    ");
   }).join("\n    ");
   const lastCardSelector = `#card-${cardCount}`;
@@ -1078,9 +1085,11 @@ function aifmanManagerCardFiles(model, { bgmMode = "builtin_dark_pulse_128", bgm
     height,
     aspectRatio: aspect,
     cardHold,
+    visualOptions,
     duration,
     assets: bgm.assets,
     bgm: bgm.label ? { mode: bgm.mode, label: bgm.label, duration: bgm.duration || duration } : null,
+    bgmWork: bgm,
     packaging: packagingOptions,
     design: `## Style Prompt
 
@@ -1116,12 +1125,13 @@ AIfman-inspired knowledge card template. Dark olive cinematic canvas, soft black
     #stage:before{content:"";position:absolute;inset:0;z-index:1;background:radial-gradient(circle at 51% 50%,rgba(0,0,0,.98) 0 15%,rgba(0,0,0,.82) 24%,rgba(0,0,0,.52) 40%,rgba(0,0,0,.18) 60%,rgba(0,0,0,0) 76%),radial-gradient(circle at 44% 22%,rgba(245,219,74,.09),rgba(245,219,74,0) 34%);pointer-events:none}
     .grain,.scan,.glow,.orbit,.hero-halos,.hero-halo,.particle{position:absolute;pointer-events:none}.grain{inset:0;z-index:20;opacity:.13;background:repeating-linear-gradient(0deg,rgba(255,255,255,.026) 0 1px,rgba(255,255,255,0) 1px 4px),repeating-linear-gradient(90deg,rgba(0,0,0,.12) 0 1px,rgba(0,0,0,0) 1px 7px)}.scan{inset:0;z-index:2;background:radial-gradient(circle at 17% 20%,rgba(241,212,74,.08),rgba(241,212,74,0) 32%),radial-gradient(circle at 83% 44%,rgba(241,212,74,.05),rgba(241,212,74,0) 28%);opacity:.86}.glow{left:330px;top:34px;width:450px;height:220px;border-radius:50%;background:radial-gradient(circle,rgba(255,244,135,.34),rgba(255,244,135,.08) 48%,rgba(255,244,135,0) 72%);filter:blur(13px);opacity:0}.orbit{display:none}.hero-halos{left:0;top:0;right:0;bottom:0;z-index:4;opacity:1}.hero-halo{left:50%;top:50%;border-radius:50%;opacity:0;border:2.5px solid rgba(241,212,74,.38);box-shadow:0 0 58px rgba(241,212,74,.18),inset 0 0 58px rgba(37,226,154,.08)}.hero-halo.h1{width:520px;height:520px;margin-left:-260px;margin-top:-260px;border-color:rgba(241,212,74,.48)}.hero-halo.h2{width:680px;height:680px;margin-left:-340px;margin-top:-340px;border-color:rgba(37,226,154,.36)}.hero-halo.h3{width:840px;height:840px;margin-left:-420px;margin-top:-420px;border-color:rgba(255,255,255,.22)}
     .particle{left:var(--x);top:var(--y);width:var(--s);height:var(--s);border-radius:50%;background:rgba(245,245,232,.76);box-shadow:0 0 13px rgba(255,255,255,.54);opacity:0;z-index:9;transform-origin:center;will-change:transform,opacity}.topline{position:absolute;left:36px;right:36px;top:26px;z-index:12;text-align:center;color:#f1d44a;font-size:28px;font-weight:900;line-height:1.35;text-shadow:0 0 15px rgba(241,212,74,.30);opacity:0}.scene,.ability-card{position:absolute;inset:0;z-index:5;display:flex;align-items:center;justify-content:center;padding:76px 94px}.title-stack{text-align:center;transform:translateY(-12px)}.title-stack h1{margin:0;font-size:72px;line-height:1.22;font-weight:900;letter-spacing:.025em;color:#f1d44a;text-shadow:0 0 18px rgba(241,212,74,.20)}.title-stack h1 span{color:#f06d75}.title-stack h2{margin:34px 0 0;font-size:92px;line-height:1.12;font-weight:900;letter-spacing:.025em;color:#25e29a;text-shadow:0 0 18px rgba(37,226,154,.26)}.title-stack small{display:none}.ability-card{opacity:0;justify-content:flex-start}.card-grid{position:relative;width:100%;height:100%;display:flex;align-items:flex-start;padding-top:82px}.card-copy{position:relative;width:670px;margin-left:18px;padding-left:36px}.card-copy:before{content:"";position:absolute;left:0;top:8px;bottom:14px;width:2px;background:linear-gradient(#f1d44a,rgba(241,212,74,.06))}.card-copy h2{margin:0 0 32px;color:#f1d44a;font-size:58px;line-height:1.26;font-weight:900;letter-spacing:.018em;text-shadow:0 0 18px rgba(241,212,74,.18)}.card-copy h2 span{color:#c99531}.card-copy h3{margin:0 0 26px;color:#d8952c;font-size:36px;font-weight:850;line-height:1.42}.card-copy p{margin:0;max-width:625px;color:#e3dfc7;font-size:22px;font-weight:700;line-height:1.82;opacity:.94}.card-copy b{display:block;width:414px;height:2px;margin-top:30px;background:linear-gradient(90deg,rgba(241,212,74,.82),rgba(241,212,74,0))}.node-map{position:absolute;left:735px;top:126px;width:235px;height:230px}.node-ring{position:absolute;left:55px;top:45px;width:126px;height:126px;border:2px solid rgba(241,212,74,.32);border-radius:50%;box-shadow:0 0 34px rgba(241,212,74,.12),inset 0 0 24px rgba(37,226,154,.08);opacity:.82}.node-ring:before,.node-ring:after{content:"";position:absolute;border-radius:50%;border:1px solid rgba(37,226,154,.28)}.node-ring:before{inset:22px}.node-ring:after{inset:48px;background:rgba(37,226,154,.08)}.node-bubble{position:absolute;width:17px;height:17px;border-radius:50%;background:#25e29a;box-shadow:0 0 0 9px rgba(37,226,154,.08),0 0 23px rgba(37,226,154,.62);opacity:.9}.b1{left:38px;top:78px}.b2{left:132px;top:28px;background:#f1d44a}.b3{left:188px;top:112px}.b4{left:108px;top:166px;background:#d8952c}.b5{left:18px;top:151px}.light-node{position:absolute;left:666px;top:220px;width:13px;height:13px;border-radius:50%;background:#f1d44a;box-shadow:0 0 0 8px rgba(241,212,74,.12),0 0 24px rgba(241,212,74,.82)}.light-node:before{content:"";position:absolute;left:-126px;top:6px;width:118px;height:1px;background:linear-gradient(90deg,rgba(241,212,74,0),rgba(241,212,74,.68))}.transition-wipe{position:absolute;inset:0;z-index:24;opacity:0;background:linear-gradient(90deg,rgba(23,23,12,0),rgba(241,212,74,.16) 34%,rgba(37,226,154,.28) 48%,rgba(241,212,74,.16) 62%,rgba(23,23,12,0));filter:blur(.4px);pointer-events:none}.beat-spark{position:absolute;left:661px;top:216px;z-index:25;width:26px;height:26px;border-radius:50%;border:2px solid rgba(241,212,74,.8);box-shadow:0 0 32px rgba(241,212,74,.42);opacity:0;pointer-events:none}.intro-template,.outro-template{position:absolute;inset:0;z-index:34;display:flex;align-items:center;justify-content:center;background:rgba(5,6,4,.88);color:#f1d44a;opacity:0}.intro-box,.outro-box{width:880px;min-height:260px;padding:46px 58px;border:1px solid rgba(241,212,74,.32);background:linear-gradient(135deg,rgba(23,23,12,.96),rgba(37,37,18,.82));box-shadow:0 0 80px rgba(241,212,74,.12)}.intro-kicker,.outro-kicker{margin:0 0 20px;color:#25e29a;font-size:22px;font-weight:900;letter-spacing:.08em;text-transform:uppercase}.intro-title,.outro-title{margin:0;color:#f1d44a;font-size:58px;font-weight:900;line-height:1.22}.intro-sub,.outro-sub{margin:24px 0 0;color:#e3dfc7;font-size:28px;font-weight:800;line-height:1.55}.watermark{position:absolute;z-index:36;max-width:360px;padding:8px 14px;border:1px solid rgba(241,212,74,.22);border-radius:999px;background:rgba(5,6,4,.38);color:#f1d44a;font-size:18px;font-weight:900;line-height:1.25;letter-spacing:.03em;text-shadow:0 0 10px rgba(0,0,0,.42);pointer-events:none;will-change:transform,opacity}.watermark.top-right{right:34px;top:26px}.watermark.top-left{left:34px;top:26px}.watermark.bottom-right{right:34px;bottom:28px}.watermark.bottom-left{left:34px;bottom:28px}.final-dim{position:absolute;inset:0;background:#17170c;opacity:0;z-index:30}
+    ${aifmanVisualCss()}
   </style>
 </head>
 <body>
   <div id="root" data-composition-id="main" data-start="0" data-duration="${duration}" data-width="${width}" data-height="${height}">
     ${bgm.src ? `<audio id="bgm" data-start="0" data-duration="${duration}" data-track-index="50" src="${bgm.src}" data-volume="${bgm.volume}"></audio>` : ""}
-    <div id="stage">
+    <div id="stage" class="${stageClass}">
     <div class="scan" data-layout-ignore></div>
     <div class="grain" data-layout-ignore></div>
     <div class="glow" data-layout-ignore></div>
