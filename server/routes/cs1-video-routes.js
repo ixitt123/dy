@@ -490,6 +490,94 @@ function defaultStyleName(styleId) {
   return CS1_VIDEO_STYLES.find((style) => style.id === styleId)?.name || styleId || "HyperFrames";
 }
 
+function normalizePackagingOptions(input = {}, context = {}) {
+  const introTemplateId = INTRO_TEMPLATE_IDS.has(String(input?.introTemplateId || "none")) ? String(input.introTemplateId || "none") : "none";
+  const outroTemplateId = OUTRO_TEMPLATE_IDS.has(String(input?.outroTemplateId || "none")) ? String(input.outroTemplateId || "none") : "none";
+  const watermarkPosition = WATERMARK_POSITIONS.has(String(input?.watermarkPosition || "top-right")) ? String(input.watermarkPosition || "top-right") : "top-right";
+  const watermarkEnabled = input?.watermarkEnabled === true || input?.watermarkEnabled === "true" || input?.watermarkEnabled === "on";
+  const opacityValue = Number.parseFloat(input?.watermarkOpacity);
+  const watermarkOpacity = Number.isFinite(opacityValue) ? Math.max(0.15, Math.min(0.85, opacityValue)) : 0.45;
+  const fallbackTitle = sanitizeTitle(context.title) || "短视频";
+  return {
+    introTemplateId,
+    outroTemplateId,
+    ctaText: sanitizeOverlayText(input?.ctaText, "关注我，持续升级认知"),
+    watermark: {
+      enabled: watermarkEnabled,
+      text: sanitizeOverlayText(input?.watermarkText, fallbackTitle),
+      position: watermarkPosition,
+      opacity: Number(watermarkOpacity.toFixed(2)),
+    },
+  };
+}
+
+function sanitizeOverlayText(value, fallback = "") {
+  return String(value || fallback || "")
+    .replace(/[<>]/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 48);
+}
+
+function renderIntroTemplate(packaging, { title, keyword } = {}) {
+  if (!packaging || packaging.introTemplateId === "none") return "";
+  const presets = {
+    brand_hook_dark: { kicker: "BRAND OPENING", sub: "固定开场 · 统一账号识别" },
+    title_flash_dark: { kicker: "TODAY'S POINT", sub: "标题冲击开场 · 先抓住注意力" },
+    series_badge_dark: { kicker: "SERIES", sub: "系列栏目开场 · 适合长期内容" },
+  };
+  const preset = presets[packaging.introTemplateId] || presets.brand_hook_dark;
+  return `<section id="intro-template" class="intro-template clip" data-start="0" data-duration="1.8" data-track-index="90">
+    <div class="intro-box">
+      <p class="intro-kicker">${escapeHtml(preset.kicker)}</p>
+      <h2 class="intro-title">${title || "短视频"}</h2>
+      <p class="intro-sub">${escapeHtml(keyword || preset.sub)}</p>
+    </div>
+  </section>`;
+}
+
+function renderOutroTemplate(packaging, { title, start = 13.3, duration = 1.5 } = {}) {
+  if (!packaging || packaging.outroTemplateId === "none") return "";
+  const presets = {
+    follow_cta_dark: { kicker: "FOLLOW", title: "关注我", sub: packaging.ctaText || "持续升级认知" },
+    comment_cta_dark: { kicker: "COMMENT", title: "评论区见", sub: packaging.ctaText || "留下你的问题" },
+    consult_cta_dark: { kicker: "CONTACT", title: "私信咨询", sub: packaging.ctaText || "领取完整方案" },
+  };
+  const preset = presets[packaging.outroTemplateId] || presets.follow_cta_dark;
+  return `<section id="outro-template" class="outro-template clip" data-start="${start.toFixed(2)}" data-duration="${duration.toFixed(2)}" data-track-index="91">
+    <div class="outro-box">
+      <p class="outro-kicker">${escapeHtml(preset.kicker)}</p>
+      <h2 class="outro-title">${escapeHtml(preset.title)}</h2>
+      <p class="outro-sub">${escapeHtml(preset.sub || title || "")}</p>
+    </div>
+  </section>`;
+}
+
+function renderWatermark(packaging) {
+  const watermark = packaging?.watermark;
+  if (!watermark?.enabled || !watermark.text) return "";
+  return `<div class="watermark ${escapeHtml(watermark.position)}" style="opacity:${watermark.opacity}" data-layout-ignore>${escapeHtml(watermark.text)}</div>`;
+}
+
+function buildIntroTimeline(packaging) {
+  if (!packaging || packaging.introTemplateId === "none") return "";
+  return [
+    `tl.fromTo("#intro-template",{opacity:0},{opacity:1,duration:.2,ease:"sine.out"},.04);`,
+    `tl.from("#intro-template .intro-box",{y:34,scale:.96,opacity:0,duration:.48,ease:"power3.out"},.14);`,
+    `tl.to("#intro-template",{opacity:0,duration:.34,ease:"sine.in"},1.38);`,
+    `tl.set("#intro-template",{opacity:0},1.72);`,
+  ].join("\n    ");
+}
+
+function buildOutroTimeline(packaging, { start = 13.4 } = {}) {
+  if (!packaging || packaging.outroTemplateId === "none") return "";
+  return [
+    `tl.fromTo("#outro-template",{opacity:0},{opacity:1,duration:.22,ease:"sine.out"},${start.toFixed(2)});`,
+    `tl.from("#outro-template .outro-box",{y:42,scale:.96,opacity:0,duration:.48,ease:"power3.out"},${(start + 0.12).toFixed(2)});`,
+    `tl.to("#outro-template .outro-box",{scale:1.02,duration:.42,repeat:1,yoyo:true,ease:"sine.inOut"},${(start + 0.86).toFixed(2)});`,
+  ].join("\n    ");
+}
+
 function inferTitle(script) {
   return sanitizeTitle(script.replace(/[，。！？；,.!?;].*$/, "")) || "CS1 Video";
 }
