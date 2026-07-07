@@ -603,6 +603,58 @@ function normalizeAifmanVisualOptions(input = {}) {
   return { iconVariant, textPalette, layoutVariant, backgroundPattern };
 }
 
+function aifmanVisualCss() {
+  return `
+    #stage.palette-white_gold .title-stack h1,#stage.palette-white_gold .card-copy h2,#stage.palette-white_gold .topline{color:#fff6c9}
+    #stage.palette-white_gold .title-stack h2,#stage.palette-white_gold .card-copy h3,#stage.palette-white_gold .node-bubble{color:#f1d44a;background:#f1d44a}
+    #stage.palette-white_gold .card-copy p{color:#f5eed4}
+    #stage.palette-cyan_orange .title-stack h1,#stage.palette-cyan_orange .card-copy h2,#stage.palette-cyan_orange .topline{color:#82f5ff}
+    #stage.palette-cyan_orange .title-stack h2,#stage.palette-cyan_orange .card-copy h3,#stage.palette-cyan_orange .node-bubble{color:#ff9d45;background:#ff9d45}
+    #stage.palette-cyan_orange .card-copy p{color:#e7f8ef}
+    #stage.palette-cyan_orange .card-copy:before,#stage.palette-cyan_orange .card-copy b{background:linear-gradient(#82f5ff,rgba(130,245,255,.04))}
+    #stage.palette-red_gold .title-stack h1,#stage.palette-red_gold .card-copy h2,#stage.palette-red_gold .topline{color:#ffd45d}
+    #stage.palette-red_gold .title-stack h2,#stage.palette-red_gold .card-copy h3,#stage.palette-red_gold .node-bubble{color:#ff6868;background:#ff6868}
+    #stage.palette-red_gold .card-copy p{color:#f2dfc4}
+    #stage.layout-wide_split .card-copy{width:760px;margin-left:0}
+    #stage.layout-wide_split .node-map{left:860px;top:116px}
+    #stage.layout-wide_split .light-node{left:790px}
+    #stage.layout-center_focus .card-grid{justify-content:center}
+    #stage.layout-center_focus .card-copy{width:760px;margin-left:0;padding-left:0;text-align:center}
+    #stage.layout-center_focus .card-copy:before{display:none}
+    #stage.layout-center_focus .card-copy b{margin-left:auto;margin-right:auto}
+    #stage.layout-center_focus .node-map{left:900px;top:122px;opacity:.55}
+    #stage.layout-center_focus .light-node{left:860px;opacity:.7}
+    #stage.layout-compact_list .card-grid{padding-top:58px}
+    #stage.layout-compact_list .card-copy h2{font-size:50px;margin-bottom:22px}
+    #stage.layout-compact_list .card-copy h3{font-size:30px;margin-bottom:16px}
+    #stage.layout-compact_list .card-copy p{font-size:20px;line-height:1.72}
+    #stage.pattern-grid .scan{background-image:linear-gradient(rgba(241,212,74,.07) 1px,transparent 1px),linear-gradient(90deg,rgba(37,226,154,.045) 1px,transparent 1px);background-size:72px 72px,72px 72px}
+    #stage.pattern-rings .scan{background:radial-gradient(circle at 68% 36%,rgba(241,212,74,.18),rgba(241,212,74,.04) 28%,rgba(241,212,74,0) 54%),radial-gradient(circle at 16% 78%,rgba(37,226,154,.12),rgba(37,226,154,0) 42%)}
+    #stage.pattern-dots .scan{background-image:radial-gradient(circle,rgba(241,212,74,.16) 0 1px,transparent 2px),radial-gradient(circle,rgba(37,226,154,.12) 0 1px,transparent 2px);background-position:0 0,34px 42px;background-size:86px 86px}
+    #stage.icon-radar_pulse .node-ring{width:160px;height:160px;left:38px;top:28px}
+    #stage.icon-data_bubbles .node-ring{display:none}
+    #stage.icon-data_bubbles .node-bubble{width:28px;height:28px}
+    #stage.icon-light_chain .node-ring{border-radius:18px;transform:rotate(45deg)}
+    #stage.icon-light_chain .node-ring:before,#stage.icon-light_chain .node-ring:after{border-radius:14px}
+  `;
+}
+
+function buildAifmanIconTimeline(variant, current, start, cardDuration) {
+  const safeStart = Number(start || 0);
+  const pulseStart = (safeStart + 0.82).toFixed(3);
+  const repeat = Math.max(1, Math.min(5, Math.ceil(Number(cardDuration || 3) / 0.7) - 1));
+  if (variant === "radar_pulse") {
+    return `tl.to("${current} .node-ring",{scale:1.28,opacity:.35,duration:.72,repeat:${repeat},yoyo:true,ease:"sine.inOut"},${pulseStart});`;
+  }
+  if (variant === "data_bubbles") {
+    return `tl.to("${current} .node-bubble",{y:-14,scale:1.16,duration:.48,repeat:${repeat},yoyo:true,stagger:.035,ease:"sine.inOut"},${pulseStart});`;
+  }
+  if (variant === "light_chain") {
+    return `tl.to("${current} .light-node",{x:42,scale:1.22,duration:.42,repeat:${repeat},yoyo:true,ease:"sine.inOut"},${pulseStart});`;
+  }
+  return "";
+}
+
 function buildContainedStageFit({ width, height, baseWidth, baseHeight }) {
   const scale = Math.min(width / baseWidth, height / baseHeight);
   return {
@@ -1413,7 +1465,7 @@ function resolveCs1Bgm({ bgmMode = "builtin_dark_pulse_128", bgmPath = "", durat
 
 function writeCs1DefaultBgmWavBuffer(durationSeconds = 15) {
   const sampleRate = 44100;
-  const duration = Math.max(1, Math.min(90, Number(durationSeconds || 0) || 15));
+  const duration = Math.max(1, Math.min(600, Number(durationSeconds || 0) || 15));
   const sampleCount = Math.ceil(sampleRate * duration);
   const dataSize = sampleCount * 2;
   const buffer = Buffer.alloc(44 + dataSize);
