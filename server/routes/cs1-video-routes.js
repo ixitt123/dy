@@ -48,6 +48,22 @@ const WATERMARK_POSITIONS = new Set([
   "bottom-left",
 ]);
 
+const WATERMARK_ANIMATIONS = new Set([
+  "none",
+  "float_y",
+  "float_x",
+  "pulse",
+  "breathe",
+]);
+
+const CARD_HOLD_PRESETS = {
+  auto: { id: "auto", label: "自动", seconds: null },
+  short: { id: "short", label: "短停留", seconds: 2.4 },
+  standard: { id: "standard", label: "标准停留", seconds: 3.2 },
+  long: { id: "long", label: "长停留", seconds: 4.2 },
+  explain: { id: "explain", label: "讲解停留", seconds: 5.2 },
+};
+
 const ASPECT_RATIO_PRESETS = {
   "9:16": {
     id: "9:16",
