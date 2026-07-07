@@ -7,7 +7,7 @@ import { HttpBodyError, readJsonBody } from "../utils/http-body.js";
 const HYPERFRAMES_VERSION = "0.7.37";
 const MAX_SCRIPT_LENGTH = 1200;
 const DEFAULT_BEAT_COUNT = 5;
-const ALLOWED_BEAT_COUNTS = new Set([3, 4, 5, 6]);
+const ALLOWED_BEAT_COUNTS = new Set([2, 3, 4, 5, 6]);
 const LOCAL_TEMPLATE_IDS = new Set([
   "cs1",
   "aifman-manager-card",
@@ -36,7 +36,7 @@ const AIFMAN_MANAGER_SCRIPT_FORMAT = [
 
 const CS1_VIDEO_STYLES = [
   { id: "cs1", name: "CS1 深色解释风", description: "黑色电影感画布，红色警示块和金色强调，适合招生提醒、学习规划、危机感口播，节奏是三段式：问题、冲突、行动。", source: "local" },
-  { id: "aifman-manager-card", name: "管理岗能力卡片风", description: "参考 AIfman 职场知识视频的动效结构：暗橄榄渐变背景、金色标题、绿色关键词、粒子圆环、三段能力卡片，适合职场管理、领导力、认知提升类横版知识短视频。", source: "local", scriptFormat: AIFMAN_MANAGER_SCRIPT_FORMAT },
+  { id: "aifman-manager-card", name: "管理岗能力卡片风", description: "参考 AIfman 职场知识视频的动效结构：暗橄榄渐变背景、金色标题、绿色关键词、粒子圆环，按文案实际结构生成 2-6 段能力卡片，适合职场管理、领导力、认知提升类横版知识短视频。", source: "local", scriptFormat: AIFMAN_MANAGER_SCRIPT_FORMAT },
   { id: "warm-grain", name: "Warm Grain 暖纸纹", description: "暖色纸张质感、颗粒纹理、绿色和陶土色点缀，适合教育提醒、家长通知、温和但严肃的知识类内容。", source: "hyperframes" },
   { id: "play-mode", name: "Play Mode 活力弹性风", description: "高能社交媒体动效，弹性转场、明亮强调色，适合短促口号、活动宣传、年轻化信息流内容。", source: "hyperframes" },
   { id: "swiss-grid", name: "Swiss Grid 瑞士网格风", description: "白底、蓝黑网格、信息排版清晰，适合课程说明、流程拆解、专业知识点和结构化教学内容。", source: "hyperframes" },
@@ -149,7 +149,9 @@ function writeHiddenStyleIds(filePath, ids) {
 async function generateVideo({ runsDir, outputDir, text, style, title, beatCount, templateName, bgmMode, bgmPath, aiRefine, modelRouter, ffmpegPath, ffprobePath }) {
   const script = normalizeScript(text);
   const styleId = normalizeStyle(style);
-  const normalizedBeatCount = normalizeBeatCount(beatCount);
+  const normalizedBeatCount = styleId === "aifman-manager-card"
+    ? resolveAifmanPreferredCount(beatCount, script)
+    : normalizeBeatCount(beatCount);
   const slug = `${formatDateSlug(new Date())}-${styleId}-${randomUUID().slice(0, 8)}`;
   const projectDir = path.join(runsDir, slug);
   const videoTitle = sanitizeTitle(title) || inferTitle(script);
@@ -401,7 +403,11 @@ function runHyperframes(cwd, args, output, env = process.env) {
 }
 
 function normalizeScript(value) {
-  const text = String(value || "").replace(/\s+/g, " ").trim();
+  const text = String(value || "")
+    .replace(/\r\n/g, "\n")
+    .replace(/[ \t]+/g, " ")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
   if (!text) throw new Error("Please enter text for video generation.");
   return text.slice(0, MAX_SCRIPT_LENGTH);
 }
@@ -416,6 +422,22 @@ function normalizeStyle(value) {
 function normalizeBeatCount(value) {
   const count = Number.parseInt(value, 10);
   return ALLOWED_BEAT_COUNTS.has(count) ? count : DEFAULT_BEAT_COUNT;
+}
+
+function isAutoBeatCount(value) {
+  return String(value || "").trim().toLowerCase() === "auto";
+}
+
+function clampCardCount(value, fallback = DEFAULT_BEAT_COUNT) {
+  const count = Number.parseInt(value, 10);
+  const fallbackCount = Number.parseInt(fallback, 10);
+  const resolved = Number.isFinite(count) ? count : fallbackCount;
+  return Math.max(2, Math.min(6, Number.isFinite(resolved) ? resolved : DEFAULT_BEAT_COUNT));
+}
+
+function resolveAifmanPreferredCount(value, script = "") {
+  if (isAutoBeatCount(value)) return inferAifmanCardCount(script);
+  return normalizeBeatCount(value);
 }
 
 function sanitizeTitle(value) {
