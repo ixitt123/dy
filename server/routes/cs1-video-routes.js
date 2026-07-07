@@ -2,9 +2,12 @@
 import path from "node:path";
 import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
+import { createRequire } from "node:module";
 import { HttpBodyError, readJsonBody } from "../utils/http-body.js";
 
 const HYPERFRAMES_VERSION = "0.7.37";
+const nodeRequire = createRequire(import.meta.url);
+const LOCAL_GSAP_SRC = "assets/gsap.min.js";
 const MAX_SCRIPT_LENGTH = 1200;
 const DEFAULT_BEAT_COUNT = 5;
 const ALLOWED_BEAT_COUNTS = new Set([2, 3, 4, 5, 6]);
