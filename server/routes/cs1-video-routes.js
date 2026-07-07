@@ -527,7 +527,7 @@ function renderIntroTemplate(packaging, { title, keyword } = {}) {
     series_badge_dark: { kicker: "SERIES", sub: "系列栏目开场 · 适合长期内容" },
   };
   const preset = presets[packaging.introTemplateId] || presets.brand_hook_dark;
-  return `<section id="intro-template" class="intro-template clip" data-start="0" data-duration="1.8" data-track-index="90">
+  return `<section id="intro-template" class="intro-template clip" data-layout-allow-occlusion data-layout-allow-overlap data-start="0" data-duration="1.8" data-track-index="90">
     <div class="intro-box">
       <p class="intro-kicker">${escapeHtml(preset.kicker)}</p>
       <h2 class="intro-title">${title || "短视频"}</h2>
