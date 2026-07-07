@@ -1362,6 +1362,16 @@
                 <textarea id="cs1VideoText" rows="8" maxlength="1200" placeholder="把要做成视频的文字粘贴到这里..." required></textarea>
               </label>
               <label>
+                视频比例 / 平台
+                <select id="cs1VideoAspectRatio">
+                  <option value="9:16" selected>9:16 竖屏 · 抖音 / 快手 / 视频号 / 小红书</option>
+                  <option value="16:9">16:9 横屏 · B站 / 西瓜视频 / YouTube / 课程</option>
+                  <option value="1:1">1:1 方屏 · 小红书 / 朋友圈 / Instagram</option>
+                  <option value="4:5">4:5 信息流 · 小红书 / Instagram Feed / 视频号</option>
+                </select>
+                <small>默认 9:16，适合直接发布短视频平台；横屏更适合课程和长视频平台。</small>
+              </label>
+              <label>
                 HyperFrames 模板
                 <select id="cs1VideoStyleSelect" name="cs1VideoStyle">
                   <option value="cs1">CS1 dark explainer</option>
@@ -1458,6 +1468,16 @@
                       <option value="0.35">低</option>
                       <option value="0.45" selected>标准</option>
                       <option value="0.6">明显</option>
+                    </select>
+                  </label>
+                  <label>
+                    水印动画
+                    <select id="cs1WatermarkAnimation">
+                      <option value="float_y" selected>上下漂浮</option>
+                      <option value="float_x">左右轻移</option>
+                      <option value="pulse">轻微放大</option>
+                      <option value="breathe">呼吸闪烁</option>
+                      <option value="none">不动</option>
                     </select>
                   </label>
                 </div>
