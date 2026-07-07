@@ -254,6 +254,7 @@ async function generateVideo({ runsDir, outputDir, text, style, title, aspectRat
     styleId,
     styleName,
     beatCount: model.beatCount || normalizedBeatCount,
+    aspectRatio: files.aspectRatio || aspect,
     files,
   });
 
