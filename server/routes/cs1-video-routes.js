@@ -19,16 +19,16 @@ const OFFICIAL_TEMPLATE_IDS = new Set([
 ]);
 
 const CS1_VIDEO_STYLES = [
-  { id: "cs1", name: "CS1 dark explainer", description: "Dark canvas, strong warning, three-beat explainer video.", source: "local" },
-  { id: "warm-grain", name: "Warm Grain", description: "Official HyperFrames warm paper and grain example.", source: "hyperframes" },
-  { id: "play-mode", name: "Play Mode", description: "Official HyperFrames energetic elastic social template.", source: "hyperframes" },
-  { id: "swiss-grid", name: "Swiss Grid", description: "Official HyperFrames clean structured technical grid template.", source: "hyperframes" },
-  { id: "kinetic-type", name: "Kinetic Type", description: "Official HyperFrames dramatic typography template.", source: "hyperframes" },
-  { id: "decision-tree", name: "Decision Tree", description: "Official HyperFrames flowchart explainer template.", source: "hyperframes" },
-  { id: "product-promo", name: "Product Promo", description: "Official HyperFrames multi-scene product showcase template.", source: "hyperframes" },
-  { id: "nyt-graph", name: "NYT Graph", description: "Official HyperFrames editorial data-story template.", source: "hyperframes" },
-  { id: "vignelli", name: "Vignelli", description: "Official HyperFrames bold portrait typography template.", source: "hyperframes" },
-  { id: "blank", name: "Blank", description: "Official HyperFrames minimal scaffold for full custom control.", source: "hyperframes" },
+  { id: "cs1", name: "CS1 深色解释风", description: "黑色电影感画布，红色警示块和金色强调，适合招生提醒、学习规划、危机感口播，节奏是三段式：问题、冲突、行动。", source: "local" },
+  { id: "warm-grain", name: "Warm Grain 暖纸纹", description: "暖色纸张质感、颗粒纹理、绿色和陶土色点缀，适合教育提醒、家长通知、温和但严肃的知识类内容。", source: "hyperframes" },
+  { id: "play-mode", name: "Play Mode 活力弹性风", description: "高能社交媒体动效，弹性转场、明亮强调色，适合短促口号、活动宣传、年轻化信息流内容。", source: "hyperframes" },
+  { id: "swiss-grid", name: "Swiss Grid 瑞士网格风", description: "白底、蓝黑网格、信息排版清晰，适合课程说明、流程拆解、专业知识点和结构化教学内容。", source: "hyperframes" },
+  { id: "kinetic-type", name: "Kinetic Type 动态大字风", description: "黑底强对比大字，文字运动冲击强，适合痛点放大、金句输出、观点表达和高冲击招生广告。", source: "hyperframes" },
+  { id: "decision-tree", name: "Decision Tree 决策路径风", description: "节点和路径图形推进，适合选择题、学习路径、规划方案、家长决策类解释视频。", source: "hyperframes" },
+  { id: "product-promo", name: "Product Promo 产品宣传风", description: "深色商业背景、产品卡片和展示感强，适合课程产品、训练营、服务卖点和招生转化内容。", source: "hyperframes" },
+  { id: "nyt-graph", name: "NYT Graph 数据叙事风", description: "报刊式数据图表语言，适合成绩对比、趋势变化、案例分析和需要数据说服力的内容。", source: "hyperframes" },
+  { id: "vignelli", name: "Vignelli 竖版海报风", description: "极简红黑白视觉、竖版大排版，适合封面感强的短视频、品牌表达、观点标题和高级感口播。", source: "hyperframes" },
+  { id: "blank", name: "Blank 空白基础风", description: "最少包装的基础模板，适合后续深度自定义，不建议作为商业成片默认选择。", source: "hyperframes" },
 ];
 
 export function createCs1VideoRoutes({ baseDir, sendJson, modelRouter, ffmpegPath = "", ffprobePath = "" }) {
