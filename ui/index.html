@@ -1395,7 +1395,14 @@
               </div>
               <label class="cs1-ai-toggle">
                 <input id="cs1VideoAiRefine" type="checkbox" />
-                <span>使用本机大模型 API 先优化成 3 个视频节拍</span>
+                <span>使用本机大模型 API 优化视频节拍</span>
+                <select id="cs1VideoBeatCount" class="cs1-beat-select" aria-label="选择脚本节拍数量">
+                  <option value="3">3 节拍 · 极短口播</option>
+                  <option value="4">4 节拍 · 标准解释</option>
+                  <option value="5" selected>5 节拍 · 推荐短视频</option>
+                  <option value="6">6 节拍 · 细节更完整</option>
+                </select>
+                <small>节拍会影响 AI 对文案的拆分、屏幕大字和字幕节奏。</small>
               </label>
               <div class="cs1-video-actions">
                 <button class="primary" id="cs1VideoGenerate" type="submit">生成视频</button>
