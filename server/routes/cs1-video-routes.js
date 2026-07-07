@@ -1,6 +1,6 @@
 ﻿import fs from "node:fs";
 import path from "node:path";
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { createRequire } from "node:module";
 import { HttpBodyError, readJsonBody } from "../utils/http-body.js";
@@ -63,6 +63,11 @@ const CARD_HOLD_PRESETS = {
   long: { id: "long", label: "长停留", seconds: 4.2 },
   explain: { id: "explain", label: "讲解停留", seconds: 5.2 },
 };
+
+const AIFMAN_ICON_VARIANTS = new Set(["orbit_nodes", "radar_pulse", "data_bubbles", "light_chain"]);
+const AIFMAN_TEXT_PALETTES = new Set(["gold_green", "white_gold", "cyan_orange", "red_gold"]);
+const AIFMAN_LAYOUT_VARIANTS = new Set(["left_right", "wide_split", "center_focus", "compact_list"]);
+const AIFMAN_BACKGROUND_PATTERNS = new Set(["vignette", "grid", "rings", "dots"]);
 
 const ASPECT_RATIO_PRESETS = {
   "9:16": {
@@ -185,6 +190,12 @@ export function createCs1VideoRoutes({ baseDir, sendJson, modelRouter, ffmpegPat
           aspectRatio: body.aspectRatio,
           beatCount: body.beatCount,
           cardHoldPreset: body.cardHoldPreset,
+          visualOptions: {
+            iconVariant: body.iconVariant,
+            textPalette: body.textPalette,
+            layoutVariant: body.layoutVariant,
+            backgroundPattern: body.backgroundPattern,
+          },
           templateName: body.templateName,
           bgmMode: body.bgmMode,
           bgmPath: body.bgmPath,
@@ -238,11 +249,12 @@ function writeHiddenStyleIds(filePath, ids) {
   fs.writeFileSync(filePath, `${JSON.stringify(payload, null, 2)}\n`, "utf8");
 }
 
-async function generateVideo({ runsDir, outputDir, text, style, title, aspectRatio, beatCount, cardHoldPreset, templateName, bgmMode, bgmPath, packaging, aiRefine, modelRouter, ffmpegPath, ffprobePath }) {
+async function generateVideo({ runsDir, outputDir, text, style, title, aspectRatio, beatCount, cardHoldPreset, visualOptions, templateName, bgmMode, bgmPath, packaging, aiRefine, modelRouter, ffmpegPath, ffprobePath }) {
   const script = normalizeScript(text);
   const styleId = normalizeStyle(style);
   const aspect = normalizeAspectRatio(aspectRatio);
   const cardHold = normalizeCardHoldPreset(cardHoldPreset);
+  const aifmanVisual = normalizeAifmanVisualOptions(visualOptions);
   const normalizedBeatCount = styleId === "aifman-manager-card"
     ? resolveAifmanPreferredCount(beatCount, script)
     : normalizeBeatCount(beatCount);
@@ -261,9 +273,9 @@ async function generateVideo({ runsDir, outputDir, text, style, title, aspectRat
     ? buildAifmanStoryModel(script, videoTitle, normalizedBeatCount)
     : buildStoryModel(script, videoTitle, normalizedBeatCount));
   const files = styleId === "cs1"
-    ? cs1Files(model, { aspect })
-      : styleId === "aifman-manager-card"
-      ? aifmanManagerCardFiles(model, { bgmMode, bgmPath, packaging: packagingOptions, aspect, cardHold })
+      ? cs1Files(model, { aspect })
+    : styleId === "aifman-manager-card"
+      ? aifmanManagerCardFiles(model, { bgmMode, bgmPath, packaging: packagingOptions, aspect, cardHold, visualOptions: aifmanVisual })
       : styleId === "warm-grain"
       ? warmGrainFiles(model, { aspect })
       : officialTemplateFiles(model, styleId, { aspect });
@@ -277,6 +289,7 @@ async function generateVideo({ runsDir, outputDir, text, style, title, aspectRat
     aspectRatio: files.aspectRatio || aspect,
     files,
   });
+  normalizeProjectBgm(projectDir, files.bgmWork, { ffmpegPath });
 
   const hyperframesEnv = buildHyperframesEnv({ ffmpegPath, ffprobePath });
   const checkOutput = [];
@@ -548,6 +561,14 @@ function normalizeAspectRatio(value) {
 function normalizeCardHoldPreset(value) {
   const id = String(value || "auto").trim();
   return CARD_HOLD_PRESETS[id] || CARD_HOLD_PRESETS.auto;
+}
+
+function normalizeAifmanVisualOptions(input = {}) {
+  const iconVariant = AIFMAN_ICON_VARIANTS.has(String(input?.iconVariant || "")) ? String(input.iconVariant) : "orbit_nodes";
+  const textPalette = AIFMAN_TEXT_PALETTES.has(String(input?.textPalette || "")) ? String(input.textPalette) : "gold_green";
+  const layoutVariant = AIFMAN_LAYOUT_VARIANTS.has(String(input?.layoutVariant || "")) ? String(input.layoutVariant) : "left_right";
+  const backgroundPattern = AIFMAN_BACKGROUND_PATTERNS.has(String(input?.backgroundPattern || "")) ? String(input.backgroundPattern) : "vignette";
+  return { iconVariant, textPalette, layoutVariant, backgroundPattern };
 }
 
 function buildContainedStageFit({ width, height, baseWidth, baseHeight }) {
