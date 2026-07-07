@@ -1,10 +1,12 @@
 import fs from "node:fs";
 import path from "node:path";
 import ffmpegPath from "ffmpeg-static";
+import ffprobeStatic from "ffprobe-static";
 
 const baseDir = process.cwd();
 const packagePath = path.join(baseDir, "node_modules", "@yc-w-cn", "douyin-mcp-server", "package.json");
 const downloadsDir = path.join(baseDir, "downloads");
+const ffprobePath = ffprobeStatic?.path || "";
 
 console.log("Douyin MCP local check");
 console.log(`Folder: ${baseDir}`);
@@ -19,6 +21,10 @@ if (!ffmpegPath || !fs.existsSync(ffmpegPath)) {
   console.error("FFmpeg component is missing. Please run the dependency installer again.");
   process.exit(1);
 }
+if (!ffprobePath || !fs.existsSync(ffprobePath)) {
+  console.error("FFprobe component is missing. Please run the dependency installer again.");
+  process.exit(1);
+}
 
 fs.mkdirSync(downloadsDir, { recursive: true });
 
@@ -28,5 +34,6 @@ fs.unlinkSync(writeTestPath);
 
 console.log(`Package: ${packageInfo.name}@${packageInfo.version}`);
 console.log(`FFmpeg: ${ffmpegPath}`);
+console.log(`FFprobe: ${ffprobePath}`);
 console.log(`Download folder: ${downloadsDir}`);
 console.log("Status: OK");

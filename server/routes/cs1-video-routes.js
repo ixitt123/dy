@@ -31,7 +31,7 @@ const CS1_VIDEO_STYLES = [
   { id: "blank", name: "Blank", description: "Official HyperFrames minimal scaffold for full custom control.", source: "hyperframes" },
 ];
 
-export function createCs1VideoRoutes({ baseDir, sendJson, modelRouter }) {
+export function createCs1VideoRoutes({ baseDir, sendJson, modelRouter, ffmpegPath = "", ffprobePath = "" }) {
   const runsDir = path.join(baseDir, ".data", "cs1-video-maker");
   const outputDir = path.join(baseDir, "jianying-exports", "hyperframes");
 
@@ -59,6 +59,8 @@ export function createCs1VideoRoutes({ baseDir, sendJson, modelRouter }) {
           title: body.title,
           aiRefine: body.aiRefine === true,
           modelRouter,
+          ffmpegPath,
+          ffprobePath,
         });
         sendJson(res, 200, { ok: true, ...result });
       } catch (error) {
@@ -75,7 +77,7 @@ export function createCs1VideoRoutes({ baseDir, sendJson, modelRouter }) {
   };
 }
 
-async function generateVideo({ runsDir, outputDir, text, style, title, aiRefine, modelRouter }) {
+async function generateVideo({ runsDir, outputDir, text, style, title, aiRefine, modelRouter, ffmpegPath, ffprobePath }) {
   const script = normalizeScript(text);
   const styleId = normalizeStyle(style);
   const slug = `${formatDateSlug(new Date())}-${styleId}-${randomUUID().slice(0, 8)}`;
@@ -100,12 +102,13 @@ async function generateVideo({ runsDir, outputDir, text, style, title, aiRefine,
     files,
   });
 
+  const hyperframesEnv = buildHyperframesEnv({ ffmpegPath, ffprobePath });
   const checkOutput = [];
-  await runHyperframes(projectDir, ["lint"], checkOutput);
-  await runHyperframes(projectDir, ["validate"], checkOutput);
-  await runHyperframes(projectDir, ["inspect"], checkOutput);
+  await runHyperframes(projectDir, ["lint"], checkOutput, hyperframesEnv);
+  await runHyperframes(projectDir, ["validate"], checkOutput, hyperframesEnv);
+  await runHyperframes(projectDir, ["inspect"], checkOutput, hyperframesEnv);
   const renderOutput = [];
-  await runHyperframes(projectDir, ["render", "--output", outputPath, "--quality", "standard"], renderOutput);
+  await runHyperframes(projectDir, ["render", "--output", outputPath, "--quality", "standard"], renderOutput, hyperframesEnv);
 
   return {
     id: slug,
@@ -191,11 +194,34 @@ function writeProject(projectDir, { slug, title, styleId, files }) {
   }
 }
 
-function runHyperframes(cwd, args, output) {
+function buildHyperframesEnv({ ffmpegPath, ffprobePath }) {
+  const env = { ...process.env };
+  const pathKey = Object.keys(env).find((key) => key.toLowerCase() === "path") || "PATH";
+  const toolDirs = [ffmpegPath, ffprobePath]
+    .filter((toolPath) => toolPath && fs.existsSync(toolPath))
+    .map((toolPath) => path.dirname(toolPath));
+  const uniqueToolDirs = Array.from(new Set(toolDirs));
+  const joinedPath = [...uniqueToolDirs, env[pathKey] || ""].filter(Boolean).join(path.delimiter);
+
+  env[pathKey] = joinedPath;
+  env.PATH = joinedPath;
+  if (process.platform === "win32") env.Path = joinedPath;
+  if (ffmpegPath && fs.existsSync(ffmpegPath)) {
+    env.FFMPEG_PATH = ffmpegPath;
+    env.FFMPEG_BIN = ffmpegPath;
+  }
+  if (ffprobePath && fs.existsSync(ffprobePath)) {
+    env.FFPROBE_PATH = ffprobePath;
+    env.FFPROBE_BIN = ffprobePath;
+  }
+  return env;
+}
+
+function runHyperframes(cwd, args, output, env = process.env) {
   const command = "npx";
   const finalArgs = ["--yes", `hyperframes@${HYPERFRAMES_VERSION}`, ...args];
   return new Promise((resolve, reject) => {
-    const child = spawn(command, finalArgs, { cwd, windowsHide: true, shell: process.platform === "win32" });
+    const child = spawn(command, finalArgs, { cwd, env, windowsHide: true, shell: process.platform === "win32" });
     let combined = "";
     child.stdout.on("data", (chunk) => {
       const text = chunk.toString();

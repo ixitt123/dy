@@ -8,6 +8,7 @@ import { fileURLToPath } from "node:url";
 import * as XLSX from "xlsx";
 import WebSocket, { WebSocketServer } from "ws";
 import ffmpegPath from "ffmpeg-static";
+import ffprobeStatic from "ffprobe-static";
 import { openTaskStore, TASK_STATUS } from "./task-store.mjs";
 import { createTtsService } from "./server/tts/tts-service.js";
 import { createImageService } from "./server/image/image-service.js";
@@ -46,6 +47,7 @@ const localMediaDir = path.join(__dirname, "local-media");
 const pidPath = path.join(__dirname, "ui-server.pid");
 const urlPath = path.join(__dirname, "ui-server.url");
 const settingsPath = path.join(__dirname, "settings.json");
+const ffprobePath = ffprobeStatic?.path || "";
 const mcpEntry = path.join(
   __dirname,
   "node_modules",
@@ -134,6 +136,8 @@ const handleCs1VideoRoutes = createCs1VideoRoutes({
   baseDir: __dirname,
   sendJson,
   modelRouter,
+  ffmpegPath,
+  ffprobePath,
 });
 
 // ModelRouter 统一模型路由
