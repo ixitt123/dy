@@ -1,0 +1,23 @@
+{
+  "skill_name": "xiaohei-explainer-video",
+  "evals": [
+    {
+      "id": "short-product-copy",
+      "prompt": "把这段文案做成 30 秒中文说明视频：AI 不是替你写完，而是帮你先找到最值得被看见的判断。请用小黑配图风格、导演稿、VFX 合约和 HyperFrames 工程输出。",
+      "expected_output": "Creates a director package and HyperFrames project with Xiaohei 2.0 as an original 3D animated protagonist, complete storyboard fields, Seedance VFX contracts, and passing HyperFrames checks.",
+      "files": []
+    },
+    {
+      "id": "article-to-explainer",
+      "prompt": "我有一篇公众号文章，主题是知识博主为什么不能平均配图。请按 Ian 小黑风格做一个 45 秒说明视频，但角色要更像 3D 动画玩偶，不要丑线稿。",
+      "expected_output": "Uses cognitive-anchor analysis instead of average paragraph splitting, writes shot-specific illustration prompts and VFX contracts, and avoids copying existing IP or studio styles.",
+      "files": []
+    },
+    {
+      "id": "director-only",
+      "prompt": "先别渲染，只给我这段文案的导演脚本和 storyboard JSON：内容生产最大的浪费，是还没判断目的就开始找素材。",
+      "expected_output": "Stops at director-script.md and storyboard.json, includes purpose/emotion/voice/subtitle/camera/composition/xiaohei_action/vfx_contract per shot, and does not build or render video.",
+      "files": []
+    }
+  ]
+}
