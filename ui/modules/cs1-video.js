@@ -30,6 +30,7 @@ export function initCs1VideoModule() {
   const message = document.getElementById("cs1VideoMessage");
   const resultPanel = document.getElementById("cs1VideoResult");
   const outputPath = document.getElementById("cs1VideoOutputPath");
+  const outputList = document.getElementById("cs1VideoOutputList");
   const logPanel = document.getElementById("cs1VideoLog");
   const generateButton = document.getElementById("cs1VideoGenerate");
   const exampleButton = document.getElementById("cs1VideoExample");
@@ -43,6 +44,7 @@ export function initCs1VideoModule() {
   const progressTrack = progressPanel?.querySelector(".cs1-progress-track");
   let lastResult = null;
   let styleCatalog = [];
+  let outputDir = "";
   let progressTimer = null;
   let progressValue = 0;
 
@@ -121,6 +123,35 @@ export function initCs1VideoModule() {
 
   const selectedStyle = () => styleSelect?.value || form.querySelector('input[name="cs1VideoStyle"]:checked')?.value || "cs1";
 
+  const renderOutputs = (outputs = []) => {
+    if (!outputList) return;
+    if (!outputs.length) {
+      outputList.innerHTML = "<p>还没有生成视频。生成后这里会显示所有 MP4 地址。</p>";
+      return;
+    }
+    outputList.innerHTML = outputs.slice(0, 30).map((item, index) => {
+      const sizeMb = Number.isFinite(item.size) ? `${(item.size / 1024 / 1024).toFixed(2)} MB` : "";
+      const updatedAt = item.updatedAt ? new Date(item.updatedAt).toLocaleString() : "";
+      return `<div class="cs1-output-item">
+        <strong>${index + 1}. ${escapeHtml(item.name || "video.mp4")}</strong>
+        <code>${escapeHtml(item.filePath || "")}</code>
+        <small>${escapeHtml([sizeMb, updatedAt].filter(Boolean).join(" · "))}</small>
+        <button class="ghost small" type="button" data-open-output="${escapeHtml(item.filePath || "")}">打开</button>
+      </div>`;
+    }).join("");
+  };
+
+  const loadOutputs = async () => {
+    try {
+      const response = await fetch("/api/cs1-video/outputs", { cache: "no-store" });
+      const data = await response.json();
+      outputDir = data.outputDir || outputDir;
+      renderOutputs(Array.isArray(data.outputs) ? data.outputs : []);
+    } catch {
+      if (outputList) outputList.innerHTML = "<p>输出记录加载失败，请稍后刷新。</p>";
+    }
+  };
+
   form.querySelectorAll(".cs1-style-card").forEach((card) => {
     card.addEventListener("click", () => {
       form.querySelectorAll(".cs1-style-card").forEach((item) => item.classList.remove("active"));
@@ -160,6 +191,7 @@ export function initCs1VideoModule() {
 
   styleSelect?.addEventListener("change", updateStyleDescription);
   loadStyles();
+  loadOutputs();
 
   deleteStyleButton?.addEventListener("click", async () => {
     if (!styleCatalog.length) return;
@@ -230,6 +262,7 @@ export function initCs1VideoModule() {
       });
       lastResult = result;
       outputPath.textContent = result.outputPath || "";
+      outputDir = result.outputDir || outputDir;
       logPanel.textContent = [
         result.aiUsed ? `Structure refinement: AI used · ${result.beatCount || beatCountSelect?.value || "auto"} cards` : `Structure refinement: local parser · ${result.beatCount || beatCountSelect?.value || "auto"} cards`,
         result.bgm?.label ? `BGM: ${result.bgm.label}` : "BGM: none",
@@ -239,6 +272,7 @@ export function initCs1VideoModule() {
         result.renderLog || "",
       ].join("\n").trim();
       resultPanel.hidden = false;
+      await loadOutputs();
       const style = styleCatalog.find((item) => item.id === result.style);
       completeProgress();
       setStatus("生成完成", `模板：${result.templateName || style?.name || result.style}。视频已输出到本机。`);
