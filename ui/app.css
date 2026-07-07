@@ -6615,6 +6615,12 @@ audio {
   padding-right: 42px;
 }
 
+#cs1VideoDeleteStyle {
+  justify-self: flex-start;
+  border-color: rgba(183, 68, 68, 0.42);
+  color: #7f1d1d;
+}
+
 .cs1-style-description {
   display: block;
   color: #7a6248;
