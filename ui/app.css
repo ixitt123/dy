@@ -6651,6 +6651,17 @@ audio {
   line-height: 1.55;
 }
 
+.cs1-script-format {
+  margin: 2px 0 0;
+  padding: 10px 12px;
+  border: 1px solid rgba(36, 27, 22, 0.12);
+  border-radius: 8px;
+  color: #2a211a;
+  background: rgba(255, 250, 235, 0.62);
+  font: 600 12px/1.65 ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+  white-space: pre-wrap;
+}
+
 .cs1-video-form textarea {
   min-height: 190px;
   resize: vertical;

@@ -1,6 +1,13 @@
 import { postJson } from "./api.js";
 
 const EXAMPLE_TEXT = "看着明天仪征几千名初三学生奔赴考场，新初二、新初三的家长们，你们以为中考离你们还远吗？别等初三，现在就开始查短板、定节奏。";
+const DEFAULT_SCRIPT_FORMAT = [
+  "标题：一句话说清主题。",
+  "开场：15-24 字钩子，直接点明痛点或结果。",
+  "主体：按 3-5 个节拍拆开，每段只讲一个观点。",
+  "字幕：短句优先，每句 12-20 字，避免长段落。",
+  "结尾：给出行动提醒、CTA 或一句总结。",
+].join("\n");
 
 export function initCs1VideoModule() {
   const form = document.getElementById("cs1VideoForm");
@@ -12,6 +19,8 @@ export function initCs1VideoModule() {
   const beatCountSelect = document.getElementById("cs1VideoBeatCount");
   const styleDescription = document.getElementById("cs1VideoStyleDescription");
   const styleSummary = document.getElementById("cs1VideoStyleSummary");
+  const scriptFormat = document.getElementById("cs1VideoScriptFormat");
+  const copyFormatButton = document.getElementById("cs1VideoCopyFormat");
   const deleteStyleButton = document.getElementById("cs1VideoDeleteStyle");
   const aiInput = document.getElementById("cs1VideoAiRefine");
   const status = document.getElementById("cs1VideoStatus");
@@ -113,6 +122,7 @@ export function initCs1VideoModule() {
     const description = style?.description || "选择模板后，这里会显示中文风格说明和适用场景。";
     if (styleDescription) styleDescription.textContent = description;
     if (styleSummary) styleSummary.textContent = description;
+    if (scriptFormat) scriptFormat.textContent = style?.scriptFormat || DEFAULT_SCRIPT_FORMAT;
   };
 
   const loadStyles = async () => {
@@ -153,6 +163,16 @@ export function initCs1VideoModule() {
       setStatus("删除失败", error instanceof Error ? error.message : String(error));
     } finally {
       deleteStyleButton.disabled = false;
+    }
+  });
+
+  copyFormatButton?.addEventListener("click", async () => {
+    const text = scriptFormat?.textContent?.trim() || DEFAULT_SCRIPT_FORMAT;
+    try {
+      await navigator.clipboard.writeText(text);
+      setStatus("已复制", "文案格式要求已复制，可直接粘贴到 AI 改写或提示词里。");
+    } catch {
+      setStatus("复制失败", "浏览器未允许剪贴板权限，请手动选中文案格式复制。");
     }
   });
 
