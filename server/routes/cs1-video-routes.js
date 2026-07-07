@@ -24,9 +24,19 @@ const OFFICIAL_TEMPLATE_IDS = new Set([
   "blank",
 ]);
 
+const AIFMAN_MANAGER_SCRIPT_FORMAT = [
+  "适用：职场管理、领导力、认知提升、能力清单类视频。",
+  "标题：用“对象 + 必备/避坑/提升 + 数字”结构，例如：升到管理岗必备的三个能力。",
+  "开场：一句身份变化或痛点，15-24 字，不铺垫。",
+  "主体：固定 3 个卡片，每个卡片包含：能力名 4-6 字 + 副标题 8-12 字 + 说明 16-28 字。",
+  "节奏：每段只讲一个动作，不写长段落，不写复杂案例。",
+  "结尾：一句行动提醒或认知总结，12-20 字。",
+  "示例：第一，沟通能力。向上汇报、平行协作、向下管理都要有秩序。",
+].join("\n");
+
 const CS1_VIDEO_STYLES = [
   { id: "cs1", name: "CS1 深色解释风", description: "黑色电影感画布，红色警示块和金色强调，适合招生提醒、学习规划、危机感口播，节奏是三段式：问题、冲突、行动。", source: "local" },
-  { id: "aifman-manager-card", name: "管理岗能力卡片风", description: "参考 AIfman 职场知识视频的动效结构：暗橄榄渐变背景、金色标题、绿色关键词、粒子圆环、三段能力卡片，适合职场管理、领导力、认知提升类横版知识短视频。", source: "local" },
+  { id: "aifman-manager-card", name: "管理岗能力卡片风", description: "参考 AIfman 职场知识视频的动效结构：暗橄榄渐变背景、金色标题、绿色关键词、粒子圆环、三段能力卡片，适合职场管理、领导力、认知提升类横版知识短视频。", source: "local", scriptFormat: AIFMAN_MANAGER_SCRIPT_FORMAT },
   { id: "warm-grain", name: "Warm Grain 暖纸纹", description: "暖色纸张质感、颗粒纹理、绿色和陶土色点缀，适合教育提醒、家长通知、温和但严肃的知识类内容。", source: "hyperframes" },
   { id: "play-mode", name: "Play Mode 活力弹性风", description: "高能社交媒体动效，弹性转场、明亮强调色，适合短促口号、活动宣传、年轻化信息流内容。", source: "hyperframes" },
   { id: "swiss-grid", name: "Swiss Grid 瑞士网格风", description: "白底、蓝黑网格、信息排版清晰，适合课程说明、流程拆解、专业知识点和结构化教学内容。", source: "hyperframes" },
