@@ -10,6 +10,7 @@ export function initCs1VideoModule() {
   const textInput = document.getElementById("cs1VideoText");
   const styleSelect = document.getElementById("cs1VideoStyleSelect");
   const beatCountSelect = document.getElementById("cs1VideoBeatCount");
+  const customStyleNameInput = null;
   const styleDescription = document.getElementById("cs1VideoStyleDescription");
   const styleSummary = document.getElementById("cs1VideoStyleSummary");
   const aiInput = document.getElementById("cs1VideoAiRefine");
@@ -154,13 +155,14 @@ export function initCs1VideoModule() {
         title: titleInput.value,
         text: textInput.value,
         style: selectedStyle(),
+        beatCount: beatCountSelect?.value || "5",
         templateName: customStyleNameInput?.value || "",
         aiRefine: aiInput.checked,
       });
       lastResult = result;
       outputPath.textContent = result.outputPath || "";
       logPanel.textContent = [
-        result.aiUsed ? "AI beat refinement: used" : "AI beat refinement: local fallback",
+        result.aiUsed ? `AI beat refinement: used · ${result.beatCount || beatCountSelect?.value || 5} beats` : `AI beat refinement: local fallback · ${result.beatCount || beatCountSelect?.value || 5} beats`,
         "",
         result.checkLog || "",
         "",
