@@ -300,6 +300,12 @@ export function initCs1VideoModule() {
       setStatus("还没有输出", "先生成一个视频，完成后可以直接打开输出位置。");
     }
   });
+
+  outputList?.addEventListener("click", (event) => {
+    const button = event.target instanceof Element ? event.target.closest("[data-open-output]") : null;
+    const filePath = button?.getAttribute("data-open-output");
+    if (filePath) openPath(filePath);
+  });
 }
 
 async function openPath(filePath) {

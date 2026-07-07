@@ -684,9 +684,11 @@ function aifmanManagerCardFiles(model, { bgmMode = "builtin_dark_pulse_128", bgm
   const height = 720;
   const cards = buildAifmanCards(model);
   const cardCount = cards.length;
-  const cardDuration = cardCount <= 3 ? 3.2 : cardCount === 4 ? 2.75 : 2.45;
-  const firstCardStart = 4.0;
-  const duration = Math.max(15, Number((firstCardStart + cardCount * cardDuration + 0.95).toFixed(2)));
+  const beatStep = 60 / 128;
+  const snapBeat = (seconds) => Number((Math.round(seconds / beatStep) * beatStep).toFixed(3));
+  const cardDuration = snapBeat(cardCount <= 3 ? beatStep * 7 : cardCount === 4 ? beatStep * 6 : beatStep * 5);
+  const firstCardStart = snapBeat(beatStep * 8);
+  const duration = Math.max(15, snapBeat(firstCardStart + cardCount * cardDuration + beatStep * 3));
   const bgm = resolveCs1Bgm({ bgmMode, bgmPath, duration });
   const title = escapeHtml(model.title || "升到管理岗的必备能力");
   const displayTitle = model.aifmanDisplayTitle || splitAifmanDisplayTitle(model.title || "", cards[0]?.keyword || "必备能力");
