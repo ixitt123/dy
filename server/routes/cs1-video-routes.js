@@ -1116,8 +1116,8 @@ AIfman-inspired knowledge card template. Dark olive cinematic canvas, soft black
       const x = 36 + (index % 5) * 13;
       const y = 32 + Math.floor(index / 5) * 10;
       const exitStart = 2.94 + (index % 5) * 0.07;
-      const exitEnd = exitStart + 0.36;
-      return `tl.fromTo(".p${index + 1}",{opacity:0,scale:.15,x:${-x},y:${-y}},{opacity:.86,scale:1.18,x:0,y:0,duration:.72,ease:"power2.out"},${start.toFixed(2)}).to(".p${index + 1}",{opacity:0,scale:2.35,x:${x * 1.6},y:${y * 1.35},duration:.52,ease:"sine.in"},${exitStart.toFixed(2)}).set(".p${index + 1}",{opacity:0},${exitEnd.toFixed(2)});`;
+      const exitEnd = exitStart + 0.55;
+      return `tl.fromTo(".p${index + 1}",{opacity:0,scale:.15,x:${-x},y:${-y}},{opacity:.86,scale:1.18,x:0,y:0,duration:.72,ease:"power2.out"},${start.toFixed(2)});\n    tl.to(".p${index + 1}",{opacity:0,scale:2.35,x:${x * 1.6},y:${y * 1.35},duration:.52,ease:"sine.in"},${exitStart.toFixed(2)});\n    tl.set(".p${index + 1}",{opacity:0,scale:0},${exitEnd.toFixed(2)});`;
     }).join("\n    ")}
     tl.to(".topline",{opacity:1,duration:.22,ease:"sine.out"},3.75)
       .to("#blank-scene",{opacity:1,duration:.18,ease:"sine.out"},3.35)
