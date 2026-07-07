@@ -9,8 +9,9 @@ export function initCs1VideoModule() {
   const titleInput = document.getElementById("cs1VideoTitle");
   const textInput = document.getElementById("cs1VideoText");
   const styleSelect = document.getElementById("cs1VideoStyleSelect");
-  const customStyleNameInput = document.getElementById("cs1VideoCustomStyleName");
+  const beatCountSelect = document.getElementById("cs1VideoBeatCount");
   const styleDescription = document.getElementById("cs1VideoStyleDescription");
+  const styleSummary = document.getElementById("cs1VideoStyleSummary");
   const aiInput = document.getElementById("cs1VideoAiRefine");
   const status = document.getElementById("cs1VideoStatus");
   const message = document.getElementById("cs1VideoMessage");

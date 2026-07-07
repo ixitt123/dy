@@ -6669,7 +6669,7 @@ audio {
 }
 
 .cs1-ai-toggle {
-  display: flex !important;
+  display: grid !important;
   grid-template-columns: auto 1fr;
   align-items: center;
   gap: 10px !important;
@@ -6677,6 +6677,28 @@ audio {
   border: 1px dashed rgba(59, 94, 58, 0.35);
   border-radius: 8px;
   background: rgba(59, 94, 58, 0.07);
+}
+
+.cs1-ai-toggle input {
+  grid-row: span 3;
+}
+
+.cs1-ai-toggle span {
+  color: #241b16;
+  font-weight: 800;
+}
+
+.cs1-ai-toggle small {
+  color: #7a6248;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.45;
+}
+
+.cs1-beat-select {
+  max-width: 280px;
+  padding: 9px 12px !important;
+  background-color: rgba(245, 240, 224, 0.9) !important;
 }
 
 .cs1-video-actions,
