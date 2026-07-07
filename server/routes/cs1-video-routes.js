@@ -653,7 +653,7 @@ function aifmanManagerCardFiles(model, { bgmMode = "builtin_dark_pulse_128", bgm
     return `<section id="${cardId}" class="ability-card clip" data-start="${start.toFixed(2)}" data-duration="${(cardDuration + 0.32).toFixed(2)}" data-track-index="${index + 3}">
       <div class="card-grid">
         <div class="card-copy">
-          <h2><span>${index + 1}.</span> ${escapeHtml(card.title)}</h2>
+          <h2 data-layout-allow-overlap><span>${index + 1}.</span> ${escapeHtml(card.title)}</h2>
           <h3>${escapeHtml(card.subtitle)}</h3>
           <p>${escapeHtml(card.detail)}</p>
           <b></b>
