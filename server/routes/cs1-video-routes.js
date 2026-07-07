@@ -941,7 +941,7 @@ AIfman-inspired knowledge card template. Dark olive cinematic canvas, soft black
     <div class="beat-spark" data-layout-ignore></div>
     <div class="topline">${title}</div>
     ${introHtml}
-    <section id="title-scene" class="scene clip" data-start="0" data-duration="3.8" data-track-index="1">
+    <section id="title-scene" class="scene clip" data-layout-allow-occlusion data-start="0" data-duration="3.8" data-track-index="1">
       <div class="title-stack">
         <h1>${lead}</h1>
         <h2>${keyword}</h2>
