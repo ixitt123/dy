@@ -292,8 +292,10 @@ export function initCs1VideoModule() {
     if (lastResult?.projectDir) openPath(lastResult.projectDir);
   });
   openOutputButton?.addEventListener("click", () => {
-    if (lastResult?.outputPath) {
-      openPath(lastResult.outputPath);
+    if (outputDir) {
+      openPath(outputDir);
+    } else if (lastResult?.outputDir) {
+      openPath(lastResult.outputDir);
     } else {
       setStatus("还没有输出", "先生成一个视频，完成后可以直接打开输出位置。");
     }
