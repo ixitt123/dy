@@ -109,7 +109,9 @@ export function initCs1VideoModule() {
 
   const updateStyleDescription = () => {
     const style = styleCatalog.find((item) => item.id === selectedStyle());
-    if (styleDescription) styleDescription.textContent = style?.description || "HyperFrames local template.";
+    const description = style?.description || "选择模板后，这里会显示中文风格说明和适用场景。";
+    if (styleDescription) styleDescription.textContent = description;
+    if (styleSummary) styleSummary.textContent = description;
   };
 
   const loadStyles = async () => {
