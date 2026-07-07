@@ -1027,7 +1027,7 @@ function aifmanManagerCardFiles(model, { bgmMode = "builtin_dark_pulse_128", bgm
     cardHold,
     duration,
     assets: bgm.assets,
-    bgm: bgm.label ? { mode: bgm.mode, label: bgm.label } : null,
+    bgm: bgm.label ? { mode: bgm.mode, label: bgm.label, duration: bgm.duration || duration } : null,
     packaging: packagingOptions,
     design: `## Style Prompt
 
@@ -1328,7 +1328,8 @@ function resolveCs1Bgm({ bgmMode = "builtin_dark_pulse_128", bgmPath = "", durat
       return {
         mode: "local",
         src: `assets/bgm${ext}`,
-        label: path.basename(resolved),
+        label: `${path.basename(resolved)} · 按视频时长截取`,
+        duration,
         volume: 0.16,
         assets: { [`assets/bgm${ext}`]: { copyFrom: resolved } },
       };
@@ -1337,7 +1338,8 @@ function resolveCs1Bgm({ bgmMode = "builtin_dark_pulse_128", bgmPath = "", durat
   return {
     mode: "builtin_dark_pulse_128",
     src: "assets/bgm-default-128bpm.wav",
-    label: "管理岗卡片风 · 128BPM 暗色律动",
+    label: `管理岗卡片风 · 128BPM · ${duration.toFixed(1)}s · 含结尾收束`,
+    duration,
     volume: 0.16,
     assets: { "assets/bgm-default-128bpm.wav": writeCs1DefaultBgmWavBuffer(duration) },
   };
