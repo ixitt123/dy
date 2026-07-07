@@ -818,12 +818,20 @@ function jsString(value) {
   return JSON.stringify(String(value));
 }
 
-function cs1Files(model) {
+function cs1Files(model, { aspect = ASPECT_RATIO_PRESETS["9:16"] } = {}) {
+  const width = aspect.width;
+  const height = aspect.height;
+  const baseWidth = 1920;
+  const baseHeight = 1080;
+  const fit = buildContainedStageFit({ width, height, baseWidth, baseHeight });
   const title = escapeHtml(model.title);
   const hook = escapeHtml(model.hook);
   const question = escapeHtml(model.question);
   const action = escapeHtml(model.action);
   return {
+    width,
+    height,
+    aspectRatio: aspect,
     design: `## Style Prompt
 
 Dark CS1 explainer video: cinematic black-brown canvas, exam-red warning blocks, large Chinese display type, deterministic three-beat motion.
@@ -845,12 +853,13 @@ Dark CS1 explainer video: cinematic black-brown canvas, exam-red warning blocks,
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=1920, height=1080" />
+  <meta name="viewport" content="width=${width}, height=${height}" />
   <script src="${LOCAL_GSAP_SRC}"></script>
   <style>
     *{box-sizing:border-box} @font-face{font-family:"Microsoft YaHei UI";src:local("Microsoft YaHei UI")} @font-face{font-family:"Microsoft YaHei";src:local("Microsoft YaHei")} @font-face{font-family:"Cascadia Mono";src:local("Cascadia Mono")}
-    html,body{margin:0;width:1920px;height:1080px;overflow:hidden;background:#12100d;color:#f0e5ce;font-family:"Microsoft YaHei UI","Microsoft YaHei",sans-serif}
-    #root{position:relative;width:1920px;height:1080px;overflow:hidden;background:radial-gradient(circle at 74% 18%,rgba(201,54,44,.22),rgba(201,54,44,0) 28%),radial-gradient(circle at 18% 78%,rgba(211,155,69,.18),rgba(211,155,69,0) 32%),#12100d}
+    html,body{margin:0;width:${width}px;height:${height}px;overflow:hidden;background:#12100d;color:#f0e5ce;font-family:"Microsoft YaHei UI","Microsoft YaHei",sans-serif}
+    #root{position:relative;width:${width}px;height:${height}px;overflow:hidden;background:#12100d}
+    #stage{position:absolute;left:${fit.left}px;top:${fit.top}px;width:${baseWidth}px;height:${baseHeight}px;overflow:hidden;transform:scale(${fit.scale});transform-origin:top left;background:radial-gradient(circle at 74% 18%,rgba(201,54,44,.22),rgba(201,54,44,0) 28%),radial-gradient(circle at 18% 78%,rgba(211,155,69,.18),rgba(211,155,69,0) 32%),#12100d}
     .texture,.lines{position:absolute;inset:0;pointer-events:none}.texture{z-index:8;opacity:.18;background-image:linear-gradient(rgba(240,229,206,.05) 1px,transparent 1px),linear-gradient(90deg,rgba(240,229,206,.04) 1px,transparent 1px);background-size:72px 72px}.lines{z-index:1;opacity:.34;background:repeating-linear-gradient(0deg,rgba(240,229,206,.08) 0 2px,transparent 2px 54px),linear-gradient(90deg,rgba(201,54,44,.28),rgba(201,54,44,0) 18%)}
     .scene{position:absolute;inset:0;z-index:2;display:flex;width:100%;height:100%;padding:106px 132px;background:#12100d}.scene-content{position:relative;z-index:3;display:flex;flex-direction:column;justify-content:center;width:100%;height:100%;gap:34px}
     #scene-2,#scene-3{opacity:0}.label{width:max-content;padding:12px 18px;border:1px solid rgba(211,155,69,.46);color:#d39b45;background:rgba(36,27,22,.76);font:700 24px "Cascadia Mono",monospace;letter-spacing:.08em;text-transform:uppercase}
@@ -860,11 +869,13 @@ Dark CS1 explainer video: cinematic black-brown canvas, exam-red warning blocks,
   </style>
 </head>
 <body>
-  <div id="root" data-composition-id="main" data-start="0" data-duration="10" data-width="1920" data-height="1080">
+  <div id="root" data-composition-id="main" data-start="0" data-duration="10" data-width="${width}" data-height="${height}">
+    <div id="stage">
     <div class="lines" data-layout-ignore></div><div class="texture" data-layout-ignore></div>
     <section id="scene-1" class="scene clip" data-start="0" data-duration="3.35" data-track-index="1"><div class="scene-content"><div class="label">CS1 HOOK</div><h1>${hook}</h1><p class="subline">${title}</p></div></section>
     <section id="scene-2" class="scene clip" data-start="3.05" data-duration="3.35" data-track-index="2"><div class="scene-content"><div class="label">QUESTION</div><h2>${question}</h2></div><div class="stamp" data-layout-ignore>NOW</div></section>
     <section id="scene-3" class="scene clip" data-start="6.15" data-duration="3.85" data-track-index="3"><div class="scene-content"><div class="label">START NOW</div><h2><span class="red">Start</span> today</h2><div class="action">${action}</div></div></section>
+    </div>
   </div>
   <script>
     window.__timelines=window.__timelines||{};const tl=gsap.timeline({paused:true});
