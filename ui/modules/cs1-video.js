@@ -9,6 +9,7 @@ export function initCs1VideoModule() {
   const titleInput = document.getElementById("cs1VideoTitle");
   const textInput = document.getElementById("cs1VideoText");
   const styleSelect = document.getElementById("cs1VideoStyleSelect");
+  const customStyleNameInput = document.getElementById("cs1VideoCustomStyleName");
   const styleDescription = document.getElementById("cs1VideoStyleDescription");
   const aiInput = document.getElementById("cs1VideoAiRefine");
   const status = document.getElementById("cs1VideoStatus");
@@ -21,8 +22,15 @@ export function initCs1VideoModule() {
   const openFileButton = document.getElementById("cs1VideoOpenFile");
   const openProjectButton = document.getElementById("cs1VideoOpenProject");
   const openOutputButton = document.getElementById("cs1VideoOpenOutput");
+  const progressPanel = document.getElementById("cs1VideoProgress");
+  const progressStage = document.getElementById("cs1VideoProgressStage");
+  const progressPercent = document.getElementById("cs1VideoProgressPercent");
+  const progressFill = document.getElementById("cs1VideoProgressFill");
+  const progressTrack = progressPanel?.querySelector(".cs1-progress-track");
   let lastResult = null;
   let styleCatalog = [];
+  let progressTimer = null;
+  let progressValue = 0;
 
   const setStatus = (value, detail = "") => {
     status.textContent = value;
