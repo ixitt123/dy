@@ -1081,7 +1081,7 @@ AIfman-inspired knowledge card template. Dark olive cinematic canvas, soft black
     ${particles}
     <div class="transition-wipe" data-layout-ignore></div>
     <div class="beat-spark" data-layout-ignore></div>
-    <div class="topline">${title}</div>
+    <div class="topline">${hookLine}</div>
     ${introHtml}
     <section id="title-scene" class="scene clip" data-layout-allow-occlusion data-start="0" data-duration="3.8" data-track-index="1">
       <div class="title-stack">
@@ -1117,7 +1117,7 @@ AIfman-inspired knowledge card template. Dark olive cinematic canvas, soft black
       const y = 32 + Math.floor(index / 5) * 10;
       const exitStart = 2.94 + (index % 5) * 0.07;
       const exitEnd = exitStart + 0.36;
-      return `tl.fromTo(".p${index + 1}",{opacity:0,scale:.25,x:${-x},y:${-y}},{opacity:.82,scale:1,x:0,y:0,duration:.36,ease:"power2.out"},${start.toFixed(2)}).to(".p${index + 1}",{opacity:0,duration:.36,ease:"sine.in"},${exitStart.toFixed(2)}).set(".p${index + 1}",{opacity:0},${exitEnd.toFixed(2)});`;
+      return `tl.fromTo(".p${index + 1}",{opacity:0,scale:.15,x:${-x},y:${-y}},{opacity:.86,scale:1.18,x:0,y:0,duration:.72,ease:"power2.out"},${start.toFixed(2)}).to(".p${index + 1}",{opacity:0,scale:2.35,x:${x * 1.6},y:${y * 1.35},duration:.52,ease:"sine.in"},${exitStart.toFixed(2)}).set(".p${index + 1}",{opacity:0},${exitEnd.toFixed(2)});`;
     }).join("\n    ")}
     tl.to(".topline",{opacity:1,duration:.22,ease:"sine.out"},3.75)
       .to("#blank-scene",{opacity:1,duration:.18,ease:"sine.out"},3.35)
@@ -1126,6 +1126,7 @@ AIfman-inspired knowledge card template. Dark olive cinematic canvas, soft black
     ${transitionSweeps}
     ${cardAnimations}
     ${outroTimeline}
+    ${watermarkTimeline}
     tl.to("${lastCardSelector}",{opacity:0,y:-22,duration:.36,ease:"power2.in"},${outroStart.toFixed(2)})
       .to(".topline",{opacity:0,duration:.28,ease:"sine.in"},${(outroStart + 0.15).toFixed(2)})
       .to(".final-dim",{opacity:.96,duration:.62,ease:"sine.inOut"},${(outroStart + 0.3).toFixed(2)})
@@ -1367,13 +1368,20 @@ function writeCs1DefaultBgmWavBuffer(durationSeconds = 15) {
   for (let index = 0; index < sampleCount; index += 1) {
     const t = index / sampleRate;
     const fadeIn = Math.min(1, t / 1.2);
-    const fadeOut = Math.min(1, (duration - t) / 1.4);
+    const fadeOut = Math.min(1, (duration - t) / 1.8);
     const envelope = Math.max(0, Math.min(fadeIn, fadeOut));
+    const outroT = Math.max(0, t - Math.max(0, duration - 1.8));
+    const outroEnvelope = outroT > 0 ? Math.sin(Math.min(1, outroT / 1.8) * Math.PI) * fadeOut : 0;
     const beatPhase = t % beat;
     const halfPhase = t % halfBeat;
     const bass = Math.sin(2 * Math.PI * 96 * t) * 0.12;
     const mid = Math.sin(2 * Math.PI * 144 * t) * 0.05;
     const high = Math.sin(2 * Math.PI * 216 * t) * 0.025;
+    const outroPad = Math.sin(2 * Math.PI * 288 * t) * 0.035 * outroEnvelope
+      + Math.sin(2 * Math.PI * 432 * t) * 0.018 * outroEnvelope;
+    const finalHit = outroT > 1.32 && outroT < 1.55
+      ? Math.sin(2 * Math.PI * 168 * t) * Math.exp(-(outroT - 1.32) * 18) * 0.16
+      : 0;
     const kick = beatPhase < 0.18
       ? Math.sin(2 * Math.PI * (70 + 42 * (1 - beatPhase / 0.18)) * t) * Math.exp(-beatPhase * 16) * 0.34
       : 0;
@@ -1381,7 +1389,7 @@ function writeCs1DefaultBgmWavBuffer(durationSeconds = 15) {
     const tick = halfPhase < 0.026
       ? (tickNoise - Math.floor(tickNoise) - 0.5) * Math.exp(-halfPhase * 105) * 0.07
       : 0;
-    const value = (bass + mid + high + kick + tick) * envelope;
+    const value = (bass + mid + high + kick + tick + outroPad + finalHit) * envelope;
     buffer.writeInt16LE(Math.round(Math.max(-1, Math.min(1, value)) * 32767), 44 + index * 2);
   }
   return buffer;
