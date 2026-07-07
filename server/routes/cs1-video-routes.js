@@ -48,6 +48,37 @@ const WATERMARK_POSITIONS = new Set([
   "bottom-left",
 ]);
 
+const ASPECT_RATIO_PRESETS = {
+  "9:16": {
+    id: "9:16",
+    label: "9:16 竖屏",
+    width: 1080,
+    height: 1920,
+    platforms: "抖音 / TikTok / 快手 / 视频号 / 小红书竖屏",
+  },
+  "16:9": {
+    id: "16:9",
+    label: "16:9 横屏",
+    width: 1920,
+    height: 1080,
+    platforms: "B站 / 西瓜视频 / YouTube / 课程横屏",
+  },
+  "1:1": {
+    id: "1:1",
+    label: "1:1 方屏",
+    width: 1080,
+    height: 1080,
+    platforms: "小红书 / 朋友圈 / Instagram 方图视频",
+  },
+  "4:5": {
+    id: "4:5",
+    label: "4:5 信息流",
+    width: 1080,
+    height: 1350,
+    platforms: "小红书信息流 / Instagram Feed / 视频号信息流",
+  },
+};
+
 const AIFMAN_MANAGER_SCRIPT_FORMAT = [
   "适用：职场管理、领导力、认知提升、能力清单类视频。",
   "标题：用“对象 + 必备/避坑/提升 + 数字”结构，例如：升到管理岗必备的三个能力。",
