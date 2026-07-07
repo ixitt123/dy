@@ -565,7 +565,7 @@ function groupBeatsForCaptions(beats) {
 
 function splitScript(script, beatCount = DEFAULT_BEAT_COUNT) {
   const parts = script
-    .split(/(?<=[。！？!?；;])|[|]/)
+    .split(/(?<=[。！？!?；;])|[\n|]/)
     .map((item) => item.replace(/[。！？!?；;]+$/g, "").trim())
     .filter(Boolean);
   if (parts.length >= beatCount) return parts.slice(0, beatCount);
@@ -821,7 +821,7 @@ function buildAifmanCards(model) {
 }
 
 function normalizeAifmanCards(cards, preferredCount = DEFAULT_BEAT_COUNT) {
-  const targetMax = Math.max(2, Math.min(6, Number(preferredCount || DEFAULT_BEAT_COUNT) || DEFAULT_BEAT_COUNT));
+  const targetMax = clampCardCount(preferredCount);
   const rows = (Array.isArray(cards) ? cards : [])
     .map((card, index) => {
       const title = compactText(card?.title || card?.name || card?.text || "", 10);
@@ -842,7 +842,11 @@ function normalizeAifmanCards(cards, preferredCount = DEFAULT_BEAT_COUNT) {
 }
 
 function extractAifmanCardsFromScript(script, preferredCount = DEFAULT_BEAT_COUNT) {
-  const clean = String(script || "").replace(/\s+/g, " ").trim();
+  const clean = String(script || "")
+    .replace(/\r\n/g, "\n")
+    .replace(/[ \t]+/g, " ")
+    .replace(/\n{2,}/g, "\n")
+    .trim();
   if (!clean) return [];
   const markerPattern = /(?:^|[。！？!?；;\n]\s*)(?:第?\s*([一二三四五六七八九十]+)|([1-9]))[、.．:：，]\s*/g;
   const matches = [...clean.matchAll(markerPattern)];
@@ -853,10 +857,39 @@ function extractAifmanCardsFromScript(script, preferredCount = DEFAULT_BEAT_COUN
       return cardFromSentence(clean.slice(start, end), index);
     }).filter(Boolean);
   }
+  const lines = clean
+    .split(/\n+/)
+    .map((line) => line.replace(/^[，。！？、,.!?:：；;\s]+|[，。！？、,.!?:：；;\s]+$/g, "").trim())
+    .filter((line) => line.length >= 4);
+  if (lines.length >= 2) {
+    const count = clampCardCount(preferredCount, lines.length);
+    const bodyLines = lines.length > count ? lines.slice(1, count + 1) : lines.slice(0, count);
+    return bodyLines.map((line, index) => cardFromSentence(line, index)).filter(Boolean);
+  }
   const sentences = splitSentences(clean);
-  const count = Math.max(2, Math.min(6, Number(preferredCount || DEFAULT_BEAT_COUNT) || DEFAULT_BEAT_COUNT, sentences.length || 2));
+  const count = Math.max(2, Math.min(6, clampCardCount(preferredCount, inferAifmanCardCount(clean)), sentences.length || 2));
   const bodySentences = sentences.length > count ? sentences.slice(1, count + 1) : sentences.slice(0, count);
   return bodySentences.map((sentence, index) => cardFromSentence(sentence, index)).filter(Boolean);
+}
+
+function inferAifmanCardCount(script = "") {
+  const clean = String(script || "")
+    .replace(/\r\n/g, "\n")
+    .replace(/[ \t]+/g, " ")
+    .replace(/\n{2,}/g, "\n")
+    .trim();
+  if (!clean) return DEFAULT_BEAT_COUNT;
+  const markerPattern = /(?:^|[。！？!?；;\n]\s*)(?:第?\s*[一二三四五六七八九十]+|[1-9])[、.．:：，]/g;
+  const markerCount = [...clean.matchAll(markerPattern)].length;
+  if (markerCount >= 2) return clampCardCount(markerCount);
+  const lines = clean
+    .split(/\n+/)
+    .map((line) => line.trim())
+    .filter((line) => line.length >= 4);
+  if (lines.length >= 2) return clampCardCount(lines.length > 6 ? lines.length - 1 : lines.length);
+  const sentenceCount = splitSentences(clean).length;
+  if (sentenceCount >= 4) return clampCardCount(sentenceCount - 1);
+  return clampCardCount(sentenceCount || DEFAULT_BEAT_COUNT);
 }
 
 function cardFromSentence(sentence, index = 0) {
