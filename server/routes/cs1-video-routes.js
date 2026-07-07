@@ -57,6 +57,7 @@ export function createCs1VideoRoutes({ baseDir, sendJson, modelRouter, ffmpegPat
           text: body.text,
           style: body.style,
           title: body.title,
+          templateName: body.templateName,
           aiRefine: body.aiRefine === true,
           modelRouter,
           ffmpegPath,
@@ -77,12 +78,13 @@ export function createCs1VideoRoutes({ baseDir, sendJson, modelRouter, ffmpegPat
   };
 }
 
-async function generateVideo({ runsDir, outputDir, text, style, title, aiRefine, modelRouter, ffmpegPath, ffprobePath }) {
+async function generateVideo({ runsDir, outputDir, text, style, title, templateName, aiRefine, modelRouter, ffmpegPath, ffprobePath }) {
   const script = normalizeScript(text);
   const styleId = normalizeStyle(style);
   const slug = `${formatDateSlug(new Date())}-${styleId}-${randomUUID().slice(0, 8)}`;
   const projectDir = path.join(runsDir, slug);
   const videoTitle = sanitizeTitle(title) || inferTitle(script);
+  const styleName = sanitizeTitle(templateName) || defaultStyleName(styleId);
   const outputPath = path.join(outputDir, `${slug}.mp4`);
 
   fs.mkdirSync(projectDir, { recursive: true });
@@ -99,6 +101,7 @@ async function generateVideo({ runsDir, outputDir, text, style, title, aiRefine,
     slug,
     title: videoTitle,
     styleId,
+    styleName,
     files,
   });
 
@@ -114,6 +117,7 @@ async function generateVideo({ runsDir, outputDir, text, style, title, aiRefine,
     id: slug,
     title: videoTitle,
     style: styleId,
+    templateName: styleName,
     projectDir,
     outputPath,
     aiUsed: Boolean(refined),
@@ -159,7 +163,7 @@ async function refineStoryModel({ script, title, modelRouter }) {
   }
 }
 
-function writeProject(projectDir, { slug, title, styleId, files }) {
+function writeProject(projectDir, { slug, title, styleId, styleName, files }) {
   const compositionDir = path.join(projectDir, "compositions");
   const width = files.width || 1920;
   const height = files.height || 1080;
@@ -182,6 +186,7 @@ function writeProject(projectDir, { slug, title, styleId, files }) {
     id: slug,
     name: title,
     style: styleId,
+    styleName,
     createdAt: new Date().toISOString(),
     duration: 10,
     width,
@@ -282,6 +287,10 @@ function normalizeStyle(value) {
 
 function sanitizeTitle(value) {
   return String(value || "").replace(/[<>:"/\\|?*\x00-\x1f]/g, "").trim().slice(0, 80);
+}
+
+function defaultStyleName(styleId) {
+  return CS1_VIDEO_STYLES.find((style) => style.id === styleId)?.name || styleId || "HyperFrames";
 }
 
 function inferTitle(script) {
