@@ -35,10 +35,11 @@ Use the Ian-style cognitive-anchor method: do not average the text into illustra
 
 Use Xiaohei 2.0 as the recurring protagonist:
 
-- original cinematic 3D animated collectible character
-- black/charcoal soft vinyl or plush material
-- rounded proportions, expressive glossy eyes, short limbs
-- serious, curious, slightly mischievous
+- original cute cinematic 3D designer-toy character
+- black/charcoal soft vinyl plus short plush material
+- oversized head, small body, rounded triangular ears or soft little horn-like tufts
+- expressive glossy glass eyes, tiny nose, subtle smiling mouth, one small harmless tooth
+- serious, curious, slightly mischievous, never ugly or passive
 - always performing the core action of the shot
 - never copy existing branded characters or named studio styles
 
@@ -79,7 +80,7 @@ Return or save JSON in this structure:
     "cta": ""
   },
   "visual_system": {
-    "style": "white canvas, hand-drawn structure, Xiaohei 2.0 original 3D animated collectible protagonist",
+    "style": "white canvas, hand-drawn structure, Xiaohei 2.0 original cute 3D animated designer-toy protagonist",
     "palette": ["#ffffff", "#111111", "#e34234", "#b76512", "#2f6fbd"],
     "forbidden": ["PPT diagrams", "dense UI", "existing IP copy", "named studio style prompts"]
   },
@@ -95,7 +96,7 @@ Return or save JSON in this structure:
       "camera": "",
       "composition": "",
       "xiaohei_action": {
-        "identity_anchor": "matte black rounded 3D collectible protagonist with expressive glossy eyes",
+        "identity_anchor": "original cute black 3D designer-toy protagonist with rounded ears, glossy glass eyes, soft vinyl plush texture and one tiny harmless tooth",
         "action": "",
         "contact_point": "",
         "emotion": "",

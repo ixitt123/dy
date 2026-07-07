@@ -6566,6 +6566,20 @@ audio {
   border: 1px solid rgba(122, 98, 72, 0.18);
 }
 
+.xiaohei-video-head {
+  background:
+    radial-gradient(circle at 12% 0%, rgba(217, 54, 43, 0.14), transparent 26%),
+    radial-gradient(circle at 88% 14%, rgba(31, 85, 158, 0.12), transparent 30%),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.96), rgba(241, 238, 228, 0.9));
+}
+
+.xiaohei-character-note {
+  border-color: rgba(31, 85, 158, 0.2);
+  background:
+    linear-gradient(90deg, rgba(217, 54, 43, 0.06), rgba(183, 101, 18, 0.06), rgba(31, 85, 158, 0.06)),
+    rgba(255, 255, 255, 0.68);
+}
+
 .cs1-video-layout {
   display: grid;
   grid-template-columns: minmax(0, 1.2fr) minmax(340px, 0.8fr);

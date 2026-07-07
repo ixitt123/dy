@@ -63,10 +63,13 @@
             <button class="nav-item" type="button" data-nav="cs1-video">
               <span class="nav-index">10</span><span>CS1 生成器</span>
             </button>
+            <button class="nav-item" type="button" data-nav="xiaohei-video">
+              <span class="nav-index">11</span><span>小黑说明视频</span>
+            </button>
           </div>
           <div class="nav-group">
             <button class="nav-item" type="button" data-nav="settings">
-              <span class="nav-index">11</span><span>系统设置</span>
+              <span class="nav-index">12</span><span>系统设置</span>
             </button>
           </div>
         </nav>
@@ -1576,6 +1579,118 @@
               <details class="cs1-log-panel">
                 <summary>查看生成日志</summary>
                 <pre id="cs1VideoLog"></pre>
+              </details>
+            </aside>
+          </div>
+        </section>
+      </section>
+
+      <section class="workbench-page" data-page="xiaohei-video" id="xiaoheiVideoPage">
+        <section class="cs1-video-maker xiaohei-video-maker">
+          <div class="result-head cs1-video-head xiaohei-video-head">
+            <div>
+              <span class="section-eyebrow">Xiaohei Explainer Video</span>
+              <h2>输入文案，生成小黑 2.0 说明视频</h2>
+              <p>按导演稿、Seedance VFX 合约、Ian 白底配图风格和 HyperFrames 检查流程输出；本地音乐会自动循环到视频长度并做淡入淡出。</p>
+            </div>
+            <button class="ghost" id="xiaoheiVideoOpenOutput" type="button">打开输出目录</button>
+          </div>
+
+          <div class="cs1-video-layout">
+            <form class="cs1-video-form" id="xiaoheiVideoForm">
+              <label>
+                视频标题
+                <input id="xiaoheiVideoTitle" type="text" maxlength="80" placeholder="例如：仪征中考家长提醒" />
+              </label>
+              <label>
+                输入文案
+                <textarea id="xiaoheiVideoText" rows="8" maxlength="1800" placeholder="把要做成说明视频的文案粘贴到这里..." required></textarea>
+              </label>
+              <label>
+                视频比例 / 平台
+                <select id="xiaoheiVideoAspectRatio">
+                  <option value="9:16" selected>9:16 竖屏 · 抖音 / 快手 / 视频号 / 小红书</option>
+                  <option value="16:9">16:9 横屏 · B站 / 课程 / 长视频</option>
+                  <option value="1:1">1:1 方屏 · 小红书 / 朋友圈</option>
+                  <option value="4:5">4:5 信息流 · 小红书 / 视频号</option>
+                </select>
+              </label>
+              <div class="cs1-template-note xiaohei-character-note">
+                <strong>小黑 2.0 角色标准</strong>
+                <p>原创可爱 3D 动画潮玩主角：黑色/深炭色、大头小身体、圆润耳朵/小角、玻璃高光眼、小鼻嘴、小尖牙、软胶短绒质感。不会复刻现有 IP 或具名动画工作室风格。</p>
+              </div>
+              <div class="cs1-visual-panel">
+                <label>
+                  分镜数量
+                  <select id="xiaoheiVideoShotCount">
+                    <option value="4">4 镜头 · 极短提醒</option>
+                    <option value="5" selected>5 镜头 · 标准说明</option>
+                    <option value="6">6 镜头 · 更完整叙事</option>
+                  </select>
+                </label>
+                <label>
+                  开头/结尾收放
+                  <select id="xiaoheiVideoIntroOutro">
+                    <option value="soft" selected>标准收放 · 缩放淡入淡出</option>
+                    <option value="paper">白纸展开 · 纸边收束</option>
+                    <option value="none">不添加收放包装</option>
+                  </select>
+                </label>
+              </div>
+              <label>
+                背景音乐
+                <select id="xiaoheiVideoBgmMode">
+                  <option value="none" selected>不添加 BGM</option>
+                  <option value="local">使用本地音频并循环铺满</option>
+                </select>
+                <div class="cs1-bgm-row">
+                  <input id="xiaoheiVideoBgmPath" type="text" placeholder="本地音频路径，可选" readonly />
+                  <button class="ghost small" id="xiaoheiVideoChooseBgm" type="button">选择音乐</button>
+                </div>
+                <small>选择本地音乐时请确认授权；如果音乐短于视频，系统会用 ffmpeg 循环并生成等长音轨。</small>
+              </label>
+              <label>
+                结尾行动文案
+                <input id="xiaoheiVideoCtaText" type="text" maxlength="48" placeholder="例如：现在就看路径、节奏和风险" />
+              </label>
+              <div class="cs1-video-actions">
+                <button class="primary" id="xiaoheiVideoGenerate" type="submit">生成小黑说明视频</button>
+                <button class="ghost" id="xiaoheiVideoExample" type="button">填入示例文案</button>
+              </div>
+            </form>
+
+            <aside class="cs1-video-status">
+              <div class="cs1-status-card">
+                <span>当前状态</span>
+                <strong id="xiaoheiVideoStatus">等待输入</strong>
+                <p id="xiaoheiVideoMessage">点击生成后会创建导演稿、分镜 JSON、配图提示、VFX 合约和 HyperFrames MP4。</p>
+              </div>
+              <div class="cs1-progress cs1-status-card" id="xiaoheiVideoProgress" hidden>
+                <div class="cs1-progress-top">
+                  <span id="xiaoheiVideoProgressStage">准备生成</span>
+                  <strong id="xiaoheiVideoProgressPercent">0%</strong>
+                </div>
+                <div class="cs1-progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+                  <i id="xiaoheiVideoProgressFill"></i>
+                </div>
+              </div>
+              <div class="cs1-output-card" id="xiaoheiVideoResult" hidden>
+                <span>输出文件</span>
+                <code id="xiaoheiVideoOutputPath"></code>
+                <div class="cs1-output-actions">
+                  <button class="secondary" id="xiaoheiVideoOpenFile" type="button">打开视频</button>
+                  <button class="ghost" id="xiaoheiVideoOpenProject" type="button">打开工程目录</button>
+                </div>
+              </div>
+              <div class="cs1-output-card cs1-output-list-card">
+                <span>最近生成视频地址</span>
+                <div class="cs1-output-list" id="xiaoheiVideoOutputList">
+                  <p>正在加载输出记录...</p>
+                </div>
+              </div>
+              <details class="cs1-log-panel">
+                <summary>查看生成日志</summary>
+                <pre id="xiaoheiVideoLog"></pre>
               </details>
             </aside>
           </div>
