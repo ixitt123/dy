@@ -714,23 +714,43 @@ function aifmanManagerCardFiles(model, { bgmMode = "builtin_dark_pulse_128", bgm
           <p>${escapeHtml(card.detail)}</p>
           <b></b>
         </div>
+        <div class="node-map" data-layout-ignore>
+          <em class="node-ring"></em>
+          <i class="node-bubble b1"></i>
+          <i class="node-bubble b2"></i>
+          <i class="node-bubble b3"></i>
+          <i class="node-bubble b4"></i>
+          <i class="node-bubble b5"></i>
+        </div>
         <div class="light-node" data-layout-ignore></div>
       </div>
     </section>`;
   }).join("");
+  const transitionSweeps = cards.map((_, index) => {
+    const start = firstCardStart + index * cardDuration;
+    return [
+      `tl.fromTo(".transition-wipe",{x:"-112%",opacity:0},{x:"0%",opacity:.82,duration:.16,ease:"power4.out"},${Math.max(0, start - 0.14).toFixed(3)});`,
+      `tl.to(".transition-wipe",{x:"112%",opacity:0,duration:.24,ease:"power3.in"},${(start + 0.04).toFixed(3)});`,
+      `tl.fromTo(".beat-spark",{opacity:0,scale:.62},{opacity:.85,scale:1.18,duration:.18,ease:"expo.out"},${(start + 0.02).toFixed(3)});`,
+      `tl.to(".beat-spark",{opacity:0,scale:1.55,duration:.32,ease:"sine.in"},${(start + 0.22).toFixed(3)});`,
+    ].join("\n    ");
+  }).join("\n    ");
   const cardAnimations = cards.map((_, index) => {
     const start = firstCardStart + index * cardDuration;
     const previous = index === 0 ? "#title-scene" : `#card-${index}`;
     const current = `#card-${index + 1}`;
     return [
-      `tl.fromTo("${current}",{opacity:0,y:42},{opacity:1,y:0,duration:.42,ease:"power3.out"},${start});`,
-      `tl.to("${previous}",{opacity:0,y:-26,duration:.32,ease:"power2.in"},${start + 0.02});`,
-      `tl.from("${current} h2",{x:-34,opacity:0,duration:.38,ease:"expo.out"},${start + 0.16});`,
-      `tl.from("${current} h3",{x:-24,opacity:0,duration:.34,ease:"power3.out"},${start + 0.42});`,
-      `tl.from("${current} p",{y:16,opacity:0,duration:.34,ease:"sine.out"},${start + 0.7});`,
-      `tl.from("${current} b",{scaleX:0,transformOrigin:"left center",duration:.48,ease:"power2.out"},${start + 0.28});`,
-      `tl.from("${current} .light-node",{scale:.2,opacity:0,duration:.36,ease:"back.out(1.8)"},${start + 0.62});`,
-      `tl.to("${current} .light-node",{scale:1.18,duration:.42,repeat:3,yoyo:true,ease:"sine.inOut"},${start + 1.05});`,
+      `tl.fromTo("${current}",{opacity:0,y:34,clipPath:"inset(0 100% 0 0)"},{opacity:1,y:0,clipPath:"inset(0 0% 0 0)",duration:.42,ease:"power4.out"},${start.toFixed(3)});`,
+      `tl.to("${previous}",{opacity:0,filter:"blur(5px)",scale:.985,duration:.24,ease:"power2.in"},${(start + 0.08).toFixed(3)});`,
+      `tl.from("${current} h2",{x:-42,opacity:0,duration:.36,ease:"expo.out"},${(start + 0.16).toFixed(3)});`,
+      `tl.from("${current} h3",{x:-26,opacity:0,duration:.32,ease:"power3.out"},${(start + 0.42).toFixed(3)});`,
+      `tl.from("${current} p",{y:18,opacity:0,duration:.34,ease:"sine.out"},${(start + 0.7).toFixed(3)});`,
+      `tl.from("${current} b",{scaleX:0,transformOrigin:"left center",duration:.42,ease:"power2.out"},${(start + 0.3).toFixed(3)});`,
+      `tl.from("${current} .node-ring",{scale:.35,opacity:0,rotation:-16,duration:.34,ease:"back.out(1.8)"},${(start + 0.2).toFixed(3)});`,
+      `tl.from("${current} .node-bubble",{scale:.18,opacity:0,y:10,duration:.28,stagger:.045,ease:"power3.out"},${(start + 0.32).toFixed(3)});`,
+      `tl.from("${current} .light-node",{scale:.2,opacity:0,duration:.3,ease:"back.out(1.8)"},${(start + 0.54).toFixed(3)});`,
+      `tl.to("${current} .node-ring",{scale:1.08,rotation:8,duration:.42,repeat:2,yoyo:true,ease:"sine.inOut"},${(start + 0.82).toFixed(3)});`,
+      `tl.to("${current} .light-node",{scale:1.18,duration:${beatStep.toFixed(3)},repeat:4,yoyo:true,ease:"sine.inOut"},${(start + beatStep * 2).toFixed(3)});`,
     ].join("\n    ");
   }).join("\n    ");
   const lastCardSelector = `#card-${cardCount}`;
