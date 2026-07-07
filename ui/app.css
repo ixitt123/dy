@@ -6662,6 +6662,13 @@ audio {
   white-space: pre-wrap;
 }
 
+.cs1-bgm-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+
 .cs1-video-form textarea {
   min-height: 190px;
   resize: vertical;

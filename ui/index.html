@@ -1398,6 +1398,19 @@
                 <pre class="cs1-script-format" id="cs1VideoScriptFormat">选择模板后，这里会显示适合该模板的文案结构。</pre>
                 <button class="ghost small" id="cs1VideoCopyFormat" type="button">复制文案格式</button>
               </div>
+              <label>
+                背景音乐
+                <select id="cs1VideoBgmMode">
+                  <option value="builtin_dark_pulse_128" selected>默认 128BPM 暗色律动</option>
+                  <option value="local">使用本地音频</option>
+                  <option value="none">不添加 BGM</option>
+                </select>
+                <div class="cs1-bgm-row">
+                  <input id="cs1VideoBgmPath" type="text" placeholder="本地音频路径，可选" readonly />
+                  <button class="ghost small" id="cs1VideoChooseBgm" type="button">选择音乐</button>
+                </div>
+                <small>默认 BGM 为本地生成，不调用 API；选择本地音乐时请确认授权。</small>
+              </label>
               <label class="cs1-ai-toggle">
                 <input id="cs1VideoAiRefine" type="checkbox" />
                 <span>使用本机大模型 API 优化视频节拍</span>

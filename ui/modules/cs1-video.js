@@ -22,6 +22,9 @@ export function initCs1VideoModule() {
   const scriptFormat = document.getElementById("cs1VideoScriptFormat");
   const copyFormatButton = document.getElementById("cs1VideoCopyFormat");
   const deleteStyleButton = document.getElementById("cs1VideoDeleteStyle");
+  const bgmModeSelect = document.getElementById("cs1VideoBgmMode");
+  const bgmPathInput = document.getElementById("cs1VideoBgmPath");
+  const chooseBgmButton = document.getElementById("cs1VideoChooseBgm");
   const aiInput = document.getElementById("cs1VideoAiRefine");
   const status = document.getElementById("cs1VideoStatus");
   const message = document.getElementById("cs1VideoMessage");
@@ -176,6 +179,24 @@ export function initCs1VideoModule() {
     }
   });
 
+  chooseBgmButton?.addEventListener("click", async () => {
+    chooseBgmButton.disabled = true;
+    try {
+      const data = await postJson("/api/local-media/choose-audio", {});
+      if (data.filePath) {
+        bgmPathInput.value = data.filePath;
+        if (bgmModeSelect) bgmModeSelect.value = "local";
+        setStatus("已选择音乐", "生成时会把本地音乐写入 HyperFrames 视频。");
+      } else {
+        setStatus("未选择音乐", "继续使用默认 128BPM 暗色律动或不添加 BGM。");
+      }
+    } catch (error) {
+      setStatus("选择音乐失败", error instanceof Error ? error.message : String(error));
+    } finally {
+      chooseBgmButton.disabled = false;
+    }
+  });
+
   exampleButton?.addEventListener("click", () => {
     titleInput.value = "仪征中考家长提醒";
     textInput.value = EXAMPLE_TEXT;
@@ -195,12 +216,15 @@ export function initCs1VideoModule() {
         text: textInput.value,
         style: selectedStyle(),
         beatCount: beatCountSelect?.value || "5",
+        bgmMode: bgmModeSelect?.value || "builtin_dark_pulse_128",
+        bgmPath: bgmPathInput?.value || "",
         aiRefine: aiInput.checked,
       });
       lastResult = result;
       outputPath.textContent = result.outputPath || "";
       logPanel.textContent = [
         result.aiUsed ? `AI beat refinement: used · ${result.beatCount || beatCountSelect?.value || 5} beats` : `AI beat refinement: local fallback · ${result.beatCount || beatCountSelect?.value || 5} beats`,
+        result.bgm?.label ? `BGM: ${result.bgm.label}` : "BGM: none",
         "",
         result.checkLog || "",
         "",
