@@ -312,6 +312,7 @@ async function generateVideo({ runsDir, outputDir, text, style, title, aspectRat
     outputDir,
     aiUsed: Boolean(refined),
     bgm: files.bgm || null,
+    visualOptions: files.visualOptions || aifmanVisual,
     packaging: files.packaging || packagingOptions,
     checkLog: checkOutput.join("\n").slice(-8000),
     renderLog: renderOutput.join("\n").slice(-8000),
