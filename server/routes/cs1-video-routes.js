@@ -106,6 +106,7 @@ async function generateVideo({ runsDir, outputDir, text, style, title, beatCount
     title: videoTitle,
     styleId,
     styleName,
+    beatCount: model.beatCount || normalizedBeatCount,
     files,
   });
 
@@ -168,7 +169,7 @@ async function refineStoryModel({ script, title, beatCount, modelRouter }) {
   }
 }
 
-function writeProject(projectDir, { slug, title, styleId, styleName, files }) {
+function writeProject(projectDir, { slug, title, styleId, styleName, beatCount, files }) {
   const compositionDir = path.join(projectDir, "compositions");
   const width = files.width || 1920;
   const height = files.height || 1080;
@@ -192,6 +193,7 @@ function writeProject(projectDir, { slug, title, styleId, styleName, files }) {
     name: title,
     style: styleId,
     styleName,
+    beatCount,
     createdAt: new Date().toISOString(),
     duration: 10,
     width,
@@ -290,6 +292,11 @@ function normalizeStyle(value) {
   return "cs1";
 }
 
+function normalizeBeatCount(value) {
+  const count = Number.parseInt(value, 10);
+  return ALLOWED_BEAT_COUNTS.has(count) ? count : DEFAULT_BEAT_COUNT;
+}
+
 function sanitizeTitle(value) {
   return String(value || "").replace(/[<>:"/\\|?*\x00-\x1f]/g, "").trim().slice(0, 80);
 }
@@ -307,29 +314,80 @@ function formatDateSlug(date) {
   return `${date.getFullYear()}${pad(date.getMonth() + 1)}${pad(date.getDate())}-${pad(date.getHours())}${pad(date.getMinutes())}${pad(date.getSeconds())}`;
 }
 
-function buildStoryModel(script, title) {
-  const segments = splitScript(script);
+function buildStoryModel(script, title, beatCount = DEFAULT_BEAT_COUNT) {
+  const segments = splitScript(script, beatCount);
+  const beats = segments.map((segment, index) => ({
+    role: index === 0 ? "hook" : index === segments.length - 1 ? "action" : "build",
+    text: segment,
+    caption: segment,
+  }));
+  return storyModelFromBeats(title, beats, beatCount);
+}
+
+function storyModelFromBeats(title, rawBeats, beatCount = DEFAULT_BEAT_COUNT) {
+  const normalizedCount = normalizeBeatCount(beatCount);
+  const beats = normalizeBeats(rawBeats, normalizedCount, title);
+  const captions = groupBeatsForCaptions(beats);
   return {
     title,
-    hook: segments[0] || title,
-    question: segments[1] || "Is this still far away?",
-    action: segments[2] || "Start now: find gaps, set rhythm, review daily.",
-    caption1: segments[0] || title,
-    caption2: segments[1] || "The key question is already here.",
-    caption3: segments[2] || "Now is the starting line.",
+    beatCount: beats.length,
+    beats,
+    hook: beats[0]?.text || title,
+    question: beats[Math.min(1, beats.length - 1)]?.text || "这个问题现在就要解决。",
+    action: beats.slice(Math.max(0, beats.length - 2)).map((beat) => beat.text).join(" / ") || "现在开始行动。",
+    caption1: captions[0] || title,
+    caption2: captions[1] || "问题已经很清楚。",
+    caption3: captions[2] || "现在开始行动。",
   };
 }
 
-function splitScript(script) {
+function normalizeBeats(rawBeats, beatCount, title) {
+  const source = Array.isArray(rawBeats) ? rawBeats : [];
+  const beats = source
+    .map((beat, index) => {
+      const text = String(beat?.text || beat?.caption || beat || "").replace(/\s+/g, " ").trim();
+      const caption = String(beat?.caption || text).replace(/\s+/g, " ").trim();
+      if (!text && !caption) return null;
+      return {
+        index: index + 1,
+        role: String(beat?.role || `beat_${index + 1}`).trim().slice(0, 24),
+        text: text.slice(0, 90),
+        caption: caption.slice(0, 90),
+      };
+    })
+    .filter(Boolean)
+    .slice(0, beatCount);
+  while (beats.length < beatCount) {
+    const index = beats.length + 1;
+    beats.push({
+      index,
+      role: index === 1 ? "hook" : index === beatCount ? "action" : "build",
+      text: index === 1 ? title : index === beatCount ? "现在开始行动。" : "把问题拆开，马上执行。",
+      caption: index === 1 ? title : index === beatCount ? "现在开始行动。" : "把问题拆开，马上执行。",
+    });
+  }
+  return beats;
+}
+
+function groupBeatsForCaptions(beats) {
+  const groups = [[], [], []];
+  beats.forEach((beat, index) => {
+    const groupIndex = Math.min(2, Math.floor((index / Math.max(1, beats.length)) * 3));
+    groups[groupIndex].push(beat.caption || beat.text);
+  });
+  return groups.map((group) => group.join("，").slice(0, 120));
+}
+
+function splitScript(script, beatCount = DEFAULT_BEAT_COUNT) {
   const parts = script
     .split(/(?<=[。！？!?；;])|[|]/)
     .map((item) => item.replace(/[。！？!?；;]+$/g, "").trim())
     .filter(Boolean);
-  if (parts.length >= 3) return parts.slice(0, 3);
+  if (parts.length >= beatCount) return parts.slice(0, beatCount);
   const chunks = [];
-  const size = Math.ceil(script.length / 3);
+  const size = Math.ceil(script.length / beatCount);
   for (let i = 0; i < script.length; i += size) chunks.push(script.slice(i, i + size).trim());
-  return chunks.filter(Boolean).slice(0, 3);
+  return chunks.filter(Boolean).slice(0, beatCount);
 }
 
 function escapeHtml(value) {

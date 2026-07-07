@@ -6623,6 +6623,28 @@ audio {
   line-height: 1.45;
 }
 
+.cs1-template-note {
+  display: grid;
+  gap: 8px;
+  padding: 14px 16px;
+  border: 1px solid rgba(59, 94, 58, 0.2);
+  border-radius: 8px;
+  background: rgba(59, 94, 58, 0.06);
+}
+
+.cs1-template-note strong {
+  color: #241b16;
+  font-size: 14px;
+}
+
+.cs1-template-note p {
+  margin: 0;
+  color: #5d4a37;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.55;
+}
+
 .cs1-video-form textarea {
   min-height: 190px;
   resize: vertical;
