@@ -12,6 +12,7 @@ export function initCs1VideoModule() {
   const beatCountSelect = document.getElementById("cs1VideoBeatCount");
   const styleDescription = document.getElementById("cs1VideoStyleDescription");
   const styleSummary = document.getElementById("cs1VideoStyleSummary");
+  const deleteStyleButton = document.getElementById("cs1VideoDeleteStyle");
   const aiInput = document.getElementById("cs1VideoAiRefine");
   const status = document.getElementById("cs1VideoStatus");
   const message = document.getElementById("cs1VideoMessage");
@@ -123,9 +124,13 @@ export function initCs1VideoModule() {
       if (!styleCatalog.length) return;
       const current = styleSelect.value || "cs1";
       styleSelect.innerHTML = styleCatalog
-        .map((style) => `<option value="${escapeHtml(style.id)}">${escapeHtml(style.name)}${style.source === "hyperframes" ? " · 官方模板" : " · 本地模板"}</option>`)
+        .map((style, index) => {
+          const number = String(style.display_index || index + 1).padStart(2, "0");
+          const sourceLabel = style.source === "hyperframes" ? "官方模板" : "本地模板";
+          return `<option value="${escapeHtml(style.id)}">${number}. ${escapeHtml(style.name)} · ${sourceLabel}</option>`;
+        })
         .join("");
-      styleSelect.value = styleCatalog.some((style) => style.id === current) ? current : "cs1";
+      styleSelect.value = styleCatalog.some((style) => style.id === current) ? current : styleCatalog[0]?.id || "cs1";
       updateStyleDescription();
     } catch {
       updateStyleDescription();
@@ -134,6 +139,22 @@ export function initCs1VideoModule() {
 
   styleSelect?.addEventListener("change", updateStyleDescription);
   loadStyles();
+
+  deleteStyleButton?.addEventListener("click", async () => {
+    if (!styleCatalog.length) return;
+    const id = selectedStyle();
+    const style = styleCatalog.find((item) => item.id === id);
+    deleteStyleButton.disabled = true;
+    try {
+      await postJson("/api/cs1-video/styles/delete", { id });
+      setStatus("模板已删除", `已从下拉框隐藏：${style?.name || id}`);
+      await loadStyles();
+    } catch (error) {
+      setStatus("删除失败", error instanceof Error ? error.message : String(error));
+    } finally {
+      deleteStyleButton.disabled = false;
+    }
+  });
 
   exampleButton?.addEventListener("click", () => {
     titleInput.value = "仪征中考家长提醒";
