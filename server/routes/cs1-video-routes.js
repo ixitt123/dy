@@ -69,6 +69,15 @@ export function createCs1VideoRoutes({ baseDir, sendJson, modelRouter, ffmpegPat
       return true;
     }
 
+    if (req.method === "GET" && route === "outputs") {
+      sendJson(res, 200, {
+        ok: true,
+        outputDir,
+        outputs: listCs1Outputs(outputDir),
+      });
+      return true;
+    }
+
     if (req.method === "POST" && route === "styles/delete") {
       try {
         const body = await readJsonBody(req, { maxBytes: 16 * 1024 });
@@ -197,6 +206,7 @@ async function generateVideo({ runsDir, outputDir, text, style, title, beatCount
     beatCount: model.beatCount || normalizedBeatCount,
     projectDir,
     outputPath,
+    outputDir,
     aiUsed: Boolean(refined),
     bgm: files.bgm || null,
     checkLog: checkOutput.join("\n").slice(-8000),
@@ -507,6 +517,28 @@ function aifmanModelFromParts({ title, headlineLead, headlineKeyword, cards, out
     aifmanCards: normalizedCards,
     aifmanOutro: String(outro || "").trim(),
   };
+}
+
+function listCs1Outputs(outputDir) {
+  try {
+    if (!fs.existsSync(outputDir)) return [];
+    return fs.readdirSync(outputDir, { withFileTypes: true })
+      .filter((entry) => entry.isFile() && entry.name.toLowerCase().endsWith(".mp4"))
+      .map((entry) => {
+        const filePath = path.join(outputDir, entry.name);
+        const stat = fs.statSync(filePath);
+        return {
+          name: entry.name,
+          filePath,
+          size: stat.size,
+          updatedAt: stat.mtime.toISOString(),
+        };
+      })
+      .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
+      .slice(0, 80);
+  } catch {
+    return [];
+  }
 }
 
 function storyModelFromBeats(title, rawBeats, beatCount = DEFAULT_BEAT_COUNT) {
