@@ -24,6 +24,27 @@ const OFFICIAL_TEMPLATE_IDS = new Set([
   "blank",
 ]);
 
+const INTRO_TEMPLATE_IDS = new Set([
+  "none",
+  "brand_hook_dark",
+  "title_flash_dark",
+  "series_badge_dark",
+]);
+
+const OUTRO_TEMPLATE_IDS = new Set([
+  "none",
+  "follow_cta_dark",
+  "comment_cta_dark",
+  "consult_cta_dark",
+]);
+
+const WATERMARK_POSITIONS = new Set([
+  "top-right",
+  "top-left",
+  "bottom-right",
+  "bottom-left",
+]);
+
 const AIFMAN_MANAGER_SCRIPT_FORMAT = [
   "适用：职场管理、领导力、认知提升、能力清单类视频。",
   "标题：用“对象 + 必备/避坑/提升 + 数字”结构，例如：升到管理岗必备的三个能力。",
@@ -115,6 +136,15 @@ export function createCs1VideoRoutes({ baseDir, sendJson, modelRouter, ffmpegPat
           templateName: body.templateName,
           bgmMode: body.bgmMode,
           bgmPath: body.bgmPath,
+          packaging: {
+            introTemplateId: body.introTemplateId,
+            outroTemplateId: body.outroTemplateId,
+            ctaText: body.ctaText,
+            watermarkEnabled: body.watermarkEnabled,
+            watermarkText: body.watermarkText,
+            watermarkPosition: body.watermarkPosition,
+            watermarkOpacity: body.watermarkOpacity,
+          },
           aiRefine: body.aiRefine === true,
           modelRouter,
           ffmpegPath,
@@ -155,7 +185,7 @@ function writeHiddenStyleIds(filePath, ids) {
   fs.writeFileSync(filePath, `${JSON.stringify(payload, null, 2)}\n`, "utf8");
 }
 
-async function generateVideo({ runsDir, outputDir, text, style, title, beatCount, templateName, bgmMode, bgmPath, aiRefine, modelRouter, ffmpegPath, ffprobePath }) {
+async function generateVideo({ runsDir, outputDir, text, style, title, beatCount, templateName, bgmMode, bgmPath, packaging, aiRefine, modelRouter, ffmpegPath, ffprobePath }) {
   const script = normalizeScript(text);
   const styleId = normalizeStyle(style);
   const normalizedBeatCount = styleId === "aifman-manager-card"
@@ -165,6 +195,7 @@ async function generateVideo({ runsDir, outputDir, text, style, title, beatCount
   const projectDir = path.join(runsDir, slug);
   const videoTitle = sanitizeTitle(title) || inferTitle(script);
   const styleName = sanitizeTitle(templateName) || defaultStyleName(styleId);
+  const packagingOptions = normalizePackagingOptions(packaging, { title: videoTitle });
   const outputPath = path.join(outputDir, `${slug}.mp4`);
 
   fs.mkdirSync(projectDir, { recursive: true });
@@ -177,7 +208,7 @@ async function generateVideo({ runsDir, outputDir, text, style, title, beatCount
   const files = styleId === "cs1"
     ? cs1Files(model)
     : styleId === "aifman-manager-card"
-      ? aifmanManagerCardFiles(model, { bgmMode, bgmPath })
+      ? aifmanManagerCardFiles(model, { bgmMode, bgmPath, packaging: packagingOptions })
       : styleId === "warm-grain"
       ? warmGrainFiles(model)
       : officialTemplateFiles(model, styleId);
@@ -209,6 +240,7 @@ async function generateVideo({ runsDir, outputDir, text, style, title, beatCount
     outputDir,
     aiUsed: Boolean(refined),
     bgm: files.bgm || null,
+    packaging: files.packaging || packagingOptions,
     checkLog: checkOutput.join("\n").slice(-8000),
     renderLog: renderOutput.join("\n").slice(-8000),
   };
