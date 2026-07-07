@@ -653,7 +653,7 @@ function buildAifmanIconTimeline(variant, current, start, cardDuration) {
   if (variant === "light_chain") {
     return `tl.to("${current} .light-node",{x:42,scale:1.22,duration:.42,repeat:${repeat},yoyo:true,ease:"sine.inOut"},${pulseStart});`;
   }
-  return "";
+  return `tl.to("${current} .node-ring",{scale:1.08,rotation:8,duration:.42,repeat:${Math.max(1, Math.min(3, repeat))},yoyo:true,ease:"sine.inOut"},${pulseStart});`;
 }
 
 function buildContainedStageFit({ width, height, baseWidth, baseHeight }) {
@@ -1119,7 +1119,6 @@ function aifmanManagerCardFiles(model, { bgmMode = "builtin_dark_pulse_128", bgm
       `tl.from("${current} .node-ring",{scale:.35,opacity:0,rotation:-16,duration:.34,ease:"back.out(1.8)"},${(start + 0.2).toFixed(3)});`,
       `tl.from("${current} .node-bubble",{scale:.18,opacity:0,y:10,duration:.28,stagger:.045,ease:"power3.out"},${(start + 0.32).toFixed(3)});`,
       `tl.from("${current} .light-node",{scale:.2,opacity:0,duration:.3,ease:"back.out(1.8)"},${(start + 0.54).toFixed(3)});`,
-      `tl.to("${current} .node-ring",{scale:1.08,rotation:8,duration:.42,repeat:2,yoyo:true,ease:"sine.inOut"},${(start + 0.82).toFixed(3)});`,
       `tl.to("${current} .light-node",{scale:1.18,duration:${beatStep.toFixed(3)},repeat:4,yoyo:true,ease:"sine.inOut"},${(start + beatStep * 2).toFixed(3)});`,
       buildAifmanIconTimeline(visualOptions.iconVariant, current, start, cardDuration),
     ].join("\n    ");
