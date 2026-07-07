@@ -37,6 +37,66 @@ export function initCs1VideoModule() {
     message.textContent = detail;
   };
 
+  const setProgress = (value, stage = "") => {
+    if (!progressPanel) return;
+    const nextValue = Math.max(0, Math.min(100, Math.round(value)));
+    progressValue = nextValue;
+    progressPanel.hidden = false;
+    if (progressStage && stage) progressStage.textContent = stage;
+    if (progressPercent) progressPercent.textContent = `${nextValue}%`;
+    if (progressFill) progressFill.style.width = `${nextValue}%`;
+    progressTrack?.setAttribute("aria-valuenow", String(nextValue));
+  };
+
+  const stopProgress = () => {
+    if (progressTimer) window.clearInterval(progressTimer);
+    progressTimer = null;
+  };
+
+  const startProgress = () => {
+    stopProgress();
+    progressValue = 0;
+    progressPanel?.classList.remove("error");
+    const startedAt = Date.now();
+    setProgress(4, "准备工程");
+    progressTimer = window.setInterval(() => {
+      const elapsed = (Date.now() - startedAt) / 1000;
+      let target = 8;
+      let stage = "创建 HyperFrames 工程";
+      if (elapsed < 4) {
+        target = 4 + elapsed * 2;
+      } else if (elapsed < 10) {
+        target = 12 + (elapsed - 4) * 2.7;
+        stage = "检查工程结构";
+      } else if (elapsed < 18) {
+        target = 28 + (elapsed - 10) * 1.8;
+        stage = "验证画面与文字";
+      } else if (elapsed < 28) {
+        target = 42 + (elapsed - 18) * 1.3;
+        stage = "检查布局溢出";
+      } else if (elapsed < 70) {
+        target = 55 + (elapsed - 28) * 0.72;
+        stage = "渲染视频帧";
+      } else {
+        target = Math.min(96, 85 + (elapsed - 70) * 0.2);
+        stage = "编码 MP4";
+      }
+      setProgress(Math.max(progressValue, target), stage);
+    }, 800);
+  };
+
+  const completeProgress = () => {
+    stopProgress();
+    progressPanel?.classList.remove("error");
+    setProgress(100, "生成完成");
+  };
+
+  const failProgress = () => {
+    stopProgress();
+    progressPanel?.classList.add("error");
+    setProgress(Math.max(progressValue, 8), "生成失败");
+  };
+
   const selectedStyle = () => styleSelect?.value || form.querySelector('input[name="cs1VideoStyle"]:checked')?.value || "cs1";
 
   form.querySelectorAll(".cs1-style-card").forEach((card) => {
@@ -74,6 +134,7 @@ export function initCs1VideoModule() {
 
   exampleButton?.addEventListener("click", () => {
     titleInput.value = "仪征中考家长提醒";
+    if (customStyleNameInput) customStyleNameInput.value = "CS1 招生提醒版";
     textInput.value = EXAMPLE_TEXT;
     textInput.focus();
   });
@@ -83,12 +144,14 @@ export function initCs1VideoModule() {
     resultPanel.hidden = true;
     logPanel.textContent = "";
     generateButton.disabled = true;
+    startProgress();
     setStatus("正在生成", "正在创建 HyperFrames 工程、检查布局并渲染 MP4，通常需要 30-90 秒。");
     try {
       const result = await postJson("/api/cs1-video/generate", {
         title: titleInput.value,
         text: textInput.value,
         style: selectedStyle(),
+        templateName: customStyleNameInput?.value || "",
         aiRefine: aiInput.checked,
       });
       lastResult = result;
