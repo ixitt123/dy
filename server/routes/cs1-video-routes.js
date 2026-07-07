@@ -197,7 +197,9 @@ function writeProject(projectDir, { slug, title, styleId, files }) {
 function buildHyperframesEnv({ ffmpegPath, ffprobePath }) {
   const env = { ...process.env };
   const pathKey = Object.keys(env).find((key) => key.toLowerCase() === "path") || "PATH";
-  const toolDirs = [ffmpegPath, ffprobePath]
+  const safeFfmpegPath = materializeAsciiToolPath(ffmpegPath, process.platform === "win32" ? "ffmpeg.exe" : "ffmpeg");
+  const safeFfprobePath = materializeAsciiToolPath(ffprobePath, process.platform === "win32" ? "ffprobe.exe" : "ffprobe");
+  const toolDirs = [safeFfmpegPath, safeFfprobePath]
     .filter((toolPath) => toolPath && fs.existsSync(toolPath))
     .map((toolPath) => path.dirname(toolPath));
   const uniqueToolDirs = Array.from(new Set(toolDirs));
@@ -206,15 +208,36 @@ function buildHyperframesEnv({ ffmpegPath, ffprobePath }) {
   env[pathKey] = joinedPath;
   env.PATH = joinedPath;
   if (process.platform === "win32") env.Path = joinedPath;
-  if (ffmpegPath && fs.existsSync(ffmpegPath)) {
-    env.FFMPEG_PATH = ffmpegPath;
-    env.FFMPEG_BIN = ffmpegPath;
+  if (safeFfmpegPath && fs.existsSync(safeFfmpegPath)) {
+    env.FFMPEG_PATH = safeFfmpegPath;
+    env.FFMPEG_BIN = safeFfmpegPath;
+    env.HYPERFRAMES_FFMPEG_PATH = safeFfmpegPath;
   }
-  if (ffprobePath && fs.existsSync(ffprobePath)) {
-    env.FFPROBE_PATH = ffprobePath;
-    env.FFPROBE_BIN = ffprobePath;
+  if (safeFfprobePath && fs.existsSync(safeFfprobePath)) {
+    env.FFPROBE_PATH = safeFfprobePath;
+    env.FFPROBE_BIN = safeFfprobePath;
+    env.HYPERFRAMES_FFPROBE_PATH = safeFfprobePath;
   }
   return env;
+}
+
+function materializeAsciiToolPath(sourcePath, fileName) {
+  if (!sourcePath || !fs.existsSync(sourcePath)) return "";
+  const cacheRoot = process.env.LOCALAPPDATA
+    ? path.join(process.env.LOCALAPPDATA, "douyin-video-tool", "media-tools")
+    : path.join(process.cwd(), ".cache-tools", "media-tools");
+  const targetPath = path.join(cacheRoot, fileName);
+  try {
+    fs.mkdirSync(cacheRoot, { recursive: true });
+    const sourceStat = fs.statSync(sourcePath);
+    const targetStat = fs.existsSync(targetPath) ? fs.statSync(targetPath) : null;
+    if (!targetStat || targetStat.size !== sourceStat.size) {
+      fs.copyFileSync(sourcePath, targetPath);
+    }
+    return targetPath;
+  } catch {
+    return sourcePath;
+  }
 }
 
 function runHyperframes(cwd, args, output, env = process.env) {
