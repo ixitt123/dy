@@ -180,6 +180,7 @@ function writeProject(projectDir, { slug, title, styleId, styleName, beatCount, 
   const compositionDir = path.join(projectDir, "compositions");
   const width = files.width || 1920;
   const height = files.height || 1080;
+  const duration = files.duration || 10;
   fs.mkdirSync(compositionDir, { recursive: true });
   fs.writeFileSync(path.join(projectDir, "package.json"), JSON.stringify({
     name: slug,
@@ -202,7 +203,7 @@ function writeProject(projectDir, { slug, title, styleId, styleName, beatCount, 
     styleName,
     beatCount,
     createdAt: new Date().toISOString(),
-    duration: 10,
+    duration,
     width,
     height,
   }, null, 2));
@@ -467,6 +468,158 @@ Dark CS1 explainer video: cinematic black-brown canvas, exam-red warning blocks,
 </body>
 </html>`,
   };
+}
+
+function aifmanManagerCardFiles(model) {
+  const duration = 15;
+  const width = 1280;
+  const height = 720;
+  const cards = buildAifmanCards(model);
+  const title = escapeHtml(model.title || "升到管理岗的必备能力");
+  const lead = escapeHtml(model.hook || "升到管理岗的");
+  const keyword = escapeHtml(cards[0]?.keyword || "必备能力");
+  const particles = Array.from({ length: 24 }, (_, index) => {
+    const x = 92 + (index % 8) * 34;
+    const y = 74 + Math.floor(index / 8) * 28;
+    const size = 4 + (index % 5) * 3;
+    return `<i class="particle p${index + 1}" style="--x:${x}px;--y:${y}px;--s:${size}px"></i>`;
+  }).join("");
+  const cardSections = cards.map((card, index) => {
+    const start = 4.0 + index * 3.25;
+    const cardId = `card-${index + 1}`;
+    return `<section id="${cardId}" class="ability-card clip" data-start="${start.toFixed(2)}" data-duration="3.35" data-track-index="${index + 3}">
+      <div class="card-grid">
+        <div class="card-copy">
+          <h2><span>${index + 1}.</span> ${escapeHtml(card.title)}</h2>
+          <h3>${escapeHtml(card.subtitle)}</h3>
+          <p>${escapeHtml(card.detail)}</p>
+          <b></b>
+        </div>
+        <div class="light-node" data-layout-ignore></div>
+      </div>
+    </section>`;
+  }).join("");
+  const cardAnimations = cards.map((_, index) => {
+    const start = 4.0 + index * 3.25;
+    const previous = index === 0 ? "#title-scene" : `#card-${index}`;
+    const current = `#card-${index + 1}`;
+    return [
+      `tl.fromTo("${current}",{opacity:0,y:42},{opacity:1,y:0,duration:.42,ease:"power3.out"},${start});`,
+      `tl.to("${previous}",{opacity:0,y:-26,duration:.32,ease:"power2.in"},${start + 0.02});`,
+      `tl.from("${current} h2",{x:-34,opacity:0,duration:.38,ease:"expo.out"},${start + 0.16});`,
+      `tl.from("${current} h3",{x:-24,opacity:0,duration:.34,ease:"power3.out"},${start + 0.42});`,
+      `tl.from("${current} p",{y:16,opacity:0,duration:.34,ease:"sine.out"},${start + 0.7});`,
+      `tl.from("${current} b",{scaleX:0,transformOrigin:"left center",duration:.48,ease:"power2.out"},${start + 0.28});`,
+      `tl.from("${current} .light-node",{scale:.2,opacity:0,duration:.36,ease:"back.out(1.8)"},${start + 0.62});`,
+      `tl.to("${current} .light-node",{scale:1.18,duration:.42,repeat:3,yoyo:true,ease:"sine.inOut"},${start + 1.05});`,
+    ].join("\n    ");
+  }).join("\n    ");
+
+  return {
+    width,
+    height,
+    duration,
+    design: `## Style Prompt
+
+AIfman-inspired management knowledge card template. Dark olive cinematic canvas, soft black vignette center, gold headlines, mint-green keyword emphasis, minimal particles, orbit ring, and three leadership ability cards.
+
+## Colors
+
+- Background: \`#17170c\`
+- Vignette: \`#020302\`
+- Gold: \`#f1d44a\`
+- Amber: \`#d8952c\`
+- Mint: \`#25e29a\`
+- Muted text: \`#d7c782\`
+
+## Typography
+
+- \`"Microsoft YaHei UI", "Microsoft YaHei", sans-serif\`
+- Bold Chinese display type, large card headings, compact body text.
+`,
+    index: `<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=${width}, height=${height}" />
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+  <style>
+    *{box-sizing:border-box}
+    @font-face{font-family:"Microsoft YaHei UI";src:local("Microsoft YaHei UI")}
+    @font-face{font-family:"Microsoft YaHei";src:local("Microsoft YaHei")}
+    html,body{margin:0;width:${width}px;height:${height}px;overflow:hidden;background:#17170c;color:#f1d44a;font-family:"Microsoft YaHei UI","Microsoft YaHei",sans-serif}
+    #root{position:relative;width:${width}px;height:${height}px;overflow:hidden;background:radial-gradient(circle at 50% 50%,#020302 0 18%,rgba(2,3,2,.86) 22%,rgba(23,23,12,.92) 50%,#252512 100%)}
+    .grain,.scan,.glow,.orbit,.particle{position:absolute;pointer-events:none}.grain{inset:0;z-index:20;opacity:.18;background:repeating-linear-gradient(0deg,rgba(255,255,255,.035) 0 1px,transparent 1px 4px),repeating-linear-gradient(90deg,rgba(255,255,255,.025) 0 1px,transparent 1px 6px)}.scan{inset:0;z-index:2;background:linear-gradient(90deg,rgba(255,220,88,.09),transparent 26%,transparent 74%,rgba(37,226,154,.08));opacity:.75}.glow{left:95px;top:70px;width:430px;height:250px;border-radius:50%;background:radial-gradient(circle,rgba(255,244,135,.38),rgba(255,244,135,.08) 48%,transparent 72%);filter:blur(12px);opacity:0}.orbit{left:585px;top:168px;width:130px;height:130px;border:2px solid rgba(241,212,74,.28);border-radius:50%;opacity:0}.orbit:before,.orbit:after{content:"";position:absolute;border:1px solid rgba(37,226,154,.25);border-radius:50%;inset:18px}.orbit:after{inset:42px;border-color:rgba(255,255,255,.22)}
+    .particle{left:var(--x);top:var(--y);width:var(--s);height:var(--s);border-radius:50%;background:rgba(255,255,255,.78);box-shadow:0 0 14px rgba(255,255,255,.5);opacity:0;z-index:9}.topline{position:absolute;left:0;right:0;top:38px;z-index:12;text-align:center;color:#f1d44a;font-size:18px;font-weight:900;text-shadow:0 0 14px rgba(241,212,74,.26);opacity:0}.scene,.ability-card{position:absolute;inset:0;z-index:5;display:flex;align-items:center;justify-content:center;padding:76px 94px}.title-stack{text-align:center;transform:translateY(-12px)}.title-stack h1{margin:0;font-size:58px;line-height:1.08;font-weight:900;letter-spacing:.03em;color:#f1d44a;text-shadow:0 0 18px rgba(241,212,74,.22)}.title-stack h1 span{color:#ff6f71}.title-stack h2{margin:8px 0 0;font-size:72px;line-height:1;font-weight:900;color:#25e29a;text-shadow:0 0 18px rgba(37,226,154,.28)}.title-stack small{display:block;margin-top:16px;color:#d7c782;font-size:18px;font-weight:800;letter-spacing:.08em}.ability-card{opacity:0;justify-content:flex-start}.card-grid{position:relative;width:100%;height:100%;display:flex;align-items:center}.card-copy{position:relative;width:590px;margin-left:24px;padding-left:34px}.card-copy:before{content:"";position:absolute;left:0;top:12px;bottom:16px;width:2px;background:linear-gradient(#f1d44a,rgba(241,212,74,.06))}.card-copy h2{margin:0 0 22px;color:#f1d44a;font-size:45px;line-height:1.12;font-weight:900;text-shadow:0 0 18px rgba(241,212,74,.18)}.card-copy h2 span{color:#c99531}.card-copy h3{margin:0 0 18px;color:#d8952c;font-size:30px;font-weight:850;line-height:1.2}.card-copy p{margin:0;max-width:560px;color:#e3dfc7;font-size:16px;font-weight:700;line-height:1.55;opacity:.9}.card-copy b{display:block;width:365px;height:2px;margin-top:28px;background:linear-gradient(90deg,rgba(241,212,74,.85),rgba(241,212,74,0))}.light-node{position:absolute;left:654px;top:342px;width:14px;height:14px;border-radius:50%;background:#f1d44a;box-shadow:0 0 0 9px rgba(241,212,74,.12),0 0 26px rgba(241,212,74,.85)}.light-node:before{content:"";position:absolute;left:-150px;top:6px;width:142px;height:1px;background:linear-gradient(90deg,rgba(241,212,74,0),rgba(241,212,74,.7))}.final-dim{position:absolute;inset:0;background:#17170c;opacity:0;z-index:30}
+  </style>
+</head>
+<body>
+  <div id="root" data-composition-id="main" data-start="0" data-duration="${duration}" data-width="${width}" data-height="${height}">
+    <div class="scan" data-layout-ignore></div>
+    <div class="grain" data-layout-ignore></div>
+    <div class="glow" data-layout-ignore></div>
+    <div class="orbit" data-layout-ignore></div>
+    ${particles}
+    <div class="topline">${title}</div>
+    <section id="title-scene" class="scene clip" data-start="0" data-duration="3.8" data-track-index="1">
+      <div class="title-stack">
+        <h1>${lead}</h1>
+        <h2>${keyword}</h2>
+        <small>MANAGEMENT ABILITY</small>
+      </div>
+    </section>
+    <section id="blank-scene" class="scene clip" data-start="3.35" data-duration=".85" data-track-index="2"></section>
+    ${cardSections}
+    <div class="final-dim" data-layout-ignore></div>
+  </div>
+  <script>
+    window.__timelines=window.__timelines||{};
+    const tl=gsap.timeline({paused:true});
+    tl.from("#title-scene h1",{y:28,opacity:0,duration:.42,ease:"power3.out"},.18)
+      .from("#title-scene h2",{y:36,opacity:0,scale:.94,duration:.54,ease:"expo.out"},.68)
+      .from("#title-scene small",{y:18,opacity:0,duration:.32,ease:"sine.out"},1.2)
+      .fromTo(".glow",{opacity:0,scale:.7},{opacity:1,scale:1,duration:.72,ease:"sine.out"},1.35)
+      .fromTo(".orbit",{opacity:0,scale:.45,rotation:-18},{opacity:1,scale:1,rotation:0,duration:.54,ease:"back.out(1.45)"},1.58);
+    ${Array.from({ length: 24 }, (_, index) => {
+      const start = 1.45 + (index % 8) * 0.035 + Math.floor(index / 8) * 0.08;
+      const x = 20 + (index % 6) * 10;
+      const y = 20 + Math.floor(index / 6) * 8;
+      return `tl.fromTo(".p${index + 1}",{opacity:0,scale:.25,x:${-x},y:${-y}},{opacity:.82,scale:1,x:0,y:0,duration:.36,ease:"power2.out"},${start.toFixed(2)}).to(".p${index + 1}",{opacity:0,duration:.5,ease:"sine.in"},${(3.0 + (index % 5) * 0.08).toFixed(2)});`;
+    }).join("\n    ")}
+    tl.to(".topline",{opacity:1,duration:.22,ease:"sine.out"},3.75)
+      .to("#blank-scene",{opacity:1,duration:.18,ease:"sine.out"},3.35)
+      .to(".orbit",{opacity:.25,scale:.82,duration:.35,ease:"power2.in"},3.25)
+      .to(".glow",{opacity:.26,scale:1.25,duration:.62,ease:"sine.inOut"},3.1);
+    ${cardAnimations}
+    tl.to("#card-3",{opacity:0,y:-22,duration:.36,ease:"power2.in"},13.8)
+      .to(".topline",{opacity:0,duration:.28,ease:"sine.in"},13.95)
+      .to(".final-dim",{opacity:.96,duration:.62,ease:"sine.inOut"},14.1)
+      .to("#root",{opacity:0,duration:.3,ease:"sine.in"},14.7);
+    window.__timelines.main=tl;
+  </script>
+</body>
+</html>`,
+  };
+}
+
+function buildAifmanCards(model) {
+  const defaults = [
+    { title: "沟通能力", subtitle: "向上平行向下兼容", detail: "向上汇报、平行协作、向下管理都要有秩序", keyword: "必备能力" },
+    { title: "解决问题", subtitle: "深入一线直面问题", detail: "深入一线找真问题，不做浮于表面的分析", keyword: "必备能力" },
+    { title: "开会能力", subtitle: "准备目标结果", detail: "明确准备、目标明确、集体讨论出结果", keyword: "必备能力" },
+  ];
+  const beats = Array.isArray(model?.beats) ? model.beats : [];
+  return defaults.map((fallback, index) => {
+    const beat = beats[index] || {};
+    const text = String(beat.text || "").trim();
+    const caption = String(beat.caption || "").trim();
+    return {
+      title: text && text.length <= 18 ? text : fallback.title,
+      subtitle: caption && caption.length <= 24 ? caption : fallback.subtitle,
+      detail: caption && caption.length > 24 ? caption : fallback.detail,
+      keyword: fallback.keyword,
+    };
+  });
 }
 
 function warmGrainFiles(model) {
