@@ -6678,6 +6678,20 @@ audio {
   background: rgba(245, 240, 224, 0.52);
 }
 
+.cs1-visual-panel {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid rgba(36, 27, 22, 0.12);
+  border-radius: 8px;
+  background: rgba(245, 240, 224, 0.48);
+}
+
+.cs1-visual-panel label {
+  min-width: 0;
+}
+
 .cs1-watermark-toggle {
   display: inline-flex !important;
   flex-direction: row !important;

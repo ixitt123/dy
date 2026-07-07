@@ -27,6 +27,10 @@ export function initCs1VideoModule() {
   const bgmModeSelect = document.getElementById("cs1VideoBgmMode");
   const bgmPathInput = document.getElementById("cs1VideoBgmPath");
   const chooseBgmButton = document.getElementById("cs1VideoChooseBgm");
+  const iconVariantSelect = document.getElementById("cs1IconVariant");
+  const textPaletteSelect = document.getElementById("cs1TextPalette");
+  const layoutVariantSelect = document.getElementById("cs1LayoutVariant");
+  const backgroundPatternSelect = document.getElementById("cs1BackgroundPattern");
   const introTemplateSelect = document.getElementById("cs1IntroTemplate");
   const outroTemplateSelect = document.getElementById("cs1OutroTemplate");
   const ctaTextInput = document.getElementById("cs1CtaText");
@@ -270,6 +274,10 @@ export function initCs1VideoModule() {
         cardHoldPreset: cardHoldSelect?.value || "auto",
         bgmMode: bgmModeSelect?.value || "builtin_dark_pulse_128",
         bgmPath: bgmPathInput?.value || "",
+        iconVariant: iconVariantSelect?.value || "orbit_nodes",
+        textPalette: textPaletteSelect?.value || "gold_green",
+        layoutVariant: layoutVariantSelect?.value || "left_right",
+        backgroundPattern: backgroundPatternSelect?.value || "vignette",
         introTemplateId: introTemplateSelect?.value || "none",
         outroTemplateId: outroTemplateSelect?.value || "none",
         ctaText: ctaTextInput?.value || "",
@@ -288,6 +296,7 @@ export function initCs1VideoModule() {
         result.aspectRatio ? `Aspect ratio: ${result.aspectRatio.label || result.aspectRatio.id || aspectRatioSelect?.value || "9:16"} · ${result.aspectRatio.platforms || ""}` : `Aspect ratio: ${aspectRatioSelect?.value || "9:16"}`,
         result.cardHold ? `Card hold: ${result.cardHold.label || result.cardHold.id || "auto"}` : `Card hold: ${cardHoldSelect?.value || "auto"}`,
         result.bgm?.label ? `BGM: ${result.bgm.label}` : "BGM: none",
+        result.visualOptions ? `Visual: icon=${result.visualOptions.iconVariant} · palette=${result.visualOptions.textPalette} · layout=${result.visualOptions.layoutVariant} · background=${result.visualOptions.backgroundPattern}` : `Visual: icon=${iconVariantSelect?.value || "orbit_nodes"} · palette=${textPaletteSelect?.value || "gold_green"} · layout=${layoutVariantSelect?.value || "left_right"} · background=${backgroundPatternSelect?.value || "vignette"}`,
         result.packaging ? `Packaging: intro=${result.packaging.introTemplateId || "none"} · outro=${result.packaging.outroTemplateId || "none"} · watermark=${result.packaging.watermark?.enabled ? `${result.packaging.watermark.position}/${result.packaging.watermark.animation || "none"}` : "off"}` : "Packaging: none",
         "",
         result.checkLog || "",
