@@ -6,6 +6,8 @@ import { HttpBodyError, readJsonBody } from "../utils/http-body.js";
 
 const HYPERFRAMES_VERSION = "0.7.37";
 const MAX_SCRIPT_LENGTH = 1200;
+const DEFAULT_BEAT_COUNT = 5;
+const ALLOWED_BEAT_COUNTS = new Set([3, 4, 5, 6]);
 const OFFICIAL_TEMPLATE_IDS = new Set([
   "warm-grain",
   "play-mode",
@@ -57,6 +59,7 @@ export function createCs1VideoRoutes({ baseDir, sendJson, modelRouter, ffmpegPat
           text: body.text,
           style: body.style,
           title: body.title,
+          beatCount: body.beatCount,
           templateName: body.templateName,
           aiRefine: body.aiRefine === true,
           modelRouter,
@@ -78,9 +81,10 @@ export function createCs1VideoRoutes({ baseDir, sendJson, modelRouter, ffmpegPat
   };
 }
 
-async function generateVideo({ runsDir, outputDir, text, style, title, templateName, aiRefine, modelRouter, ffmpegPath, ffprobePath }) {
+async function generateVideo({ runsDir, outputDir, text, style, title, beatCount, templateName, aiRefine, modelRouter, ffmpegPath, ffprobePath }) {
   const script = normalizeScript(text);
   const styleId = normalizeStyle(style);
+  const normalizedBeatCount = normalizeBeatCount(beatCount);
   const slug = `${formatDateSlug(new Date())}-${styleId}-${randomUUID().slice(0, 8)}`;
   const projectDir = path.join(runsDir, slug);
   const videoTitle = sanitizeTitle(title) || inferTitle(script);
@@ -90,8 +94,8 @@ async function generateVideo({ runsDir, outputDir, text, style, title, templateN
   fs.mkdirSync(projectDir, { recursive: true });
   fs.mkdirSync(outputDir, { recursive: true });
 
-  const refined = aiRefine ? await refineStoryModel({ script, title: videoTitle, modelRouter }) : null;
-  const model = refined || buildStoryModel(script, videoTitle);
+  const refined = aiRefine ? await refineStoryModel({ script, title: videoTitle, beatCount: normalizedBeatCount, modelRouter }) : null;
+  const model = refined || buildStoryModel(script, videoTitle, normalizedBeatCount);
   const files = styleId === "cs1"
     ? cs1Files(model)
     : styleId === "warm-grain"
@@ -118,6 +122,7 @@ async function generateVideo({ runsDir, outputDir, text, style, title, templateN
     title: videoTitle,
     style: styleId,
     templateName: styleName,
+    beatCount: model.beatCount || normalizedBeatCount,
     projectDir,
     outputPath,
     aiUsed: Boolean(refined),
@@ -126,7 +131,7 @@ async function generateVideo({ runsDir, outputDir, text, style, title, templateN
   };
 }
 
-async function refineStoryModel({ script, title, modelRouter }) {
+async function refineStoryModel({ script, title, beatCount, modelRouter }) {
   if (!modelRouter || typeof modelRouter.generate !== "function") return null;
   try {
     const result = await modelRouter.generate({
@@ -135,29 +140,29 @@ async function refineStoryModel({ script, title, modelRouter }) {
         {
           role: "system",
           content: [
-            "You turn Chinese short-video copy into a 10-second, 3-beat video structure.",
-            "Return only JSON with keys: title, hook, question, action, caption1, caption2, caption3.",
-            "Each value must be concise Chinese, suitable for large on-screen text.",
+            `You turn Chinese short-video copy into a 10-second, ${beatCount}-beat video structure.`,
+            `Return only JSON with keys: title, beats. beats must be an array with exactly ${beatCount} items.`,
+            "Each beat item must include: role, text, caption.",
+            "Each text/caption value must be concise Chinese, suitable for large on-screen text.",
             "No markdown, no explanations.",
           ].join("\n"),
         },
         {
           role: "user",
-          content: JSON.stringify({ title, script }),
+          content: JSON.stringify({ title, script, beatCount }),
         },
       ],
       options: { temperature: 0.4 },
     });
     const parsed = JSON.parse(String(result.content || "").replace(/^```json\s*/i, "").replace(/```$/i, "").trim());
-    return {
-      title: sanitizeTitle(parsed.title) || title,
-      hook: String(parsed.hook || "").trim().slice(0, 80) || title,
-      question: String(parsed.question || "").trim().slice(0, 80) || "Is this still far away?",
-      action: String(parsed.action || "").trim().slice(0, 100) || "Start now: find gaps, set rhythm, review daily.",
-      caption1: String(parsed.caption1 || parsed.hook || "").trim().slice(0, 80) || title,
-      caption2: String(parsed.caption2 || parsed.question || "").trim().slice(0, 80) || "The key question is already here.",
-      caption3: String(parsed.caption3 || parsed.action || "").trim().slice(0, 100) || "Now is the starting line.",
-    };
+    if (Array.isArray(parsed.beats)) {
+      return storyModelFromBeats(sanitizeTitle(parsed.title) || title, parsed.beats, beatCount);
+    }
+    return storyModelFromBeats(sanitizeTitle(parsed.title) || title, [
+      { role: "hook", text: parsed.hook, caption: parsed.caption1 },
+      { role: "conflict", text: parsed.question, caption: parsed.caption2 },
+      { role: "action", text: parsed.action, caption: parsed.caption3 },
+    ], beatCount);
   } catch {
     return null;
   }
