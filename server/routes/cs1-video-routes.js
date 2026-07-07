@@ -594,6 +594,8 @@ function normalizePackagingOptions(input = {}, context = {}) {
   const existingWatermark = input?.watermark && typeof input.watermark === "object" ? input.watermark : {};
   const rawWatermarkPosition = input?.watermarkPosition ?? existingWatermark.position ?? "top-right";
   const watermarkPosition = WATERMARK_POSITIONS.has(String(rawWatermarkPosition)) ? String(rawWatermarkPosition) : "top-right";
+  const rawWatermarkAnimation = input?.watermarkAnimation ?? existingWatermark.animation ?? "float_y";
+  const watermarkAnimation = WATERMARK_ANIMATIONS.has(String(rawWatermarkAnimation)) ? String(rawWatermarkAnimation) : "float_y";
   const watermarkEnabled = input?.watermarkEnabled === true
     || input?.watermarkEnabled === "true"
     || input?.watermarkEnabled === "on"
@@ -612,6 +614,7 @@ function normalizePackagingOptions(input = {}, context = {}) {
       text: sanitizeOverlayText(rawWatermarkText, fallbackTitle),
       position: watermarkPosition,
       opacity: Number(watermarkOpacity.toFixed(2)),
+      animation: watermarkAnimation,
     },
   };
 }
@@ -662,6 +665,19 @@ function renderWatermark(packaging) {
   const watermark = packaging?.watermark;
   if (!watermark?.enabled || !watermark.text) return "";
   return `<div class="watermark ${escapeHtml(watermark.position)}" style="opacity:${watermark.opacity}" data-layout-ignore>${escapeHtml(watermark.text)}</div>`;
+}
+
+function buildWatermarkTimeline(packaging, { duration = 15 } = {}) {
+  const watermark = packaging?.watermark;
+  if (!watermark?.enabled || !watermark.text || watermark.animation === "none") return "";
+  const loops = Math.max(1, Math.ceil(duration / 2.4) - 1);
+  const presets = {
+    float_y: `tl.to(".watermark",{y:-8,duration:1.2,repeat:${loops},yoyo:true,ease:"sine.inOut"},.2);`,
+    float_x: `tl.to(".watermark",{x:8,duration:1.2,repeat:${loops},yoyo:true,ease:"sine.inOut"},.2);`,
+    pulse: `tl.to(".watermark",{scale:1.045,duration:.86,repeat:${Math.max(1, Math.ceil(duration / 1.72) - 1)},yoyo:true,ease:"sine.inOut"},.2);`,
+    breathe: `tl.to(".watermark",{opacity:${Math.min(0.85, Number(watermark.opacity || 0.45) + 0.18).toFixed(2)},scale:1.025,duration:1.35,repeat:${Math.max(1, Math.ceil(duration / 2.7) - 1)},yoyo:true,ease:"sine.inOut"},.2);`,
+  };
+  return presets[watermark.animation] || "";
 }
 
 function buildIntroTimeline(packaging) {
