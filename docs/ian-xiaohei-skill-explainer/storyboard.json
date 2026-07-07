@@ -1,0 +1,133 @@
+{
+  "title": "Ian 小黑插图 Skill 说明视频",
+  "subject": "ian-xiaohei-illustrations Codex skill",
+  "format": {
+    "width": 1920,
+    "height": 1080,
+    "aspect_ratio": "16:9",
+    "duration_seconds": 34,
+    "language": "zh-CN"
+  },
+  "style": {
+    "visual_identity": "pure white canvas, black hand-drawn lines, Xiaohei as the core actor, sparse red/orange/blue annotations",
+    "avoid": [
+      "PPT diagram",
+      "commercial cartoon",
+      "dense architecture chart",
+      "tech UI",
+      "decorative mascot"
+    ]
+  },
+  "story_arc": [
+    "Find the cognitive anchor",
+    "Reject PPT-like illustration",
+    "Use director judgment",
+    "Transform text into metaphor",
+    "Run QA",
+    "Ask what needs to be seen"
+  ],
+  "shots": [
+    {
+      "id": "shot_01_hook",
+      "start": 0,
+      "end": 5.2,
+      "purpose": "Hook the viewer by reframing illustration as cognitive judgment.",
+      "emotion": "clear, curious",
+      "voice_text": "一篇中文文章，真正难的不是配图，是找出哪个认知点值得被画出来。",
+      "subtitle": "不是找图，是找认知锚点",
+      "camera": "static 16:9 whiteboard frame, left-weighted text, right sketch action",
+      "composition": "Xiaohei pulls one ink thread out of a question cloud; ink dust settles beside the anchor label.",
+      "vfx_contract": {
+        "source": "behind the question mark",
+        "material": "black ink dust with a few blue dots",
+        "motion_path": "spiral outward, follow the pulled thread, settle near the anchor label",
+        "endpoint": "one black anchor dot"
+      }
+    },
+    {
+      "id": "shot_02_ppt_trap",
+      "start": 4.7,
+      "end": 10.4,
+      "purpose": "Show the failure mode of generic illustration.",
+      "emotion": "alert, slightly annoyed",
+      "voice_text": "只把段落排成节点，结果很快就变成流程图、课件和装饰图。",
+      "subtitle": "坏配图长得像 PPT",
+      "camera": "push transition into a denser right-side grid",
+      "composition": "Xiaohei carries too many labels into a formal grid; red correction mark rejects the grid.",
+      "vfx_contract": {
+        "source": "top of the over-neat grid",
+        "material": "red crayon line and paper scraps",
+        "motion_path": "drop downward, bend labels, scatter scraps sideways",
+        "endpoint": "short handwritten reject mark"
+      }
+    },
+    {
+      "id": "shot_03_director",
+      "start": 9.9,
+      "end": 16,
+      "purpose": "Explain that the director layer decides purpose before visuals.",
+      "emotion": "professional, calm",
+      "voice_text": "所以它先做导演判断：hook、pain、proof、solution，每一张图都要服务一个目的。",
+      "subtitle": "Director 先判断目的",
+      "camera": "horizontal push, then close visual attention on a hand-drawn scale",
+      "composition": "Xiaohei adjusts an anchor scale while blue system notes stick to structure words.",
+      "vfx_contract": {
+        "source": "scale pivot",
+        "material": "blue system notes, thin lines, small ink dots",
+        "motion_path": "arc outward to four structure labels",
+        "endpoint": "notes stick beside hook, pain, proof, solution"
+      }
+    },
+    {
+      "id": "shot_04_workflow",
+      "start": 15.5,
+      "end": 22,
+      "purpose": "Make the skill workflow concrete and memorable.",
+      "emotion": "smooth, useful",
+      "voice_text": "然后才进入小黑风格：正文进来，锚点留下，隐喻成形，最后变成一张清爽的 16:9 正文配图。",
+      "subtitle": "正文 -> 锚点 -> 隐喻 -> 配图",
+      "camera": "vertical push into a low-tech machine diagram",
+      "composition": "A crank machine turns text into anchor, metaphor, and final clean 16:9 output.",
+      "vfx_contract": {
+        "source": "machine inlet",
+        "material": "orange liquid ink line",
+        "motion_path": "move through three tubes, narrow at filter, end on output sheet",
+        "endpoint": "orange arrow on the final page"
+      }
+    },
+    {
+      "id": "shot_05_qa",
+      "start": 21.5,
+      "end": 28.2,
+      "purpose": "Give the viewer the QA checklist that keeps the style honest.",
+      "emotion": "selective, disciplined",
+      "voice_text": "复核时只看三件事：小黑是不是在干活，画面是不是够空，中文是不是够短。",
+      "subtitle": "QA：少、准、怪",
+      "camera": "squeeze transition that compresses clutter into three questions",
+      "composition": "Xiaohei erases crowded nodes, leaving three short QA prompts.",
+      "vfx_contract": {
+        "source": "erased crowded nodes",
+        "material": "red paper scraps and gray pencil dust",
+        "motion_path": "burst along eraser path, drift upward, dust sinks",
+        "endpoint": "clean white page with three QA prompts"
+      }
+    },
+    {
+      "id": "shot_06_cta",
+      "start": 27.7,
+      "end": 34,
+      "purpose": "Close with a memorable operating principle.",
+      "emotion": "quiet, resolved",
+      "voice_text": "下一次不要先问配几张图。先问：哪个点需要被看见？",
+      "subtitle": "哪个点需要被看见？",
+      "camera": "gentle push, final fade to white",
+      "composition": "Xiaohei opens a simple door; behind it is one clean hand-drawn article illustration.",
+      "vfx_contract": {
+        "source": "door gap",
+        "material": "thin orange line and black ink dots",
+        "motion_path": "trace door edge, settle below final question",
+        "endpoint": "small anchor dot near Xiaohei's feet"
+      }
+    }
+  ]
+}

@@ -1,0 +1,1135 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=1920, height=1080">
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        margin: 0;
+        width: 1920px;
+        height: 1080px;
+        overflow: hidden;
+        background: #ffffff;
+      }
+
+      body {
+        color: #111111;
+        font-family: "LXGW WenKai", "KaiTi", "Microsoft YaHei UI", "Microsoft YaHei", sans-serif;
+      }
+
+      @font-face {
+        font-family: "LXGW WenKai";
+        src: local("LXGW WenKai");
+      }
+
+      @font-face {
+        font-family: "KaiTi";
+        src: local("KaiTi");
+      }
+
+      @font-face {
+        font-family: "Microsoft YaHei UI";
+        src: local("Microsoft YaHei UI");
+      }
+
+      @font-face {
+        font-family: "Microsoft YaHei";
+        src: local("Microsoft YaHei");
+      }
+
+      @font-face {
+        font-family: "Cascadia Mono";
+        src: local("Cascadia Mono");
+      }
+
+      #root {
+        position: relative;
+        width: 1920px;
+        height: 1080px;
+        overflow: hidden;
+        background: #ffffff;
+      }
+
+      .scene {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        width: 100%;
+        height: 100%;
+        padding: 100px 124px;
+        overflow: hidden;
+        background: #ffffff;
+      }
+
+      .scene-content {
+        position: relative;
+        z-index: 3;
+        display: grid;
+        grid-template-columns: minmax(0, 0.92fr) minmax(0, 1.08fr);
+        align-items: center;
+        width: 100%;
+        height: 100%;
+        gap: 82px;
+      }
+
+      #scene-2,
+      #scene-3,
+      #scene-4,
+      #scene-5,
+      #scene-6 {
+        opacity: 0;
+      }
+
+      .copy {
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        gap: 26px;
+        min-width: 0;
+      }
+
+      .kicker,
+      .mono,
+      .note,
+      .caption-tag {
+        font-family: "Cascadia Mono", "IBM Plex Mono", monospace;
+        font-variant-numeric: tabular-nums;
+      }
+
+      .kicker {
+        width: max-content;
+        max-width: 100%;
+        padding: 11px 18px 9px;
+        border: 2px solid #111111;
+        border-radius: 999px 780px 900px 740px / 720px 980px 760px 920px;
+        color: #2f6fbd;
+        font-size: 22px;
+        font-weight: 700;
+        letter-spacing: 0;
+        transform: rotate(-1deg);
+        background: #ffffff;
+      }
+
+      h1,
+      h2 {
+        margin: 0;
+        color: #111111;
+        font-weight: 900;
+        line-height: 1.08;
+        letter-spacing: 0;
+      }
+
+      h1 {
+        max-width: 760px;
+        font-size: 82px;
+      }
+
+      h2 {
+        max-width: 720px;
+        font-size: 72px;
+      }
+
+      .subline {
+        margin: 0;
+        max-width: 720px;
+        color: #3a3a3a;
+        font-size: 34px;
+        font-weight: 400;
+        line-height: 1.34;
+      }
+
+      .hand-label {
+        display: inline-flex;
+        width: max-content;
+        max-width: 100%;
+        padding: 8px 16px 7px;
+        border: 2px solid currentColor;
+        border-radius: 22px 18px 20px 15px / 16px 24px 15px 21px;
+        font-size: 30px;
+        font-weight: 700;
+        line-height: 1.1;
+        transform: rotate(-2deg);
+      }
+
+      .red {
+        color: #e34234;
+      }
+
+      .orange {
+        color: #b76512;
+      }
+
+      .blue {
+        color: #2f6fbd;
+      }
+
+      .stage {
+        position: relative;
+        width: 100%;
+        height: 790px;
+        min-width: 0;
+      }
+
+      .sketch-box,
+      .paper,
+      .machine,
+      .output-sheet,
+      .door,
+      .qa-board {
+        border: 4px solid #111111;
+        background: #ffffff;
+        box-shadow: none;
+      }
+
+      .paper {
+        position: absolute;
+        left: 130px;
+        top: 118px;
+        width: 590px;
+        height: 390px;
+        border-radius: 30px 24px 38px 20px / 22px 34px 24px 38px;
+        transform: rotate(2deg);
+      }
+
+      .paper::before,
+      .paper::after {
+        content: "";
+        position: absolute;
+        left: 58px;
+        height: 4px;
+        background: #d6d1c9;
+        border-radius: 999px;
+      }
+
+      .paper::before {
+        top: 106px;
+        width: 330px;
+      }
+
+      .paper::after {
+        top: 162px;
+        width: 260px;
+      }
+
+      .question {
+        position: absolute;
+        right: 94px;
+        top: 42px;
+        color: #111111;
+        font-size: 178px;
+        font-weight: 900;
+        transform: rotate(11deg);
+      }
+
+      .thread {
+        position: absolute;
+        left: 330px;
+        top: 488px;
+        width: 355px;
+        height: 58px;
+        border-top: 5px solid #111111;
+        border-radius: 50%;
+        transform: rotate(-12deg);
+        transform-origin: left center;
+      }
+
+      .anchor-dot {
+        position: absolute;
+        left: 650px;
+        top: 502px;
+        width: 34px;
+        height: 34px;
+        border-radius: 50%;
+        background: #111111;
+      }
+
+      .xiaohei {
+        position: absolute;
+        width: 112px;
+        height: 146px;
+      }
+
+      .xiaohei .body {
+        position: absolute;
+        left: 14px;
+        top: 0;
+        width: 84px;
+        height: 106px;
+        border-radius: 46% 54% 48% 52% / 41% 48% 52% 59%;
+        background: #111111;
+      }
+
+      .xiaohei .body::before,
+      .xiaohei .body::after {
+        content: "";
+        position: absolute;
+        top: 34px;
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        background: #ffffff;
+      }
+
+      .xiaohei .body::before {
+        left: 24px;
+      }
+
+      .xiaohei .body::after {
+        right: 23px;
+      }
+
+      .xiaohei .leg {
+        position: absolute;
+        top: 100px;
+        width: 4px;
+        height: 46px;
+        background: #111111;
+        transform-origin: top center;
+      }
+
+      .xiaohei .leg-a {
+        left: 42px;
+        transform: rotate(8deg);
+      }
+
+      .xiaohei .leg-b {
+        left: 70px;
+        transform: rotate(-10deg);
+      }
+
+      .xiaohei .arm {
+        position: absolute;
+        top: 54px;
+        width: 62px;
+        height: 4px;
+        background: #111111;
+        transform-origin: left center;
+      }
+
+      .xiaohei .arm-a {
+        left: 0;
+        transform: rotate(18deg);
+      }
+
+      .xiaohei .arm-b {
+        right: -42px;
+        transform: rotate(-14deg);
+      }
+
+      .scene-1-x {
+        left: 170px;
+        top: 502px;
+      }
+
+      .dust {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 100%;
+        pointer-events: none;
+      }
+
+      .p {
+        position: absolute;
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background: #111111;
+        opacity: 0.9;
+      }
+
+      .p.blue-dot {
+        width: 8px;
+        height: 8px;
+        background: #2f6fbd;
+      }
+
+      .p1 { left: 594px; top: 202px; }
+      .p2 { left: 652px; top: 244px; }
+      .p3 { left: 704px; top: 302px; }
+      .p4 { left: 618px; top: 348px; }
+      .p5 { left: 548px; top: 296px; }
+      .p6 { left: 500px; top: 394px; }
+      .p7 { left: 666px; top: 434px; }
+      .p8 { left: 724px; top: 470px; }
+
+      .grid-trap {
+        position: absolute;
+        right: 74px;
+        top: 118px;
+        width: 560px;
+        height: 470px;
+        border: 4px solid #111111;
+        transform: rotate(1.4deg);
+      }
+
+      .grid-trap::before,
+      .grid-trap::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background:
+          linear-gradient(90deg, rgba(17, 17, 17, 0.18) 3px, rgba(17, 17, 17, 0) 3px),
+          linear-gradient(rgba(17, 17, 17, 0.14) 3px, rgba(17, 17, 17, 0) 3px);
+        background-size: 140px 118px;
+      }
+
+      .grid-trap::after {
+        inset: 40px 54px;
+        border: 3px dashed #d6d1c9;
+        background: none;
+      }
+
+      .tag-stack {
+        position: absolute;
+        left: 98px;
+        top: 270px;
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+      }
+
+      .tag-paper {
+        width: 250px;
+        padding: 12px 18px;
+        border: 3px solid #111111;
+        border-radius: 16px 10px 14px 18px;
+        background: #ffffff;
+        font-size: 28px;
+        font-weight: 700;
+        transform: rotate(-3deg);
+      }
+
+      .tag-paper:nth-child(2) {
+        transform: rotate(2deg);
+      }
+
+      .tag-paper:nth-child(3) {
+        transform: rotate(-1deg);
+      }
+
+      .reject-mark {
+        position: absolute;
+        right: 174px;
+        top: 528px;
+        color: #e34234;
+        font-size: 68px;
+        font-weight: 900;
+        transform: rotate(-8deg);
+      }
+
+      .red-scrap {
+        position: absolute;
+        width: 18px;
+        height: 10px;
+        background: #e34234;
+        transform: rotate(12deg);
+      }
+
+      .scrap-a { right: 520px; top: 190px; }
+      .scrap-b { right: 240px; top: 214px; transform: rotate(-24deg); }
+      .scrap-c { right: 390px; top: 610px; transform: rotate(31deg); }
+      .scrap-d { right: 136px; top: 440px; transform: rotate(-12deg); }
+
+      .scene-2-x {
+        left: 184px;
+        top: 586px;
+      }
+
+      .scale {
+        position: absolute;
+        left: 100px;
+        top: 130px;
+        width: 640px;
+        height: 480px;
+      }
+
+      .scale-line {
+        position: absolute;
+        left: 112px;
+        top: 210px;
+        width: 420px;
+        height: 5px;
+        background: #111111;
+        transform: rotate(-5deg);
+        transform-origin: center;
+      }
+
+      .pivot {
+        position: absolute;
+        left: 310px;
+        top: 193px;
+        width: 42px;
+        height: 42px;
+        border: 4px solid #111111;
+        border-radius: 50%;
+        background: #ffffff;
+      }
+
+      .scale-plate {
+        position: absolute;
+        width: 174px;
+        height: 90px;
+        border: 4px solid #111111;
+        border-radius: 50%;
+        background: #ffffff;
+      }
+
+      .plate-a {
+        left: 24px;
+        top: 268px;
+        transform: rotate(4deg);
+      }
+
+      .plate-b {
+        right: 30px;
+        top: 226px;
+        transform: rotate(-3deg);
+      }
+
+      .plate-label {
+        position: absolute;
+        width: 112px;
+        color: #3a3a3a;
+        font-size: 28px;
+        font-weight: 700;
+        text-align: center;
+      }
+
+      .label-hook { left: 4px; top: 100px; }
+      .label-pain { left: 156px; top: 50px; color: #e34234; }
+      .label-proof { right: 154px; top: 58px; color: #2f6fbd; }
+      .label-solution { right: 0; top: 116px; color: #b76512; }
+
+      .note {
+        position: absolute;
+        width: 142px;
+        padding: 10px 12px;
+        border: 2px solid #2f6fbd;
+        border-radius: 14px 12px 16px 10px;
+        color: #2f6fbd;
+        font-size: 24px;
+        font-weight: 700;
+        background: #ffffff;
+      }
+
+      .note-a { left: 14px; top: 18px; transform: rotate(-7deg); }
+      .note-b { left: 190px; top: 0; transform: rotate(4deg); }
+      .note-c { right: 168px; top: 10px; transform: rotate(-3deg); }
+      .note-d { right: 0; top: 38px; transform: rotate(6deg); }
+
+      .scene-3-x {
+        left: 306px;
+        top: 350px;
+      }
+
+      .machine {
+        position: absolute;
+        left: 82px;
+        top: 142px;
+        width: 650px;
+        height: 430px;
+        border-radius: 42px 32px 36px 30px / 36px 44px 30px 38px;
+        transform: rotate(-1deg);
+      }
+
+      .machine-title {
+        position: absolute;
+        left: 54px;
+        top: 42px;
+        font-size: 34px;
+        font-weight: 900;
+      }
+
+      .tube {
+        position: absolute;
+        height: 36px;
+        border: 4px solid #111111;
+        border-radius: 999px;
+        background: #ffffff;
+      }
+
+      .tube-a { left: 58px; top: 142px; width: 190px; }
+      .tube-b { left: 255px; top: 206px; width: 180px; transform: rotate(15deg); }
+      .tube-c { left: 424px; top: 286px; width: 170px; transform: rotate(-8deg); }
+
+      .orange-flow {
+        position: absolute;
+        left: 130px;
+        top: 157px;
+        width: 480px;
+        height: 160px;
+        border-top: 8px solid #b76512;
+        border-right: 8px solid #b76512;
+        border-radius: 80px 130px 40px 0;
+        transform-origin: left center;
+      }
+
+      .crank {
+        position: absolute;
+        left: 84px;
+        bottom: 70px;
+        width: 112px;
+        height: 112px;
+        border: 5px solid #111111;
+        border-radius: 50%;
+      }
+
+      .crank::after {
+        content: "";
+        position: absolute;
+        right: -50px;
+        top: 48px;
+        width: 72px;
+        height: 5px;
+        background: #111111;
+      }
+
+      .output-sheet {
+        position: absolute;
+        right: 18px;
+        top: 240px;
+        width: 236px;
+        height: 132px;
+        border-width: 3px;
+        border-radius: 14px 10px 18px 12px;
+        transform: rotate(4deg);
+      }
+
+      .output-sheet::after {
+        content: "16:9";
+        position: absolute;
+        right: 18px;
+        bottom: 12px;
+        color: #2f6fbd;
+        font-family: "Cascadia Mono", "IBM Plex Mono", monospace;
+        font-size: 22px;
+        font-weight: 700;
+      }
+
+      .workflow-words {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        margin-top: 6px;
+      }
+
+      .workflow-words span {
+        padding: 8px 13px;
+        border: 2px solid #111111;
+        border-radius: 18px 14px 16px 12px;
+        font-size: 27px;
+        font-weight: 800;
+      }
+
+      .scene-4-x {
+        left: 42px;
+        top: 430px;
+      }
+
+      .qa-board {
+        position: absolute;
+        left: 108px;
+        top: 116px;
+        width: 620px;
+        height: 498px;
+        border-radius: 30px 24px 34px 22px / 26px 38px 24px 34px;
+        transform: rotate(1deg);
+      }
+
+      .qa-question {
+        position: absolute;
+        left: 78px;
+        width: 430px;
+        padding: 14px 18px;
+        border: 3px solid #111111;
+        border-radius: 21px 16px 20px 14px;
+        background: #ffffff;
+        font-size: 32px;
+        font-weight: 850;
+      }
+
+      .q1 { top: 82px; }
+      .q2 { top: 198px; }
+      .q3 { top: 316px; }
+
+      .eraser-path {
+        position: absolute;
+        right: 84px;
+        top: 98px;
+        width: 88px;
+        height: 330px;
+        border: 4px solid #e34234;
+        border-left: 0;
+        border-radius: 0 50px 50px 0;
+        opacity: 0.8;
+      }
+
+      .scene-5-x {
+        right: 140px;
+        top: 382px;
+      }
+
+      .eraser {
+        position: absolute;
+        right: 76px;
+        top: 360px;
+        width: 138px;
+        height: 72px;
+        border: 4px solid #111111;
+        border-radius: 18px 14px 20px 12px;
+        background: #ffffff;
+        transform: rotate(-12deg);
+      }
+
+      .eraser::after {
+        content: "";
+        position: absolute;
+        left: 46px;
+        top: -4px;
+        width: 4px;
+        height: 72px;
+        background: #111111;
+      }
+
+      .door {
+        position: absolute;
+        left: 142px;
+        top: 118px;
+        width: 310px;
+        height: 484px;
+        border-radius: 18px 14px 12px 16px;
+        transform-origin: left center;
+      }
+
+      .door::after {
+        content: "";
+        position: absolute;
+        right: 38px;
+        top: 230px;
+        width: 16px;
+        height: 16px;
+        border-radius: 50%;
+        background: #111111;
+      }
+
+      .final-sheet {
+        position: absolute;
+        right: 86px;
+        top: 178px;
+        width: 430px;
+        height: 242px;
+        border: 4px solid #111111;
+        border-radius: 18px 12px 20px 14px;
+        background: #ffffff;
+        transform: rotate(-2deg);
+      }
+
+      .final-sheet .mini-x {
+        position: absolute;
+        left: 74px;
+        top: 76px;
+        width: 70px;
+        height: 82px;
+        border-radius: 48%;
+        background: #111111;
+      }
+
+      .final-sheet .mini-x::before,
+      .final-sheet .mini-x::after {
+        content: "";
+        position: absolute;
+        top: 26px;
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: #ffffff;
+      }
+
+      .final-sheet .mini-x::before {
+        left: 18px;
+      }
+
+      .final-sheet .mini-x::after {
+        right: 18px;
+      }
+
+      .final-sheet .mini-line {
+        position: absolute;
+        left: 178px;
+        height: 4px;
+        border-radius: 999px;
+        background: #d6d1c9;
+      }
+
+      .mini-a { top: 86px; width: 160px; }
+      .mini-b { top: 132px; width: 110px; }
+
+      .orange-path {
+        position: absolute;
+        left: 426px;
+        top: 472px;
+        width: 356px;
+        height: 72px;
+        border-bottom: 7px solid #b76512;
+        border-radius: 50%;
+        transform-origin: left center;
+      }
+
+      .scene-6-x {
+        left: 290px;
+        top: 580px;
+      }
+
+      .caption-tag {
+        position: absolute;
+        right: 60px;
+        bottom: 40px;
+        color: #2f6fbd;
+        font-size: 24px;
+        font-weight: 700;
+      }
+
+      .rule-list {
+        display: flex;
+        flex-direction: column;
+        gap: 18px;
+        max-width: 650px;
+      }
+
+      .rule-list span {
+        width: max-content;
+        max-width: 100%;
+        padding: 12px 18px;
+        border: 3px solid #111111;
+        border-radius: 19px 16px 20px 15px;
+        color: #111111;
+        font-size: 31px;
+        font-weight: 850;
+        background: #ffffff;
+      }
+
+      .rule-list span:nth-child(1) {
+        transform: rotate(-1.4deg);
+      }
+
+      .rule-list span:nth-child(2) {
+        color: #e34234;
+        transform: rotate(1.2deg);
+      }
+
+      .rule-list span:nth-child(3) {
+        color: #2f6fbd;
+        transform: rotate(-0.8deg);
+      }
+
+      .rule-list span:nth-child(4) {
+        color: #b76512;
+        transform: rotate(1.4deg);
+      }
+    </style>
+  </head>
+  <body>
+    <div data-hf-id="hf-kv97" id="root" data-composition-id="main" data-start="0" data-duration="34" data-width="1920" data-height="1080">
+      <section data-hf-id="hf-lxxi" id="scene-1" class="scene clip" data-start="0" data-duration="5.2" data-track-index="1">
+        <div data-hf-id="hf-cn5c" class="scene-content">
+          <div data-hf-id="hf-bdx3" class="copy">
+            <div data-hf-id="hf-ip6v" class="kicker">skill installed · explainer</div>
+            <h1 data-hf-id="hf-ugs5">不是找图，是找认知锚点</h1>
+            <p data-hf-id="hf-qem0" class="subline">一篇中文文章，真正难的不是配图，是找出哪个判断值得被画出来。</p>
+            <span data-hf-id="hf-an3z" class="hand-label blue">先抓住那个点</span>
+          </div>
+          <div data-hf-id="hf-tan6" class="stage">
+            <div data-hf-id="hf-2ava" class="paper">
+              <div data-hf-id="hf-qm75" class="question">?</div>
+            </div>
+            <div data-hf-id="hf-d0tl" class="thread" data-layout-ignore=""></div>
+            <div data-hf-id="hf-n3c4" class="anchor-dot" data-layout-ignore=""></div>
+            <div data-hf-id="hf-pwkl" class="xiaohei scene-1-x" data-layout-ignore="">
+              <div data-hf-id="hf-2t3w" class="body"></div>
+              <span data-hf-id="hf-88qp" class="leg leg-a"></span>
+              <span data-hf-id="hf-c6uq" class="leg leg-b"></span>
+              <span data-hf-id="hf-7wbt" class="arm arm-a"></span>
+              <span data-hf-id="hf-e21m" class="arm arm-b"></span>
+            </div>
+            <div data-hf-id="hf-i5z1" class="dust" data-layout-ignore="">
+              <span data-hf-id="hf-s12k" class="p p1"></span>
+              <span data-hf-id="hf-gch7" class="p p2 blue-dot"></span>
+              <span data-hf-id="hf-wque" class="p p3"></span>
+              <span data-hf-id="hf-bo69" class="p p4 blue-dot"></span>
+              <span data-hf-id="hf-4n2g" class="p p5"></span>
+              <span data-hf-id="hf-fik3" class="p p6"></span>
+              <span data-hf-id="hf-v6kg" class="p p7 blue-dot"></span>
+              <span data-hf-id="hf-1d4t" class="p p8"></span>
+            </div>
+            <div data-hf-id="hf-khwo" class="caption-tag">black ink dust -&gt; anchor</div>
+          </div>
+        </div>
+      </section>
+
+      <section data-hf-id="hf-uufm" id="scene-2" class="scene clip" data-start="4.7" data-duration="5.7" data-track-index="2">
+        <div data-hf-id="hf-o0eg" class="scene-content">
+          <div data-hf-id="hf-r8s7" class="copy">
+            <div data-hf-id="hf-qzbl" class="kicker">bad path</div>
+            <h2 data-hf-id="hf-p2vi">坏配图长得像 PPT</h2>
+            <p data-hf-id="hf-e816" class="subline">把段落排成节点，画面很快变成流程图、课件和装饰图。</p>
+            <div data-hf-id="hf-tb5b" class="rule-list">
+              <span data-hf-id="hf-6grw">节点太多</span>
+              <span data-hf-id="hf-vq3h">箭头太满</span>
+              <span data-hf-id="hf-718m">小黑只站旁边</span>
+            </div>
+          </div>
+          <div data-hf-id="hf-xa86" class="stage">
+            <div data-hf-id="hf-qdso" class="grid-trap"></div>
+            <div data-hf-id="hf-vdjn" class="tag-stack">
+              <div data-hf-id="hf-9v1c" class="tag-paper">第一段</div>
+              <div data-hf-id="hf-gukc" class="tag-paper">第二段</div>
+              <div data-hf-id="hf-r6kd" class="tag-paper">第三段</div>
+            </div>
+            <div data-hf-id="hf-pyty" class="xiaohei scene-2-x" data-layout-ignore="">
+              <div data-hf-id="hf-6g9g" class="body"></div>
+              <span data-hf-id="hf-8ehh" class="leg leg-a"></span>
+              <span data-hf-id="hf-17jq" class="leg leg-b"></span>
+              <span data-hf-id="hf-ptnh" class="arm arm-a"></span>
+              <span data-hf-id="hf-6lmm" class="arm arm-b"></span>
+            </div>
+            <div data-hf-id="hf-f8zj" class="reject-mark">退回</div>
+            <span data-hf-id="hf-sn1a" class="red-scrap scrap-a" data-layout-ignore=""></span>
+            <span data-hf-id="hf-2hgl" class="red-scrap scrap-b" data-layout-ignore=""></span>
+            <span data-hf-id="hf-fab4" class="red-scrap scrap-c" data-layout-ignore=""></span>
+            <span data-hf-id="hf-a6gn" class="red-scrap scrap-d" data-layout-ignore=""></span>
+          </div>
+        </div>
+      </section>
+
+      <section data-hf-id="hf-kmjs" id="scene-3" class="scene clip" data-start="9.9" data-duration="6.1" data-track-index="3">
+        <div data-hf-id="hf-mthd" class="scene-content">
+          <div data-hf-id="hf-quh6" class="copy">
+            <div data-hf-id="hf-dfe6" class="kicker">director layer</div>
+            <h2 data-hf-id="hf-24ga">Director 先判断目的</h2>
+            <p data-hf-id="hf-bjyb" class="subline">它先看传播结构：hook、pain、proof、solution。每一张图都要服务一个镜头目的。</p>
+            <span data-hf-id="hf-4l4i" class="hand-label orange">不是随机切句</span>
+          </div>
+          <div data-hf-id="hf-xoj7" class="stage">
+            <div data-hf-id="hf-9b1q" class="scale">
+              <div data-hf-id="hf-0br5" class="note note-a">hook</div>
+              <div data-hf-id="hf-3o85" class="note note-b">pain</div>
+              <div data-hf-id="hf-lxx6" class="note note-c">proof</div>
+              <div data-hf-id="hf-hk58" class="note note-d">solution</div>
+              <div data-hf-id="hf-3rpx" class="scale-line"></div>
+              <div data-hf-id="hf-pjno" class="pivot"></div>
+              <div data-hf-id="hf-bpzz" class="scale-plate plate-a"></div>
+              <div data-hf-id="hf-3244" class="scale-plate plate-b"></div>
+              <div data-hf-id="hf-2iw0" class="plate-label label-hook">钩子</div>
+              <div data-hf-id="hf-36e4" class="plate-label label-pain">痛点</div>
+              <div data-hf-id="hf-hdyp" class="plate-label label-proof">证据</div>
+              <div data-hf-id="hf-bgrc" class="plate-label label-solution">方案</div>
+              <div data-hf-id="hf-yknj" class="xiaohei scene-3-x" data-layout-ignore="">
+                <div data-hf-id="hf-59cd" class="body"></div>
+                <span data-hf-id="hf-9lek" class="leg leg-a"></span>
+                <span data-hf-id="hf-1lur" class="leg leg-b"></span>
+                <span data-hf-id="hf-r0kk" class="arm arm-a"></span>
+                <span data-hf-id="hf-6zxn" class="arm arm-b"></span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section data-hf-id="hf-0c9v" id="scene-4" class="scene clip" data-start="15.5" data-duration="6.5" data-track-index="4">
+        <div data-hf-id="hf-n7se" class="scene-content">
+          <div data-hf-id="hf-qg65" class="copy">
+            <div data-hf-id="hf-oku2" class="kicker">workflow</div>
+            <h2 data-hf-id="hf-cqux">正文进来，隐喻出去</h2>
+            <p data-hf-id="hf-6y4c" class="subline">skill 不平均配图。它只保留最该被看见的结构，再发明一个奇怪但成立的手绘隐喻。</p>
+            <div data-hf-id="hf-w0xn" class="workflow-words">
+              <span data-hf-id="hf-wbzn">正文</span>
+              <span data-hf-id="hf-93ew">锚点</span>
+              <span data-hf-id="hf-a56w">隐喻</span>
+              <span data-hf-id="hf-kqdq">配图</span>
+            </div>
+          </div>
+          <div data-hf-id="hf-y2u8" class="stage">
+            <div data-hf-id="hf-oj3b" class="machine">
+              <div data-hf-id="hf-q4fh" class="machine-title">小黑低科技机</div>
+              <div data-hf-id="hf-v4ci" class="tube tube-a"></div>
+              <div data-hf-id="hf-oymp" class="tube tube-b"></div>
+              <div data-hf-id="hf-o6yw" class="tube tube-c"></div>
+              <div data-hf-id="hf-0c5i" class="orange-flow" data-layout-ignore=""></div>
+              <div data-hf-id="hf-6kpl" class="crank"></div>
+              <div data-hf-id="hf-czip" class="output-sheet"></div>
+              <div data-hf-id="hf-jip4" class="xiaohei scene-4-x" data-layout-ignore="">
+                <div data-hf-id="hf-5nne" class="body"></div>
+                <span data-hf-id="hf-973j" class="leg leg-a"></span>
+                <span data-hf-id="hf-205s" class="leg leg-b"></span>
+                <span data-hf-id="hf-qm9j" class="arm arm-a"></span>
+                <span data-hf-id="hf-7e8o" class="arm arm-b"></span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section data-hf-id="hf-hiim" id="scene-5" class="scene clip" data-start="21.5" data-duration="6.7" data-track-index="5">
+        <div data-hf-id="hf-m0vb" class="scene-content">
+          <div data-hf-id="hf-t8bc" class="copy">
+            <div data-hf-id="hf-teen" class="kicker">quality gate</div>
+            <h2 data-hf-id="hf-e9eo">QA：少、准、怪</h2>
+            <p data-hf-id="hf-v991" class="subline">复核时不要加东西，只问三件事。过不了，就重写这张图。</p>
+            <span data-hf-id="hf-5tze" class="hand-label red">删掉解释欲</span>
+          </div>
+          <div data-hf-id="hf-vap1" class="stage">
+            <div data-hf-id="hf-i199" class="qa-board">
+              <div data-hf-id="hf-zrw4" class="qa-question q1">小黑在干活吗？</div>
+              <div data-hf-id="hf-apv6" class="qa-question q2">画面够空吗？</div>
+              <div data-hf-id="hf-blnz" class="qa-question q3">中文够短吗？</div>
+              <div data-hf-id="hf-a3zt" class="eraser-path" data-layout-ignore=""></div>
+              <div data-hf-id="hf-njwg" class="eraser"></div>
+              <span data-hf-id="hf-fd6q" class="red-scrap scrap-a" data-layout-ignore=""></span>
+              <span data-hf-id="hf-axix" class="red-scrap scrap-b" data-layout-ignore=""></span>
+              <span data-hf-id="hf-epjc" class="red-scrap scrap-c" data-layout-ignore=""></span>
+              <span data-hf-id="hf-x5x3" class="red-scrap scrap-d" data-layout-ignore=""></span>
+              <div data-hf-id="hf-l4pd" class="xiaohei scene-5-x" data-layout-ignore="">
+                <div data-hf-id="hf-7n6j" class="body"></div>
+                <span data-hf-id="hf-ae0m" class="leg leg-a"></span>
+                <span data-hf-id="hf-z80l" class="leg leg-b"></span>
+                <span data-hf-id="hf-rt6m" class="arm arm-a"></span>
+                <span data-hf-id="hf-4m3h" class="arm arm-b"></span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section data-hf-id="hf-utik" id="scene-6" class="scene clip" data-start="27.7" data-duration="6.3" data-track-index="6">
+        <div data-hf-id="hf-mf6c" class="scene-content">
+          <div data-hf-id="hf-su0b" class="copy">
+            <div data-hf-id="hf-f5ka" class="kicker">operating principle</div>
+            <h1 data-hf-id="hf-v4yc">哪个点需要被看见？</h1>
+            <p data-hf-id="hf-rxuy" class="subline">下一次不要先问配几张图。先问：这个观点，应该怎么被一眼看懂？</p>
+            <span data-hf-id="hf-47hc" class="hand-label orange">图不是装饰，是判断</span>
+          </div>
+          <div data-hf-id="hf-vp02" class="stage">
+            <div data-hf-id="hf-ucjc" class="door"></div>
+            <div data-hf-id="hf-pk2e" class="final-sheet">
+              <div data-hf-id="hf-nf9i" class="mini-x"></div>
+              <span data-hf-id="hf-ru5q" class="mini-line mini-a"></span>
+              <span data-hf-id="hf-nw1p" class="mini-line mini-b"></span>
+            </div>
+            <div data-hf-id="hf-4jhb" class="orange-path" data-layout-ignore=""></div>
+            <div data-hf-id="hf-nv42" class="xiaohei scene-6-x" data-layout-ignore="">
+              <div data-hf-id="hf-81hk" class="body"></div>
+              <span data-hf-id="hf-9zpl" class="leg leg-a"></span>
+              <span data-hf-id="hf-zmbm" class="leg leg-b"></span>
+              <span data-hf-id="hf-revl" class="arm arm-a"></span>
+              <span data-hf-id="hf-50ei" class="arm arm-b"></span>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <script>
+      window.__timelines = window.__timelines || {};
+      const tl = gsap.timeline({ paused: true });
+
+      function enterCopy(scene, start) {
+        tl.from(scene + " .kicker", { y: 28, opacity: 0, duration: 0.38, ease: "power3.out" }, start + 0.16);
+        tl.from(scene + " h1, " + scene + " h2", { x: -48, opacity: 0, duration: 0.58, ease: "expo.out" }, start + 0.34);
+        tl.from(scene + " .subline", { y: 30, opacity: 0, duration: 0.46, ease: "sine.out" }, start + 0.78);
+      }
+
+      function pushTransition(oldScene, newScene, start) {
+        tl.to(oldScene, { x: -1920, duration: 0.5, ease: "power3.inOut" }, start);
+        tl.fromTo(newScene, { x: 1920, opacity: 1 }, { x: 0, duration: 0.5, ease: "power3.inOut" }, start);
+        tl.set(oldScene, { opacity: 0 }, start + 0.52);
+      }
+
+      function verticalTransition(oldScene, newScene, start) {
+        tl.to(oldScene, { y: -1080, duration: 0.5, ease: "power3.inOut" }, start);
+        tl.fromTo(newScene, { y: 1080, opacity: 1 }, { y: 0, duration: 0.5, ease: "power3.inOut" }, start);
+        tl.set(oldScene, { opacity: 0 }, start + 0.52);
+      }
+
+      function squeezeTransition(oldScene, newScene, start) {
+        tl.to(oldScene, { scaleX: 0, transformOrigin: "left center", duration: 0.42, ease: "power3.inOut" }, start);
+        tl.fromTo(newScene, { scaleX: 0, transformOrigin: "right center", opacity: 1 }, { scaleX: 1, duration: 0.42, ease: "power3.inOut" }, start + 0.08);
+        tl.set(oldScene, { opacity: 0 }, start + 0.55);
+      }
+
+      enterCopy("#scene-1", 0);
+      tl.from("#scene-1 .paper", { y: 52, rotation: -4, opacity: 0, duration: 0.52, ease: "back.out(1.3)" }, 0.48);
+      tl.from("#scene-1 .question", { scale: 0.68, rotation: -18, opacity: 0, duration: 0.42, ease: "power4.out" }, 0.86);
+      tl.from("#scene-1 .thread", { scaleX: 0, opacity: 0, duration: 0.56, transformOrigin: "left center", ease: "power2.out" }, 1.12);
+      tl.from("#scene-1 .scene-1-x", { x: -56, y: 24, opacity: 0, duration: 0.58, ease: "back.out(1.6)" }, 1.04);
+      tl.from("#scene-1 .anchor-dot", { scale: 0, opacity: 0, duration: 0.34, ease: "power4.out" }, 1.56);
+      tl.from("#scene-1 .p", { x: -90, y: -40, scale: 0, opacity: 0, duration: 0.62, stagger: 0.045, ease: "expo.out" }, 1.42);
+      tl.from("#scene-1 .hand-label", { rotation: -9, scale: 0.86, opacity: 0, duration: 0.4, ease: "back.out(1.4)" }, 1.86);
+      tl.to("#scene-1 .scene-1-x", { y: -10, duration: 1.05, repeat: 3, yoyo: true, ease: "sine.inOut" }, 1.9);
+
+      pushTransition("#scene-1", "#scene-2", 4.7);
+      enterCopy("#scene-2", 4.9);
+      tl.from("#scene-2 .rule-list span", { x: -34, opacity: 0, duration: 0.34, stagger: 0.11, ease: "power2.out" }, 5.8);
+      tl.from("#scene-2 .grid-trap", { scale: 0.93, rotation: -2, opacity: 0, duration: 0.48, ease: "back.out(1.25)" }, 5.38);
+      tl.from("#scene-2 .tag-paper", { x: -90, y: 24, opacity: 0, duration: 0.44, stagger: 0.12, ease: "expo.out" }, 5.78);
+      tl.from("#scene-2 .scene-2-x", { x: -70, opacity: 0, duration: 0.5, ease: "back.out(1.5)" }, 6.12);
+      tl.from("#scene-2 .reject-mark", { y: -72, scale: 1.25, opacity: 0, duration: 0.32, ease: "power4.out" }, 6.7);
+      tl.from("#scene-2 .red-scrap", { y: -58, scale: 0, opacity: 0, duration: 0.42, stagger: 0.06, ease: "power3.out" }, 6.78);
+      tl.to("#scene-2 .grid-trap", { rotation: -1.8, duration: 1.2, repeat: 2, yoyo: true, ease: "sine.inOut" }, 7.1);
+
+      pushTransition("#scene-2", "#scene-3", 9.9);
+      enterCopy("#scene-3", 10.12);
+      tl.from("#scene-3 .scale-line", { scaleX: 0, opacity: 0, duration: 0.48, transformOrigin: "center", ease: "power4.out" }, 10.66);
+      tl.from("#scene-3 .pivot", { scale: 0, opacity: 0, duration: 0.34, ease: "back.out(1.8)" }, 10.86);
+      tl.from("#scene-3 .scale-plate", { y: 38, opacity: 0, duration: 0.42, stagger: 0.12, ease: "power2.out" }, 11.04);
+      tl.from("#scene-3 .plate-label", { y: -26, opacity: 0, duration: 0.34, stagger: 0.07, ease: "sine.out" }, 11.26);
+      tl.from("#scene-3 .note", { x: -52, y: 18, rotation: -12, opacity: 0, duration: 0.46, stagger: 0.09, ease: "expo.out" }, 11.56);
+      tl.from("#scene-3 .scene-3-x", { y: 44, opacity: 0, duration: 0.45, ease: "back.out(1.45)" }, 11.36);
+      tl.from("#scene-3 .hand-label", { scale: 0.84, rotation: -9, opacity: 0, duration: 0.38, ease: "back.out(1.4)" }, 11.88);
+      tl.to("#scene-3 .scale-line", { rotation: 3, duration: 1.25, repeat: 2, yoyo: true, ease: "sine.inOut" }, 12.2);
+
+      verticalTransition("#scene-3", "#scene-4", 15.5);
+      enterCopy("#scene-4", 15.72);
+      tl.from("#scene-4 .workflow-words span", { y: 24, opacity: 0, duration: 0.32, stagger: 0.08, ease: "power2.out" }, 16.46);
+      tl.from("#scene-4 .machine", { y: 60, rotation: -5, opacity: 0, duration: 0.55, ease: "back.out(1.25)" }, 16.18);
+      tl.from("#scene-4 .tube", { scaleX: 0, opacity: 0, duration: 0.42, stagger: 0.12, transformOrigin: "left center", ease: "power4.out" }, 16.7);
+      tl.from("#scene-4 .scene-4-x", { x: -46, opacity: 0, duration: 0.44, ease: "back.out(1.5)" }, 16.88);
+      tl.from("#scene-4 .crank", { scale: 0.82, opacity: 0, duration: 0.36, ease: "sine.out" }, 17.06);
+      tl.to("#scene-4 .crank", { rotation: 360, duration: 1.05, repeat: 2, ease: "none" }, 17.32);
+      tl.fromTo("#scene-4 .orange-flow", { scaleX: 0, rotation: 5 }, { scaleX: 1, rotation: 5, duration: 1.1, ease: "power3.inOut" }, 17.5);
+      tl.from("#scene-4 .output-sheet", { x: -50, scale: 0.88, opacity: 0, duration: 0.42, ease: "expo.out" }, 18.52);
+
+      squeezeTransition("#scene-4", "#scene-5", 21.5);
+      enterCopy("#scene-5", 21.78);
+      tl.from("#scene-5 .hand-label", { scale: 0.82, rotation: 8, opacity: 0, duration: 0.38, ease: "back.out(1.5)" }, 22.74);
+      tl.from("#scene-5 .qa-board", { scale: 0.94, rotation: -3, opacity: 0, duration: 0.48, ease: "back.out(1.25)" }, 22.32);
+      tl.from("#scene-5 .qa-question", { x: -58, opacity: 0, duration: 0.4, stagger: 0.13, ease: "expo.out" }, 22.76);
+      tl.from("#scene-5 .eraser", { x: 70, y: -40, opacity: 0, duration: 0.42, ease: "power3.out" }, 23.32);
+      tl.from("#scene-5 .scene-5-x", { y: 48, opacity: 0, duration: 0.46, ease: "back.out(1.4)" }, 23.2);
+      tl.from("#scene-5 .eraser-path", { scaleY: 0, opacity: 0, duration: 0.46, transformOrigin: "top center", ease: "power2.out" }, 23.56);
+      tl.from("#scene-5 .red-scrap", { x: -46, y: -24, scale: 0, opacity: 0, duration: 0.4, stagger: 0.07, ease: "power4.out" }, 23.82);
+      tl.to("#scene-5 .eraser", { x: -18, y: 18, rotation: -2, duration: 0.72, repeat: 2, yoyo: true, ease: "sine.inOut" }, 24.1);
+
+      pushTransition("#scene-5", "#scene-6", 27.7);
+      enterCopy("#scene-6", 27.94);
+      tl.from("#scene-6 .hand-label", { scale: 0.84, rotation: -8, opacity: 0, duration: 0.38, ease: "back.out(1.4)" }, 28.86);
+      tl.from("#scene-6 .door", { rotationY: 28, x: -54, opacity: 0, duration: 0.56, ease: "power3.out" }, 28.34);
+      tl.from("#scene-6 .scene-6-x", { y: 42, opacity: 0, duration: 0.45, ease: "back.out(1.5)" }, 28.72);
+      tl.from("#scene-6 .final-sheet", { x: 80, scale: 0.9, opacity: 0, duration: 0.48, ease: "expo.out" }, 29.06);
+      tl.fromTo("#scene-6 .orange-path", { scaleX: 0, rotation: -3 }, { scaleX: 1, rotation: -3, duration: 0.72, ease: "power3.inOut" }, 29.48);
+      tl.from("#scene-6 .mini-x", { scale: 0, opacity: 0, duration: 0.34, ease: "back.out(1.6)" }, 29.86);
+      tl.from("#scene-6 .mini-line", { scaleX: 0, opacity: 0, duration: 0.32, stagger: 0.08, transformOrigin: "left center", ease: "power4.out" }, 30.08);
+      tl.to("#scene-6 .door", { rotation: -2, duration: 1.25, repeat: 1, yoyo: true, ease: "sine.inOut" }, 30.44);
+      tl.to("#root", { opacity: 0, duration: 0.42, ease: "sine.in" }, 33.48);
+
+      window.__timelines["main"] = tl;
+    </script>
+  </body>
+</html>

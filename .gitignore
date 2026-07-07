@@ -38,6 +38,7 @@ ui-server.url
 *.sqlite
 *.sqlite-shm
 *.sqlite-wal
+**/.thumbnails/
 
 image-assets/generated/
 image-assets/review/
