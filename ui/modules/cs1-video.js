@@ -165,8 +165,10 @@ export function initCs1VideoModule() {
       ].join("\n").trim();
       resultPanel.hidden = false;
       const style = styleCatalog.find((item) => item.id === result.style);
-      setStatus("生成完成", `模板：${style?.name || result.style}。视频已输出到本机。`);
+      completeProgress();
+      setStatus("生成完成", `模板：${result.templateName || style?.name || result.style}。视频已输出到本机。`);
     } catch (error) {
+      failProgress();
       setStatus("生成失败", error instanceof Error ? error.message : String(error));
       logPanel.textContent = error instanceof Error ? error.stack || error.message : String(error);
     } finally {
