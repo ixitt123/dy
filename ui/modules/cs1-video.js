@@ -15,8 +15,10 @@ export function initCs1VideoModule() {
 
   const titleInput = document.getElementById("cs1VideoTitle");
   const textInput = document.getElementById("cs1VideoText");
+  const aspectRatioSelect = document.getElementById("cs1VideoAspectRatio");
   const styleSelect = document.getElementById("cs1VideoStyleSelect");
   const beatCountSelect = document.getElementById("cs1VideoBeatCount");
+  const cardHoldSelect = document.getElementById("cs1VideoCardHold");
   const styleDescription = document.getElementById("cs1VideoStyleDescription");
   const styleSummary = document.getElementById("cs1VideoStyleSummary");
   const scriptFormat = document.getElementById("cs1VideoScriptFormat");
@@ -32,6 +34,7 @@ export function initCs1VideoModule() {
   const watermarkTextInput = document.getElementById("cs1WatermarkText");
   const watermarkPositionSelect = document.getElementById("cs1WatermarkPosition");
   const watermarkOpacitySelect = document.getElementById("cs1WatermarkOpacity");
+  const watermarkAnimationSelect = document.getElementById("cs1WatermarkAnimation");
   const aiInput = document.getElementById("cs1VideoAiRefine");
   const status = document.getElementById("cs1VideoStatus");
   const message = document.getElementById("cs1VideoMessage");
@@ -261,8 +264,10 @@ export function initCs1VideoModule() {
       const result = await postJson("/api/cs1-video/generate", {
         title: titleInput.value,
         text: textInput.value,
+        aspectRatio: aspectRatioSelect?.value || "9:16",
         style: selectedStyle(),
         beatCount: beatCountSelect?.value || "auto",
+        cardHoldPreset: cardHoldSelect?.value || "auto",
         bgmMode: bgmModeSelect?.value || "builtin_dark_pulse_128",
         bgmPath: bgmPathInput?.value || "",
         introTemplateId: introTemplateSelect?.value || "none",
@@ -272,6 +277,7 @@ export function initCs1VideoModule() {
         watermarkText: watermarkTextInput?.value || "",
         watermarkPosition: watermarkPositionSelect?.value || "top-right",
         watermarkOpacity: watermarkOpacitySelect?.value || "0.45",
+        watermarkAnimation: watermarkAnimationSelect?.value || "float_y",
         aiRefine: aiInput.checked,
       });
       lastResult = result;
@@ -279,8 +285,10 @@ export function initCs1VideoModule() {
       outputDir = result.outputDir || outputDir;
       logPanel.textContent = [
         result.aiUsed ? `Structure refinement: AI used · ${result.beatCount || beatCountSelect?.value || "auto"} cards` : `Structure refinement: local parser · ${result.beatCount || beatCountSelect?.value || "auto"} cards`,
+        result.aspectRatio ? `Aspect ratio: ${result.aspectRatio.label || result.aspectRatio.id || aspectRatioSelect?.value || "9:16"} · ${result.aspectRatio.platforms || ""}` : `Aspect ratio: ${aspectRatioSelect?.value || "9:16"}`,
+        result.cardHold ? `Card hold: ${result.cardHold.label || result.cardHold.id || "auto"}` : `Card hold: ${cardHoldSelect?.value || "auto"}`,
         result.bgm?.label ? `BGM: ${result.bgm.label}` : "BGM: none",
-        result.packaging ? `Packaging: intro=${result.packaging.introTemplateId || "none"} · outro=${result.packaging.outroTemplateId || "none"} · watermark=${result.packaging.watermark?.enabled ? result.packaging.watermark.position : "off"}` : "Packaging: none",
+        result.packaging ? `Packaging: intro=${result.packaging.introTemplateId || "none"} · outro=${result.packaging.outroTemplateId || "none"} · watermark=${result.packaging.watermark?.enabled ? `${result.packaging.watermark.position}/${result.packaging.watermark.animation || "none"}` : "off"}` : "Packaging: none",
         "",
         result.checkLog || "",
         "",
