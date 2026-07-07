@@ -358,6 +358,7 @@ function writeProject(projectDir, { slug, title, styleId, styleName, beatCount, 
   }, null, 2));
   fs.writeFileSync(path.join(projectDir, "DESIGN.md"), files.design);
   fs.writeFileSync(path.join(projectDir, "index.html"), files.index);
+  writeLocalGsapAsset(projectDir);
   for (const [name, content] of Object.entries(files.compositions || {})) {
     fs.writeFileSync(path.join(compositionDir, name), content);
   }
@@ -372,6 +373,24 @@ function writeProject(projectDir, { slug, title, styleId, styleName, beatCount, 
       fs.writeFileSync(targetPath, String(asset || ""), "utf8");
     }
   }
+}
+
+function resolveLocalGsapPath() {
+  try {
+    return nodeRequire.resolve("gsap/dist/gsap.min.js");
+  } catch {
+    return "";
+  }
+}
+
+function writeLocalGsapAsset(projectDir) {
+  const sourcePath = resolveLocalGsapPath();
+  if (!sourcePath || !fs.existsSync(sourcePath)) {
+    throw new Error("本地 GSAP 资源缺失，请先执行 pnpm install。");
+  }
+  const targetPath = path.join(projectDir, LOCAL_GSAP_SRC);
+  fs.mkdirSync(path.dirname(targetPath), { recursive: true });
+  fs.copyFileSync(sourcePath, targetPath);
 }
 
 function buildHyperframesEnv({ ffmpegPath, ffprobePath }) {
@@ -777,7 +796,7 @@ Dark CS1 explainer video: cinematic black-brown canvas, exam-red warning blocks,
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=1920, height=1080" />
-  <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+  <script src="${LOCAL_GSAP_SRC}"></script>
   <style>
     *{box-sizing:border-box} @font-face{font-family:"Microsoft YaHei UI";src:local("Microsoft YaHei UI")} @font-face{font-family:"Microsoft YaHei";src:local("Microsoft YaHei")} @font-face{font-family:"Cascadia Mono";src:local("Cascadia Mono")}
     html,body{margin:0;width:1920px;height:1080px;overflow:hidden;background:#12100d;color:#f0e5ce;font-family:"Microsoft YaHei UI","Microsoft YaHei",sans-serif}
@@ -922,7 +941,7 @@ AIfman-inspired knowledge card template. Dark olive cinematic canvas, soft black
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=${width}, height=${height}" />
-  <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+  <script src="${LOCAL_GSAP_SRC}"></script>
   <style>
     *{box-sizing:border-box}
     @font-face{font-family:"Microsoft YaHei UI";src:local("Microsoft YaHei UI")}
