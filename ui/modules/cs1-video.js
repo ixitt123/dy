@@ -10,7 +10,6 @@ export function initCs1VideoModule() {
   const textInput = document.getElementById("cs1VideoText");
   const styleSelect = document.getElementById("cs1VideoStyleSelect");
   const beatCountSelect = document.getElementById("cs1VideoBeatCount");
-  const customStyleNameInput = null;
   const styleDescription = document.getElementById("cs1VideoStyleDescription");
   const styleSummary = document.getElementById("cs1VideoStyleSummary");
   const aiInput = document.getElementById("cs1VideoAiRefine");
@@ -124,7 +123,7 @@ export function initCs1VideoModule() {
       if (!styleCatalog.length) return;
       const current = styleSelect.value || "cs1";
       styleSelect.innerHTML = styleCatalog
-        .map((style) => `<option value="${escapeHtml(style.id)}">${escapeHtml(style.name)}${style.source === "hyperframes" ? " · official" : ""}</option>`)
+        .map((style) => `<option value="${escapeHtml(style.id)}">${escapeHtml(style.name)}${style.source === "hyperframes" ? " · 官方模板" : " · 本地模板"}</option>`)
         .join("");
       styleSelect.value = styleCatalog.some((style) => style.id === current) ? current : "cs1";
       updateStyleDescription();
@@ -138,7 +137,6 @@ export function initCs1VideoModule() {
 
   exampleButton?.addEventListener("click", () => {
     titleInput.value = "仪征中考家长提醒";
-    if (customStyleNameInput) customStyleNameInput.value = "CS1 招生提醒版";
     textInput.value = EXAMPLE_TEXT;
     textInput.focus();
   });
@@ -156,7 +154,6 @@ export function initCs1VideoModule() {
         text: textInput.value,
         style: selectedStyle(),
         beatCount: beatCountSelect?.value || "5",
-        templateName: customStyleNameInput?.value || "",
         aiRefine: aiInput.checked,
       });
       lastResult = result;
