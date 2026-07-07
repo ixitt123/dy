@@ -1183,7 +1183,7 @@ AIfman-inspired knowledge card template. Dark olive cinematic canvas, soft black
 <body>
   <div id="root" data-composition-id="main" data-start="0" data-duration="${duration}" data-width="${width}" data-height="${height}">
     ${bgm.src ? `<audio id="bgm" data-start="0" data-duration="${duration}" data-track-index="50" src="${bgm.src}" data-volume="${bgm.volume}"></audio>` : ""}
-    <div id="stage" class="${stageClass}" data-layout-allow-overflow>
+    <div id="stage" class="${stageClass}" data-layout-ignore>
     <div class="scan" data-layout-ignore></div>
     <div class="grain" data-layout-ignore></div>
     <div class="glow" data-layout-ignore></div>
