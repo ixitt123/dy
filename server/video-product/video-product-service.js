@@ -1571,7 +1571,31 @@ export function createVideoProductService({
         });
       }
     }
-    return assets.sort((a, b) => String(a.source_label || "").localeCompare(String(b.source_label || ""), "zh-CN") || String(a.filename).localeCompare(String(b.filename), "zh-CN"));
+    return [...builtInBgmAssets(), ...assets]
+      .sort((a, b) => String(a.source_label || "").localeCompare(String(b.source_label || ""), "zh-CN") || String(a.filename).localeCompare(String(b.filename), "zh-CN"));
+  }
+
+  function builtInBgmAssets() {
+    return [
+      {
+        id: "builtin_bgm_aifman_manager_dark_pulse_128",
+        path: "",
+        title: "管理岗卡片风 · 128BPM 暗色律动",
+        filename: "管理岗卡片风 · 128BPM 暗色律动",
+        file_size: 0,
+        bpm: 128,
+        mood: "暗色、克制、知识卡片、职场管理",
+        tags: ["aifman", "manager", "knowledge", "dark", "pulse", "职场", "管理", "知识卡片"],
+        license: "系统本地生成基础节奏垫，不来自原视频，不调用付费 API。",
+        license_url: "",
+        source: "generated_default",
+        source_label: "系统内置 BGM 预设",
+        license_status: "authorized",
+        created_at: "",
+        kind: "generated_default_bgm",
+        route_a_style_id: "black_gold_knowledge",
+      },
+    ];
   }
 
   function isBgmBpmInPublishRange(asset) {
@@ -1786,8 +1810,11 @@ export function createVideoProductService({
   async function selectBgmAsset({ preferredId = "", strategy = "none", styleId = ROUTE_A_DEFAULT_STYLE_ID, timeline = null } = {}) {
     const assets = listBgmAssets();
     const preferred = preferredId
-      ? assets.find((asset) => String(asset.id) === String(preferredId) || path.resolve(asset.path) === path.resolve(String(preferredId)))
+      ? assets.find((asset) => String(asset.id) === String(preferredId) || (asset.path && path.resolve(asset.path) === path.resolve(String(preferredId))))
       : null;
+    if (preferred?.kind === "generated_default_bgm") {
+      return { path: "", source: "generated_default", label: preferred.title || preferred.filename, asset: preferred };
+    }
     if (preferred) return { path: preferred.path, source: "manual", label: preferred.filename, asset: preferred };
     if (strategy === "manual" || strategy === "none") return { path: "", source: "none", label: "", asset: null };
     if (strategy === "generated_default") return { path: "", source: "generated_default", label: "generated_default", asset: null };
@@ -2494,9 +2521,10 @@ ${sceneMarkup}
     });
     if (bgmSelection.source === "generated_default") {
       const generatedPath = path.join(audioDir, "bgm_generated_default.wav");
-      const generated = writeDefaultBgmWav(generatedPath, timeline.duration, routeAStyle);
+      const generatedStyleId = bgmSelection.asset?.route_a_style_id || routeAStyle;
+      const generated = writeDefaultBgmWav(generatedPath, timeline.duration, generatedStyleId);
       bgmSelection.path = generated.path;
-      bgmSelection.label = generated.label;
+      bgmSelection.label = bgmSelection.asset?.title || bgmSelection.asset?.filename || generated.label;
     }
     if (bgmSelection.path && fs.existsSync(bgmSelection.path)) {
       const ext = path.extname(bgmSelection.path) || ".mp3";
