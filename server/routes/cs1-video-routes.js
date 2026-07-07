@@ -28,7 +28,7 @@ const AIFMAN_MANAGER_SCRIPT_FORMAT = [
   "适用：职场管理、领导力、认知提升、能力清单类视频。",
   "标题：用“对象 + 必备/避坑/提升 + 数字”结构，例如：升到管理岗必备的三个能力。",
   "开场：一句身份变化或痛点，15-24 字，不铺垫。",
-  "主体：固定 3 个卡片，每个卡片包含：能力名 4-6 字 + 副标题 8-12 字 + 说明 16-28 字。",
+  "主体：按文案实际结构生成 2-6 个卡片，不强行固定 3 个；每个卡片包含：标题 4-8 字 + 副标题 8-14 字 + 说明 16-32 字。",
   "节奏：每段只讲一个动作，不写长段落，不写复杂案例。",
   "结尾：一句行动提醒或认知总结，12-20 字。",
   "示例：第一，沟通能力。向上汇报、平行协作、向下管理都要有秩序。",
@@ -104,6 +104,8 @@ export function createCs1VideoRoutes({ baseDir, sendJson, modelRouter, ffmpegPat
           title: body.title,
           beatCount: body.beatCount,
           templateName: body.templateName,
+          bgmMode: body.bgmMode,
+          bgmPath: body.bgmPath,
           aiRefine: body.aiRefine === true,
           modelRouter,
           ffmpegPath,
@@ -144,7 +146,7 @@ function writeHiddenStyleIds(filePath, ids) {
   fs.writeFileSync(filePath, `${JSON.stringify(payload, null, 2)}\n`, "utf8");
 }
 
-async function generateVideo({ runsDir, outputDir, text, style, title, beatCount, templateName, aiRefine, modelRouter, ffmpegPath, ffprobePath }) {
+async function generateVideo({ runsDir, outputDir, text, style, title, beatCount, templateName, bgmMode, bgmPath, aiRefine, modelRouter, ffmpegPath, ffprobePath }) {
   const script = normalizeScript(text);
   const styleId = normalizeStyle(style);
   const normalizedBeatCount = normalizeBeatCount(beatCount);
@@ -157,12 +159,14 @@ async function generateVideo({ runsDir, outputDir, text, style, title, beatCount
   fs.mkdirSync(projectDir, { recursive: true });
   fs.mkdirSync(outputDir, { recursive: true });
 
-  const refined = aiRefine ? await refineStoryModel({ script, title: videoTitle, beatCount: normalizedBeatCount, modelRouter }) : null;
-  const model = refined || buildStoryModel(script, videoTitle, normalizedBeatCount);
+  const refined = aiRefine ? await refineStoryModel({ script, title: videoTitle, beatCount: normalizedBeatCount, styleId, modelRouter }) : null;
+  const model = refined || (styleId === "aifman-manager-card"
+    ? buildAifmanStoryModel(script, videoTitle, normalizedBeatCount)
+    : buildStoryModel(script, videoTitle, normalizedBeatCount));
   const files = styleId === "cs1"
     ? cs1Files(model)
     : styleId === "aifman-manager-card"
-      ? aifmanManagerCardFiles(model)
+      ? aifmanManagerCardFiles(model, { bgmMode, bgmPath })
       : styleId === "warm-grain"
       ? warmGrainFiles(model)
       : officialTemplateFiles(model, styleId);
@@ -192,14 +196,18 @@ async function generateVideo({ runsDir, outputDir, text, style, title, beatCount
     projectDir,
     outputPath,
     aiUsed: Boolean(refined),
+    bgm: files.bgm || null,
     checkLog: checkOutput.join("\n").slice(-8000),
     renderLog: renderOutput.join("\n").slice(-8000),
   };
 }
 
-async function refineStoryModel({ script, title, beatCount, modelRouter }) {
+async function refineStoryModel({ script, title, beatCount, styleId, modelRouter }) {
   if (!modelRouter || typeof modelRouter.generate !== "function") return null;
   try {
+    if (styleId === "aifman-manager-card") {
+      return await refineAifmanStoryModel({ script, title, beatCount, modelRouter });
+    }
     const result = await modelRouter.generate({
       taskType: "rewrite",
       messages: [
@@ -232,6 +240,42 @@ async function refineStoryModel({ script, title, beatCount, modelRouter }) {
   } catch {
     return null;
   }
+}
+
+async function refineAifmanStoryModel({ script, title, beatCount, modelRouter }) {
+  const result = await modelRouter.generate({
+    taskType: "rewrite",
+    messages: [
+      {
+        role: "system",
+        content: [
+          "你是 AIfman 风格的中文短视频导演，只负责把文案拆成深色知识卡片视频结构。",
+          "必须返回 JSON，不要 markdown，不要解释。",
+          "结构：{ \"title\":\"\", \"headline_lead\":\"\", \"headline_keyword\":\"\", \"cards\":[{\"title\":\"\", \"subtitle\":\"\", \"detail\":\"\"}], \"outro\":\"\" }",
+          "cards 数量必须按文案实际情况决定，范围 2-6 个；文案明确有第一/第二/第三/四点时必须跟随原结构，不要强行固定三个。",
+          "每个 card.title 4-8 个中文；subtitle 8-14 个中文；detail 16-32 个中文。",
+          "不要直接截取长句当标题，要提炼成可上屏的大字。",
+          "如果是英语学习内容，避免把“学英语12年”这类背景句当能力卡标题，应提炼为“开口能力”“场景练习”“输出习惯”等动作型卡片。",
+          "headline_lead 是标题前半句，headline_keyword 是需要绿色强调的短词，例如：必备能力、避坑指南、核心动作、正确方法。",
+        ].join("\n"),
+      },
+      {
+        role: "user",
+        content: JSON.stringify({ title, script, preferredCardCount: beatCount }, null, 2),
+      },
+    ],
+    options: { temperature: 0.25 },
+  });
+  const parsed = JSON.parse(String(result.content || "").replace(/^```json\s*/i, "").replace(/```$/i, "").trim());
+  return aifmanModelFromParts({
+    title: sanitizeTitle(parsed.title) || title,
+    headlineLead: parsed.headline_lead,
+    headlineKeyword: parsed.headline_keyword,
+    cards: parsed.cards,
+    outro: parsed.outro,
+    fallbackTitle: title,
+    preferredCount: beatCount,
+  });
 }
 
 function writeProject(projectDir, { slug, title, styleId, styleName, beatCount, files }) {
