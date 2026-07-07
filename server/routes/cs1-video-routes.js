@@ -314,6 +314,17 @@ function writeProject(projectDir, { slug, title, styleId, styleName, beatCount, 
   for (const [name, content] of Object.entries(files.compositions || {})) {
     fs.writeFileSync(path.join(compositionDir, name), content);
   }
+  for (const [name, asset] of Object.entries(files.assets || {})) {
+    const targetPath = path.join(projectDir, name);
+    fs.mkdirSync(path.dirname(targetPath), { recursive: true });
+    if (asset && typeof asset === "object" && asset.copyFrom) {
+      fs.copyFileSync(asset.copyFrom, targetPath);
+    } else if (Buffer.isBuffer(asset)) {
+      fs.writeFileSync(targetPath, asset);
+    } else {
+      fs.writeFileSync(targetPath, String(asset || ""), "utf8");
+    }
+  }
 }
 
 function buildHyperframesEnv({ ffmpegPath, ffprobePath }) {
@@ -432,6 +443,48 @@ function buildStoryModel(script, title, beatCount = DEFAULT_BEAT_COUNT) {
     caption: segment,
   }));
   return storyModelFromBeats(title, beats, beatCount);
+}
+
+function buildAifmanStoryModel(script, title, beatCount = DEFAULT_BEAT_COUNT) {
+  const cards = extractAifmanCardsFromScript(script, beatCount);
+  const display = splitAifmanDisplayTitle(title, inferAifmanKeyword(title, script));
+  return aifmanModelFromParts({
+    title,
+    headlineLead: display.lead,
+    headlineKeyword: display.keyword,
+    cards,
+    fallbackTitle: title,
+    preferredCount: beatCount,
+  });
+}
+
+function aifmanModelFromParts({ title, headlineLead, headlineKeyword, cards, outro = "", fallbackTitle = "", preferredCount = DEFAULT_BEAT_COUNT } = {}) {
+  const normalizedCards = normalizeAifmanCards(cards, preferredCount);
+  const safeTitle = sanitizeTitle(title) || sanitizeTitle(fallbackTitle) || "知识卡片视频";
+  const display = {
+    lead: limitChineseTitle(String(headlineLead || "").trim() || splitAifmanDisplayTitle(safeTitle, headlineKeyword).lead, 12),
+    keyword: limitChineseTitle(String(headlineKeyword || "").trim() || splitAifmanDisplayTitle(safeTitle, "核心动作").keyword, 8),
+  };
+  const beats = normalizedCards.map((card, index) => ({
+    index: index + 1,
+    role: `card_${index + 1}`,
+    text: card.title,
+    caption: `${card.subtitle}。${card.detail}`,
+  }));
+  return {
+    title: safeTitle,
+    beatCount: normalizedCards.length,
+    beats,
+    hook: display.lead,
+    question: normalizedCards[0]?.subtitle || "先把问题拆清楚。",
+    action: String(outro || normalizedCards.at(-1)?.detail || "现在开始行动。").slice(0, 90),
+    caption1: normalizedCards[0]?.detail || safeTitle,
+    caption2: normalizedCards[1]?.detail || "问题已经很清楚。",
+    caption3: normalizedCards[2]?.detail || "现在开始行动。",
+    aifmanDisplayTitle: display,
+    aifmanCards: normalizedCards,
+    aifmanOutro: String(outro || "").trim(),
+  };
 }
 
 function storyModelFromBeats(title, rawBeats, beatCount = DEFAULT_BEAT_COUNT) {
@@ -572,13 +625,17 @@ Dark CS1 explainer video: cinematic black-brown canvas, exam-red warning blocks,
   };
 }
 
-function aifmanManagerCardFiles(model) {
-  const duration = 15;
+function aifmanManagerCardFiles(model, { bgmMode = "builtin_dark_pulse_128", bgmPath = "" } = {}) {
   const width = 1280;
   const height = 720;
   const cards = buildAifmanCards(model);
+  const cardCount = cards.length;
+  const cardDuration = cardCount <= 3 ? 3.2 : cardCount === 4 ? 2.75 : 2.45;
+  const firstCardStart = 4.0;
+  const duration = Math.max(15, Number((firstCardStart + cardCount * cardDuration + 0.95).toFixed(2)));
+  const bgm = resolveCs1Bgm({ bgmMode, bgmPath, duration });
   const title = escapeHtml(model.title || "升到管理岗的必备能力");
-  const displayTitle = splitAifmanDisplayTitle(model.title || "", cards[0]?.keyword || "必备能力");
+  const displayTitle = model.aifmanDisplayTitle || splitAifmanDisplayTitle(model.title || "", cards[0]?.keyword || "必备能力");
   const lead = escapeHtml(displayTitle.lead);
   const keyword = escapeHtml(displayTitle.keyword);
   const particleSeeds = [
@@ -591,9 +648,9 @@ function aifmanManagerCardFiles(model) {
     return `<i class="particle p${index + 1}" style="--x:${x}px;--y:${y}px;--s:${size}px"></i>`;
   }).join("");
   const cardSections = cards.map((card, index) => {
-    const start = 4.0 + index * 3.25;
+    const start = firstCardStart + index * cardDuration;
     const cardId = `card-${index + 1}`;
-    return `<section id="${cardId}" class="ability-card clip" data-start="${start.toFixed(2)}" data-duration="3.35" data-track-index="${index + 3}">
+    return `<section id="${cardId}" class="ability-card clip" data-start="${start.toFixed(2)}" data-duration="${(cardDuration + 0.32).toFixed(2)}" data-track-index="${index + 3}">
       <div class="card-grid">
         <div class="card-copy">
           <h2><span>${index + 1}.</span> ${escapeHtml(card.title)}</h2>
@@ -606,7 +663,7 @@ function aifmanManagerCardFiles(model) {
     </section>`;
   }).join("");
   const cardAnimations = cards.map((_, index) => {
-    const start = 4.0 + index * 3.25;
+    const start = firstCardStart + index * cardDuration;
     const previous = index === 0 ? "#title-scene" : `#card-${index}`;
     const current = `#card-${index + 1}`;
     return [
@@ -620,14 +677,18 @@ function aifmanManagerCardFiles(model) {
       `tl.to("${current} .light-node",{scale:1.18,duration:.42,repeat:3,yoyo:true,ease:"sine.inOut"},${start + 1.05});`,
     ].join("\n    ");
   }).join("\n    ");
+  const lastCardSelector = `#card-${cardCount}`;
+  const outroStart = Math.max(firstCardStart + cardCount * cardDuration - 0.28, 13.2);
 
   return {
     width,
     height,
     duration,
+    assets: bgm.assets,
+    bgm: bgm.label ? { mode: bgm.mode, label: bgm.label } : null,
     design: `## Style Prompt
 
-AIfman-inspired management knowledge card template. Dark olive cinematic canvas, soft black vignette center, gold headlines, mint-green keyword emphasis, minimal particles, orbit ring, and three leadership ability cards.
+AIfman-inspired knowledge card template. Dark olive cinematic canvas, soft black vignette center, gold headlines, mint-green keyword emphasis, minimal particles, orbit ring, and dynamic 2-6 knowledge cards based on the script.
 
 ## Colors
 
@@ -662,6 +723,7 @@ AIfman-inspired management knowledge card template. Dark olive cinematic canvas,
 </head>
 <body>
   <div id="root" data-composition-id="main" data-start="0" data-duration="${duration}" data-width="${width}" data-height="${height}">
+    ${bgm.src ? `<audio id="bgm" data-start="0" data-duration="${duration}" data-track-index="50" src="${bgm.src}" data-volume="${bgm.volume}"></audio>` : ""}
     <div class="scan" data-layout-ignore></div>
     <div class="grain" data-layout-ignore></div>
     <div class="glow" data-layout-ignore></div>
@@ -698,10 +760,10 @@ AIfman-inspired management knowledge card template. Dark olive cinematic canvas,
       .to(".orbit",{opacity:.25,scale:.82,duration:.35,ease:"power2.in"},3.25)
       .to(".glow",{opacity:.26,scale:1.25,duration:.62,ease:"sine.inOut"},3.1);
     ${cardAnimations}
-    tl.to("#card-3",{opacity:0,y:-22,duration:.36,ease:"power2.in"},13.8)
-      .to(".topline",{opacity:0,duration:.28,ease:"sine.in"},13.95)
-      .to(".final-dim",{opacity:.96,duration:.62,ease:"sine.inOut"},14.1)
-      .to("#root",{opacity:0,duration:.3,ease:"sine.in"},14.7);
+    tl.to("${lastCardSelector}",{opacity:0,y:-22,duration:.36,ease:"power2.in"},${outroStart.toFixed(2)})
+      .to(".topline",{opacity:0,duration:.28,ease:"sine.in"},${(outroStart + 0.15).toFixed(2)})
+      .to(".final-dim",{opacity:.96,duration:.62,ease:"sine.inOut"},${(outroStart + 0.3).toFixed(2)})
+      .to("#root",{opacity:0,duration:.3,ease:"sine.in"},${Math.max(duration - 0.35, outroStart + 0.9).toFixed(2)});
     window.__timelines.main=tl;
   </script>
 </body>
