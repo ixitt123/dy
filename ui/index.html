@@ -1411,6 +1411,57 @@
                 </div>
                 <small>默认 BGM 为本地生成，不调用 API；选择本地音乐时请确认授权。</small>
               </label>
+              <div class="cs1-packaging-panel">
+                <label>
+                  开头固定模板
+                  <select id="cs1IntroTemplate">
+                    <option value="none" selected>不添加开头</option>
+                    <option value="brand_hook_dark">品牌识别开场</option>
+                    <option value="title_flash_dark">标题冲击开场</option>
+                    <option value="series_badge_dark">系列栏目开场</option>
+                  </select>
+                </label>
+                <label>
+                  固定结尾模板
+                  <select id="cs1OutroTemplate">
+                    <option value="none" selected>不添加结尾</option>
+                    <option value="follow_cta_dark">关注引导</option>
+                    <option value="comment_cta_dark">评论引导</option>
+                    <option value="consult_cta_dark">私信咨询</option>
+                  </select>
+                </label>
+                <label>
+                  结尾 CTA 文案
+                  <input id="cs1CtaText" type="text" maxlength="48" placeholder="例如：关注我，持续升级认知" />
+                </label>
+                <label class="cs1-watermark-toggle">
+                  <input id="cs1WatermarkEnabled" type="checkbox" />
+                  <span>添加水印</span>
+                </label>
+                <div class="cs1-watermark-grid">
+                  <label>
+                    水印文字
+                    <input id="cs1WatermarkText" type="text" maxlength="48" placeholder="账号名称 / 品牌名" />
+                  </label>
+                  <label>
+                    水印位置
+                    <select id="cs1WatermarkPosition">
+                      <option value="top-right" selected>右上角</option>
+                      <option value="top-left">左上角</option>
+                      <option value="bottom-right">右下角</option>
+                      <option value="bottom-left">左下角</option>
+                    </select>
+                  </label>
+                  <label>
+                    透明度
+                    <select id="cs1WatermarkOpacity">
+                      <option value="0.35">低</option>
+                      <option value="0.45" selected>标准</option>
+                      <option value="0.6">明显</option>
+                    </select>
+                  </label>
+                </div>
+              </div>
               <label class="cs1-ai-toggle">
                 <input id="cs1VideoAiRefine" type="checkbox" />
                 <span>使用本机大模型 API 优化视频节拍</span>

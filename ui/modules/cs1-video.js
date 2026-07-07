@@ -25,6 +25,13 @@ export function initCs1VideoModule() {
   const bgmModeSelect = document.getElementById("cs1VideoBgmMode");
   const bgmPathInput = document.getElementById("cs1VideoBgmPath");
   const chooseBgmButton = document.getElementById("cs1VideoChooseBgm");
+  const introTemplateSelect = document.getElementById("cs1IntroTemplate");
+  const outroTemplateSelect = document.getElementById("cs1OutroTemplate");
+  const ctaTextInput = document.getElementById("cs1CtaText");
+  const watermarkEnabledInput = document.getElementById("cs1WatermarkEnabled");
+  const watermarkTextInput = document.getElementById("cs1WatermarkText");
+  const watermarkPositionSelect = document.getElementById("cs1WatermarkPosition");
+  const watermarkOpacitySelect = document.getElementById("cs1WatermarkOpacity");
   const aiInput = document.getElementById("cs1VideoAiRefine");
   const status = document.getElementById("cs1VideoStatus");
   const message = document.getElementById("cs1VideoMessage");
@@ -258,6 +265,13 @@ export function initCs1VideoModule() {
         beatCount: beatCountSelect?.value || "auto",
         bgmMode: bgmModeSelect?.value || "builtin_dark_pulse_128",
         bgmPath: bgmPathInput?.value || "",
+        introTemplateId: introTemplateSelect?.value || "none",
+        outroTemplateId: outroTemplateSelect?.value || "none",
+        ctaText: ctaTextInput?.value || "",
+        watermarkEnabled: Boolean(watermarkEnabledInput?.checked),
+        watermarkText: watermarkTextInput?.value || "",
+        watermarkPosition: watermarkPositionSelect?.value || "top-right",
+        watermarkOpacity: watermarkOpacitySelect?.value || "0.45",
         aiRefine: aiInput.checked,
       });
       lastResult = result;
@@ -266,6 +280,7 @@ export function initCs1VideoModule() {
       logPanel.textContent = [
         result.aiUsed ? `Structure refinement: AI used · ${result.beatCount || beatCountSelect?.value || "auto"} cards` : `Structure refinement: local parser · ${result.beatCount || beatCountSelect?.value || "auto"} cards`,
         result.bgm?.label ? `BGM: ${result.bgm.label}` : "BGM: none",
+        result.packaging ? `Packaging: intro=${result.packaging.introTemplateId || "none"} · outro=${result.packaging.outroTemplateId || "none"} · watermark=${result.packaging.watermark?.enabled ? result.packaging.watermark.position : "off"}` : "Packaging: none",
         "",
         result.checkLog || "",
         "",
