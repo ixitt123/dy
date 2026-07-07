@@ -184,6 +184,7 @@ export function createCs1VideoRoutes({ baseDir, sendJson, modelRouter, ffmpegPat
           title: body.title,
           aspectRatio: body.aspectRatio,
           beatCount: body.beatCount,
+          cardHoldPreset: body.cardHoldPreset,
           templateName: body.templateName,
           bgmMode: body.bgmMode,
           bgmPath: body.bgmPath,
@@ -195,6 +196,7 @@ export function createCs1VideoRoutes({ baseDir, sendJson, modelRouter, ffmpegPat
             watermarkText: body.watermarkText,
             watermarkPosition: body.watermarkPosition,
             watermarkOpacity: body.watermarkOpacity,
+            watermarkAnimation: body.watermarkAnimation,
           },
           aiRefine: body.aiRefine === true,
           modelRouter,
@@ -236,10 +238,11 @@ function writeHiddenStyleIds(filePath, ids) {
   fs.writeFileSync(filePath, `${JSON.stringify(payload, null, 2)}\n`, "utf8");
 }
 
-async function generateVideo({ runsDir, outputDir, text, style, title, aspectRatio, beatCount, templateName, bgmMode, bgmPath, packaging, aiRefine, modelRouter, ffmpegPath, ffprobePath }) {
+async function generateVideo({ runsDir, outputDir, text, style, title, aspectRatio, beatCount, cardHoldPreset, templateName, bgmMode, bgmPath, packaging, aiRefine, modelRouter, ffmpegPath, ffprobePath }) {
   const script = normalizeScript(text);
   const styleId = normalizeStyle(style);
   const aspect = normalizeAspectRatio(aspectRatio);
+  const cardHold = normalizeCardHoldPreset(cardHoldPreset);
   const normalizedBeatCount = styleId === "aifman-manager-card"
     ? resolveAifmanPreferredCount(beatCount, script)
     : normalizeBeatCount(beatCount);
@@ -259,8 +262,8 @@ async function generateVideo({ runsDir, outputDir, text, style, title, aspectRat
     : buildStoryModel(script, videoTitle, normalizedBeatCount));
   const files = styleId === "cs1"
     ? cs1Files(model, { aspect })
-    : styleId === "aifman-manager-card"
-      ? aifmanManagerCardFiles(model, { bgmMode, bgmPath, packaging: packagingOptions, aspect })
+      : styleId === "aifman-manager-card"
+      ? aifmanManagerCardFiles(model, { bgmMode, bgmPath, packaging: packagingOptions, aspect, cardHold })
       : styleId === "warm-grain"
       ? warmGrainFiles(model, { aspect })
       : officialTemplateFiles(model, styleId, { aspect });
@@ -270,6 +273,7 @@ async function generateVideo({ runsDir, outputDir, text, style, title, aspectRat
     styleId,
     styleName,
     beatCount: model.beatCount || normalizedBeatCount,
+    cardHold,
     aspectRatio: files.aspectRatio || aspect,
     files,
   });
@@ -288,6 +292,7 @@ async function generateVideo({ runsDir, outputDir, text, style, title, aspectRat
     style: styleId,
     templateName: styleName,
     beatCount: model.beatCount || normalizedBeatCount,
+    cardHold: files.cardHold || cardHold,
     aspectRatio: files.aspectRatio || aspect,
     projectDir,
     outputPath,
@@ -538,6 +543,11 @@ function normalizeStyle(value) {
 function normalizeAspectRatio(value) {
   const id = String(value || "9:16").trim();
   return ASPECT_RATIO_PRESETS[id] || ASPECT_RATIO_PRESETS["9:16"];
+}
+
+function normalizeCardHoldPreset(value) {
+  const id = String(value || "auto").trim();
+  return CARD_HOLD_PRESETS[id] || CARD_HOLD_PRESETS.auto;
 }
 
 function buildContainedStageFit({ width, height, baseWidth, baseHeight }) {
