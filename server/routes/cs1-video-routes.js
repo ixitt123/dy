@@ -534,12 +534,16 @@ function aifmanManagerCardFiles(model) {
   const height = 720;
   const cards = buildAifmanCards(model);
   const title = escapeHtml(model.title || "升到管理岗的必备能力");
-  const lead = escapeHtml(model.hook || "升到管理岗的");
-  const keyword = escapeHtml(cards[0]?.keyword || "必备能力");
-  const particles = Array.from({ length: 24 }, (_, index) => {
-    const x = 92 + (index % 8) * 34;
-    const y = 74 + Math.floor(index / 8) * 28;
-    const size = 4 + (index % 5) * 3;
+  const displayTitle = splitAifmanDisplayTitle(model.title || "", cards[0]?.keyword || "必备能力");
+  const lead = escapeHtml(displayTitle.lead);
+  const keyword = escapeHtml(displayTitle.keyword);
+  const particleSeeds = [
+    [404, 48, 5], [446, 58, 8], [512, 36, 4], [584, 38, 7], [648, 52, 11],
+    [700, 74, 6], [466, 104, 6], [536, 92, 12], [608, 112, 5], [682, 126, 8],
+    [418, 146, 4], [484, 158, 7], [562, 148, 5], [628, 170, 4], [708, 164, 6],
+    [768, 96, 4], [726, 34, 7], [370, 94, 5], [338, 142, 4], [792, 144, 5],
+  ];
+  const particles = particleSeeds.map(([x, y, size], index) => {
     return `<i class="particle p${index + 1}" style="--x:${x}px;--y:${y}px;--s:${size}px"></i>`;
   }).join("");
   const cardSections = cards.map((card, index) => {
@@ -606,9 +610,10 @@ AIfman-inspired management knowledge card template. Dark olive cinematic canvas,
     @font-face{font-family:"Microsoft YaHei UI";src:local("Microsoft YaHei UI")}
     @font-face{font-family:"Microsoft YaHei";src:local("Microsoft YaHei")}
     html,body{margin:0;width:${width}px;height:${height}px;overflow:hidden;background:#17170c;color:#f1d44a;font-family:"Microsoft YaHei UI","Microsoft YaHei",sans-serif}
-    #root{position:relative;width:${width}px;height:${height}px;overflow:hidden;background:radial-gradient(circle at 50% 50%,#020302 0 18%,rgba(2,3,2,.86) 22%,rgba(23,23,12,.92) 50%,#252512 100%)}
-    .grain,.scan,.glow,.orbit,.particle{position:absolute;pointer-events:none}.grain{inset:0;z-index:20;opacity:.18;background:repeating-linear-gradient(0deg,rgba(255,255,255,.035) 0 1px,transparent 1px 4px),repeating-linear-gradient(90deg,rgba(255,255,255,.025) 0 1px,transparent 1px 6px)}.scan{inset:0;z-index:2;background:linear-gradient(90deg,rgba(255,220,88,.09),transparent 26%,transparent 74%,rgba(37,226,154,.08));opacity:.75}.glow{left:95px;top:70px;width:430px;height:250px;border-radius:50%;background:radial-gradient(circle,rgba(255,244,135,.38),rgba(255,244,135,.08) 48%,transparent 72%);filter:blur(12px);opacity:0}.orbit{left:585px;top:168px;width:130px;height:130px;border:2px solid rgba(241,212,74,.28);border-radius:50%;opacity:0}.orbit:before,.orbit:after{content:"";position:absolute;border:1px solid rgba(37,226,154,.25);border-radius:50%;inset:18px}.orbit:after{inset:42px;border-color:rgba(255,255,255,.22)}
-    .particle{left:var(--x);top:var(--y);width:var(--s);height:var(--s);border-radius:50%;background:rgba(255,255,255,.78);box-shadow:0 0 14px rgba(255,255,255,.5);opacity:0;z-index:9}.topline{position:absolute;left:0;right:0;top:38px;z-index:12;text-align:center;color:#f1d44a;font-size:18px;font-weight:900;text-shadow:0 0 14px rgba(241,212,74,.26);opacity:0}.scene,.ability-card{position:absolute;inset:0;z-index:5;display:flex;align-items:center;justify-content:center;padding:76px 94px}.title-stack{text-align:center;transform:translateY(-12px)}.title-stack h1{margin:0;font-size:58px;line-height:1.08;font-weight:900;letter-spacing:.03em;color:#f1d44a;text-shadow:0 0 18px rgba(241,212,74,.22)}.title-stack h1 span{color:#ff6f71}.title-stack h2{margin:8px 0 0;font-size:72px;line-height:1;font-weight:900;color:#25e29a;text-shadow:0 0 18px rgba(37,226,154,.28)}.title-stack small{display:block;margin-top:16px;color:#d7c782;font-size:18px;font-weight:800;letter-spacing:.08em}.ability-card{opacity:0;justify-content:flex-start}.card-grid{position:relative;width:100%;height:100%;display:flex;align-items:center}.card-copy{position:relative;width:590px;margin-left:24px;padding-left:34px}.card-copy:before{content:"";position:absolute;left:0;top:12px;bottom:16px;width:2px;background:linear-gradient(#f1d44a,rgba(241,212,74,.06))}.card-copy h2{margin:0 0 22px;color:#f1d44a;font-size:45px;line-height:1.12;font-weight:900;text-shadow:0 0 18px rgba(241,212,74,.18)}.card-copy h2 span{color:#c99531}.card-copy h3{margin:0 0 18px;color:#d8952c;font-size:30px;font-weight:850;line-height:1.2}.card-copy p{margin:0;max-width:560px;color:#e3dfc7;font-size:16px;font-weight:700;line-height:1.55;opacity:.9}.card-copy b{display:block;width:365px;height:2px;margin-top:28px;background:linear-gradient(90deg,rgba(241,212,74,.85),rgba(241,212,74,0))}.light-node{position:absolute;left:654px;top:342px;width:14px;height:14px;border-radius:50%;background:#f1d44a;box-shadow:0 0 0 9px rgba(241,212,74,.12),0 0 26px rgba(241,212,74,.85)}.light-node:before{content:"";position:absolute;left:-150px;top:6px;width:142px;height:1px;background:linear-gradient(90deg,rgba(241,212,74,0),rgba(241,212,74,.7))}.final-dim{position:absolute;inset:0;background:#17170c;opacity:0;z-index:30}
+    #root{position:relative;width:${width}px;height:${height}px;overflow:hidden;background:#252512}
+    #root:before{content:"";position:absolute;inset:0;z-index:1;background:radial-gradient(circle at 51% 50%,rgba(0,0,0,.98) 0 15%,rgba(0,0,0,.82) 24%,rgba(0,0,0,.52) 40%,rgba(0,0,0,.18) 60%,rgba(0,0,0,0) 76%),radial-gradient(circle at 44% 22%,rgba(245,219,74,.09),rgba(245,219,74,0) 34%);pointer-events:none}
+    .grain,.scan,.glow,.orbit,.particle{position:absolute;pointer-events:none}.grain{inset:0;z-index:20;opacity:.13;background:repeating-linear-gradient(0deg,rgba(255,255,255,.026) 0 1px,rgba(255,255,255,0) 1px 4px),repeating-linear-gradient(90deg,rgba(0,0,0,.12) 0 1px,rgba(0,0,0,0) 1px 7px)}.scan{inset:0;z-index:2;background:radial-gradient(circle at 17% 20%,rgba(241,212,74,.08),rgba(241,212,74,0) 32%),radial-gradient(circle at 83% 44%,rgba(241,212,74,.05),rgba(241,212,74,0) 28%);opacity:.86}.glow{left:330px;top:34px;width:450px;height:220px;border-radius:50%;background:radial-gradient(circle,rgba(255,244,135,.34),rgba(255,244,135,.08) 48%,rgba(255,244,135,0) 72%);filter:blur(13px);opacity:0}.orbit{left:602px;top:166px;width:98px;height:98px;border:2px solid rgba(241,212,74,.24);border-radius:50%;opacity:0}.orbit:before,.orbit:after{content:"";position:absolute;border:1px solid rgba(37,226,154,.20);border-radius:50%;inset:14px}.orbit:after{inset:33px;border-color:rgba(255,255,255,.18)}
+    .particle{left:var(--x);top:var(--y);width:var(--s);height:var(--s);border-radius:50%;background:rgba(245,245,232,.76);box-shadow:0 0 13px rgba(255,255,255,.54);opacity:0;z-index:9}.topline{position:absolute;left:0;right:0;top:32px;z-index:12;text-align:center;color:#f1d44a;font-size:17px;font-weight:900;text-shadow:0 0 13px rgba(241,212,74,.23);opacity:0}.scene,.ability-card{position:absolute;inset:0;z-index:5;display:flex;align-items:center;justify-content:center;padding:76px 94px}.title-stack{text-align:center;transform:translateY(-6px)}.title-stack h1{margin:0;font-size:62px;line-height:1.08;font-weight:900;letter-spacing:.02em;color:#f1d44a;text-shadow:0 0 18px rgba(241,212,74,.20)}.title-stack h1 span{color:#f06d75}.title-stack h2{margin:6px 0 0;font-size:78px;line-height:1;font-weight:900;color:#25e29a;text-shadow:0 0 18px rgba(37,226,154,.26)}.title-stack small{display:none}.ability-card{opacity:0;justify-content:flex-start}.card-grid{position:relative;width:100%;height:100%;display:flex;align-items:flex-start;padding-top:96px}.card-copy{position:relative;width:610px;margin-left:18px;padding-left:32px}.card-copy:before{content:"";position:absolute;left:0;top:8px;bottom:14px;width:2px;background:linear-gradient(#f1d44a,rgba(241,212,74,.06))}.card-copy h2{margin:0 0 20px;color:#f1d44a;font-size:51px;line-height:1.08;font-weight:900;text-shadow:0 0 18px rgba(241,212,74,.18)}.card-copy h2 span{color:#c99531}.card-copy h3{margin:0 0 17px;color:#d8952c;font-size:31px;font-weight:850;line-height:1.2}.card-copy p{margin:0;max-width:560px;color:#e3dfc7;font-size:16px;font-weight:700;line-height:1.55;opacity:.9}.card-copy b{display:block;width:372px;height:2px;margin-top:25px;background:linear-gradient(90deg,rgba(241,212,74,.82),rgba(241,212,74,0))}.light-node{position:absolute;left:636px;top:205px;width:13px;height:13px;border-radius:50%;background:#f1d44a;box-shadow:0 0 0 8px rgba(241,212,74,.12),0 0 24px rgba(241,212,74,.82)}.light-node:before{content:"";position:absolute;left:-126px;top:6px;width:118px;height:1px;background:linear-gradient(90deg,rgba(241,212,74,0),rgba(241,212,74,.68))}.final-dim{position:absolute;inset:0;background:#17170c;opacity:0;z-index:30}
   </style>
 </head>
 <body>
@@ -638,10 +643,10 @@ AIfman-inspired management knowledge card template. Dark olive cinematic canvas,
       .from("#title-scene small",{y:18,opacity:0,duration:.32,ease:"sine.out"},1.2)
       .fromTo(".glow",{opacity:0,scale:.7},{opacity:1,scale:1,duration:.72,ease:"sine.out"},1.35)
       .fromTo(".orbit",{opacity:0,scale:.45,rotation:-18},{opacity:1,scale:1,rotation:0,duration:.54,ease:"back.out(1.45)"},1.58);
-    ${Array.from({ length: 24 }, (_, index) => {
-      const start = 1.45 + (index % 8) * 0.035 + Math.floor(index / 8) * 0.08;
-      const x = 20 + (index % 6) * 10;
-      const y = 20 + Math.floor(index / 6) * 8;
+    ${particleSeeds.map((_, index) => {
+      const start = 1.34 + (index % 7) * 0.042 + Math.floor(index / 7) * 0.08;
+      const x = 36 + (index % 5) * 13;
+      const y = 32 + Math.floor(index / 5) * 10;
       return `tl.fromTo(".p${index + 1}",{opacity:0,scale:.25,x:${-x},y:${-y}},{opacity:.82,scale:1,x:0,y:0,duration:.36,ease:"power2.out"},${start.toFixed(2)}).to(".p${index + 1}",{opacity:0,duration:.5,ease:"sine.in"},${(3.0 + (index % 5) * 0.08).toFixed(2)});`;
     }).join("\n    ")}
     tl.to(".topline",{opacity:1,duration:.22,ease:"sine.out"},3.75)
@@ -678,6 +683,45 @@ function buildAifmanCards(model) {
       keyword: fallback.keyword,
     };
   });
+}
+
+function splitAifmanDisplayTitle(title = "", fallbackKeyword = "必备能力") {
+  const clean = String(title || "")
+    .replace(/[，。！？、,.!?:：；;]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!clean) return { lead: "升到管理岗的", keyword: fallbackKeyword || "必备能力" };
+  const keywordCandidates = [
+    "必备能力",
+    "核心能力",
+    "关键能力",
+    "三个能力",
+    "三个方法",
+    "三个动作",
+    "避坑指南",
+  ];
+  const matched = keywordCandidates.find((item) => clean.includes(item));
+  if (matched) {
+    const lead = clean.replace(matched, "").trim() || "升到管理岗的";
+    return { lead: limitChineseTitle(lead, 11), keyword: matched };
+  }
+  const deIndex = clean.lastIndexOf("的");
+  if (deIndex >= 2 && deIndex < clean.length - 2) {
+    return {
+      lead: limitChineseTitle(clean.slice(0, deIndex + 1), 11),
+      keyword: limitChineseTitle(clean.slice(deIndex + 1), 6),
+    };
+  }
+  return {
+    lead: limitChineseTitle(clean, 11),
+    keyword: fallbackKeyword || "必备能力",
+  };
+}
+
+function limitChineseTitle(value, maxLength) {
+  const text = String(value || "").trim();
+  if (text.length <= maxLength) return text;
+  return text.slice(0, maxLength);
 }
 
 function warmGrainFiles(model) {
