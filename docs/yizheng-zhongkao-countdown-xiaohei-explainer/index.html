@@ -1,0 +1,906 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=1920, height=1080">
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        margin: 0;
+        width: 1920px;
+        height: 1080px;
+        overflow: hidden;
+        background: #ffffff;
+      }
+
+      body {
+        color: #111111;
+        font-family: "LXGW WenKai", "KaiTi", "Microsoft YaHei UI", "Microsoft YaHei", sans-serif;
+      }
+
+      @font-face {
+        font-family: "LXGW WenKai";
+        src: local("LXGW WenKai");
+      }
+
+      @font-face {
+        font-family: "KaiTi";
+        src: local("KaiTi");
+      }
+
+      @font-face {
+        font-family: "Microsoft YaHei UI";
+        src: local("Microsoft YaHei UI");
+      }
+
+      @font-face {
+        font-family: "Microsoft YaHei";
+        src: local("Microsoft YaHei");
+      }
+
+      @font-face {
+        font-family: "Cascadia Mono";
+        src: local("Cascadia Mono");
+      }
+
+      #root {
+        position: relative;
+        width: 1920px;
+        height: 1080px;
+        overflow: hidden;
+        background: #ffffff;
+      }
+
+      .scene {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        width: 100%;
+        height: 100%;
+        padding: 92px 118px;
+        overflow: hidden;
+        background-color: #ffffff;
+      }
+
+      #scene-2,
+      #scene-3,
+      #scene-4,
+      #scene-5 {
+        opacity: 0;
+      }
+
+      .scene-content {
+        position: relative;
+        z-index: 2;
+        display: grid;
+        grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr);
+        align-items: center;
+        width: 100%;
+        height: 100%;
+        gap: 74px;
+      }
+
+      .copy {
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        min-width: 0;
+        gap: 24px;
+      }
+
+      .kicker,
+      .mono,
+      .caption-code {
+        font-family: "Cascadia Mono", "IBM Plex Mono", monospace;
+        font-variant-numeric: tabular-nums;
+      }
+
+      .kicker {
+        width: max-content;
+        max-width: 100%;
+        padding: 10px 17px 8px;
+        border: 2px solid #111111;
+        border-radius: 999px;
+        color: #1f559e;
+        font-size: 22px;
+        font-weight: 800;
+        line-height: 1.1;
+        background: #ffffff;
+      }
+
+      h1,
+      h2 {
+        margin: 0;
+        max-width: 800px;
+        color: #111111;
+        font-weight: 900;
+        line-height: 1.08;
+        letter-spacing: 0;
+      }
+
+      h1 {
+        font-size: 88px;
+      }
+
+      h2 {
+        font-size: 76px;
+      }
+
+      .subline {
+        margin: 0;
+        max-width: 760px;
+        color: #3a3a3a;
+        font-size: 33px;
+        font-weight: 400;
+        line-height: 1.36;
+      }
+
+      .hand-label {
+        display: inline-flex;
+        width: max-content;
+        max-width: 100%;
+        padding: 9px 16px 8px;
+        border: 3px solid currentColor;
+        border-radius: 22px 16px 20px 18px;
+        font-size: 31px;
+        font-weight: 900;
+        line-height: 1.1;
+        background: #ffffff;
+      }
+
+      .red {
+        color: #d9362b;
+      }
+
+      .orange {
+        color: #b76512;
+      }
+
+      .blue {
+        color: #2f6fbd;
+      }
+
+      .stage {
+        position: relative;
+        width: 100%;
+        height: 802px;
+        min-width: 0;
+      }
+
+      .sketch {
+        position: absolute;
+        border: 4px solid #111111;
+        background: #ffffff;
+      }
+
+      .caption-code {
+        position: absolute;
+        right: 42px;
+        bottom: 28px;
+        color: #2f6fbd;
+        font-size: 23px;
+        font-weight: 800;
+      }
+
+      .mascot {
+        position: absolute;
+        width: 150px;
+        height: 196px;
+        z-index: 6;
+      }
+
+      .mascot-shadow {
+        position: absolute;
+        left: 28px;
+        bottom: 1px;
+        width: 96px;
+        height: 18px;
+        border-radius: 50%;
+        background: rgba(17, 17, 17, 0.16);
+      }
+
+      .mascot-body {
+        position: absolute;
+        left: 22px;
+        top: 22px;
+        width: 106px;
+        height: 136px;
+        border-radius: 52% 48% 47% 53% / 42% 44% 56% 58%;
+        background:
+          radial-gradient(circle at 36% 28%, #575757 0, #2c2c2c 22%, #111111 68%),
+          #111111;
+        box-shadow:
+          inset -18px -22px 26px rgba(0, 0, 0, 0.42),
+          inset 13px 11px 18px rgba(255, 255, 255, 0.08);
+      }
+
+      .eye {
+        position: absolute;
+        top: 58px;
+        width: 26px;
+        height: 34px;
+        border-radius: 50%;
+        background: #ffffff;
+        box-shadow: inset 0 -5px 0 rgba(31, 85, 158, 0.16);
+      }
+
+      .eye::after {
+        content: "";
+        position: absolute;
+        left: 8px;
+        top: 7px;
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: #111111;
+      }
+
+      .eye-left {
+        left: 46px;
+      }
+
+      .eye-right {
+        right: 45px;
+      }
+
+      .arm,
+      .leg {
+        position: absolute;
+        border-radius: 999px;
+        background: #111111;
+      }
+
+      .arm {
+        top: 88px;
+        width: 54px;
+        height: 16px;
+      }
+
+      .arm-left {
+        left: 2px;
+      }
+
+      .arm-right {
+        right: 0;
+      }
+
+      .leg {
+        top: 150px;
+        width: 18px;
+        height: 38px;
+      }
+
+      .leg-left {
+        left: 54px;
+      }
+
+      .leg-right {
+        right: 52px;
+      }
+
+      .exam-gate {
+        left: 342px;
+        top: 106px;
+        width: 360px;
+        height: 320px;
+        border-radius: 22px;
+      }
+
+      .exam-gate::before {
+        content: "考场";
+        position: absolute;
+        left: 116px;
+        top: 34px;
+        color: #111111;
+        font-size: 54px;
+        font-weight: 900;
+      }
+
+      .exam-gate::after {
+        content: "";
+        position: absolute;
+        left: 72px;
+        bottom: -4px;
+        width: 116px;
+        height: 176px;
+        border: 4px solid #111111;
+        border-bottom: 0;
+        border-radius: 72px 72px 0 0;
+        background: #ffffff;
+      }
+
+      .ticket-pile {
+        position: absolute;
+        left: 80px;
+        top: 486px;
+        width: 402px;
+        height: 184px;
+      }
+
+      .ticket {
+        position: absolute;
+        width: 246px;
+        height: 72px;
+        border: 3px solid #111111;
+        border-radius: 15px;
+        background: #ffffff;
+      }
+
+      .ticket-a {
+        left: 0;
+        top: 24px;
+      }
+
+      .ticket-b {
+        left: 108px;
+        top: 72px;
+      }
+
+      .ticket-c {
+        left: 46px;
+        top: 118px;
+      }
+
+      .stamp {
+        position: absolute;
+        left: 452px;
+        top: 520px;
+        z-index: 8;
+        width: 144px;
+        height: 84px;
+        border: 5px solid #d9362b;
+        border-radius: 18px;
+        color: #d9362b;
+        font-size: 43px;
+        font-weight: 900;
+        line-height: 72px;
+        text-align: center;
+        background: #ffffff;
+      }
+
+      .s1-mascot {
+        left: 520px;
+        top: 468px;
+      }
+
+      .red-dot,
+      .black-dot,
+      .blue-dot {
+        position: absolute;
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+      }
+
+      .red-dot {
+        background: #d9362b;
+      }
+
+      .black-dot {
+        background: #111111;
+      }
+
+      .blue-dot {
+        background: #1f559e;
+      }
+
+      .rd1 { left: 502px; top: 500px; }
+      .rd2 { left: 610px; top: 562px; }
+      .rd3 { left: 448px; top: 636px; }
+      .rd4 { left: 710px; top: 446px; }
+
+      .grade-labels {
+        position: absolute;
+        left: 64px;
+        top: 160px;
+        display: flex;
+        flex-direction: column;
+        gap: 26px;
+      }
+
+      .grade-label {
+        width: 220px;
+        padding: 16px 22px;
+        border: 4px solid #111111;
+        border-radius: 20px;
+        font-size: 36px;
+        font-weight: 900;
+        background: #ffffff;
+      }
+
+      .distance-line {
+        position: absolute;
+        left: 244px;
+        top: 328px;
+        width: 470px;
+        height: 130px;
+        border-top: 8px solid #b76512;
+        border-right: 8px solid #b76512;
+        border-radius: 120px 160px 0 0;
+        transform-origin: left center;
+      }
+
+      .mini-gate {
+        right: 92px;
+        top: 190px;
+        width: 216px;
+        height: 260px;
+        border-radius: 18px;
+      }
+
+      .mini-gate::after {
+        content: "";
+        position: absolute;
+        left: 56px;
+        bottom: -4px;
+        width: 82px;
+        height: 126px;
+        border: 4px solid #111111;
+        border-bottom: 0;
+        border-radius: 60px 60px 0 0;
+      }
+
+      .s2-mascot {
+        left: 384px;
+        top: 410px;
+      }
+
+      .calendar {
+        left: 110px;
+        top: 128px;
+        width: 428px;
+        height: 430px;
+        border-radius: 24px;
+      }
+
+      .calendar::before {
+        content: "还有 1-2 年";
+        position: absolute;
+        left: 58px;
+        top: 52px;
+        font-size: 54px;
+        font-weight: 900;
+      }
+
+      .calendar::after {
+        content: "";
+        position: absolute;
+        left: 70px;
+        top: 172px;
+        width: 250px;
+        height: 5px;
+        background: #d8d2c7;
+        box-shadow: 0 56px 0 #d8d2c7, 0 112px 0 #d8d2c7;
+      }
+
+      .hourglass {
+        position: absolute;
+        right: 118px;
+        top: 116px;
+        width: 248px;
+        height: 470px;
+      }
+
+      .hourglass .glass-top,
+      .hourglass .glass-bottom {
+        position: absolute;
+        left: 14px;
+        width: 220px;
+        height: 186px;
+        border: 5px solid #111111;
+        background: #ffffff;
+      }
+
+      .glass-top {
+        top: 0;
+        border-radius: 26px 26px 90px 90px;
+      }
+
+      .glass-bottom {
+        bottom: 0;
+        border-radius: 90px 90px 26px 26px;
+      }
+
+      .sand-stream {
+        position: absolute;
+        left: 120px;
+        top: 188px;
+        width: 8px;
+        height: 94px;
+        background: #111111;
+        border-radius: 999px;
+        transform-origin: top center;
+      }
+
+      .s3-mascot {
+        left: 406px;
+        top: 500px;
+      }
+
+      .bd1 { left: 668px; top: 470px; }
+      .bd2 { left: 694px; top: 535px; }
+      .bd3 { left: 642px; top: 584px; }
+      .bd4 { left: 706px; top: 632px; }
+      .bd5 { left: 752px; top: 610px; }
+
+      .split-gate {
+        left: 260px;
+        top: 158px;
+        width: 344px;
+        height: 420px;
+        border-radius: 28px;
+      }
+
+      .split-gate::before {
+        content: "";
+        position: absolute;
+        left: 166px;
+        top: 50px;
+        width: 8px;
+        height: 320px;
+        background: #111111;
+        border-radius: 999px;
+      }
+
+      .lever {
+        position: absolute;
+        left: 570px;
+        top: 332px;
+        width: 154px;
+        height: 12px;
+        border-radius: 999px;
+        background: #111111;
+        transform-origin: left center;
+      }
+
+      .path {
+        position: absolute;
+        height: 8px;
+        background: #b76512;
+        border-radius: 999px;
+        transform-origin: left center;
+      }
+
+      .path-in {
+        left: 42px;
+        top: 362px;
+        width: 256px;
+      }
+
+      .path-a {
+        left: 528px;
+        top: 286px;
+        width: 258px;
+      }
+
+      .path-b {
+        left: 528px;
+        top: 454px;
+        width: 258px;
+      }
+
+      .note {
+        position: absolute;
+        z-index: 8;
+        padding: 11px 14px 9px;
+        border: 3px solid #1f559e;
+        border-radius: 15px;
+        color: #1f559e;
+        font-size: 30px;
+        font-weight: 900;
+        background: #ffffff;
+      }
+
+      .note-a { right: 128px; top: 206px; }
+      .note-b { left: 52px; top: 598px; }
+      .s4-mascot { left: 596px; top: 468px; }
+
+      .door {
+        left: 92px;
+        top: 132px;
+        width: 300px;
+        height: 470px;
+        border-radius: 26px;
+        transform-origin: left center;
+      }
+
+      .door::after {
+        content: "";
+        position: absolute;
+        right: 44px;
+        top: 220px;
+        width: 18px;
+        height: 18px;
+        border-radius: 50%;
+        background: #111111;
+      }
+
+      .route-line {
+        position: absolute;
+        left: 340px;
+        top: 392px;
+        width: 500px;
+        height: 88px;
+        border-bottom: 8px solid #b76512;
+        border-radius: 50%;
+        transform-origin: left center;
+      }
+
+      .route-label {
+        position: absolute;
+        padding: 12px 18px 10px;
+        border: 3px solid #111111;
+        border-radius: 18px;
+        font-size: 34px;
+        font-weight: 900;
+        background: #ffffff;
+      }
+
+      .target { left: 378px; top: 242px; }
+      .pace { left: 542px; top: 346px; color: #1f559e; }
+      .risk { left: 708px; top: 248px; color: #d9362b; }
+      .now { right: 96px; top: 486px; color: #b76512; }
+      .s5-mascot { left: 238px; top: 524px; }
+    </style>
+  </head>
+  <body>
+    <div data-hf-id="hf-j7pz" id="root" data-composition-id="main" data-start="0" data-duration="30" data-width="1920" data-height="1080">
+      <section data-hf-id="hf-9d7f" id="scene-1" class="scene" data-layout-allow-overflow="" data-layout-allow-overlap="">
+        <div data-hf-id="hf-cn5c" class="scene-content">
+          <div data-hf-id="hf-bdx3" class="copy">
+            <div data-hf-id="hf-jgpy" class="kicker">Yizheng Zhongkao · hook</div>
+            <h1 data-hf-id="hf-drcg">明天，几千名学生进考场</h1>
+            <p data-hf-id="hf-p2nm" class="subline">看着明天仪征几千名初三学生奔赴考场，下一批家长真的还远吗？</p>
+            <span data-hf-id="hf-ubfv" class="hand-label red">距离感错误</span>
+          </div>
+          <div data-hf-id="hf-tan6" class="stage">
+            <div data-hf-id="hf-fvj7" class="sketch exam-gate"></div>
+            <div data-hf-id="hf-uufd" class="ticket-pile">
+              <div data-hf-id="hf-oj0e" class="ticket ticket-a"></div>
+              <div data-hf-id="hf-kkwd" class="ticket ticket-b"></div>
+              <div data-hf-id="hf-jt8k" class="ticket ticket-c"></div>
+            </div>
+            <div data-hf-id="hf-pgzc" class="stamp">明天</div>
+            <span data-hf-id="hf-2qej" class="red-dot rd1"></span>
+            <span data-hf-id="hf-u2io" class="red-dot rd2"></span>
+            <span data-hf-id="hf-qs7d" class="red-dot rd3"></span>
+            <span data-hf-id="hf-m6am" class="red-dot rd4"></span>
+            <div data-hf-id="hf-la04" class="mascot s1-mascot" data-layout-ignore="">
+              <div data-hf-id="hf-gxu6" class="mascot-shadow"></div>
+              <div data-hf-id="hf-qhiq" class="mascot-body"></div>
+              <span data-hf-id="hf-1w2b" class="eye eye-left"></span>
+              <span data-hf-id="hf-piri" class="eye eye-right"></span>
+              <span data-hf-id="hf-gk97" class="arm arm-left"></span>
+              <span data-hf-id="hf-uuhi" class="arm arm-right"></span>
+              <span data-hf-id="hf-2mkj" class="leg leg-left"></span>
+              <span data-hf-id="hf-akha" class="leg leg-right"></span>
+            </div>
+            <div data-hf-id="hf-c3fy" class="caption-code">red stamp -&gt; wake up</div>
+          </div>
+        </div>
+      </section>
+
+      <section data-hf-id="hf-yhps" id="scene-2" class="scene" data-layout-allow-overflow="" data-layout-allow-overlap="">
+        <div data-hf-id="hf-o0eg" class="scene-content">
+          <div data-hf-id="hf-r8s7" class="copy">
+            <div data-hf-id="hf-7z0r" class="kicker">distance illusion</div>
+            <h2 data-hf-id="hf-nuy8">你以为中考还远吗？</h2>
+            <p data-hf-id="hf-nvsn" class="subline">新初二、新初三的家长们，嘴上说还有时间，线一拉就短了。</p>
+            <span data-hf-id="hf-oqyn" class="hand-label orange">一年两年会折叠</span>
+          </div>
+          <div data-hf-id="hf-xa86" class="stage">
+            <div data-hf-id="hf-pa5r" class="grade-labels">
+              <div data-hf-id="hf-2o4d" class="grade-label">新初二</div>
+              <div data-hf-id="hf-lqgu" class="grade-label">新初三</div>
+            </div>
+            <div data-hf-id="hf-35bc" class="distance-line"></div>
+            <div data-hf-id="hf-jx3r" class="sketch mini-gate"></div>
+            <span data-hf-id="hf-uytf" class="black-dot bd1"></span>
+            <span data-hf-id="hf-maxk" class="black-dot bd2"></span>
+            <div data-hf-id="hf-rf9h" class="mascot s2-mascot" data-layout-ignore="">
+              <div data-hf-id="hf-f782" class="mascot-shadow"></div>
+              <div data-hf-id="hf-jcvq" class="mascot-body"></div>
+              <span data-hf-id="hf-dkvn" class="eye eye-left"></span>
+              <span data-hf-id="hf-sdgi" class="eye eye-right"></span>
+              <span data-hf-id="hf-81rf" class="arm arm-left"></span>
+              <span data-hf-id="hf-6coq" class="arm arm-right"></span>
+              <span data-hf-id="hf-olkz" class="leg leg-left"></span>
+              <span data-hf-id="hf-v1gy" class="leg leg-right"></span>
+            </div>
+            <div data-hf-id="hf-0trd" class="caption-code">orange line folds shorter</div>
+          </div>
+        </div>
+      </section>
+
+      <section data-hf-id="hf-z9dl" id="scene-3" class="scene" data-layout-allow-overflow="" data-layout-allow-overlap="">
+        <div data-hf-id="hf-mthd" class="scene-content">
+          <div data-hf-id="hf-quh6" class="copy">
+            <div data-hf-id="hf-56kx" class="kicker">countdown pressure</div>
+            <h2 data-hf-id="hf-nq8g">一年两年，不是缓冲</h2>
+            <p data-hf-id="hf-suq5" class="subline">总觉得还有一年、两年时间，不着急。可节点不会因为感觉慢下来。</p>
+            <span data-hf-id="hf-3h0c" class="hand-label red">不着急最危险</span>
+          </div>
+          <div data-hf-id="hf-xoj7" class="stage">
+            <div data-hf-id="hf-yrsm" class="sketch calendar"></div>
+            <div data-hf-id="hf-cd3i" class="hourglass">
+              <div data-hf-id="hf-svmm" class="glass-top"></div>
+              <div data-hf-id="hf-iedj" class="sand-stream"></div>
+              <div data-hf-id="hf-0e7w" class="glass-bottom"></div>
+            </div>
+            <span data-hf-id="hf-oif7" class="black-dot bd1"></span>
+            <span data-hf-id="hf-1xyo" class="black-dot bd2"></span>
+            <span data-hf-id="hf-n2ld" class="black-dot bd3"></span>
+            <span data-hf-id="hf-eepi" class="black-dot bd4"></span>
+            <span data-hf-id="hf-ictj" class="black-dot bd5"></span>
+            <div data-hf-id="hf-2gu6" class="mascot s3-mascot" data-layout-ignore="">
+              <div data-hf-id="hf-flj3" class="mascot-shadow"></div>
+              <div data-hf-id="hf-jr6r" class="mascot-body"></div>
+              <span data-hf-id="hf-d6km" class="eye eye-left"></span>
+              <span data-hf-id="hf-srrj" class="eye eye-right"></span>
+              <span data-hf-id="hf-7nge" class="arm arm-left"></span>
+              <span data-hf-id="hf-6qzr" class="arm arm-right"></span>
+              <span data-hf-id="hf-o79y" class="leg leg-left"></span>
+              <span data-hf-id="hf-vfrz" class="leg leg-right"></span>
+            </div>
+            <div data-hf-id="hf-6jp3" class="caption-code">black paper sand -&gt; countdown</div>
+          </div>
+        </div>
+      </section>
+
+      <section data-hf-id="hf-qlhq" id="scene-4" class="scene" data-layout-allow-overflow="" data-layout-allow-overlap="">
+        <div data-hf-id="hf-n7se" class="scene-content">
+          <div data-hf-id="hf-qg65" class="copy">
+            <div data-hf-id="hf-ap3w" class="kicker">split gate</div>
+            <h2 data-hf-id="hf-uajz">看阵仗，也看分流</h2>
+            <p data-hf-id="hf-ir22" class="subline">今年中考的阵仗和分流比例，不需要编数字，也足够提醒家长醒一醒。</p>
+            <span data-hf-id="hf-80ny" class="hand-label blue">比例不是空气</span>
+          </div>
+          <div data-hf-id="hf-y2u8" class="stage">
+            <div data-hf-id="hf-cfd2" class="path path-in"></div>
+            <div data-hf-id="hf-wrpo" class="sketch split-gate"></div>
+            <div data-hf-id="hf-9198" class="lever"></div>
+            <div data-hf-id="hf-qmeo" class="path path-a"></div>
+            <div data-hf-id="hf-zaaj" class="path path-b"></div>
+            <div data-hf-id="hf-ms2i" class="note note-a">阵仗</div>
+            <div data-hf-id="hf-r02w" class="note note-b">比例</div>
+            <span data-hf-id="hf-hryc" class="blue-dot rd1"></span>
+            <span data-hf-id="hf-snfz" class="blue-dot rd2"></span>
+            <span data-hf-id="hf-mhq6" class="blue-dot rd3"></span>
+            <div data-hf-id="hf-zzen" class="mascot s4-mascot" data-layout-ignore="">
+              <div data-hf-id="hf-fzu4" class="mascot-shadow"></div>
+              <div data-hf-id="hf-k5hs" class="mascot-body"></div>
+              <span data-hf-id="hf-cs9l" class="eye eye-left"></span>
+              <span data-hf-id="hf-t62k" class="eye eye-right"></span>
+              <span data-hf-id="hf-795d" class="arm arm-left"></span>
+              <span data-hf-id="hf-75as" class="arm arm-right"></span>
+              <span data-hf-id="hf-nsyx" class="leg leg-left"></span>
+              <span data-hf-id="hf-vu30" class="leg leg-right"></span>
+            </div>
+            <div data-hf-id="hf-n38a" class="caption-code">blue notes -&gt; no fake numbers</div>
+          </div>
+        </div>
+      </section>
+
+      <section data-hf-id="hf-ujlr" id="scene-5" class="scene" data-layout-allow-overflow="" data-layout-allow-overlap="">
+        <div data-hf-id="hf-m0vb" class="scene-content">
+          <div data-hf-id="hf-t8bc" class="copy">
+            <div data-hf-id="hf-h54w" class="kicker">now plan</div>
+            <h1 data-hf-id="hf-enrp">现在就看路径</h1>
+            <p data-hf-id="hf-a62b" class="subline">别等考场到了才紧张。先把目标、节奏、风险摆到桌面上。</p>
+            <span data-hf-id="hf-ebm2" class="hand-label orange">现在，不是以后</span>
+          </div>
+          <div data-hf-id="hf-vap1" class="stage">
+            <div data-hf-id="hf-lf8c" class="sketch door"></div>
+            <div data-hf-id="hf-m3n2" class="route-line"></div>
+            <div data-hf-id="hf-ua5q" class="route-label target">目标</div>
+            <div data-hf-id="hf-66s0" class="route-label pace">节奏</div>
+            <div data-hf-id="hf-fh1m" class="route-label risk">风险</div>
+            <div data-hf-id="hf-wm4m" class="route-label now">现在</div>
+            <span data-hf-id="hf-o446" class="black-dot bd1"></span>
+            <span data-hf-id="hf-0r1l" class="black-dot bd2"></span>
+            <div data-hf-id="hf-qh4o" class="mascot s5-mascot" data-layout-ignore="">
+              <div data-hf-id="hf-ge55" class="mascot-shadow"></div>
+              <div data-hf-id="hf-hdcl" class="mascot-body"></div>
+              <span data-hf-id="hf-cdyk" class="eye eye-left"></span>
+              <span data-hf-id="hf-tkdl" class="eye eye-right"></span>
+              <span data-hf-id="hf-6uuc" class="arm arm-left"></span>
+              <span data-hf-id="hf-7jlt" class="arm arm-right"></span>
+              <span data-hf-id="hf-nenw" class="leg leg-left"></span>
+              <span data-hf-id="hf-w8e1" class="leg leg-right"></span>
+            </div>
+            <div data-hf-id="hf-1yva" class="caption-code">route line -&gt; action</div>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <script>
+      window.__timelines = window.__timelines || {};
+      const tl = gsap.timeline({ paused: true });
+
+      function enterCopy(scene, start) {
+        tl.from(scene + " .kicker", { y: 26, opacity: 0, duration: 0.32, ease: "power3.out" }, start + 0.15);
+        tl.from(scene + " h1, " + scene + " h2", { x: -52, opacity: 0, duration: 0.52, ease: "expo.out" }, start + 0.28);
+        tl.from(scene + " .subline", { y: 28, opacity: 0, duration: 0.42, ease: "sine.out" }, start + 0.68);
+        tl.from(scene + " .hand-label", { scale: 0.82, opacity: 0, duration: 0.34, ease: "back.out(1.45)" }, start + 1.02);
+      }
+
+      function pushTransition(oldScene, newScene, start) {
+        tl.to(oldScene, { x: -1920, duration: 0.46, ease: "power3.inOut" }, start);
+        tl.fromTo(newScene, { x: 1920, opacity: 1 }, { x: 0, duration: 0.46, ease: "power3.inOut" }, start);
+        tl.set(oldScene, { opacity: 0 }, start + 0.48);
+      }
+
+      function verticalTransition(oldScene, newScene, start) {
+        tl.to(oldScene, { y: -1080, duration: 0.48, ease: "power3.inOut" }, start);
+        tl.fromTo(newScene, { y: 1080, opacity: 1 }, { y: 0, duration: 0.48, ease: "power3.inOut" }, start);
+        tl.set(oldScene, { opacity: 0 }, start + 0.5);
+      }
+
+      function squeezeTransition(oldScene, newScene, start) {
+        tl.to(oldScene, { scaleX: 0, transformOrigin: "left center", duration: 0.42, ease: "power3.inOut" }, start);
+        tl.fromTo(newScene, { scaleX: 0, transformOrigin: "right center", opacity: 1 }, { scaleX: 1, duration: 0.42, ease: "power3.inOut" }, start + 0.08);
+        tl.set(oldScene, { opacity: 0 }, start + 0.54);
+      }
+
+      enterCopy("#scene-1", 0);
+      tl.from("#scene-1 .exam-gate", { y: 46, opacity: 0, duration: 0.46, ease: "back.out(1.25)" }, 0.48);
+      tl.from("#scene-1 .ticket", { x: -72, opacity: 0, duration: 0.34, stagger: 0.1, ease: "power2.out" }, 0.86);
+      tl.from("#scene-1 .s1-mascot", { y: 48, scale: 0.88, opacity: 0, duration: 0.5, ease: "back.out(1.45)" }, 1.08);
+      tl.from("#scene-1 .stamp", { y: -72, scale: 1.16, opacity: 0, duration: 0.26, ease: "power4.out" }, 1.42);
+      tl.from("#scene-1 .red-dot", { y: -26, scale: 0, opacity: 0, duration: 0.38, stagger: 0.05, ease: "expo.out" }, 1.48);
+      tl.from("#scene-1 .caption-code", { x: 36, opacity: 0, duration: 0.34, ease: "sine.out" }, 1.82);
+      tl.to("#scene-1 .s1-mascot", { y: -8, duration: 0.96, repeat: 3, yoyo: true, ease: "sine.inOut" }, 1.9);
+
+      pushTransition("#scene-1", "#scene-2", 5.3);
+      enterCopy("#scene-2", 5.5);
+      tl.from("#scene-2 .grade-label", { x: -70, opacity: 0, duration: 0.36, stagger: 0.12, ease: "expo.out" }, 6.12);
+      tl.from("#scene-2 .mini-gate", { x: 70, opacity: 0, duration: 0.4, ease: "power3.out" }, 6.3);
+      tl.from("#scene-2 .s2-mascot", { y: 42, opacity: 0, duration: 0.44, ease: "back.out(1.5)" }, 6.48);
+      tl.fromTo("#scene-2 .distance-line", { scaleX: 0, opacity: 0 }, { scaleX: 1, opacity: 1, duration: 0.78, ease: "power3.inOut" }, 6.72);
+      tl.from("#scene-2 .black-dot", { scale: 0, opacity: 0, duration: 0.3, stagger: 0.08, ease: "power4.out" }, 7.18);
+      tl.from("#scene-2 .caption-code", { y: 28, opacity: 0, duration: 0.34, ease: "sine.out" }, 7.38);
+      tl.to("#scene-2 .distance-line", { scaleX: 0.62, duration: 1.05, repeat: 2, yoyo: true, ease: "sine.inOut" }, 7.62);
+
+      verticalTransition("#scene-2", "#scene-3", 11.3);
+      enterCopy("#scene-3", 11.52);
+      tl.from("#scene-3 .calendar", { y: -50, opacity: 0, duration: 0.44, ease: "back.out(1.25)" }, 12.12);
+      tl.from("#scene-3 .hourglass", { x: 62, opacity: 0, duration: 0.48, ease: "power3.out" }, 12.38);
+      tl.from("#scene-3 .s3-mascot", { y: 46, scale: 0.9, opacity: 0, duration: 0.46, ease: "back.out(1.5)" }, 12.68);
+      tl.from("#scene-3 .sand-stream", { scaleY: 0, opacity: 0, duration: 0.42, transformOrigin: "top center", ease: "power2.out" }, 12.88);
+      tl.from("#scene-3 .black-dot", { y: -90, scale: 0, opacity: 0, duration: 0.54, stagger: 0.06, ease: "expo.out" }, 13.08);
+      tl.from("#scene-3 .caption-code", { x: 42, opacity: 0, duration: 0.34, ease: "sine.out" }, 13.62);
+      tl.to("#scene-3 .sand-stream", { scaleY: 0.55, duration: 0.72, repeat: 3, yoyo: true, ease: "sine.inOut" }, 13.72);
+
+      squeezeTransition("#scene-3", "#scene-4", 17.2);
+      enterCopy("#scene-4", 17.5);
+      tl.from("#scene-4 .path-in", { scaleX: 0, opacity: 0, duration: 0.4, transformOrigin: "left center", ease: "power4.out" }, 18.05);
+      tl.from("#scene-4 .split-gate", { scale: 0.94, opacity: 0, duration: 0.42, ease: "back.out(1.25)" }, 18.2);
+      tl.from("#scene-4 .lever", { scaleX: 0, opacity: 0, duration: 0.34, transformOrigin: "left center", ease: "power3.out" }, 18.45);
+      tl.from("#scene-4 .s4-mascot", { y: 50, opacity: 0, duration: 0.44, ease: "back.out(1.5)" }, 18.52);
+      tl.from("#scene-4 .path-a, #scene-4 .path-b", { scaleX: 0, opacity: 0, duration: 0.46, stagger: 0.12, transformOrigin: "left center", ease: "power4.out" }, 18.78);
+      tl.from("#scene-4 .note", { y: -28, opacity: 0, duration: 0.34, stagger: 0.11, ease: "expo.out" }, 19.18);
+      tl.from("#scene-4 .blue-dot", { x: -40, y: -20, scale: 0, opacity: 0, duration: 0.34, stagger: 0.06, ease: "power3.out" }, 19.42);
+      tl.from("#scene-4 .caption-code", { x: 42, opacity: 0, duration: 0.34, ease: "sine.out" }, 19.7);
+      tl.to("#scene-4 .lever", { rotation: 12, duration: 0.8, repeat: 2, yoyo: true, ease: "sine.inOut" }, 19.88);
+
+      pushTransition("#scene-4", "#scene-5", 23.5);
+      enterCopy("#scene-5", 23.74);
+      tl.from("#scene-5 .door", { x: -64, opacity: 0, duration: 0.46, ease: "power3.out" }, 24.28);
+      tl.from("#scene-5 .s5-mascot", { y: 50, opacity: 0, duration: 0.42, ease: "back.out(1.5)" }, 24.48);
+      tl.fromTo("#scene-5 .route-line", { scaleX: 0, opacity: 0 }, { scaleX: 1, opacity: 1, duration: 0.72, ease: "power3.inOut" }, 24.82);
+      tl.from("#scene-5 .route-label", { y: 30, scale: 0.9, opacity: 0, duration: 0.35, stagger: 0.1, ease: "back.out(1.35)" }, 25.18);
+      tl.from("#scene-5 .black-dot", { scale: 0, opacity: 0, duration: 0.3, stagger: 0.08, ease: "power4.out" }, 25.64);
+      tl.from("#scene-5 .caption-code", { y: 28, opacity: 0, duration: 0.34, ease: "sine.out" }, 25.82);
+      tl.to("#scene-5 .door", { rotation: -3, duration: 1.1, repeat: 1, yoyo: true, ease: "sine.inOut" }, 26.2);
+      tl.to("#root", { opacity: 0, duration: 0.38, ease: "sine.in" }, 29.56);
+
+      window.__timelines["main"] = tl;
+    </script>
+  </body>
+</html>
