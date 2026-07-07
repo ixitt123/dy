@@ -1405,6 +1405,15 @@
                 <strong id="cs1VideoStatus">等待输入</strong>
                 <p id="cs1VideoMessage">选择模板后点击生成，服务器会自动运行 HyperFrames 检查并渲染 MP4。</p>
               </div>
+              <div class="cs1-progress cs1-status-card" id="cs1VideoProgress" hidden>
+                <div class="cs1-progress-top">
+                  <span id="cs1VideoProgressStage">准备生成</span>
+                  <strong id="cs1VideoProgressPercent">0%</strong>
+                </div>
+                <div class="cs1-progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+                  <i id="cs1VideoProgressFill"></i>
+                </div>
+              </div>
               <div class="cs1-output-card" id="cs1VideoResult" hidden>
                 <span>输出文件</span>
                 <code id="cs1VideoOutputPath"></code>
