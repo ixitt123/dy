@@ -41,16 +41,44 @@ const CS1_VIDEO_STYLES = [
 export function createCs1VideoRoutes({ baseDir, sendJson, modelRouter, ffmpegPath = "", ffprobePath = "" }) {
   const runsDir = path.join(baseDir, ".data", "cs1-video-maker");
   const outputDir = path.join(baseDir, "jianying-exports", "hyperframes");
+  const hiddenStylesPath = path.join(runsDir, "hidden-styles.json");
 
   return async function handleCs1VideoRoutes(req, res, url) {
     if (!url.pathname.startsWith("/api/cs1-video/")) return false;
     const route = url.pathname.replace("/api/cs1-video/", "");
 
     if (req.method === "GET" && route === "styles") {
+      const hiddenStyleIds = readHiddenStyleIds(hiddenStylesPath);
+      const visibleStyles = CS1_VIDEO_STYLES
+        .filter((style) => !hiddenStyleIds.has(style.id))
+        .map((style, index) => ({ ...style, display_index: index + 1 }));
       sendJson(res, 200, {
         ok: true,
-        styles: CS1_VIDEO_STYLES,
+        styles: visibleStyles,
       });
+      return true;
+    }
+
+    if (req.method === "POST" && route === "styles/delete") {
+      try {
+        const body = await readJsonBody(req, { maxBytes: 16 * 1024 });
+        const styleId = String(body.id || "").trim();
+        const exists = CS1_VIDEO_STYLES.some((style) => style.id === styleId);
+        if (!exists) throw new Error("模板不存在，无法删除。");
+        const hiddenStyleIds = readHiddenStyleIds(hiddenStylesPath);
+        const visibleCount = CS1_VIDEO_STYLES.filter((style) => !hiddenStyleIds.has(style.id)).length;
+        if (!hiddenStyleIds.has(styleId) && visibleCount <= 1) {
+          throw new Error("至少需要保留一个 HyperFrames 模板。");
+        }
+        hiddenStyleIds.add(styleId);
+        writeHiddenStyleIds(hiddenStylesPath, hiddenStyleIds);
+        sendJson(res, 200, { ok: true, id: styleId });
+      } catch (error) {
+        sendJson(res, error instanceof HttpBodyError ? error.statusCode : 400, {
+          ok: false,
+          message: error instanceof Error ? error.message : String(error),
+        });
+      }
       return true;
     }
 
@@ -84,6 +112,26 @@ export function createCs1VideoRoutes({ baseDir, sendJson, modelRouter, ffmpegPat
     sendJson(res, 404, { ok: false, message: "Unknown CS1 video API" });
     return true;
   };
+}
+
+function readHiddenStyleIds(filePath) {
+  try {
+    const raw = fs.readFileSync(filePath, "utf8");
+    const parsed = JSON.parse(raw);
+    const ids = Array.isArray(parsed?.ids) ? parsed.ids : [];
+    return new Set(ids.map((id) => String(id || "").trim()).filter(Boolean));
+  } catch {
+    return new Set();
+  }
+}
+
+function writeHiddenStyleIds(filePath, ids) {
+  fs.mkdirSync(path.dirname(filePath), { recursive: true });
+  const payload = {
+    ids: Array.from(ids).sort(),
+    updated_at: new Date().toISOString(),
+  };
+  fs.writeFileSync(filePath, `${JSON.stringify(payload, null, 2)}\n`, "utf8");
 }
 
 async function generateVideo({ runsDir, outputDir, text, style, title, beatCount, templateName, aiRefine, modelRouter, ffmpegPath, ffprobePath }) {
