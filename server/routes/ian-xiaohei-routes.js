@@ -72,6 +72,58 @@ export function createIanXiaoheiRoutes({ baseDir, sendJson, imageService }) {
       return true;
     }
 
+    if (req.method === "POST" && route === "generate-shot") {
+      try {
+        const body = await readJsonBody(req, { maxBytes: 512 * 1024 });
+        const plan = body.plan && typeof body.plan === "object" ? body.plan : null;
+        const shot = normalizeShotInput(body.shot);
+        const batchId = safeBatchId(body.batchId || plan?.batchId);
+        if (!batchId) throw new Error("缺少输出批次 ID。");
+        if (!shot.prompt) throw new Error("缺少当前配图提示词。");
+
+        const batchDir = path.join(outputRoot, batchId);
+        fs.mkdirSync(batchDir, { recursive: true });
+        if (plan) savePlanFiles(batchDir, plan);
+
+        const generated = await imageService.generateImage({
+          prompt: shot.prompt,
+          aspectRatio: "16:9",
+          count: 1,
+          sourceType: "ian-xiaohei",
+          sourceId: `${batchId}:${shot.index}`,
+          provider: String(body.provider || ""),
+          folderName: batchId,
+          folderPath: batchDir,
+        });
+        const first = generated.results.find((item) => item.success);
+        if (!first) {
+          const message = generated.results.find((item) => item.error)?.error || "图片生成失败。";
+          updateResultFile(batchDir, { error: { index: shot.index, topic: shot.topic, message } });
+          throw new Error(message);
+        }
+        const image = {
+          index: shot.index,
+          topic: shot.topic,
+          purpose: shot.purpose,
+          prompt: shot.prompt,
+          imagePath: first.imagePath,
+          imageUrl: `/api/image/file?path=${encodeURIComponent(first.imagePath)}`,
+          thumbnailUrl: first.thumbnailUrl,
+          assetId: first.assetId,
+          provider: first.provider,
+          model: first.model,
+        };
+        updateResultFile(batchDir, { image });
+        sendJson(res, 200, { ok: true, batchId, outputDir: batchDir, image });
+      } catch (error) {
+        sendJson(res, error instanceof HttpBodyError ? error.statusCode : 400, {
+          ok: false,
+          message: error instanceof Error ? error.message : String(error),
+        });
+      }
+      return true;
+    }
+
     if (req.method === "POST" && route === "generate") {
       try {
         const body = await readJsonBody(req, { maxBytes: 256 * 1024 });
@@ -170,6 +222,56 @@ function buildXiaoheiPlan(input = {}) {
     purposeLabel: PURPOSES.find((item) => item.id === purpose)?.label || "文章正文配图",
     shots,
   };
+}
+
+function normalizeShotInput(value) {
+  const shot = value && typeof value === "object" ? value : {};
+  return {
+    index: clamp(Number(shot.index) || 1, 1, 99),
+    topic: trimText(shot.topic || `小黑配图 ${shot.index || 1}`, 64),
+    purpose: trimText(shot.purpose || "正文配图", 64),
+    prompt: String(shot.prompt || "").trim(),
+  };
+}
+
+function safeBatchId(value) {
+  return String(value || "")
+    .replace(/[^a-zA-Z0-9._-]/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "")
+    .slice(0, 96);
+}
+
+function savePlanFiles(batchDir, plan) {
+  const planPath = path.join(batchDir, "plan.json");
+  const promptsPath = path.join(batchDir, "prompts.md");
+  if (!fs.existsSync(planPath)) fs.writeFileSync(planPath, JSON.stringify(plan, null, 2), "utf8");
+  if (!fs.existsSync(promptsPath)) fs.writeFileSync(promptsPath, promptsMarkdown(plan), "utf8");
+}
+
+function updateResultFile(batchDir, { image = null, error = null } = {}) {
+  const resultPath = path.join(batchDir, "result.json");
+  let result = { images: [], errors: [] };
+  try {
+    const parsed = JSON.parse(fs.readFileSync(resultPath, "utf8"));
+    result = {
+      images: Array.isArray(parsed.images) ? parsed.images : [],
+      errors: Array.isArray(parsed.errors) ? parsed.errors : [],
+    };
+  } catch {
+    result = { images: [], errors: [] };
+  }
+  if (image) {
+    result.images = result.images.filter((item) => Number(item.index) !== Number(image.index));
+    result.images.push(image);
+    result.images.sort((a, b) => Number(a.index || 0) - Number(b.index || 0));
+  }
+  if (error) {
+    result.errors = result.errors.filter((item) => Number(item.index) !== Number(error.index));
+    result.errors.push(error);
+    result.errors.sort((a, b) => Number(a.index || 0) - Number(b.index || 0));
+  }
+  fs.writeFileSync(resultPath, JSON.stringify(result, null, 2), "utf8");
 }
 
 function buildShot({ index, title, segment, purpose, preferredStructure }) {
