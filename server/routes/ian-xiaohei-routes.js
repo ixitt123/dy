@@ -459,8 +459,41 @@ function inferLabels(segment, purpose, roleDef = null) {
   return candidates.slice(0, 6).length ? candidates.slice(0, 6) : ["输入", "判断", "输出"];
 }
 
+function rolesForCount(count) {
+  if (count <= 1) return [SHOT_ROLE_DEFS[0]];
+  if (count === 2) return [SHOT_ROLE_DEFS[0], SHOT_ROLE_DEFS[2]];
+  if (count === 3) return [SHOT_ROLE_DEFS[0], SHOT_ROLE_DEFS[3], SHOT_ROLE_DEFS[8]];
+  if (count === 4) return [SHOT_ROLE_DEFS[0], SHOT_ROLE_DEFS[1], SHOT_ROLE_DEFS[3], SHOT_ROLE_DEFS[8]];
+  const selected = SHOT_ROLE_DEFS.slice(0, Math.min(count, SHOT_ROLE_DEFS.length));
+  while (selected.length < count) selected.push(SHOT_ROLE_DEFS[selected.length % SHOT_ROLE_DEFS.length]);
+  return selected;
+}
+
+function inferDomainLayer(text) {
+  const value = String(text || "").toLowerCase();
+  if (text.includes("英文") || value.includes("english") || text.includes("语言")) {
+    return { elements: ["单词纸片", "对话门", "开口按钮", "身份标签"] };
+  }
+  if (text.includes("管理") || text.includes("领导") || text.includes("职场")) {
+    return { elements: ["任务纸团", "沟通线", "判断按钮", "协作便签"] };
+  }
+  if (text.includes("招生") || text.includes("课程") || text.includes("学习")) {
+    return { elements: ["课程卡片", "学习路径", "提醒便签", "目标门"] };
+  }
+  if (text.includes("AI") || text.includes("模型") || text.includes("自动")) {
+    return { elements: ["输入纸片", "黑盒按钮", "反馈便签", "输出抽屉"] };
+  }
+  if (text.includes("行动") || text.includes("开始") || text.includes("今天")) {
+    return { elements: ["今天节点", "行动线轴", "第一步便签", "落点黑点"] };
+  }
+  return { elements: ["输入纸片", "判断便签", "输出纸条", "橙色路径"] };
+}
+
 function splitIntoSegments(text, count) {
-  const sentences = text.split(/(?<=[。！？!?；;])|\n+/).map((item) => item.trim()).filter(Boolean);
+  const sentences = expandLongSegments(text
+    .split(/(?<=[。！？!?；;])|\n+/)
+    .map((item) => item.trim())
+    .filter(Boolean), count);
   if (sentences.length <= count) return padSegments(sentences, count, text);
   const buckets = Array.from({ length: count }, () => []);
   sentences.forEach((sentence, index) => {
@@ -468,6 +501,39 @@ function splitIntoSegments(text, count) {
     buckets[bucketIndex].push(sentence);
   });
   return buckets.map((bucket) => bucket.join("")).filter(Boolean);
+}
+
+function expandLongSegments(segments, count) {
+  const expanded = [];
+  const targetLength = Math.max(34, Math.ceil(segments.join("").length / Math.max(1, count)));
+  for (const segment of segments) {
+    if (expanded.length < count && segment.length > targetLength * 1.45) {
+      expanded.push(...splitByLength(segment, targetLength));
+    } else {
+      expanded.push(segment);
+    }
+  }
+  if (expanded.length < count) {
+    const extra = [];
+    for (const segment of expanded) {
+      if (extra.length + expanded.length >= count) break;
+      if (segment.includes("，") || segment.includes(",")) {
+        extra.push(...segment.split(/[，,]/).map((item) => item.trim()).filter((item) => item.length >= 8));
+      }
+    }
+    return uniqueList([...expanded, ...extra]);
+  }
+  return expanded;
+}
+
+function splitByLength(text, targetLength) {
+  const chunks = [];
+  let cursor = 0;
+  while (cursor < text.length) {
+    chunks.push(text.slice(cursor, cursor + targetLength).trim());
+    cursor += targetLength;
+  }
+  return chunks.filter(Boolean);
 }
 
 function padSegments(segments, count, fallback) {
@@ -487,6 +553,18 @@ function normalizeText(value) {
 function trimText(value, max) {
   const text = String(value || "").trim();
   return text.length > max ? `${text.slice(0, max - 1)}…` : text;
+}
+
+function uniqueList(values) {
+  const seen = new Set();
+  const output = [];
+  for (const value of values) {
+    const clean = String(value || "").trim();
+    if (!clean || seen.has(clean)) continue;
+    seen.add(clean);
+    output.push(clean);
+  }
+  return output;
 }
 
 function clamp(value, min, max) {
@@ -515,6 +593,7 @@ function promptsMarkdown(plan) {
       `## ${shot.index}. ${shot.topic}`,
       "",
       `用途：${shot.purpose}`,
+      `角色：${shot.role || ""}`,
       `结构：${shot.structureType}`,
       "",
       "```text",

@@ -191,7 +191,7 @@ function renderPlan(plan) {
   els.promptResults.innerHTML = shots.map((shot) => `
     <article class="prompt-card">
       <h3>#${shot.index} ${escapeHtml(shot.topic)}</h3>
-      <p class="meta">${escapeHtml(shot.purpose)} · ${escapeHtml(shot.structureType)}</p>
+      <p class="meta">${escapeHtml(shot.purpose)} · ${escapeHtml(shot.role || "自动角色")} · ${escapeHtml(shot.structureType)}</p>
       <pre>${escapeHtml(shot.prompt)}</pre>
     </article>
   `).join("");
