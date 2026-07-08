@@ -148,7 +148,7 @@ export function createIanXiaoheiRoutes({ baseDir, sendJson, imageService }) {
 function buildXiaoheiPlan(input = {}) {
   const text = normalizeText(input.text);
   if (!text) throw new Error("请先输入文案。");
-  const count = clamp(Number(input.count) || 1, 1, 4);
+  const count = clamp(Number(input.count) || 1, 1, 9);
   const purpose = PURPOSES.some((item) => item.id === input.purpose) ? input.purpose : "article";
   const batchId = `${dateSlug()}-ian-xiaohei-${randomUUID().slice(0, 8)}`;
   const title = inferTitle(text, input.title);
