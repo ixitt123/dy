@@ -10,6 +10,11 @@ const LOCAL_GSAP_SRC = "assets/gsap.min.js";
 const MAX_SCRIPT_LENGTH = 1800;
 const nodeRequire = createRequire(import.meta.url);
 
+const XIAOHEI_LAYOUT_VARIANTS = new Set(["left_right", "wide_text", "sketch_focus", "center_story"]);
+const XIAOHEI_TEXT_PALETTES = new Set(["ink_red_orange", "blue_orange", "red_black", "ink_green"]);
+const XIAOHEI_BACKGROUND_PATTERNS = new Set(["paper_grid", "clean_white", "warm_paper", "blueprint"]);
+const XIAOHEI_MOTION_VARIANTS = new Set(["ink_pop", "paper_slide", "marker_sweep", "route_pulse"]);
+
 const ASPECT_RATIO_PRESETS = {
   "9:16": { id: "9:16", label: "9:16 竖屏", width: 1080, height: 1920, platforms: "抖音 / 快手 / 视频号 / 小红书" },
   "16:9": { id: "16:9", label: "16:9 横屏", width: 1920, height: 1080, platforms: "B站 / 课程 / 长视频" },
@@ -155,6 +160,10 @@ export function createXiaoheiVideoRoutes({ baseDir, sendJson, ffmpegPath = "", f
           bgmMode: body.bgmMode,
           bgmPath: body.bgmPath,
           introOutroMode: body.introOutroMode,
+          layoutVariant: body.layoutVariant,
+          textPalette: body.textPalette,
+          backgroundPattern: body.backgroundPattern,
+          motionVariant: body.motionVariant,
           ctaText: body.ctaText,
           ffmpegPath,
           ffprobePath,
@@ -174,11 +183,12 @@ export function createXiaoheiVideoRoutes({ baseDir, sendJson, ffmpegPath = "", f
   };
 }
 
-async function generateXiaoheiVideo({ runsDir, outputDir, title, text, aspectRatio, shotCount, bgmMode, bgmPath, introOutroMode, ctaText, ffmpegPath, ffprobePath }) {
+async function generateXiaoheiVideo({ runsDir, outputDir, title, text, aspectRatio, shotCount, bgmMode, bgmPath, introOutroMode, layoutVariant, textPalette, backgroundPattern, motionVariant, ctaText, ffmpegPath, ffprobePath }) {
   const script = normalizeScript(text);
   const aspect = normalizeAspectRatio(aspectRatio);
   const count = normalizeShotCount(shotCount);
   const mode = normalizeIntroOutroMode(introOutroMode);
+  const visualOptions = normalizeXiaoheiVisualOptions({ layoutVariant, textPalette, backgroundPattern, motionVariant });
   const videoTitle = sanitizeTitle(title) || inferTitle(script);
   const slug = `${formatDateSlug(new Date())}-xiaohei-${randomUUID().slice(0, 8)}`;
   const projectDir = path.join(runsDir, slug);
@@ -186,7 +196,7 @@ async function generateXiaoheiVideo({ runsDir, outputDir, title, text, aspectRat
   const storyboard = buildStoryboard({ title: videoTitle, script, shotCount: count, aspect, ctaText });
   const duration = storyboard.format.duration_seconds;
   const bgm = resolveBgm({ bgmMode, bgmPath, duration });
-  const files = buildProjectFiles({ slug, title: videoTitle, script, storyboard, aspect, bgm, introOutroMode: mode });
+  const files = buildProjectFiles({ slug, title: videoTitle, script, storyboard, aspect, bgm, introOutroMode: mode, visualOptions });
 
   fs.mkdirSync(projectDir, { recursive: true });
   fs.mkdirSync(outputDir, { recursive: true });
@@ -212,6 +222,7 @@ async function generateXiaoheiVideo({ runsDir, outputDir, title, text, aspectRat
     duration,
     bgm: bgm.public,
     introOutroMode: mode,
+    visualOptions,
     directorScriptPath: path.join(projectDir, "director-script.md"),
     storyboardPath: path.join(projectDir, "storyboard.json"),
     imagePromptsPath: path.join(projectDir, "image-prompts.md"),
@@ -297,7 +308,7 @@ function buildStoryboard({ title, script, shotCount, aspect, ctaText }) {
   };
 }
 
-function buildProjectFiles({ slug, title, script, storyboard, aspect, bgm, introOutroMode }) {
+function buildProjectFiles({ slug, title, script, storyboard, aspect, bgm, introOutroMode, visualOptions }) {
   return {
     design: renderDesign({ title, storyboard }),
     directorScript: renderDirectorScript({ title, script, storyboard }),
@@ -313,7 +324,7 @@ function buildProjectFiles({ slug, title, script, storyboard, aspect, bgm, intro
         vfx_contract: shot.vfx_contract,
       })),
     }, null, 2),
-    index: renderIndexHtml({ title, storyboard, aspect, bgm, introOutroMode }),
+    index: renderIndexHtml({ title, storyboard, aspect, bgm, introOutroMode, visualOptions }),
     meta: {
       id: slug,
       name: title,
@@ -325,6 +336,7 @@ function buildProjectFiles({ slug, title, script, storyboard, aspect, bgm, intro
       aspectRatio: aspect,
       bgm: bgm.public,
       introOutroMode,
+      visualOptions,
     },
     assets: bgm.assets,
   };
