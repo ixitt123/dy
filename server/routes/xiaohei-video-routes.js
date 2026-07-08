@@ -446,13 +446,20 @@ ${storyboard.shots.map((shot) => `## 镜头 ${shot.scene}
 `;
 }
 
-function renderIndexHtml({ title, storyboard, aspect, bgm, introOutroMode }) {
+function renderIndexHtml({ title, storyboard, aspect, bgm, introOutroMode, visualOptions }) {
   const width = aspect.width;
   const height = aspect.height;
   const duration = storyboard.format.duration_seconds;
   const isPortrait = height > width;
+  const visual = normalizeXiaoheiVisualOptions(visualOptions);
+  const rootClass = [
+    `xh-layout-${visual.layoutVariant}`,
+    `xh-palette-${visual.textPalette}`,
+    `xh-bg-${visual.backgroundPattern}`,
+    `xh-motion-${visual.motionVariant}`,
+  ].join(" ");
   const sceneMarkup = storyboard.shots.map((shot, index) => renderScene(shot, index, { isPortrait })).join("\n");
-  const sceneTimeline = storyboard.shots.map((shot, index) => buildSceneTimeline(shot, index, storyboard.shots.length)).join("\n    ");
+  const sceneTimeline = storyboard.shots.map((shot, index) => buildSceneTimeline(shot, index, storyboard.shots.length, visual)).join("\n    ");
   const introOutroTimeline = buildIntroOutroTimeline(introOutroMode, duration);
   return `<!DOCTYPE html>
 <html lang="zh-CN">
@@ -528,14 +535,18 @@ function renderIndexHtml({ title, storyboard, aspect, bgm, introOutroMode }) {
       .route{position:absolute;left:${isPortrait ? "8%" : "8%"};top:${isPortrait ? "62%" : "58%"};width:${isPortrait ? 760 : 820}px;height:170px;border:0;border-top:8px solid #b76512;border-radius:50%}
       .route b{position:absolute;top:-44px;padding:9px 14px;border:3px solid #b76512;border-radius:18px;background:#fff;color:#b76512;font-size:${isPortrait ? 28 : 26}px}.route b:nth-child(1){left:4%}.route b:nth-child(2){left:38%}.route b:nth-child(3){right:6%}
       .now-node{left:50%;top:42%;width:${isPortrait ? 460 : 520}px;height:${isPortrait ? 280 : 260}px;margin-left:${isPortrait ? -230 : -260}px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#d9362b;font-size:${isPortrait ? 72 : 70}px;font-weight:900}
+      .scene[data-variant="now"] .now-node{top:${isPortrait ? "13%" : "10%"};width:${isPortrait ? 420 : 470}px;height:${isPortrait ? 220 : 210}px;margin-left:${isPortrait ? -210 : -235}px;z-index:4}
+      .scene[data-variant="now"] .now-route{top:${isPortrait ? "73%" : "72%"};left:${isPortrait ? "9%" : "7%"};width:${isPortrait ? 720 : 790}px;z-index:2}
+      .scene[data-variant="now"] .xiaohei{left:${isPortrait ? "55%" : "58%"};bottom:${isPortrait ? "20%" : "16%"}}
       .dust{position:absolute;inset:0;pointer-events:none}.dust i{position:absolute;width:10px;height:10px;border-radius:50%;background:currentColor;opacity:.75}
       .dust.red{color:#d9362b}.dust.orange{color:#b76512}.dust.blue{color:#1f559e}
       .waterline{position:absolute;left:0;right:0;bottom:${isPortrait ? 76 : 70}px;height:4px;background:#111;opacity:.12}
       ${isPortrait ? ".stage .xiaohei{left:44%;bottom:9%}.scene[data-variant='gate'] .xiaohei{left:58%;bottom:12%}.scene[data-variant='line'] .xiaohei{left:36%;bottom:10%}" : ".stage .xiaohei{left:54%;bottom:10%}.scene[data-variant='gate'] .xiaohei{left:62%;bottom:10%}.scene[data-variant='line'] .xiaohei{left:42%;bottom:9%}"}
+      ${xiaoheiLayoutCss({ isPortrait })}
     </style>
   </head>
   <body>
-    <div id="root" data-composition-id="main" data-start="0" data-duration="${duration}" data-width="${width}" data-height="${height}">
+    <div id="root" class="${rootClass}" data-composition-id="main" data-start="0" data-duration="${duration}" data-width="${width}" data-height="${height}">
       <div class="paper-grid" data-layout-ignore></div>
       <div class="paper-edge" data-layout-ignore></div>
       <div class="waterline" data-layout-ignore></div>
