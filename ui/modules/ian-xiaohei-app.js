@@ -17,6 +17,8 @@ const els = {
   refreshOutputs: document.querySelector("#refreshOutputs"),
   statusLabel: document.querySelector("#statusLabel"),
   statusDetail: document.querySelector("#statusDetail"),
+  progressStep: document.querySelector("#progressStep"),
+  progressPercent: document.querySelector("#progressPercent"),
   progressBar: document.querySelector("#progressBar"),
   promptResults: document.querySelector("#promptResults"),
   imageResults: document.querySelector("#imageResults"),
@@ -61,15 +63,12 @@ async function createPlan() {
     return null;
   }
   setBusy(true);
-  setStatus("正在生成提示词", "根据文案拆分认知锚点，并套用小黑正文配图规则。", 35);
+  setStatus("正在生成提示词", "根据文案拆分认知锚点，并套用小黑正文配图规则。", 35, false, "分析文案");
   try {
-    const data = await fetchJson("/api/ian-xiaohei/plan", {
-      method: "POST",
-      body: JSON.stringify(payload),
-    });
+    const data = await requestPlan(payload);
     state.plan = data;
     renderPlan(data);
-    setStatus("提示词已生成", `共 ${data.shots?.length || 0} 张，画幅固定为 16:9。`, 100);
+    setStatus("提示词已生成", `共 ${data.shots?.length || 0} 张，画幅固定为 16:9。`, 100, false, "提示词完成");
     return data;
   } catch (error) {
     setStatus("提示词生成失败", error.message || String(error), 0, true);
@@ -86,19 +85,60 @@ async function generateImages() {
     return;
   }
   setBusy(true);
-  setStatus("正在生成小黑配图", "正在调用当前系统图片 Provider。", 12);
+  setStatus("正在生成小黑配图", "正在生成配图计划。", 5, false, "0/0");
   els.imageResults.className = "image-list empty";
   els.imageResults.textContent = "生成中，请稍候。";
   try {
-    const data = await fetchJson("/api/ian-xiaohei/generate", {
-      method: "POST",
-      body: JSON.stringify(payload),
-    });
-    state.plan = data.plan;
-    renderPlan(data.plan);
-    renderImages(data.images || [], data.errors || []);
+    const plan = await requestPlan(payload);
+    state.plan = plan;
+    renderPlan(plan);
+    const shots = plan.shots || [];
+    const images = [];
+    const errors = [];
+    renderImages(images, errors);
+    for (let index = 0; index < shots.length; index += 1) {
+      const shot = shots[index];
+      const before = progressForShot(index, shots.length);
+      setStatus(
+        "正在生成小黑配图",
+        `第 ${index + 1}/${shots.length} 张：${shot.topic || "小黑配图"}`,
+        before,
+        false,
+        `${index}/${shots.length}`,
+      );
+      try {
+        const data = await fetchJson("/api/ian-xiaohei/generate-shot", {
+          method: "POST",
+          body: JSON.stringify({
+            batchId: plan.batchId,
+            plan,
+            shot,
+          }),
+        });
+        images.push(data.image);
+      } catch (error) {
+        errors.push({
+          index: shot.index,
+          topic: shot.topic,
+          message: error.payload?.message || error.message || String(error),
+        });
+      }
+      renderImages(images, errors);
+      setStatus(
+        "正在生成小黑配图",
+        `已完成 ${index + 1}/${shots.length} 张。`,
+        progressForShot(index + 1, shots.length),
+        false,
+        `${index + 1}/${shots.length}`,
+      );
+    }
     await loadOutputs();
-    setStatus("生成完成", `成功 ${data.images?.length || 0} 张，已保存到本地输出目录。`, 100);
+    if (!images.length && errors.length) {
+      setStatus("生成失败", errors[0].message || "图片生成失败。", 100, true, `${errors.length}/${shots.length} 失败`);
+      return;
+    }
+    const summary = errors.length ? `成功 ${images.length} 张，失败 ${errors.length} 张。` : `成功 ${images.length} 张。`;
+    setStatus("生成完成", `${summary} 已保存到本地输出目录。`, 100, false, `${images.length}/${shots.length}`);
   } catch (error) {
     const detail = error.payload?.message || error.message || String(error);
     const plan = error.payload?.plan;
@@ -108,6 +148,13 @@ async function generateImages() {
   } finally {
     setBusy(false);
   }
+}
+
+async function requestPlan(payload) {
+  return fetchJson("/api/ian-xiaohei/plan", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
 }
 
 async function loadOutputs() {
@@ -212,11 +259,19 @@ function setBusy(busy) {
   els.copyPrompts.disabled = busy;
 }
 
-function setStatus(label, detail, progress = 0, isError = false) {
+function progressForShot(done, total) {
+  if (!total) return 0;
+  return Math.round(8 + (Math.max(0, Math.min(done, total)) / total) * 90);
+}
+
+function setStatus(label, detail, progress = 0, isError = false, step = "") {
+  const safeProgress = Math.max(0, Math.min(100, Math.round(Number(progress) || 0)));
   els.statusLabel.textContent = label;
-  els.statusLabel.className = isError ? "error" : progress >= 100 ? "success" : "";
+  els.statusLabel.className = isError ? "error" : safeProgress >= 100 ? "success" : "";
   els.statusDetail.textContent = detail || "";
-  els.progressBar.style.width = `${Math.max(0, Math.min(100, Number(progress) || 0))}%`;
+  els.progressStep.textContent = step || (safeProgress >= 100 ? "完成" : "处理中");
+  els.progressPercent.textContent = `${safeProgress}%`;
+  els.progressBar.style.width = `${safeProgress}%`;
 }
 
 async function fetchJson(url, options = {}) {
