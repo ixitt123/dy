@@ -11,6 +11,10 @@ export function initXiaoheiVideoModule() {
   const aspectRatioSelect = document.getElementById("xiaoheiVideoAspectRatio");
   const shotCountSelect = document.getElementById("xiaoheiVideoShotCount");
   const introOutroSelect = document.getElementById("xiaoheiVideoIntroOutro");
+  const layoutVariantSelect = document.getElementById("xiaoheiVideoLayoutVariant");
+  const textPaletteSelect = document.getElementById("xiaoheiVideoTextPalette");
+  const backgroundPatternSelect = document.getElementById("xiaoheiVideoBackgroundPattern");
+  const motionVariantSelect = document.getElementById("xiaoheiVideoMotionVariant");
   const bgmModeSelect = document.getElementById("xiaoheiVideoBgmMode");
   const bgmPathInput = document.getElementById("xiaoheiVideoBgmPath");
   const chooseBgmButton = document.getElementById("xiaoheiVideoChooseBgm");
@@ -167,6 +171,10 @@ export function initXiaoheiVideoModule() {
         aspectRatio: aspectRatioSelect?.value || "9:16",
         shotCount: shotCountSelect?.value || "5",
         introOutroMode: introOutroSelect?.value || "soft",
+        layoutVariant: layoutVariantSelect?.value || "left_right",
+        textPalette: textPaletteSelect?.value || "ink_red_orange",
+        backgroundPattern: backgroundPatternSelect?.value || "paper_grid",
+        motionVariant: motionVariantSelect?.value || "ink_pop",
         bgmMode: bgmModeSelect?.value || "none",
         bgmPath: bgmPathInput?.value || "",
         ctaText: ctaTextInput?.value || "",
@@ -177,6 +185,7 @@ export function initXiaoheiVideoModule() {
       logPanel.textContent = [
         `Shots: ${result.shotCount || ""} · Duration: ${result.duration || ""}s`,
         result.aspectRatio ? `Aspect ratio: ${result.aspectRatio.label || result.aspectRatio.id}` : "",
+        result.visualOptions ? `Layout: ${result.visualOptions.layoutVariant} · Palette: ${result.visualOptions.textPalette} · Background: ${result.visualOptions.backgroundPattern} · Motion: ${result.visualOptions.motionVariant}` : "",
         result.bgm?.label ? `BGM: ${result.bgm.label}` : "BGM: none",
         `Director script: ${result.directorScriptPath || ""}`,
         `Storyboard: ${result.storyboardPath || ""}`,
