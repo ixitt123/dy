@@ -974,6 +974,14 @@ function normalizeIntroOutroMode(value) {
   return new Set(["soft", "paper", "none"]).has(mode) ? mode : "soft";
 }
 
+function normalizeXiaoheiVisualOptions(input = {}) {
+  const layoutVariant = XIAOHEI_LAYOUT_VARIANTS.has(String(input?.layoutVariant || "")) ? String(input.layoutVariant) : "left_right";
+  const textPalette = XIAOHEI_TEXT_PALETTES.has(String(input?.textPalette || "")) ? String(input.textPalette) : "ink_red_orange";
+  const backgroundPattern = XIAOHEI_BACKGROUND_PATTERNS.has(String(input?.backgroundPattern || "")) ? String(input.backgroundPattern) : "paper_grid";
+  const motionVariant = XIAOHEI_MOTION_VARIANTS.has(String(input?.motionVariant || "")) ? String(input.motionVariant) : "ink_pop";
+  return { layoutVariant, textPalette, backgroundPattern, motionVariant };
+}
+
 function splitScript(script, count) {
   const parts = String(script)
     .split(/(?<=[。！？!?；;])|\n+/)
