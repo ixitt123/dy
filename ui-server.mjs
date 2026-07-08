@@ -32,6 +32,7 @@ import { createVideoProductService } from "./server/video-product/video-product-
 import { createVideoOutputRoutes } from "./server/routes/video-output-routes.js";
 import { createCs1VideoRoutes } from "./server/routes/cs1-video-routes.js";
 import { createXiaoheiVideoRoutes } from "./server/routes/xiaohei-video-routes.js";
+import { createIanXiaoheiRoutes } from "./server/routes/ian-xiaohei-routes.js";
 import { HttpBodyError, readBody, readJsonBody } from "./server/utils/http-body.js";
 import { DEFAULT_REWRITE_REFERENCE, REWRITE_DIRECTIONS, REWRITE_STYLES, REWRITE_VERSION_DEFS, REWRITE_VERSION_DEFAULTS } from "./server/config/rewrite-presets.js";
 import { DEFAULT_MODEL_MAPPING, DEFAULT_VOLCENGINE_ARK_IMAGE_MODEL, SETTINGS_TASKS } from "./server/config/model-defaults.js";
@@ -145,6 +146,11 @@ const handleXiaoheiVideoRoutes = createXiaoheiVideoRoutes({
   sendJson,
   ffmpegPath,
   ffprobePath,
+});
+const handleIanXiaoheiRoutes = createIanXiaoheiRoutes({
+  baseDir: __dirname,
+  sendJson,
+  imageService,
 });
 
 // ModelRouter 统一模型路由
@@ -5737,6 +5743,7 @@ const server = http.createServer(async (req, res) => {
     if (await handleVideoOutputRoutes(req, res, url)) return;
     if (await handleCs1VideoRoutes(req, res, url)) return;
     if (await handleXiaoheiVideoRoutes(req, res, url)) return;
+    if (await handleIanXiaoheiRoutes(req, res, url)) return;
 
     // ===== Image Studio API =====
     if (url.pathname.startsWith("/api/image/")) {
