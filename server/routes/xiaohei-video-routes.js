@@ -575,7 +575,7 @@ function renderScene(shot, index, { isPortrait }) {
           <span class="hand-label ${index % 3 === 0 ? "red" : index % 3 === 1 ? "orange" : "blue"}">${escapeHtml(shortPurpose(shot.purpose))}</span>
         </div>
         <div class="stage">
-          ${renderVisual(index)}
+          ${renderVisualV2(index)}
           ${renderXiaohei()}
           <span class="caption-code">XIAOHEI 2.0 · ${escapeHtml(shot.xiaohei_action.action)}</span>
         </div>
