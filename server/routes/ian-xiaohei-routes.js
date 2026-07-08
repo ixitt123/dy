@@ -343,16 +343,18 @@ function updateResultFile(batchDir, { image = null, error = null } = {}) {
   fs.writeFileSync(resultPath, JSON.stringify(result, null, 2), "utf8");
 }
 
-function buildShot({ index, title, segment, purpose, preferredStructure }) {
+function buildShot({ index, total, title, segment, purpose, preferredStructure, roleDef }) {
+  const shotRole = roleDef || SHOT_ROLE_DEFS[(index - 1) % SHOT_ROLE_DEFS.length];
   const structureType = STRUCTURE_TYPES.includes(preferredStructure)
     ? preferredStructure
-    : inferStructureType(segment, index);
+    : inferStructureType(segment, index, shotRole);
   const topic = inferTopic(segment, title, index);
   const coreIdea = inferCoreIdea(segment);
-  const metaphor = buildMetaphor(segment, structureType);
-  const labels = inferLabels(segment, purpose);
+  const metaphor = buildMetaphor(segment, structureType, { index, total, title, shotRole });
+  const labels = inferLabels(segment, purpose, shotRole);
   const prompt = buildPrompt({
     topic,
+    seriesRole: `${index}/${total} ${shotRole.label}`,
     structureType,
     coreIdea,
     composition: metaphor.composition,
@@ -363,6 +365,7 @@ function buildShot({ index, title, segment, purpose, preferredStructure }) {
     index,
     topic,
     purpose: shotPurposeLabel(purpose, index),
+    role: shotRole.label,
     structureType,
     coreIdea,
     composition: metaphor.composition,
@@ -372,7 +375,7 @@ function buildShot({ index, title, segment, purpose, preferredStructure }) {
   };
 }
 
-function buildPrompt({ topic, structureType, coreIdea, composition, elements, labels }) {
+function buildPrompt({ topic, seriesRole, structureType, coreIdea, composition, elements, labels }) {
   return [
     "Generate one standalone 16:9 horizontal Chinese article illustration.",
     "",
@@ -383,6 +386,7 @@ function buildPrompt({ topic, structureType, coreIdea, composition, elements, la
     "小黑, a small solid-black absurd creature with white dot eyes, tiny thin legs, blank serious expression, slightly uneven hand-drawn body shape. 小黑 must perform the core conceptual action, not decorate the scene. Make 小黑 serious, deadpan, and slightly bizarre, not cute.",
     "",
     `Theme: ${topic}`,
+    `Series role: ${seriesRole}. This image belongs to a multi-image set, so it must use a clearly different metaphor, object set, and composition from the other images in the same set.`,
     `Structure type: ${structureType}`,
     `Core idea: ${coreIdea}`,
     `Composition: ${composition}`,
@@ -393,49 +397,29 @@ function buildPrompt({ topic, structureType, coreIdea, composition, elements, la
     "Black for main line art and 小黑. Orange for main flow/path/arrows. Red only for key warnings/problems/results. Blue only for secondary notes or feedback/system state.",
     "",
     "Constraints:",
-    "One image explains only one core structure. Keep the main subject around 40%-60% of the canvas. Preserve at least 35% blank white space. Use at most 5-8 short handwritten Chinese labels. Do not write a title in the top-left corner. Do not write the structure type on the image. Do not make it a formal diagram, course slide, or dense explainer. Do not copy prior examples or reuse known case compositions unless explicitly requested; invent a fresh visual metaphor for this specific article. It should be clear but not instructional, interesting but not childish, strange but clean.",
+    "One image explains only one core structure. Keep the main subject around 40%-60% of the canvas. Preserve at least 35% blank white space. Use at most 5-8 short handwritten Chinese labels. Do not write a title in the top-left corner. Do not write the structure type on the image. Do not make it a formal diagram, course slide, or dense explainer. Do not repeat the same machine, route, door, funnel, card, or character pose across the image set. Do not copy prior examples or reuse known case compositions unless explicitly requested; invent a fresh visual metaphor for this specific article. It should be clear but not instructional, interesting but not childish, strange but clean.",
   ].join("\n");
 }
 
-function buildMetaphor(segment, structureType) {
-  const lower = segment.toLowerCase();
-  if (segment.includes("英文") || lower.includes("english") || segment.includes("语言")) {
-    return {
-      composition: "白纸中间是一台低科技语言工具台，小黑把写着“学生身份”的纸牌塞进抽屉，再从旧工具台里抽出橙色的“使用者”路径；左侧是松散单词纸片，右侧是一扇正在打开的对话门。",
-      elements: ["旧工具台", "身份纸牌", "橙色路径", "对话门"],
-    };
-  }
-  if (segment.includes("管理") || segment.includes("领导")) {
-    return {
-      composition: "小黑站在一台歪斜的管理秤上，把散落任务、沟通线和判断按钮分成三格；橙色线从混乱纸团汇入一个稳定出口，红色批注只标出最容易翻车的位置。",
-      elements: ["管理秤", "任务纸团", "判断按钮", "稳定出口"],
-    };
-  }
-  if (segment.includes("行动") || segment.includes("开始") || segment.includes("今天")) {
-    return {
-      composition: "一条弯曲路线从白纸左侧的犹豫洞口出发，小黑拉着橙色线穿过几个小门，最后把线钉在“今天”节点上；画面保留大面积空白。",
-      elements: ["犹豫洞口", "橙色路线", "小门", "今天节点"],
-    };
-  }
-  if (structureType === "前后对比") {
-    return {
-      composition: "左侧是散乱纸片和断线，右侧是收束后的一个干净出口；小黑在中间把混乱纸片压进一个怪压面机，橙色箭头表示从散乱到可用。",
-      elements: ["散乱纸片", "怪压面机", "干净出口", "橙色箭头"],
-    };
-  }
-  if (structureType === "方法分层") {
-    return {
-      composition: "三层不规则纸盒从下到上搭起，小黑在底层搬砖，旁边只有少量红橙蓝批注，表达从基础动作到最终结果的搭建过程。",
-      elements: ["不规则纸盒", "小砖块", "顶层结果", "短批注"],
-    };
-  }
+function buildMetaphor(segment, structureType, { index, total, title, shotRole }) {
+  const domain = inferDomainLayer(`${title} ${segment}`);
+  const base = shotRole?.composition || fallbackCompositionFor(structureType);
+  const composition = `${base} 内容主题只取当前段落，不把全文都塞进同一张图；相关物件使用${domain.elements.join("、")}，并保持第 ${index}/${total} 张与其他张的主物件和小黑动作不同。`;
   return {
-    composition: "白纸中央是一台奇怪的手绘黑盒机器，小黑在机器内部拧一个判断旋钮；左侧输入几张纸片，右侧吐出一个清晰结果，橙色线表示主路径。",
-    elements: ["黑盒机器", "判断旋钮", "输入纸片", "清晰结果"],
+    composition,
+    elements: uniqueList([...(shotRole?.elements || []), ...domain.elements]).slice(0, 6),
   };
 }
 
-function inferStructureType(segment, index) {
+function fallbackCompositionFor(structureType) {
+  if (structureType === "前后对比") return "左侧是散乱状态，右侧是收束结果，小黑在中间完成一次具体切换动作。";
+  if (structureType === "方法分层") return "几层松散纸盒表达方法层级，小黑只在其中一层执行核心动作。";
+  if (structureType === "地图路线") return "一条手绘弯曲路径穿过少量节点，小黑沿路线推进。";
+  return "白纸中央是一台奇怪的低科技手绘装置，小黑正在操作其中一个关键部件。";
+}
+
+function inferStructureType(segment, index, roleDef = null) {
+  if (roleDef?.structure) return roleDef.structure;
   if (segment.includes("不是") || segment.includes("忘掉") || segment.includes("当做")) return "前后对比";
   if (segment.includes("开始") || segment.includes("今天") || segment.includes("行动")) return "地图路线";
   if (segment.includes("能力") || segment.includes("步骤") || segment.includes("方法")) return "方法分层";
@@ -460,8 +444,8 @@ function inferCoreIdea(segment) {
   return trimText(segment.replace(/\s+/g, " "), 90);
 }
 
-function inferLabels(segment, purpose) {
-  const candidates = [];
+function inferLabels(segment, purpose, roleDef = null) {
+  const candidates = roleDef?.label ? [roleDef.label] : [];
   if (segment.includes("英文")) candidates.push("别当学生", "当使用者", "开口", "今天开始");
   if (segment.includes("行动")) candidates.push("行动篇", "现在", "别等", "第一步");
   if (segment.includes("管理")) candidates.push("判断", "沟通", "节奏", "别乱");
