@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>小黑配图软件</title>
+  <link rel="stylesheet" href="./xiaohei-illustrations.css" />
+</head>
+<body>
+  <main class="app-shell">
+    <section class="workspace">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">Ian Xiaohei Illustration</p>
+          <h1>小黑配图软件</h1>
+        </div>
+        <div class="topbar-actions">
+          <button id="openOutputDir" type="button">打开输出目录</button>
+          <button id="refreshOutputs" type="button">刷新记录</button>
+        </div>
+      </header>
+
+      <section class="composer">
+        <label class="field field-title">
+          <span>配图标题</span>
+          <input id="titleInput" type="text" placeholder="可选；不填则自动提取文案第一句" />
+        </label>
+        <label class="field field-text">
+          <span>输入文案</span>
+          <textarea id="copyInput" placeholder="把文章段落、短文案或方法论说明粘贴到这里。"></textarea>
+        </label>
+        <div class="control-grid">
+          <label class="field">
+            <span>输出张数</span>
+            <select id="countSelect">
+              <option value="1">1 张：单核心观点</option>
+              <option value="2">2 张：前后对比 / 两段结构</option>
+              <option value="3">3 张：短文多段配图</option>
+              <option value="4">4 张：长文重点配图</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>用途</span>
+            <select id="purposeSelect"></select>
+          </label>
+          <label class="field">
+            <span>结构偏好</span>
+            <select id="structureSelect">
+              <option value="">自动判断</option>
+            </select>
+          </label>
+        </div>
+        <div class="actions">
+          <button id="generateImages" type="button" class="primary">生成小黑配图</button>
+          <button id="planPrompts" type="button">只生成提示词</button>
+          <button id="copyPrompts" type="button">复制全部提示词</button>
+        </div>
+      </section>
+
+      <section class="status-panel" aria-live="polite">
+        <div>
+          <span id="statusLabel">待输入</span>
+          <p id="statusDetail">默认生成 16:9 横版白底手绘小黑正文配图。</p>
+        </div>
+        <div class="progress-shell"><div id="progressBar"></div></div>
+      </section>
+
+      <section class="results-grid">
+        <div class="panel">
+          <div class="panel-head">
+            <h2>提示词计划</h2>
+            <span id="planCount">0</span>
+          </div>
+          <div id="promptResults" class="prompt-list empty">还没有生成提示词。</div>
+        </div>
+        <div class="panel">
+          <div class="panel-head">
+            <h2>生成结果</h2>
+            <span id="imageCount">0</span>
+          </div>
+          <div id="imageResults" class="image-list empty">生成后的图片会显示在这里。</div>
+        </div>
+      </section>
+
+      <section class="panel output-panel">
+        <div class="panel-head">
+          <h2>历史输出</h2>
+          <span id="outputDirLabel"></span>
+        </div>
+        <div id="outputHistory" class="history-list empty">暂无历史输出。</div>
+      </section>
+    </section>
+  </main>
+  <script type="module" src="./modules/ian-xiaohei-app.js"></script>
+</body>
+</html>
