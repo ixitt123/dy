@@ -25,6 +25,72 @@ const PURPOSES = [
 
 const MAX_TEXT_LENGTH = 5000;
 
+const SHOT_ROLE_DEFS = [
+  {
+    id: "hook",
+    label: "钩子判断",
+    structure: "概念隐喻",
+    composition: "白纸中央是一台很旧的手摇广播机，小黑把核心判断纸条从广播机嘴里拉出来，红色小标注只提示最刺痛的那句话；画面像一张白纸草图，不像封面海报。",
+    elements: ["手摇广播机", "核心纸条", "红色提醒", "大留白"],
+  },
+  {
+    id: "problem",
+    label: "问题暴露",
+    structure: "角色状态",
+    composition: "小黑站在一堆散落标签中间，用细线把真正的问题从杂乱词条里拎出来；左侧保留混乱纸片，右侧只留下一个干净问题框。",
+    elements: ["散落标签", "问题线", "干净问题框", "黑色墨点"],
+  },
+  {
+    id: "switch",
+    label: "身份切换",
+    structure: "前后对比",
+    composition: "画面左侧是旧身份衣架，右侧是新角色工具门，小黑把旧纸牌挂回衣架，再推开右侧小门；橙色箭头表达角色切换。",
+    elements: ["旧身份衣架", "新角色门", "身份纸牌", "橙色箭头"],
+  },
+  {
+    id: "method",
+    label: "方法动作",
+    structure: "Workflow",
+    composition: "小黑坐在低科技工具台前，把输入纸片塞进一个怪打孔器，右侧吐出可执行动作；每个部件都手绘得很松，不做正式流程图。",
+    elements: ["低科技工具台", "怪打孔器", "输入纸片", "动作出口"],
+  },
+  {
+    id: "path",
+    label: "路径推进",
+    structure: "地图路线",
+    composition: "一条弯曲橙色路线穿过 3 个小节点，小黑背着线轴往前走，路径尽头是一个很小但清楚的结果门；节点少，不画复杂地图。",
+    elements: ["橙色路线", "线轴", "小节点", "结果门"],
+  },
+  {
+    id: "warning",
+    label: "误区提醒",
+    structure: "系统局部",
+    composition: "小黑蹲在一个歪斜警示井边，把错误纸团从井口捞出来，红色批注只标最容易误解的一点，蓝色批注标修正方向。",
+    elements: ["警示井", "错误纸团", "红色批注", "蓝色修正"],
+  },
+  {
+    id: "layer",
+    label: "方法分层",
+    structure: "方法分层",
+    composition: "三层不规则纸盒从下到上搭起，小黑在底层搬一块黑色小砖，上层只放一个结果便签；层级松散、有手绘感，不像金字塔图。",
+    elements: ["不规则纸盒", "黑色小砖", "结果便签", "短标注"],
+  },
+  {
+    id: "loop",
+    label: "闭环反馈",
+    structure: "系统局部",
+    composition: "小黑在一台小回流机器旁边接住从出口绕回来的橙色线，左侧是输入，右侧是反馈便签，表达动作之后会形成闭环。",
+    elements: ["回流机器", "橙色回路线", "反馈便签", "输入纸片"],
+  },
+  {
+    id: "cta",
+    label: "结尾行动",
+    structure: "小漫画分镜",
+    composition: "画面分成 3 个很松的小格：犹豫、动手、落点。小黑从第一格走到第三格，把最后一个黑点按在纸面上；不写大标题。",
+    elements: ["三格小漫画", "落点黑点", "行动纸面", "少量脚印"],
+  },
+];
+
 export function createIanXiaoheiRoutes({ baseDir, sendJson, imageService }) {
   const outputRoot = path.join(baseDir, "image-assets", "ian-xiaohei");
   fs.mkdirSync(outputRoot, { recursive: true });
@@ -205,13 +271,16 @@ function buildXiaoheiPlan(input = {}) {
   const batchId = `${dateSlug()}-ian-xiaohei-${randomUUID().slice(0, 8)}`;
   const title = inferTitle(text, input.title);
   const segments = splitIntoSegments(text, count);
+  const roles = rolesForCount(count);
   const shots = segments.map((segment, index) => buildShot({
     index: index + 1,
+    total: count,
     title,
     text,
     segment,
     purpose,
     preferredStructure: input.structureType,
+    roleDef: roles[index],
   }));
   return {
     batchId,
