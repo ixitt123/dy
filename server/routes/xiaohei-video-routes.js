@@ -564,6 +564,41 @@ function renderIndexHtml({ title, storyboard, aspect, bgm, introOutroMode, visua
 </html>`;
 }
 
+function xiaoheiLayoutCss({ isPortrait }) {
+  return `
+      #root.xh-layout-wide_text .scene{grid-template-columns:${isPortrait ? "1fr" : "minmax(0,1.16fr) minmax(0,.84fr)"}}
+      #root.xh-layout-wide_text .subline{max-width:${isPortrait ? 900 : 900}px}
+      #root.xh-layout-wide_text .stage{transform:scale(.92);transform-origin:center}
+      #root.xh-layout-sketch_focus .scene{grid-template-columns:${isPortrait ? "1fr" : "minmax(0,.76fr) minmax(0,1.24fr)"}}
+      #root.xh-layout-sketch_focus .headline{font-size:${isPortrait ? 66 : 68}px}
+      #root.xh-layout-sketch_focus .subline{font-size:${isPortrait ? 30 : 29}px}
+      #root.xh-layout-sketch_focus .stage{transform:scale(1.04);transform-origin:center}
+      #root.xh-layout-center_story .scene{grid-template-columns:1fr;grid-template-rows:${isPortrait ? "minmax(0,.72fr) minmax(0,1.28fr)" : "minmax(0,.48fr) minmax(0,.52fr)"};gap:${isPortrait ? 18 : 24}px}
+      #root.xh-layout-center_story .copy{text-align:center;align-items:center}
+      #root.xh-layout-center_story .headline{max-width:${isPortrait ? 900 : 1180}px}
+      #root.xh-layout-center_story .subline{max-width:${isPortrait ? 850 : 1040}px}
+      #root.xh-layout-center_story .stage{min-height:${isPortrait ? 860 : 420}px}
+      #root.xh-palette-blue_orange .red{color:#1f559e}
+      #root.xh-palette-blue_orange .orange,#root.xh-palette-blue_orange .route b{color:#b76512;border-color:#b76512}
+      #root.xh-palette-blue_orange .route{border-top-color:#b76512}
+      #root.xh-palette-red_black .blue{color:#111}
+      #root.xh-palette-red_black .orange,#root.xh-palette-red_black .route b{color:#d9362b;border-color:#d9362b}
+      #root.xh-palette-red_black .route{border-top-color:#d9362b}
+      #root.xh-palette-ink_green .red{color:#2f6f56}
+      #root.xh-palette-ink_green .orange,#root.xh-palette-ink_green .route b{color:#4f7f42;border-color:#4f7f42}
+      #root.xh-palette-ink_green .blue{color:#255f72}
+      #root.xh-palette-ink_green .route{border-top-color:#4f7f42}
+      #root.xh-bg-clean_white .paper-grid{display:none}
+      #root.xh-bg-clean_white .paper-edge{opacity:.62}
+      #root.xh-bg-warm_paper{background:#fbf5e8}
+      #root.xh-bg-warm_paper .scene,#root.xh-bg-warm_paper .sketch,#root.xh-bg-warm_paper .hand-label,#root.xh-bg-warm_paper .kicker,#root.xh-bg-warm_paper .label-pill,#root.xh-bg-warm_paper .note,#root.xh-bg-warm_paper .route b{background:#fbf5e8}
+      #root.xh-bg-warm_paper .paper-grid{background-image:linear-gradient(rgba(122,98,72,.06) 1px,transparent 1px),linear-gradient(90deg,rgba(122,98,72,.05) 1px,transparent 1px)}
+      #root.xh-bg-blueprint{background:#f5fbff}
+      #root.xh-bg-blueprint .scene,#root.xh-bg-blueprint .sketch,#root.xh-bg-blueprint .hand-label,#root.xh-bg-blueprint .kicker,#root.xh-bg-blueprint .label-pill,#root.xh-bg-blueprint .note,#root.xh-bg-blueprint .route b{background:#f5fbff}
+      #root.xh-bg-blueprint .paper-grid{background-image:linear-gradient(rgba(31,85,158,.08) 1px,transparent 1px),linear-gradient(90deg,rgba(31,85,158,.07) 1px,transparent 1px)}
+    `;
+}
+
 function renderScene(shot, index, { isPortrait }) {
   const variant = ["stamp", "line", "calendar", "gate", "door", "now"][Math.min(index, 5)];
   const titleTag = index === 0 ? "h1" : "h2";
@@ -600,6 +635,26 @@ function renderVisual(index) {
     return `<div class="sketch door"></div><div class="route"><b>目标</b><b>节奏</b><b>风险</b></div>${dust}`;
   }
   return `<div class="sketch now-node">现在</div><div class="route"><b>行动</b><b>复盘</b><b>调整</b></div>${dust}`;
+}
+
+function renderVisualV2(index) {
+  const dust = `<div class="dust ${index % 3 === 0 ? "red" : index % 3 === 1 ? "orange" : "blue"}" data-layout-ignore>${Array.from({ length: 12 }).map((_, i) => `<i style="left:${8 + ((i * 17) % 82)}%;top:${14 + ((i * 23) % 72)}%"></i>`).join("")}</div>`;
+  if (index === 0) {
+    return `<div class="sketch gate"></div><div class="sketch ticket"></div><div class="sketch stamp">\u660e\u5929</div>${dust}`;
+  }
+  if (index === 1) {
+    return `<span class="label-pill pill-a">\u65b0\u9636\u6bb5</span><span class="label-pill pill-b">\u76ee\u6807\u95e8</span><div class="distance-line"></div>${dust}`;
+  }
+  if (index === 2) {
+    return `<div class="sketch calendar"></div><div class="sand">${Array.from({ length: 5 }).map(() => "<i></i>").join("")}</div>${dust}`;
+  }
+  if (index === 3) {
+    return `<div class="split-gate"><i class="split-path path-main"></i><i class="split-path path-one"></i><i class="split-path path-two"></i><i class="pivot"></i><span class="note one blue">\u5206\u6d41</span><span class="note two blue">\u6bd4\u4f8b</span></div>${dust}`;
+  }
+  if (index === 4) {
+    return `<div class="sketch door"></div><div class="route"><b>\u76ee\u6807</b><b>\u8282\u594f</b><b>\u98ce\u9669</b></div>${dust}`;
+  }
+  return `<div class="sketch now-node">\u73b0\u5728</div><div class="route now-route"><b>\u884c\u52a8</b><b>\u590d\u76d8</b><b>\u8c03\u6574</b></div>${dust}`;
 }
 
 function renderXiaohei() {
@@ -640,7 +695,7 @@ function buildIntroOutroTimeline(mode, duration) {
   ].join("\n      ");
 }
 
-function buildSceneTimeline(shot, index, total) {
+function buildSceneTimeline(shot, index, total, visualOptions = normalizeXiaoheiVisualOptions()) {
   const scene = `#scene-${index + 1}`;
   const start = Number(shot.start.toFixed(2));
   const exit = Number((shot.start + shot.duration - 0.6).toFixed(2));
@@ -656,12 +711,27 @@ function buildSceneTimeline(shot, index, total) {
   lines.push(`tl.from("${scene} .xiaohei",{y:44,scale:.86,opacity:0,duration:.56,ease:"back.out(1.5)"},${(start + 0.72).toFixed(2)});`);
   lines.push(`tl.to("${scene} .xiaohei",{y:-10,rotation:${index % 2 === 0 ? 2 : -2},duration:1.05,repeat:${Math.max(1, Math.ceil(shot.duration / 2.1) - 1)},yoyo:true,ease:"sine.inOut"},${(start + 1.32).toFixed(2)});`);
   lines.push(`tl.from("${scene} .sketch,${scene} .split-path,${scene} .distance-line,${scene} .route",{scale:.96,opacity:0,duration:.64,stagger:.04,ease:"power2.out"},${(start + 0.9).toFixed(2)});`);
+  lines.push(buildXiaoheiMotionTimeline(visualOptions.motionVariant, scene, start, index));
   lines.push(`tl.from("${scene} .dust i",{scale:0,opacity:0,duration:.35,stagger:.025,ease:"power2.out"},${(start + 1.45).toFixed(2)});`);
   lines.push(`tl.to("${scene} .dust i",{y:18,opacity:0,duration:.72,stagger:.018,ease:"sine.in"},${(start + 2.05).toFixed(2)});`);
   if (index < total - 1) {
     lines.push(`tl.to("${scene}",{opacity:0,x:${index % 2 === 0 ? -70 : 70},scale:.985,duration:.48,ease:"power2.inOut"},${exit.toFixed(2)});`);
   }
   return lines.join("\n    ");
+}
+
+function buildXiaoheiMotionTimeline(variant, scene, start, index) {
+  const t = (Number(start || 0) + 1.7).toFixed(2);
+  if (variant === "paper_slide") {
+    return `tl.fromTo("${scene} .stage",{x:${index % 2 === 0 ? 34 : -34}},{x:0,duration:.72,ease:"power3.out"},${t});`;
+  }
+  if (variant === "marker_sweep") {
+    return `tl.to("${scene} .hand-label",{scale:1.06,rotation:${index % 2 === 0 ? 1.4 : -1.4},duration:.28,repeat:2,yoyo:true,ease:"sine.inOut"},${t});`;
+  }
+  if (variant === "route_pulse") {
+    return `tl.to("${scene} .route,${scene} .distance-line,${scene} .split-path",{scale:1.025,duration:.32,repeat:3,yoyo:true,ease:"sine.inOut"},${t});`;
+  }
+  return `tl.to("${scene} .sketch,${scene} .note,${scene} .label-pill",{scale:1.025,duration:.26,repeat:2,yoyo:true,ease:"sine.inOut"},${t});`;
 }
 
 function writeProject(projectDir, { slug, title, storyboard, files }) {
