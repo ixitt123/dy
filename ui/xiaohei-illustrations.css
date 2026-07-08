@@ -179,6 +179,27 @@ textarea:focus {
   color: var(--muted);
 }
 
+.progress-box {
+  display: grid;
+  gap: 8px;
+}
+
+.progress-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+#progressPercent {
+  color: var(--ink);
+  font-size: 18px;
+  min-width: 48px;
+  text-align: right;
+}
+
 .progress-shell {
   height: 10px;
   overflow: hidden;
