@@ -152,6 +152,13 @@ const handleIanXiaoheiRoutes = createIanXiaoheiRoutes({
   sendJson,
   imageService,
   modelRouter,
+  ttsService,
+  voiceAssetService,
+  videoProductService,
+  taskStore,
+  getSettings: readSettings,
+  ffprobePath,
+  transcribeLocalMedia: transcribeLocalMediaWithDashScope,
 });
 
 // ModelRouter 统一模型路由

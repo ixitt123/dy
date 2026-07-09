@@ -24,6 +24,15 @@ const PURPOSES = [
 ];
 
 const MAX_TEXT_LENGTH = 5000;
+const MAX_AUDIO_BYTES = 30 * 1024 * 1024;
+const AUDIO_MIME_EXTENSIONS = {
+  "audio/mpeg": ".mp3",
+  "audio/mp3": ".mp3",
+  "audio/wav": ".wav",
+  "audio/x-wav": ".wav",
+  "audio/mp4": ".m4a",
+  "audio/x-m4a": ".m4a",
+};
 
 const SHOT_ROLE_DEFS = [
   {
@@ -91,21 +100,66 @@ const SHOT_ROLE_DEFS = [
   },
 ];
 
-export function createIanXiaoheiRoutes({ baseDir, sendJson, imageService, modelRouter = null }) {
+export function createIanXiaoheiRoutes({
+  baseDir,
+  sendJson,
+  imageService,
+  modelRouter = null,
+  ttsService = null,
+  voiceAssetService = null,
+  videoProductService = null,
+  taskStore = null,
+  getSettings = () => ({}),
+  ffprobePath = "",
+  transcribeLocalMedia = null,
+}) {
   const outputRoot = path.join(baseDir, "image-assets", "ian-xiaohei");
+  const uploadRoot = path.join(outputRoot, "_uploaded-audio");
   fs.mkdirSync(outputRoot, { recursive: true });
+  fs.mkdirSync(uploadRoot, { recursive: true });
 
   return async function handleIanXiaoheiRoutes(req, res, url) {
     if (!url.pathname.startsWith("/api/ian-xiaohei/")) return false;
     const route = url.pathname.replace("/api/ian-xiaohei/", "");
 
     if (req.method === "GET" && route === "config") {
+      const settings = getSettings() || {};
+      const defaultProvider = String(settings.tts?.default_provider || "aliyun_bailian");
+      const voiceAssets = voiceAssetService?.listAssets?.()
+        ?.filter((asset) => !asset.archived && asset.status === "active") || [];
       sendJson(res, 200, {
         ok: true,
         outputDir: outputRoot,
         purposes: PURPOSES,
         structureTypes: STRUCTURE_TYPES,
+        tts: {
+          defaultProvider,
+          defaultSpeed: Number(settings.tts?.default_speed || 1),
+          defaultVoice: voiceAssetService?.getDefault?.() || null,
+          voices: ttsService?.listVoices?.(defaultProvider) || [],
+          voiceAssets,
+        },
       });
+      return true;
+    }
+
+    if (req.method === "GET" && route === "tts-job") {
+      const job = ttsService?.getJob?.(Number(url.searchParams.get("id") || 0));
+      if (!job) {
+        sendJson(res, 404, { ok: false, message: "没有找到这条 TTS 任务。" });
+      } else {
+        sendJson(res, 200, { ok: true, job });
+      }
+      return true;
+    }
+
+    if (req.method === "GET" && route === "video-job") {
+      const project = videoProductService?.getProject?.(Number(url.searchParams.get("id") || 0));
+      if (!project) {
+        sendJson(res, 404, { ok: false, message: "没有找到这条剪映草稿任务。" });
+      } else {
+        sendJson(res, 200, { ok: true, project });
+      }
       return true;
     }
 
@@ -121,6 +175,173 @@ export function createIanXiaoheiRoutes({ baseDir, sendJson, imageService, modelR
     if (req.method === "POST" && route === "open-output") {
       openFolder(outputRoot);
       sendJson(res, 200, { ok: true, outputDir: outputRoot });
+      return true;
+    }
+
+    if (req.method === "POST" && route === "tts") {
+      try {
+        if (!ttsService?.enqueue) throw new Error("TTS 服务不可用。");
+        const body = await readJsonBody(req, { maxBytes: 256 * 1024 });
+        const text = normalizeText(body.text);
+        if (!text) throw new Error("请先输入文案。");
+        const asset = Number(body.voice_asset_id || 0) > 0
+          ? voiceAssetService?.getAsset?.(Number(body.voice_asset_id))
+          : null;
+        const result = ttsService.enqueue({
+          text,
+          provider: String(asset?.provider || body.provider || ""),
+          voice_id: String(asset?.voice_id || body.voice_id || ""),
+          voice_name: String(asset?.voice_name || body.voice_name || ""),
+          voice_asset_id: Number(asset?.id || 0),
+          model: String(asset?.metadata?.target_model || body.model || ""),
+          speed: Number(body.speed || 1),
+          emotion: String(body.emotion || "自然"),
+          format: "mp3",
+          workflow_auto_director: false,
+        });
+        if (result.error) throw new Error(result.error);
+        sendJson(res, 202, { ok: true, job: result.job });
+      } catch (error) {
+        sendJson(res, error instanceof HttpBodyError ? error.statusCode : 400, {
+          ok: false,
+          message: error instanceof Error ? error.message : String(error),
+        });
+      }
+      return true;
+    }
+
+    if (req.method === "POST" && route === "upload-audio") {
+      try {
+        if (!taskStore || typeof transcribeLocalMedia !== "function") throw new Error("本地音频校验服务不可用。");
+        const body = await readJsonBody(req, { maxBytes: 42 * 1024 * 1024 });
+        const text = normalizeText(body.text);
+        if (!text) throw new Error("请先输入与音频对应的文案。");
+        const uploaded = decodeUploadedAudio(body.audio_data, body.audio_mime);
+        const fileName = `${dateSlug()}-${randomUUID().slice(0, 8)}${uploaded.extension}`;
+        const audioPath = path.join(uploadRoot, fileName);
+        fs.writeFileSync(audioPath, uploaded.buffer);
+        try {
+          const apiKey = resolveAsrApiKey(getSettings());
+          if (!apiKey) throw new Error("未配置可用的语音识别 API Key，无法检查本地音频与文案是否一致。");
+          const transcript = await transcribeLocalMedia(apiKey, audioPath);
+          const similarity = textSimilarity(text, transcript);
+          if (similarity < 0.82) {
+            throw new Error(`音频与输入文案不一致（匹配度 ${Math.round(similarity * 100)}%），请更换音频或文案。`);
+          }
+          const duration = await probeAudioDuration(ffprobePath, audioPath);
+          const job = taskStore.createTtsJob({
+            provider: "local_upload",
+            voice_id: "local-upload",
+            voice_name: "本地上传",
+            text,
+            emotion: "自然",
+            speed: 1,
+            volume: 50,
+            pitch: 1,
+            format: uploaded.extension === ".wav" ? "wav" : "mp3",
+            audio_path: audioPath,
+            status: "completed",
+            completed_at: new Date().toISOString(),
+            metadata_json: JSON.stringify({
+              source: "ian_xiaohei_local_upload",
+              transcript,
+              text_similarity: similarity,
+              audio_duration: duration,
+            }),
+          });
+          sendJson(res, 201, {
+            ok: true,
+            job: {
+              ...job,
+              audio_url: `/api/tts/audio?id=${job.id}`,
+              metadata: { transcript, text_similarity: similarity, audio_duration: duration },
+            },
+          });
+        } catch (error) {
+          fs.rmSync(audioPath, { force: true });
+          throw error;
+        }
+      } catch (error) {
+        sendJson(res, error instanceof HttpBodyError ? error.statusCode : 400, {
+          ok: false,
+          message: error instanceof Error ? error.message : String(error),
+        });
+      }
+      return true;
+    }
+
+    if (req.method === "POST" && route === "timeline-plan") {
+      try {
+        const body = await readJsonBody(req, { maxBytes: 512 * 1024 });
+        const job = ttsService?.getJob?.(Number(body.tts_job_id || 0))
+          || taskStore?.getTtsJob?.(Number(body.tts_job_id || 0));
+        if (!job || job.status !== "completed" || !job.audio_path || !fs.existsSync(job.audio_path)) {
+          throw new Error("TTS 音频尚未生成完成。");
+        }
+        const text = normalizeText(body.text || job.text);
+        if (normalizeComparableText(text) !== normalizeComparableText(job.text)) {
+          throw new Error("当前文案与 TTS 文案不一致，请重新生成语音。");
+        }
+        const audioDuration = await probeAudioDuration(ffprobePath, job.audio_path);
+        if (!(audioDuration > 0)) throw new Error("无法读取 TTS 音频时长。");
+        const plan = await buildTimedXiaoheiPlan({
+          text,
+          title: body.title,
+          purpose: body.purpose,
+          preferredStructure: body.structureType,
+          audioDuration,
+          ttsJobId: job.id,
+          modelRouter,
+        });
+        const director = createDirectorProjectForPlan(taskStore, plan, job);
+        plan.directorProjectId = director.id;
+        const batchDir = path.join(outputRoot, plan.batchId);
+        fs.mkdirSync(batchDir, { recursive: true });
+        savePlanFiles(batchDir, plan);
+        fs.copyFileSync(job.audio_path, path.join(batchDir, `voice${path.extname(job.audio_path) || ".mp3"}`));
+        sendJson(res, 200, { ok: true, ...plan });
+      } catch (error) {
+        sendJson(res, error instanceof HttpBodyError ? error.statusCode : 400, {
+          ok: false,
+          message: error instanceof Error ? error.message : String(error),
+        });
+      }
+      return true;
+    }
+
+    if (req.method === "POST" && route === "export-draft") {
+      try {
+        if (!videoProductService?.enqueue) throw new Error("视频成片服务不可用。");
+        const body = await readJsonBody(req, { maxBytes: 2 * 1024 * 1024 });
+        const plan = body.plan && typeof body.plan === "object" ? body.plan : null;
+        const images = Array.isArray(body.images) ? body.images : [];
+        if (!plan?.directorProjectId || !plan?.ttsJobId) throw new Error("缺少导演稿或 TTS 绑定信息。");
+        const missing = (plan.shots || []).filter((shot) => !images.some((image) => Number(image.index) === Number(shot.index) && image.assetId));
+        if (missing.length) throw new Error(`缺少配图：${missing.map((shot) => `#${shot.index}`).join("、")}。`);
+        const manualBindings = Object.fromEntries(images.map((image) => [String(image.index), String(image.assetId)]));
+        const result = videoProductService.enqueue({
+          source_director_project_id: Number(plan.directorProjectId),
+          director_project_id: Number(plan.directorProjectId),
+          audio_asset_id: Number(plan.ttsJobId),
+          tts_job_id: Number(plan.ttsJobId),
+          title: String(plan.title || "小黑配图视频"),
+          output_type: "jianying_template",
+          platform: "douyin",
+          image_source: "director",
+          image_asset_ids: images.map((image) => image.assetId),
+          manual_bindings: manualBindings,
+          jianying_template: String(body.jianying_template || "education_tips"),
+          bgm_strategy: String(body.bgm_strategy || "none"),
+          force_execution: false,
+        });
+        if (!result?.project) throw new Error(result?.error || "剪映草稿任务创建失败。");
+        sendJson(res, 202, { ok: true, project: result.project });
+      } catch (error) {
+        sendJson(res, error instanceof HttpBodyError ? error.statusCode : 400, {
+          ok: false,
+          message: error instanceof Error ? error.message : String(error),
+        });
+      }
       return true;
     }
 
@@ -156,7 +377,9 @@ export function createIanXiaoheiRoutes({ baseDir, sendJson, imageService, modelR
           aspectRatio: "16:9",
           count: 1,
           sourceType: "ian-xiaohei",
-          sourceId: `${batchId}:${shot.index}`,
+          sourceId: plan?.directorProjectId
+            ? `${plan.directorProjectId}:${shot.index}`
+            : `${batchId}:${shot.index}`,
           provider: String(body.provider || ""),
           folderName: batchId,
           folderPath: batchDir,
