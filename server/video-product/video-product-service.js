@@ -2108,6 +2108,9 @@ export function createVideoProductService({
     }
     if (!director || director.status !== "completed") blockers.push("缺少已完成的 AI 导演项目。");
     if (!directorScenes.length) blockers.push("导演项目没有可用镜头列表。");
+    const directorMetadata = safeJson(director?.metadata_json, {});
+    const preserveDirectorTimeline = directorMetadata.source_type === "ian_xiaohei_tts_timeline"
+      || input.preserve_director_timeline === true;
     const audioBinding = director && audio
       ? audioDirectorBinding(director, audio, directorScenes)
       : { accepted: false, score: 0, reason: "缺少导演稿或音频，无法绑定。" };
@@ -2132,7 +2135,7 @@ export function createVideoProductService({
     if (needsDownloadedVideo && !downloadedVideos.length) blockers.push("缺少可用于混剪的已下载视频素材。");
 
     const audioDuration = await probeMediaDuration(ffmpegPath, audio?.audio_path || "");
-    const routeASubtitleScenes = isRouteAVoiceClock
+    const routeASubtitleScenes = isRouteAVoiceClock && !preserveDirectorTimeline
       ? buildRouteASubtitleScenes({
         audioText: ttsJobText(audio),
         directorScenes,
@@ -2183,7 +2186,11 @@ export function createVideoProductService({
           purpose: scene.purpose || "",
           emotion: scene.emotion || "",
           asset_type: scene.asset_type || "",
-          alignment_source: routeASubtitleScenes.length ? "tts_text_sentence_chunks" : "director_scene_duration_scaled",
+          alignment_source: preserveDirectorTimeline
+            ? "ian_xiaohei_tts_timeline"
+            : routeASubtitleScenes.length
+              ? "tts_text_sentence_chunks"
+              : "director_scene_duration_scaled",
           image_prompt: scene.image_prompt || "",
           output_type: outputType,
           image_source: image ? {
