@@ -318,6 +318,9 @@ export function createIanXiaoheiRoutes({
         if (!plan?.directorProjectId || !plan?.ttsJobId) throw new Error("缺少导演稿或 TTS 绑定信息。");
         const missing = (plan.shots || []).filter((shot) => !images.some((image) => Number(image.index) === Number(shot.index) && image.assetId));
         if (missing.length) throw new Error(`缺少配图：${missing.map((shot) => `#${shot.index}`).join("、")}。`);
+        const audioJob = ttsService?.getJob?.(Number(plan.ttsJobId))
+          || taskStore?.getTtsJob?.(Number(plan.ttsJobId));
+        const packageDir = writeXiaoheiMaterialPackage(outputRoot, plan, images, audioJob);
         const manualBindings = Object.fromEntries(images.map((image) => [String(image.index), String(image.assetId)]));
         const result = videoProductService.enqueue({
           source_director_project_id: Number(plan.directorProjectId),
@@ -335,7 +338,7 @@ export function createIanXiaoheiRoutes({
           force_execution: false,
         });
         if (!result?.project) throw new Error(result?.error || "剪映草稿任务创建失败。");
-        sendJson(res, 202, { ok: true, project: result.project });
+        sendJson(res, 202, { ok: true, project: result.project, packageDir });
       } catch (error) {
         sendJson(res, error instanceof HttpBodyError ? error.statusCode : 400, {
           ok: false,
@@ -836,6 +839,84 @@ function probeAudioDuration(ffprobePath, filePath) {
       resolve(code === 0 && Number.isFinite(duration) ? duration : 0);
     });
   });
+}
+
+function writeXiaoheiMaterialPackage(outputRoot, plan, images, audioJob) {
+  const batchId = safeBatchId(plan.batchId);
+  if (!batchId) throw new Error("缺少小黑素材批次 ID。");
+  const batchDir = path.join(outputRoot, batchId);
+  fs.mkdirSync(batchDir, { recursive: true });
+  const imageByIndex = new Map(images.map((image) => [Number(image.index), image]));
+  const scenes = (plan.shots || []).map((shot) => {
+    const image = imageByIndex.get(Number(shot.index)) || {};
+    return {
+      segment_id: shot.segmentId || `seg-${String(shot.index).padStart(3, "0")}`,
+      scene_index: Number(shot.index),
+      start_time: Number(shot.startTime || 0),
+      end_time: Number(shot.endTime || 0),
+      duration: Number(shot.duration || 0),
+      text: shot.sourceText || "",
+      subtitle: shot.sourceText || "",
+      image_asset_id: image.assetId || "",
+      image_path: image.imagePath || "",
+      visual_subject: shot.visualSubject || "",
+      xiaohei_action: shot.xiaoheiAction || "",
+      visual_metaphor: shot.visualMetaphor || "",
+    };
+  });
+  fs.writeFileSync(path.join(batchDir, "timeline.json"), JSON.stringify({
+    title: plan.title,
+    duration: Number(plan.audioDuration || 0),
+    timing_source: plan.timingSource,
+    audio_path: audioJob?.audio_path || "",
+    scenes,
+  }, null, 2), "utf8");
+  fs.writeFileSync(path.join(batchDir, "segment-image-map.json"), JSON.stringify(scenes.map((scene) => ({
+    segment_id: scene.segment_id,
+    scene_index: scene.scene_index,
+    text: scene.text,
+    start_time: scene.start_time,
+    end_time: scene.end_time,
+    image_asset_id: scene.image_asset_id,
+    image_path: scene.image_path,
+  })), null, 2), "utf8");
+  fs.writeFileSync(path.join(batchDir, "subtitles.srt"), scenes.map((scene, index) => [
+    index + 1,
+    `${srtTime(scene.start_time)} --> ${srtTime(scene.end_time)}`,
+    scene.subtitle,
+    "",
+  ].join("\n")).join("\n"), "utf8");
+  fs.writeFileSync(path.join(batchDir, "project_manifest.json"), JSON.stringify({
+    version: 1,
+    type: "ian_xiaohei_video_material_package",
+    batch_id: batchId,
+    title: plan.title,
+    source_text: plan.sourceText,
+    tts_job_id: Number(plan.ttsJobId || 0),
+    director_project_id: Number(plan.directorProjectId || 0),
+    audio_duration: Number(plan.audioDuration || 0),
+    scene_count: scenes.length,
+    files: {
+      audio: audioJob?.audio_path || "",
+      timeline: "timeline.json",
+      mapping: "segment-image-map.json",
+      subtitles: "subtitles.srt",
+      prompts: "prompts.md",
+      images: scenes.map((scene) => scene.image_path),
+    },
+    created_at: new Date().toISOString(),
+  }, null, 2), "utf8");
+  return batchDir;
+}
+
+function srtTime(value) {
+  const totalMs = Math.max(0, Math.round(Number(value || 0) * 1000));
+  const hours = Math.floor(totalMs / 3600000);
+  const minutes = Math.floor((totalMs % 3600000) / 60000);
+  const seconds = Math.floor((totalMs % 60000) / 1000);
+  const milliseconds = totalMs % 1000;
+  const pad = (number, length = 2) => String(number).padStart(length, "0");
+  return `${pad(hours)}:${pad(minutes)}:${pad(seconds)},${pad(milliseconds, 3)}`;
 }
 
 function normalizeShotInput(value) {
