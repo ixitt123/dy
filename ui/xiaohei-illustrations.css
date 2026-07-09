@@ -160,6 +160,56 @@ textarea:focus {
   gap: 12px;
 }
 
+.advanced-panel {
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+}
+
+.advanced-panel > summary {
+  cursor: pointer;
+  font-weight: 800;
+}
+
+.advanced-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin: 14px 0 10px;
+}
+
+.field small {
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.consent-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 10px 0;
+  font-size: 13px;
+}
+
+.consent-row input {
+  width: 16px;
+  height: 16px;
+}
+
+.audio-preview {
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+}
+
+.audio-preview audio {
+  display: block;
+  width: 100%;
+  margin-top: 8px;
+}
+
 .status-panel {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 280px;
@@ -359,6 +409,7 @@ pre {
   }
 
   .control-grid,
+  .advanced-grid,
   .results-grid {
     grid-template-columns: 1fr;
   }
