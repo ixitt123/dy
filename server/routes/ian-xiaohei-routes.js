@@ -1118,13 +1118,14 @@ function normalizeAiAnchor(value, units) {
   const fallbackAction = defaultActionForRole(roleId, sourceText);
   const proposedAction = trimText(value.xiaohei_action || "", 48);
   const proposedSubject = trimText(value.visual_subject || "", 32);
+  const specializedSubject = specializedSubjectForText(sourceText);
   return {
     sourceText,
     sourceIndex: units.indexOf(sourceText),
     roleId,
     visualTitle: trimText(value.visual_title || inferTopic(sourceText, "", 1), 32),
     coreIdea: trimText(value.core_idea || inferCoreIdea(sourceText), 100),
-    visualSubject: isValidVisualSubject(proposedSubject) ? proposedSubject : extractVisualSubject(sourceText),
+    visualSubject: specializedSubject || (isValidVisualSubject(proposedSubject) ? proposedSubject : extractVisualSubject(sourceText)),
     xiaoheiAction: isValidXiaoheiAction(proposedAction) ? proposedAction : fallbackAction,
     visualMetaphor: trimText(value.visual_metaphor || defaultMetaphorForRole(roleId, sourceText), 80),
     structureType: STRUCTURE_TYPES.includes(value.structure_type)
@@ -1267,14 +1268,8 @@ function semanticAnchorScore(text, index, total) {
 }
 
 function extractVisualSubject(text) {
-  const specialized = [
-    { pattern: /(半年内?.{0,8}(?:流利|说).{0,6}(?:英文|英语)|(?:流利|说).{0,6}(?:英文|英语))/u, label: "半年说流利英文" },
-    { pattern: /(英文学生.{0,12}(?:语言|英文).{0,6}使用者|忘掉.{0,8}学生.{0,12}使用者)/u, label: "学生到语言使用者" },
-    { pattern: /(行动篇|从今天开始|现在开始|立即行动)/u, label: "行动正式开始" },
-    { pattern: /(管理岗|管理者|领导力)/u, label: "管理角色" },
-    { pattern: /(背景音乐|BGM|音乐节拍)/iu, label: "背景音乐节拍" },
-  ].find((item) => item.pattern.test(String(text || "")));
-  if (specialized) return specialized.label;
+  const specialized = specializedSubjectForText(text);
+  if (specialized) return specialized;
   const clean = String(text || "").replace(/[。！？!?；;，,：:]/g, " ");
   const phrases = clean.match(/[\u4e00-\u9fa5A-Za-z0-9]{2,12}/g) || [];
   const stop = /^(所以|但是|然而|然后|好了|今天|开始|从今天开始|请你|这个|一个|自己|可以|就是|作为|几乎所有人)$/u;
@@ -1282,6 +1277,19 @@ function extractVisualSubject(text) {
     .map((item) => item.replace(/^(所以|但是|然而|然后|好了|请你)/u, ""))
     .find((item) => item.length >= 2 && !stop.test(item));
   return trimText(candidate || clean, 24);
+}
+
+function specializedSubjectForText(text) {
+  const matched = [
+    { pattern: /(半年内?.{0,8}(?:流利|说).{0,6}(?:英文|英语)|(?:流利|说).{0,6}(?:英文|英语))/u, label: "半年说流利英文" },
+    { pattern: /(英文学生.{0,12}(?:语言|英文).{0,6}使用者|忘掉.{0,8}学生.{0,12}使用者)/u, label: "学生到语言使用者" },
+    { pattern: /(忘掉|放下|不再).{0,10}(英文|英语)?.{0,6}学生.{0,6}(身份)?/u, label: "放下英文学生身份" },
+    { pattern: /(当做|成为|变成).{0,10}(语言|英文|英语).{0,6}使用者/u, label: "成为语言使用者" },
+    { pattern: /(行动篇|从今天开始|现在开始|立即行动)/u, label: "行动正式开始" },
+    { pattern: /(管理岗|管理者|领导力)/u, label: "管理角色" },
+    { pattern: /(背景音乐|BGM|音乐节拍)/iu, label: "背景音乐节拍" },
+  ].find((item) => item.pattern.test(String(text || "")));
+  return matched?.label || "";
 }
 
 function isValidXiaoheiAction(value) {
