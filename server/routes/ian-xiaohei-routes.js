@@ -635,7 +635,7 @@ async function enrichTimedSegmentsWithModel({ title, segments, modelRouter }) {
 
 function buildAudioTimedSegments(text, audioDuration) {
   const duration = Math.max(1, Number(audioDuration || 0));
-  const targetCount = clamp(Math.round(duration / 4), 1, 30);
+  const targetCount = clamp(Math.ceil(duration / 4), 1, 30);
   let units = segmentTextIntoSemanticUnits(text);
   if (!units.length) units = [normalizeText(text)];
 
