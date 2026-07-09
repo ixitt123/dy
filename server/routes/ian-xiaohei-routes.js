@@ -549,6 +549,7 @@ async function analyzeSemanticAnchorsWithModel({ text, title, maxCount, modelRou
             `最多输出 ${maxCount} 个锚点；短文可以少于 ${maxCount} 个。按原文出现顺序返回。`,
             "只返回 JSON，不要 markdown。格式：",
             '{"anchors":[{"source_text":"","role_id":"hook|problem|switch|method|path|warning|layer|loop|cta","visual_title":"","core_idea":"","visual_subject":"","xiaohei_action":"","visual_metaphor":"","structure_type":"Workflow|系统局部|前后对比|角色状态|概念隐喻|方法分层|地图路线|小漫画分镜","labels":[""],"elements":[""]}]}',
+            "visual_subject 只写当前段落的核心对象或变化，最多 12 个中文，不要写完整构图。",
             "labels 只能使用当前 source_text 中已有或直接概括出的 2-6 字短词，最多 6 个。",
           ].join("\n"),
         },
@@ -577,16 +578,17 @@ function normalizeAiAnchor(value, units) {
   const sourceText = resolveSourceExcerpt(value.source_text, units);
   if (!sourceText) return null;
   const inferredRole = inferRoleDefinition(sourceText, 1, 1);
-  const roleId = getRoleDefinition(value.role_id)?.id || inferredRole.id;
+  const roleId = inferExplicitRoleId(sourceText) || getRoleDefinition(value.role_id)?.id || inferredRole.id;
   const fallbackAction = defaultActionForRole(roleId, sourceText);
   const proposedAction = trimText(value.xiaohei_action || "", 48);
+  const proposedSubject = trimText(value.visual_subject || "", 32);
   return {
     sourceText,
     sourceIndex: units.indexOf(sourceText),
     roleId,
     visualTitle: trimText(value.visual_title || inferTopic(sourceText, "", 1), 32),
     coreIdea: trimText(value.core_idea || inferCoreIdea(sourceText), 100),
-    visualSubject: trimText(value.visual_subject || extractVisualSubject(sourceText), 32),
+    visualSubject: isValidVisualSubject(proposedSubject) ? proposedSubject : extractVisualSubject(sourceText),
     xiaoheiAction: isValidXiaoheiAction(proposedAction) ? proposedAction : fallbackAction,
     visualMetaphor: trimText(value.visual_metaphor || defaultMetaphorForRole(roleId, sourceText), 80),
     structureType: STRUCTURE_TYPES.includes(value.structure_type)
@@ -748,7 +750,21 @@ function extractVisualSubject(text) {
 
 function isValidXiaoheiAction(value) {
   if (!value) return false;
-  return !/(微笑|大笑|可爱|穿上|脱下|T恤|衣服|服装|举起.{0,8}(?:大字|旗帜|牌子)|复杂表情)/iu.test(value);
+  return !/(微笑|大笑|可爱|穿上|脱下|T恤|衣服|服装|徽章|学生证|握拳|写着|标有|举起.{0,8}(?:大字|旗帜|牌子)|复杂表情)/iu.test(value);
+}
+
+function isValidVisualSubject(value) {
+  if (!value || value.length > 20) return false;
+  return !/(小黑|一个|一扇|一台|画面|显示|旁边|同时|面前|写着|标有)/u.test(value);
+}
+
+function inferExplicitRoleId(text) {
+  const value = String(text || "");
+  if (/(不是|而是|忘掉|当做|身份|从.+(?:变成|转为|成为))/u.test(value)) return "switch";
+  if (/(误区|错误|不要|不能|别再|避坑|警惕)/u.test(value)) return "warning";
+  if (/(反馈|复盘|循环|闭环|回流)/u.test(value)) return "loop";
+  if (/(今天|现在|开始|行动|接下来)/u.test(value)) return "path";
+  return "";
 }
 
 function defaultActionForRole(roleId, text) {
