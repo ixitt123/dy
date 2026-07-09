@@ -68,7 +68,13 @@ async function createPlan() {
     const data = await requestPlan(payload);
     state.plan = data;
     renderPlan(data);
-    setStatus("提示词已生成", `共 ${data.shots?.length || 0} 张，画幅固定为 16:9。`, 100, false, "提示词完成");
+    setStatus(
+      "提示词已生成",
+      `${data.analysisNote || "已按完整语义段落生成配图计划"} 共 ${data.shots?.length || 0} 张，画幅固定为 16:9。`,
+      100,
+      false,
+      "语义匹配完成",
+    );
     return data;
   } catch (error) {
     setStatus("提示词生成失败", error.message || String(error), 0, true);
@@ -192,7 +198,19 @@ function renderPlan(plan) {
     <article class="prompt-card">
       <h3>#${shot.index} ${escapeHtml(shot.topic)}</h3>
       <p class="meta">${escapeHtml(shot.purpose)} · ${escapeHtml(shot.role || "自动角色")} · ${escapeHtml(shot.structureType)}</p>
-      <pre>${escapeHtml(shot.prompt)}</pre>
+      <div class="semantic-binding">
+        <strong>对应原文</strong>
+        <p>${escapeHtml(shot.sourceText || "")}</p>
+        <dl>
+          <dt>核心意思</dt><dd>${escapeHtml(shot.coreIdea || "")}</dd>
+          <dt>小黑动作</dt><dd>${escapeHtml(shot.xiaoheiAction || "")}</dd>
+          <dt>视觉隐喻</dt><dd>${escapeHtml(shot.visualMetaphor || "")}</dd>
+        </dl>
+      </div>
+      <details>
+        <summary>查看完整生图提示词</summary>
+        <pre>${escapeHtml(shot.prompt)}</pre>
+      </details>
     </article>
   `).join("");
 }

@@ -267,6 +267,45 @@ textarea:focus {
   font-size: 13px;
 }
 
+.semantic-binding {
+  margin-bottom: 10px;
+  padding: 10px;
+  border-left: 3px solid #df722f;
+  background: #fff;
+}
+
+.semantic-binding > strong {
+  font-size: 13px;
+}
+
+.semantic-binding > p {
+  margin: 6px 0 10px;
+  line-height: 1.65;
+}
+
+.semantic-binding dl {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr);
+  gap: 5px 10px;
+  margin: 0;
+  font-size: 13px;
+}
+
+.semantic-binding dt {
+  color: var(--muted);
+}
+
+.semantic-binding dd {
+  margin: 0;
+}
+
+.prompt-card details summary {
+  margin-bottom: 8px;
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 13px;
+}
+
 pre {
   max-height: 260px;
   overflow: auto;
