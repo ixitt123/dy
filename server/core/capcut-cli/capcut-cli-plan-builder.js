@@ -128,14 +128,20 @@ function wrapCaptionText(value = "", maxCharsPerLine = 12, maxLines = 2) {
       continue;
     }
     pushCurrent();
-    for (const chunk of splitCaptionSegment(part, maxCharsPerLine)) {
-      lines.push(chunk);
-      if (lines.length >= maxLines) break;
-    }
-    if (lines.length >= maxLines) break;
+    for (const chunk of splitCaptionSegment(part, maxCharsPerLine)) lines.push(chunk);
   }
   pushCurrent();
-  return lines.slice(0, maxLines).filter(Boolean).join("\n");
+  const cleanLines = lines.filter(Boolean);
+  if (cleanLines.length <= maxLines) return cleanLines.join("\n");
+
+  // 字幕必须完整保留；超出行数时重新均分，不能静默截断原文。
+  const characters = Array.from(text.replace(/\s+/g, ""));
+  const chunkSize = Math.ceil(characters.length / Math.max(1, maxLines));
+  const balanced = [];
+  for (let index = 0; index < characters.length; index += chunkSize) {
+    balanced.push(characters.slice(index, index + chunkSize).join(""));
+  }
+  return balanced.join("\n");
 }
 
 function captionKeywordCandidates(scene = {}, text = "") {

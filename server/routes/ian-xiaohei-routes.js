@@ -742,7 +742,7 @@ function createDirectorProjectForPlan(taskStore, plan, audioJob) {
   taskStore.replaceDirectorScenes(project.id, plan.shots.map((shot) => ({
     scene_index: shot.index,
     duration: shot.duration,
-    purpose: shot.role,
+    purpose: shot.visualSubject || shot.topic,
     emotion: "自然",
     voice_text: shot.sourceText,
     subtitle: shot.sourceText,
