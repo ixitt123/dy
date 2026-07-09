@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { spawn } from "node:child_process";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { HttpBodyError, readJsonBody } from "../utils/http-body.js";
 
 const STRUCTURE_TYPES = [
@@ -25,6 +25,20 @@ const PURPOSES = [
 
 const MAX_TEXT_LENGTH = 5000;
 const MAX_AUDIO_BYTES = 30 * 1024 * 1024;
+const MAX_IMAGE_BYTES = 20 * 1024 * 1024;
+const EMOTION_OPTIONS = ["自然", "亲切", "专业", "热情", "沉稳", "激励", "严肃", "温柔"];
+const SPEED_OPTIONS = [0.8, 0.9, 1, 1.1, 1.2, 1.3, 1.5];
+const ASPECT_RATIO_OPTIONS = [
+  { id: "16:9", label: "16:9 横版（默认）" },
+  { id: "9:16", label: "9:16 竖版" },
+  { id: "1:1", label: "1:1 正方形" },
+];
+const IMAGE_MIME_EXTENSIONS = {
+  "image/png": ".png",
+  "image/jpeg": ".jpg",
+  "image/jpg": ".jpg",
+  "image/webp": ".webp",
+};
 const AUDIO_MIME_EXTENSIONS = {
   "audio/mpeg": ".mp3",
   "audio/mp3": ".mp3",
@@ -115,8 +129,10 @@ export function createIanXiaoheiRoutes({
 }) {
   const outputRoot = path.join(baseDir, "image-assets", "ian-xiaohei");
   const uploadRoot = path.join(outputRoot, "_uploaded-audio");
+  const voicePreviewRoot = path.join(baseDir, "ui", "assets", "voice-previews", "minimax");
   fs.mkdirSync(outputRoot, { recursive: true });
   fs.mkdirSync(uploadRoot, { recursive: true });
+  fs.mkdirSync(voicePreviewRoot, { recursive: true });
 
   return async function handleIanXiaoheiRoutes(req, res, url) {
     if (!url.pathname.startsWith("/api/ian-xiaohei/")) return false;
@@ -124,22 +140,178 @@ export function createIanXiaoheiRoutes({
 
     if (req.method === "GET" && route === "config") {
       const settings = getSettings() || {};
-      const defaultProvider = String(settings.tts?.default_provider || "aliyun_bailian");
+      const defaultProvider = settings.tts?.minimax?.api_key
+        ? "minimax"
+        : String(settings.tts?.default_provider || "minimax");
+      const minimaxPresets = ttsService?.listVoices?.("minimax") || [];
       const voiceAssets = voiceAssetService?.listAssets?.()
-        ?.filter((asset) => !asset.archived && asset.status === "active") || [];
+        ?.filter((asset) => (
+          !asset.archived
+          && asset.status === "active"
+          && (asset.voice_type === "clone" || (asset.provider === "minimax" && asset.voice_type === "preset"))
+        )) || [];
+      const activePresetIds = new Set(
+        voiceAssets.filter((asset) => asset.provider === "minimax" && asset.voice_type === "preset")
+          .map((asset) => asset.voice_id),
+      );
       sendJson(res, 200, {
         ok: true,
         outputDir: outputRoot,
         purposes: PURPOSES,
         structureTypes: STRUCTURE_TYPES,
+        aspectRatios: ASPECT_RATIO_OPTIONS,
         tts: {
           defaultProvider,
+          recommendedProvider: "minimax",
+          recommendedModel: "speech-2.6-hd",
+          minimaxConfigured: Boolean(settings.tts?.minimax?.api_key),
+          minimaxBaseUrl: String(settings.tts?.minimax?.base_url || "https://api.minimax.io/v1"),
+          minimaxModel: String(settings.tts?.minimax?.model || "speech-2.6-hd"),
           defaultSpeed: Number(settings.tts?.default_speed || 1),
           defaultVoice: voiceAssetService?.getDefault?.() || null,
-          voices: ttsService?.listVoices?.(defaultProvider) || [],
-          voiceAssets,
+          voices: minimaxPresets.filter((voice) => activePresetIds.has(voice.id)),
+          voiceAssets: voiceAssets.filter((asset) => (
+            asset.voice_type === "clone" || activePresetIds.has(asset.voice_id)
+          )).map((asset) => {
+            if (asset.provider !== "minimax" || asset.voice_type !== "preset") return asset;
+            const preview = staticVoicePreview(voicePreviewRoot, asset.provider, asset.voice_id);
+            return {
+              ...asset,
+              preview_url: fs.existsSync(preview.path) ? preview.url : "",
+              preview_ready: fs.existsSync(preview.path),
+            };
+          }),
+          emotions: EMOTION_OPTIONS,
+          speeds: SPEED_OPTIONS,
         },
       });
+      return true;
+    }
+
+    if (req.method === "GET" && route === "audio-jobs") {
+      const projectId = String(url.searchParams.get("project_id") || "").trim();
+      sendJson(res, 200, {
+        ok: true,
+        jobs: ttsService?.listProjectJobs?.(projectId, 100) || [],
+        selected: ttsService?.getSelectedProjectJob?.(projectId) || null,
+      });
+      return true;
+    }
+
+    if (req.method === "POST" && route === "audio-select") {
+      try {
+        const body = await readJsonBody(req, { maxBytes: 64 * 1024 });
+        const result = ttsService?.selectProjectJob?.(body.project_id, body.job_id);
+        if (result?.error) throw new Error(result.error);
+        sendJson(res, 200, { ok: true, ...result });
+      } catch (error) {
+        sendJson(res, error instanceof HttpBodyError ? error.statusCode : 400, {
+          ok: false,
+          message: error instanceof Error ? error.message : String(error),
+        });
+      }
+      return true;
+    }
+
+    if (req.method === "POST" && route === "audio-delete") {
+      try {
+        const body = await readJsonBody(req, { maxBytes: 64 * 1024 });
+        const projectId = String(body.project_id || "").trim();
+        const job = ttsService?.getJob?.(Number(body.job_id || 0));
+        if (!job) throw new Error("音频记录不存在。");
+        const wasSelected = Boolean(job.metadata?.selected_for_project);
+        const result = ttsService.removeJob(job.id, { deleteFile: true });
+        let selected = null;
+        if (wasSelected) {
+          const fallback = (ttsService?.listProjectJobs?.(projectId, 100) || [])
+            .find((item) => item.status === "completed" && item.audio_path);
+          if (fallback) {
+            const selectedResult = ttsService.selectProjectJob(projectId, fallback.id);
+            selected = selectedResult.job || null;
+          }
+        }
+        sendJson(res, 200, { ok: true, ...result, selected });
+      } catch (error) {
+        sendJson(res, error instanceof HttpBodyError ? error.statusCode : 400, {
+          ok: false,
+          message: error instanceof Error ? error.message : String(error),
+        });
+      }
+      return true;
+    }
+
+    if (req.method === "POST" && route === "voice-preview") {
+      try {
+        const body = await readJsonBody(req, { maxBytes: 64 * 1024 });
+        const asset = Number(body.voice_asset_id || 0) > 0
+          ? voiceAssetService?.getAsset?.(Number(body.voice_asset_id))
+          : null;
+        if (asset?.preview_url) {
+          sendJson(res, 200, { ok: true, preview_url: asset.preview_url, cached: true });
+          return true;
+        }
+        const provider = String(asset?.provider || body.provider || "minimax");
+        const voiceId = String(asset?.voice_id || body.voice_id || "").trim();
+        const voiceName = String(asset?.voice_name || body.voice_name || "").trim();
+        if (!voiceId) throw new Error("缺少需要试听的音色。");
+        const preview = staticVoicePreview(voicePreviewRoot, provider, voiceId);
+        if (fs.existsSync(preview.path)) {
+          sendJson(res, 200, { ok: true, preview_url: preview.url, cached: true });
+          return true;
+        }
+        const generated = await ttsService.generateStaticPreview({
+          provider,
+          voice_id: voiceId,
+          voice_name: voiceName,
+          model: String(asset?.metadata?.target_model || body.model || "speech-2.6-hd"),
+          outputPath: preview.path,
+        });
+        if (generated.error) {
+          fs.rmSync(preview.path, { force: true });
+          throw new Error(generated.error);
+        }
+        sendJson(res, 201, {
+          ok: true,
+          preview_url: preview.url,
+          cached: false,
+          message: "试听音频已生成一次并保存到源码，后续直接复用。",
+        });
+      } catch (error) {
+        sendJson(res, error instanceof HttpBodyError ? error.statusCode : 400, {
+          ok: false,
+          message: error instanceof Error ? error.message : String(error),
+        });
+      }
+      return true;
+    }
+
+    if (req.method === "POST" && route === "voice-default") {
+      try {
+        const body = await readJsonBody(req, { maxBytes: 64 * 1024 });
+        const result = voiceAssetService?.setDefault?.(Number(body.id || 0));
+        if (result?.error) throw new Error(result.error);
+        sendJson(res, 200, { ok: true, ...result });
+      } catch (error) {
+        sendJson(res, error instanceof HttpBodyError ? error.statusCode : 400, {
+          ok: false,
+          message: error instanceof Error ? error.message : String(error),
+        });
+      }
+      return true;
+    }
+
+    if (req.method === "POST" && route === "voice-delete") {
+      try {
+        const body = await readJsonBody(req, { maxBytes: 64 * 1024 });
+        const result = await voiceAssetService?.deletePermanent?.(Number(body.id || 0));
+        if (result?.error) throw new Error(result.error);
+        sendJson(res, 200, { ok: true, ...result });
+      } catch (error) {
+        sendJson(res, error instanceof HttpBodyError ? error.statusCode : 400, {
+          ok: false,
+          message: error instanceof Error ? error.message : String(error),
+        });
+      }
       return true;
     }
 
@@ -184,9 +356,14 @@ export function createIanXiaoheiRoutes({
         const body = await readJsonBody(req, { maxBytes: 256 * 1024 });
         const text = normalizeText(body.text);
         if (!text) throw new Error("请先输入文案。");
+        const projectId = String(body.project_id || "").trim();
+        if (!projectId) throw new Error("缺少当前项目 ID。");
         const asset = Number(body.voice_asset_id || 0) > 0
           ? voiceAssetService?.getAsset?.(Number(body.voice_asset_id))
           : null;
+        if (asset && (asset.supports_emotion === false || asset.supports_speed === false)) {
+          throw new Error("该音色不同时支持情感与语速，不能用于当前流程。");
+        }
         const result = ttsService.enqueue({
           text,
           provider: String(asset?.provider || body.provider || ""),
@@ -194,9 +371,11 @@ export function createIanXiaoheiRoutes({
           voice_name: String(asset?.voice_name || body.voice_name || ""),
           voice_asset_id: Number(asset?.id || 0),
           model: String(asset?.metadata?.target_model || body.model || ""),
-          speed: Number(body.speed || 1),
-          emotion: String(body.emotion || "自然"),
+          speed: SPEED_OPTIONS.includes(Number(body.speed)) ? Number(body.speed) : 1,
+          emotion: EMOTION_OPTIONS.includes(String(body.emotion)) ? String(body.emotion) : "自然",
           format: "mp3",
+          project_id: projectId,
+          source: "ian_xiaohei",
           workflow_auto_director: false,
         });
         if (result.error) throw new Error(result.error);
@@ -216,6 +395,8 @@ export function createIanXiaoheiRoutes({
         const body = await readJsonBody(req, { maxBytes: 42 * 1024 * 1024 });
         const text = normalizeText(body.text);
         if (!text) throw new Error("请先输入与音频对应的文案。");
+        const projectId = String(body.project_id || "").trim();
+        if (!projectId) throw new Error("缺少当前项目 ID。");
         const uploaded = decodeUploadedAudio(body.audio_data, body.audio_mime);
         const fileName = `${dateSlug()}-${randomUUID().slice(0, 8)}${uploaded.extension}`;
         const audioPath = path.join(uploadRoot, fileName);
@@ -244,6 +425,8 @@ export function createIanXiaoheiRoutes({
             completed_at: new Date().toISOString(),
             metadata_json: JSON.stringify({
               source: "ian_xiaohei_local_upload",
+              project_id: projectId,
+              selected_for_project: false,
               transcript,
               text_similarity: similarity,
               audio_duration: duration,
@@ -273,6 +456,7 @@ export function createIanXiaoheiRoutes({
     if (req.method === "POST" && route === "timeline-plan") {
       try {
         const body = await readJsonBody(req, { maxBytes: 512 * 1024 });
+        const projectId = String(body.project_id || "").trim();
         const job = ttsService?.getJob?.(Number(body.tts_job_id || 0))
           || taskStore?.getTtsJob?.(Number(body.tts_job_id || 0));
         if (!job || job.status !== "completed" || !job.audio_path || !fs.existsSync(job.audio_path)) {
@@ -282,6 +466,10 @@ export function createIanXiaoheiRoutes({
         if (normalizeComparableText(text) !== normalizeComparableText(job.text)) {
           throw new Error("当前文案与 TTS 文案不一致，请重新生成语音。");
         }
+        const selectedJob = ttsService?.getSelectedProjectJob?.(projectId);
+        if (!selectedJob || Number(selectedJob.id) !== Number(job.id)) {
+          throw new Error("请先试听并点击“确定本视频使用”，再生成分镜图片。");
+        }
         const audioDuration = await probeAudioDuration(ffprobePath, job.audio_path);
         if (!(audioDuration > 0)) throw new Error("无法读取 TTS 音频时长。");
         const plan = await buildTimedXiaoheiPlan({
@@ -289,6 +477,7 @@ export function createIanXiaoheiRoutes({
           title: body.title,
           purpose: body.purpose,
           preferredStructure: body.structureType,
+          aspectRatio: normalizeAspectRatio(body.aspectRatio),
           audioDuration,
           ttsJobId: job.id,
           modelRouter,
@@ -329,7 +518,7 @@ export function createIanXiaoheiRoutes({
           tts_job_id: Number(plan.ttsJobId),
           title: String(plan.title || "小黑配图视频"),
           output_type: "jianying_template",
-          platform: "douyin",
+          platform: platformForAspectRatio(plan.aspectRatio),
           image_source: "director",
           image_asset_ids: images.map((image) => image.assetId),
           manual_bindings: manualBindings,
@@ -377,7 +566,7 @@ export function createIanXiaoheiRoutes({
 
         const generated = await imageService.generateImage({
           prompt: shot.prompt,
-          aspectRatio: "16:9",
+          aspectRatio: normalizeAspectRatio(plan?.aspectRatio),
           count: 1,
           sourceType: "ian-xiaohei",
           sourceId: plan?.directorProjectId
@@ -416,6 +605,73 @@ export function createIanXiaoheiRoutes({
       return true;
     }
 
+    if (req.method === "POST" && route === "upload-shot-image") {
+      try {
+        const body = await readJsonBody(req, { maxBytes: 28 * 1024 * 1024 });
+        const plan = body.plan && typeof body.plan === "object" ? body.plan : null;
+        const shot = normalizeShotInput(body.shot);
+        const batchId = safeBatchId(body.batchId || plan?.batchId);
+        if (!batchId || !plan) throw new Error("缺少当前提示词计划。");
+        if (!shot.index || !(plan.shots || []).some((item) => Number(item.index) === Number(shot.index))) {
+          throw new Error("当前图片没有对应的分镜。");
+        }
+        const uploaded = decodeUploadedImage(body.image_data, body.image_mime);
+        const aspectRatio = normalizeAspectRatio(body.aspectRatio || plan.aspectRatio);
+        const batchDir = path.join(outputRoot, batchId);
+        const sourceDir = path.join(batchDir, "_manual-source");
+        fs.mkdirSync(sourceDir, { recursive: true });
+        const sourcePath = path.join(
+          sourceDir,
+          `scene-${String(shot.index).padStart(2, "0")}-${randomUUID().slice(0, 8)}${uploaded.extension}`,
+        );
+        fs.writeFileSync(sourcePath, uploaded.buffer);
+        let asset;
+        try {
+          asset = await imageService.addLocalImageAsset({
+            filePath: sourcePath,
+            prompt: shot.prompt,
+            aspectRatio,
+            sourceId: plan?.directorProjectId
+              ? `${plan.directorProjectId}:${shot.index}`
+              : `${batchId}:${shot.index}`,
+            sourceType: "ian-xiaohei-local",
+            directorProjectId: Number(plan?.directorProjectId || 0),
+            sceneIndex: Number(shot.index),
+            assetOrder: Number(shot.index),
+          });
+        } finally {
+          fs.rmSync(sourcePath, { force: true });
+        }
+        const replaceAssetId = String(body.replace_asset_id || "").trim();
+        if (replaceAssetId && replaceAssetId !== String(asset.id)) {
+          imageService.deleteAsset(replaceAssetId);
+        }
+        const image = {
+          index: shot.index,
+          topic: shot.topic,
+          purpose: shot.purpose,
+          prompt: shot.prompt,
+          imagePath: asset.file_path,
+          imageUrl: `/api/image/file?path=${encodeURIComponent(asset.file_path)}`,
+          thumbnailUrl: asset.thumbnail_url,
+          assetId: asset.id,
+          provider: "local",
+          model: "local-file",
+          source: "local_upload",
+          aspectRatio,
+          confirmed: true,
+        };
+        updateResultFile(batchDir, { image });
+        sendJson(res, 201, { ok: true, batchId, outputDir: batchDir, image });
+      } catch (error) {
+        sendJson(res, error instanceof HttpBodyError ? error.statusCode : 400, {
+          ok: false,
+          message: error instanceof Error ? error.message : String(error),
+        });
+      }
+      return true;
+    }
+
     if (req.method === "POST" && route === "generate") {
       try {
         const body = await readJsonBody(req, { maxBytes: 256 * 1024 });
@@ -431,7 +687,7 @@ export function createIanXiaoheiRoutes({
           try {
             const generated = await imageService.generateImage({
               prompt: shot.prompt,
-              aspectRatio: "16:9",
+              aspectRatio: normalizeAspectRatio(plan.aspectRatio),
               count: 1,
               sourceType: "ian-xiaohei",
               sourceId: `${plan.batchId}:${shot.index}`,
@@ -494,6 +750,7 @@ async function buildXiaoheiPlan(input = {}, modelRouter = null) {
   if (!text) throw new Error("请先输入文案。");
   const maxCount = clamp(Number(input.count) || 1, 1, 9);
   const purpose = PURPOSES.some((item) => item.id === input.purpose) ? input.purpose : "article";
+  const aspectRatio = normalizeAspectRatio(input.aspectRatio);
   const batchId = `${dateSlug()}-ian-xiaohei-${randomUUID().slice(0, 8)}`;
   const title = inferTitle(text, input.title);
   const aiAnchors = input.semanticAnalysis === false
@@ -509,13 +766,14 @@ async function buildXiaoheiPlan(input = {}, modelRouter = null) {
     title,
     anchor,
     purpose,
+    aspectRatio,
     preferredStructure: input.structureType,
   }));
   return {
     batchId,
     title,
     sourceText: text,
-    aspectRatio: "16:9",
+    aspectRatio,
     purpose,
     purposeLabel: PURPOSES.find((item) => item.id === purpose)?.label || "文章正文配图",
     requestedCount: maxCount,
@@ -533,12 +791,14 @@ async function buildTimedXiaoheiPlan({
   title: explicitTitle = "",
   purpose: requestedPurpose = "article",
   preferredStructure = "",
+  aspectRatio: requestedAspectRatio = "16:9",
   audioDuration,
   ttsJobId,
   modelRouter,
 }) {
   const normalizedText = normalizeText(text);
   const purpose = PURPOSES.some((item) => item.id === requestedPurpose) ? requestedPurpose : "article";
+  const aspectRatio = normalizeAspectRatio(requestedAspectRatio);
   const title = inferTitle(normalizedText, explicitTitle);
   const batchId = `${dateSlug()}-ian-xiaohei-video-${randomUUID().slice(0, 8)}`;
   const timedSegments = buildAudioTimedSegments(normalizedText, audioDuration);
@@ -564,6 +824,7 @@ async function buildTimedXiaoheiPlan({
       title,
       anchor,
       purpose,
+      aspectRatio,
       preferredStructure,
     }),
     segmentId: `seg-${String(index + 1).padStart(3, "0")}`,
@@ -575,7 +836,7 @@ async function buildTimedXiaoheiPlan({
     batchId,
     title,
     sourceText: normalizedText,
-    aspectRatio: "16:9",
+    aspectRatio,
     purpose,
     purposeLabel: PURPOSES.find((item) => item.id === purpose)?.label || "文章正文配图",
     requestedCount: "auto",
@@ -726,7 +987,7 @@ function createDirectorProjectForPlan(taskStore, plan, audioJob) {
     source_text: plan.sourceText,
     video_type: "knowledge",
     visual_style: "ian_xiaohei_whiteboard",
-    platform: "douyin",
+    platform: platformForAspectRatio(plan.aspectRatio),
     pace: "audio_synced",
     estimated_duration: Number(plan.audioDuration || 0),
     status: "completed",
@@ -737,7 +998,7 @@ function createDirectorProjectForPlan(taskStore, plan, audioJob) {
       tts_job_id: Number(audioJob.id),
       scene_count: plan.shots.length,
       total_duration: plan.audioDuration,
-      ratio: "16:9",
+      ratio: normalizeAspectRatio(plan.aspectRatio),
       timing_source: plan.timingSource,
       batch_id: plan.batchId,
     }),
@@ -780,6 +1041,37 @@ function decodeUploadedAudio(dataUrl, mimeHint = "") {
   if (!buffer.length) throw new Error("上传的音频为空。");
   if (buffer.length > MAX_AUDIO_BYTES) throw new Error("上传的音频不能超过 30MB。");
   return { buffer, mimeType, extension };
+}
+
+function decodeUploadedImage(dataUrl, mimeHint = "") {
+  const match = String(dataUrl || "").match(/^data:([^;,]+);base64,([A-Za-z0-9+/=\s]+)$/);
+  const mimeType = String(match?.[1] || mimeHint || "").toLowerCase();
+  const extension = IMAGE_MIME_EXTENSIONS[mimeType];
+  if (!extension) throw new Error("本地分镜图片只支持 PNG、JPG 或 WEBP。");
+  const buffer = Buffer.from(match?.[2] || "", "base64");
+  if (!buffer.length) throw new Error("上传的图片为空。");
+  if (buffer.length > MAX_IMAGE_BYTES) throw new Error("上传的图片不能超过 20MB。");
+  return { buffer, mimeType, extension };
+}
+
+function normalizeAspectRatio(value) {
+  const ratio = String(value || "16:9").trim();
+  return ASPECT_RATIO_OPTIONS.some((item) => item.id === ratio) ? ratio : "16:9";
+}
+
+function platformForAspectRatio(value) {
+  const ratio = normalizeAspectRatio(value);
+  if (ratio === "9:16") return "douyin";
+  if (ratio === "1:1") return "square";
+  return "landscape";
+}
+
+function staticVoicePreview(root, provider, voiceId) {
+  const key = createHash("sha1").update(`${provider}:${voiceId}`).digest("hex").slice(0, 20);
+  return {
+    path: path.join(root, `${key}.mp3`),
+    url: `/assets/voice-previews/minimax/${key}.mp3`,
+  };
 }
 
 function resolveAsrApiKey(settings = {}) {
@@ -969,7 +1261,7 @@ function updateResultFile(batchDir, { image = null, error = null } = {}) {
   fs.writeFileSync(resultPath, JSON.stringify(result, null, 2), "utf8");
 }
 
-function buildShot({ index, total, title, anchor, purpose, preferredStructure }) {
+function buildShot({ index, total, title, anchor, purpose, aspectRatio = "16:9", preferredStructure }) {
   const segment = anchor.sourceText;
   const shotRole = getRoleDefinition(anchor.roleId) || inferRoleDefinition(segment, index, total);
   const structureType = STRUCTURE_TYPES.includes(preferredStructure)
@@ -1001,6 +1293,7 @@ function buildShot({ index, total, title, anchor, purpose, preferredStructure })
     composition: metaphor.composition,
     elements: metaphor.elements,
     labels,
+    aspectRatio,
   });
   return {
     index,
@@ -1034,9 +1327,15 @@ function buildPrompt({
   composition,
   elements,
   labels,
+  aspectRatio = "16:9",
 }) {
+  const formatDescription = aspectRatio === "9:16"
+    ? "9:16 vertical Chinese short-video illustration"
+    : aspectRatio === "1:1"
+      ? "1:1 square Chinese social-media illustration"
+      : "16:9 horizontal Chinese article illustration";
   return [
-    "Generate one standalone 16:9 horizontal Chinese article illustration.",
+    `Generate one standalone ${formatDescription}.`,
     "",
     "Visual DNA:",
     "Pure white background. Minimalist black hand-drawn line art. Slightly wobbly pen lines. Lots of empty white space. Sparse red/orange/blue handwritten Chinese annotations. Clean absurd product-sketch feeling. No gradients, no shadows, no paper texture, no complex background, no commercial vector style, no PPT infographic look, no cute mascot poster, no children's illustration, no realistic UI.",

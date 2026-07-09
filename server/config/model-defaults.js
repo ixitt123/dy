@@ -7,7 +7,7 @@ export const DEFAULT_MODEL_MAPPING = {
   image_prompt: { provider: "deepseek", model: "deepseek-chat" },
   image: { provider: "volcengine_ark", model: DEFAULT_VOLCENGINE_ARK_IMAGE_MODEL },
   video: { provider: "kling", model: "kling" },
-  tts: { provider: "aliyun_bailian", model: "cosyvoice-v2" },
+  tts: { provider: "minimax", model: "speech-2.6-hd" },
 };
 export const SETTINGS_TASKS = {
   analyze: {
@@ -43,6 +43,6 @@ export const SETTINGS_TASKS = {
   tts: {
     label: "TTS 语音",
     purpose: "把文案生成配音，可用于短视频口播。",
-    route: "使用 TTS Provider，目前主要接入阿里云百炼和自定义 TTS。",
+    route: "默认使用 MiniMax speech-2.6-hd；阿里云百炼和 Fish Audio 保留为备用。",
   },
 };

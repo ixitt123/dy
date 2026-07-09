@@ -3,7 +3,7 @@ import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { createTtsProvider } from "../tts/providers/index.js";
 
-const MAX_SAMPLE_BYTES = 10 * 1024 * 1024;
+const MAX_SAMPLE_BYTES = 20 * 1024 * 1024;
 const MIME_EXTENSIONS = {
   "audio/wav": ".wav",
   "audio/x-wav": ".wav",
@@ -55,7 +55,7 @@ function decodeAudio(dataUrl, mimeHint = "") {
   if (!extension) throw new Error("参考音频只支持 WAV、MP3 或 M4A。");
   const buffer = Buffer.from(match?.[2] || "", "base64");
   if (!buffer.length) throw new Error("参考音频为空。");
-  if (buffer.length > MAX_SAMPLE_BYTES) throw new Error("参考音频不能超过 10MB。");
+  if (buffer.length > MAX_SAMPLE_BYTES) throw new Error("参考音频不能超过 20MB。");
   return { buffer, mimeType: mimeType === "audio/x-wav" ? "audio/wav" : mimeType, extension };
 }
 
@@ -129,15 +129,16 @@ export function createVoiceAssetService({ baseDir, taskStore, ttsService, getSet
       : 0;
     const previewTest = taskStore.listVoiceTests({ voiceAssetId: row.id })
       .find((test) => test.status === "completed" && test.tts_job_id);
-    const presetPreviewUrl = row.voice_type === "preset" && row.voice_id
-      ? `/api/tts/voice-preview?provider=${encodeURIComponent(row.provider || "aliyun_bailian")}&voice_id=${encodeURIComponent(row.voice_id)}`
-      : "";
     return {
       ...row,
       tags,
       metadata,
-      sample_url: row.sample_path ? `/api/voice-assets/audio?id=${row.id}&kind=sample` : metadata.sample_url || presetPreviewUrl,
-      preview_url: previewTest ? `/api/tts/audio?id=${previewTest.tts_job_id}` : "",
+      sample_url: row.sample_path ? `/api/voice-assets/audio?id=${row.id}&kind=sample` : metadata.sample_url || "",
+      preview_url: previewTest
+        ? `/api/tts/audio?id=${previewTest.tts_job_id}`
+        : String(metadata.demo_audio || ""),
+      supports_emotion: metadata.supports_emotion !== false,
+      supports_speed: metadata.supports_speed !== false,
       rating_count: ownRatings.length,
       average_score: averageScore,
       average_stars: averageStars,
@@ -203,6 +204,9 @@ export function createVoiceAssetService({ baseDir, taskStore, ttsService, getSet
       sample_transcript: String(input.sample_transcript || ""),
       clone_request: cloneResult?.metadata || {},
       clone_error: cloneResult?.success === false ? String(cloneResult.error || cloneResult.detail || "复刻失败") : "",
+      demo_audio: String(cloneResult?.metadata?.demo_audio || ""),
+      supports_emotion: cloneResult?.metadata?.supports_emotion !== false,
+      supports_speed: cloneResult?.metadata?.supports_speed !== false,
       consent_confirmed: consentConfirmed,
     };
     const asset = taskStore.createVoiceAsset({
@@ -328,6 +332,10 @@ export function createVoiceAssetService({ baseDir, taskStore, ttsService, getSet
   function setDefault(id) {
     const asset = taskStore.getVoiceAsset(id);
     if (!asset) return { error: "声音资产不存在。" };
+    const metadata = safeJson(asset.metadata_json, {});
+    if (metadata.supports_emotion === false || metadata.supports_speed === false) {
+      return { error: "该音色不同时支持情感与语速，不能设为默认。" };
+    }
     return { asset: enrichAsset(taskStore.setDefaultVoice(id), taskStore.listVoiceRatings({ voiceAssetId: id })) };
   }
 
@@ -341,6 +349,55 @@ export function createVoiceAssetService({ baseDir, taskStore, ttsService, getSet
     if (!asset) return { error: "声音资产不存在。" };
     if (asset.is_default) taskStore.setDefaultVoice(0);
     return { asset: taskStore.updateVoiceAsset(id, { archived: true, is_default: false }) };
+  }
+
+  async function deletePermanent(id) {
+    const asset = taskStore.getVoiceAsset(id);
+    if (!asset) return { error: "声音资产不存在。" };
+    if (asset.is_default) taskStore.setDefaultVoice(0);
+
+    if (asset.voice_type === "preset") {
+      taskStore.updateVoiceAsset(id, {
+        archived: true,
+        is_default: false,
+        status: "deleted",
+      });
+      return { deleted: 1, id: asset.id, permanent: true };
+    }
+
+    const provider = providerFor(asset.provider);
+    if (asset.voice_type === "clone" && typeof provider?.deleteVoice === "function") {
+      const remote = await provider.deleteVoice({
+        voiceId: asset.voice_id,
+        voiceType: "voice_cloning",
+      });
+      if (remote?.success === false) {
+        return { error: remote.error || remote.detail || "平台音色删除失败。" };
+      }
+    }
+
+    for (const filePath of [asset.sample_path, asset.preview_path]) {
+      if (!filePath) continue;
+      const resolved = path.resolve(filePath);
+      if (
+        [path.resolve(samplesDir), path.resolve(previewsDir)].some((root) => (
+          resolved !== root && resolved.startsWith(`${root}${path.sep}`)
+        ))
+        && fs.existsSync(resolved)
+      ) {
+        fs.rmSync(resolved, { force: true });
+      }
+    }
+    for (const file of fs.readdirSync(clonesDir)) {
+      if (file.startsWith(`voice-${asset.id}-v`)) {
+        fs.rmSync(path.join(clonesDir, file), { force: true });
+      }
+    }
+    return {
+      deleted: taskStore.deleteVoiceAsset(asset.id),
+      id: asset.id,
+      permanent: true,
+    };
   }
 
   function reconcileTests(voiceAssetId = 0) {
@@ -439,6 +496,7 @@ export function createVoiceAssetService({ baseDir, taskStore, ttsService, getSet
     setDefault,
     getDefault,
     archive,
+    deletePermanent,
     createTests,
     listTests: reconcileTests,
     saveRating,

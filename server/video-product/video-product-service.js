@@ -48,6 +48,7 @@ const PLATFORM_PRESETS = {
   xiaohongshu: { label: "小红书", ratio: "3:4", resolution: "1080x1440", fps: 30 },
   bilibili: { label: "B站", ratio: "16:9", resolution: "1920x1080", fps: 30 },
   landscape: { label: "横版", ratio: "16:9", resolution: "1920x1080", fps: 30 },
+  square: { label: "正方形", ratio: "1:1", resolution: "1080x1080", fps: 30 },
 };
 
 const ROUTE_A_SKILL_CHAIN = [

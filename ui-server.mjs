@@ -846,7 +846,7 @@ function normalizeSettings(settings) {
     minimax: {
       base_url: String(tts.minimax?.base_url || "https://api.minimax.io/v1").trim(),
       api_key: String(tts.minimax?.api_key || "").trim(),
-      model: String(tts.minimax?.model || "minimax-speech").trim() || "minimax-speech",
+      model: String(tts.minimax?.model || "speech-2.6-hd").trim() || "speech-2.6-hd",
       voice: String(tts.minimax?.voice || "").trim(),
     },
     fish_audio: {
@@ -867,7 +867,7 @@ function normalizeSettings(settings) {
     },
     default_provider: TTS_PROVIDER_LABELS[String(tts.default_provider || "")]
       ? String(tts.default_provider)
-      : "aliyun_bailian",
+      : "minimax",
     default_speed: clampDecimal(tts.default_speed, 0.5, 2, 1),
     default_format: tts.default_format === "wav" ? "wav" : "mp3",
   };
@@ -1267,11 +1267,11 @@ function publicUnifiedProviders(settings = readSettings()) {
       id: "minimax",
       label: TTS_PROVIDER_LABELS.minimax,
       config: tts.minimax || {},
-      description: "扩展预留 Provider，可先保存 Key，正式生成能力后续接入。",
+      description: "推荐中文 TTS；支持 10 个精选预设音色、声音克隆、情感和语速控制。",
       baseUrl: tts.minimax?.base_url || "https://api.minimax.io/v1",
-      model: tts.minimax?.model || "minimax-speech",
-      models: ["minimax-speech"],
-      enabled: false,
+      model: tts.minimax?.model || "speech-2.6-hd",
+      models: ["speech-2.6-hd", "speech-2.8-hd"],
+      enabled: true,
     },
     {
       id: "fish_audio",
@@ -4722,6 +4722,7 @@ const server = http.createServer(async (req, res) => {
         volcengine_doubao: ["api_key", "app_id", "access_key_id", "secret_access_key", "default_model", "default_voice"],
         tencent_tts: ["secret_id", "secret_key", "region", "default_voice"],
         custom_tts: ["base_url", "api_key", "model", "voice"],
+        minimax: ["base_url", "api_key", "model", "voice"],
         fish_audio: ["base_url", "api_key", "model", "voice", "reference_id", "default_format"],
       }[providerId] || [];
       const secretFields = new Set(["api_key", "secret_id", "secret_key", "access_key_id", "secret_access_key"]);

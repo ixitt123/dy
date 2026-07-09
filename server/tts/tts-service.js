@@ -69,8 +69,8 @@ function providerConfig(settings, providerId) {
 }
 
 function resolveVoiceSelection(provider, config = {}, input = {}) {
-  const requestedVoice = String(input.voice_id || config.default_voice || "").trim();
-  const requestedModel = String(input.model || config.default_model || "").trim();
+  const requestedVoice = String(input.voice_id || config.default_voice || config.voice || "").trim();
+  const requestedModel = String(input.model || config.default_model || config.model || "").trim();
   const presets = typeof provider?.listPresetVoices === "function" ? provider.listPresetVoices() : [];
   const selectedPreset = requestedVoice
     ? presets.find((voice) => voice.id === requestedVoice)
@@ -176,6 +176,10 @@ export function createTtsService({ baseDir, taskStore, getSettings, ffmpegPath, 
       if (!String(input.voice_id || config.voice || config.reference_id || "").trim()) {
         return "Fish Audio：请填写 voice_id / reference_id。";
       }
+    }
+    if (providerId === "minimax") {
+      if (!String(config.api_key || "").trim()) return "MiniMax：未配置 API Key。";
+      if (!String(input.voice_id || config.voice || "").trim()) return "MiniMax：请选择预设音色或克隆音色。";
     }
     if (providerId === "custom_tts" && !String(config.base_url || "").trim()) {
       return "请先填写自定义 Provider 的 base_url。";
@@ -286,6 +290,8 @@ export function createTtsService({ baseDir, taskStore, getSettings, ffmpegPath, 
         model: voiceSelection.model,
         voice_asset_id: Number(input.voice_asset_id || 0),
         project_id: String(input.project_id || input.projectId || ""),
+        source: String(input.source || ""),
+        selected_for_project: false,
         workflow_auto_director: input.workflow_auto_director !== false,
         default_voice_fallback: voiceSelection.usedFallback,
       }),
@@ -309,6 +315,8 @@ export function createTtsService({ baseDir, taskStore, getSettings, ffmpegPath, 
       voice_name: source.voice_name,
       voice_asset_id: Number(metadata.voice_asset_id || 0),
       model: metadata.model || "",
+      project_id: metadata.project_id || "",
+      source: metadata.source || "",
       speed: source.speed,
       emotion: source.emotion,
       style_prompt: source.style_prompt,
@@ -320,6 +328,40 @@ export function createTtsService({ baseDir, taskStore, getSettings, ffmpegPath, 
 
   function listJobs(limit = 50) {
     return taskStore.listTtsJobs({ limit }).map(publicJob);
+  }
+
+  function listProjectJobs(projectId, limit = 100) {
+    const cleanProjectId = String(projectId || "").trim();
+    return listJobs(limit).filter((job) => String(job.metadata?.project_id || "") === cleanProjectId);
+  }
+
+  function selectProjectJob(projectId, jobId) {
+    const cleanProjectId = String(projectId || "").trim();
+    const targetId = Number(jobId || 0);
+    if (!cleanProjectId) return { error: "缺少项目 ID。" };
+    const target = taskStore.getTtsJob(targetId);
+    if (!target || target.status !== "completed" || !target.audio_path || !fs.existsSync(target.audio_path)) {
+      return { error: "只能选择已完成且音频文件存在的语音。" };
+    }
+    const targetMetadata = safeJson(target.metadata_json, {});
+    if (String(targetMetadata.project_id || "") !== cleanProjectId) {
+      return { error: "该音频不属于当前项目。" };
+    }
+    for (const job of taskStore.listTtsJobs({ limit: 500 })) {
+      const metadata = safeJson(job.metadata_json, {});
+      if (String(metadata.project_id || "") !== cleanProjectId) continue;
+      const selected = Number(job.id) === targetId;
+      if (Boolean(metadata.selected_for_project) === selected) continue;
+      taskStore.updateTtsJob(job.id, {
+        metadata_json: JSON.stringify({ ...metadata, selected_for_project: selected }),
+      });
+    }
+    return { job: getJob(targetId) };
+  }
+
+  function getSelectedProjectJob(projectId) {
+    return listProjectJobs(projectId, 500)
+      .find((job) => job.status === "completed" && job.metadata?.selected_for_project) || null;
   }
 
   function getJob(id) {
@@ -375,6 +417,33 @@ export function createTtsService({ baseDir, taskStore, getSettings, ffmpegPath, 
     return createVoicePreviewWav(voiceId);
   }
 
+  async function generateStaticPreview({
+    provider: providerId,
+    voice_id: voiceId,
+    voice_name: voiceName = "",
+    model = "",
+    text = "你好，这是我的短视频配音试听。表达自然，节奏清楚，重点明确。",
+    outputPath,
+  } = {}) {
+    const provider = getProvider(providerId);
+    if (!provider) return { error: "未知 TTS Provider。" };
+    if (!String(voiceId || "").trim()) return { error: "缺少试听音色。" };
+    if (!String(outputPath || "").trim()) return { error: "缺少试听音频保存路径。" };
+    const result = await provider.generateSpeech({
+      text,
+      voiceId,
+      voiceName,
+      model,
+      emotion: "自然",
+      speed: 1,
+      volume: 50,
+      pitch: 1,
+      format: "mp3",
+      outputPath,
+    });
+    return result.success ? result : { error: result.error || result.detail || "试听音频生成失败。" };
+  }
+
   for (const job of taskStore.listTtsJobs({ limit: 500 })) {
     if (!["waiting", "processing"].includes(job.status)) continue;
     taskStore.updateTtsJob(job.id, { status: "waiting", error: "" });
@@ -387,10 +456,14 @@ export function createTtsService({ baseDir, taskStore, getSettings, ffmpegPath, 
     retryJob,
     getJob,
     listJobs,
+    listProjectJobs,
+    selectProjectJob,
+    getSelectedProjectJob,
     removeJob,
     clearJobs,
     listVoices,
     voicePreview,
+    generateStaticPreview,
     outputDir,
   };
 }

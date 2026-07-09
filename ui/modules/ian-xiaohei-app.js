@@ -2,26 +2,45 @@ const state = {
   config: null,
   plan: null,
   ttsJob: null,
+  selectedTtsJob: null,
+  audioJobs: [],
   images: [],
   outputDir: "",
   promptsText: "",
   voiceChoices: new Map(),
+  pendingUploads: new Map(),
+  projectId: localStorage.getItem("ian-xiaohei-project-id") || `xiaohei-${Date.now()}`,
 };
+localStorage.setItem("ian-xiaohei-project-id", state.projectId);
 
 const els = {
   titleInput: document.querySelector("#titleInput"),
+  minimaxStatus: document.querySelector("#minimaxStatus"),
+  minimaxApiKey: document.querySelector("#minimaxApiKey"),
+  minimaxModel: document.querySelector("#minimaxModel"),
+  saveMinimaxSettings: document.querySelector("#saveMinimaxSettings"),
   copyInput: document.querySelector("#copyInput"),
   voiceSelect: document.querySelector("#voiceSelect"),
+  emotionSelect: document.querySelector("#emotionSelect"),
   speedSelect: document.querySelector("#speedSelect"),
+  aspectRatioSelect: document.querySelector("#aspectRatioSelect"),
   purposeSelect: document.querySelector("#purposeSelect"),
+  voiceDescription: document.querySelector("#voiceDescription"),
+  previewVoice: document.querySelector("#previewVoice"),
+  setDefaultVoice: document.querySelector("#setDefaultVoice"),
+  deleteVoice: document.querySelector("#deleteVoice"),
   localAudioInput: document.querySelector("#localAudioInput"),
   cloneVoiceName: document.querySelector("#cloneVoiceName"),
   cloneAudioInput: document.querySelector("#cloneAudioInput"),
   cloneTranscript: document.querySelector("#cloneTranscript"),
   cloneConsent: document.querySelector("#cloneConsent"),
   cloneVoice: document.querySelector("#cloneVoice"),
+  generateAudio: document.querySelector("#generateAudio"),
+  confirmAudio: document.querySelector("#confirmAudio"),
   audioPreviewPanel: document.querySelector("#audioPreviewPanel"),
+  audioPreviewTitle: document.querySelector("#audioPreviewTitle"),
   audioPreview: document.querySelector("#audioPreview"),
+  audioJobs: document.querySelector("#audioJobs"),
   generateImages: document.querySelector("#generateImages"),
   planPrompts: document.querySelector("#planPrompts"),
   copyPrompts: document.querySelector("#copyPrompts"),
@@ -45,16 +64,27 @@ init().catch((error) => setStatus("初始化失败", error.message || String(err
 async function init() {
   bindEvents();
   await loadConfig();
-  await loadOutputs();
+  await Promise.all([loadAudioJobs(), loadOutputs()]);
 }
 
 function bindEvents() {
   els.planPrompts.addEventListener("click", () => createPlan());
+  els.saveMinimaxSettings.addEventListener("click", () => saveMinimaxSettings());
   els.generateImages.addEventListener("click", () => generateCompleteWorkflow());
+  els.generateAudio.addEventListener("click", () => generateAudioOnly());
+  els.confirmAudio.addEventListener("click", () => confirmCurrentAudio());
   els.cloneVoice.addEventListener("click", () => createCloneVoice());
+  els.previewVoice.addEventListener("click", () => previewCurrentVoice());
+  els.setDefaultVoice.addEventListener("click", () => setCurrentVoiceDefault());
+  els.deleteVoice.addEventListener("click", () => deleteCurrentVoice());
+  els.voiceSelect.addEventListener("change", () => renderVoiceDescription());
+  els.aspectRatioSelect.addEventListener("change", () => resetVisualWorkflow("视频比例已改变，请重新生成分镜计划。"));
   els.copyPrompts.addEventListener("click", () => copyAllPrompts());
   els.openOutputDir.addEventListener("click", () => openOutputDir());
   els.refreshOutputs.addEventListener("click", () => loadOutputs());
+  els.audioJobs.addEventListener("click", handleAudioJobAction);
+  els.promptResults.addEventListener("click", handlePromptAction);
+  els.promptResults.addEventListener("change", handlePromptFileChange);
 }
 
 async function loadConfig() {
@@ -65,52 +95,208 @@ async function loadConfig() {
   els.purposeSelect.innerHTML = (data.purposes || [])
     .map((item) => `<option value="${escapeAttr(item.id)}">${escapeHtml(item.label)}</option>`)
     .join("");
+  els.aspectRatioSelect.innerHTML = (data.aspectRatios || [{ id: "16:9", label: "16:9 横版（默认）" }])
+    .map((item) => `<option value="${escapeAttr(item.id)}" ${item.id === "16:9" ? "selected" : ""}>${escapeHtml(item.label)}</option>`)
+    .join("");
+  els.emotionSelect.innerHTML = (data.tts?.emotions || ["自然"])
+    .map((item) => `<option value="${escapeAttr(item)}" ${item === "自然" ? "selected" : ""}>${escapeHtml(item)}</option>`)
+    .join("");
+  els.speedSelect.innerHTML = (data.tts?.speeds || [1])
+    .map((speed) => `<option value="${speed}" ${Number(speed) === 1 ? "selected" : ""}>${Number(speed).toFixed(1)}×</option>`)
+    .join("");
+  els.minimaxStatus.textContent = data.tts?.minimaxConfigured
+    ? "已配置，可生成配音和固化试听样音"
+    : "未配置，请填写 API Key";
+  els.minimaxStatus.className = data.tts?.minimaxConfigured ? "success" : "error";
+  els.minimaxModel.value = data.tts?.minimaxModel || "speech-2.6-hd";
   renderVoiceChoices(data.tts || {});
+}
+
+async function saveMinimaxSettings() {
+  const apiKey = els.minimaxApiKey.value.trim();
+  if (!apiKey && !state.config?.tts?.minimaxConfigured) {
+    setStatus("缺少 API Key", "请填写 MiniMax（稀宇）API Key。", 0, true);
+    return;
+  }
+  els.saveMinimaxSettings.disabled = true;
+  try {
+    await fetchJson("/api/tts/settings", {
+      method: "POST",
+      body: JSON.stringify({
+        provider: "minimax",
+        api_key: apiKey,
+        base_url: state.config?.tts?.minimaxBaseUrl || "https://api.minimax.io/v1",
+        model: els.minimaxModel.value || "speech-2.6-hd",
+      }),
+    });
+    els.minimaxApiKey.value = "";
+    await loadConfig();
+    await ensurePresetVoicePreviews();
+    setStatus("MiniMax 配置已保存", "API Key 仅保存在本地；预设试听样音已固化到源码目录。", 100);
+  } catch (error) {
+    setStatus("配置保存失败", error.payload?.message || error.message || String(error), 100, true);
+  } finally {
+    els.saveMinimaxSettings.disabled = false;
+  }
+}
+
+async function ensurePresetVoicePreviews() {
+  const choices = [...state.voiceChoices.values()]
+    .filter((choice) => choice.provider === "minimax" && choice.voiceType === "preset" && !choice.previewUrl);
+  const failures = [];
+  for (let index = 0; index < choices.length; index += 1) {
+    const choice = choices[index];
+    setStatus(
+      "正在初始化预设试听",
+      `第 ${index + 1}/${choices.length} 个：${choice.voiceName}。每个样音只生成一次。`,
+      Math.round(((index + 1) / Math.max(1, choices.length)) * 90),
+      false,
+      "保存本地试听",
+    );
+    try {
+      await fetchJson("/api/ian-xiaohei/voice-preview", {
+        method: "POST",
+        body: JSON.stringify({
+          voice_asset_id: choice.voiceAssetId,
+          provider: choice.provider,
+          voice_id: choice.voiceId,
+          voice_name: choice.voiceName,
+          model: choice.model,
+        }),
+      });
+    } catch (error) {
+      failures.push(`${choice.voiceName}：${error.payload?.message || error.message || String(error)}`);
+    }
+  }
+  await loadConfig();
+  if (failures.length) throw new Error(`有 ${failures.length} 个试听样音生成失败：${failures.join("；")}`);
 }
 
 function renderVoiceChoices(tts) {
   state.voiceChoices.clear();
-  const options = [];
   const assets = Array.isArray(tts.voiceAssets) ? tts.voiceAssets : [];
-  const presets = Array.isArray(tts.voices) ? tts.voices : [];
+  const presetInfo = new Map((tts.voices || []).map((voice) => [voice.id, voice]));
+  const options = [];
   for (const asset of assets) {
+    const info = presetInfo.get(asset.voice_id) || {};
     const key = `asset:${asset.id}`;
     state.voiceChoices.set(key, {
       voiceAssetId: Number(asset.id),
       provider: asset.provider,
       voiceId: asset.voice_id,
       voiceName: asset.voice_name,
-      model: asset.metadata?.target_model || "",
+      voiceType: asset.voice_type,
+      model: asset.metadata?.target_model || info.model || "speech-2.6-hd",
+      description: asset.description || info.description || "",
+      useCase: info.useCase || "",
+      previewUrl: asset.preview_url || "",
+      supportsEmotion: asset.supports_emotion !== false && info.supportsEmotion !== false,
+      supportsSpeed: asset.supports_speed !== false && info.supportsSpeed !== false,
+      isDefault: Boolean(asset.is_default),
     });
     options.push({
       key,
-      label: `${asset.is_default ? "默认 · " : ""}${asset.voice_name} · ${asset.voice_type === "clone" ? "我的克隆音色" : asset.provider}`,
+      label: `${asset.is_default ? "默认 · " : ""}${asset.voice_name} · ${asset.voice_type === "clone" ? "我的克隆音色" : info.useCase || "平台预设"}`,
       selected: Boolean(asset.is_default || Number(tts.defaultVoice?.id || 0) === Number(asset.id)),
     });
   }
-  for (const voice of presets) {
-    const key = `preset:${voice.id}`;
-    state.voiceChoices.set(key, {
-      voiceAssetId: 0,
-      provider: tts.defaultProvider || "aliyun_bailian",
-      voiceId: voice.id,
-      voiceName: voice.name,
-      model: voice.model || "",
-    });
-    options.push({
-      key,
-      label: `${voice.name} · 平台预设`,
-      selected: !options.some((item) => item.selected) && false,
-    });
-  }
   if (!options.length) {
-    els.voiceSelect.innerHTML = '<option value="">请先在系统设置中配置 TTS</option>';
+    els.voiceSelect.innerHTML = '<option value="">请先在系统设置中配置 MiniMax</option>';
+    renderVoiceDescription();
     return;
   }
   const selectedIndex = Math.max(0, options.findIndex((item) => item.selected));
   els.voiceSelect.innerHTML = options.map((item, index) => (
     `<option value="${escapeAttr(item.key)}" ${index === selectedIndex ? "selected" : ""}>${escapeHtml(item.label)}</option>`
   )).join("");
+  renderVoiceDescription();
+}
+
+function renderVoiceDescription() {
+  const choice = currentVoiceChoice();
+  if (!choice) {
+    els.voiceDescription.textContent = "请先配置 MiniMax API Key 或创建克隆音色。";
+    return;
+  }
+  els.voiceDescription.textContent = [
+    choice.voiceType === "clone" ? "我的克隆音色" : "精选预设",
+    choice.useCase,
+    choice.description,
+  ].filter(Boolean).join(" · ");
+  const supported = choice.supportsEmotion && choice.supportsSpeed;
+  els.setDefaultVoice.disabled = !supported;
+}
+
+function currentVoiceChoice() {
+  return state.voiceChoices.get(els.voiceSelect.value) || null;
+}
+
+async function previewCurrentVoice() {
+  const choice = currentVoiceChoice();
+  if (!choice) {
+    setStatus("无法试听", "请先选择可用音色。", 0, true);
+    return;
+  }
+  if (choice.previewUrl) {
+    showAudio(choice.previewUrl, `${choice.voiceName} · 音色试听`);
+    return;
+  }
+  setBusy(true);
+  setStatus("正在生成试听", `正在生成“${choice.voiceName}”的真实试听音频。`, 25, false, "音色试听");
+  try {
+    const data = await fetchJson("/api/ian-xiaohei/voice-preview", {
+      method: "POST",
+      body: JSON.stringify({
+        voice_asset_id: choice.voiceAssetId,
+        provider: choice.provider,
+        voice_id: choice.voiceId,
+        voice_name: choice.voiceName,
+        model: choice.model,
+      }),
+    });
+    if (data.preview_url) {
+      showAudio(data.preview_url, `${choice.voiceName} · 音色试听`);
+    } else {
+      const job = await pollTtsJob(data.job.id, "正在生成真实试听");
+      showAudio(job.audio_url, `${choice.voiceName} · 音色试听`);
+    }
+    setStatus("试听已生成", "可以直接播放对比声音效果。", 100, false, "完成");
+  } catch (error) {
+    setStatus("试听失败", error.payload?.message || error.message || String(error), 100, true);
+  } finally {
+    setBusy(false);
+  }
+}
+
+async function setCurrentVoiceDefault() {
+  const choice = currentVoiceChoice();
+  if (!choice?.voiceAssetId) return;
+  try {
+    await fetchJson("/api/ian-xiaohei/voice-default", {
+      method: "POST",
+      body: JSON.stringify({ id: choice.voiceAssetId }),
+    });
+    await loadConfig();
+    setStatus("默认音色已更新", `${choice.voiceName} 已设为默认。`, 100);
+  } catch (error) {
+    setStatus("设置失败", error.payload?.message || error.message || String(error), 100, true);
+  }
+}
+
+async function deleteCurrentVoice() {
+  const choice = currentVoiceChoice();
+  if (!choice?.voiceAssetId) return;
+  if (!window.confirm(`永久删除“${choice.voiceName}”？删除后不提供恢复。`)) return;
+  try {
+    await fetchJson("/api/ian-xiaohei/voice-delete", {
+      method: "POST",
+      body: JSON.stringify({ id: choice.voiceAssetId }),
+    });
+    await loadConfig();
+    setStatus("音色已永久删除", `${choice.voiceName} 已从配音音色中移除。`, 100);
+  } catch (error) {
+    setStatus("删除失败", error.payload?.message || error.message || String(error), 100, true);
+  }
 }
 
 async function createPlan() {
@@ -128,7 +314,10 @@ async function createPlan() {
       body: JSON.stringify({ ...payload, count: Math.max(1, Math.min(9, sentenceCount)) }),
     });
     state.plan = data;
+    state.images = [];
+    state.pendingUploads.clear();
     renderPlan(data);
+    renderImages([], []);
     setStatus("配图分析完成", data.analysisNote || `已生成 ${data.shots?.length || 0} 个配图方案。`, 100, false, "分析完成");
     return data;
   } catch (error) {
@@ -139,27 +328,88 @@ async function createPlan() {
   }
 }
 
+async function generateAudioOnly() {
+  const payload = formPayload();
+  if (!payload.text) {
+    setStatus("缺少文案", "请先输入需要配音的文案。", 0, true);
+    return null;
+  }
+  setBusy(true);
+  try {
+    const job = els.localAudioInput.files?.[0]
+      ? await uploadAndValidateAudio(payload)
+      : await generateTts(payload);
+    state.ttsJob = job;
+    showAudio(job.audio_url || `/api/tts/audio?id=${job.id}`, `音频 #${job.id} · 待确认`);
+    await loadAudioJobs();
+    setStatus("音频生成完成，等待确认", "请试听这条音频；满意后点击“确定本视频使用”。", 100, false, "等待试听确认");
+    return job;
+  } catch (error) {
+    setStatus("音频生成失败", error.payload?.message || error.message || String(error), 100, true);
+    return null;
+  } finally {
+    setBusy(false);
+  }
+}
+
+async function confirmCurrentAudio() {
+  const job = state.ttsJob;
+  const text = formPayload().text;
+  if (!job || job.status !== "completed") {
+    setStatus("没有可确认的音频", "请先生成或试听一条已完成音频。", 0, true);
+    return null;
+  }
+  if (normalizeComparableText(job.text) !== normalizeComparableText(text)) {
+    setStatus("文案不一致", "当前试听音频不是由此文案生成，请重新生成音频。", 0, true);
+    return null;
+  }
+  try {
+    const data = await fetchJson("/api/ian-xiaohei/audio-select", {
+      method: "POST",
+      body: JSON.stringify({ project_id: state.projectId, job_id: job.id }),
+    });
+    state.selectedTtsJob = data.job;
+    state.ttsJob = data.job;
+    resetVisualWorkflow();
+    await loadAudioJobs();
+    showAudio(data.job.audio_url, `已确定使用 · 音频 #${data.job.id}`);
+    setStatus("音频已确定", "时间轴和分镜将严格使用这条音频的真实时长。", 100, false, "可以继续生成");
+    return data.job;
+  } catch (error) {
+    setStatus("确认失败", error.payload?.message || error.message || String(error), 100, true);
+    return null;
+  }
+}
+
 async function generateCompleteWorkflow() {
   const payload = formPayload();
   if (!payload.text) {
     setStatus("缺少文案", "请先输入需要制作视频的文案。", 0, true);
     return;
   }
+  if (
+    !state.selectedTtsJob
+    || normalizeComparableText(state.selectedTtsJob.text) !== normalizeComparableText(payload.text)
+  ) {
+    await generateAudioOnly();
+    return;
+  }
+
   setBusy(true);
   state.images = [];
+  state.pendingUploads.clear();
   renderImages([], []);
   try {
-    const ttsJob = els.localAudioInput.files?.[0]
-      ? await uploadAndValidateAudio(payload)
-      : await generateTts(payload);
+    const ttsJob = state.selectedTtsJob;
     state.ttsJob = ttsJob;
-    showAudio(ttsJob.audio_url || `/api/tts/audio?id=${ttsJob.id}`);
+    showAudio(ttsJob.audio_url || `/api/tts/audio?id=${ttsJob.id}`, `已确定使用 · 音频 #${ttsJob.id}`);
 
     setStatus("正在按音频分镜", "正在读取真实音频时长，并按 3–5 秒语义节奏绑定文案。", 28, false, "音频与文案对齐");
     const plan = await fetchJson("/api/ian-xiaohei/timeline-plan", {
       method: "POST",
       body: JSON.stringify({
         ...payload,
+        project_id: state.projectId,
         tts_job_id: ttsJob.id,
       }),
     });
@@ -191,6 +441,8 @@ async function generateCompleteWorkflow() {
           message: error.payload?.message || error.message || String(error),
         });
       }
+      state.images = images.slice();
+      renderPlan(plan);
       renderImages(images, errors);
     }
     state.images = images;
@@ -205,9 +457,7 @@ async function generateCompleteWorkflow() {
     });
     const project = await pollVideoProject(queued.project.id);
     await loadOutputs();
-    if (project.status !== "completed") {
-      throw new Error(project.error || "剪映草稿生成失败。");
-    }
+    if (project.status !== "completed") throw new Error(project.error || "剪映草稿生成失败。");
     setStatus(
       "完整素材已生成",
       project.draft_path
@@ -228,11 +478,14 @@ async function generateCompleteWorkflow() {
 }
 
 async function generateTts(payload) {
-  const choice = state.voiceChoices.get(els.voiceSelect.value) || {};
-  setStatus("正在生成 TTS", "使用选中的音色生成完整口播音频。", 8, false, "提交配音");
+  const choice = currentVoiceChoice();
+  if (!choice) throw new Error("请先选择可用音色。");
+  if (!choice.supportsEmotion || !choice.supportsSpeed) throw new Error("当前音色不同时支持情感和语速。");
+  setStatus("正在生成 TTS", "使用选中的音色、情感和语速生成完整口播音频。", 8, false, "提交配音");
   const queued = await fetchJson("/api/ian-xiaohei/tts", {
     method: "POST",
     body: JSON.stringify({
+      project_id: state.projectId,
       text: payload.text,
       provider: choice.provider,
       voice_id: choice.voiceId,
@@ -240,18 +493,19 @@ async function generateTts(payload) {
       voice_asset_id: choice.voiceAssetId,
       model: choice.model,
       speed: Number(els.speedSelect.value || 1),
+      emotion: els.emotionSelect.value || "自然",
     }),
   });
   return pollTtsJob(queued.job.id);
 }
 
-async function pollTtsJob(id) {
+async function pollTtsJob(id, label = "正在生成 TTS") {
   for (let attempt = 0; attempt < 600; attempt += 1) {
     const data = await fetchJson(`/api/ian-xiaohei/tts-job?id=${encodeURIComponent(id)}`);
     const job = data.job;
     if (job.status === "completed") return job;
     if (job.status === "failed") throw new Error(job.error || "TTS 生成失败。");
-    setStatus("正在生成 TTS", job.status === "processing" ? "语音合成中。" : "等待语音任务。", Math.min(24, 10 + attempt / 8), false, "生成配音");
+    setStatus(label, job.status === "processing" ? "语音合成中。" : "等待语音任务。", Math.min(90, 10 + attempt / 7), false, "生成配音");
     await delay(1000);
   }
   throw new Error("TTS 生成超时。");
@@ -264,12 +518,79 @@ async function uploadAndValidateAudio(payload) {
   const data = await fetchJson("/api/ian-xiaohei/upload-audio", {
     method: "POST",
     body: JSON.stringify({
+      project_id: state.projectId,
       text: payload.text,
       audio_data: audioData,
       audio_mime: file.type,
     }),
   });
   return data.job;
+}
+
+async function loadAudioJobs() {
+  const data = await fetchJson(`/api/ian-xiaohei/audio-jobs?project_id=${encodeURIComponent(state.projectId)}`);
+  state.audioJobs = data.jobs || [];
+  state.selectedTtsJob = data.selected || null;
+  if (!state.ttsJob && state.selectedTtsJob) state.ttsJob = state.selectedTtsJob;
+  renderAudioJobs();
+}
+
+function renderAudioJobs() {
+  if (!state.audioJobs.length) {
+    els.audioJobs.className = "audio-job-list empty";
+    els.audioJobs.textContent = "当前项目还没有音频。";
+    return;
+  }
+  els.audioJobs.className = "audio-job-list";
+  els.audioJobs.innerHTML = state.audioJobs.map((job) => {
+    const selected = Boolean(job.metadata?.selected_for_project);
+    return `
+      <article class="audio-job ${selected ? "selected" : ""}">
+        <div>
+          <strong>音频 #${job.id} · ${escapeHtml(job.voice_name || job.provider || "配音")} ${selected ? "· 本视频使用" : ""}</strong>
+          <p>${escapeHtml(job.emotion || "自然")} · ${Number(job.speed || 1).toFixed(1)}× · ${escapeHtml(statusLabel(job.status))}</p>
+        </div>
+        <div class="audio-job-actions">
+          ${job.status === "completed" ? `<button type="button" data-audio-action="preview" data-id="${job.id}">试听</button>` : ""}
+          ${job.status === "completed" && !selected ? `<button type="button" data-audio-action="select" data-id="${job.id}">使用</button>` : ""}
+          ${!["waiting", "processing"].includes(job.status) ? `<button type="button" class="danger" data-audio-action="delete" data-id="${job.id}">删除</button>` : ""}
+        </div>
+      </article>
+    `;
+  }).join("");
+}
+
+async function handleAudioJobAction(event) {
+  const button = event.target.closest("[data-audio-action]");
+  if (!button) return;
+  const job = state.audioJobs.find((item) => Number(item.id) === Number(button.dataset.id));
+  if (!job) return;
+  const action = button.dataset.audioAction;
+  if (action === "preview") {
+    state.ttsJob = job;
+    showAudio(job.audio_url, `音频 #${job.id} · ${job.voice_name || job.provider}`);
+    return;
+  }
+  if (action === "select") {
+    state.ttsJob = job;
+    await confirmCurrentAudio();
+    return;
+  }
+  if (action === "delete" && window.confirm(`删除音频 #${job.id}？音频文件也会删除。`)) {
+    try {
+      const data = await fetchJson("/api/ian-xiaohei/audio-delete", {
+        method: "POST",
+        body: JSON.stringify({ project_id: state.projectId, job_id: job.id }),
+      });
+      state.ttsJob = data.selected || null;
+      await loadAudioJobs();
+      if (data.selected) showAudio(data.selected.audio_url, `自动使用 · 音频 #${data.selected.id}`);
+      else hideAudio();
+      setStatus("音频已删除", data.selected ? `已自动改用音频 #${data.selected.id}。` : "当前项目暂无可用音频。", 100);
+    } catch (error) {
+      setStatus("删除失败", error.payload?.message || error.message || String(error), 100, true);
+    }
+  }
 }
 
 async function pollVideoProject(id) {
@@ -292,16 +613,16 @@ async function createCloneVoice() {
     return;
   }
   setBusy(true);
-  setStatus("正在创建克隆音色", "正在上传参考音频并创建可重复使用的音色。", 30, false, "声音复刻");
+  setStatus("正在创建克隆音色", "正在上传参考音频并创建可重复使用的 MiniMax 音色。", 30, false, "声音克隆");
   try {
     const sampleData = await readFileDataUrl(file);
     const data = await fetchJson("/api/voice-assets/create", {
       method: "POST",
       body: JSON.stringify({
         voice_name: name,
-        preferred_name: `xiaohei${Date.now().toString().slice(-6)}`,
-        provider: "aliyun_bailian",
-        target_model: "qwen3-tts-vc-2026-01-22",
+        preferred_name: `xiaohei${Date.now().toString().slice(-8)}`,
+        provider: "minimax",
+        target_model: "speech-2.6-hd",
         sample_data: sampleData,
         sample_mime: file.type,
         sample_transcript: els.cloneTranscript.value.trim(),
@@ -310,11 +631,70 @@ async function createCloneVoice() {
       }),
     });
     await loadConfig();
-    setStatus("克隆音色已保存", data.message || "现在可以在配音音色中选择。", 100, false, "完成");
+    setStatus("克隆音色已保存", data.message || "现在可以在配音音色中选择并试听。", 100, false, "完成");
   } catch (error) {
     setStatus("克隆音色失败", error.payload?.message || error.message || String(error), 100, true);
   } finally {
     setBusy(false);
+  }
+}
+
+async function handlePromptFileChange(event) {
+  const input = event.target.closest("[data-shot-upload]");
+  if (!input?.files?.[0]) return;
+  const index = Number(input.dataset.shotUpload);
+  const file = input.files[0];
+  const dataUrl = await readFileDataUrl(file);
+  state.pendingUploads.set(index, { dataUrl, mimeType: file.type, fileName: file.name });
+  renderPlan(state.plan);
+}
+
+async function handlePromptAction(event) {
+  const button = event.target.closest("[data-prompt-action]");
+  if (!button) return;
+  const index = Number(button.dataset.index);
+  const action = button.dataset.promptAction;
+  if (action === "choose-image") {
+    els.promptResults.querySelector(`[data-shot-upload="${index}"]`)?.click();
+    return;
+  }
+  if (action === "cancel-image") {
+    state.pendingUploads.delete(index);
+    renderPlan(state.plan);
+    return;
+  }
+  if (action === "confirm-image") await uploadShotImage(index);
+}
+
+async function uploadShotImage(index) {
+  const pending = state.pendingUploads.get(index);
+  const shot = state.plan?.shots?.find((item) => Number(item.index) === Number(index));
+  if (!pending || !shot || !state.plan) return;
+  const existing = state.images.find((image) => Number(image.index) === Number(index));
+  setStatus("正在替换分镜图片", `正在裁剪并绑定分镜 #${index}。`, 55, false, "本地图片");
+  try {
+    const data = await fetchJson("/api/ian-xiaohei/upload-shot-image", {
+      method: "POST",
+      body: JSON.stringify({
+        batchId: state.plan.batchId,
+        plan: state.plan,
+        shot,
+        aspectRatio: state.plan.aspectRatio,
+        image_data: pending.dataUrl,
+        image_mime: pending.mimeType,
+        replace_asset_id: existing?.assetId || "",
+      }),
+    });
+    state.images = [
+      ...state.images.filter((image) => Number(image.index) !== Number(index)),
+      data.image,
+    ].sort((left, right) => Number(left.index) - Number(right.index));
+    state.pendingUploads.delete(index);
+    renderPlan(state.plan);
+    renderImages(state.images, []);
+    setStatus("本地图片已绑定", `分镜 #${index} 后续只使用这张已确认图片。`, 100, false, "完成");
+  } catch (error) {
+    setStatus("图片替换失败", error.payload?.message || error.message || String(error), 100, true);
   }
 }
 
@@ -334,6 +714,7 @@ function formPayload() {
     title: els.titleInput.value.trim(),
     text: els.copyInput.value.trim(),
     purpose: els.purposeSelect.value || "article",
+    aspectRatio: els.aspectRatioSelect.value || "16:9",
   };
 }
 
@@ -346,41 +727,70 @@ function renderPlan(plan) {
     els.promptResults.textContent = "还没有生成提示词。";
     return;
   }
+  const ratioStyle = previewRatioStyle(plan.aspectRatio);
   els.promptResults.className = "prompt-list";
-  els.promptResults.innerHTML = shots.map((shot) => `
-    <article class="prompt-card">
-      <h3>#${shot.index} ${escapeHtml(shot.topic)}</h3>
-      <p class="meta">${shot.startTime !== undefined ? `${formatTime(shot.startTime)}–${formatTime(shot.endTime)} · ${Number(shot.duration || 0).toFixed(1)} 秒 · ` : ""}${escapeHtml(shot.role || "自动角色")} · ${escapeHtml(shot.structureType)}</p>
-      <div class="semantic-binding">
-        <strong>对应原文</strong>
-        <p>${escapeHtml(shot.sourceText || "")}</p>
-        <dl>
-          <dt>核心意思</dt><dd>${escapeHtml(shot.coreIdea || "")}</dd>
-          <dt>小黑动作</dt><dd>${escapeHtml(shot.xiaoheiAction || "")}</dd>
-          <dt>视觉隐喻</dt><dd>${escapeHtml(shot.visualMetaphor || "")}</dd>
-        </dl>
-      </div>
-      <details>
-        <summary>查看完整生图提示词</summary>
-        <pre>${escapeHtml(shot.prompt)}</pre>
-      </details>
-    </article>
-  `).join("");
+  els.promptResults.innerHTML = shots.map((shot) => {
+    const image = state.images.find((item) => Number(item.index) === Number(shot.index));
+    const pending = state.pendingUploads.get(Number(shot.index));
+    return `
+      <article class="prompt-card" data-shot-card="${shot.index}">
+        <h3>#${shot.index} ${escapeHtml(shot.topic)}</h3>
+        <p class="meta">${shot.startTime !== undefined ? `${formatTime(shot.startTime)}–${formatTime(shot.endTime)} · ${Number(shot.duration || 0).toFixed(1)} 秒 · ` : ""}${escapeHtml(shot.role || "自动角色")} · ${escapeHtml(shot.structureType)}</p>
+        <div class="semantic-binding">
+          <strong>对应原文</strong>
+          <p>${escapeHtml(shot.sourceText || "")}</p>
+          <dl>
+            <dt>核心意思</dt><dd>${escapeHtml(shot.coreIdea || "")}</dd>
+            <dt>小黑动作</dt><dd>${escapeHtml(shot.xiaoheiAction || "")}</dd>
+            <dt>视觉隐喻</dt><dd>${escapeHtml(shot.visualMetaphor || "")}</dd>
+          </dl>
+        </div>
+        <details>
+          <summary>查看完整生图提示词</summary>
+          <pre>${escapeHtml(shot.prompt)}</pre>
+        </details>
+        <div class="prompt-actions">
+          <button type="button" data-prompt-action="choose-image" data-index="${shot.index}">${image ? "替换本地图片" : "添加本地图片素材"}</button>
+          <input hidden type="file" accept=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp" data-shot-upload="${shot.index}" />
+          ${image ? `<span class="binding-ok">已绑定 ${escapeHtml(image.source === "local_upload" ? "本地图片" : "AI 图片")}</span>` : ""}
+        </div>
+        ${image ? `
+          <div class="shot-image-state">
+            <strong>本分镜当前使用图片</strong>
+            <img style="${ratioStyle}" src="${escapeAttr(image.imageUrl || image.thumbnailUrl || "")}" alt="${escapeAttr(shot.topic)}" />
+            <span class="path">${escapeHtml(image.imagePath || "")}</span>
+          </div>
+        ` : ""}
+        ${pending ? `
+          <div class="manual-preview">
+            <strong>裁剪前预览：${escapeHtml(pending.fileName)}</strong>
+            <img style="${ratioStyle}" src="${escapeAttr(pending.dataUrl)}" alt="待上传本地图片" />
+            <p class="meta">确认后系统会按 ${escapeHtml(plan.aspectRatio || "16:9")} 居中裁剪，并直接覆盖旧图。</p>
+            <div class="manual-preview-actions">
+              <button type="button" class="primary" data-prompt-action="confirm-image" data-index="${shot.index}">确认使用</button>
+              <button type="button" data-prompt-action="cancel-image" data-index="${shot.index}">取消</button>
+            </div>
+          </div>
+        ` : ""}
+      </article>
+    `;
+  }).join("");
 }
 
 function renderImages(images, errors = []) {
   els.imageCount.textContent = String(images.length);
   if (!images.length && !errors.length) {
     els.imageResults.className = "image-list empty";
-    els.imageResults.textContent = "生成后的图片会显示在这里。";
+    els.imageResults.textContent = "生成或上传后的图片会显示在这里。";
     return;
   }
   els.imageResults.className = "image-list";
+  const ratioStyle = previewRatioStyle(state.plan?.aspectRatio);
   const imageHtml = images.map((image) => {
     const shot = state.plan?.shots?.find((item) => Number(item.index) === Number(image.index));
     return `
       <article class="image-card">
-        <img src="${escapeAttr(image.imageUrl || image.thumbnailUrl || "")}" alt="${escapeAttr(image.topic || "小黑配图")}" />
+        <img style="${ratioStyle}" src="${escapeAttr(image.imageUrl || image.thumbnailUrl || "")}" alt="${escapeAttr(image.topic || "小黑配图")}" />
         <h3>#${image.index} ${escapeHtml(image.topic || "小黑配图")}</h3>
         <p class="meta">${escapeHtml(shot?.sourceText || image.purpose || "")}</p>
         <p class="path">${escapeHtml(image.imagePath || "")}</p>
@@ -425,15 +835,44 @@ async function copyAllPrompts() {
   setStatus("已复制提示词", "提示词已经复制。", 100);
 }
 
-function showAudio(url) {
+function resetVisualWorkflow(message = "") {
+  state.plan = null;
+  state.images = [];
+  state.pendingUploads.clear();
+  state.promptsText = "";
+  renderPlan(null);
+  renderImages([], []);
+  if (message) setStatus("需要重新生成分镜", message, 0);
+}
+
+function showAudio(url, title = "当前试听音频") {
   els.audioPreview.src = url;
+  els.audioPreviewTitle.textContent = title;
   els.audioPreviewPanel.hidden = false;
 }
 
+function hideAudio() {
+  els.audioPreview.removeAttribute("src");
+  els.audioPreview.load();
+  els.audioPreviewPanel.hidden = true;
+}
+
 function setBusy(busy) {
-  for (const element of [els.generateImages, els.planPrompts, els.copyPrompts, els.cloneVoice]) {
+  for (const element of [
+    els.generateImages,
+    els.saveMinimaxSettings,
+    els.generateAudio,
+    els.confirmAudio,
+    els.planPrompts,
+    els.copyPrompts,
+    els.cloneVoice,
+    els.previewVoice,
+    els.setDefaultVoice,
+    els.deleteVoice,
+  ]) {
     element.disabled = busy;
   }
+  if (!busy) renderVoiceDescription();
 }
 
 function imageProgress(done, total) {
@@ -483,6 +922,25 @@ function formatTime(value) {
   const minutes = Math.floor(total / 60);
   const seconds = total - minutes * 60;
   return `${String(minutes).padStart(2, "0")}:${seconds.toFixed(1).padStart(4, "0")}`;
+}
+
+function statusLabel(value) {
+  return {
+    waiting: "等待中",
+    processing: "生成中",
+    completed: "已完成",
+    failed: "失败",
+  }[value] || String(value || "");
+}
+
+function normalizeComparableText(value) {
+  return String(value || "").toLowerCase().replace(/[^\u4e00-\u9fa5a-z0-9]/g, "");
+}
+
+function previewRatioStyle(ratio) {
+  if (ratio === "9:16") return "--preview-ratio: 9 / 16";
+  if (ratio === "1:1") return "--preview-ratio: 1 / 1";
+  return "--preview-ratio: 16 / 9";
 }
 
 function escapeHtml(value) {
