@@ -91,7 +91,7 @@ const SHOT_ROLE_DEFS = [
   },
 ];
 
-export function createIanXiaoheiRoutes({ baseDir, sendJson, imageService }) {
+export function createIanXiaoheiRoutes({ baseDir, sendJson, imageService, modelRouter = null }) {
   const outputRoot = path.join(baseDir, "image-assets", "ian-xiaohei");
   fs.mkdirSync(outputRoot, { recursive: true });
 
@@ -127,7 +127,7 @@ export function createIanXiaoheiRoutes({ baseDir, sendJson, imageService }) {
     if (req.method === "POST" && route === "plan") {
       try {
         const body = await readJsonBody(req, { maxBytes: 256 * 1024 });
-        const plan = buildXiaoheiPlan(body);
+        const plan = await buildXiaoheiPlan(body, modelRouter);
         sendJson(res, 200, { ok: true, ...plan });
       } catch (error) {
         sendJson(res, error instanceof HttpBodyError ? error.statusCode : 400, {
@@ -193,7 +193,7 @@ export function createIanXiaoheiRoutes({ baseDir, sendJson, imageService }) {
     if (req.method === "POST" && route === "generate") {
       try {
         const body = await readJsonBody(req, { maxBytes: 256 * 1024 });
-        const plan = buildXiaoheiPlan(body);
+        const plan = await buildXiaoheiPlan(body, modelRouter);
         const batchDir = path.join(outputRoot, plan.batchId);
         fs.mkdirSync(batchDir, { recursive: true });
         fs.writeFileSync(path.join(batchDir, "plan.json"), JSON.stringify(plan, null, 2), "utf8");
@@ -263,24 +263,26 @@ export function createIanXiaoheiRoutes({ baseDir, sendJson, imageService }) {
   };
 }
 
-function buildXiaoheiPlan(input = {}) {
+async function buildXiaoheiPlan(input = {}, modelRouter = null) {
   const text = normalizeText(input.text);
   if (!text) throw new Error("请先输入文案。");
-  const count = clamp(Number(input.count) || 1, 1, 9);
+  const maxCount = clamp(Number(input.count) || 1, 1, 9);
   const purpose = PURPOSES.some((item) => item.id === input.purpose) ? input.purpose : "article";
   const batchId = `${dateSlug()}-ian-xiaohei-${randomUUID().slice(0, 8)}`;
   const title = inferTitle(text, input.title);
-  const segments = splitIntoSegments(text, count);
-  const roles = rolesForCount(count);
-  const shots = segments.map((segment, index) => buildShot({
+  const aiAnchors = input.semanticAnalysis === false
+    ? null
+    : await analyzeSemanticAnchorsWithModel({ text, title, maxCount, modelRouter });
+  const anchors = aiAnchors?.length
+    ? aiAnchors
+    : selectSemanticAnchors(text, maxCount);
+  const shots = anchors.map((anchor, index) => buildShot({
     index: index + 1,
-    total: count,
+    total: anchors.length,
     title,
-    text,
-    segment,
+    anchor,
     purpose,
     preferredStructure: input.structureType,
-    roleDef: roles[index],
   }));
   return {
     batchId,
@@ -289,6 +291,11 @@ function buildXiaoheiPlan(input = {}) {
     aspectRatio: "16:9",
     purpose,
     purposeLabel: PURPOSES.find((item) => item.id === purpose)?.label || "文章正文配图",
+    requestedCount: maxCount,
+    analysisMode: aiAnchors?.length ? "ai_semantic" : "local_semantic",
+    analysisNote: aiAnchors?.length
+      ? "已使用当前系统文本模型理解全文并选择认知锚点。"
+      : "当前文本模型不可用，已使用本地语义规则选择完整段落；没有按字数硬切。",
     shots,
   };
 }
@@ -343,20 +350,35 @@ function updateResultFile(batchDir, { image = null, error = null } = {}) {
   fs.writeFileSync(resultPath, JSON.stringify(result, null, 2), "utf8");
 }
 
-function buildShot({ index, total, title, segment, purpose, preferredStructure, roleDef }) {
-  const shotRole = roleDef || SHOT_ROLE_DEFS[(index - 1) % SHOT_ROLE_DEFS.length];
+function buildShot({ index, total, title, anchor, purpose, preferredStructure }) {
+  const segment = anchor.sourceText;
+  const shotRole = getRoleDefinition(anchor.roleId) || inferRoleDefinition(segment, index, total);
   const structureType = STRUCTURE_TYPES.includes(preferredStructure)
     ? preferredStructure
-    : inferStructureType(segment, index, shotRole);
-  const topic = inferTopic(segment, title, index);
-  const coreIdea = inferCoreIdea(segment);
-  const metaphor = buildMetaphor(segment, structureType, { index, total, title, shotRole });
-  const labels = inferLabels(segment, purpose, shotRole);
+    : (STRUCTURE_TYPES.includes(anchor.structureType)
+      ? anchor.structureType
+      : inferStructureType(segment, index, shotRole));
+  const topic = anchor.visualTitle || inferTopic(segment, title, index);
+  const coreIdea = anchor.coreIdea || inferCoreIdea(segment);
+  const metaphor = buildMetaphor(segment, structureType, {
+    index,
+    total,
+    title,
+    shotRole,
+    anchor,
+  });
+  const labels = Array.isArray(anchor.labels) && anchor.labels.length
+    ? anchor.labels.slice(0, 6)
+    : inferLabels(segment, purpose, shotRole);
   const prompt = buildPrompt({
     topic,
     seriesRole: `${index}/${total} ${shotRole.label}`,
     structureType,
     coreIdea,
+    sourceText: segment,
+    visualSubject: anchor.visualSubject,
+    xiaoheiAction: anchor.xiaoheiAction,
+    visualMetaphor: anchor.visualMetaphor,
     composition: metaphor.composition,
     elements: metaphor.elements,
     labels,
@@ -366,6 +388,11 @@ function buildShot({ index, total, title, segment, purpose, preferredStructure, 
     topic,
     purpose: shotPurposeLabel(purpose, index),
     role: shotRole.label,
+    roleId: shotRole.id,
+    sourceText: segment,
+    visualSubject: anchor.visualSubject || "",
+    xiaoheiAction: anchor.xiaoheiAction || "",
+    visualMetaphor: anchor.visualMetaphor || "",
     structureType,
     coreIdea,
     composition: metaphor.composition,
@@ -375,7 +402,19 @@ function buildShot({ index, total, title, segment, purpose, preferredStructure, 
   };
 }
 
-function buildPrompt({ topic, seriesRole, structureType, coreIdea, composition, elements, labels }) {
+function buildPrompt({
+  topic,
+  seriesRole,
+  structureType,
+  coreIdea,
+  sourceText,
+  visualSubject,
+  xiaoheiAction,
+  visualMetaphor,
+  composition,
+  elements,
+  labels,
+}) {
   return [
     "Generate one standalone 16:9 horizontal Chinese article illustration.",
     "",
@@ -387,8 +426,12 @@ function buildPrompt({ topic, seriesRole, structureType, coreIdea, composition, 
     "",
     `Theme: ${topic}`,
     `Series role: ${seriesRole}. This image belongs to a multi-image set, so it must use a clearly different metaphor, object set, and composition from the other images in the same set.`,
+    `Exact source paragraph this image must explain: ${sourceText}`,
     `Structure type: ${structureType}`,
     `Core idea: ${coreIdea}`,
+    `Visual subject: ${visualSubject || coreIdea}`,
+    `Xiaohei core action: ${xiaoheiAction || "小黑执行当前段落最关键的动作"}`,
+    `Fresh metaphor for this paragraph: ${visualMetaphor || "从当前段落重新发明一个低科技物理隐喻"}`,
     `Composition: ${composition}`,
     `Suggested elements: ${elements.join(" / ")}`,
     `Chinese handwritten labels: ${labels.join(" / ")}`,
@@ -397,17 +440,23 @@ function buildPrompt({ topic, seriesRole, structureType, coreIdea, composition, 
     "Black for main line art and 小黑. Orange for main flow/path/arrows. Red only for key warnings/problems/results. Blue only for secondary notes or feedback/system state.",
     "",
     "Constraints:",
-    "One image explains only one core structure. Keep the main subject around 40%-60% of the canvas. Preserve at least 35% blank white space. Use at most 5-8 short handwritten Chinese labels. Do not write a title in the top-left corner. Do not write the structure type on the image. Do not make it a formal diagram, course slide, or dense explainer. Do not repeat the same machine, route, door, funnel, card, or character pose across the image set. Do not copy prior examples or reuse known case compositions unless explicitly requested; invent a fresh visual metaphor for this specific article. It should be clear but not instructional, interesting but not childish, strange but clean.",
+    "The picture must explain the exact source paragraph above, not merely the article's broad topic. Preserve its subject, action, direction, contrast, and result. Do not substitute a generic learning, workplace, AI, or business scene. One image explains only one core structure. Keep the main subject around 40%-60% of the canvas. Preserve at least 35% blank white space. Use at most 5-8 short handwritten Chinese labels, and derive labels only from this source paragraph. Do not write a title in the top-left corner. Do not write the structure type on the image. Do not make it a formal diagram, course slide, or dense explainer. Do not repeat the same machine, route, door, funnel, card, or character pose across the image set. Do not copy prior examples or reuse known case compositions unless explicitly requested; invent a fresh visual metaphor for this specific paragraph. It should be clear but not instructional, interesting but not childish, strange but clean.",
   ].join("\n");
 }
 
-function buildMetaphor(segment, structureType, { index, total, title, shotRole }) {
+function buildMetaphor(segment, structureType, { index, total, title, shotRole, anchor = {} }) {
   const domain = inferDomainLayer(`${title} ${segment}`);
-  const base = shotRole?.composition || fallbackCompositionFor(structureType);
-  const composition = `${base} 内容主题只取当前段落，不把全文都塞进同一张图；相关物件使用${domain.elements.join("、")}，并保持第 ${index}/${total} 张与其他张的主物件和小黑动作不同。`;
+  const semanticBase = anchor.visualMetaphor && anchor.xiaoheiAction
+    ? `核心隐喻是“${anchor.visualMetaphor}”。小黑正在${anchor.xiaoheiAction}。`
+    : (shotRole?.composition || fallbackCompositionFor(structureType));
+  const composition = `${semanticBase} 画面只翻译当前原文“${trimText(segment, 80)}”，不扩写成全文主题；围绕“${anchor.visualSubject || inferTopic(segment, title, index)}”选择具体物件，可参考${domain.elements.join("、")}，但不允许用通用图标替代原文动作。保持第 ${index}/${total} 张与其他张的主物件和小黑动作不同。`;
   return {
     composition,
-    elements: uniqueList([...(shotRole?.elements || []), ...domain.elements]).slice(0, 6),
+    elements: uniqueList([
+      ...(Array.isArray(anchor.elements) ? anchor.elements : []),
+      ...(shotRole?.elements || []),
+      ...domain.elements,
+    ]).slice(0, 6),
   };
 }
 

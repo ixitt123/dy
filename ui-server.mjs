@@ -151,6 +151,7 @@ const handleIanXiaoheiRoutes = createIanXiaoheiRoutes({
   baseDir: __dirname,
   sendJson,
   imageService,
+  modelRouter,
 });
 
 // ModelRouter 统一模型路由
