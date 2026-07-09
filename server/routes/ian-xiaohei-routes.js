@@ -276,6 +276,7 @@ async function buildXiaoheiPlan(input = {}, modelRouter = null) {
   const anchors = aiAnchors?.length
     ? aiAnchors
     : selectSemanticAnchors(text, maxCount);
+  const semanticUnitCount = segmentTextIntoSemanticUnits(text).length;
   const shots = anchors.map((anchor, index) => buildShot({
     index: index + 1,
     total: anchors.length,
@@ -292,10 +293,11 @@ async function buildXiaoheiPlan(input = {}, modelRouter = null) {
     purpose,
     purposeLabel: PURPOSES.find((item) => item.id === purpose)?.label || "文章正文配图",
     requestedCount: maxCount,
+    semanticUnitCount,
     analysisMode: aiAnchors?.length ? "ai_semantic" : "local_semantic",
     analysisNote: aiAnchors?.length
-      ? "已使用当前系统文本模型理解全文并选择认知锚点。"
-      : "当前文本模型不可用，已使用本地语义规则选择完整段落；没有按字数硬切。",
+      ? `已使用当前系统文本模型理解全文，从 ${semanticUnitCount} 个语义段中选择 ${anchors.length} 个认知锚点；纯过渡句不会强行配图。`
+      : `当前文本模型不可用，已用本地规则从 ${semanticUnitCount} 个完整语义段中选择 ${anchors.length} 个认知锚点；没有按字数硬切。`,
     shots,
   };
 }
@@ -390,6 +392,7 @@ function buildShot({ index, total, title, anchor, purpose, preferredStructure })
     role: shotRole.label,
     roleId: shotRole.id,
     sourceText: segment,
+    sourceIndex: Number.isFinite(anchor.sourceIndex) ? anchor.sourceIndex : index - 1,
     visualSubject: anchor.visualSubject || "",
     xiaoheiAction: anchor.xiaoheiAction || "",
     visualMetaphor: anchor.visualMetaphor || "",
@@ -540,6 +543,9 @@ async function analyzeSemanticAnchorsWithModel({ text, title, maxCount, modelRou
             "优先选择：核心判断、认知转折、断点、输入输出闭环、前后对比、角色变化、方法动作、常见误区。",
             "每张图只能绑定一段语义完整的原文，source_text 必须逐字摘自用户原文。",
             "小黑必须执行该段的核心物理动作，不能只站在旁边。隐喻必须为当前段重新发明，不能只画宽泛主题。",
+            "core_idea、visual_subject、xiaohei_action、visual_metaphor 只能解释各自 source_text，禁止混入相邻句或全文其他内容。",
+            "小黑保持黑色实心、白点眼、细腿、空表情；不要给小黑穿衣服、不要微笑、不要举写有大字的牌子。",
+            "不要把原文或标题写进画面，只允许 2-6 字的少量短批注。",
             `最多输出 ${maxCount} 个锚点；短文可以少于 ${maxCount} 个。按原文出现顺序返回。`,
             "只返回 JSON，不要 markdown。格式：",
             '{"anchors":[{"source_text":"","role_id":"hook|problem|switch|method|path|warning|layer|loop|cta","visual_title":"","core_idea":"","visual_subject":"","xiaohei_action":"","visual_metaphor":"","structure_type":"Workflow|系统局部|前后对比|角色状态|概念隐喻|方法分层|地图路线|小漫画分镜","labels":[""],"elements":[""]}]}',
@@ -558,7 +564,9 @@ async function analyzeSemanticAnchorsWithModel({ text, title, maxCount, modelRou
     const anchors = Array.isArray(parsed?.anchors)
       ? parsed.anchors.map((item) => normalizeAiAnchor(item, units)).filter(Boolean)
       : [];
-    return dedupeAnchors(anchors).slice(0, maxCount);
+    return dedupeAnchors(anchors)
+      .sort((a, b) => Number(a.sourceIndex || 0) - Number(b.sourceIndex || 0))
+      .slice(0, maxCount);
   } catch {
     return null;
   }
@@ -570,13 +578,16 @@ function normalizeAiAnchor(value, units) {
   if (!sourceText) return null;
   const inferredRole = inferRoleDefinition(sourceText, 1, 1);
   const roleId = getRoleDefinition(value.role_id)?.id || inferredRole.id;
+  const fallbackAction = defaultActionForRole(roleId, sourceText);
+  const proposedAction = trimText(value.xiaohei_action || "", 48);
   return {
     sourceText,
+    sourceIndex: units.indexOf(sourceText),
     roleId,
     visualTitle: trimText(value.visual_title || inferTopic(sourceText, "", 1), 32),
     coreIdea: trimText(value.core_idea || inferCoreIdea(sourceText), 100),
     visualSubject: trimText(value.visual_subject || extractVisualSubject(sourceText), 32),
-    xiaoheiAction: trimText(value.xiaohei_action || defaultActionForRole(roleId, sourceText), 48),
+    xiaoheiAction: isValidXiaoheiAction(proposedAction) ? proposedAction : fallbackAction,
     visualMetaphor: trimText(value.visual_metaphor || defaultMetaphorForRole(roleId, sourceText), 80),
     structureType: STRUCTURE_TYPES.includes(value.structure_type)
       ? value.structure_type
@@ -638,6 +649,7 @@ function buildLocalAnchor(sourceText, index, total) {
   const role = inferRoleDefinition(sourceText, index + 1, total);
   return {
     sourceText,
+    sourceIndex: index,
     roleId: role.id,
     visualTitle: inferTopic(sourceText, "", index + 1),
     coreIdea: inferCoreIdea(sourceText),
@@ -717,10 +729,26 @@ function semanticAnchorScore(text, index, total) {
 }
 
 function extractVisualSubject(text) {
+  const specialized = [
+    { pattern: /(半年内?.{0,8}(?:流利|说).{0,6}(?:英文|英语)|(?:流利|说).{0,6}(?:英文|英语))/u, label: "半年说流利英文" },
+    { pattern: /(英文学生.{0,12}(?:语言|英文).{0,6}使用者|忘掉.{0,8}学生.{0,12}使用者)/u, label: "学生到语言使用者" },
+    { pattern: /(行动篇|从今天开始|现在开始|立即行动)/u, label: "行动正式开始" },
+    { pattern: /(管理岗|管理者|领导力)/u, label: "管理角色" },
+    { pattern: /(背景音乐|BGM|音乐节拍)/iu, label: "背景音乐节拍" },
+  ].find((item) => item.pattern.test(String(text || "")));
+  if (specialized) return specialized.label;
   const clean = String(text || "").replace(/[。！？!?；;，,：:]/g, " ");
   const phrases = clean.match(/[\u4e00-\u9fa5A-Za-z0-9]{2,12}/g) || [];
-  const stop = /^(所以|但是|然而|然后|今天|开始|请你|这个|一个|自己|可以|就是|作为)$/u;
-  return trimText(phrases.find((item) => !stop.test(item)) || clean, 24);
+  const stop = /^(所以|但是|然而|然后|好了|今天|开始|从今天开始|请你|这个|一个|自己|可以|就是|作为|几乎所有人)$/u;
+  const candidate = phrases
+    .map((item) => item.replace(/^(所以|但是|然而|然后|好了|请你)/u, ""))
+    .find((item) => item.length >= 2 && !stop.test(item));
+  return trimText(candidate || clean, 24);
+}
+
+function isValidXiaoheiAction(value) {
+  if (!value) return false;
+  return !/(微笑|大笑|可爱|穿上|脱下|T恤|衣服|服装|举起.{0,8}(?:大字|旗帜|牌子)|复杂表情)/iu.test(value);
 }
 
 function defaultActionForRole(roleId, text) {
