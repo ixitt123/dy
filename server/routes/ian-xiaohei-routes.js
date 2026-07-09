@@ -525,6 +525,319 @@ async function buildXiaoheiPlan(input = {}, modelRouter = null) {
   };
 }
 
+async function buildTimedXiaoheiPlan({
+  text,
+  title: explicitTitle = "",
+  purpose: requestedPurpose = "article",
+  preferredStructure = "",
+  audioDuration,
+  ttsJobId,
+  modelRouter,
+}) {
+  const normalizedText = normalizeText(text);
+  const purpose = PURPOSES.some((item) => item.id === requestedPurpose) ? requestedPurpose : "article";
+  const title = inferTitle(normalizedText, explicitTitle);
+  const batchId = `${dateSlug()}-ian-xiaohei-video-${randomUUID().slice(0, 8)}`;
+  const timedSegments = buildAudioTimedSegments(normalizedText, audioDuration);
+  const aiAnchors = await enrichTimedSegmentsWithModel({
+    title,
+    segments: timedSegments.map((segment) => segment.text),
+    modelRouter,
+  });
+  const anchors = timedSegments.map((segment, index) => {
+    const ai = aiAnchors?.[index];
+    const local = buildLocalAnchor(segment.text, index, timedSegments.length);
+    return {
+      ...local,
+      ...(ai || {}),
+      sourceText: segment.text,
+      sourceIndex: index,
+    };
+  });
+  const shots = anchors.map((anchor, index) => ({
+    ...buildShot({
+      index: index + 1,
+      total: anchors.length,
+      title,
+      anchor,
+      purpose,
+      preferredStructure,
+    }),
+    segmentId: `seg-${String(index + 1).padStart(3, "0")}`,
+    startTime: timedSegments[index].start,
+    endTime: timedSegments[index].end,
+    duration: timedSegments[index].duration,
+  }));
+  return {
+    batchId,
+    title,
+    sourceText: normalizedText,
+    aspectRatio: "16:9",
+    purpose,
+    purposeLabel: PURPOSES.find((item) => item.id === purpose)?.label || "文章正文配图",
+    requestedCount: "auto",
+    semanticUnitCount: shots.length,
+    analysisMode: aiAnchors?.length === timedSegments.length ? "ai_timed_semantic" : "local_timed_semantic",
+    analysisNote: `已按 ${Number(audioDuration).toFixed(2)} 秒真实音频生成 ${shots.length} 个连续语义镜头，每段约 3-5 秒。`,
+    timingSource: "tts_audio_duration_weighted",
+    audioDuration: Number(audioDuration.toFixed(3)),
+    ttsJobId: Number(ttsJobId),
+    shots,
+  };
+}
+
+async function enrichTimedSegmentsWithModel({ title, segments, modelRouter }) {
+  if (!modelRouter || typeof modelRouter.generate !== "function" || !segments.length) return null;
+  try {
+    const result = await modelRouter.generate({
+      taskType: "rewrite",
+      messages: [
+        {
+          role: "system",
+          content: [
+            "你是 Ian 小黑视频配图导演。用户已经按 TTS 音频节奏拆好了全部文案段落。",
+            "不得删除、合并、重排或新增段落。必须为每个输入段落返回一条视觉设计，数量和 source_index 完全一致。",
+            "每条只解释该段原文：提炼主体、动作、转折和结果，再发明一个低科技、怪诞但清楚的物理隐喻。",
+            "小黑是黑色实心、白点眼、细腿、空表情的严肃操作员，必须执行核心动作；不能穿衣、微笑、举标题牌或当装饰。",
+            "禁止通用英语学习图、通用职场图、PPT、正式流程图、商业插画、可爱卡通和大段可读文字。",
+            "只返回 JSON，不要 markdown。",
+            '{"anchors":[{"source_index":0,"role_id":"hook|problem|switch|method|path|warning|layer|loop|cta","visual_title":"","core_idea":"","visual_subject":"","xiaohei_action":"","visual_metaphor":"","structure_type":"Workflow|系统局部|前后对比|角色状态|概念隐喻|方法分层|地图路线|小漫画分镜","labels":[""],"elements":[""]}]}',
+          ].join("\n"),
+        },
+        {
+          role: "user",
+          content: JSON.stringify({
+            title,
+            segments: segments.map((sourceText, sourceIndex) => ({
+              source_index: sourceIndex,
+              source_text: sourceText,
+            })),
+          }, null, 2),
+        },
+      ],
+      options: { temperature: 0.25 },
+    });
+    const parsed = parseJsonObject(result?.content);
+    const source = Array.isArray(parsed?.anchors) ? parsed.anchors : [];
+    const byIndex = new Map();
+    for (const value of source) {
+      const index = Number(value?.source_index);
+      if (!Number.isInteger(index) || index < 0 || index >= segments.length || byIndex.has(index)) continue;
+      const anchor = normalizeAiAnchor({ ...value, source_text: segments[index] }, segments);
+      if (anchor) byIndex.set(index, anchor);
+    }
+    if (byIndex.size !== segments.length) return null;
+    return segments.map((_, index) => byIndex.get(index));
+  } catch {
+    return null;
+  }
+}
+
+function buildAudioTimedSegments(text, audioDuration) {
+  const duration = Math.max(1, Number(audioDuration || 0));
+  const targetCount = clamp(Math.round(duration / 4), 1, 30);
+  let units = segmentTextIntoSemanticUnits(text);
+  if (!units.length) units = [normalizeText(text)];
+
+  while (units.length < targetCount) {
+    let bestIndex = -1;
+    let bestSplit = null;
+    for (let index = 0; index < units.length; index += 1) {
+      const split = splitUnitAtSemanticBoundary(units[index]);
+      if (!split || split.length !== 2) continue;
+      if (bestIndex < 0 || units[index].length > units[bestIndex].length) {
+        bestIndex = index;
+        bestSplit = split;
+      }
+    }
+    if (bestIndex < 0) break;
+    units.splice(bestIndex, 1, ...bestSplit);
+  }
+
+  while (units.length > targetCount) {
+    let mergeIndex = 0;
+    let mergeWeight = Number.POSITIVE_INFINITY;
+    for (let index = 0; index < units.length - 1; index += 1) {
+      const weight = speechWeight(units[index]) + speechWeight(units[index + 1]);
+      if (weight < mergeWeight) {
+        mergeWeight = weight;
+        mergeIndex = index;
+      }
+    }
+    units.splice(mergeIndex, 2, `${units[mergeIndex]}${units[mergeIndex + 1]}`);
+  }
+
+  const weights = units.map(speechWeight);
+  const totalWeight = weights.reduce((sum, value) => sum + value, 0) || units.length;
+  let cursor = 0;
+  return units.map((unit, index) => {
+    const isLast = index === units.length - 1;
+    const rawDuration = duration * (weights[index] / totalWeight);
+    const end = isLast ? duration : Math.min(duration, cursor + rawDuration);
+    const segment = {
+      text: unit,
+      start: Number(cursor.toFixed(3)),
+      end: Number(end.toFixed(3)),
+      duration: Number(Math.max(0.1, end - cursor).toFixed(3)),
+    };
+    cursor = end;
+    return segment;
+  });
+}
+
+function splitUnitAtSemanticBoundary(value) {
+  const text = String(value || "").trim();
+  if (text.length < 28) return null;
+  const boundaries = [];
+  for (let index = 8; index < text.length - 8; index += 1) {
+    if (/[，,；;：:]/u.test(text[index])) boundaries.push(index + 1);
+  }
+  const connectorPattern = /(但是|然而|所以|因此|同时|接下来|从今天开始|换句话说|也就是说)/gu;
+  let match;
+  while ((match = connectorPattern.exec(text))) {
+    if (match.index >= 8 && match.index <= text.length - 8) boundaries.push(match.index);
+  }
+  if (!boundaries.length) return null;
+  const midpoint = text.length / 2;
+  const splitAt = boundaries.sort((a, b) => Math.abs(a - midpoint) - Math.abs(b - midpoint))[0];
+  const left = text.slice(0, splitAt).trim();
+  const right = text.slice(splitAt).trim();
+  return left.length >= 6 && right.length >= 6 ? [left, right] : null;
+}
+
+function speechWeight(text) {
+  const value = String(text || "");
+  const readable = (value.match(/[\u4e00-\u9fa5A-Za-z0-9]/g) || []).length;
+  const pauses = (value.match(/[，,。！？!?；;：:]/g) || []).length;
+  return Math.max(1, readable + pauses * 2.5);
+}
+
+function createDirectorProjectForPlan(taskStore, plan, audioJob) {
+  if (!taskStore?.createDirectorProject || !taskStore?.replaceDirectorScenes) {
+    throw new Error("导演项目存储不可用。");
+  }
+  const project = taskStore.createDirectorProject({
+    task_id: Number(audioJob?.task_id || 0),
+    rewrite_id: Number(audioJob?.rewrite_id || 0),
+    title: plan.title,
+    source_text: plan.sourceText,
+    video_type: "knowledge",
+    visual_style: "ian_xiaohei_whiteboard",
+    platform: "douyin",
+    pace: "audio_synced",
+    estimated_duration: Number(plan.audioDuration || 0),
+    status: "completed",
+    score: 90,
+    metadata_json: JSON.stringify({
+      source_type: "ian_xiaohei_tts_timeline",
+      source_key: `tts:${audioJob.id}`,
+      tts_job_id: Number(audioJob.id),
+      scene_count: plan.shots.length,
+      total_duration: plan.audioDuration,
+      ratio: "16:9",
+      timing_source: plan.timingSource,
+      batch_id: plan.batchId,
+    }),
+  });
+  taskStore.replaceDirectorScenes(project.id, plan.shots.map((shot) => ({
+    scene_index: shot.index,
+    duration: shot.duration,
+    purpose: shot.role,
+    emotion: "自然",
+    voice_text: shot.sourceText,
+    subtitle: shot.sourceText,
+    visual_style: "Ian 小黑白底手绘",
+    camera: "slow_push_in",
+    composition: shot.composition,
+    image_prompt: shot.prompt,
+    motion_prompt: "slow_push_in",
+    bgm: "",
+    sfx: "",
+    transition: shot.index === plan.shots.length ? "fade" : "straight_cut",
+    asset_type: "image",
+    metadata_json: JSON.stringify({
+      segment_id: shot.segmentId,
+      start_time: shot.startTime,
+      end_time: shot.endTime,
+      caption_keywords: shot.labels,
+      source_text: shot.sourceText,
+      visual_subject: shot.visualSubject,
+      xiaohei_action: shot.xiaoheiAction,
+    }),
+  })));
+  return taskStore.getDirectorProject(project.id);
+}
+
+function decodeUploadedAudio(dataUrl, mimeHint = "") {
+  const match = String(dataUrl || "").match(/^data:([^;,]+);base64,([A-Za-z0-9+/=\s]+)$/);
+  const mimeType = String(match?.[1] || mimeHint || "").toLowerCase();
+  const extension = AUDIO_MIME_EXTENSIONS[mimeType];
+  if (!extension) throw new Error("本地 TTS 只支持 MP3、WAV 或 M4A。");
+  const buffer = Buffer.from(match?.[2] || "", "base64");
+  if (!buffer.length) throw new Error("上传的音频为空。");
+  if (buffer.length > MAX_AUDIO_BYTES) throw new Error("上传的音频不能超过 30MB。");
+  return { buffer, mimeType, extension };
+}
+
+function resolveAsrApiKey(settings = {}) {
+  return String(
+    settings.asr?.api_key
+    || settings.speechRecognition?.apiKey
+    || settings.tts?.aliyun_bailian?.api_key
+    || settings.rewriteProviders?.dashscope?.apiKey
+    || "",
+  ).trim();
+}
+
+function normalizeComparableText(value) {
+  return String(value || "").toLowerCase().replace(/[^\u4e00-\u9fa5a-z0-9]/g, "");
+}
+
+function textSimilarity(left, right) {
+  const a = normalizeComparableText(left);
+  const b = normalizeComparableText(right);
+  if (!a || !b) return 0;
+  if (a === b) return 1;
+  const bigrams = (value) => {
+    const output = [];
+    for (let index = 0; index < value.length - 1; index += 1) output.push(value.slice(index, index + 2));
+    return output.length ? output : [value];
+  };
+  const aPairs = bigrams(a);
+  const counts = new Map();
+  for (const pair of bigrams(b)) counts.set(pair, (counts.get(pair) || 0) + 1);
+  let overlap = 0;
+  for (const pair of aPairs) {
+    const count = counts.get(pair) || 0;
+    if (count > 0) {
+      overlap += 1;
+      counts.set(pair, count - 1);
+    }
+  }
+  return (2 * overlap) / (aPairs.length + bigrams(b).length);
+}
+
+function probeAudioDuration(ffprobePath, filePath) {
+  if (!ffprobePath || !fs.existsSync(ffprobePath)) return Promise.resolve(0);
+  return new Promise((resolve) => {
+    const child = spawn(ffprobePath, [
+      "-v", "error",
+      "-show_entries", "format=duration",
+      "-of", "default=noprint_wrappers=1:nokey=1",
+      filePath,
+    ], { windowsHide: true, stdio: ["ignore", "pipe", "ignore"] });
+    let stdout = "";
+    child.stdout.on("data", (chunk) => {
+      stdout += chunk.toString("utf8");
+    });
+    child.on("error", () => resolve(0));
+    child.on("close", (code) => {
+      const duration = Number(stdout.trim());
+      resolve(code === 0 && Number.isFinite(duration) ? duration : 0);
+    });
+  });
+}
+
 function normalizeShotInput(value) {
   const shot = value && typeof value === "object" ? value : {};
   return {
