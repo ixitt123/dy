@@ -961,7 +961,7 @@ function buildPrompt({
     "Pure white background. Minimalist black hand-drawn line art. Slightly wobbly pen lines. Lots of empty white space. Sparse red/orange/blue handwritten Chinese annotations. Clean absurd product-sketch feeling. No gradients, no shadows, no paper texture, no complex background, no commercial vector style, no PPT infographic look, no cute mascot poster, no children's illustration, no realistic UI.",
     "",
     "Recurring IP character required:",
-    "小黑, a small solid-black absurd creature with white dot eyes, tiny thin legs, blank serious expression, slightly uneven hand-drawn body shape. 小黑 must perform the core conceptual action, not decorate the scene. Make 小黑 serious, deadpan, and slightly bizarre, not cute.",
+    "小黑, one small solid-black absurd creature with exactly two white dot eyes, exactly two tiny thin legs, at most two thin arms, no duplicated face or limbs, blank serious expression, slightly uneven hand-drawn body shape. 小黑 must perform the core conceptual action, not decorate the scene. Make 小黑 serious, deadpan, and slightly bizarre, not cute. Never draw extra eyes, extra legs, extra arms, layered faces, smiling, confident, excited, or expressive facial features.",
     "",
     `Theme: ${topic}`,
     `Series role: ${seriesRole}. This image belongs to a multi-image set, so it must use a clearly different metaphor, object set, and composition from the other images in the same set.`,
@@ -979,7 +979,7 @@ function buildPrompt({
     "Black for main line art and 小黑. Orange for main flow/path/arrows. Red only for key warnings/problems/results. Blue only for secondary notes or feedback/system state.",
     "",
     "Constraints:",
-    "The picture must explain the exact source paragraph above, not merely the article's broad topic. Preserve its subject, action, direction, contrast, and result. Do not substitute a generic learning, workplace, AI, or business scene. One image explains only one core structure. Keep the main subject around 40%-60% of the canvas. Preserve at least 35% blank white space. Use at most 5-8 short handwritten Chinese labels, and derive labels only from this source paragraph. Do not write a title in the top-left corner. Do not write the structure type on the image. Do not make it a formal diagram, course slide, or dense explainer. Do not repeat the same machine, route, door, funnel, card, or character pose across the image set. Do not copy prior examples or reuse known case compositions unless explicitly requested; invent a fresh visual metaphor for this specific paragraph. It should be clear but not instructional, interesting but not childish, strange but clean.",
+    "The picture must explain the exact source paragraph above, not merely the article's broad topic. Preserve its subject, action, direction, contrast, and result. Do not substitute a generic learning, workplace, AI, or business scene. Draw only one Xiaohei character unless the composition explicitly requires a before/after comparison; even then, each Xiaohei must have exactly two eyes and two legs. One image explains only one core structure. Keep the main subject around 40%-60% of the canvas. Preserve at least 35% blank white space. Use at most 5-8 short handwritten Chinese labels, and derive labels only from this source paragraph. Do not write a title in the top-left corner. Do not write the structure type on the image. Do not make it a formal diagram, course slide, or dense explainer. Do not repeat the same machine, route, door, funnel, card, or character pose across the image set. Do not copy prior examples or reuse known case compositions unless explicitly requested; invent a fresh visual metaphor for this specific paragraph. It should be clear but not instructional, interesting but not childish, strange but clean.",
   ].join("\n");
 }
 
@@ -1294,7 +1294,7 @@ function specializedSubjectForText(text) {
 
 function isValidXiaoheiAction(value) {
   if (!value) return false;
-  return !/(微笑|大笑|可爱|穿上|脱下|T恤|衣服|服装|徽章|学生证|握拳|写着|标有|举起.{0,8}(?:大字|旗帜|牌子)|复杂表情)/iu.test(value);
+  return !/(微笑|大笑|可爱|自信|兴奋|露出.{0,6}表情|穿上|脱下|T恤|衣服|服装|徽章|学生证|握拳|写着|标有|举起.{0,8}(?:大字|旗帜|牌子)|复杂表情)/iu.test(value);
 }
 
 function isValidVisualSubject(value) {
