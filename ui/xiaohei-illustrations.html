@@ -31,41 +31,67 @@
         </label>
         <div class="control-grid">
           <label class="field">
-            <span>最多输出张数（按文案语义选段）</span>
-            <select id="countSelect">
-              <option value="1">1 张：单核心观点</option>
-              <option value="2">2 张：前后对比 / 两段结构</option>
-              <option value="3">3 张：短文多段配图</option>
-              <option value="4">4 张：长文重点配图</option>
-              <option value="5">5 张：文章重点配图</option>
-              <option value="6">6 张：完整文章配图</option>
-              <option value="7">7 张：长文深度配图</option>
-              <option value="8">8 张：长文完整配图</option>
-              <option value="9">9 张：上限，谨慎使用</option>
+            <span>配音音色</span>
+            <select id="voiceSelect"></select>
+          </label>
+          <label class="field">
+            <span>语速</span>
+            <select id="speedSelect">
+              <option value="0.9">稍慢</option>
+              <option value="1" selected>自然</option>
+              <option value="1.1">稍快</option>
+              <option value="1.2">短视频快节奏</option>
             </select>
           </label>
           <label class="field">
-            <span>用途</span>
-            <select id="purposeSelect"></select>
-          </label>
-          <label class="field">
-            <span>结构偏好</span>
-            <select id="structureSelect">
-              <option value="">自动判断</option>
+            <span>图片用途</span>
+            <select id="purposeSelect">
             </select>
           </label>
         </div>
+        <details class="advanced-panel">
+          <summary>备用音频与克隆音色</summary>
+          <div class="advanced-grid">
+            <label class="field">
+              <span>上传已有 TTS（备用）</span>
+              <input id="localAudioInput" type="file" accept=".mp3,.wav,.m4a,audio/mpeg,audio/wav,audio/mp4" />
+              <small>上传后会先识别并核对文案；不一致时停止生成。</small>
+            </label>
+            <label class="field">
+              <span>克隆音色名称</span>
+              <input id="cloneVoiceName" type="text" placeholder="例如：我的口播音色" />
+            </label>
+            <label class="field">
+              <span>本人授权参考音频</span>
+              <input id="cloneAudioInput" type="file" accept=".mp3,.wav,.m4a,audio/mpeg,audio/wav,audio/mp4" />
+              <small>建议 10–20 秒清晰单人声，无音乐和混响。</small>
+            </label>
+            <label class="field">
+              <span>参考音频文字</span>
+              <input id="cloneTranscript" type="text" placeholder="填写参考音频中说的原文" />
+            </label>
+          </div>
+          <label class="consent-row">
+            <input id="cloneConsent" type="checkbox" />
+            <span>我确认拥有该声音的合法使用授权</span>
+          </label>
+          <button id="cloneVoice" type="button">创建并保存克隆音色</button>
+        </details>
         <div class="actions">
-          <button id="generateImages" type="button" class="primary">生成小黑配图</button>
-          <button id="planPrompts" type="button">只生成提示词</button>
+          <button id="generateImages" type="button" class="primary">一键生成完整素材并导入剪映</button>
+          <button id="planPrompts" type="button">仅分析文案配图</button>
           <button id="copyPrompts" type="button">复制全部提示词</button>
+        </div>
+        <div id="audioPreviewPanel" class="audio-preview" hidden>
+          <strong>当前 TTS 音频</strong>
+          <audio id="audioPreview" controls></audio>
         </div>
       </section>
 
       <section class="status-panel" aria-live="polite">
         <div>
           <span id="statusLabel">待输入</span>
-          <p id="statusDetail">先理解文案并选择认知转折段，再生成对应的 16:9 小黑配图。</p>
+          <p id="statusDetail">输入文案后，系统会自动配音、按音频节奏分镜、逐段配图并导入剪映。</p>
         </div>
         <div class="progress-box">
           <div class="progress-meta">
