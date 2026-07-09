@@ -508,14 +508,274 @@ function inferLabels(segment, purpose, roleDef = null) {
   return candidates.slice(0, 6).length ? candidates.slice(0, 6) : ["输入", "判断", "输出"];
 }
 
-function rolesForCount(count) {
-  if (count <= 1) return [SHOT_ROLE_DEFS[0]];
-  if (count === 2) return [SHOT_ROLE_DEFS[0], SHOT_ROLE_DEFS[2]];
-  if (count === 3) return [SHOT_ROLE_DEFS[0], SHOT_ROLE_DEFS[3], SHOT_ROLE_DEFS[8]];
-  if (count === 4) return [SHOT_ROLE_DEFS[0], SHOT_ROLE_DEFS[1], SHOT_ROLE_DEFS[3], SHOT_ROLE_DEFS[8]];
-  const selected = SHOT_ROLE_DEFS.slice(0, Math.min(count, SHOT_ROLE_DEFS.length));
-  while (selected.length < count) selected.push(SHOT_ROLE_DEFS[selected.length % SHOT_ROLE_DEFS.length]);
-  return selected;
+function getRoleDefinition(roleId) {
+  return SHOT_ROLE_DEFS.find((item) => item.id === roleId) || null;
+}
+
+function inferRoleDefinition(segment, index, total) {
+  const text = String(segment || "");
+  if (/(不是|而是|忘掉|当做|身份|从.+变成)/u.test(text)) return getRoleDefinition("switch");
+  if (/(误区|错误|不要|不能|别再|避坑|警惕)/u.test(text)) return getRoleDefinition("warning");
+  if (/(问题|卡住|困难|焦虑|混乱|失败|为什么)/u.test(text)) return getRoleDefinition("problem");
+  if (/(反馈|复盘|循环|闭环|回来|回流)/u.test(text)) return getRoleDefinition("loop");
+  if (/(层|阶段|第一|第二|第三|能力|框架)/u.test(text)) return getRoleDefinition("layer");
+  if (/(方法|步骤|通过|使用|练习|做法|先.+再)/u.test(text)) return getRoleDefinition("method");
+  if (/(今天|现在|开始|行动|接下来|然后|走向)/u.test(text)) return getRoleDefinition(index === total ? "cta" : "path");
+  if (index === 1) return getRoleDefinition("hook");
+  if (index === total && /(去做|马上|立刻|试试|记住)/u.test(text)) return getRoleDefinition("cta");
+  return getRoleDefinition("method");
+}
+
+async function analyzeSemanticAnchorsWithModel({ text, title, maxCount, modelRouter }) {
+  if (!modelRouter || typeof modelRouter.generate !== "function") return null;
+  try {
+    const result = await modelRouter.generate({
+      taskType: "rewrite",
+      messages: [
+        {
+          role: "system",
+          content: [
+            "你是 Ian 小黑中文正文配图的语义导演，只负责理解文章和选择真正需要配图的认知锚点。",
+            "不要平均切字，不要为了凑数量重复段落，不要按固定的开头/问题/方法/结尾模板强套原文。",
+            "优先选择：核心判断、认知转折、断点、输入输出闭环、前后对比、角色变化、方法动作、常见误区。",
+            "每张图只能绑定一段语义完整的原文，source_text 必须逐字摘自用户原文。",
+            "小黑必须执行该段的核心物理动作，不能只站在旁边。隐喻必须为当前段重新发明，不能只画宽泛主题。",
+            `最多输出 ${maxCount} 个锚点；短文可以少于 ${maxCount} 个。按原文出现顺序返回。`,
+            "只返回 JSON，不要 markdown。格式：",
+            '{"anchors":[{"source_text":"","role_id":"hook|problem|switch|method|path|warning|layer|loop|cta","visual_title":"","core_idea":"","visual_subject":"","xiaohei_action":"","visual_metaphor":"","structure_type":"Workflow|系统局部|前后对比|角色状态|概念隐喻|方法分层|地图路线|小漫画分镜","labels":[""],"elements":[""]}]}',
+            "labels 只能使用当前 source_text 中已有或直接概括出的 2-6 字短词，最多 6 个。",
+          ].join("\n"),
+        },
+        {
+          role: "user",
+          content: JSON.stringify({ title, text, max_images: maxCount }, null, 2),
+        },
+      ],
+      options: { temperature: 0.2 },
+    });
+    const parsed = parseJsonObject(result?.content);
+    const units = segmentTextIntoSemanticUnits(text);
+    const anchors = Array.isArray(parsed?.anchors)
+      ? parsed.anchors.map((item) => normalizeAiAnchor(item, units)).filter(Boolean)
+      : [];
+    return dedupeAnchors(anchors).slice(0, maxCount);
+  } catch {
+    return null;
+  }
+}
+
+function normalizeAiAnchor(value, units) {
+  if (!value || typeof value !== "object") return null;
+  const sourceText = resolveSourceExcerpt(value.source_text, units);
+  if (!sourceText) return null;
+  const inferredRole = inferRoleDefinition(sourceText, 1, 1);
+  const roleId = getRoleDefinition(value.role_id)?.id || inferredRole.id;
+  return {
+    sourceText,
+    roleId,
+    visualTitle: trimText(value.visual_title || inferTopic(sourceText, "", 1), 32),
+    coreIdea: trimText(value.core_idea || inferCoreIdea(sourceText), 100),
+    visualSubject: trimText(value.visual_subject || extractVisualSubject(sourceText), 32),
+    xiaoheiAction: trimText(value.xiaohei_action || defaultActionForRole(roleId, sourceText), 48),
+    visualMetaphor: trimText(value.visual_metaphor || defaultMetaphorForRole(roleId, sourceText), 80),
+    structureType: STRUCTURE_TYPES.includes(value.structure_type)
+      ? value.structure_type
+      : getRoleDefinition(roleId)?.structure,
+    labels: uniqueList(Array.isArray(value.labels) ? value.labels : []).map((item) => trimText(item, 8)).slice(0, 6),
+    elements: uniqueList(Array.isArray(value.elements) ? value.elements : []).map((item) => trimText(item, 16)).slice(0, 5),
+  };
+}
+
+function parseJsonObject(value) {
+  const text = String(value || "").trim()
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/```\s*$/i, "");
+  try {
+    return JSON.parse(text);
+  } catch {
+    const start = text.indexOf("{");
+    const end = text.lastIndexOf("}");
+    if (start < 0 || end <= start) return null;
+    try {
+      return JSON.parse(text.slice(start, end + 1));
+    } catch {
+      return null;
+    }
+  }
+}
+
+function resolveSourceExcerpt(value, units) {
+  const candidate = normalizeText(value);
+  if (!candidate) return "";
+  const exact = units.find((unit) => unit === candidate);
+  if (exact) return exact;
+  const containing = units.find((unit) => unit.includes(candidate) || candidate.includes(unit));
+  if (containing) return containing;
+  const candidateTerms = new Set(candidate.match(/[\u4e00-\u9fa5]{2,6}/g) || []);
+  let best = "";
+  let bestScore = 0;
+  for (const unit of units) {
+    const terms = unit.match(/[\u4e00-\u9fa5]{2,6}/g) || [];
+    const score = terms.reduce((sum, term) => sum + (candidateTerms.has(term) ? term.length : 0), 0);
+    if (score > bestScore) {
+      best = unit;
+      bestScore = score;
+    }
+  }
+  return bestScore >= 4 ? best : "";
+}
+
+function selectSemanticAnchors(text, maxCount) {
+  const units = segmentTextIntoSemanticUnits(text);
+  if (!units.length) return [];
+  const selected = units.length <= maxCount
+    ? units
+    : selectDistributedAnchors(units, maxCount);
+  return selected.map((sourceText, index) => buildLocalAnchor(sourceText, index, selected.length));
+}
+
+function buildLocalAnchor(sourceText, index, total) {
+  const role = inferRoleDefinition(sourceText, index + 1, total);
+  return {
+    sourceText,
+    roleId: role.id,
+    visualTitle: inferTopic(sourceText, "", index + 1),
+    coreIdea: inferCoreIdea(sourceText),
+    visualSubject: extractVisualSubject(sourceText),
+    xiaoheiAction: defaultActionForRole(role.id, sourceText),
+    visualMetaphor: defaultMetaphorForRole(role.id, sourceText),
+    structureType: role.structure,
+    labels: inferLabels(sourceText, "article", role),
+    elements: [],
+  };
+}
+
+function segmentTextIntoSemanticUnits(text) {
+  const paragraphs = normalizeText(text).split(/\n{2,}|\n/u).map((item) => item.trim()).filter(Boolean);
+  const units = [];
+  for (const paragraph of paragraphs) {
+    const sentences = paragraph
+      .split(/(?<=[。！？!?；;])/u)
+      .map((item) => item.trim())
+      .filter(Boolean);
+    for (const sentence of sentences.length ? sentences : [paragraph]) {
+      units.push(...splitLongSemanticUnit(sentence));
+    }
+  }
+  return dedupeText(units);
+}
+
+function splitLongSemanticUnit(value) {
+  const text = String(value || "").trim();
+  if (text.length <= 100) return text ? [text] : [];
+  const clauses = text.split(/(?<=[，,：:])|(?=(?:但是|然而|所以|因此|从今天|请你|也就是说|换句话说))/u)
+    .map((item) => item.trim())
+    .filter(Boolean);
+  if (clauses.length <= 1) return [text];
+  const output = [];
+  let current = "";
+  for (const clause of clauses) {
+    if (current && current.length + clause.length > 90) {
+      output.push(current);
+      current = clause;
+    } else {
+      current += clause;
+    }
+  }
+  if (current) output.push(current);
+  return output;
+}
+
+function selectDistributedAnchors(units, maxCount) {
+  const selected = [];
+  for (let index = 0; index < maxCount; index += 1) {
+    const start = Math.floor(index * units.length / maxCount);
+    const end = Math.max(start + 1, Math.floor((index + 1) * units.length / maxCount));
+    const window = units.slice(start, end);
+    let bestOffset = 0;
+    let bestScore = -Infinity;
+    window.forEach((unit, offset) => {
+      const score = semanticAnchorScore(unit, start + offset, units.length);
+      if (score > bestScore) {
+        bestScore = score;
+        bestOffset = offset;
+      }
+    });
+    selected.push(units[start + bestOffset]);
+  }
+  return dedupeText(selected);
+}
+
+function semanticAnchorScore(text, index, total) {
+  let score = Math.min(String(text || "").length, 90) / 15;
+  if (/(不是|而是|忘掉|当做|意味着|本质|核心)/u.test(text)) score += 7;
+  if (/(问题|误区|不要|不能|但是|然而|却)/u.test(text)) score += 5;
+  if (/(方法|步骤|通过|行动|开始|第一|第二|第三)/u.test(text)) score += 4;
+  if (index === 0) score += 2;
+  if (index === total - 1) score += 1;
+  return score;
+}
+
+function extractVisualSubject(text) {
+  const clean = String(text || "").replace(/[。！？!?；;，,：:]/g, " ");
+  const phrases = clean.match(/[\u4e00-\u9fa5A-Za-z0-9]{2,12}/g) || [];
+  const stop = /^(所以|但是|然而|然后|今天|开始|请你|这个|一个|自己|可以|就是|作为)$/u;
+  return trimText(phrases.find((item) => !stop.test(item)) || clean, 24);
+}
+
+function defaultActionForRole(roleId, text) {
+  const subject = extractVisualSubject(text);
+  const actions = {
+    hook: `从一台怪测量仪里拉出“${subject}”的判断纸条`,
+    problem: `从杂乱纸团中拎出真正卡住“${subject}”的那一根线`,
+    switch: `摘下旧身份纸牌，并把“${subject}”推入新的使用场景`,
+    method: `把“${subject}”放进低科技工具台并亲手完成关键动作`,
+    path: `牵着代表“${subject}”的橙色线走过必要节点`,
+    warning: `从错误装置里捞出与“${subject}”有关的误区纸团`,
+    layer: `把“${subject}”拆成少量层级并搬动最关键的一层`,
+    loop: `接住“${subject}”从结果端返回的反馈线`,
+    cta: `把“${subject}”的最后一个行动黑点按到纸面上`,
+  };
+  return actions[roleId] || actions.method;
+}
+
+function defaultMetaphorForRole(roleId, text) {
+  const subject = extractVisualSubject(text);
+  const metaphors = {
+    hook: `一台只吐出一个结论的旧测量仪，测量对象是“${subject}”`,
+    problem: `一堆互相缠住的纸线中只有一根连接“${subject}”`,
+    switch: `旧身份衣架与“${subject}”实际使用门之间的一次换牌`,
+    method: `把“${subject}”从抽象名词压成可执行动作的怪工具台`,
+    path: `一条由当前动作推动、通向“${subject}”结果的小路`,
+    warning: `会吞掉“${subject}”正确动作的歪斜警示井`,
+    layer: `承托“${subject}”的几层不规则纸盒`,
+    loop: `让“${subject}”动作与反馈重新接上的手摇回流机`,
+    cta: `从犹豫走到执行“${subject}”的三格行动纸`,
+  };
+  return metaphors[roleId] || metaphors.method;
+}
+
+function dedupeAnchors(anchors) {
+  const seen = new Set();
+  return anchors.filter((anchor) => {
+    const key = String(anchor?.sourceText || "").replace(/\s+/g, "");
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function dedupeText(values) {
+  const seen = new Set();
+  const output = [];
+  for (const value of values) {
+    const clean = String(value || "").trim();
+    const key = clean.replace(/\s+/g, "");
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    output.push(clean);
+  }
+  return output;
 }
 
 function inferDomainLayer(text) {
@@ -536,59 +796,6 @@ function inferDomainLayer(text) {
     return { elements: ["今天节点", "行动线轴", "第一步便签", "落点黑点"] };
   }
   return { elements: ["输入纸片", "判断便签", "输出纸条", "橙色路径"] };
-}
-
-function splitIntoSegments(text, count) {
-  const sentences = expandLongSegments(text
-    .split(/(?<=[。！？!?；;])|\n+/)
-    .map((item) => item.trim())
-    .filter(Boolean), count);
-  if (sentences.length <= count) return padSegments(sentences, count, text);
-  const buckets = Array.from({ length: count }, () => []);
-  sentences.forEach((sentence, index) => {
-    const bucketIndex = Math.min(count - 1, Math.floor(index * count / sentences.length));
-    buckets[bucketIndex].push(sentence);
-  });
-  return buckets.map((bucket) => bucket.join("")).filter(Boolean);
-}
-
-function expandLongSegments(segments, count) {
-  const expanded = [];
-  const targetLength = Math.max(34, Math.ceil(segments.join("").length / Math.max(1, count)));
-  for (const segment of segments) {
-    if (expanded.length < count && segment.length > targetLength * 1.45) {
-      expanded.push(...splitByLength(segment, targetLength));
-    } else {
-      expanded.push(segment);
-    }
-  }
-  if (expanded.length < count) {
-    const extra = [];
-    for (const segment of expanded) {
-      if (extra.length + expanded.length >= count) break;
-      if (segment.includes("，") || segment.includes(",")) {
-        extra.push(...segment.split(/[，,]/).map((item) => item.trim()).filter((item) => item.length >= 8));
-      }
-    }
-    return uniqueList([...expanded, ...extra]);
-  }
-  return expanded;
-}
-
-function splitByLength(text, targetLength) {
-  const chunks = [];
-  let cursor = 0;
-  while (cursor < text.length) {
-    chunks.push(text.slice(cursor, cursor + targetLength).trim());
-    cursor += targetLength;
-  }
-  return chunks.filter(Boolean);
-}
-
-function padSegments(segments, count, fallback) {
-  const output = [...segments];
-  while (output.length < count) output.push(output[output.length - 1] || fallback);
-  return output.slice(0, count);
 }
 
 function normalizeText(value) {
