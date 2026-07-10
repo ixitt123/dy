@@ -335,7 +335,7 @@ export function createIanXiaoheiRoutes({
           provider,
           voice_id: voiceId,
           voice_name: voiceName,
-          model: String(asset?.metadata?.target_model || body.model || "speech-2.6-hd"),
+          model: String(asset?.metadata?.target_model || asset?.metadata?.model || body.model || ""),
           outputPath: preview.path,
         });
         if (generated.error) {
@@ -486,7 +486,7 @@ export function createIanXiaoheiRoutes({
           voice_id: String(asset?.voice_id || body.voice_id || ""),
           voice_name: String(asset?.voice_name || body.voice_name || ""),
           voice_asset_id: Number(asset?.id || 0),
-          model: String(asset?.metadata?.target_model || body.model || ""),
+          model: String(asset?.metadata?.target_model || asset?.metadata?.model || body.model || ""),
           speed: SPEED_OPTIONS.includes(Number(body.speed)) ? Number(body.speed) : 1,
           emotion: EMOTION_OPTIONS.includes(String(body.emotion)) ? String(body.emotion) : "自然",
           format: "mp3",
