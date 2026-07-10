@@ -1059,7 +1059,7 @@ function buildAudioTimedSegments(text, audioDuration) {
 }
 
 function extractTtsSubtitleSegments(job, fallbackText, audioDuration) {
-  const metadata = parseJsonObject(job?.metadata_json, {});
+  const metadata = parseStoredJsonObject(job?.metadata_json, {});
   const raw = metadata.subtitles || metadata.subtitle || metadata.words || metadata.word_timestamps || [];
   const tokens = normalizeSubtitleTokens(raw, audioDuration);
   if (!tokens.length) return null;
@@ -1166,7 +1166,7 @@ function parseMaybeJson(value) {
   }
 }
 
-function parseJsonObject(value, fallback = {}) {
+function parseStoredJsonObject(value, fallback = {}) {
   if (!value) return fallback;
   if (typeof value === "object") return value;
   try {
@@ -2155,7 +2155,7 @@ function resolveBatchDir(outputRoot, id) {
 
 function readJsonFile(filePath, fallback = {}) {
   try {
-    return parseJsonObject(fs.readFileSync(filePath, "utf8"), fallback);
+    return parseStoredJsonObject(fs.readFileSync(filePath, "utf8"), fallback);
   } catch {
     return fallback;
   }
