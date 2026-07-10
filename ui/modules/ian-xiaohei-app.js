@@ -191,38 +191,6 @@ async function deleteMinimaxApi() {
   }
 }
 
-async function ensurePresetVoicePreviews() {
-  const choices = [...state.voiceChoices.values()]
-    .filter((choice) => choice.provider === "minimax" && choice.voiceType === "preset" && !choice.previewUrl);
-  const failures = [];
-  for (let index = 0; index < choices.length; index += 1) {
-    const choice = choices[index];
-    setStatus(
-      "正在初始化预设试听",
-      `第 ${index + 1}/${choices.length} 个：${choice.voiceName}。每个样音只生成一次。`,
-      Math.round(((index + 1) / Math.max(1, choices.length)) * 90),
-      false,
-      "保存本地试听",
-    );
-    try {
-      await fetchJson("/api/ian-xiaohei/voice-preview", {
-        method: "POST",
-        body: JSON.stringify({
-          voice_asset_id: choice.voiceAssetId,
-          provider: choice.provider,
-          voice_id: choice.voiceId,
-          voice_name: choice.voiceName,
-          model: choice.model,
-        }),
-      });
-    } catch (error) {
-      failures.push(`${choice.voiceName}：${error.payload?.message || error.message || String(error)}`);
-    }
-  }
-  await loadConfig();
-  if (failures.length) throw new Error(`有 ${failures.length} 个试听样音生成失败：${failures.join("；")}`);
-}
-
 function renderVoiceChoices(tts) {
   state.voiceChoices.clear();
   const assets = Array.isArray(tts.voiceAssets) ? tts.voiceAssets : [];
@@ -620,6 +588,7 @@ async function handleAudioJobAction(event) {
       await loadAudioJobs();
       if (data.selected) showAudio(data.selected.audio_url, `自动使用 · 音频 #${data.selected.id}`);
       else hideAudio();
+      resetVisualWorkflow();
       setStatus("音频已删除", data.selected ? `已自动改用音频 #${data.selected.id}。` : "当前项目暂无可用音频。", 100);
     } catch (error) {
       setStatus("删除失败", error.payload?.message || error.message || String(error), 100, true);

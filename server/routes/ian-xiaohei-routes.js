@@ -2097,7 +2097,7 @@ function promptsMarkdown(plan) {
 function listOutputBatches(outputRoot, videoProductService = null) {
   if (!fs.existsSync(outputRoot)) return [];
   return fs.readdirSync(outputRoot, { withFileTypes: true })
-    .filter((entry) => entry.isDirectory())
+    .filter((entry) => entry.isDirectory() && !entry.name.startsWith("_"))
     .map((entry) => {
       const folderPath = path.join(outputRoot, entry.name);
       const result = readJsonFile(path.join(folderPath, "result.json"), {});
@@ -2146,6 +2146,7 @@ function listOutputBatches(outputRoot, videoProductService = null) {
 function resolveBatchDir(outputRoot, id) {
   const safeId = safeBatchId(id);
   if (!safeId) return "";
+  if (safeId.startsWith("_")) return "";
   const root = path.resolve(outputRoot);
   const target = path.resolve(root, safeId);
   if (target !== root && target.startsWith(`${root}${path.sep}`)) return target;
