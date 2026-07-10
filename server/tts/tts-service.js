@@ -441,7 +441,12 @@ export function createTtsService({ baseDir, taskStore, getSettings, ffmpegPath, 
       format: "mp3",
       outputPath,
     });
-    return result.success ? result : { error: result.error || result.detail || "试听音频生成失败。" };
+    return result.success
+      ? result
+      : {
+          error: result.error || result.detail || "?????????",
+          detail: result.detail || "",
+        };
   }
 
   for (const job of taskStore.listTtsJobs({ limit: 500 })) {

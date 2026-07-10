@@ -340,7 +340,7 @@ export function createIanXiaoheiRoutes({
         });
         if (generated.error) {
           fs.rmSync(preview.path, { force: true });
-          throw new Error(generated.error);
+          throw new Error([generated.error, generated.detail].filter(Boolean).join(" "));
         }
         sendJson(res, 201, {
           ok: true,
