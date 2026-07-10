@@ -142,6 +142,38 @@
             <audio id="musicPreview" controls></audio>
           </div>
         </section>
+        <section class="reference-audio-studio">
+          <div class="panel-head">
+            <div>
+              <h2>参考音频风格生成</h2>
+              <p>导入一个参考视频或音频，系统分析 BPM、响度和收尾，再按当前文案生成类似节奏的配音+BGM 混音。</p>
+            </div>
+            <div class="audio-actions">
+              <button id="analyzeReferenceAudio" type="button">分析参考音频</button>
+              <button id="generateReferenceMix" type="button" class="primary">生成类似风格音频</button>
+            </div>
+          </div>
+          <div class="reference-grid">
+            <label class="field">
+              <span>参考视频 / 音频</span>
+              <input id="referenceAudioInput" type="file" accept=".mp4,.mov,.m4v,.mp3,.wav,.m4a,video/mp4,video/quicktime,audio/mpeg,audio/wav,audio/mp4" />
+              <small>第一版会提取音频特征，不会复制原视频声音。</small>
+            </label>
+            <label class="field">
+              <span>BGM 策略</span>
+              <select id="referenceBgmMode">
+                <option value="auto">自动：优先 MiniMax BGM，失败用本地氛围底</option>
+                <option value="local">只用本地基础氛围底</option>
+                <option value="none">只生成配音，不加 BGM</option>
+              </select>
+            </label>
+          </div>
+          <div id="referenceProfile" class="reference-profile empty">还没有分析参考音频。</div>
+          <div id="referenceMixPreviewPanel" class="audio-preview" hidden>
+            <strong id="referenceMixPreviewTitle">参考风格混音</strong>
+            <audio id="referenceMixPreview" controls></audio>
+          </div>
+        </section>
         <section class="audio-studio">
           <div class="panel-head">
             <div>

@@ -61,6 +61,12 @@ const AUDIO_MIME_EXTENSIONS = {
   "audio/mp4": ".m4a",
   "audio/x-m4a": ".m4a",
 };
+const REFERENCE_MEDIA_MIME_EXTENSIONS = {
+  ...AUDIO_MIME_EXTENSIONS,
+  "video/mp4": ".mp4",
+  "video/quicktime": ".mov",
+  "video/x-m4v": ".m4v",
+};
 
 const MINIMAX_MUSIC_MODEL = "music-2.6-free";
 const MUSIC_PRESETS = [
@@ -190,6 +196,7 @@ export function createIanXiaoheiRoutes({
   videoProductService = null,
   taskStore = null,
   getSettings = () => ({}),
+  ffmpegPath = "",
   ffprobePath = "",
   transcribeLocalMedia = null,
 }) {
@@ -197,10 +204,12 @@ export function createIanXiaoheiRoutes({
   const uploadRoot = path.join(outputRoot, "_uploaded-audio");
   const voicePreviewRoot = path.join(baseDir, "ui", "assets", "voice-previews");
   const musicOutputRoot = path.join(baseDir, ".data", "music", "minimax");
+  const referenceAudioRoot = path.join(baseDir, ".data", "audio-reference", "ian-xiaohei");
   fs.mkdirSync(outputRoot, { recursive: true });
   fs.mkdirSync(uploadRoot, { recursive: true });
   fs.mkdirSync(voicePreviewRoot, { recursive: true });
   fs.mkdirSync(musicOutputRoot, { recursive: true });
+  fs.mkdirSync(referenceAudioRoot, { recursive: true });
 
   return async function handleIanXiaoheiRoutes(req, res, url) {
     if (!url.pathname.startsWith("/api/ian-xiaohei/")) return false;
@@ -295,7 +304,24 @@ export function createIanXiaoheiRoutes({
           outputDir: musicOutputRoot,
           presets: MUSIC_PRESETS,
         },
+        referenceAudio: {
+          outputDir: referenceAudioRoot,
+          defaultTargetBpm: 120,
+          defaultTargetLufs: -14,
+          supported: Boolean(ffmpegPath && fs.existsSync(ffmpegPath) && ffprobePath && fs.existsSync(ffprobePath)),
+        },
       });
+      return true;
+    }
+
+    if (req.method === "GET" && route === "reference-audio-file") {
+      const fileName = safeMusicFileName(url.searchParams.get("file"));
+      const filePath = fileName ? path.join(referenceAudioRoot, fileName) : "";
+      if (!filePath || !fs.existsSync(filePath)) {
+        sendJson(res, 404, { ok: false, message: "参考音频结果不存在。" });
+        return true;
+      }
+      sendAudioFile(res, filePath);
       return true;
     }
 
@@ -307,6 +333,68 @@ export function createIanXiaoheiRoutes({
         return true;
       }
       sendAudioFile(res, filePath);
+      return true;
+    }
+
+    if (req.method === "POST" && route === "reference-audio/analyze") {
+      try {
+        if (!ffmpegPath || !fs.existsSync(ffmpegPath) || !ffprobePath || !fs.existsSync(ffprobePath)) {
+          throw new Error("FFmpeg / FFprobe 不可用，无法分析参考音频。");
+        }
+        const body = await readJsonBody(req, { maxBytes: 48 * 1024 * 1024 });
+        const uploaded = decodeUploadedReferenceMedia(body.media_data, body.media_mime);
+        const fileName = `${dateSlug()}-reference-${randomUUID().slice(0, 8)}${uploaded.extension}`;
+        const filePath = path.join(referenceAudioRoot, fileName);
+        fs.writeFileSync(filePath, uploaded.buffer);
+        const profile = await analyzeReferenceAudio({
+          ffmpegPath,
+          ffprobePath,
+          filePath,
+          sourceName: String(body.file_name || ""),
+        });
+        fs.writeFileSync(
+          path.join(referenceAudioRoot, `${path.basename(fileName, uploaded.extension)}-profile.json`),
+          JSON.stringify(profile, null, 2),
+          "utf8",
+        );
+        sendJson(res, 200, { ok: true, profile });
+      } catch (error) {
+        sendJson(res, error instanceof HttpBodyError ? error.statusCode : 400, {
+          ok: false,
+          message: error instanceof Error ? error.message : String(error),
+        });
+      }
+      return true;
+    }
+
+    if (req.method === "POST" && route === "reference-audio/generate-mix") {
+      try {
+        if (!ffmpegPath || !fs.existsSync(ffmpegPath) || !ffprobePath || !fs.existsSync(ffprobePath)) {
+          throw new Error("FFmpeg / FFprobe 不可用，无法生成参考风格混音。");
+        }
+        const body = await readJsonBody(req, { maxBytes: 512 * 1024 });
+        const profile = body.profile && typeof body.profile === "object" ? body.profile : {};
+        const result = await generateReferenceAudioMix({
+          settings: getSettings() || {},
+          outputRoot: referenceAudioRoot,
+          ffmpegPath,
+          ffprobePath,
+          profile,
+          text: body.text,
+          title: body.title,
+          voiceAssetId: body.voice_asset_id,
+          voiceAssetService,
+          emotion: body.emotion,
+          speed: body.speed,
+          bgmMode: body.bgm_mode,
+        });
+        sendJson(res, 201, { ok: true, ...result });
+      } catch (error) {
+        sendJson(res, error instanceof HttpBodyError ? error.statusCode : 400, {
+          ok: false,
+          message: error instanceof Error ? error.message : String(error),
+        });
+      }
       return true;
     }
 
@@ -1409,6 +1497,17 @@ function decodeUploadedAudio(dataUrl, mimeHint = "") {
   return { buffer, mimeType, extension };
 }
 
+function decodeUploadedReferenceMedia(dataUrl, mimeHint = "") {
+  const match = String(dataUrl || "").match(/^data:([^;,]+);base64,([A-Za-z0-9+/=\s]+)$/);
+  const mimeType = String(match?.[1] || mimeHint || "").toLowerCase();
+  const extension = REFERENCE_MEDIA_MIME_EXTENSIONS[mimeType];
+  if (!extension) throw new Error("参考音频只支持 MP3、WAV、M4A、MP4、MOV。");
+  const buffer = Buffer.from(match?.[2] || "", "base64");
+  if (!buffer.length) throw new Error("上传的参考文件为空。");
+  if (buffer.length > 48 * 1024 * 1024) throw new Error("参考文件不能超过 48MB。");
+  return { buffer, mimeType, extension };
+}
+
 function decodeUploadedImage(dataUrl, mimeHint = "") {
   const match = String(dataUrl || "").match(/^data:([^;,]+);base64,([A-Za-z0-9+/=\s]+)$/);
   const mimeType = String(match?.[1] || mimeHint || "").toLowerCase();
@@ -1623,6 +1722,18 @@ function textSimilarity(left, right) {
     }
   }
   return (2 * overlap) / (aPairs.length + bigrams(b).length);
+}
+
+function estimateMinimumSpeechDuration(text) {
+  const normalized = String(text || "").replace(/\s+/g, "");
+  if (!normalized) return 1;
+  const cjkCount = (normalized.match(/[\u4e00-\u9fff]/g) || []).length;
+  const asciiWordCount = (normalized.match(/[a-z0-9]+/gi) || []).length;
+  const estimatedSeconds = Math.max(
+    (cjkCount / 6.5) + (asciiWordCount / 2.4),
+    normalized.length / 10,
+  );
+  return clampFloat(estimatedSeconds * 0.55, 0.8, 20, 1);
 }
 
 function probeAudioDuration(ffprobePath, filePath) {
@@ -2447,12 +2558,208 @@ function readJsonFile(filePath, fallback = {}) {
 
 function sendAudioFile(res, filePath) {
   const extension = path.extname(filePath).toLowerCase();
-  const contentType = extension === ".wav" ? "audio/wav" : "audio/mpeg";
+  const contentType = extension === ".wav" ? "audio/wav" : extension === ".m4a" ? "audio/mp4" : "audio/mpeg";
   res.writeHead(200, {
     "content-type": contentType,
     "cache-control": "no-store",
   });
   fs.createReadStream(filePath).pipe(res);
+}
+
+async function analyzeReferenceAudio({ ffmpegPath, ffprobePath, filePath, sourceName = "" }) {
+  const media = await probeReferenceMedia(ffprobePath, filePath);
+  const volume = await detectReferenceVolume(ffmpegPath, filePath);
+  const loudness = await measureReferenceLoudness(ffmpegPath, filePath);
+  const silences = await detectReferenceSilences(ffmpegPath, filePath);
+  const bpm = await estimateReferenceBpm(ffmpegPath, filePath);
+  const duration = Number(media.duration || 0);
+  const endingSilenceSeconds = silences
+    .filter((item) => Number(item.start || 0) >= Math.max(0, duration - 6))
+    .reduce((sum, item) => sum + Number(item.duration || 0), 0);
+  const estimatedBpm = clampFloat(Number(bpm || 120), 80, 180, 120);
+  const targetBpm = clampFloat(Math.max(120, estimatedBpm), 120, 150, 120);
+  const targetLufs = clampFloat(Number(loudness.input_i || -14), -18, -12, -14);
+  return {
+    id: `ref-audio-${dateSlug()}-${randomUUID().slice(0, 8)}`,
+    source_name: sourceName,
+    source_path: filePath,
+    duration,
+    codec: media.audioCodec,
+    sample_rate: media.sampleRate,
+    channels: media.channels,
+    bitrate: media.bitRate,
+    mean_volume_db: volume.mean_volume,
+    max_volume_db: volume.max_volume,
+    loudness,
+    estimated_bpm: estimatedBpm,
+    target_bpm: targetBpm,
+    target_lufs: targetLufs,
+    true_peak_db: -1.5,
+    lra: Number(loudness.input_lra || 6.5),
+    ending_fade_seconds: clampFloat(Math.max(2.2, Math.min(3.5, endingSilenceSeconds || 2.5)), 1.5, 4, 2.5),
+    bgm_ducking: true,
+    voice_priority: true,
+    bpm_range: [120, 150],
+    silences: silences.slice(0, 40),
+    summary: [
+      `${duration ? `${duration.toFixed(1)}s` : "未知时长"}`,
+      `${Math.round(targetBpm)} BPM`,
+      `${targetLufs.toFixed(1)} LUFS`,
+      `峰值 ${Number(volume.max_volume || -1.5).toFixed(1)} dB`,
+    ].join(" · "),
+    created_at: new Date().toISOString(),
+  };
+}
+
+async function generateReferenceAudioMix({
+  settings = {},
+  outputRoot,
+  ffmpegPath,
+  ffprobePath,
+  profile = {},
+  text = "",
+  title = "",
+  voiceAssetId = 0,
+  voiceAssetService = null,
+  emotion = "自然",
+  speed = 1,
+  bgmMode = "auto",
+}) {
+  const cleanText = normalizeText(text);
+  if (!cleanText) throw new Error("请先输入需要生成音频的文案。");
+  const asset = Number(voiceAssetId || 0) > 0
+    ? voiceAssetService?.getAsset?.(Number(voiceAssetId))
+    : voiceAssetService?.getDefault?.();
+  if (!asset) throw new Error("请先选择一个可用配音音色。");
+  const provider = createTtsProvider(asset.provider, {
+    config: settings.tts?.[asset.provider] || {},
+    ffmpegPath,
+  });
+  if (!provider) throw new Error(`未知 TTS Provider：${asset.provider}`);
+
+  const slug = `${dateSlug()}-reference-style-${randomUUID().slice(0, 8)}`;
+  const voicePath = path.join(outputRoot, `${slug}-voice.mp3`);
+  const finalPath = path.join(outputRoot, `${slug}-final_audio_mix.m4a`);
+  const targetBpm = clampFloat(Number(profile.target_bpm || profile.estimated_bpm || 120), 80, 180, 120);
+  const targetLufs = clampFloat(Number(profile.target_lufs || -14), -18, -12, -14);
+  const endingFade = clampFloat(Number(profile.ending_fade_seconds || 2.5), 1.5, 4, 2.5);
+  fs.mkdirSync(outputRoot, { recursive: true });
+
+  const voiceResult = await provider.generateSpeech({
+    text: cleanText,
+    voiceId: asset.voice_id,
+    voiceName: asset.voice_name,
+    model: String(asset.metadata?.target_model || asset.metadata?.model || settings.tts?.[asset.provider]?.model || ""),
+    emotion: String(emotion || "自然"),
+    speed: SPEED_OPTIONS.includes(Number(speed)) ? Number(speed) : 1,
+    volume: 50,
+    pitch: 1,
+    format: "mp3",
+    outputPath: voicePath,
+  });
+  if (!voiceResult?.success || !fs.existsSync(voicePath)) {
+    throw new Error([voiceResult?.error || "TTS 生成失败。", voiceResult?.detail || ""].filter(Boolean).join(" "));
+  }
+
+  const voiceDuration = await probeAudioDuration(ffprobePath, voicePath);
+  const expectedVoiceMin = estimateMinimumSpeechDuration(cleanText);
+  if (!Number.isFinite(voiceDuration) || voiceDuration < expectedVoiceMin) {
+    throw new Error(`TTS 音频生成异常：当前音频只有 ${Number(voiceDuration || 0).toFixed(2)} 秒，按文案长度至少应约 ${expectedVoiceMin.toFixed(1)} 秒。请更换音色或检查 ${asset.provider} API 配置后重试。`);
+  }
+  let bgm = null;
+  const warnings = [];
+  if (String(bgmMode || "auto") !== "none") {
+    try {
+      if (String(bgmMode || "auto") !== "local" && settings.tts?.minimax?.api_key) {
+        bgm = await generateMinimaxMusic({
+          settings,
+          outputRoot,
+          presetId: "clean_education_bgm",
+          lyrics: "",
+          title,
+          promptExtra: [
+            `参考音频目标节拍 ${Math.round(targetBpm)} BPM`,
+            "人声优先，BGM 不抢口播",
+            "适合中文知识口播和小黑配图视频",
+            `总时长约 ${Math.round(voiceDuration + endingFade)} 秒，结尾自然收束`,
+          ].join("，"),
+        });
+      }
+    } catch (error) {
+      warnings.push(`MiniMax BGM 生成失败，已改用本地基础氛围底：${error instanceof Error ? error.message : String(error)}`);
+    }
+    if (!bgm?.audio_path || !fs.existsSync(bgm.audio_path)) {
+      const localBgmPath = path.join(outputRoot, `${slug}-local_bgm.mp3`);
+      await createLocalReferenceBgm({
+        ffmpegPath,
+        outputPath: localBgmPath,
+        duration: Math.max(12, voiceDuration + endingFade),
+        targetBpm,
+        endingFade,
+      });
+      bgm = {
+        preset_id: "local_reference_bgm",
+        preset_label: "本地基础氛围底",
+        audio_path: localBgmPath,
+        audio_url: `/api/ian-xiaohei/reference-audio-file?file=${encodeURIComponent(path.basename(localBgmPath))}`,
+        source: "local_generated",
+      };
+    }
+  }
+
+  if (bgm?.audio_path && fs.existsSync(bgm.audio_path)) {
+    await mixVoiceAndBgm({
+      ffmpegPath,
+      voicePath,
+      bgmPath: bgm.audio_path,
+      outputPath: finalPath,
+      voiceDuration,
+      targetLufs,
+      endingFade,
+    });
+  } else {
+    await normalizeVoiceOnly({
+      ffmpegPath,
+      voicePath,
+      outputPath: finalPath,
+      targetLufs,
+    });
+  }
+
+  const report = {
+    title,
+    text: cleanText,
+    profile,
+    voice: {
+      provider: asset.provider,
+      voice_id: asset.voice_id,
+      voice_name: asset.voice_name,
+      path: voicePath,
+      duration: voiceDuration,
+    },
+    bgm,
+    final_audio_path: finalPath,
+    target_bpm: targetBpm,
+    target_lufs: targetLufs,
+    ending_fade_seconds: endingFade,
+    warnings,
+    created_at: new Date().toISOString(),
+  };
+  fs.writeFileSync(path.join(outputRoot, `${slug}-audio_report.json`), JSON.stringify(report, null, 2), "utf8");
+  return {
+    title,
+    audio_path: finalPath,
+    audio_url: `/api/ian-xiaohei/reference-audio-file?file=${encodeURIComponent(path.basename(finalPath))}`,
+    voice_path: voicePath,
+    bgm_path: bgm?.audio_path || "",
+    bgm_source: bgm?.source || bgm?.preset_id || "none",
+    target_bpm: targetBpm,
+    target_lufs: targetLufs,
+    duration: voiceDuration + (bgm ? endingFade : 0),
+    warnings,
+    report,
+    message: "参考音频风格混音已生成，可试听后作为本视频音频素材。",
+  };
 }
 
 async function generateMinimaxMusic({
@@ -2605,6 +2912,259 @@ function redactMiniMaxSecret(value, apiKey) {
 function safeMusicFileName(value) {
   const fileName = String(value || "").replace(/[^A-Za-z0-9._-]/g, "");
   return fileName.endsWith(".mp3") || fileName.endsWith(".wav") ? fileName : "";
+}
+
+async function probeReferenceMedia(ffprobePath, filePath) {
+  const result = await runProcessCapture(ffprobePath, [
+    "-v", "error",
+    "-print_format", "json",
+    "-show_format",
+    "-show_streams",
+    filePath,
+  ]);
+  const data = parseStoredJsonObject(result.stdout, {});
+  const audio = (data.streams || []).find((stream) => stream.codec_type === "audio") || {};
+  return {
+    duration: Number(data.format?.duration || audio.duration || 0),
+    audioCodec: String(audio.codec_name || ""),
+    sampleRate: Number(audio.sample_rate || 0),
+    channels: Number(audio.channels || 0),
+    bitRate: Number(audio.bit_rate || data.format?.bit_rate || 0),
+  };
+}
+
+async function detectReferenceVolume(ffmpegPath, filePath) {
+  const result = await runProcessCapture(ffmpegPath, [
+    "-hide_banner",
+    "-nostats",
+    "-i", filePath,
+    "-af", "volumedetect",
+    "-vn", "-sn", "-dn",
+    "-f", "null",
+    nullDevice(),
+  ], { allowFailure: true, timeoutMs: 120000 });
+  const text = `${result.stdout}\n${result.stderr}`;
+  return {
+    mean_volume: parseFfmpegNumber(text, /mean_volume:\s*([-\d.]+)\s*dB/i, -17),
+    max_volume: parseFfmpegNumber(text, /max_volume:\s*([-\d.]+)\s*dB/i, -2),
+  };
+}
+
+async function measureReferenceLoudness(ffmpegPath, filePath) {
+  const result = await runProcessCapture(ffmpegPath, [
+    "-hide_banner",
+    "-nostats",
+    "-i", filePath,
+    "-af", "loudnorm=I=-16:TP=-1.5:LRA=11:print_format=json",
+    "-vn", "-sn", "-dn",
+    "-f", "null",
+    nullDevice(),
+  ], { allowFailure: true, timeoutMs: 120000 });
+  const text = `${result.stdout}\n${result.stderr}`;
+  const match = text.match(/\{\s*"input_i"[\s\S]*?\}/);
+  const data = parseStoredJsonObject(match?.[0] || "", {});
+  return {
+    input_i: Number(data.input_i || -14),
+    input_tp: Number(data.input_tp || -1.5),
+    input_lra: Number(data.input_lra || 6.5),
+    input_thresh: Number(data.input_thresh || -24),
+    output_i: Number(data.output_i || 0),
+    target_offset: Number(data.target_offset || 0),
+  };
+}
+
+async function detectReferenceSilences(ffmpegPath, filePath) {
+  const result = await runProcessCapture(ffmpegPath, [
+    "-hide_banner",
+    "-nostats",
+    "-i", filePath,
+    "-af", "silencedetect=n=-35dB:d=0.25",
+    "-vn", "-sn", "-dn",
+    "-f", "null",
+    nullDevice(),
+  ], { allowFailure: true, timeoutMs: 120000 });
+  const text = `${result.stdout}\n${result.stderr}`;
+  const events = [];
+  const startPattern = /silence_start:\s*([\d.]+)/g;
+  const endPattern = /silence_end:\s*([\d.]+)\s*\|\s*silence_duration:\s*([\d.]+)/g;
+  let startMatch;
+  while ((startMatch = startPattern.exec(text))) events.push({ type: "start", at: Number(startMatch[1]) });
+  let endMatch;
+  const ends = [];
+  while ((endMatch = endPattern.exec(text))) ends.push({ end: Number(endMatch[1]), duration: Number(endMatch[2]) });
+  return ends.map((item, index) => ({
+    start: Number(events[index]?.at || Math.max(0, item.end - item.duration)),
+    end: item.end,
+    duration: item.duration,
+  }));
+}
+
+async function estimateReferenceBpm(ffmpegPath, filePath) {
+  const result = await runProcessCapture(ffmpegPath, [
+    "-hide_banner",
+    "-loglevel", "error",
+    "-t", "180",
+    "-i", filePath,
+    "-vn",
+    "-ac", "1",
+    "-ar", "22050",
+    "-f", "s16le",
+    "-acodec", "pcm_s16le",
+    "-",
+  ], { binaryStdout: true, timeoutMs: 120000 });
+  const pcm = result.stdoutBuffer;
+  if (!pcm?.length) return 120;
+  const samples = Math.floor(pcm.length / 2);
+  const hop = 512;
+  const win = 1024;
+  const envelope = [];
+  for (let offset = 0; offset + win < samples; offset += hop) {
+    let sum = 0;
+    for (let j = 0; j < win; j += 1) {
+      const sample = pcm.readInt16LE((offset + j) * 2);
+      sum += sample * sample;
+    }
+    envelope.push(Math.sqrt(sum / win));
+  }
+  if (envelope.length < 20) return 120;
+  const onset = [0];
+  for (let index = 1; index < envelope.length; index += 1) {
+    onset.push(Math.max(0, envelope[index] - envelope[index - 1]));
+  }
+  const mean = onset.reduce((sum, value) => sum + value, 0) / onset.length;
+  const cleaned = onset.map((value) => Math.max(0, value - mean * 0.5));
+  const fps = 22050 / hop;
+  let bestBpm = 120;
+  let bestScore = -Infinity;
+  for (let bpm = 80; bpm <= 180; bpm += 1) {
+    const lag = Math.round((60 / bpm) * fps);
+    if (lag <= 0 || lag >= cleaned.length) continue;
+    let score = 0;
+    let count = 0;
+    for (let index = lag; index < cleaned.length; index += 1) {
+      score += cleaned[index] * cleaned[index - lag];
+      count += 1;
+    }
+    const normalized = count ? score / count : 0;
+    if (normalized > bestScore) {
+      bestScore = normalized;
+      bestBpm = bpm;
+    }
+  }
+  return bestBpm;
+}
+
+async function createLocalReferenceBgm({ ffmpegPath, outputPath, duration, targetBpm, endingFade }) {
+  const safeDuration = clampFloat(Number(duration || 30), 5, 600, 30);
+  const beatHz = clampFloat(Number(targetBpm || 120) / 60, 1.2, 2.8, 2);
+  const fadeStart = Math.max(0, safeDuration - Number(endingFade || 2.5));
+  await runProcessCapture(ffmpegPath, [
+    "-y",
+    "-hide_banner",
+    "-loglevel", "error",
+    "-f", "lavfi",
+    "-i", `aevalsrc=0.014*sin(2*PI*220*t)+0.01*sin(2*PI*330*t)+0.006*sin(2*PI*${beatHz}*t):s=44100:d=${safeDuration.toFixed(3)}`,
+    "-filter:a", `afade=t=in:st=0:d=0.4,afade=t=out:st=${fadeStart.toFixed(3)}:d=${Number(endingFade || 2.5).toFixed(3)},loudnorm=I=-24:TP=-3:LRA=8`,
+    "-c:a", "libmp3lame",
+    "-b:a", "160k",
+    outputPath,
+  ], { timeoutMs: 120000 });
+}
+
+async function mixVoiceAndBgm({ ffmpegPath, voicePath, bgmPath, outputPath, voiceDuration, targetLufs, endingFade }) {
+  const voiceSeconds = Math.max(1, Number(voiceDuration || 1));
+  const tail = clampFloat(Number(endingFade || 2.5), 1.5, 4, 2.5);
+  const mixDuration = voiceSeconds + tail;
+  const fadeStart = Math.max(0, mixDuration - tail);
+  const target = clampFloat(Number(targetLufs || -14), -18, -12, -14);
+  const filter = [
+    `[0:a]aformat=sample_rates=44100:channel_layouts=stereo,volume=1.0,apad=pad_dur=${tail.toFixed(3)},aresample=44100,asplit=2[voice_mix][voice_sc]`,
+    `[1:a]aformat=sample_rates=44100:channel_layouts=stereo,volume=0.24,atrim=0:${mixDuration.toFixed(3)},asetpts=N/SR/TB,aresample=44100[bgm0]`,
+    "[bgm0][voice_sc]sidechaincompress=threshold=0.025:ratio=10:attack=20:release=500[ducked]",
+    `[voice_mix][ducked]amix=inputs=2:duration=first:dropout_transition=0,volume=${target <= -15 ? "0.92" : "1.0"},alimiter=limit=0.92,afade=t=out:st=${fadeStart.toFixed(3)}:d=${tail.toFixed(3)}[a]`,
+  ].join(";");
+  await runProcessCapture(ffmpegPath, [
+    "-y",
+    "-hide_banner",
+    "-loglevel", "error",
+    "-i", voicePath,
+    "-stream_loop", "-1",
+    "-i", bgmPath,
+    "-filter_complex", filter,
+    "-map", "[a]",
+    "-t", mixDuration.toFixed(3),
+    "-c:a", "aac",
+    "-b:a", "192k",
+    outputPath,
+  ], { timeoutMs: 180000 });
+}
+
+async function normalizeVoiceOnly({ ffmpegPath, voicePath, outputPath, targetLufs }) {
+  const target = clampFloat(Number(targetLufs || -14), -18, -12, -14);
+  await runProcessCapture(ffmpegPath, [
+    "-y",
+    "-hide_banner",
+    "-loglevel", "error",
+    "-i", voicePath,
+    "-af", `loudnorm=I=${target}:TP=-1.5:LRA=7`,
+    "-c:a", "libmp3lame",
+    "-b:a", "192k",
+    outputPath,
+  ], { timeoutMs: 120000 });
+}
+
+function runProcessCapture(command, args, {
+  timeoutMs = 60000,
+  allowFailure = false,
+  binaryStdout = false,
+} = {}) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(command, args, { windowsHide: true });
+    const stdoutChunks = [];
+    const stderrChunks = [];
+    const timer = setTimeout(() => {
+      child.kill("SIGKILL");
+      reject(new Error(`命令超时：${path.basename(command)}`));
+    }, timeoutMs);
+    child.stdout.on("data", (chunk) => stdoutChunks.push(Buffer.from(chunk)));
+    child.stderr.on("data", (chunk) => stderrChunks.push(Buffer.from(chunk)));
+    child.on("error", (error) => {
+      clearTimeout(timer);
+      reject(error);
+    });
+    child.on("close", (code) => {
+      clearTimeout(timer);
+      const stdoutBuffer = Buffer.concat(stdoutChunks);
+      const stderrBuffer = Buffer.concat(stderrChunks);
+      const result = {
+        code,
+        stdoutBuffer,
+        stdout: binaryStdout ? "" : stdoutBuffer.toString("utf8"),
+        stderr: stderrBuffer.toString("utf8"),
+      };
+      if (code !== 0 && !allowFailure) {
+        reject(new Error(result.stderr || result.stdout || `命令执行失败：${code}`));
+        return;
+      }
+      resolve(result);
+    });
+  });
+}
+
+function parseFfmpegNumber(text, pattern, fallback) {
+  const match = String(text || "").match(pattern);
+  const value = Number(match?.[1]);
+  return Number.isFinite(value) ? value : fallback;
+}
+
+function nullDevice() {
+  return process.platform === "win32" ? "NUL" : "/dev/null";
+}
+
+function clampFloat(value, min, max, fallback) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return fallback;
+  return Math.max(min, Math.min(max, number));
 }
 
 function openFolder(folderPath) {

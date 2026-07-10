@@ -10,6 +10,7 @@ const state = {
   voiceChoices: new Map(),
   savedApis: [],
   musicPresets: [],
+  referenceProfile: null,
   pendingUploads: new Map(),
   projectId: localStorage.getItem("ian-xiaohei-project-id") || `xiaohei-${Date.now()}`,
 };
@@ -50,6 +51,14 @@ const els = {
   musicPreviewPanel: document.querySelector("#musicPreviewPanel"),
   musicPreviewTitle: document.querySelector("#musicPreviewTitle"),
   musicPreview: document.querySelector("#musicPreview"),
+  referenceAudioInput: document.querySelector("#referenceAudioInput"),
+  referenceBgmMode: document.querySelector("#referenceBgmMode"),
+  analyzeReferenceAudio: document.querySelector("#analyzeReferenceAudio"),
+  generateReferenceMix: document.querySelector("#generateReferenceMix"),
+  referenceProfile: document.querySelector("#referenceProfile"),
+  referenceMixPreviewPanel: document.querySelector("#referenceMixPreviewPanel"),
+  referenceMixPreviewTitle: document.querySelector("#referenceMixPreviewTitle"),
+  referenceMixPreview: document.querySelector("#referenceMixPreview"),
   generateAudio: document.querySelector("#generateAudio"),
   confirmAudio: document.querySelector("#confirmAudio"),
   audioPreviewPanel: document.querySelector("#audioPreviewPanel"),
@@ -94,6 +103,8 @@ function bindEvents() {
   els.confirmAudio.addEventListener("click", () => confirmCurrentAudio());
   els.cloneVoice.addEventListener("click", () => createCloneVoice());
   els.generateMusic.addEventListener("click", () => generateMusicMaterial());
+  els.analyzeReferenceAudio.addEventListener("click", () => analyzeReferenceAudio());
+  els.generateReferenceMix.addEventListener("click", () => generateReferenceMix());
   els.musicPreset.addEventListener("change", () => {
     const preset = currentMusicPreset();
     if (preset) els.musicStatus.textContent = `${preset.label}：${preset.description || "可生成本地 mp3 素材。"}`;
@@ -245,6 +256,100 @@ async function generateMusicMaterial() {
   } finally {
     setBusy(false);
   }
+}
+
+async function analyzeReferenceAudio() {
+  const file = els.referenceAudioInput.files?.[0];
+  if (!file) {
+    setStatus("缺少参考音频", "请先上传一个参考视频或音频。", 0, true);
+    return;
+  }
+  setBusy(true);
+  renderReferenceProfile(null, "正在读取并分析参考音频...");
+  setStatus("正在分析参考音频", "正在提取 BPM、响度、峰值和结尾收束。", 25, false, "参考音频分析");
+  try {
+    const mediaData = await readFileDataUrl(file);
+    const data = await fetchJson("/api/ian-xiaohei/reference-audio/analyze", {
+      method: "POST",
+      body: JSON.stringify({
+        media_data: mediaData,
+        media_mime: file.type,
+        file_name: file.name,
+      }),
+    });
+    state.referenceProfile = data.profile;
+    renderReferenceProfile(data.profile);
+    setStatus("参考音频分析完成", data.profile?.summary || "已生成音频风格参数。", 100, false, "完成");
+  } catch (error) {
+    renderReferenceProfile(null, error.payload?.message || error.message || String(error));
+    setStatus("参考音频分析失败", error.payload?.message || error.message || String(error), 100, true);
+  } finally {
+    setBusy(false);
+  }
+}
+
+async function generateReferenceMix() {
+  if (!state.referenceProfile) {
+    setStatus("缺少参考风格", "请先点击“分析参考音频”。", 0, true);
+    return;
+  }
+  const payload = formPayload();
+  if (!payload.text) {
+    setStatus("缺少文案", "请先输入需要生成口播音频的文案。", 0, true);
+    return;
+  }
+  const choice = currentVoiceChoice();
+  if (!choice) {
+    setStatus("缺少配音音色", "请先选择一个配音音色。", 0, true);
+    return;
+  }
+  setBusy(true);
+  setStatus("正在生成参考风格混音", "正在生成 TTS、匹配 BGM 并做人声优先混音。", 35, false, "参考风格混音");
+  try {
+    const data = await fetchJson("/api/ian-xiaohei/reference-audio/generate-mix", {
+      method: "POST",
+      body: JSON.stringify({
+        project_id: state.projectId,
+        title: payload.title,
+        text: payload.text,
+        profile: state.referenceProfile,
+        voice_asset_id: choice.voiceAssetId,
+        emotion: els.emotionSelect.value,
+        speed: Number(els.speedSelect.value || 1),
+        bgm_mode: els.referenceBgmMode.value || "auto",
+      }),
+    });
+    if (data.audio_url) {
+      els.referenceMixPreview.src = data.audio_url;
+      els.referenceMixPreviewTitle.textContent = `参考风格混音 · ${Math.round(Number(data.target_bpm || 0))} BPM · ${Number(data.target_lufs || -14).toFixed(1)} LUFS`;
+      els.referenceMixPreviewPanel.hidden = false;
+    }
+    const warnings = Array.isArray(data.warnings) && data.warnings.length ? `；提示：${data.warnings.join("；")}` : "";
+    setStatus("参考风格混音已生成", `${data.audio_path || ""}${warnings}`, 100, false, "完成");
+  } catch (error) {
+    setStatus("参考风格混音失败", error.payload?.message || error.message || String(error), 100, true);
+  } finally {
+    setBusy(false);
+  }
+}
+
+function renderReferenceProfile(profile, message = "") {
+  if (!els.referenceProfile) return;
+  if (!profile) {
+    els.referenceProfile.className = "reference-profile empty";
+    els.referenceProfile.textContent = message || "还没有分析参考音频。";
+    return;
+  }
+  els.referenceProfile.className = "reference-profile";
+  els.referenceProfile.innerHTML = [
+    `<strong>${escapeHtml(profile.summary || "参考音频风格")}</strong>`,
+    `时长：${Number(profile.duration || 0).toFixed(1)}s`,
+    `目标节拍：${Math.round(Number(profile.target_bpm || 120))} BPM`,
+    `目标响度：${Number(profile.target_lufs || -14).toFixed(1)} LUFS`,
+    `平均音量：${Number(profile.mean_volume_db || 0).toFixed(1)} dB`,
+    `峰值：${Number(profile.max_volume_db || 0).toFixed(1)} dB`,
+    `结尾收束：${Number(profile.ending_fade_seconds || 2.5).toFixed(1)}s`,
+  ].map((line) => `<div>${line}</div>`).join("");
 }
 
 async function saveMinimaxSettings() {
@@ -1050,6 +1155,8 @@ function setBusy(busy) {
     els.testMinimaxSettings,
     els.deleteMinimaxApi,
     els.generateMusic,
+    els.analyzeReferenceAudio,
+    els.generateReferenceMix,
     els.generateAudio,
     els.confirmAudio,
     els.planPrompts,

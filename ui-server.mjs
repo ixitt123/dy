@@ -162,6 +162,7 @@ const handleIanXiaoheiRoutes = createIanXiaoheiRoutes({
   videoProductService,
   taskStore,
   getSettings: readSettings,
+  ffmpegPath,
   ffprobePath,
   transcribeLocalMedia: transcribeLocalMediaWithDashScope,
 });
