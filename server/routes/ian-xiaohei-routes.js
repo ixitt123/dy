@@ -3,6 +3,7 @@ import path from "node:path";
 import { spawn } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
 import { HttpBodyError, readJsonBody } from "../utils/http-body.js";
+import { createTtsProvider } from "../tts/providers/index.js";
 
 const STRUCTURE_TYPES = [
   "Workflow",
@@ -157,6 +158,14 @@ export function createIanXiaoheiRoutes({
       sendJson(res, 200, {
         ok: true,
         outputDir: outputRoot,
+        integrations: {
+          imageProvider: "火山方舟 Seedream",
+          imageProviderId: "volcengine_ark",
+          imageProviderConfigured: Boolean(settings.imageProviders?.volcengine_ark?.apiKey),
+          imageModel: String(settings.imageProviders?.volcengine_ark?.model || ""),
+          jianyingDraftDir: String(settings.jianyingDraftDir || settings.jianying?.draftDir || ""),
+          outputDir: outputRoot,
+        },
         purposes: PURPOSES,
         structureTypes: STRUCTURE_TYPES,
         aspectRatios: ASPECT_RATIO_OPTIONS,
@@ -185,6 +194,30 @@ export function createIanXiaoheiRoutes({
           speeds: SPEED_OPTIONS,
         },
       });
+      return true;
+    }
+
+    if (req.method === "POST" && route === "test-minimax") {
+      try {
+        const settings = getSettings() || {};
+        const provider = createTtsProvider("minimax", {
+          config: settings.tts?.minimax || {},
+          ffmpegPath,
+        });
+        const result = await provider.healthCheck();
+        const ok = result.status === "online";
+        sendJson(res, ok ? 200 : 400, {
+          ok,
+          status: result.status,
+          message: result.message || (ok ? "MiniMax 连接正常。" : "MiniMax 连接失败。"),
+        });
+      } catch (error) {
+        sendJson(res, 400, {
+          ok: false,
+          status: "failed",
+          message: error instanceof Error ? error.message : String(error),
+        });
+      }
       return true;
     }
 
@@ -347,6 +380,50 @@ export function createIanXiaoheiRoutes({
     if (req.method === "POST" && route === "open-output") {
       openFolder(outputRoot);
       sendJson(res, 200, { ok: true, outputDir: outputRoot });
+      return true;
+    }
+
+    if (req.method === "POST" && route === "output-open") {
+      try {
+        const body = await readJsonBody(req, { maxBytes: 64 * 1024 });
+        const batchDir = resolveBatchDir(outputRoot, body.id);
+        if (!batchDir || !fs.existsSync(batchDir)) throw new Error("历史输出目录不存在。");
+        openFolder(batchDir);
+        sendJson(res, 200, { ok: true, outputDir: batchDir });
+      } catch (error) {
+        sendJson(res, error instanceof HttpBodyError ? error.statusCode : 400, {
+          ok: false,
+          message: error instanceof Error ? error.message : String(error),
+        });
+      }
+      return true;
+    }
+
+    if (req.method === "POST" && route === "output-delete") {
+      try {
+        const body = await readJsonBody(req, { maxBytes: 64 * 1024 });
+        const batchDir = resolveBatchDir(outputRoot, body.id);
+        if (!batchDir || !fs.existsSync(batchDir)) throw new Error("历史输出目录不存在。");
+        const result = readJsonFile(path.join(batchDir, "result.json"), {});
+        const manifest = readJsonFile(path.join(batchDir, "project_manifest.json"), {});
+        const timelineProjectId = Number(body.timeline_project_id || result.output?.timeline_project_id || manifest.timeline_project_id || 0);
+        let timelineDeleted = null;
+        if (timelineProjectId && videoProductService?.removeProject) {
+          timelineDeleted = videoProductService.removeProject(timelineProjectId, { deleteFiles: true });
+        }
+        fs.rmSync(batchDir, { recursive: true, force: true });
+        sendJson(res, 200, {
+          ok: true,
+          id: safeBatchId(body.id),
+          deleted: true,
+          timelineDeleted,
+        });
+      } catch (error) {
+        sendJson(res, error instanceof HttpBodyError ? error.statusCode : 400, {
+          ok: false,
+          message: error instanceof Error ? error.message : String(error),
+        });
+      }
       return true;
     }
 
