@@ -202,7 +202,6 @@ export function createIanXiaoheiRoutes({
         const settings = getSettings() || {};
         const provider = createTtsProvider("minimax", {
           config: settings.tts?.minimax || {},
-          ffmpegPath,
         });
         const result = await provider.healthCheck();
         const ok = result.status === "online";
