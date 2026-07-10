@@ -29,6 +29,18 @@ const MAX_AUDIO_BYTES = 30 * 1024 * 1024;
 const MAX_IMAGE_BYTES = 20 * 1024 * 1024;
 const EMOTION_OPTIONS = ["自然", "亲切", "专业", "热情", "沉稳", "激励", "严肃", "温柔"];
 const SPEED_OPTIONS = [0.8, 0.9, 1, 1.1, 1.2, 1.3, 1.5];
+const XIAOHEI_ALIYUN_PRESET_IDS = new Set([
+  "longshu_v2",
+  "longshuo_v2",
+  "longxiaochun_v2",
+  "longxiaoxia_v2",
+  "longanpei",
+  "Cherry",
+  "Ethan",
+  "Maia",
+  "Kai",
+  "Elias",
+]);
 const ASPECT_RATIO_OPTIONS = [
   { id: "16:9", label: "16:9 横版（默认）" },
   { id: "9:16", label: "9:16 竖版" },
@@ -150,6 +162,7 @@ export function createIanXiaoheiRoutes({
       for (const providerInfo of presetProviders) {
         const voices = ttsService?.listVoices?.(providerInfo.id) || [];
         for (const voice of voices) {
+          if (!xiaoheiPresetVoiceAllowed(providerInfo.id, voice.id)) continue;
           presetVoices.push({
             ...voice,
             provider: providerInfo.id,
@@ -163,7 +176,11 @@ export function createIanXiaoheiRoutes({
           && asset.status === "active"
           && (
             asset.voice_type === "clone"
-            || (asset.voice_type === "preset" && configuredProviderIds.has(asset.provider))
+            || (
+              asset.voice_type === "preset"
+              && configuredProviderIds.has(asset.provider)
+              && xiaoheiPresetVoiceAllowed(asset.provider, asset.voice_id)
+            )
           )
         )) || [];
       const activePresetIds = new Set(
@@ -1356,6 +1373,12 @@ function configuredTtsPresetProviders(settings = {}) {
     .filter((id) => ["aliyun_bailian", "minimax"].includes(id))
     .filter((id) => ttsProviderConfigured(settings, id))
     .map((id) => ({ id, label: labels[id] || id }));
+}
+
+function xiaoheiPresetVoiceAllowed(providerId, voiceId) {
+  if (providerId === "minimax") return true;
+  if (providerId === "aliyun_bailian") return XIAOHEI_ALIYUN_PRESET_IDS.has(String(voiceId || ""));
+  return false;
 }
 
 function savedApiSummaries(settings = {}) {
