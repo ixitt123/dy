@@ -146,7 +146,22 @@ export function createVoiceAssetService({ baseDir, taskStore, ttsService, getSet
   }
 
   function ensurePresetAssets() {
-    ttsService.listVoices("aliyun_bailian");
+    const settings = getSettings() || {};
+    const tts = settings.tts || {};
+    const providers = [
+      String(tts.default_provider || ""),
+      "aliyun_bailian",
+      "minimax",
+    ].filter(Boolean);
+    for (const providerId of [...new Set(providers)]) {
+      const config = tts[providerId] || {};
+      const configured = providerId === "aliyun_bailian"
+        ? Boolean(config.api_key)
+        : providerId === "minimax"
+          ? Boolean(config.api_key)
+          : false;
+      if (configured) ttsService.listVoices(providerId);
+    }
   }
 
   function listAssets() {

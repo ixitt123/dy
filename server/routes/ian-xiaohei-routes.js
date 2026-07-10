@@ -130,7 +130,7 @@ export function createIanXiaoheiRoutes({
 }) {
   const outputRoot = path.join(baseDir, "image-assets", "ian-xiaohei");
   const uploadRoot = path.join(outputRoot, "_uploaded-audio");
-  const voicePreviewRoot = path.join(baseDir, "ui", "assets", "voice-previews", "minimax");
+  const voicePreviewRoot = path.join(baseDir, "ui", "assets", "voice-previews");
   fs.mkdirSync(outputRoot, { recursive: true });
   fs.mkdirSync(uploadRoot, { recursive: true });
   fs.mkdirSync(voicePreviewRoot, { recursive: true });
@@ -141,19 +141,34 @@ export function createIanXiaoheiRoutes({
 
     if (req.method === "GET" && route === "config") {
       const settings = getSettings() || {};
-      const defaultProvider = settings.tts?.minimax?.api_key
-        ? "minimax"
-        : String(settings.tts?.default_provider || "minimax");
-      const minimaxPresets = ttsService?.listVoices?.("minimax") || [];
+      const presetProviders = configuredTtsPresetProviders(settings);
+      const configuredProviderIds = new Set(presetProviders.map((provider) => provider.id));
+      const defaultProvider = configuredProviderIds.has(String(settings.tts?.default_provider || ""))
+        ? String(settings.tts.default_provider)
+        : (presetProviders[0]?.id || "minimax");
+      const presetVoices = [];
+      for (const providerInfo of presetProviders) {
+        const voices = ttsService?.listVoices?.(providerInfo.id) || [];
+        for (const voice of voices) {
+          presetVoices.push({
+            ...voice,
+            provider: providerInfo.id,
+            providerLabel: providerInfo.label,
+          });
+        }
+      }
       const voiceAssets = voiceAssetService?.listAssets?.()
         ?.filter((asset) => (
           !asset.archived
           && asset.status === "active"
-          && (asset.voice_type === "clone" || (asset.provider === "minimax" && asset.voice_type === "preset"))
+          && (
+            asset.voice_type === "clone"
+            || (asset.voice_type === "preset" && configuredProviderIds.has(asset.provider))
+          )
         )) || [];
       const activePresetIds = new Set(
-        voiceAssets.filter((asset) => asset.provider === "minimax" && asset.voice_type === "preset")
-          .map((asset) => asset.voice_id),
+        voiceAssets.filter((asset) => asset.voice_type === "preset")
+          .map((asset) => `${asset.provider}:${asset.voice_id}`),
       );
       sendJson(res, 200, {
         ok: true,
@@ -179,14 +194,21 @@ export function createIanXiaoheiRoutes({
           minimaxModel: String(settings.tts?.minimax?.model || "speech-2.6-hd"),
           defaultSpeed: Number(settings.tts?.default_speed || 1),
           defaultVoice: voiceAssetService?.getDefault?.() || null,
-          voices: minimaxPresets.filter((voice) => activePresetIds.has(voice.id)),
+          voices: presetVoices.filter((voice) => activePresetIds.has(`${voice.provider}:${voice.id}`)),
           voiceAssets: voiceAssets.filter((asset) => (
-            asset.voice_type === "clone" || activePresetIds.has(asset.voice_id)
+            asset.voice_type === "clone" || activePresetIds.has(`${asset.provider}:${asset.voice_id}`)
           )).map((asset) => {
-            if (asset.provider !== "minimax" || asset.voice_type !== "preset") return asset;
+            const providerInfo = presetProviders.find((provider) => provider.id === asset.provider) || null;
+            if (asset.voice_type !== "preset") {
+              return {
+                ...asset,
+                provider_label: providerInfo?.label || asset.provider,
+              };
+            }
             const preview = staticVoicePreview(voicePreviewRoot, asset.provider, asset.voice_id);
             return {
               ...asset,
+              provider_label: providerInfo?.label || asset.provider,
               preview_url: fs.existsSync(preview.path) ? preview.url : "",
               preview_ready: fs.existsSync(preview.path),
             };
@@ -1297,11 +1319,43 @@ function platformForAspectRatio(value) {
 }
 
 function staticVoicePreview(root, provider, voiceId) {
-  const key = createHash("sha1").update(`${provider}:${voiceId}`).digest("hex").slice(0, 20);
+  const safeProvider = String(provider || "unknown").replace(/[^a-z0-9_-]+/gi, "_") || "unknown";
+  const key = createHash("sha1").update(`${safeProvider}:${voiceId}`).digest("hex").slice(0, 20);
   return {
-    path: path.join(root, `${key}.mp3`),
-    url: `/assets/voice-previews/minimax/${key}.mp3`,
+    path: path.join(root, safeProvider, `${key}.mp3`),
+    url: `/assets/voice-previews/${encodeURIComponent(safeProvider)}/${key}.mp3`,
   };
+}
+
+function ttsProviderConfigured(settings = {}, providerId = "") {
+  const tts = settings.tts || {};
+  const config = tts[providerId] || {};
+  if (providerId === "aliyun_bailian") return Boolean(config.api_key);
+  if (providerId === "minimax") return Boolean(config.api_key);
+  if (providerId === "fish_audio") return Boolean(config.api_key && (config.voice || config.reference_id));
+  if (providerId === "custom_tts") return Boolean(config.base_url);
+  if (providerId === "tencent_tts") return Boolean(config.secret_id && config.secret_key);
+  if (providerId === "volcengine_doubao") return Boolean(config.api_key || (config.access_key_id && config.secret_access_key));
+  if (providerId === "elevenlabs") return Boolean(config.api_key);
+  return false;
+}
+
+function configuredTtsPresetProviders(settings = {}) {
+  const tts = settings.tts || {};
+  const labels = {
+    aliyun_bailian: "阿里云百炼 CosyVoice / Qwen-TTS",
+    minimax: "MiniMax",
+  };
+  const ordered = [
+    String(tts.default_provider || ""),
+    "aliyun_bailian",
+    "minimax",
+  ].filter(Boolean);
+  const unique = [...new Set(ordered)];
+  return unique
+    .filter((id) => ["aliyun_bailian", "minimax"].includes(id))
+    .filter((id) => ttsProviderConfigured(settings, id))
+    .map((id) => ({ id, label: labels[id] || id }));
 }
 
 function savedApiSummaries(settings = {}) {
