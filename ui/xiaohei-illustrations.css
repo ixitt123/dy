@@ -403,11 +403,68 @@ button.danger {
   background: var(--soft);
 }
 
+.settings-actions,
+.history-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.integration-status {
+  grid-column: 1 / -1;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--muted);
+  background: #fff;
+  font-size: 13px;
+}
+
+.integration-status.success {
+  color: #126b3f;
+  border-color: #bddcc9;
+  background: #f2fbf5;
+}
+
+.integration-status.warning {
+  color: #8a5b00;
+  border-color: #e2cf9a;
+  background: #fff9e8;
+}
+
 .prompt-card h3,
 .image-card h3,
 .history-card h3 {
   margin: 0 0 8px;
   font-size: 15px;
+}
+
+.history-panel summary {
+  cursor: pointer;
+  margin-bottom: 12px;
+  color: var(--ink);
+  font-weight: 800;
+}
+
+.history-panel summary span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  height: 20px;
+  margin-left: 6px;
+  border-radius: 999px;
+  background: var(--soft);
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.history-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
 }
 
 .meta {

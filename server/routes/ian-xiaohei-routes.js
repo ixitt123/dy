@@ -1223,6 +1223,7 @@ function createDirectorProjectForPlan(taskStore, plan, audioJob) {
     metadata_json: JSON.stringify({
       source_type: "ian_xiaohei_tts_timeline",
       source_key: `tts:${audioJob.id}`,
+      project_id: plan.projectId || "",
       tts_job_id: Number(audioJob.id),
       scene_count: plan.shots.length,
       total_duration: plan.audioDuration,
@@ -1411,6 +1412,7 @@ function writeXiaoheiMaterialPackage(outputRoot, plan, images, audioJob) {
     version: 1,
     type: "ian_xiaohei_video_material_package",
     batch_id: batchId,
+    project_id: plan.projectId || "",
     title: plan.title,
     source_text: plan.sourceText,
     tts_job_id: Number(plan.ttsJobId || 0),

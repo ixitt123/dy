@@ -4726,6 +4726,11 @@ const server = http.createServer(async (req, res) => {
         fish_audio: ["base_url", "api_key", "model", "voice", "reference_id", "default_format"],
       }[providerId] || [];
       const secretFields = new Set(["api_key", "secret_id", "secret_key", "access_key_id", "secret_access_key"]);
+      if (body.clear_secret === true) {
+        for (const field of secretFields) {
+          if (allowedFields.includes(field)) target[field] = "";
+        }
+      }
       for (const field of allowedFields) {
         if (body[field] === undefined) continue;
         const value = String(body[field] || "").trim();
