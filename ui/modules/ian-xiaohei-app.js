@@ -8,6 +8,7 @@ const state = {
   outputDir: "",
   promptsText: "",
   voiceChoices: new Map(),
+  savedApis: [],
   pendingUploads: new Map(),
   projectId: localStorage.getItem("ian-xiaohei-project-id") || `xiaohei-${Date.now()}`,
 };
@@ -200,14 +201,24 @@ async function saveMinimaxSettings() {
 }
 
 async function testMinimaxSettings() {
+  const selected = state.savedApis?.find((item) => item.id === els.savedApiSelect?.value);
+  if (!selected) {
+    setStatus("没有可测试的 API", "请先到系统设置保存 API。", 0, true);
+    return;
+  }
   setBusy(true);
-  setStatus("正在测试 MiniMax", "正在验证本地保存的 API Key 是否可用。", 35, false, "测试连接");
+  setStatus(`正在测试 ${selected.label}`, "正在验证本地保存的 API 配置。", 35, false, "测试连接");
   try {
-    const data = await fetchJson("/api/ian-xiaohei/test-minimax", { method: "POST", body: "{}" });
+    const data = selected.id === "minimax"
+      ? await fetchJson("/api/ian-xiaohei/test-minimax", { method: "POST", body: "{}" })
+      : await fetchJson("/api/settings/test-provider", {
+        method: "POST",
+        body: JSON.stringify({ id: selected.id }),
+      });
     await loadConfig();
-    setStatus(data.ok ? "MiniMax 连接正常" : "MiniMax 连接异常", data.message || "测试完成。", 100, !data.ok, "测试完成");
+    setStatus(data.ok ? `${selected.label} 连接正常` : `${selected.label} 连接异常`, data.message || "测试完成。", 100, !data.ok, "测试完成");
   } catch (error) {
-    setStatus("MiniMax 测试失败", error.payload?.message || error.message || String(error), 100, true);
+    setStatus(`${selected.label} 测试失败`, error.payload?.message || error.message || String(error), 100, true);
   } finally {
     setBusy(false);
   }

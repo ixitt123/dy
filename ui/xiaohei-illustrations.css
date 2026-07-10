@@ -411,7 +411,8 @@ button.danger {
   align-items: center;
 }
 
-.integration-status {
+.integration-status,
+.api-detail {
   grid-column: 1 / -1;
   padding: 8px 10px;
   border: 1px solid var(--line);
@@ -421,13 +422,15 @@ button.danger {
   font-size: 13px;
 }
 
-.integration-status.success {
+.integration-status.success,
+.api-detail.success {
   color: #126b3f;
   border-color: #bddcc9;
   background: #f2fbf5;
 }
 
-.integration-status.warning {
+.integration-status.warning,
+.api-detail.warning {
   color: #8a5b00;
   border-color: #e2cf9a;
   background: #fff9e8;
