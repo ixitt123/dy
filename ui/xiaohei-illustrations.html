@@ -114,6 +114,34 @@
           </label>
           <button id="cloneVoice" type="button">创建并保存克隆音色</button>
         </details>
+        <section class="music-studio">
+          <div class="panel-head">
+            <div>
+              <h2>AI 唱歌 / 搞怪音乐</h2>
+              <p>独立生成 mp3，可作为片头梗歌、搞怪音乐或 BGM 素材；不会替代当前 TTS 配音。</p>
+            </div>
+            <button id="generateMusic" type="button">生成音乐素材</button>
+          </div>
+          <div class="music-grid">
+            <label class="field">
+              <span>音乐预设</span>
+              <select id="musicPreset"></select>
+            </label>
+            <label class="field">
+              <span>风格补充</span>
+              <input id="musicPromptExtra" type="text" placeholder="可选：更燃、更搞笑、更像片头广告歌" />
+            </label>
+          </div>
+          <label class="field">
+            <span>歌词 / 口号</span>
+            <textarea id="musicLyrics" placeholder="留空时会默认使用上方文案；纯音乐预设可留空。"></textarea>
+          </label>
+          <div id="musicStatus" class="music-status">选择预设后生成，生成结果会保存在本地。</div>
+          <div id="musicPreviewPanel" class="audio-preview" hidden>
+            <strong id="musicPreviewTitle">当前音乐素材</strong>
+            <audio id="musicPreview" controls></audio>
+          </div>
+        </section>
         <section class="audio-studio">
           <div class="panel-head">
             <div>

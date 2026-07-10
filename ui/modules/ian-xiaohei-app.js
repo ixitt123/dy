@@ -9,6 +9,7 @@ const state = {
   promptsText: "",
   voiceChoices: new Map(),
   savedApis: [],
+  musicPresets: [],
   pendingUploads: new Map(),
   projectId: localStorage.getItem("ian-xiaohei-project-id") || `xiaohei-${Date.now()}`,
 };
@@ -41,6 +42,14 @@ const els = {
   cloneTranscript: document.querySelector("#cloneTranscript"),
   cloneConsent: document.querySelector("#cloneConsent"),
   cloneVoice: document.querySelector("#cloneVoice"),
+  musicPreset: document.querySelector("#musicPreset"),
+  musicPromptExtra: document.querySelector("#musicPromptExtra"),
+  musicLyrics: document.querySelector("#musicLyrics"),
+  generateMusic: document.querySelector("#generateMusic"),
+  musicStatus: document.querySelector("#musicStatus"),
+  musicPreviewPanel: document.querySelector("#musicPreviewPanel"),
+  musicPreviewTitle: document.querySelector("#musicPreviewTitle"),
+  musicPreview: document.querySelector("#musicPreview"),
   generateAudio: document.querySelector("#generateAudio"),
   confirmAudio: document.querySelector("#confirmAudio"),
   audioPreviewPanel: document.querySelector("#audioPreviewPanel"),
@@ -84,6 +93,11 @@ function bindEvents() {
   els.generateAudio.addEventListener("click", () => generateAudioOnly());
   els.confirmAudio.addEventListener("click", () => confirmCurrentAudio());
   els.cloneVoice.addEventListener("click", () => createCloneVoice());
+  els.generateMusic.addEventListener("click", () => generateMusicMaterial());
+  els.musicPreset.addEventListener("change", () => {
+    const preset = currentMusicPreset();
+    if (preset) els.musicStatus.textContent = `${preset.label}：${preset.description || "可生成本地 mp3 素材。"}`;
+  });
   els.previewVoice.addEventListener("click", () => previewCurrentVoice());
   els.setDefaultVoice.addEventListener("click", () => setCurrentVoiceDefault());
   els.deleteVoice.addEventListener("click", () => deleteCurrentVoice());
@@ -124,6 +138,7 @@ async function loadConfig() {
   renderSavedApis(data.savedApis || []);
   renderIntegrationStatus(data.integrations || {});
   renderVoiceChoices(data.tts || {});
+  renderMusicPresets(data.music || {});
 }
 
 function renderSavedApis(savedApis) {
@@ -171,6 +186,65 @@ function renderIntegrationStatus(integrations) {
   ];
   els.integrationStatus.textContent = items.join(" ｜ ");
   els.integrationStatus.className = `integration-status ${integrations.imageProviderConfigured && integrations.jianyingDraftDir ? "success" : "warning"}`;
+}
+
+function renderMusicPresets(music) {
+  state.musicPresets = Array.isArray(music.presets) ? music.presets : [];
+  if (!state.musicPresets.length) {
+    els.musicPreset.innerHTML = '<option value="">暂无音乐预设</option>';
+    els.musicStatus.textContent = "当前没有可用音乐预设。";
+    return;
+  }
+  els.musicPreset.innerHTML = state.musicPresets.map((preset, index) => `
+    <option value="${escapeAttr(preset.id)}">${index + 1}. ${escapeHtml(preset.label)}${preset.instrumental ? " · 纯音乐" : ""}</option>
+  `).join("");
+  const first = state.musicPresets[0];
+  els.musicStatus.textContent = music.configured
+    ? `${first.label}：${first.description || "可生成本地 mp3 素材。"}`
+    : "MiniMax API 未配置，音乐生成不可用。";
+}
+
+function currentMusicPreset() {
+  return state.musicPresets.find((preset) => preset.id === els.musicPreset.value) || state.musicPresets[0] || null;
+}
+
+async function generateMusicMaterial() {
+  const preset = currentMusicPreset();
+  if (!preset) {
+    setStatus("没有音乐预设", "请先刷新配置或检查 MiniMax 配置。", 0, true);
+    return;
+  }
+  const lyrics = (els.musicLyrics.value.trim() || els.copyInput.value.trim()).slice(0, 3200);
+  if (!preset.instrumental && !lyrics) {
+    setStatus("缺少歌词", "唱歌和搞怪音乐需要歌词或口号；也可以选择纯音乐 BGM 预设。", 0, true);
+    return;
+  }
+  setBusy(true);
+  els.musicStatus.textContent = `正在生成：${preset.label}，请等待 MiniMax 返回 mp3。`;
+  setStatus("正在生成音乐素材", `${preset.label} · ${preset.description || ""}`, 35, false, "MiniMax Music");
+  try {
+    const data = await fetchJson("/api/ian-xiaohei/music", {
+      method: "POST",
+      body: JSON.stringify({
+        preset_id: preset.id,
+        title: els.titleInput.value.trim(),
+        lyrics,
+        prompt_extra: els.musicPromptExtra.value.trim(),
+      }),
+    });
+    if (data.audio_url) {
+      els.musicPreview.src = data.audio_url;
+      els.musicPreviewTitle.textContent = `${data.preset_label || preset.label} · ${data.model || ""}`;
+      els.musicPreviewPanel.hidden = false;
+    }
+    els.musicStatus.textContent = `${data.message || "音乐素材已生成。"} ${data.audio_path || ""}`;
+    setStatus("音乐素材已生成", data.audio_path || "可以在下方试听。", 100, false, "完成");
+  } catch (error) {
+    els.musicStatus.textContent = error.payload?.message || error.message || String(error);
+    setStatus("音乐生成失败", error.payload?.message || error.message || String(error), 100, true);
+  } finally {
+    setBusy(false);
+  }
 }
 
 async function saveMinimaxSettings() {
@@ -263,13 +337,15 @@ function renderVoiceChoices(tts) {
       voiceType: asset.voice_type,
       model: asset.metadata?.target_model || asset.metadata?.model || info.model || "",
       description: asset.description || info.description || "",
+      category: info.category || asset.metadata?.category || "",
       useCase: info.useCase || "",
       previewUrl: asset.preview_url || "",
       supportsEmotion: asset.supports_emotion !== false && info.supportsEmotion !== false,
       supportsSpeed: asset.supports_speed !== false && info.supportsSpeed !== false,
       isDefault: Boolean(asset.is_default),
     });
-    const baseLabel = `${asset.is_default ? "默认 · " : ""}${asset.voice_name} · ${asset.voice_type === "clone" ? "我的克隆音色" : info.useCase || "平台预设"}`;
+    const presetLabel = [info.category, info.useCase || "平台预设"].filter(Boolean).join(" / ");
+    const baseLabel = `${asset.is_default ? "默认 · " : ""}${asset.voice_name} · ${asset.voice_type === "clone" ? "我的克隆音色" : presetLabel}`;
     options.push({
       key,
       label: `${baseLabel}${providerLabel ? ` - ${providerLabel}` : ""}`,
@@ -296,6 +372,7 @@ function renderVoiceDescription() {
   }
   els.voiceDescription.textContent = [
     choice.voiceType === "clone" ? "我的克隆音色" : "精选预设",
+    choice.category,
     choice.useCase,
     choice.description,
   ].filter(Boolean).join(" · ");
@@ -972,6 +1049,7 @@ function setBusy(busy) {
     els.saveMinimaxSettings,
     els.testMinimaxSettings,
     els.deleteMinimaxApi,
+    els.generateMusic,
     els.generateAudio,
     els.confirmAudio,
     els.planPrompts,

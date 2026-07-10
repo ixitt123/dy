@@ -44,6 +44,7 @@ image-assets/generated/
 image-assets/ian-xiaohei/
 image-assets/review/
 jianying-exports/
+ui/assets/voice-previews/**/*.mp3
 
 .DS_Store
 Thumbs.db

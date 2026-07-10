@@ -4,6 +4,7 @@ import { spawn } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
 import { HttpBodyError, readJsonBody } from "../utils/http-body.js";
 import { createTtsProvider } from "../tts/providers/index.js";
+import { MINIMAX_PRESET_VOICE_IDS } from "../tts/providers/minimax.js";
 
 const STRUCTURE_TYPES = [
   "Workflow",
@@ -60,6 +61,58 @@ const AUDIO_MIME_EXTENSIONS = {
   "audio/mp4": ".m4a",
   "audio/x-m4a": ".m4a",
 };
+
+const MINIMAX_MUSIC_MODEL = "music-2.6-free";
+const MUSIC_PRESETS = [
+  {
+    id: "short_hook_pop",
+    label: "短视频洗脑副歌",
+    model: MINIMAX_MUSIC_MODEL,
+    prompt: "中文流行短视频副歌，明亮，强记忆点，适合教育口播片头，节拍感清楚，120-140 BPM",
+    description: "适合把核心观点做成片头口号或结尾记忆点。",
+    outro: "马上行动，今天开始。",
+  },
+  {
+    id: "funny_rap",
+    label: "搞怪说唱口播",
+    model: MINIMAX_MUSIC_MODEL,
+    prompt: "中文搞怪说唱，轻松幽默，短句强节奏，适合知识类反差视频，120-150 BPM",
+    description: "适合吐槽、反差、轻娱乐知识内容。",
+    outro: "别光收藏，赶紧开练。",
+  },
+  {
+    id: "nanjing_talk_rap",
+    label: "南京口语感说唱",
+    model: MINIMAX_MUSIC_MODEL,
+    prompt: "中文口语化说唱，带南京本地生活感，轻松直接，节奏清楚，120-140 BPM",
+    description: "不是官方南京方言音色，用音乐风格模拟南京口语气质。",
+    outro: "这个办法，今天就能用。",
+  },
+  {
+    id: "yangzhou_soft_jingle",
+    label: "扬州口语感小调",
+    model: MINIMAX_MUSIC_MODEL,
+    prompt: "中文轻快小调，江南口语气质，温和亲切，广告歌质感，110-135 BPM",
+    description: "不是官方扬州方言音色，用音乐风格模拟柔和口语气质。",
+    outro: "慢慢来，也要马上开始。",
+  },
+  {
+    id: "cartoon_fun",
+    label: "卡通搞怪片头",
+    model: MINIMAX_MUSIC_MODEL,
+    prompt: "卡通搞怪短视频音乐，俏皮，弹跳感，适合小黑配图，120-150 BPM",
+    description: "适合搞怪角色、卡通风、轻松片头。",
+    outro: "叮咚，知识点送到。",
+  },
+  {
+    id: "clean_education_bgm",
+    label: "清爽教育BGM",
+    model: MINIMAX_MUSIC_MODEL,
+    prompt: "清爽教育类背景音乐，轻快不抢人声，适合英语学习和知识口播，120-135 BPM",
+    description: "生成纯音乐，适合作为视频 BGM 素材。",
+    instrumental: true,
+  },
+];
 
 const SHOT_ROLE_DEFS = [
   {
@@ -143,9 +196,11 @@ export function createIanXiaoheiRoutes({
   const outputRoot = path.join(baseDir, "image-assets", "ian-xiaohei");
   const uploadRoot = path.join(outputRoot, "_uploaded-audio");
   const voicePreviewRoot = path.join(baseDir, "ui", "assets", "voice-previews");
+  const musicOutputRoot = path.join(baseDir, ".data", "music", "minimax");
   fs.mkdirSync(outputRoot, { recursive: true });
   fs.mkdirSync(uploadRoot, { recursive: true });
   fs.mkdirSync(voicePreviewRoot, { recursive: true });
+  fs.mkdirSync(musicOutputRoot, { recursive: true });
 
   return async function handleIanXiaoheiRoutes(req, res, url) {
     if (!url.pathname.startsWith("/api/ian-xiaohei/")) return false;
@@ -233,7 +288,25 @@ export function createIanXiaoheiRoutes({
           emotions: EMOTION_OPTIONS,
           speeds: SPEED_OPTIONS,
         },
+        music: {
+          provider: "minimax",
+          configured: Boolean(settings.tts?.minimax?.api_key),
+          model: MINIMAX_MUSIC_MODEL,
+          outputDir: musicOutputRoot,
+          presets: MUSIC_PRESETS,
+        },
       });
+      return true;
+    }
+
+    if (req.method === "GET" && route === "music-audio") {
+      const fileName = safeMusicFileName(url.searchParams.get("file"));
+      const filePath = fileName ? path.join(musicOutputRoot, fileName) : "";
+      if (!filePath || !fs.existsSync(filePath)) {
+        sendJson(res, 404, { ok: false, message: "音乐文件不存在。" });
+        return true;
+      }
+      sendAudioFile(res, filePath);
       return true;
     }
 
@@ -254,6 +327,28 @@ export function createIanXiaoheiRoutes({
         sendJson(res, 400, {
           ok: false,
           status: "failed",
+          message: error instanceof Error ? error.message : String(error),
+        });
+      }
+      return true;
+    }
+
+    if (req.method === "POST" && route === "music") {
+      try {
+        const body = await readJsonBody(req, { maxBytes: 256 * 1024 });
+        const settings = getSettings() || {};
+        const result = await generateMinimaxMusic({
+          settings,
+          outputRoot: musicOutputRoot,
+          presetId: body.preset_id,
+          lyrics: body.lyrics || body.text || "",
+          promptExtra: body.prompt_extra || "",
+          title: body.title || "",
+        });
+        sendJson(res, 201, { ok: true, ...result });
+      } catch (error) {
+        sendJson(res, error instanceof HttpBodyError ? error.statusCode : 400, {
+          ok: false,
           message: error instanceof Error ? error.message : String(error),
         });
       }
@@ -331,11 +426,13 @@ export function createIanXiaoheiRoutes({
           sendJson(res, 200, { ok: true, preview_url: preview.url, cached: true });
           return true;
         }
+        const previewText = String(asset?.metadata?.previewText || body.text || "").trim();
         const generated = await ttsService.generateStaticPreview({
           provider,
           voice_id: voiceId,
           voice_name: voiceName,
           model: String(asset?.metadata?.target_model || asset?.metadata?.model || body.model || ""),
+          ...(previewText ? { text: previewText } : {}),
           outputPath: preview.path,
         });
         if (generated.error) {
@@ -1376,7 +1473,7 @@ function configuredTtsPresetProviders(settings = {}) {
 }
 
 function xiaoheiPresetVoiceAllowed(providerId, voiceId) {
-  if (providerId === "minimax") return true;
+  if (providerId === "minimax") return MINIMAX_PRESET_VOICE_IDS.has(String(voiceId || ""));
   if (providerId === "aliyun_bailian") return XIAOHEI_ALIYUN_PRESET_IDS.has(String(voiceId || ""));
   return false;
 }
@@ -2346,6 +2443,168 @@ function readJsonFile(filePath, fallback = {}) {
   } catch {
     return fallback;
   }
+}
+
+function sendAudioFile(res, filePath) {
+  const extension = path.extname(filePath).toLowerCase();
+  const contentType = extension === ".wav" ? "audio/wav" : "audio/mpeg";
+  res.writeHead(200, {
+    "content-type": contentType,
+    "cache-control": "no-store",
+  });
+  fs.createReadStream(filePath).pipe(res);
+}
+
+async function generateMinimaxMusic({
+  settings = {},
+  outputRoot,
+  presetId,
+  lyrics = "",
+  promptExtra = "",
+  title = "",
+}) {
+  const config = settings.tts?.minimax || {};
+  const apiKey = String(config.api_key || "").trim();
+  if (!apiKey) throw new Error("MiniMax：未配置 API Key，无法生成唱歌或音乐。");
+  const preset = MUSIC_PRESETS.find((item) => item.id === String(presetId || "")) || MUSIC_PRESETS[0];
+  const baseUrl = String(config.base_url || "https://api.minimaxi.com").trim();
+  const text = normalizeText(lyrics).slice(0, 3200);
+  if (!preset.instrumental && !text) {
+    throw new Error("请先输入歌词或口号；纯音乐请改选“清爽教育BGM”。");
+  }
+  const prompt = [
+    preset.prompt,
+    String(promptExtra || "").trim(),
+    title ? `视频标题：${String(title).trim().slice(0, 80)}` : "",
+  ].filter(Boolean).join("，");
+  const body = {
+    model: preset.model || MINIMAX_MUSIC_MODEL,
+    prompt,
+    stream: false,
+    output_format: "hex",
+    audio_setting: {
+      sample_rate: 44100,
+      bitrate: 256000,
+      format: "mp3",
+    },
+    aigc_watermark: false,
+    lyrics_optimizer: false,
+    is_instrumental: Boolean(preset.instrumental),
+  };
+  if (!preset.instrumental) body.lyrics = formatMusicLyrics(text, preset);
+
+  const response = await fetch(minimaxEndpoint(baseUrl, "/v1/music_generation"), {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${apiKey}`,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify(body),
+  });
+  const raw = await response.text();
+  const data = parseStoredJsonObject(raw, {});
+  const statusCode = Number(data?.base_resp?.status_code || 0);
+  if (!response.ok || statusCode !== 0) {
+    throw new Error(redactMiniMaxSecret(minimaxMusicError(response.status, data, raw), apiKey));
+  }
+
+  let buffer = null;
+  const audioHex = String(data?.data?.audio || "").trim();
+  if (audioHex) buffer = Buffer.from(audioHex, "hex");
+  const remoteUrl = String(data?.data?.audio_url || data?.data?.url || "").trim();
+  if (!buffer?.length && remoteUrl) buffer = await downloadAudioUrl(remoteUrl);
+  if (!buffer?.length) {
+    throw new Error(`MiniMax Music 没有返回可用音频，状态：${String(data?.data?.status || "unknown")}`);
+  }
+
+  const fileName = `${dateSlug()}-${preset.id}-${randomUUID().slice(0, 8)}.mp3`;
+  const outputPath = path.join(outputRoot, fileName);
+  fs.mkdirSync(outputRoot, { recursive: true });
+  fs.writeFileSync(outputPath, buffer);
+  return {
+    preset_id: preset.id,
+    preset_label: preset.label,
+    model: body.model,
+    prompt,
+    instrumental: Boolean(preset.instrumental),
+    audio_path: outputPath,
+    audio_url: `/api/ian-xiaohei/music-audio?file=${encodeURIComponent(fileName)}`,
+    duration_ms: Number(data?.extra_info?.music_duration || 0),
+    bytes: buffer.length,
+    trace_id: String(data?.trace_id || ""),
+    message: preset.instrumental ? "纯音乐已生成，可作为 BGM 素材试听。" : "唱歌/搞怪音乐已生成，可试听后作为视频素材。",
+  };
+}
+
+function minimaxEndpoint(baseUrl, pathname) {
+  const base = String(baseUrl || "https://api.minimaxi.com").replace(/\/+$/, "");
+  const suffix = pathname.startsWith("/") ? pathname : `/${pathname}`;
+  return base.endsWith("/v1") ? `${base}${suffix.replace(/^\/v1(?=\/|$)/, "")}` : `${base}${suffix}`;
+}
+
+function formatMusicLyrics(text, preset = {}) {
+  const clean = String(text || "")
+    .replace(/\r\n/g, "\n")
+    .replace(/[ \t]+/g, " ")
+    .trim();
+  if (/^\s*\[(Intro|Verse|Pre Chorus|Chorus|Interlude|Bridge|Outro|Post Chorus|Transition|Break|Hook|Build Up|Inst|Solo)\]/im.test(clean)) {
+    return clean.slice(0, 3500);
+  }
+  const lines = clean
+    .split(/(?<=[。！？!?；;])|\n+/u)
+    .map((item) => item.replace(/[。！？!?；;]+$/u, "").trim())
+    .filter(Boolean)
+    .slice(0, 16);
+  if (!lines.length) return "";
+  const hook = lines[0].length <= 26 ? lines[0] : `${lines[0].slice(0, 24)}…`;
+  const midpoint = Math.max(1, Math.ceil(lines.length / 2));
+  return [
+    "[Intro]",
+    hook,
+    "[Verse]",
+    ...lines.slice(0, midpoint),
+    "[Chorus]",
+    ...(lines.slice(midpoint).length ? lines.slice(midpoint) : [hook]),
+    "[Outro]",
+    preset.outro || hook,
+  ].join("\n").slice(0, 3500);
+}
+
+async function downloadAudioUrl(url) {
+  const response = await fetch(url);
+  if (!response.ok) throw new Error(`下载 MiniMax 音频失败：${response.status}`);
+  return Buffer.from(await response.arrayBuffer());
+}
+
+function minimaxMusicError(status, data, raw) {
+  const code = Number(data?.base_resp?.status_code || data?.status_code || 0);
+  const message = String(
+    data?.base_resp?.status_msg
+      || data?.message
+      || data?.error?.message
+      || raw
+      || "",
+  ).trim();
+  if (status === 401 || status === 403 || /unauthorized|invalid.*key|鉴权|密钥|api key/i.test(message)) {
+    return "MiniMax：API Key 无效或未授权音乐生成。";
+  }
+  if (status === 402 || /balance|quota|insufficient|余额|额度/i.test(message)) {
+    return "MiniMax：余额不足或音乐生成额度不可用。";
+  }
+  if (/model/i.test(message)) return `MiniMax Music：模型不可用。${message ? ` ${message}` : ""}`;
+  return message
+    ? `MiniMax Music 请求失败（${status || code}）：${message}`
+    : `MiniMax Music 请求失败（${status || code || "未知"}）。`;
+}
+
+function redactMiniMaxSecret(value, apiKey) {
+  const key = String(apiKey || "");
+  return key ? String(value || "").replaceAll(key, "[REDACTED]") : String(value || "");
+}
+
+function safeMusicFileName(value) {
+  const fileName = String(value || "").replace(/[^A-Za-z0-9._-]/g, "");
+  return fileName.endsWith(".mp3") || fileName.endsWith(".wav") ? fileName : "";
 }
 
 function openFolder(folderPath) {
