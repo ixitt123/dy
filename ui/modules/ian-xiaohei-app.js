@@ -269,9 +269,10 @@ function renderVoiceChoices(tts) {
       supportsSpeed: asset.supports_speed !== false && info.supportsSpeed !== false,
       isDefault: Boolean(asset.is_default),
     });
+    const baseLabel = `${asset.is_default ? "默认 · " : ""}${asset.voice_name} · ${asset.voice_type === "clone" ? "我的克隆音色" : info.useCase || "平台预设"}`;
     options.push({
       key,
-      label: `${asset.is_default ? "默认 · " : ""}${asset.voice_name} · ${asset.voice_type === "clone" ? "我的克隆音色" : info.useCase || "平台预设"}`,
+      label: `${baseLabel}${providerLabel ? ` ? ${providerLabel}` : ""}`,
       selected: Boolean(asset.is_default || Number(tts.defaultVoice?.id || 0) === Number(asset.id)),
     });
   }
