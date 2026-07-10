@@ -245,18 +245,23 @@ async function deleteMinimaxApi() {
 function renderVoiceChoices(tts) {
   state.voiceChoices.clear();
   const assets = Array.isArray(tts.voiceAssets) ? tts.voiceAssets : [];
-  const presetInfo = new Map((tts.voices || []).map((voice) => [voice.id, voice]));
+  const presetInfo = new Map((tts.voices || []).flatMap((voice) => [
+    [`${voice.provider || ""}:${voice.id}`, voice],
+    [voice.id, voice],
+  ]));
   const options = [];
   for (const asset of assets) {
-    const info = presetInfo.get(asset.voice_id) || {};
+    const info = presetInfo.get(`${asset.provider || ""}:${asset.voice_id}`) || presetInfo.get(asset.voice_id) || {};
+    const providerLabel = asset.provider_label || info.providerLabel || asset.provider || "";
     const key = `asset:${asset.id}`;
     state.voiceChoices.set(key, {
       voiceAssetId: Number(asset.id),
       provider: asset.provider,
+      providerLabel,
       voiceId: asset.voice_id,
       voiceName: asset.voice_name,
       voiceType: asset.voice_type,
-      model: asset.metadata?.target_model || info.model || "speech-2.6-hd",
+      model: asset.metadata?.target_model || asset.metadata?.model || info.model || "",
       description: asset.description || info.description || "",
       useCase: info.useCase || "",
       previewUrl: asset.preview_url || "",
