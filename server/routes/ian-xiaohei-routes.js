@@ -372,7 +372,7 @@ export function createIanXiaoheiRoutes({
       sendJson(res, 200, {
         ok: true,
         outputDir: outputRoot,
-        batches: listOutputBatches(outputRoot),
+        batches: listOutputBatches(outputRoot, videoProductService),
       });
       return true;
     }
@@ -1166,6 +1166,17 @@ function parseMaybeJson(value) {
   }
 }
 
+function parseJsonObject(value, fallback = {}) {
+  if (!value) return fallback;
+  if (typeof value === "object") return value;
+  try {
+    const parsed = JSON.parse(String(value));
+    return parsed && typeof parsed === "object" ? parsed : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
 function splitUnitAtSemanticBoundary(value) {
   const text = String(value || "").trim();
   if (text.length < 28) return null;
@@ -1417,6 +1428,36 @@ function writeXiaoheiMaterialPackage(outputRoot, plan, images, audioJob) {
     created_at: new Date().toISOString(),
   }, null, 2), "utf8");
   return batchDir;
+}
+
+function validateImageBindings({ plan, images, imageService }) {
+  const imageByIndex = new Map(images.map((image) => [Number(image.index), image]));
+  const assetIds = new Set(images.map((image) => String(image.assetId || "")).filter(Boolean));
+  const knownAssets = new Map(
+    (imageService?.getAssets?.({ limit: 2000 }) || [])
+      .filter((asset) => assetIds.has(String(asset.id)))
+      .map((asset) => [String(asset.id), asset]),
+  );
+  for (const shot of plan.shots || []) {
+    const image = imageByIndex.get(Number(shot.index));
+    if (!image?.assetId) throw new Error(`#${shot.index} 缺少确认图片。`);
+    const asset = knownAssets.get(String(image.assetId));
+    if (!asset) throw new Error(`#${shot.index} 图片资产不存在，请重新上传本地图片。`);
+    if (Number(asset.scene_index || 0) !== Number(shot.index)) {
+      throw new Error(`#${shot.index} 图片 scene_index 不匹配，请重新上传本地图片。`);
+    }
+    const expectedSourceIds = new Set([
+      `${plan.directorProjectId}:${shot.index}`,
+      `${plan.batchId}:${shot.index}`,
+    ]);
+    if (asset.source_id && !expectedSourceIds.has(String(asset.source_id))) {
+      throw new Error(`#${shot.index} 图片不属于当前分镜计划，请重新上传本地图片。`);
+    }
+    const filePath = String(asset.file_path || asset.original_path || image.imagePath || "");
+    if (!filePath || !fs.existsSync(filePath)) {
+      throw new Error(`#${shot.index} 图片文件不存在，请重新上传本地图片。`);
+    }
+  }
 }
 
 function srtTime(value) {
@@ -2052,13 +2093,16 @@ function promptsMarkdown(plan) {
   ].join("\n");
 }
 
-function listOutputBatches(outputRoot) {
+function listOutputBatches(outputRoot, videoProductService = null) {
   if (!fs.existsSync(outputRoot)) return [];
   return fs.readdirSync(outputRoot, { withFileTypes: true })
     .filter((entry) => entry.isDirectory())
     .map((entry) => {
       const folderPath = path.join(outputRoot, entry.name);
-      const files = fs.readdirSync(folderPath, { withFileTypes: true })
+      const result = readJsonFile(path.join(folderPath, "result.json"), {});
+      const manifest = readJsonFile(path.join(folderPath, "project_manifest.json"), {});
+      const resultImages = Array.isArray(result.images) ? result.images : [];
+      const directFiles = fs.readdirSync(folderPath, { withFileTypes: true })
         .filter((file) => file.isFile() && /\.(png|jpe?g|webp)$/i.test(file.name))
         .map((file) => {
           const filePath = path.join(folderPath, file.name);
@@ -2071,16 +2115,48 @@ function listOutputBatches(outputRoot) {
             updatedAt: stats.mtime.toISOString(),
           };
         });
+      const files = resultImages.length
+        ? resultImages.map((image) => ({
+          name: `scene_${String(image.index || "").padStart(2, "0")}`,
+          path: image.imagePath || "",
+          imageUrl: image.imageUrl || (image.imagePath ? `/api/image/file?path=${encodeURIComponent(image.imagePath)}` : ""),
+          updatedAt: "",
+        }))
+        : directFiles;
+      const timelineProjectId = Number(result.output?.timeline_project_id || manifest.timeline_project_id || 0);
+      const timelineProject = timelineProjectId && videoProductService?.getProject
+        ? videoProductService.getProject(timelineProjectId)
+        : null;
       const stats = fs.statSync(folderPath);
       return {
         id: entry.name,
+        title: manifest.title || "",
         folderPath,
+        timelineProjectId,
+        draftPath: timelineProject?.draft_path || result.output?.draft_path || manifest.draft_path || "",
         updatedAt: stats.mtime.toISOString(),
         files,
       };
     })
     .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
     .slice(0, 40);
+}
+
+function resolveBatchDir(outputRoot, id) {
+  const safeId = safeBatchId(id);
+  if (!safeId) return "";
+  const root = path.resolve(outputRoot);
+  const target = path.resolve(root, safeId);
+  if (target !== root && target.startsWith(`${root}${path.sep}`)) return target;
+  return "";
+}
+
+function readJsonFile(filePath, fallback = {}) {
+  try {
+    return parseJsonObject(fs.readFileSync(filePath, "utf8"), fallback);
+  } catch {
+    return fallback;
+  }
 }
 
 function openFolder(folderPath) {
