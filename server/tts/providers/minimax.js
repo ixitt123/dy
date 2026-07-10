@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { TtsProviderAdapter, clampNumber, redactSecrets } from "../provider-adapter.js";
 
-const DEFAULT_BASE_URL = "https://api.minimax.io/v1";
+const DEFAULT_BASE_URL = "https://api.minimaxi.com";
 const DEFAULT_MODEL = "speech-2.6-hd";
 const PREVIEW_TEXT = "你好，这是我的短视频配音试听。表达自然，节奏清楚，重点明确。";
 

@@ -207,7 +207,7 @@ export function createIanXiaoheiRoutes({
           recommendedProvider: "minimax",
           recommendedModel: "speech-2.6-hd",
           minimaxConfigured: Boolean(settings.tts?.minimax?.api_key),
-          minimaxBaseUrl: String(settings.tts?.minimax?.base_url || "https://api.minimax.io/v1"),
+          minimaxBaseUrl: String(settings.tts?.minimax?.base_url || "https://api.minimaxi.com"),
           minimaxModel: String(settings.tts?.minimax?.model || "speech-2.6-hd"),
           defaultSpeed: Number(settings.tts?.default_speed || 1),
           defaultVoice: voiceAssetService?.getDefault?.() || null,

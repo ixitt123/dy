@@ -186,7 +186,7 @@ async function saveMinimaxSettings() {
       body: JSON.stringify({
         provider: "minimax",
         api_key: apiKey,
-        base_url: state.config?.tts?.minimaxBaseUrl || "https://api.minimax.io/v1",
+        base_url: state.config?.tts?.minimaxBaseUrl || "https://api.minimaxi.com",
         model: els.minimaxModel.value || "speech-2.6-hd",
       }),
     });

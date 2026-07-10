@@ -50,6 +50,11 @@ const pidPath = path.join(__dirname, "ui-server.pid");
 const urlPath = path.join(__dirname, "ui-server.url");
 const settingsPath = path.join(__dirname, "settings.json");
 const ffprobePath = ffprobeStatic?.path || "";
+const MINIMAX_TTS_DEFAULT_BASE_URL = "https://api.minimaxi.com";
+const MINIMAX_TTS_LEGACY_BASE_URLS = new Set([
+  "https://api.minimax.io",
+  "https://api.minimax.io/v1",
+]);
 const mcpEntry = path.join(
   __dirname,
   "node_modules",
@@ -844,7 +849,7 @@ function normalizeSettings(settings) {
       voice: String(tts.custom_tts?.voice || "").trim(),
     },
     minimax: {
-      base_url: String(tts.minimax?.base_url || "https://api.minimax.io/v1").trim(),
+      base_url: normalizeMiniMaxTtsBaseUrl(tts.minimax?.base_url),
       api_key: String(tts.minimax?.api_key || "").trim(),
       model: String(tts.minimax?.model || "speech-2.6-hd").trim() || "speech-2.6-hd",
       voice: String(tts.minimax?.voice || "").trim(),
@@ -921,6 +926,12 @@ function maskApiKey(apiKey) {
   if (!apiKey) return "";
   if (apiKey.length <= 10) return "已保存";
   return `${apiKey.slice(0, 6)}...${apiKey.slice(-4)}`;
+}
+
+function normalizeMiniMaxTtsBaseUrl(value) {
+  const baseUrl = String(value || "").trim().replace(/\/+$/, "");
+  if (!baseUrl || MINIMAX_TTS_LEGACY_BASE_URLS.has(baseUrl)) return MINIMAX_TTS_DEFAULT_BASE_URL;
+  return baseUrl;
 }
 
 function publicTtsSettings(settings = readSettings()) {
@@ -1268,7 +1279,7 @@ function publicUnifiedProviders(settings = readSettings()) {
       label: TTS_PROVIDER_LABELS.minimax,
       config: tts.minimax || {},
       description: "推荐中文 TTS；支持 10 个精选预设音色、声音克隆、情感和语速控制。",
-      baseUrl: tts.minimax?.base_url || "https://api.minimax.io/v1",
+      baseUrl: normalizeMiniMaxTtsBaseUrl(tts.minimax?.base_url),
       model: tts.minimax?.model || "speech-2.6-hd",
       models: ["speech-2.6-hd", "speech-2.8-hd"],
       enabled: true,
