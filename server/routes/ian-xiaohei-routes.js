@@ -1036,6 +1036,114 @@ function buildAudioTimedSegments(text, audioDuration) {
   });
 }
 
+function extractTtsSubtitleSegments(job, fallbackText, audioDuration) {
+  const metadata = parseJsonObject(job?.metadata_json, {});
+  const raw = metadata.subtitles || metadata.subtitle || metadata.words || metadata.word_timestamps || [];
+  const tokens = normalizeSubtitleTokens(raw, audioDuration);
+  if (!tokens.length) return null;
+  const targetCount = clamp(Math.ceil(Math.max(1, Number(audioDuration || 0)) / 4), 1, 30);
+  const chunks = [];
+  let current = null;
+  for (const token of tokens) {
+    const text = String(token.text || "").trim();
+    if (!text) continue;
+    if (!current) current = { text: "", start: token.start, end: token.end };
+    current.text += text;
+    current.end = Math.max(current.end, token.end);
+    const elapsed = current.end - current.start;
+    const canBreakOnPunctuation = elapsed >= 2.4 && /[。！？!?；;，,、]$/u.test(current.text);
+    const mustBreak = elapsed >= 4.8;
+    if ((canBreakOnPunctuation || mustBreak) && current.text.trim().length >= 4) {
+      chunks.push(current);
+      current = null;
+    }
+  }
+  if (current?.text?.trim()) chunks.push(current);
+  while (chunks.length > targetCount) {
+    let mergeIndex = 0;
+    let shortest = Number.POSITIVE_INFINITY;
+    for (let index = 0; index < chunks.length - 1; index += 1) {
+      const duration = Math.max(0, chunks[index + 1].end - chunks[index].start);
+      if (duration < shortest) {
+        shortest = duration;
+        mergeIndex = index;
+      }
+    }
+    chunks.splice(mergeIndex, 2, {
+      text: `${chunks[mergeIndex].text}${chunks[mergeIndex + 1].text}`,
+      start: chunks[mergeIndex].start,
+      end: chunks[mergeIndex + 1].end,
+    });
+  }
+  const segments = chunks
+    .map((chunk) => ({
+      text: normalizeText(chunk.text),
+      start: Number(Math.max(0, chunk.start).toFixed(3)),
+      end: Number(Math.min(Number(audioDuration || chunk.end), Math.max(chunk.end, chunk.start + 0.1)).toFixed(3)),
+    }))
+    .filter((chunk) => chunk.text && chunk.end > chunk.start)
+    .map((chunk) => ({
+      ...chunk,
+      duration: Number((chunk.end - chunk.start).toFixed(3)),
+    }));
+  return segments.length ? segments : buildAudioTimedSegments(fallbackText, audioDuration);
+}
+
+function normalizeSubtitleTokens(rawValue, audioDuration) {
+  const raw = parseMaybeJson(rawValue);
+  const source = Array.isArray(raw)
+    ? raw
+    : Array.isArray(raw?.words)
+      ? raw.words
+      : Array.isArray(raw?.segments)
+        ? raw.segments
+        : Array.isArray(raw?.subtitles)
+          ? raw.subtitles
+          : [];
+  return source
+    .map((item) => {
+      const value = item && typeof item === "object" ? item : { text: item };
+      const text = String(
+        value.text
+        || value.word
+        || value.subtitle
+        || value.content
+        || value.char
+        || "",
+      ).trim();
+      const start = normalizeSubtitleTime(
+        value.start_time ?? value.startTime ?? value.start ?? value.begin_time ?? value.begin ?? value.offset_start,
+        audioDuration,
+      );
+      const end = normalizeSubtitleTime(
+        value.end_time ?? value.endTime ?? value.end ?? value.finish_time ?? value.finish ?? value.offset_end,
+        audioDuration,
+      );
+      return { text, start, end };
+    })
+    .filter((item) => item.text && Number.isFinite(item.start) && Number.isFinite(item.end) && item.end > item.start)
+    .sort((a, b) => a.start - b.start);
+}
+
+function normalizeSubtitleTime(value, audioDuration) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return NaN;
+  if (numeric > Math.max(1000, Number(audioDuration || 0) * 2)) return numeric / 1000;
+  return numeric;
+}
+
+function parseMaybeJson(value) {
+  if (typeof value !== "string") return value;
+  const text = value.trim();
+  if (!text) return [];
+  if (!/^[\[{]/.test(text)) return [];
+  try {
+    return JSON.parse(text);
+  } catch {
+    return [];
+  }
+}
+
 function splitUnitAtSemanticBoundary(value) {
   const text = String(value || "").trim();
   if (text.length < 28) return null;
