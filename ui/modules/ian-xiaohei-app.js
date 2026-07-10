@@ -19,6 +19,9 @@ const els = {
   minimaxApiKey: document.querySelector("#minimaxApiKey"),
   minimaxModel: document.querySelector("#minimaxModel"),
   saveMinimaxSettings: document.querySelector("#saveMinimaxSettings"),
+  testMinimaxSettings: document.querySelector("#testMinimaxSettings"),
+  deleteMinimaxApi: document.querySelector("#deleteMinimaxApi"),
+  integrationStatus: document.querySelector("#integrationStatus"),
   copyInput: document.querySelector("#copyInput"),
   voiceSelect: document.querySelector("#voiceSelect"),
   emotionSelect: document.querySelector("#emotionSelect"),
@@ -54,6 +57,8 @@ const els = {
   promptResults: document.querySelector("#promptResults"),
   imageResults: document.querySelector("#imageResults"),
   outputHistory: document.querySelector("#outputHistory"),
+  outputHistoryPanel: document.querySelector("#outputHistoryPanel"),
+  outputHistoryCount: document.querySelector("#outputHistoryCount"),
   outputDirLabel: document.querySelector("#outputDirLabel"),
   planCount: document.querySelector("#planCount"),
   imageCount: document.querySelector("#imageCount"),
@@ -70,6 +75,8 @@ async function init() {
 function bindEvents() {
   els.planPrompts.addEventListener("click", () => createPlan());
   els.saveMinimaxSettings.addEventListener("click", () => saveMinimaxSettings());
+  els.testMinimaxSettings.addEventListener("click", () => testMinimaxSettings());
+  els.deleteMinimaxApi.addEventListener("click", () => deleteMinimaxApi());
   els.generateImages.addEventListener("click", () => generateCompleteWorkflow());
   els.generateAudio.addEventListener("click", () => generateAudioOnly());
   els.confirmAudio.addEventListener("click", () => confirmCurrentAudio());
@@ -85,6 +92,7 @@ function bindEvents() {
   els.audioJobs.addEventListener("click", handleAudioJobAction);
   els.promptResults.addEventListener("click", handlePromptAction);
   els.promptResults.addEventListener("change", handlePromptFileChange);
+  els.outputHistory.addEventListener("click", handleOutputHistoryAction);
 }
 
 async function loadConfig() {
@@ -109,7 +117,19 @@ async function loadConfig() {
     : "未配置，请填写 API Key";
   els.minimaxStatus.className = data.tts?.minimaxConfigured ? "success" : "error";
   els.minimaxModel.value = data.tts?.minimaxModel || "speech-2.6-hd";
+  renderIntegrationStatus(data.integrations || {});
   renderVoiceChoices(data.tts || {});
+}
+
+function renderIntegrationStatus(integrations) {
+  if (!els.integrationStatus) return;
+  const items = [
+    `图片：${integrations.imageProviderConfigured ? "已配置" : "未配置"}${integrations.imageProvider ? ` · ${integrations.imageProvider}` : ""}`,
+    `剪映草稿目录：${integrations.jianyingDraftDir ? "已配置" : "未配置"}`,
+    `输出目录：${integrations.outputDir ? "正常" : "异常"}`,
+  ];
+  els.integrationStatus.textContent = items.join(" ｜ ");
+  els.integrationStatus.className = `integration-status ${integrations.imageProviderConfigured && integrations.jianyingDraftDir ? "success" : "warning"}`;
 }
 
 async function saveMinimaxSettings() {
@@ -131,12 +151,43 @@ async function saveMinimaxSettings() {
     });
     els.minimaxApiKey.value = "";
     await loadConfig();
-    await ensurePresetVoicePreviews();
-    setStatus("MiniMax 配置已保存", "API Key 仅保存在本地；预设试听样音已固化到源码目录。", 100);
+    setStatus("MiniMax 配置已保存", "API Key 仅保存在本地；点击某个音色的“试听当前音色”时才会生成并缓存该音色样音。", 100);
   } catch (error) {
     setStatus("配置保存失败", error.payload?.message || error.message || String(error), 100, true);
   } finally {
     els.saveMinimaxSettings.disabled = false;
+  }
+}
+
+async function testMinimaxSettings() {
+  setBusy(true);
+  setStatus("正在测试 MiniMax", "正在验证本地保存的 API Key 是否可用。", 35, false, "测试连接");
+  try {
+    const data = await fetchJson("/api/ian-xiaohei/test-minimax", { method: "POST", body: "{}" });
+    await loadConfig();
+    setStatus(data.ok ? "MiniMax 连接正常" : "MiniMax 连接异常", data.message || "测试完成。", 100, !data.ok, "测试完成");
+  } catch (error) {
+    setStatus("MiniMax 测试失败", error.payload?.message || error.message || String(error), 100, true);
+  } finally {
+    setBusy(false);
+  }
+}
+
+async function deleteMinimaxApi() {
+  if (!window.confirm("删除本地保存的 MiniMax API Key？删除后预设试听和语音生成会停止，已生成的音频文件不会删除。")) return;
+  setBusy(true);
+  try {
+    await fetchJson("/api/tts/settings", {
+      method: "POST",
+      body: JSON.stringify({ provider: "minimax", clear_secret: true }),
+    });
+    els.minimaxApiKey.value = "";
+    await loadConfig();
+    setStatus("MiniMax API 已删除", "本地配置已清空。重新生成语音前需要再次填写 API Key。", 100);
+  } catch (error) {
+    setStatus("删除 API 失败", error.payload?.message || error.message || String(error), 100, true);
+  } finally {
+    setBusy(false);
   }
 }
 
@@ -255,6 +306,7 @@ async function previewCurrentVoice() {
       }),
     });
     if (data.preview_url) {
+      choice.previewUrl = data.preview_url;
       showAudio(data.preview_url, `${choice.voiceName} · 音色试听`);
     } else {
       const job = await pollTtsJob(data.job.id, "正在生成真实试听");

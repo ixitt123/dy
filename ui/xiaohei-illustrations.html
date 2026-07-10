@@ -37,7 +37,12 @@
               <option value="speech-2.8-hd">speech-2.8-hd（超自然音质）</option>
             </select>
           </label>
-          <button id="saveMinimaxSettings" type="button">保存 MiniMax 配置</button>
+          <div class="settings-actions">
+            <button id="saveMinimaxSettings" type="button">保存 MiniMax 配置</button>
+            <button id="testMinimaxSettings" type="button">测试连接</button>
+            <button id="deleteMinimaxApi" type="button" class="danger">删除 API</button>
+          </div>
+          <div id="integrationStatus" class="integration-status">正在读取图片 Provider、剪映目录和输出目录状态。</div>
         </section>
         <label class="field field-title">
           <span>配图标题</span>
@@ -122,9 +127,9 @@
           <div id="audioJobs" class="audio-job-list empty">当前项目还没有音频。</div>
         </section>
         <div class="actions">
-          <button id="generateImages" type="button" class="primary">继续生成分镜图片并导入剪映</button>
-          <button id="planPrompts" type="button">仅分析文案配图</button>
+          <button id="planPrompts" type="button">根据音频分析分镜配图</button>
           <button id="copyPrompts" type="button">复制全部提示词</button>
+          <button id="generateImages" type="button" class="primary">一键生成剪映草稿</button>
         </div>
       </section>
 
@@ -164,7 +169,10 @@
           <h2>历史输出</h2>
           <span id="outputDirLabel"></span>
         </div>
-        <div id="outputHistory" class="history-list empty">暂无历史输出。</div>
+        <details id="outputHistoryPanel" class="history-panel">
+          <summary>展开历史输出 <span id="outputHistoryCount">0</span></summary>
+          <div id="outputHistory" class="history-list empty">暂无历史输出。</div>
+        </details>
       </section>
     </section>
   </main>
