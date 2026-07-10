@@ -585,10 +585,23 @@ export function createIanXiaoheiRoutes({
         const plan = body.plan && typeof body.plan === "object" ? body.plan : null;
         const images = Array.isArray(body.images) ? body.images : [];
         if (!plan?.directorProjectId || !plan?.ttsJobId) throw new Error("缺少导演稿或 TTS 绑定信息。");
-        const missing = (plan.shots || []).filter((shot) => !images.some((image) => Number(image.index) === Number(shot.index) && image.assetId));
-        if (missing.length) throw new Error(`缺少配图：${missing.map((shot) => `#${shot.index}`).join("、")}。`);
+        const projectId = String(body.project_id || plan.projectId || "").trim();
+        if (!projectId) throw new Error("缺少当前小黑项目 ID。");
+        if (String(plan.projectId || "") && String(plan.projectId) !== projectId) {
+          throw new Error("当前分镜计划不属于这个项目，请重新按音频分析分镜。");
+        }
+        const selectedJob = ttsService?.getSelectedProjectJob?.(projectId);
+        if (!selectedJob || Number(selectedJob.id) !== Number(plan.ttsJobId)) {
+          throw new Error("当前确认音频与分镜计划不一致，请先重新确认音频并生成分镜。");
+        }
         const audioJob = ttsService?.getJob?.(Number(plan.ttsJobId))
           || taskStore?.getTtsJob?.(Number(plan.ttsJobId));
+        if (!audioJob || audioJob.status !== "completed" || !audioJob.audio_path || !fs.existsSync(audioJob.audio_path)) {
+          throw new Error("确认音频文件不存在或尚未生成完成。");
+        }
+        const missing = (plan.shots || []).filter((shot) => !images.some((image) => Number(image.index) === Number(shot.index) && image.assetId));
+        if (missing.length) throw new Error(`缺少配图：${missing.map((shot) => `#${shot.index}`).join("、")}。`);
+        validateImageBindings({ plan, images, imageService });
         const packageDir = writeXiaoheiMaterialPackage(outputRoot, plan, images, audioJob);
         const manualBindings = Object.fromEntries(images.map((image) => [String(image.index), String(image.assetId)]));
         const result = videoProductService.enqueue({
@@ -607,6 +620,14 @@ export function createIanXiaoheiRoutes({
           force_execution: false,
         });
         if (!result?.project) throw new Error(result?.error || "剪映草稿任务创建失败。");
+        updateResultFile(packageDir, {
+          output: {
+            timeline_project_id: Number(result.project.id || 0),
+            timeline_project_status: result.project.status || "",
+            package_dir: packageDir,
+            created_at: new Date().toISOString(),
+          },
+        });
         sendJson(res, 202, { ok: true, project: result.project, packageDir });
       } catch (error) {
         sendJson(res, error instanceof HttpBodyError ? error.statusCode : 400, {
@@ -915,6 +936,7 @@ async function buildTimedXiaoheiPlan({
     startTime: timedSegments[index].start,
     endTime: timedSegments[index].end,
     duration: timedSegments[index].duration,
+    subtitleText: timedSegments[index].text,
   }));
   return {
     batchId,
@@ -1128,7 +1150,7 @@ function normalizeSubtitleTokens(rawValue, audioDuration) {
 function normalizeSubtitleTime(value, audioDuration) {
   const numeric = Number(value);
   if (!Number.isFinite(numeric)) return NaN;
-  if (numeric > Math.max(1000, Number(audioDuration || 0) * 2)) return numeric / 1000;
+  if (numeric > Math.max(1, Number(audioDuration || 0)) + 1) return numeric / 1000;
   return numeric;
 }
 
@@ -1204,7 +1226,7 @@ function createDirectorProjectForPlan(taskStore, plan, audioJob) {
     purpose: shot.visualSubject || shot.topic,
     emotion: "自然",
     voice_text: shot.sourceText,
-    subtitle: shot.sourceText,
+    subtitle: shot.subtitleText || shot.sourceText,
     visual_style: "Ian 小黑白底手绘",
     camera: "slow_push_in",
     composition: shot.composition,
@@ -1220,6 +1242,7 @@ function createDirectorProjectForPlan(taskStore, plan, audioJob) {
       end_time: shot.endTime,
       caption_keywords: shot.labels,
       source_text: shot.sourceText,
+      subtitle_text: shot.subtitleText || shot.sourceText,
       visual_subject: shot.visualSubject,
       xiaohei_action: shot.xiaoheiAction,
     }),
@@ -1343,7 +1366,7 @@ function writeXiaoheiMaterialPackage(outputRoot, plan, images, audioJob) {
       end_time: Number(shot.endTime || 0),
       duration: Number(shot.duration || 0),
       text: shot.sourceText || "",
-      subtitle: shot.sourceText || "",
+      subtitle: shot.subtitleText || shot.sourceText || "",
       image_asset_id: image.assetId || "",
       image_path: image.imagePath || "",
       visual_subject: shot.visualSubject || "",
@@ -1431,17 +1454,18 @@ function savePlanFiles(batchDir, plan) {
   if (!fs.existsSync(promptsPath)) fs.writeFileSync(promptsPath, promptsMarkdown(plan), "utf8");
 }
 
-function updateResultFile(batchDir, { image = null, error = null } = {}) {
+function updateResultFile(batchDir, { image = null, error = null, output = null } = {}) {
   const resultPath = path.join(batchDir, "result.json");
-  let result = { images: [], errors: [] };
+  let result = { images: [], errors: [], output: {} };
   try {
     const parsed = JSON.parse(fs.readFileSync(resultPath, "utf8"));
     result = {
       images: Array.isArray(parsed.images) ? parsed.images : [],
       errors: Array.isArray(parsed.errors) ? parsed.errors : [],
+      output: parsed.output && typeof parsed.output === "object" ? parsed.output : {},
     };
   } catch {
-    result = { images: [], errors: [] };
+    result = { images: [], errors: [], output: {} };
   }
   if (image) {
     result.images = result.images.filter((item) => Number(item.index) !== Number(image.index));
@@ -1453,6 +1477,7 @@ function updateResultFile(batchDir, { image = null, error = null } = {}) {
     result.errors.push(error);
     result.errors.sort((a, b) => Number(a.index || 0) - Number(b.index || 0));
   }
+  if (output) result.output = { ...result.output, ...output };
   fs.writeFileSync(resultPath, JSON.stringify(result, null, 2), "utf8");
 }
 
