@@ -549,6 +549,7 @@ export function createIanXiaoheiRoutes({
         }
         const audioDuration = await probeAudioDuration(ffprobePath, job.audio_path);
         if (!(audioDuration > 0)) throw new Error("无法读取 TTS 音频时长。");
+        const subtitleSegments = extractTtsSubtitleSegments(job, text, audioDuration);
         const plan = await buildTimedXiaoheiPlan({
           text,
           title: body.title,
@@ -557,6 +558,8 @@ export function createIanXiaoheiRoutes({
           aspectRatio: normalizeAspectRatio(body.aspectRatio),
           audioDuration,
           ttsJobId: job.id,
+          projectId,
+          subtitleSegments,
           modelRouter,
         });
         const director = createDirectorProjectForPlan(taskStore, plan, job);
@@ -871,6 +874,8 @@ async function buildTimedXiaoheiPlan({
   aspectRatio: requestedAspectRatio = "16:9",
   audioDuration,
   ttsJobId,
+  projectId = "",
+  subtitleSegments = null,
   modelRouter,
 }) {
   const normalizedText = normalizeText(text);
@@ -878,7 +883,9 @@ async function buildTimedXiaoheiPlan({
   const aspectRatio = normalizeAspectRatio(requestedAspectRatio);
   const title = inferTitle(normalizedText, explicitTitle);
   const batchId = `${dateSlug()}-ian-xiaohei-video-${randomUUID().slice(0, 8)}`;
-  const timedSegments = buildAudioTimedSegments(normalizedText, audioDuration);
+  const timedSegments = Array.isArray(subtitleSegments) && subtitleSegments.length
+    ? subtitleSegments
+    : buildAudioTimedSegments(normalizedText, audioDuration);
   const aiAnchors = await enrichTimedSegmentsWithModel({
     title,
     segments: timedSegments.map((segment) => segment.text),
@@ -911,6 +918,7 @@ async function buildTimedXiaoheiPlan({
   }));
   return {
     batchId,
+    projectId: String(projectId || ""),
     title,
     sourceText: normalizedText,
     aspectRatio,
@@ -919,8 +927,10 @@ async function buildTimedXiaoheiPlan({
     requestedCount: "auto",
     semanticUnitCount: shots.length,
     analysisMode: aiAnchors?.length === timedSegments.length ? "ai_timed_semantic" : "local_timed_semantic",
-    analysisNote: `已按 ${Number(audioDuration).toFixed(2)} 秒真实音频生成 ${shots.length} 个连续语义镜头，每段约 3-5 秒。`,
-    timingSource: "tts_audio_duration_weighted",
+    analysisNote: subtitleSegments?.length
+      ? `已按 TTS 返回的字幕时间轴和 ${Number(audioDuration).toFixed(2)} 秒音频生成 ${shots.length} 个连续语义镜头。`
+      : `已按 ${Number(audioDuration).toFixed(2)} 秒真实音频生成 ${shots.length} 个连续语义镜头，每段约 3-5 秒。`,
+    timingSource: subtitleSegments?.length ? "tts_provider_subtitle_timeline" : "tts_audio_duration_weighted",
     audioDuration: Number(audioDuration.toFixed(3)),
     ttsJobId: Number(ttsJobId),
     shots,
