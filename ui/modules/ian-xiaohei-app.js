@@ -357,23 +357,33 @@ async function createPlan() {
     setStatus("缺少文案", "请先输入需要配图的中文文案。", 0, true);
     return null;
   }
+  if (
+    !state.selectedTtsJob
+    || normalizeComparableText(state.selectedTtsJob.text) !== normalizeComparableText(payload.text)
+  ) {
+    setStatus("请先生成并确认音频", "没有确认音频时不能分析分镜配图。请先生成 TTS、试听，并点击“确定本视频使用”。", 0, true);
+    return null;
+  }
   setBusy(true);
-  setStatus("正在分析文案", "正在提取完整语义段和小黑核心动作。", 35, false, "分析文案");
+  setStatus("正在按音频分析分镜", "正在结合已确认音频时长和文案语义生成分镜提示词。", 35, false, "音频+文案分析");
   try {
-    const sentenceCount = payload.text.split(/(?<=[。！？!?；;])|\n+/).filter((item) => item.trim()).length;
-    const data = await fetchJson("/api/ian-xiaohei/plan", {
+    const data = await fetchJson("/api/ian-xiaohei/timeline-plan", {
       method: "POST",
-      body: JSON.stringify({ ...payload, count: Math.max(1, Math.min(9, sentenceCount)) }),
+      body: JSON.stringify({
+        ...payload,
+        project_id: state.projectId,
+        tts_job_id: state.selectedTtsJob.id,
+      }),
     });
     state.plan = data;
     state.images = [];
     state.pendingUploads.clear();
     renderPlan(data);
     renderImages([], []);
-    setStatus("配图分析完成", data.analysisNote || `已生成 ${data.shots?.length || 0} 个配图方案。`, 100, false, "分析完成");
+    setStatus("分镜配图分析完成", data.analysisNote || `已生成 ${data.shots?.length || 0} 个配图方案。`, 100, false, "等待上传图片");
     return data;
   } catch (error) {
-    setStatus("文案分析失败", error.message || String(error), 0, true);
+    setStatus("分镜分析失败", error.payload?.message || error.message || String(error), 0, true);
     return null;
   } finally {
     setBusy(false);
@@ -443,69 +453,41 @@ async function generateCompleteWorkflow() {
     !state.selectedTtsJob
     || normalizeComparableText(state.selectedTtsJob.text) !== normalizeComparableText(payload.text)
   ) {
-    await generateAudioOnly();
+    setStatus("请先确认音频", "当前文案还没有确认音频，不能生成剪映草稿。请先生成、试听并确认音频。", 0, true);
+    return;
+  }
+  if (!state.plan?.shots?.length) {
+    setStatus("缺少分镜计划", "请先点击“根据音频分析分镜配图”，再逐段上传确认图片。", 0, true);
+    return;
+  }
+  const missingImages = missingShotImages(state.plan, state.images);
+  if (missingImages.length) {
+    setStatus(
+      "缺少分镜图片",
+      `请先补齐这些分镜图片：${missingImages.map((shot) => `#${shot.index} ${shot.sourceText || shot.topic || ""}`).join("；")}`,
+      0,
+      true,
+    );
     return;
   }
 
   setBusy(true);
-  state.images = [];
-  state.pendingUploads.clear();
-  renderImages([], []);
   try {
     const ttsJob = state.selectedTtsJob;
     state.ttsJob = ttsJob;
     showAudio(ttsJob.audio_url || `/api/tts/audio?id=${ttsJob.id}`, `已确定使用 · 音频 #${ttsJob.id}`);
 
-    setStatus("正在按音频分镜", "正在读取真实音频时长，并按 3–5 秒语义节奏绑定文案。", 28, false, "音频与文案对齐");
-    const plan = await fetchJson("/api/ian-xiaohei/timeline-plan", {
-      method: "POST",
-      body: JSON.stringify({
-        ...payload,
-        project_id: state.projectId,
-        tts_job_id: ttsJob.id,
-      }),
-    });
-    state.plan = plan;
-    renderPlan(plan);
-
-    const images = [];
-    const errors = [];
-    const shots = plan.shots || [];
-    for (let index = 0; index < shots.length; index += 1) {
-      const shot = shots[index];
-      setStatus(
-        "正在生成小黑配图",
-        `第 ${index + 1}/${shots.length} 张，对应 ${formatTime(shot.startTime)}–${formatTime(shot.endTime)}。`,
-        imageProgress(index, shots.length),
-        false,
-        `${index}/${shots.length}`,
-      );
-      try {
-        const data = await fetchJson("/api/ian-xiaohei/generate-shot", {
-          method: "POST",
-          body: JSON.stringify({ batchId: plan.batchId, plan, shot }),
-        });
-        images.push(data.image);
-      } catch (error) {
-        errors.push({
-          index: shot.index,
-          topic: shot.topic,
-          message: error.payload?.message || error.message || String(error),
-        });
-      }
-      state.images = images.slice();
-      renderPlan(plan);
-      renderImages(images, errors);
-    }
-    state.images = images;
-    if (errors.length || images.length !== shots.length) {
-      throw new Error(`配图未全部完成：成功 ${images.length} 张，失败 ${errors.length} 张。已停止导入剪映。`);
-    }
-
     setStatus("正在创建剪映草稿", "图片、TTS 和字幕已绑定，正在写入剪映模板草稿。", 88, false, "提交剪映任务");
     const queued = await fetchJson("/api/ian-xiaohei/export-draft", {
       method: "POST",
-      body: JSON.stringify({ plan, images, jianying_template: "education_tips", bgm_strategy: "none" }),
+      body: JSON.stringify({
+        project_id: state.projectId,
+        tts_job_id: ttsJob.id,
+        plan: state.plan,
+        images: state.images,
+        jianying_template: "education_tips",
+        bgm_strategy: "none",
+      }),
     });
     const project = await pollVideoProject(queued.project.id);
     await loadOutputs();
@@ -859,7 +841,16 @@ function renderImages(images, errors = []) {
   els.imageResults.innerHTML = imageHtml + errorHtml;
 }
 
+function missingShotImages(plan, images = []) {
+  const imageByIndex = new Map((images || []).map((image) => [Number(image.index), image]));
+  return (plan?.shots || []).filter((shot) => {
+    const image = imageByIndex.get(Number(shot.index));
+    return !image?.assetId;
+  });
+}
+
 function renderHistory(batches) {
+  if (els.outputHistoryCount) els.outputHistoryCount.textContent = String(batches.length || 0);
   if (!batches.length) {
     els.outputHistory.className = "history-list empty";
     els.outputHistory.textContent = "暂无历史输出。";
@@ -868,8 +859,18 @@ function renderHistory(batches) {
   els.outputHistory.className = "history-list";
   els.outputHistory.innerHTML = batches.map((batch) => `
     <article class="history-card">
-      <h3>${escapeHtml(batch.id)}</h3>
-      <p class="meta">${escapeHtml(batch.files?.length || 0)} 张 · ${escapeHtml(batch.folderPath || "")}</p>
+      <div class="history-head">
+        <div>
+          <h3>${escapeHtml(batch.title || batch.id)}</h3>
+          <p class="meta">${escapeHtml(batch.files?.length || 0)} 张 · ${escapeHtml(batch.updatedAt || "")}</p>
+        </div>
+        <div class="history-actions">
+          <button type="button" data-output-action="open" data-id="${escapeAttr(batch.id)}">打开目录</button>
+          <button type="button" class="danger" data-output-action="delete" data-id="${escapeAttr(batch.id)}" data-timeline-id="${escapeAttr(batch.timelineProjectId || "")}">永久删除</button>
+        </div>
+      </div>
+      <p class="path">${escapeHtml(batch.folderPath || "")}</p>
+      ${batch.draftPath ? `<p class="path">剪映草稿：${escapeHtml(batch.draftPath)}</p>` : ""}
       <div class="history-images">
         ${(batch.files || []).slice(0, 4).map((file) => `
           <img src="${escapeAttr(file.imageUrl)}" alt="${escapeAttr(file.name)}" />
@@ -878,6 +879,36 @@ function renderHistory(batches) {
       </div>
     </article>
   `).join("");
+}
+
+async function handleOutputHistoryAction(event) {
+  const button = event.target.closest("[data-output-action]");
+  if (!button) return;
+  const id = button.dataset.id || "";
+  const action = button.dataset.outputAction;
+  if (action === "open") {
+    await fetchJson("/api/ian-xiaohei/output-open", {
+      method: "POST",
+      body: JSON.stringify({ id }),
+    });
+    return;
+  }
+  if (action === "delete") {
+    if (!window.confirm(`永久删除历史输出“${id}”？本地草稿、素材包和记录会一起删除，不能恢复。`)) return;
+    setBusy(true);
+    try {
+      await fetchJson("/api/ian-xiaohei/output-delete", {
+        method: "POST",
+        body: JSON.stringify({ id, timeline_project_id: button.dataset.timelineId || "" }),
+      });
+      await loadOutputs();
+      setStatus("历史输出已删除", `已永久删除 ${id} 及对应本地文件。`, 100);
+    } catch (error) {
+      setStatus("删除历史输出失败", error.payload?.message || error.message || String(error), 100, true);
+    } finally {
+      setBusy(false);
+    }
+  }
 }
 
 async function copyAllPrompts() {
@@ -913,6 +944,8 @@ function setBusy(busy) {
   for (const element of [
     els.generateImages,
     els.saveMinimaxSettings,
+    els.testMinimaxSettings,
+    els.deleteMinimaxApi,
     els.generateAudio,
     els.confirmAudio,
     els.planPrompts,
