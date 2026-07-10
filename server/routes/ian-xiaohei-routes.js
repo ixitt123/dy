@@ -158,6 +158,7 @@ export function createIanXiaoheiRoutes({
       sendJson(res, 200, {
         ok: true,
         outputDir: outputRoot,
+        savedApis: savedApiSummaries(settings),
         integrations: {
           imageProvider: "火山方舟 Seedream",
           imageProviderId: "volcengine_ark",
@@ -1301,6 +1302,115 @@ function staticVoicePreview(root, provider, voiceId) {
     path: path.join(root, `${key}.mp3`),
     url: `/assets/voice-previews/minimax/${key}.mp3`,
   };
+}
+
+function savedApiSummaries(settings = {}) {
+  const output = [];
+  const push = (item) => {
+    if (!item?.configured) return;
+    output.push({
+      id: String(item.id || ""),
+      label: String(item.label || item.id || ""),
+      group: String(item.group || ""),
+      feature: String(item.feature || ""),
+      model: String(item.model || ""),
+      baseUrl: String(item.baseUrl || ""),
+      apiKeyMask: maskSecret(item.apiKey || ""),
+      activeDefault: Boolean(item.activeDefault),
+      testable: Boolean(item.testable),
+    });
+  };
+
+  const rewriteProviders = settings.rewriteProviders || {};
+  const rewriteDefault = String(settings.rewrite?.defaultProvider || "");
+  for (const [id, provider] of Object.entries(rewriteProviders)) {
+    push({
+      id,
+      label: provider?.label || id,
+      group: "文本模型",
+      feature: "文案、分析、导演、提示词",
+      configured: Boolean(provider?.apiKey),
+      apiKey: provider?.apiKey,
+      model: provider?.model,
+      baseUrl: provider?.baseUrl,
+      activeDefault: rewriteDefault === id,
+      testable: true,
+    });
+  }
+
+  const imageProviders = settings.imageProviders || {};
+  const imageDefault = settings.modelMap?.image?.provider || settings.modelMapping?.image?.provider || "volcengine_ark";
+  const imageLabels = { volcengine_ark: "火山方舟 Seedream", jimeng: "即梦 AI" };
+  for (const [id, provider] of Object.entries(imageProviders)) {
+    push({
+      id,
+      label: provider?.label || imageLabels[id] || id,
+      group: "图片生成",
+      feature: "分镜配图、本地图片资产",
+      configured: Boolean(provider?.apiKey),
+      apiKey: provider?.apiKey,
+      model: provider?.model,
+      baseUrl: provider?.baseUrl,
+      activeDefault: imageDefault === id,
+      testable: true,
+    });
+  }
+
+  const tts = settings.tts || {};
+  const ttsDefs = [
+    ["aliyun_bailian", "阿里云百炼 CosyVoice / Qwen-TTS", tts.aliyun_bailian, "api_key", "default_model"],
+    ["volcengine_doubao", "火山引擎豆包语音", tts.volcengine_doubao, "api_key", "default_model"],
+    ["tencent_tts", "腾讯云 TTS", tts.tencent_tts, "secret_id", "default_model"],
+    ["custom_tts", "自定义 Provider", tts.custom_tts, "api_key", "model"],
+    ["minimax", "MiniMax", tts.minimax, "api_key", "model"],
+    ["fish_audio", "Fish Audio", tts.fish_audio, "api_key", "model"],
+    ["elevenlabs", "ElevenLabs", tts.elevenlabs, "api_key", "model"],
+  ];
+  for (const [id, label, config, secretField, modelField] of ttsDefs) {
+    const configured = id === "custom_tts"
+      ? Boolean(config?.base_url || config?.api_key)
+      : Boolean(config?.[secretField] || (id === "volcengine_doubao" && config?.secret_access_key));
+    push({
+      id,
+      label,
+      group: "TTS 语音",
+      feature: "配音、声音克隆、试听",
+      configured,
+      apiKey: config?.[secretField] || config?.secret_access_key || "",
+      model: config?.[modelField] || config?.voice || "",
+      baseUrl: config?.base_url || "",
+      activeDefault: String(tts.default_provider || "") === id,
+      testable: true,
+    });
+  }
+
+  const bgmProviders = settings.bgmProviders || {};
+  for (const [id, provider] of Object.entries(bgmProviders)) {
+    push({
+      id,
+      label: provider?.label || id,
+      group: "BGM 音乐",
+      feature: "背景音乐搜索/匹配",
+      configured: Boolean(provider?.api_key || provider?.apiKey),
+      apiKey: provider?.api_key || provider?.apiKey,
+      model: provider?.model || "",
+      baseUrl: provider?.base_url || provider?.baseUrl || "",
+      activeDefault: false,
+      testable: false,
+    });
+  }
+
+  return output.sort((a, b) => {
+    if (a.activeDefault !== b.activeDefault) return a.activeDefault ? -1 : 1;
+    return `${a.group}${a.label}`.localeCompare(`${b.group}${b.label}`, "zh-Hans-CN");
+  });
+}
+
+function maskSecret(value) {
+  const text = String(value || "").trim();
+  if (!text) return "";
+  if (text.length <= 8) return "已保存";
+  return `${text.slice(0, 4)}...${text.slice(-4)}`;
 }
 
 function resolveAsrApiKey(settings = {}) {

@@ -18,6 +18,8 @@ const els = {
   minimaxStatus: document.querySelector("#minimaxStatus"),
   minimaxApiKey: document.querySelector("#minimaxApiKey"),
   minimaxModel: document.querySelector("#minimaxModel"),
+  savedApiSelect: document.querySelector("#savedApiSelect"),
+  savedApiDetail: document.querySelector("#savedApiDetail"),
   saveMinimaxSettings: document.querySelector("#saveMinimaxSettings"),
   testMinimaxSettings: document.querySelector("#testMinimaxSettings"),
   deleteMinimaxApi: document.querySelector("#deleteMinimaxApi"),
@@ -85,6 +87,7 @@ function bindEvents() {
   els.setDefaultVoice.addEventListener("click", () => setCurrentVoiceDefault());
   els.deleteVoice.addEventListener("click", () => deleteCurrentVoice());
   els.voiceSelect.addEventListener("change", () => renderVoiceDescription());
+  els.savedApiSelect.addEventListener("change", () => renderSavedApiDetail());
   els.aspectRatioSelect.addEventListener("change", () => resetVisualWorkflow("视频比例已改变，请重新生成分镜计划。"));
   els.copyPrompts.addEventListener("click", () => copyAllPrompts());
   els.openOutputDir.addEventListener("click", () => openOutputDir());
@@ -117,8 +120,45 @@ async function loadConfig() {
     : "未配置，请填写 API Key";
   els.minimaxStatus.className = data.tts?.minimaxConfigured ? "success" : "error";
   els.minimaxModel.value = data.tts?.minimaxModel || "speech-2.6-hd";
+  renderSavedApis(data.savedApis || []);
   renderIntegrationStatus(data.integrations || {});
   renderVoiceChoices(data.tts || {});
+}
+
+function renderSavedApis(savedApis) {
+  state.savedApis = Array.isArray(savedApis) ? savedApis : [];
+  if (!els.savedApiSelect) return;
+  if (!state.savedApis.length) {
+    els.savedApiSelect.innerHTML = `<option value="">暂无已保存 API</option>`;
+    renderSavedApiDetail();
+    return;
+  }
+  els.savedApiSelect.innerHTML = state.savedApis.map((item) => `
+    <option value="${escapeAttr(item.id)}">
+      ${escapeHtml(item.activeDefault ? "默认 · " : "")}${escapeHtml(item.group)} · ${escapeHtml(item.label)}${item.apiKeyMask ? ` · ${escapeHtml(item.apiKeyMask)}` : ""}
+    </option>
+  `).join("");
+  if (state.savedApis.some((item) => item.id === "minimax")) els.savedApiSelect.value = "minimax";
+  renderSavedApiDetail();
+}
+
+function renderSavedApiDetail() {
+  if (!els.savedApiDetail) return;
+  const item = state.savedApis?.find((api) => api.id === els.savedApiSelect?.value);
+  if (!item) {
+    els.savedApiDetail.textContent = "没有读取到已保存 API。请先到系统设置保存 API。";
+    els.savedApiDetail.className = "api-detail warning";
+    return;
+  }
+  const detail = [
+    item.activeDefault ? "当前默认" : "",
+    item.feature,
+    item.model ? `模型：${item.model}` : "",
+    item.baseUrl ? `Base URL：${item.baseUrl}` : "",
+    item.apiKeyMask ? `Key：${item.apiKeyMask}` : "",
+  ].filter(Boolean).join(" ｜ ");
+  els.savedApiDetail.textContent = detail || "已保存。";
+  els.savedApiDetail.className = `api-detail ${item.activeDefault ? "success" : ""}`;
 }
 
 function renderIntegrationStatus(integrations) {
