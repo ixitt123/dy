@@ -8,6 +8,51 @@ const DEFAULT_SCRIPT_FORMAT = [
   "字幕：短句优先，每句 12-20 字，避免长段落。",
   "结尾：给出行动提醒、CTA 或一句总结。",
 ].join("\n");
+const CS1_HANDOFF_KEY = "video-factory-cs1-handoff";
+
+function activeProject() {
+  return window.videoProjects?.current?.() || null;
+}
+
+function navigateToCs1() {
+  window.appNavigate?.("cs1-video");
+  window.workbenchNavigate?.("cs1-video", { preserveScroll: true });
+}
+
+function readHandoff() {
+  try {
+    return JSON.parse(localStorage.getItem(CS1_HANDOFF_KEY) || "null");
+  } catch {
+    return null;
+  }
+}
+
+function writeHandoff(handoff) {
+  if (!handoff) {
+    localStorage.removeItem(CS1_HANDOFF_KEY);
+    return;
+  }
+  localStorage.setItem(CS1_HANDOFF_KEY, JSON.stringify(handoff));
+}
+
+export function sendConfirmedTtsToCs1(job, project = activeProject()) {
+  if (!job?.id || job.status !== "completed" || !job.audio_path) {
+    throw new Error("请先生成、试听并确认一条可用的 TTS 音频。");
+  }
+  const handoff = {
+    projectId: project?.id || "",
+    projectTitle: project?.title || "",
+    title: project?.title || job.voice_name || "CS1 文字视频",
+    text: String(job.text || project?.selectedRewriteText || project?.transcriptText || "").trim(),
+    ttsJob: job,
+    sentAt: new Date().toISOString(),
+  };
+  if (!handoff.text) throw new Error("已确认音频缺少对应文案，无法发送到 CS1。");
+  writeHandoff(handoff);
+  navigateToCs1();
+  window.dispatchEvent(new CustomEvent("video-factory:cs1-handoff", { detail: handoff }));
+  return handoff;
+}
 
 export function initCs1VideoModule() {
   const form = document.getElementById("cs1VideoForm");
@@ -51,6 +96,9 @@ export function initCs1VideoModule() {
   const openFileButton = document.getElementById("cs1VideoOpenFile");
   const openProjectButton = document.getElementById("cs1VideoOpenProject");
   const openOutputButton = document.getElementById("cs1VideoOpenOutput");
+  const handoffStatus = document.getElementById("cs1VideoHandoffStatus");
+  const useTtsButton = document.getElementById("cs1VideoUseTts");
+  const clearTtsButton = document.getElementById("cs1VideoClearTts");
   const progressPanel = document.getElementById("cs1VideoProgress");
   const progressStage = document.getElementById("cs1VideoProgressStage");
   const progressPercent = document.getElementById("cs1VideoProgressPercent");
@@ -61,6 +109,7 @@ export function initCs1VideoModule() {
   let outputDir = "";
   let progressTimer = null;
   let progressValue = 0;
+  let activeHandoff = readHandoff();
 
   if (beatCountSelect && !beatCountSelect.querySelector('option[value="auto"]')) {
     beatCountSelect.insertAdjacentHTML("afterbegin", [
@@ -166,6 +215,37 @@ export function initCs1VideoModule() {
     }
   };
 
+  const syncHandoffStatus = () => {
+    const handoff = activeHandoff;
+    const narrationPath = handoff?.ttsJob?.audio_path || "";
+    if (handoffStatus) {
+      handoffStatus.textContent = handoff
+        ? `已接收确认音频 #${handoff.ttsJob?.id || "-"}：${handoff.title || "未命名项目"}。生成时会直接使用真实配音音轨。`
+        : "可直接手动输入文案，也可以先在 TTS 语音页确认音频后发送到这里。";
+    }
+    if (useTtsButton) useTtsButton.disabled = !narrationPath;
+    if (clearTtsButton) clearTtsButton.disabled = !handoff;
+  };
+
+  const applyHandoff = (handoff, { overwriteText = true } = {}) => {
+    activeHandoff = handoff?.ttsJob?.audio_path ? handoff : null;
+    if (activeHandoff) {
+      if (!titleInput.value.trim() || overwriteText) {
+        titleInput.value = activeHandoff.title || activeHandoff.projectTitle || activeHandoff.ttsJob?.voice_name || "CS1 文字视频";
+      }
+      if (!textInput.value.trim() || overwriteText) {
+        textInput.value = activeHandoff.text || activeHandoff.ttsJob?.text || "";
+      }
+    }
+    syncHandoffStatus();
+  };
+
+  const clearHandoff = () => {
+    activeHandoff = null;
+    writeHandoff(null);
+    syncHandoffStatus();
+  };
+
   form.querySelectorAll(".cs1-style-card").forEach((card) => {
     card.addEventListener("click", () => {
       form.querySelectorAll(".cs1-style-card").forEach((item) => item.classList.remove("active"));
@@ -206,6 +286,41 @@ export function initCs1VideoModule() {
   styleSelect?.addEventListener("change", updateStyleDescription);
   loadStyles();
   loadOutputs();
+  applyHandoff(activeHandoff, { overwriteText: false });
+
+  useTtsButton?.addEventListener("click", () => {
+    const handoff = readHandoff();
+    if (!handoff?.ttsJob?.audio_path) {
+      setStatus("没有已确认 TTS", "请先在 TTS 语音页确认一条音频，再发送到 CS1。");
+      clearHandoff();
+      return;
+    }
+    applyHandoff(handoff, { overwriteText: true });
+    setStatus("已同步确认音频", `当前会使用 TTS #${handoff.ttsJob.id} 作为最终视频音轨。`);
+  });
+
+  clearTtsButton?.addEventListener("click", () => {
+    clearHandoff();
+    setStatus("已清除 TTS 绑定", "继续手动输入文案时，将只生成无配音版本。");
+  });
+
+  window.addEventListener("video-factory:cs1-handoff", (event) => {
+    const handoff = event.detail || readHandoff();
+    applyHandoff(handoff, { overwriteText: true });
+    if (handoff?.ttsJob?.id) {
+      setStatus("已接收确认音频", `TTS #${handoff.ttsJob.id} 已同步到 CS1，可直接生成视频。`);
+    }
+  });
+
+  document.addEventListener("workbench:route", (event) => {
+    if (event.detail?.page !== "cs1-video") return;
+    const latest = readHandoff();
+    if (latest?.ttsJob?.audio_path && latest?.sentAt !== activeHandoff?.sentAt) {
+      applyHandoff(latest, { overwriteText: false });
+    } else {
+      syncHandoffStatus();
+    }
+  });
 
   deleteStyleButton?.addEventListener("click", async () => {
     if (!styleCatalog.length) return;
@@ -287,6 +402,9 @@ export function initCs1VideoModule() {
         watermarkOpacity: watermarkOpacitySelect?.value || "0.45",
         watermarkAnimation: watermarkAnimationSelect?.value || "float_y",
         aiRefine: aiInput.checked,
+        narrationPath: activeHandoff?.ttsJob?.audio_path || "",
+        ttsJobId: activeHandoff?.ttsJob?.id || 0,
+        projectId: activeHandoff?.projectId || "",
       });
       lastResult = result;
       outputPath.textContent = result.outputPath || "";
@@ -295,6 +413,7 @@ export function initCs1VideoModule() {
         result.aiUsed ? `Structure refinement: AI used · ${result.beatCount || beatCountSelect?.value || "auto"} cards` : `Structure refinement: local parser · ${result.beatCount || beatCountSelect?.value || "auto"} cards`,
         result.aspectRatio ? `Aspect ratio: ${result.aspectRatio.label || result.aspectRatio.id || aspectRatioSelect?.value || "9:16"} · ${result.aspectRatio.platforms || ""}` : `Aspect ratio: ${aspectRatioSelect?.value || "9:16"}`,
         result.cardHold ? `Card hold: ${result.cardHold.label || result.cardHold.id || "auto"}` : `Card hold: ${cardHoldSelect?.value || "auto"}`,
+        result.narration?.enabled ? `Narration: TTS #${result.narration.ttsJobId || activeHandoff?.ttsJob?.id || "-"} · ${result.narration.duration?.toFixed?.(2) || result.narration.duration || "unknown"}s` : "Narration: manual text only",
         result.bgm?.label ? `BGM: ${result.bgm.label}` : "BGM: none",
         result.visualOptions ? `Visual: icon=${result.visualOptions.iconVariant} · palette=${result.visualOptions.textPalette} · layout=${result.visualOptions.layoutVariant} · background=${result.visualOptions.backgroundPattern}` : `Visual: icon=${iconVariantSelect?.value || "orbit_nodes"} · palette=${textPaletteSelect?.value || "gold_green"} · layout=${layoutVariantSelect?.value || "left_right"} · background=${backgroundPatternSelect?.value || "vignette"}`,
         result.packaging ? `Packaging: intro=${result.packaging.introTemplateId || "none"} · outro=${result.packaging.outroTemplateId || "none"} · watermark=${result.packaging.watermark?.enabled ? `${result.packaging.watermark.position}/${result.packaging.watermark.animation || "none"}` : "off"}` : "Packaging: none",
@@ -307,7 +426,11 @@ export function initCs1VideoModule() {
       await loadOutputs();
       const style = styleCatalog.find((item) => item.id === result.style);
       completeProgress();
-      setStatus("生成完成", `模板：${result.templateName || style?.name || result.style}。视频已输出到本机。`);
+      setStatus(
+        "生成完成",
+        `${result.templateName || style?.name || result.style} 已输出到本机。`
+          + (result.narration?.enabled ? ` 当前使用 TTS #${result.narration.ttsJobId || activeHandoff?.ttsJob?.id || "-"}.` : ""),
+      );
     } catch (error) {
       failProgress();
       setStatus("生成失败", error instanceof Error ? error.message : String(error));
