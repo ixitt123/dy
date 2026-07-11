@@ -321,6 +321,7 @@ export function initCs1VideoModule() {
       syncHandoffStatus();
     }
   });
+  window.videoFactorySendToCs1 = sendConfirmedTtsToCs1;
 
   deleteStyleButton?.addEventListener("click", async () => {
     if (!styleCatalog.length) return;

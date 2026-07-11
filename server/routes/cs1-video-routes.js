@@ -209,6 +209,8 @@ export function createCs1VideoRoutes({ baseDir, sendJson, modelRouter, ffmpegPat
             watermarkOpacity: body.watermarkOpacity,
             watermarkAnimation: body.watermarkAnimation,
           },
+          narrationPath: body.narrationPath,
+          ttsJobId: body.ttsJobId,
           aiRefine: body.aiRefine === true,
           modelRouter,
           ffmpegPath,
@@ -249,7 +251,7 @@ function writeHiddenStyleIds(filePath, ids) {
   fs.writeFileSync(filePath, `${JSON.stringify(payload, null, 2)}\n`, "utf8");
 }
 
-async function generateVideo({ runsDir, outputDir, text, style, title, aspectRatio, beatCount, cardHoldPreset, visualOptions, templateName, bgmMode, bgmPath, packaging, aiRefine, modelRouter, ffmpegPath, ffprobePath }) {
+async function generateVideo({ runsDir, outputDir, text, style, title, aspectRatio, beatCount, cardHoldPreset, visualOptions, templateName, bgmMode, bgmPath, packaging, narrationPath, ttsJobId, aiRefine, modelRouter, ffmpegPath, ffprobePath }) {
   const script = normalizeScript(text);
   const styleId = normalizeStyle(style);
   const aspect = normalizeAspectRatio(aspectRatio);
@@ -298,6 +300,22 @@ async function generateVideo({ runsDir, outputDir, text, style, title, aspectRat
   await runHyperframes(projectDir, ["inspect"], checkOutput, hyperframesEnv);
   const renderOutput = [];
   await runHyperframes(projectDir, ["render", "--output", outputPath, "--quality", "standard"], renderOutput, hyperframesEnv);
+  const narration = resolveNarrationTrack(narrationPath);
+  let narrationResult = null;
+  if (narration) {
+    const voicedOutputPath = path.join(outputDir, `${slug}.voice.mp4`);
+    fs.rmSync(voicedOutputPath, { force: true });
+    narrationResult = await attachNarrationTrack({
+      ffmpegPath,
+      ffprobePath,
+      videoPath: outputPath,
+      narrationPath: narration.filePath,
+      outputPath: voicedOutputPath,
+      ttsJobId,
+    });
+    fs.rmSync(outputPath, { force: true });
+    fs.renameSync(voicedOutputPath, outputPath);
+  }
 
   return {
     id: slug,
@@ -312,11 +330,116 @@ async function generateVideo({ runsDir, outputDir, text, style, title, aspectRat
     outputDir,
     aiUsed: Boolean(refined),
     bgm: files.bgm || null,
+    narration: narrationResult || { enabled: false, ttsJobId: Number(ttsJobId || 0) || 0 },
     visualOptions: files.visualOptions || aifmanVisual,
     packaging: files.packaging || packagingOptions,
     checkLog: checkOutput.join("\n").slice(-8000),
     renderLog: renderOutput.join("\n").slice(-8000),
   };
+}
+
+function resolveNarrationTrack(inputPath) {
+  const filePath = String(inputPath || "").trim();
+  if (!filePath) return null;
+  const resolvedPath = path.resolve(filePath);
+  if (!fs.existsSync(resolvedPath) || !fs.statSync(resolvedPath).isFile()) {
+    throw new Error("CS1 绑定的 TTS 音频不存在，请回到 TTS 页面重新确认后再生成。");
+  }
+  const ext = path.extname(resolvedPath).toLowerCase();
+  if (!new Set([".mp3", ".wav", ".m4a", ".aac", ".ogg"]).has(ext)) {
+    throw new Error("CS1 只支持常见音频格式作为确认音轨。");
+  }
+  return { filePath: resolvedPath };
+}
+
+async function attachNarrationTrack({ ffmpegPath, ffprobePath, videoPath, narrationPath, outputPath, ttsJobId = 0 }) {
+  const safeFfmpegPath = materializeAsciiToolPath(ffmpegPath, process.platform === "win32" ? "ffmpeg.exe" : "ffmpeg") || "ffmpeg";
+  const videoInfo = await probeMediaInfo(ffprobePath, videoPath);
+  const narrationInfo = await probeMediaInfo(ffprobePath, narrationPath);
+  if (!(narrationInfo.duration > 0)) {
+    throw new Error("无法读取已确认 TTS 音频时长，CS1 无法绑定真实音轨。");
+  }
+  const extendBy = Math.max(0, Number(narrationInfo.duration || 0) - Number(videoInfo.duration || 0) + 0.08);
+  const args = [
+    "-y",
+    "-hide_banner",
+    "-loglevel", "error",
+    "-i", videoPath,
+    "-i", narrationPath,
+  ];
+  if (extendBy > 0.05) {
+    args.push(
+      "-filter_complex",
+      `[0:v]tpad=stop_mode=clone:stop_duration=${extendBy.toFixed(3)}[v]`,
+      "-map", "[v]",
+    );
+  } else {
+    args.push("-map", "0:v:0");
+  }
+  args.push(
+    "-map", "1:a:0",
+    "-c:v", extendBy > 0.05 ? "libx264" : "copy",
+  );
+  if (extendBy > 0.05) {
+    args.push("-preset", "veryfast", "-crf", "18");
+  }
+  args.push(
+    "-c:a", "aac",
+    "-b:a", "192k",
+    "-shortest",
+    "-movflags", "+faststart",
+    outputPath,
+  );
+  await runProcessCapture(safeFfmpegPath, args);
+  return {
+    enabled: true,
+    filePath: narrationPath,
+    duration: Number(narrationInfo.duration || 0),
+    paddedVideo: extendBy > 0.05,
+    ttsJobId: Number(ttsJobId || 0) || 0,
+  };
+}
+
+async function probeMediaInfo(ffprobePath, filePath) {
+  const safeFfprobePath = materializeAsciiToolPath(ffprobePath, process.platform === "win32" ? "ffprobe.exe" : "ffprobe") || "ffprobe";
+  const stdout = await runProcessCapture(safeFfprobePath, [
+    "-v", "error",
+    "-print_format", "json",
+    "-show_format",
+    "-show_streams",
+    filePath,
+  ]);
+  const parsed = JSON.parse(stdout || "{}");
+  const streams = Array.isArray(parsed.streams) ? parsed.streams : [];
+  const audio = streams.find((stream) => stream.codec_type === "audio") || {};
+  const video = streams.find((stream) => stream.codec_type === "video") || {};
+  return {
+    duration: Number(parsed.format?.duration || audio.duration || video.duration || 0),
+    hasAudio: Boolean(audio.codec_type),
+    hasVideo: Boolean(video.codec_type),
+  };
+}
+
+function runProcessCapture(command, args) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(command, args, { windowsHide: true });
+    let stdout = "";
+    let stderr = "";
+    child.stdout.on("data", (chunk) => {
+      stdout += chunk.toString();
+    });
+    child.stderr.on("data", (chunk) => {
+      stderr += chunk.toString();
+    });
+    child.on("error", reject);
+    child.on("close", (code) => {
+      if (code === 0) {
+        resolve(stdout);
+        return;
+      }
+      reject(new Error(`${path.basename(command)} failed:\n${(stderr || stdout).slice(-2500)}`));
+    });
+  });
 }
 
 async function refineStoryModel({ script, title, beatCount, styleId, modelRouter }) {
