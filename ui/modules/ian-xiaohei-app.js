@@ -16,6 +16,7 @@ const state = {
   pendingUploads: new Map(),
   projectId: localStorage.getItem("ian-xiaohei-project-id") || `xiaohei-${Date.now()}`,
 };
+const embeddedMode = new URLSearchParams(window.location.search).get("embedded") === "1";
 localStorage.setItem("ian-xiaohei-project-id", state.projectId);
 
 const els = {
@@ -93,9 +94,41 @@ const els = {
 init().catch((error) => setStatus("初始化失败", error.message || String(error), 0, true));
 
 async function init() {
+  if (embeddedMode) document.body.classList.add("embedded-production-mode");
   bindEvents();
+  window.addEventListener("message", handleParentHandoff);
   await loadConfig();
   await Promise.all([loadAudioJobs(), loadOutputs()]);
+  if (embeddedMode) window.parent.postMessage({ type: "video-factory:xiaohei-ready" }, window.location.origin);
+}
+
+async function handleParentHandoff(event) {
+  if (event.origin !== window.location.origin || event.data?.type !== "video-factory:xiaohei-handoff") return;
+  const handoff = event.data.handoff || {};
+  const job = handoff.ttsJob || {};
+  if (!job.id || job.status !== "completed") {
+    setStatus("缺少已确认音频", "请先在 TTS 语音页生成、试听并确认音频。", 0, true);
+    return;
+  }
+  state.projectId = String(handoff.projectId || state.projectId);
+  localStorage.setItem("ian-xiaohei-project-id", state.projectId);
+  els.titleInput.value = handoff.title || handoff.projectTitle || "小黑配图视频";
+  els.copyInput.value = handoff.text || job.text || "";
+  state.ttsJob = job;
+  try {
+    const data = await fetchJson("/api/ian-xiaohei/audio-select", {
+      method: "POST",
+      body: JSON.stringify({ project_id: state.projectId, job_id: job.id }),
+    });
+    state.selectedTtsJob = data.job;
+    state.ttsJob = data.job;
+    showAudio(data.job.audio_url || `/api/tts/audio?id=${data.job.id}`, `已确认使用 · 音频 #${data.job.id}`);
+    resetVisualWorkflow();
+    await loadAudioJobs();
+    setStatus("已接收 TTS 音频", "文案和音频已绑定，可以根据真实时间轴分析分镜配图。", 100, false, "等待分镜分析");
+  } catch (error) {
+    setStatus("音频接收失败", error.payload?.message || error.message || String(error), 100, true);
+  }
 }
 
 function bindEvents() {

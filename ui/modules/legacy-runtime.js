@@ -4484,6 +4484,29 @@ document.querySelector("#sendTtsToVideoProduct")?.addEventListener("click", asyn
   ttsStatus.textContent = "已把当前语音发送到成片中心。";
 });
 
+document.querySelector("#sendTtsToXiaohei")?.addEventListener("click", async () => {
+  if (!activeTtsRailJob?.id || activeTtsRailJob.status !== "completed") {
+    ttsStatus.textContent = "请先生成、试听并确认一条语音。";
+    return;
+  }
+  try {
+    const job = {
+      ...activeTtsRailJob,
+      text: activeTtsRailJob.text || ttsText.value.trim(),
+    };
+    await window.videoProjects?.linkCurrent?.("tts", job.id, job.voice_name || `配音 #${job.id}`, {
+      ...job,
+      source: "ai_generated",
+      status: "ready",
+      confirmed: true,
+    });
+    window.videoFactorySendToXiaohei?.(job, window.videoProjects?.current?.());
+    ttsStatus.textContent = "已确认当前语音并发送到小黑配图视频。";
+  } catch (error) {
+    ttsStatus.textContent = error instanceof Error ? error.message : String(error);
+  }
+});
+
 document.querySelector("#refreshTtsJobs").addEventListener("click", () => {
   refreshTtsJobs().catch((error) => {
     ttsStatus.textContent = error instanceof Error ? error.message : String(error);

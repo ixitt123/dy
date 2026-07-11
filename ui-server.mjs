@@ -33,6 +33,7 @@ import { createVideoOutputRoutes } from "./server/routes/video-output-routes.js"
 import { createCs1VideoRoutes } from "./server/routes/cs1-video-routes.js";
 import { createXiaoheiVideoRoutes } from "./server/routes/xiaohei-video-routes.js";
 import { createIanXiaoheiRoutes } from "./server/routes/ian-xiaohei-routes.js";
+import { createMoneyPrinterTurboRoutes } from "./server/routes/moneyprinterturbo-routes.js";
 import { HttpBodyError, readBody, readJsonBody } from "./server/utils/http-body.js";
 import { DEFAULT_REWRITE_REFERENCE, REWRITE_DIRECTIONS, REWRITE_STYLES, REWRITE_VERSION_DEFS, REWRITE_VERSION_DEFAULTS } from "./server/config/rewrite-presets.js";
 import { DEFAULT_MODEL_MAPPING, DEFAULT_VOLCENGINE_ARK_IMAGE_MODEL, SETTINGS_TASKS } from "./server/config/model-defaults.js";
@@ -165,6 +166,12 @@ const handleIanXiaoheiRoutes = createIanXiaoheiRoutes({
   ffmpegPath,
   ffprobePath,
   transcribeLocalMedia: transcribeLocalMediaWithDashScope,
+});
+const handleMoneyPrinterTurboRoutes = createMoneyPrinterTurboRoutes({
+  baseDir: __dirname,
+  sendJson,
+  getSettings: readSettings,
+  writeSettings,
 });
 
 // ModelRouter 统一模型路由
@@ -4014,7 +4021,7 @@ async function handleTtsJobCompleted(job) {
   if (!job || job.status !== "completed") return;
   const metadata = safeJsonParse(job.metadata_json);
   const projectId = String(metadata.project_id || metadata.projectId || "").trim();
-  if (!projectId || metadata.workflow_auto_director === false) return;
+  if (!projectId) return;
   const project = projectCenter.getById(projectId);
   if (!project) return;
 
@@ -4035,30 +4042,6 @@ async function handleTtsJobCompleted(job) {
       },
     });
 
-    const latest = projectCenter.getById(project.id);
-    if (latest?.directorScript?.id || latest?.lastDirectorProjectId) return;
-    const sourceText = String(latest?.selectedRewriteText || job.text || latest?.transcriptText || "").trim();
-    if (!sourceText || !directorService) return;
-    const result = directorService.enqueue({
-      project_id: latest.id,
-      video_project_id: latest.id,
-      task_id: Number(job.task_id || latest.lastTaskId || 0),
-      rewrite_id: Number(job.rewrite_id || 0),
-      tts_job_id: Number(job.id || 0),
-      source_key: `project-${latest.id}-tts-${job.id}`,
-      source_type: "tts",
-      title: latest.platformTitles?.douyinTitle || latest.title,
-      source_text: sourceText,
-      tts_duration: audioDuration,
-      estimated_duration: audioDuration || 30,
-      video_type: latest.videoType || "douyin-knowledge",
-      platform: "douyin",
-      shot_count: "auto",
-    });
-    if (result.error) throw new Error(result.error);
-    projectCenter.setWorkflowState(latest.id, "tts_ready", {
-      lastDirectorProjectId: result.project?.id || 0,
-    });
   } catch (error) {
     projectCenter.setWorkflowState(project.id, "tts_ready", {
       workflowError: {
@@ -5773,6 +5756,7 @@ const server = http.createServer(async (req, res) => {
     if (await handleCs1VideoRoutes(req, res, url)) return;
     if (await handleXiaoheiVideoRoutes(req, res, url)) return;
     if (await handleIanXiaoheiRoutes(req, res, url)) return;
+    if (await handleMoneyPrinterTurboRoutes(req, res, url)) return;
 
     // ===== Image Studio API =====
     if (url.pathname.startsWith("/api/image/")) {

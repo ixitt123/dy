@@ -745,3 +745,27 @@ pre {
     justify-content: flex-start;
   }
 }
+.embedded-production-mode .topbar,
+.embedded-production-mode .provider-setup,
+.embedded-production-mode .music-studio,
+.embedded-production-mode .reference-audio-studio,
+.embedded-production-mode .audio-studio,
+.embedded-production-mode .composer > .control-grid,
+.embedded-production-mode .composer > .voice-actions,
+.embedded-production-mode .composer > .audio-upload {
+  display: none !important;
+}
+
+.embedded-production-mode {
+  background: #f4f6fa;
+}
+
+.embedded-production-mode .workspace {
+  width: 100%;
+  max-width: none;
+  padding: 14px;
+}
+
+.embedded-production-mode .composer {
+  margin-top: 0;
+}

@@ -43,6 +43,10 @@ const workbenchPages = {
     title: "CS1 生成器",
     description: "输入文字，选择 CS1 或 warm-grain 模板，生成本地 HyperFrames 视频。",
   },
+  moneyprinterturbo: {
+    title: "MoneyPrinterTurbo",
+    description: "使用官方原版工作台生成素材型短视频，并独立管理运行与更新。",
+  },
   "xiaohei-video": {
     title: "小黑说明视频",
     description: "输入文案，按导演稿、Seedance VFX 合约和 Ian 配图风格生成小黑说明视频。",

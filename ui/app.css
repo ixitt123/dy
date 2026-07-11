@@ -6977,3 +6977,43 @@ audio {
     grid-template-columns: 1fr;
   }
 }
+.workbench-nav .nav-item[hidden],
+.workbench-nav .nav-group[hidden] {
+  display: none !important;
+}
+
+[data-nav="transcript"],
+[data-nav="director"],
+[data-nav="assets"],
+[data-nav="video-output"] {
+  display: none !important;
+}
+
+.embedded-production-line {
+  min-height: calc(100vh - 120px);
+}
+
+.production-line-head,
+.production-line-notice {
+  margin-bottom: 12px;
+}
+
+.production-line-notice {
+  border: 1px solid var(--border, #2d3542);
+  padding: 10px 12px;
+  color: var(--text-secondary, #aab5c5);
+  background: var(--panel, #10151d);
+}
+
+.production-line-frame {
+  display: block;
+  width: 100%;
+  min-height: calc(100vh - 250px);
+  border: 1px solid var(--border, #2d3542);
+  background: #f4f6fa;
+}
+
+.production-line-actions {
+  display: flex;
+  gap: 8px;
+}
