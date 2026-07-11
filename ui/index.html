@@ -87,7 +87,7 @@
           <div class="header-title">
             <span class="header-kicker">短视频内容生产工厂</span>
             <h1 id="workbenchPageTitle">首页总览</h1>
-            <p id="workbenchPageDescription">查看任务进度、最近生成和生产流程。</p>
+            <p id="workbenchPageDescription">查看任务进度、最近生成和生产线入口。</p>
           </div>
           <div class="header-actions">
             <span class="connection-status" id="workbenchConnectionStatus">
@@ -106,7 +106,7 @@
                 <div class="panel-heading">
                   <div>
                     <span class="section-eyebrow">制作流程</span>
-                    <h2>内容生产流程</h2>
+                    <h2>新生产线流程</h2>
                   </div>
                   <span class="phase-badge">项目制生产流程</span>
                 </div>
@@ -119,13 +119,13 @@
                   <i></i>
                   <button type="button" data-nav="tts"><span>4</span><strong>TTS 配音</strong><small>声音与试听</small></button>
                   <i></i>
-                  <button type="button" data-nav="director"><span>5</span><strong>AI 导演</strong><small>分镜与字幕</small></button>
+                  <button type="button" data-nav="cs1-video"><span>5</span><strong>CS1 文字视频</strong><small>HyperFrames 模板</small></button>
                   <i></i>
-                  <button type="button" data-nav="assets"><span>6</span><strong>素材匹配</strong><small>画面与 BGM</small></button>
+                  <button type="button" data-nav="xiaohei-video"><span>6</span><strong>小黑配图视频</strong><small>真实音频时间轴</small></button>
                   <i></i>
-                  <button type="button" data-nav="video-output"><span>7</span><strong>成片草稿</strong><small>生成剪映草稿</small></button>
+                  <button type="button" data-nav="moneyprinterturbo"><span>7</span><strong>MoneyPrinterTurbo</strong><small>官方原版工作台</small></button>
                   <i></i>
-                  <button type="button" data-nav="video-output"><span>8</span><strong>打开剪映</strong><small>检查并导出</small></button>
+                  <button type="button" data-nav="video-output"><span>8</span><strong>剪映草稿</strong><small>检查并导出</small></button>
                 </div>
               </section>
 
@@ -271,9 +271,9 @@
                   <div class="quick-entry-grid">
                     <button type="button" data-nav="collector"><strong>采集项目素材</strong><span>下载或导入视频</span></button>
                     <button type="button" data-nav="rewrite"><strong>打开AI改写</strong><span>生成多版本文案</span></button>
-                    <button type="button" data-nav="tts"><strong>生成TTS</strong><span>配音与试听</span></button>
-                    <button type="button" data-nav="director"><strong>进入AI导演</strong><span>生成专业分镜</span></button>
-                    <button type="button" data-nav="vfo"><strong>进入成片中心</strong><span>检查并生成草稿</span></button>
+                    <button type="button" data-nav="tts"><strong>生成TTS</strong><span>确认真实配音</span></button>
+                    <button type="button" data-nav="cs1-video"><strong>进入CS1</strong><span>本地文字视频模板</span></button>
+                    <button type="button" data-nav="xiaohei-video"><strong>进入小黑</strong><span>按音频时间轴做配图</span></button>
                   </div>
                 </section>
               </div>
@@ -1215,7 +1215,9 @@
               <button class="primary" id="generateTts" type="button">生成语音</button>
               <button class="ghost" id="openVoiceCloneFromTts" type="button">克隆音色</button>
               <button class="ghost" id="sendTtsToVideoProduct" type="button">发送到成片中心</button>
+              <button class="ghost" id="sendTtsToCs1" type="button">发送到 CS1 文字视频</button>
               <button class="ghost" id="sendTtsToXiaohei" type="button">发送到小黑配图视频</button>
+              <button class="ghost" id="sendTtsToMoneyPrinterTurbo" type="button">发送到 MoneyPrinterTurbo</button>
               <span id="ttsStatus">等待生成</span>
             </div>
           </div>
@@ -1350,9 +1352,14 @@
             <div>
               <span class="section-eyebrow">CS1 Local Video Maker</span>
               <h2>输入文字，选择模板，一键输出 HyperFrames 视频</h2>
-              <p>内置 CS1 深色解释风和 HyperFrames warm-grain 暖纸纹模板；生成工程保存在本机，MP4 输出到 jianying-exports。</p>
+              <p>内置 CS1 深色解释风和 HyperFrames warm-grain 暖纸纹模板；从 TTS 发送时会直接使用已确认音频作为成片音轨。</p>
             </div>
             <button class="ghost" id="cs1VideoOpenOutput" type="button">打开输出目录</button>
+          </div>
+          <div class="production-line-notice" id="cs1VideoHandoffStatus">可直接手动输入文案，也可以先在 TTS 语音页确认音频后发送到这里。</div>
+          <div class="production-line-actions">
+            <button class="ghost small" id="cs1VideoUseTts" type="button">使用当前确认 TTS</button>
+            <button class="ghost small" id="cs1VideoClearTts" type="button">清除 TTS 绑定</button>
           </div>
 
           <div class="cs1-video-layout">
