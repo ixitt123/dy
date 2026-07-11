@@ -4889,9 +4889,12 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.method === "GET" && url.pathname === "/api/voice-assets/audio") {
-      const filePath = voiceAssetService.resolveSamplePath(Number(url.searchParams.get("id") || 0));
+      const kind = url.searchParams.get("kind") === "preview" ? "preview" : "sample";
+      const filePath = voiceAssetService.resolveAssetAudioPath
+        ? voiceAssetService.resolveAssetAudioPath(Number(url.searchParams.get("id") || 0), kind)
+        : voiceAssetService.resolveSamplePath(Number(url.searchParams.get("id") || 0));
       if (!filePath) {
-        sendJson(res, 404, { ok: false, message: "参考音频不存在。" });
+        sendJson(res, 404, { ok: false, message: kind === "preview" ? "试听音频不存在。" : "参考音频不存在。" });
         return;
       }
       const extension = path.extname(filePath).toLowerCase();

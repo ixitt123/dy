@@ -309,6 +309,7 @@ export function createIanXiaoheiRoutes({
           defaultTargetBpm: 120,
           defaultTargetLufs: -14,
           supported: Boolean(ffmpegPath && fs.existsSync(ffmpegPath) && ffprobePath && fs.existsSync(ffprobePath)),
+          stylePresets: voiceAssetService?.listStylePresets?.() || [],
         },
       });
       return true;
@@ -358,6 +359,132 @@ export function createIanXiaoheiRoutes({
           "utf8",
         );
         sendJson(res, 200, { ok: true, profile });
+      } catch (error) {
+        sendJson(res, error instanceof HttpBodyError ? error.statusCode : 400, {
+          ok: false,
+          message: error instanceof Error ? error.message : String(error),
+        });
+      }
+      return true;
+    }
+
+    if (req.method === "GET" && route === "reference-audio/clone-draft-preview") {
+      const filePath = voiceAssetService?.resolveCloneDraftPreviewPath?.(url.searchParams.get("id"));
+      if (!filePath) {
+        sendJson(res, 404, { ok: false, message: "克隆试听不存在或已失效。" });
+        return true;
+      }
+      sendAudioFile(res, filePath);
+      return true;
+    }
+
+    if (req.method === "POST" && route === "reference-audio/clone-draft") {
+      try {
+        if (!ffmpegPath || !fs.existsSync(ffmpegPath) || !ffprobePath || !fs.existsSync(ffprobePath)) {
+          throw new Error("FFmpeg / FFprobe 不可用，无法提取克隆人声样本。");
+        }
+        if (!voiceAssetService?.createCloneDraft) throw new Error("声音资产服务未初始化。");
+        const body = await readJsonBody(req, { maxBytes: 128 * 1024 });
+        if (body.consent_confirmed !== true) throw new Error("请先确认拥有该声音的长期克隆与生成授权。");
+        const sourcePath = resolveReferenceSourcePath(referenceAudioRoot, body.profile?.source_path);
+        if (!sourcePath) throw new Error("参考音频已失效，请重新选择并分析文件。" );
+        const segment = pickCloneSampleSegment(body.profile || {});
+        const samplePath = path.join(referenceAudioRoot, `${dateSlug()}-clone-sample-${randomUUID().slice(0, 8)}.wav`);
+        await extractCloneSample({
+          ffmpegPath,
+          sourcePath,
+          outputPath: samplePath,
+          start: segment.start,
+          duration: segment.duration,
+        });
+        const result = await voiceAssetService.createCloneDraft({
+          provider: "minimax",
+          voice_name: body.voice_name,
+          preferred_name: body.preferred_name,
+          sample_path: samplePath,
+          sample_mime: "audio/wav",
+          sample_transcript: "自动从授权参考音频中提取的人声片段",
+          consent_confirmed: true,
+          target_model: "speech-2.6-hd",
+          style_profile: body.profile || {},
+        });
+        fs.rmSync(samplePath, { force: true });
+        if (result.error) throw new Error(result.error);
+        sendJson(res, 201, {
+          ok: true,
+          draft: {
+            id: result.draft.id,
+            provider: result.draft.provider,
+            voice_name: result.draft.voice_name,
+            source_sample: segment,
+            preview_url: `/api/ian-xiaohei/reference-audio/clone-draft-preview?id=${encodeURIComponent(result.draft.id)}`,
+          },
+        });
+      } catch (error) {
+        sendJson(res, error instanceof HttpBodyError ? error.statusCode : 400, {
+          ok: false,
+          message: error instanceof Error ? error.message : String(error),
+        });
+      }
+      return true;
+    }
+
+    if (req.method === "POST" && route === "reference-audio/clone-confirm") {
+      try {
+        const body = await readJsonBody(req, { maxBytes: 64 * 1024 });
+        const result = await voiceAssetService?.confirmCloneDraft?.(body.draft_id, {
+          set_default: body.set_default === true,
+          save_style: body.save_style !== false,
+          description: body.description,
+          tags: body.tags,
+        });
+        if (result?.error) throw new Error(result.error);
+        sendJson(res, 201, { ok: true, ...result });
+      } catch (error) {
+        sendJson(res, error instanceof HttpBodyError ? error.statusCode : 400, {
+          ok: false,
+          message: error instanceof Error ? error.message : String(error),
+        });
+      }
+      return true;
+    }
+
+    if (req.method === "POST" && route === "reference-audio/clone-discard") {
+      try {
+        const body = await readJsonBody(req, { maxBytes: 64 * 1024 });
+        const result = await voiceAssetService?.discardCloneDraft?.(body.draft_id);
+        if (result?.error) throw new Error(result.error);
+        sendJson(res, 200, { ok: true, ...result });
+      } catch (error) {
+        sendJson(res, error instanceof HttpBodyError ? error.statusCode : 400, {
+          ok: false,
+          message: error instanceof Error ? error.message : String(error),
+        });
+      }
+      return true;
+    }
+
+    if (req.method === "POST" && route === "reference-audio/style-default") {
+      try {
+        const body = await readJsonBody(req, { maxBytes: 64 * 1024 });
+        const result = voiceAssetService?.setDefaultStylePreset?.(body.id);
+        if (result?.error) throw new Error(result.error);
+        sendJson(res, 200, { ok: true, ...result });
+      } catch (error) {
+        sendJson(res, error instanceof HttpBodyError ? error.statusCode : 400, {
+          ok: false,
+          message: error instanceof Error ? error.message : String(error),
+        });
+      }
+      return true;
+    }
+
+    if (req.method === "POST" && route === "reference-audio/style-delete") {
+      try {
+        const body = await readJsonBody(req, { maxBytes: 64 * 1024 });
+        const result = voiceAssetService?.deleteStylePreset?.(body.id);
+        if (result?.error) throw new Error(result.error);
+        sendJson(res, 200, { ok: true, ...result });
       } catch (error) {
         sendJson(res, error instanceof HttpBodyError ? error.statusCode : 400, {
           ok: false,
@@ -425,6 +552,9 @@ export function createIanXiaoheiRoutes({
       try {
         const body = await readJsonBody(req, { maxBytes: 256 * 1024 });
         const settings = getSettings() || {};
+        const stylePreset = body.style_preset_id
+          ? voiceAssetService?.getStylePreset?.(body.style_preset_id)
+          : null;
         const result = await generateMinimaxMusic({
           settings,
           outputRoot: musicOutputRoot,
@@ -432,8 +562,9 @@ export function createIanXiaoheiRoutes({
           lyrics: body.lyrics || body.text || "",
           promptExtra: body.prompt_extra || "",
           title: body.title || "",
+          styleProfile: stylePreset?.profile || null,
         });
-        sendJson(res, 201, { ok: true, ...result });
+        sendJson(res, 201, { ok: true, ...result, style_preset: stylePreset || null });
       } catch (error) {
         sendJson(res, error instanceof HttpBodyError ? error.statusCode : 400, {
           ok: false,
@@ -1506,6 +1637,59 @@ function decodeUploadedReferenceMedia(dataUrl, mimeHint = "") {
   if (!buffer.length) throw new Error("上传的参考文件为空。");
   if (buffer.length > 48 * 1024 * 1024) throw new Error("参考文件不能超过 48MB。");
   return { buffer, mimeType, extension };
+}
+
+function resolveReferenceSourcePath(referenceAudioRoot, sourcePath) {
+  const root = path.resolve(referenceAudioRoot);
+  const resolved = path.resolve(String(sourcePath || ""));
+  if (!resolved || resolved === root || !resolved.startsWith(`${root}${path.sep}`)) return "";
+  return fs.existsSync(resolved) ? resolved : "";
+}
+
+function pickCloneSampleSegment(profile = {}) {
+  const duration = Number(profile.duration || 0);
+  if (!Number.isFinite(duration) || duration < 30) {
+    throw new Error("参考音频中可用人声不足 30 秒，请上传更清晰、单人说话且时长更长的授权样本。" );
+  }
+  const sampleDuration = Math.min(45, Math.max(30, duration - 1));
+  const maxStart = Math.max(0, duration - sampleDuration - 0.5);
+  const silences = Array.isArray(profile.silences) ? profile.silences : [];
+  const candidates = [];
+  for (let start = Math.min(3, maxStart); start <= maxStart; start += 5) candidates.push(start);
+  if (!candidates.length) candidates.push(0);
+  const scored = candidates.map((start) => {
+    const end = start + sampleDuration;
+    const silenceSeconds = silences.reduce((total, silence) => {
+      const silenceStart = Number(silence.start || 0);
+      const silenceEnd = silenceStart + Number(silence.duration || 0);
+      return total + Math.max(0, Math.min(end, silenceEnd) - Math.max(start, silenceStart));
+    }, 0);
+    return { start, duration: sampleDuration, silenceSeconds };
+  }).sort((left, right) => left.silenceSeconds - right.silenceSeconds || left.start - right.start);
+  const winner = scored[0];
+  return {
+    start: Number(winner.start.toFixed(2)),
+    duration: Number(winner.duration.toFixed(2)),
+    silence_seconds: Number(winner.silenceSeconds.toFixed(2)),
+  };
+}
+
+async function extractCloneSample({ ffmpegPath, sourcePath, outputPath, start, duration }) {
+  await runProcessCapture(ffmpegPath, [
+    "-y",
+    "-hide_banner",
+    "-loglevel", "error",
+    "-ss", String(Math.max(0, Number(start || 0)).toFixed(2)),
+    "-t", String(Math.max(1, Number(duration || 30)).toFixed(2)),
+    "-i", sourcePath,
+    "-map", "0:a:0",
+    "-vn",
+    "-ac", "1",
+    "-ar", "24000",
+    "-af", "highpass=f=80,lowpass=f=10000,loudnorm=I=-16:TP=-1.5:LRA=8",
+    "-c:a", "pcm_s16le",
+    outputPath,
+  ], { timeoutMs: 180000 });
 }
 
 function decodeUploadedImage(dataUrl, mimeHint = "") {
@@ -2769,6 +2953,7 @@ async function generateMinimaxMusic({
   lyrics = "",
   promptExtra = "",
   title = "",
+  styleProfile = null,
 }) {
   const config = settings.tts?.minimax || {};
   const apiKey = String(config.api_key || "").trim();
@@ -2781,6 +2966,12 @@ async function generateMinimaxMusic({
   }
   const prompt = [
     preset.prompt,
+    styleProfile ? [
+      `参考配乐风格：${Math.round(Number(styleProfile.target_bpm || styleProfile.estimated_bpm || 120))} BPM`,
+      `响度目标 ${Number(styleProfile.target_lufs || -14).toFixed(1)} LUFS`,
+      `结尾 ${Number(styleProfile.ending_fade_seconds || 2.5).toFixed(1)} 秒自然淡出`,
+      "人声优先，BGM 不抢口播",
+    ].join("，") : "",
     String(promptExtra || "").trim(),
     title ? `视频标题：${String(title).trim().slice(0, 80)}` : "",
   ].filter(Boolean).join("，");

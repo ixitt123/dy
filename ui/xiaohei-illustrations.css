@@ -228,6 +228,10 @@ button.danger {
   margin: 14px 0 10px;
 }
 
+.advanced-single-field {
+  margin-top: 14px;
+}
+
 .field small {
   color: var(--muted);
   line-height: 1.5;
@@ -307,6 +311,23 @@ button.danger {
   margin: 12px 0;
 }
 
+.music-style-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 12px;
+  margin: 12px 0;
+  padding: 12px;
+  border: 1px solid #ded3f4;
+  border-radius: 6px;
+  background: #fff;
+}
+
+.style-actions {
+  justify-content: flex-end;
+  padding-bottom: 2px;
+}
+
 .reference-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(260px, 0.6fr);
@@ -337,6 +358,37 @@ button.danger {
 
 .reference-profile.empty {
   color: var(--muted);
+}
+
+.reference-clone-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px dashed #8fbda5;
+  border-radius: 6px;
+  background: #fff;
+}
+
+.reference-clone-controls .consent-row {
+  margin: 0;
+}
+
+.default-choice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 12px 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.default-choice input {
+  width: 16px;
+  height: 16px;
 }
 
 .audio-studio .panel-head {
@@ -679,7 +731,17 @@ pre {
   .control-grid,
   .provider-setup,
   .advanced-grid,
+  .reference-grid,
   .results-grid {
     grid-template-columns: 1fr;
+  }
+
+  .music-style-row {
+    grid-template-columns: 1fr;
+    align-items: stretch;
+  }
+
+  .style-actions {
+    justify-content: flex-start;
   }
 }

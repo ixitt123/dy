@@ -87,32 +87,12 @@
           <span id="voiceDescription">选择音色后可以先试听。</span>
         </div>
         <details class="advanced-panel">
-          <summary>备用音频与克隆音色</summary>
-          <div class="advanced-grid">
-            <label class="field">
-              <span>上传已有 TTS（备用）</span>
-              <input id="localAudioInput" type="file" accept=".mp3,.wav,.m4a,audio/mpeg,audio/wav,audio/mp4" />
-              <small>上传后会先识别并核对文案；不一致时停止生成。</small>
-            </label>
-            <label class="field">
-              <span>克隆音色名称</span>
-              <input id="cloneVoiceName" type="text" placeholder="例如：我的口播音色" />
-            </label>
-            <label class="field">
-              <span>本人授权参考音频</span>
-              <input id="cloneAudioInput" type="file" accept=".mp3,.wav,.m4a,audio/mpeg,audio/wav,audio/mp4" />
-              <small>MiniMax 建议至少 10 秒清晰单人声，无音乐和混响。</small>
-            </label>
-            <label class="field">
-              <span>参考音频文字</span>
-              <input id="cloneTranscript" type="text" placeholder="填写参考音频中说的原文" />
-            </label>
-          </div>
-          <label class="consent-row">
-            <input id="cloneConsent" type="checkbox" />
-            <span>我确认拥有该声音的合法使用授权</span>
+          <summary>备用：导入已有 TTS 音频</summary>
+          <label class="field advanced-single-field">
+            <span>上传已有 TTS</span>
+            <input id="localAudioInput" type="file" accept=".mp3,.wav,.m4a,audio/mpeg,audio/wav,audio/mp4" />
+            <small>仅在已有配音时使用；上传后会识别并核对当前文案，不一致会阻止后续分镜生成。</small>
           </label>
-          <button id="cloneVoice" type="button">创建并保存克隆音色</button>
         </details>
         <section class="music-studio">
           <div class="panel-head">
@@ -132,6 +112,17 @@
               <input id="musicPromptExtra" type="text" placeholder="可选：更燃、更搞笑、更像片头广告歌" />
             </label>
           </div>
+          <div class="music-style-row">
+            <label class="field">
+              <span>参考配乐风格</span>
+              <select id="referenceStyleSelect"></select>
+              <small>来自已确认的授权参考音频；生成音乐素材时会使用其 BPM、响度和收尾规则。</small>
+            </label>
+            <div class="audio-actions style-actions">
+              <button id="setDefaultReferenceStyle" type="button">设为默认风格</button>
+              <button id="deleteReferenceStyle" type="button" class="danger">永久删除风格</button>
+            </div>
+          </div>
           <label class="field">
             <span>歌词 / 口号</span>
             <textarea id="musicLyrics" placeholder="留空时会默认使用上方文案；纯音乐预设可留空。"></textarea>
@@ -145,33 +136,44 @@
         <section class="reference-audio-studio">
           <div class="panel-head">
             <div>
-              <h2>参考音频风格生成</h2>
-              <p>导入一个参考视频或音频，系统分析 BPM、响度和收尾，再按当前文案生成类似节奏的配音+BGM 混音。</p>
+              <h2>从授权参考音频创建音色</h2>
+              <p>系统会自动提取 30 至 60 秒清晰人声，分析节奏与混音规则；试听通过后才加入长期音色库和配乐风格库。</p>
             </div>
             <div class="audio-actions">
               <button id="analyzeReferenceAudio" type="button">分析参考音频</button>
-              <button id="generateReferenceMix" type="button" class="primary">生成类似风格音频</button>
             </div>
           </div>
           <div class="reference-grid">
             <label class="field">
               <span>参考视频 / 音频</span>
               <input id="referenceAudioInput" type="file" accept=".mp4,.mov,.m4v,.mp3,.wav,.m4a,video/mp4,video/quicktime,audio/mpeg,audio/wav,audio/mp4" />
-              <small>第一版会提取音频特征，不会复制原视频声音。</small>
+              <small>仅可上传拥有长期克隆和生成授权的声音。不会复用参考视频的原 BGM。</small>
             </label>
             <label class="field">
-              <span>BGM 策略</span>
-              <select id="referenceBgmMode">
-                <option value="auto">自动：优先 MiniMax BGM，失败用本地氛围底</option>
-                <option value="local">只用本地基础氛围底</option>
-                <option value="none">只生成配音，不加 BGM</option>
-              </select>
+              <span>克隆音色名称</span>
+              <input id="referenceCloneName" type="text" placeholder="例如：老师知识口播" />
+              <small>确认后以这个名称出现在“配音音色”中。</small>
             </label>
           </div>
           <div id="referenceProfile" class="reference-profile empty">还没有分析参考音频。</div>
-          <div id="referenceMixPreviewPanel" class="audio-preview" hidden>
-            <strong id="referenceMixPreviewTitle">参考风格混音</strong>
-            <audio id="referenceMixPreview" controls></audio>
+          <div id="referenceCloneControls" class="reference-clone-controls" hidden>
+            <label class="consent-row">
+              <input id="referenceCloneConsent" type="checkbox" />
+              <span>我确认拥有该声音的长期克隆与生成授权</span>
+            </label>
+            <button id="createReferenceClone" type="button" class="primary">创建克隆并生成试听</button>
+          </div>
+          <div id="referenceClonePreviewPanel" class="audio-preview" hidden>
+            <strong id="referenceClonePreviewTitle">克隆音色试听</strong>
+            <audio id="referenceClonePreview" controls></audio>
+            <label class="default-choice">
+              <input id="referenceCloneDefault" type="checkbox" />
+              <span>确认加入时设为默认音色</span>
+            </label>
+            <div class="audio-actions">
+              <button id="confirmReferenceClone" type="button" class="primary">确认加入预设音色</button>
+              <button id="discardReferenceClone" type="button" class="danger">放弃并永久删除</button>
+            </div>
           </div>
         </section>
         <section class="audio-studio">

@@ -11,6 +11,8 @@ const state = {
   savedApis: [],
   musicPresets: [],
   referenceProfile: null,
+  referenceCloneDraft: null,
+  referenceStylePresets: [],
   pendingUploads: new Map(),
   projectId: localStorage.getItem("ian-xiaohei-project-id") || `xiaohei-${Date.now()}`,
 };
@@ -38,27 +40,30 @@ const els = {
   setDefaultVoice: document.querySelector("#setDefaultVoice"),
   deleteVoice: document.querySelector("#deleteVoice"),
   localAudioInput: document.querySelector("#localAudioInput"),
-  cloneVoiceName: document.querySelector("#cloneVoiceName"),
-  cloneAudioInput: document.querySelector("#cloneAudioInput"),
-  cloneTranscript: document.querySelector("#cloneTranscript"),
-  cloneConsent: document.querySelector("#cloneConsent"),
-  cloneVoice: document.querySelector("#cloneVoice"),
   musicPreset: document.querySelector("#musicPreset"),
   musicPromptExtra: document.querySelector("#musicPromptExtra"),
   musicLyrics: document.querySelector("#musicLyrics"),
   generateMusic: document.querySelector("#generateMusic"),
+  referenceStyleSelect: document.querySelector("#referenceStyleSelect"),
+  setDefaultReferenceStyle: document.querySelector("#setDefaultReferenceStyle"),
+  deleteReferenceStyle: document.querySelector("#deleteReferenceStyle"),
   musicStatus: document.querySelector("#musicStatus"),
   musicPreviewPanel: document.querySelector("#musicPreviewPanel"),
   musicPreviewTitle: document.querySelector("#musicPreviewTitle"),
   musicPreview: document.querySelector("#musicPreview"),
   referenceAudioInput: document.querySelector("#referenceAudioInput"),
-  referenceBgmMode: document.querySelector("#referenceBgmMode"),
+  referenceCloneName: document.querySelector("#referenceCloneName"),
+  referenceCloneConsent: document.querySelector("#referenceCloneConsent"),
   analyzeReferenceAudio: document.querySelector("#analyzeReferenceAudio"),
-  generateReferenceMix: document.querySelector("#generateReferenceMix"),
+  createReferenceClone: document.querySelector("#createReferenceClone"),
+  confirmReferenceClone: document.querySelector("#confirmReferenceClone"),
+  discardReferenceClone: document.querySelector("#discardReferenceClone"),
+  referenceCloneControls: document.querySelector("#referenceCloneControls"),
+  referenceCloneDefault: document.querySelector("#referenceCloneDefault"),
   referenceProfile: document.querySelector("#referenceProfile"),
-  referenceMixPreviewPanel: document.querySelector("#referenceMixPreviewPanel"),
-  referenceMixPreviewTitle: document.querySelector("#referenceMixPreviewTitle"),
-  referenceMixPreview: document.querySelector("#referenceMixPreview"),
+  referenceClonePreviewPanel: document.querySelector("#referenceClonePreviewPanel"),
+  referenceClonePreviewTitle: document.querySelector("#referenceClonePreviewTitle"),
+  referenceClonePreview: document.querySelector("#referenceClonePreview"),
   generateAudio: document.querySelector("#generateAudio"),
   confirmAudio: document.querySelector("#confirmAudio"),
   audioPreviewPanel: document.querySelector("#audioPreviewPanel"),
@@ -101,10 +106,13 @@ function bindEvents() {
   els.generateImages.addEventListener("click", () => generateCompleteWorkflow());
   els.generateAudio.addEventListener("click", () => generateAudioOnly());
   els.confirmAudio.addEventListener("click", () => confirmCurrentAudio());
-  els.cloneVoice.addEventListener("click", () => createCloneVoice());
   els.generateMusic.addEventListener("click", () => generateMusicMaterial());
   els.analyzeReferenceAudio.addEventListener("click", () => analyzeReferenceAudio());
-  els.generateReferenceMix.addEventListener("click", () => generateReferenceMix());
+  els.createReferenceClone.addEventListener("click", () => createReferenceClone());
+  els.confirmReferenceClone.addEventListener("click", () => confirmReferenceClone());
+  els.discardReferenceClone.addEventListener("click", () => discardReferenceClone());
+  els.setDefaultReferenceStyle.addEventListener("click", () => setCurrentReferenceStyleDefault());
+  els.deleteReferenceStyle.addEventListener("click", () => deleteCurrentReferenceStyle());
   els.musicPreset.addEventListener("change", () => {
     const preset = currentMusicPreset();
     if (preset) els.musicStatus.textContent = `${preset.label}：${preset.description || "可生成本地 mp3 素材。"}`;
@@ -149,7 +157,7 @@ async function loadConfig() {
   renderSavedApis(data.savedApis || []);
   renderIntegrationStatus(data.integrations || {});
   renderVoiceChoices(data.tts || {});
-  renderMusicPresets(data.music || {});
+  renderMusicPresets(data.music || {}, data.referenceAudio || {});
 }
 
 function renderSavedApis(savedApis) {
@@ -199,8 +207,10 @@ function renderIntegrationStatus(integrations) {
   els.integrationStatus.className = `integration-status ${integrations.imageProviderConfigured && integrations.jianyingDraftDir ? "success" : "warning"}`;
 }
 
-function renderMusicPresets(music) {
+function renderMusicPresets(music, referenceAudio = {}) {
   state.musicPresets = Array.isArray(music.presets) ? music.presets : [];
+  state.referenceStylePresets = Array.isArray(referenceAudio.stylePresets) ? referenceAudio.stylePresets : [];
+  renderReferenceStyleChoices();
   if (!state.musicPresets.length) {
     els.musicPreset.innerHTML = '<option value="">暂无音乐预设</option>';
     els.musicStatus.textContent = "当前没有可用音乐预设。";
@@ -213,6 +223,29 @@ function renderMusicPresets(music) {
   els.musicStatus.textContent = music.configured
     ? `${first.label}：${first.description || "可生成本地 mp3 素材。"}`
     : "MiniMax API 未配置，音乐生成不可用。";
+}
+
+function renderReferenceStyleChoices() {
+  if (!els.referenceStyleSelect) return;
+  const presets = state.referenceStylePresets;
+  if (!presets.length) {
+    els.referenceStyleSelect.innerHTML = '<option value="">暂未保存参考配乐风格</option>';
+    els.setDefaultReferenceStyle.disabled = true;
+    els.deleteReferenceStyle.disabled = true;
+    return;
+  }
+  const defaultPreset = presets.find((preset) => preset.is_default) || presets[0];
+  els.referenceStyleSelect.innerHTML = presets.map((preset, index) => {
+    const bpm = Math.round(Number(preset.profile?.target_bpm || preset.profile?.estimated_bpm || 120));
+    const defaultLabel = preset.is_default ? "默认 · " : "";
+    return `<option value="${escapeAttr(preset.id)}" ${preset.id === defaultPreset.id ? "selected" : ""}>${index + 1}. ${escapeHtml(defaultLabel + preset.name)} · ${bpm} BPM</option>`;
+  }).join("");
+  els.setDefaultReferenceStyle.disabled = false;
+  els.deleteReferenceStyle.disabled = false;
+}
+
+function currentReferenceStylePreset() {
+  return state.referenceStylePresets.find((preset) => preset.id === els.referenceStyleSelect?.value) || null;
 }
 
 function currentMusicPreset() {
@@ -238,6 +271,7 @@ async function generateMusicMaterial() {
       method: "POST",
       body: JSON.stringify({
         preset_id: preset.id,
+        style_preset_id: currentReferenceStylePreset()?.id || "",
         title: els.titleInput.value.trim(),
         lyrics,
         prompt_extra: els.musicPromptExtra.value.trim(),
@@ -265,6 +299,9 @@ async function analyzeReferenceAudio() {
     return;
   }
   setBusy(true);
+  state.referenceCloneDraft = null;
+  els.referenceCloneControls.hidden = true;
+  resetReferenceClonePreview();
   renderReferenceProfile(null, "正在读取并分析参考音频...");
   setStatus("正在分析参考音频", "正在提取 BPM、响度、峰值和结尾收束。", 25, false, "参考音频分析");
   try {
@@ -278,6 +315,9 @@ async function analyzeReferenceAudio() {
       }),
     });
     state.referenceProfile = data.profile;
+    state.referenceCloneDraft = null;
+    resetReferenceClonePreview();
+    els.referenceCloneControls.hidden = false;
     renderReferenceProfile(data.profile);
     setStatus("参考音频分析完成", data.profile?.summary || "已生成音频风格参数。", 100, false, "完成");
   } catch (error) {
@@ -288,48 +328,129 @@ async function analyzeReferenceAudio() {
   }
 }
 
-async function generateReferenceMix() {
+async function createReferenceClone() {
   if (!state.referenceProfile) {
-    setStatus("缺少参考风格", "请先点击“分析参考音频”。", 0, true);
+    setStatus("缺少参考音频", "请先分析授权参考视频或音频。", 0, true);
     return;
   }
-  const payload = formPayload();
-  if (!payload.text) {
-    setStatus("缺少文案", "请先输入需要生成口播音频的文案。", 0, true);
-    return;
-  }
-  const choice = currentVoiceChoice();
-  if (!choice) {
-    setStatus("缺少配音音色", "请先选择一个配音音色。", 0, true);
+  const voiceName = els.referenceCloneName.value.trim();
+  if (!voiceName || !els.referenceCloneConsent.checked) {
+    setStatus("克隆资料不完整", "请填写音色名称并确认拥有该声音的长期克隆与生成授权。", 0, true);
     return;
   }
   setBusy(true);
-  setStatus("正在生成参考风格混音", "正在生成 TTS、匹配 BGM 并做人声优先混音。", 35, false, "参考风格混音");
+  setStatus("正在创建克隆音色", "正在自动提取清晰人声、调用 MiniMax 创建克隆，并生成固定试听。", 35, false, "创建克隆与试听");
   try {
-    const data = await fetchJson("/api/ian-xiaohei/reference-audio/generate-mix", {
+    const data = await fetchJson("/api/ian-xiaohei/reference-audio/clone-draft", {
       method: "POST",
       body: JSON.stringify({
-        project_id: state.projectId,
-        title: payload.title,
-        text: payload.text,
+        voice_name: voiceName,
+        preferred_name: `xiaohei-${Date.now().toString().slice(-8)}`,
+        consent_confirmed: true,
         profile: state.referenceProfile,
-        voice_asset_id: choice.voiceAssetId,
-        emotion: els.emotionSelect.value,
-        speed: Number(els.speedSelect.value || 1),
-        bgm_mode: els.referenceBgmMode.value || "auto",
       }),
     });
-    if (data.audio_url) {
-      els.referenceMixPreview.src = data.audio_url;
-      els.referenceMixPreviewTitle.textContent = `参考风格混音 · ${Math.round(Number(data.target_bpm || 0))} BPM · ${Number(data.target_lufs || -14).toFixed(1)} LUFS`;
-      els.referenceMixPreviewPanel.hidden = false;
-    }
-    const warnings = Array.isArray(data.warnings) && data.warnings.length ? `；提示：${data.warnings.join("；")}` : "";
-    setStatus("参考风格混音已生成", `${data.audio_path || ""}${warnings}`, 100, false, "完成");
+    state.referenceCloneDraft = data.draft;
+    els.referenceClonePreview.src = data.draft.preview_url;
+    els.referenceClonePreviewTitle.textContent = `${data.draft.voice_name} · 克隆音色试听`;
+    els.referenceClonePreviewPanel.hidden = false;
+    els.referenceCloneControls.hidden = true;
+    setStatus("克隆试听已生成", "请先试听。满意后点“确认加入预设音色”；不满意可永久删除这次临时克隆。", 100, false, "等待试听确认");
   } catch (error) {
-    setStatus("参考风格混音失败", error.payload?.message || error.message || String(error), 100, true);
+    setStatus("创建克隆音色失败", error.payload?.message || error.message || String(error), 100, true);
   } finally {
     setBusy(false);
+  }
+}
+
+async function confirmReferenceClone() {
+  const draft = state.referenceCloneDraft;
+  if (!draft?.id) {
+    setStatus("没有可确认的克隆试听", "请先创建并试听克隆音色。", 0, true);
+    return;
+  }
+  setBusy(true);
+  try {
+    const data = await fetchJson("/api/ian-xiaohei/reference-audio/clone-confirm", {
+      method: "POST",
+      body: JSON.stringify({
+        draft_id: draft.id,
+        set_default: els.referenceCloneDefault.checked,
+        save_style: true,
+        tags: ["授权克隆", "小黑视频", "口播"],
+      }),
+    });
+    state.referenceCloneDraft = null;
+    els.referenceCloneName.value = "";
+    els.referenceCloneConsent.checked = false;
+    els.referenceCloneDefault.checked = false;
+    resetReferenceClonePreview();
+    els.referenceCloneControls.hidden = true;
+    await loadConfig();
+    const styleName = data.style_preset?.name ? `；已同时保存“${data.style_preset.name}”配乐风格` : "";
+    setStatus("克隆音色已加入预设", `“${data.asset?.voice_name || "新音色"}”现在可在配音音色中直接选择${styleName}。`, 100, false, "完成");
+  } catch (error) {
+    setStatus("保存克隆音色失败", error.payload?.message || error.message || String(error), 100, true);
+  } finally {
+    setBusy(false);
+  }
+}
+
+async function discardReferenceClone() {
+  const draft = state.referenceCloneDraft;
+  if (!draft?.id) return;
+  if (!window.confirm(`放弃“${draft.voice_name}”的克隆试听？本地临时文件和 MiniMax 临时音色都会永久删除。`)) return;
+  setBusy(true);
+  try {
+    await fetchJson("/api/ian-xiaohei/reference-audio/clone-discard", {
+      method: "POST",
+      body: JSON.stringify({ draft_id: draft.id }),
+    });
+    state.referenceCloneDraft = null;
+    resetReferenceClonePreview();
+    els.referenceCloneControls.hidden = false;
+    setStatus("临时克隆已删除", "没有加入配音音色库。可以换一段更清晰的授权样本后重新创建。", 100, false, "已删除");
+  } catch (error) {
+    setStatus("删除临时克隆失败", error.payload?.message || error.message || String(error), 100, true);
+  } finally {
+    setBusy(false);
+  }
+}
+
+function resetReferenceClonePreview() {
+  els.referenceClonePreview.removeAttribute("src");
+  els.referenceClonePreview.load();
+  els.referenceClonePreviewPanel.hidden = true;
+}
+
+async function setCurrentReferenceStyleDefault() {
+  const preset = currentReferenceStylePreset();
+  if (!preset) return;
+  try {
+    await fetchJson("/api/ian-xiaohei/reference-audio/style-default", {
+      method: "POST",
+      body: JSON.stringify({ id: preset.id }),
+    });
+    await loadConfig();
+    setStatus("默认配乐风格已更新", `“${preset.name}”会优先用于后续音乐素材生成。`, 100, false, "完成");
+  } catch (error) {
+    setStatus("设置默认风格失败", error.payload?.message || error.message || String(error), 100, true);
+  }
+}
+
+async function deleteCurrentReferenceStyle() {
+  const preset = currentReferenceStylePreset();
+  if (!preset) return;
+  if (!window.confirm(`永久删除配乐风格“${preset.name}”？删除后不提供恢复。`)) return;
+  try {
+    await fetchJson("/api/ian-xiaohei/reference-audio/style-delete", {
+      method: "POST",
+      body: JSON.stringify({ id: preset.id }),
+    });
+    await loadConfig();
+    setStatus("配乐风格已删除", `“${preset.name}”已从本地风格库移除。`, 100, false, "完成");
+  } catch (error) {
+    setStatus("删除配乐风格失败", error.payload?.message || error.message || String(error), 100, true);
   }
 }
 
@@ -847,40 +968,6 @@ async function pollVideoProject(id) {
   throw new Error("剪映草稿任务超时。");
 }
 
-async function createCloneVoice() {
-  const name = els.cloneVoiceName.value.trim();
-  const file = els.cloneAudioInput.files?.[0];
-  if (!name || !file || !els.cloneConsent.checked) {
-    setStatus("克隆资料不完整", "请填写名称、上传本人授权音频并确认授权。", 0, true);
-    return;
-  }
-  setBusy(true);
-  setStatus("正在创建克隆音色", "正在上传参考音频并创建可重复使用的 MiniMax 音色。", 30, false, "声音克隆");
-  try {
-    const sampleData = await readFileDataUrl(file);
-    const data = await fetchJson("/api/voice-assets/create", {
-      method: "POST",
-      body: JSON.stringify({
-        voice_name: name,
-        preferred_name: `xiaohei${Date.now().toString().slice(-8)}`,
-        provider: "minimax",
-        target_model: "speech-2.6-hd",
-        sample_data: sampleData,
-        sample_mime: file.type,
-        sample_transcript: els.cloneTranscript.value.trim(),
-        consent_confirmed: true,
-        tags: ["小黑视频", "口播"],
-      }),
-    });
-    await loadConfig();
-    setStatus("克隆音色已保存", data.message || "现在可以在配音音色中选择并试听。", 100, false, "完成");
-  } catch (error) {
-    setStatus("克隆音色失败", error.payload?.message || error.message || String(error), 100, true);
-  } finally {
-    setBusy(false);
-  }
-}
-
 async function handlePromptFileChange(event) {
   const input = event.target.closest("[data-shot-upload]");
   if (!input?.files?.[0]) return;
@@ -1156,19 +1243,25 @@ function setBusy(busy) {
     els.deleteMinimaxApi,
     els.generateMusic,
     els.analyzeReferenceAudio,
-    els.generateReferenceMix,
+    els.createReferenceClone,
+    els.confirmReferenceClone,
+    els.discardReferenceClone,
+    els.setDefaultReferenceStyle,
+    els.deleteReferenceStyle,
     els.generateAudio,
     els.confirmAudio,
     els.planPrompts,
     els.copyPrompts,
-    els.cloneVoice,
     els.previewVoice,
     els.setDefaultVoice,
     els.deleteVoice,
-  ]) {
+  ].filter(Boolean)) {
     element.disabled = busy;
   }
-  if (!busy) renderVoiceDescription();
+  if (!busy) {
+    renderVoiceDescription();
+    renderReferenceStyleChoices();
+  }
 }
 
 function imageProgress(done, total) {
