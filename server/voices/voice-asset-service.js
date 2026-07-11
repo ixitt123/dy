@@ -4,6 +4,8 @@ import { randomUUID } from "node:crypto";
 import { createTtsProvider } from "../tts/providers/index.js";
 
 const MAX_SAMPLE_BYTES = 20 * 1024 * 1024;
+const CLONE_PREVIEW_TEXT = "你好，这是一段克隆音色试听。请用自然、清晰、有交流感的方式讲述，重点明确，节奏舒适。";
+const STYLE_PRESET_VERSION = 1;
 const MIME_EXTENSIONS = {
   "audio/wav": ".wav",
   "audio/x-wav": ".wav",
@@ -26,6 +28,36 @@ function sanitizeName(value) {
     .replace(/[<>:"/\\|?*\x00-\x1F]/g, "")
     .trim()
     .slice(0, 60) || "voice";
+}
+
+function uniqueId(prefix) {
+  return `${prefix}-${Date.now()}-${randomUUID().slice(0, 8)}`;
+}
+
+function safeFileSegment(value) {
+  return sanitizeName(value).replace(/\s+/g, "-").slice(0, 40) || "voice";
+}
+
+function isWithin(root, target) {
+  const resolvedRoot = path.resolve(root);
+  const resolvedTarget = path.resolve(target);
+  return resolvedTarget !== resolvedRoot && resolvedTarget.startsWith(`${resolvedRoot}${path.sep}`);
+}
+
+function normalizeStyleProfile(value = {}) {
+  const number = (input, fallback, min, max) => {
+    const parsed = Number(input);
+    return Number.isFinite(parsed) ? Math.max(min, Math.min(max, parsed)) : fallback;
+  };
+  return {
+    estimated_bpm: number(value.estimated_bpm, 120, 80, 180),
+    target_bpm: number(value.target_bpm, 120, 80, 180),
+    target_lufs: number(value.target_lufs, -14, -20, -8),
+    ending_fade_seconds: number(value.ending_fade_seconds, 2.5, 1, 6),
+    bgm_ducking: value.bgm_ducking !== false,
+    voice_priority: value.voice_priority !== false,
+    bpm_range: Array.isArray(value.bpm_range) ? value.bpm_range.slice(0, 2) : [120, 150],
+  };
 }
 
 function parseTags(value) {
