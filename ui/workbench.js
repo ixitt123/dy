@@ -44,8 +44,8 @@ const workbenchPages = {
     description: "输入文字，选择 CS1 或 warm-grain 模板，生成本地 HyperFrames 视频。",
   },
   "xiaohei-video": {
-    title: "小黑说明视频",
-    description: "输入文案，按导演稿、Seedance VFX 合约和 Ian 配图风格生成小黑说明视频。",
+    title: "小黑视频风格生成",
+    description: "使用小黑配图软件生成 TTS、音乐素材、逐段配图和剪映草稿。",
   },
   files: {
     title: "素材资产库",

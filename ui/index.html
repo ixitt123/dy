@@ -1616,150 +1616,15 @@
       </section>
 
       <section class="workbench-page" data-page="xiaohei-video" id="xiaoheiVideoPage">
-        <section class="cs1-video-maker xiaohei-video-maker">
-          <div class="result-head cs1-video-head xiaohei-video-head">
+        <section class="embedded-production-line">
+          <div class="result-head production-line-head">
             <div>
-              <span class="section-eyebrow">Xiaohei Explainer Video</span>
-              <h2>输入文案，生成小黑 2.0 说明视频</h2>
-              <p>按导演稿、Seedance VFX 合约、Ian 白底配图风格和 HyperFrames 检查流程输出；本地音乐会自动循环到视频长度并做淡入淡出。</p>
+              <span class="section-eyebrow">XIAOHEI STYLE VIDEO</span>
+              <h2>小黑视频风格生成</h2>
+              <p>加载小黑配图软件中，可以直接输入文案，也可以接收 TTS 音频后按真实时间轴生成配图视频草稿。</p>
             </div>
-            <button class="ghost" id="xiaoheiVideoOpenOutput" type="button">打开输出目录</button>
           </div>
-
-          <div class="cs1-video-layout">
-            <form class="cs1-video-form" id="xiaoheiVideoForm">
-              <label>
-                视频标题
-                <input id="xiaoheiVideoTitle" type="text" maxlength="80" placeholder="例如：仪征中考家长提醒" />
-              </label>
-              <label>
-                输入文案
-                <textarea id="xiaoheiVideoText" rows="8" maxlength="1800" placeholder="把要做成说明视频的文案粘贴到这里..." required></textarea>
-              </label>
-              <label>
-                视频比例 / 平台
-                <select id="xiaoheiVideoAspectRatio">
-                  <option value="9:16" selected>9:16 竖屏 · 抖音 / 快手 / 视频号 / 小红书</option>
-                  <option value="16:9">16:9 横屏 · B站 / 课程 / 长视频</option>
-                  <option value="1:1">1:1 方屏 · 小红书 / 朋友圈</option>
-                  <option value="4:5">4:5 信息流 · 小红书 / 视频号</option>
-                </select>
-              </label>
-              <div class="cs1-template-note xiaohei-character-note">
-                <strong>小黑 2.0 角色标准</strong>
-                <p>原创可爱 3D 动画潮玩主角：黑色/深炭色、大头小身体、圆润耳朵/小角、玻璃高光眼、小鼻嘴、小尖牙、软胶短绒质感。不会复刻现有 IP 或具名动画工作室风格。</p>
-              </div>
-              <div class="cs1-visual-panel">
-                <label>
-                  分镜数量
-                  <select id="xiaoheiVideoShotCount">
-                    <option value="4">4 镜头 · 极短提醒</option>
-                    <option value="5" selected>5 镜头 · 标准说明</option>
-                    <option value="6">6 镜头 · 更完整叙事</option>
-                  </select>
-                </label>
-                <label>
-                  开头/结尾收放
-                  <select id="xiaoheiVideoIntroOutro">
-                    <option value="soft" selected>标准收放 · 缩放淡入淡出</option>
-                    <option value="paper">白纸展开 · 纸边收束</option>
-                    <option value="none">不添加收放包装</option>
-                  </select>
-                </label>
-                <label>
-                  画面排版
-                  <select id="xiaoheiVideoLayoutVariant">
-                    <option value="left_right" selected>01. 左文右图 · 标准讲解</option>
-                    <option value="wide_text">02. 文案加宽 · 适合长句</option>
-                    <option value="sketch_focus">03. 图示放大 · 强化小黑动作</option>
-                    <option value="center_story">04. 居中叙事 · 标题更醒目</option>
-                  </select>
-                </label>
-                <label>
-                  文字配色
-                  <select id="xiaoheiVideoTextPalette">
-                    <option value="ink_red_orange" selected>01. 黑字 + 红橙批注</option>
-                    <option value="blue_orange">02. 蓝色系统 + 橙色路径</option>
-                    <option value="red_black">03. 红黑警示</option>
-                    <option value="ink_green">04. 墨绿知识感</option>
-                  </select>
-                </label>
-                <label>
-                  背景纸纹
-                  <select id="xiaoheiVideoBackgroundPattern">
-                    <option value="paper_grid" selected>01. 白纸网格</option>
-                    <option value="clean_white">02. 大留白</option>
-                    <option value="warm_paper">03. 暖纸张</option>
-                    <option value="blueprint">04. 蓝图点阵</option>
-                  </select>
-                </label>
-                <label>
-                  图示动效
-                  <select id="xiaoheiVideoMotionVariant">
-                    <option value="ink_pop" selected>01. 墨点弹出</option>
-                    <option value="paper_slide">02. 白纸滑入</option>
-                    <option value="marker_sweep">03. 标记强调</option>
-                    <option value="route_pulse">04. 路线脉冲</option>
-                  </select>
-                </label>
-              </div>
-              <label>
-                背景音乐
-                <select id="xiaoheiVideoBgmMode">
-                  <option value="none" selected>不添加 BGM</option>
-                  <option value="local">使用本地音频并循环铺满</option>
-                </select>
-                <div class="cs1-bgm-row">
-                  <input id="xiaoheiVideoBgmPath" type="text" placeholder="本地音频路径，可选" readonly />
-                  <button class="ghost small" id="xiaoheiVideoChooseBgm" type="button">选择音乐</button>
-                </div>
-                <small>选择本地音乐时请确认授权；如果音乐短于视频，系统会用 ffmpeg 循环并生成等长音轨。</small>
-              </label>
-              <label>
-                结尾行动文案
-                <input id="xiaoheiVideoCtaText" type="text" maxlength="48" placeholder="例如：现在就看路径、节奏和风险" />
-              </label>
-              <div class="cs1-video-actions">
-                <button class="primary" id="xiaoheiVideoGenerate" type="submit">生成小黑说明视频</button>
-                <button class="ghost" id="xiaoheiVideoExample" type="button">填入示例文案</button>
-              </div>
-            </form>
-
-            <aside class="cs1-video-status">
-              <div class="cs1-status-card">
-                <span>当前状态</span>
-                <strong id="xiaoheiVideoStatus">等待输入</strong>
-                <p id="xiaoheiVideoMessage">点击生成后会创建导演稿、分镜 JSON、配图提示、VFX 合约和 HyperFrames MP4。</p>
-              </div>
-              <div class="cs1-progress cs1-status-card" id="xiaoheiVideoProgress" hidden>
-                <div class="cs1-progress-top">
-                  <span id="xiaoheiVideoProgressStage">准备生成</span>
-                  <strong id="xiaoheiVideoProgressPercent">0%</strong>
-                </div>
-                <div class="cs1-progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
-                  <i id="xiaoheiVideoProgressFill"></i>
-                </div>
-              </div>
-              <div class="cs1-output-card" id="xiaoheiVideoResult" hidden>
-                <span>输出文件</span>
-                <code id="xiaoheiVideoOutputPath"></code>
-                <div class="cs1-output-actions">
-                  <button class="secondary" id="xiaoheiVideoOpenFile" type="button">打开视频</button>
-                  <button class="ghost" id="xiaoheiVideoOpenProject" type="button">打开工程目录</button>
-                </div>
-              </div>
-              <div class="cs1-output-card cs1-output-list-card">
-                <span>最近生成视频地址</span>
-                <div class="cs1-output-list" id="xiaoheiVideoOutputList">
-                  <p>正在加载输出记录...</p>
-                </div>
-              </div>
-              <details class="cs1-log-panel">
-                <summary>查看生成日志</summary>
-                <pre id="xiaoheiVideoLog"></pre>
-              </details>
-            </aside>
-          </div>
+          <div class="production-line-notice">正在初始化小黑视频风格生成工作台...</div>
         </section>
       </section>
 

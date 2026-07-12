@@ -4491,6 +4491,38 @@ body[data-active-module="video-output"] .floating-workflow-guide [data-nav="vide
   line-height: 1;
 }
 
+.embedded-production-line {
+  min-height: calc(100vh - 120px);
+}
+
+.production-line-head,
+.production-line-notice {
+  margin-bottom: 12px;
+}
+
+.production-line-head p {
+  margin-top: 5px;
+  color: #7d8797;
+  font-size: 11px;
+}
+
+.production-line-notice {
+  border: 1px solid #2d3542;
+  border-radius: 8px;
+  padding: 10px 12px;
+  color: #aab5c5;
+  background: #10151d;
+}
+
+.production-line-frame {
+  display: block;
+  width: 100%;
+  min-height: calc(100vh - 250px);
+  border: 1px solid #2d3542;
+  border-radius: 8px;
+  background: #f4f6fa;
+}
+
 .workspace,
 .result-area,
 .files-area,
