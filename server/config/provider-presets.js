@@ -89,11 +89,11 @@ export const REWRITE_PROVIDER_PRESETS = {
   },
   minimax: {
     label: "MiniMax",
-    baseUrl: "https://api.minimax.io/v1",
+    baseUrl: "https://api.minimaxi.com",
     model: "MiniMax-M2.5",
     models: ["MiniMax-M2.5", "MiniMax-M2", "MiniMax-Text-01"],
-    applyUrl: "https://platform.minimax.io/",
-    balanceUrl: "https://platform.minimax.io/",
+    applyUrl: "https://platform.minimaxi.com/",
+    balanceUrl: "https://platform.minimaxi.com/",
   },
   xiaomi: {
     label: "小米 MiMo",

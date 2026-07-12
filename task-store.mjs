@@ -1286,6 +1286,22 @@ export function openTaskStore(baseDir) {
     return getVoiceAsset(id);
   }
 
+  function deleteVoiceAsset(id) {
+    const voiceId = Number(id || 0);
+    if (!voiceId) return 0;
+    db.exec("BEGIN IMMEDIATE");
+    try {
+      db.prepare("DELETE FROM voice_ratings WHERE voice_asset_id = ?").run(voiceId);
+      db.prepare("DELETE FROM voice_tests WHERE voice_asset_id = ?").run(voiceId);
+      const result = db.prepare("DELETE FROM voices WHERE id = ?").run(voiceId);
+      db.exec("COMMIT");
+      return Number(result.changes || 0);
+    } catch (error) {
+      db.exec("ROLLBACK");
+      throw error;
+    }
+  }
+
   function setDefaultVoice(id) {
     const voiceId = Number(id);
     const timestamp = nowIso();
@@ -1973,6 +1989,7 @@ export function openTaskStore(baseDir) {
     upsertVoice,
     listVoices,
     updateVoiceAsset,
+    deleteVoiceAsset,
     setDefaultVoice,
     getDefaultVoice,
     recordVoiceUse,
