@@ -25,9 +25,11 @@ try {
   });
 
   const voices = provider.listPresetVoices();
-  assert.equal(voices.length, 10);
-  assert.equal(voices.filter((voice) => voice.gender === "female").length, 5);
-  assert.equal(voices.filter((voice) => voice.gender === "male").length, 5);
+  assert.ok(voices.length >= 20);
+  assert.ok(voices.some((voice) => voice.gender === "female"));
+  assert.ok(voices.some((voice) => voice.gender === "male"));
+  assert.ok(voices.some((voice) => voice.gender === "neutral"));
+  assert.ok(voices.some((voice) => voice.id === "Chinese (Mandarin)_News_Anchor"));
   assert.ok(voices.every((voice) => voice.supportsEmotion && voice.supportsSpeed));
 
   globalThis.fetch = async (url, options = {}) => {
