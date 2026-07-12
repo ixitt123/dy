@@ -219,8 +219,8 @@ flowchart TD
 
 技术落点：
 
-- 复用 `skills/xiaohei-explainer-video/SKILL.md`。
-- 复用 `prompts/xiaohei_explainer_video.md`。
+- 使用 `ui/xiaohei-illustrations.html` 作为小黑视频风格生成工作台。
+- 使用 `ui/modules/ian-xiaohei-app.js` 承载小黑配图软件的完整前端能力。
 - 复用 `server/routes/ian-xiaohei-routes.js` 的小黑配图、TTS、音乐素材、声音克隆和剪映草稿能力。
 - 后续把它接入统一生产线，而不是只作为独立工具页。
 - 浏览器预览和剪映草稿要共享同一份 storyboard、字幕、音频、素材清单。
