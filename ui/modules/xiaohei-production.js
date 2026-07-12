@@ -37,30 +37,10 @@ export function sendConfirmedTtsToXiaohei(job, project = activeProject()) {
 }
 
 export function initXiaoheiProductionModule() {
-  const navConfig = [
-    ["dashboard", "01", "首页"],
-    ["collector", "02", "视频下载与采集"],
-    ["rewrite", "03", "AI 改写"],
-    ["tts", "04", "TTS 语音"],
-    ["cs1-video", "05", "CS1 文字视频"],
-    ["xiaohei-video", "06", "小黑配图视频"],
-    ["settings", "08", "系统设置"],
-  ];
-  for (const [route, index, label] of navConfig) {
-    const button = document.querySelector(`[data-nav="${route}"]`);
-    if (!button) continue;
-    const indexNode = button.querySelector(".nav-index");
-    const labelNode = indexNode?.nextElementSibling;
-    if (indexNode) indexNode.textContent = index;
-    if (labelNode) labelNode.textContent = label;
-  }
-  for (const route of ["transcript", "director", "assets", "video-output"]) {
-    document.querySelectorAll(`[data-nav="${route}"]`).forEach((button) => {
-      const group = button.closest(".nav-group");
-      button.hidden = true;
-      if (group && !group.querySelector(".nav-item:not([hidden])")) group.hidden = true;
-    });
-  }
+  document.querySelectorAll('[data-nav="xiaohei-video"]').forEach((button) => {
+    const labelNode = button.querySelector(".nav-index")?.nextElementSibling || button.querySelector("strong");
+    if (labelNode) labelNode.textContent = "小黑视频风格生成";
+  });
 
   const page = document.querySelector("#xiaoheiVideoPage");
   if (!page) return;
@@ -70,17 +50,17 @@ export function initXiaoheiProductionModule() {
       <div class="result-head production-line-head">
         <div>
           <span class="section-eyebrow">PRODUCTION LINE 02</span>
-          <h2>小黑配图视频</h2>
-          <p>使用已确认的 TTS 音频与对应文案，按真实音频时间轴生成逐段配图和剪映草稿。</p>
+          <h2>小黑视频风格生成</h2>
+          <p>使用文案、TTS 音频、参考音频和小黑配图规则，生成逐段配图、音乐素材和剪映草稿。</p>
         </div>
         <button class="ghost" id="refreshXiaoheiProduction" type="button">刷新工作台</button>
       </div>
-      <div class="production-line-notice" id="xiaoheiHandoffStatus">请先在 TTS 语音页确认音频，再发送到小黑配图视频。</div>
+      <div class="production-line-notice" id="xiaoheiHandoffStatus">可以直接输入文案生成，也可以先在 TTS 语音页确认音频后发送到这里。</div>
       <iframe
         id="xiaoheiProductionFrame"
         class="production-line-frame"
         src="/xiaohei-illustrations.html?embedded=1"
-        title="小黑配图视频工作台"
+        title="小黑视频风格生成工作台"
       ></iframe>
     </section>`;
 
@@ -91,7 +71,7 @@ export function initXiaoheiProductionModule() {
     const handoff = readHandoff();
     status.textContent = handoff
       ? `已接收音频 #${handoff.ttsJob?.id || "-"}：${handoff.title || "未命名项目"}`
-      : "请先在 TTS 语音页确认音频，再发送到小黑配图视频。";
+      : "可以直接输入文案生成，也可以先在 TTS 语音页确认音频后发送到这里。";
     postHandoff(frame, handoff);
   };
 
