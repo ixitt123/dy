@@ -834,6 +834,7 @@ function navigateWorkbench(pageId, options = {}) {
   const normalized = aliases[pageId] || pageId;
   const target = workbenchPages[normalized] ? normalized : "dashboard";
   activeWorkbenchPage = target;
+  document.body.dataset.activeModule = target;
   document.querySelectorAll(".workbench-page").forEach((page) => {
     page.classList.toggle("active", page.dataset.page === target);
   });
