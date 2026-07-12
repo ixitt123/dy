@@ -63,7 +63,7 @@
 - AI 导演系统：`server/director/director-service.js`
 - VFO：`server/vfo/vfo-service.js`
 - 成片中心：`server/video-product/video-product-service.js`
-- 小黑视频接口：`server/routes/xiaohei-video-routes.js`
+- 小黑视频风格生成接口：`server/routes/ian-xiaohei-routes.js`
 - 成片输出接口：`server/routes/video-output-routes.js`
 - 项目知识与规则：`skills/`、`prompts/`、`config/`
 
@@ -221,7 +221,7 @@ flowchart TD
 
 - 复用 `skills/xiaohei-explainer-video/SKILL.md`。
 - 复用 `prompts/xiaohei_explainer_video.md`。
-- 复用 `server/routes/xiaohei-video-routes.js` 当前 HyperFrames 预览生成能力。
+- 复用 `server/routes/ian-xiaohei-routes.js` 的小黑配图、TTS、音乐素材、声音克隆和剪映草稿能力。
 - 后续把它接入统一生产线，而不是只作为独立工具页。
 - 浏览器预览和剪映草稿要共享同一份 storyboard、字幕、音频、素材清单。
 
@@ -322,7 +322,7 @@ created
 - `/api/rewrite/*`：改写、评分、版本保存。
 - `/api/tts/*`：语音生成、试听、重试、声音资产。
 - `/api/director/*`：导演稿、storyboard、导出。
-- `/api/xiaohei-video/*`：小黑预览工程和镜头包。
+- `/api/ian-xiaohei/*`：小黑视频风格生成、TTS、音乐素材、配图、输出记录和剪映草稿。
 - `/api/video-product/*`：浏览器预览、剪映草稿、素材包、输出记录。
 - `/api/assets/*`：素材库检索、标签、打开文件。
 - `/api/settings/*`：Provider、路径、默认配置。
