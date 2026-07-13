@@ -6292,7 +6292,7 @@ ttsVoiceQuickPanel?.addEventListener("click", async (event) => {
       return;
     }
     if (button.classList.contains("tts-voice-delete")) {
-      if (!window.confirm(`永久删除“${asset.voice_name || asset.voice_id}”？此操作会删除 SQLite 记录；克隆音色会同步删除本地声音文件。`)) return;
+      if (!window.confirm(`永久删除“${asset.voice_name || asset.voice_id}”？预设音色会从界面永久移除；克隆音色会删除 SQLite 记录和本地声音文件。`)) return;
       await fetchJson("/api/voice-assets/delete", {
         method: "POST",
         headers: { "content-type": "application/json" },
