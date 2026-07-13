@@ -3065,14 +3065,54 @@ function formatVoiceTime(value) {
 
 function filteredVoiceAssets() {
   const rows = [...voiceAssets];
-  if (voiceAssetFilter === "preset") return rows.filter((asset) => asset.voice_type === "preset");
-  if (voiceAssetFilter === "clone") return rows.filter((asset) => asset.voice_type === "clone");
-  if (voiceAssetFilter === "favorite") return rows.filter((asset) => asset.is_favorite);
+  const providerValue = voiceProviderFilter?.value || "all";
+  const categoryValue = voiceCategoryFilter?.value || "all";
+  let filtered = rows;
+  if (voiceAssetFilter === "preset") filtered = filtered.filter((asset) => asset.voice_type === "preset");
+  if (voiceAssetFilter === "clone") filtered = filtered.filter((asset) => asset.voice_type === "clone");
+  if (voiceAssetFilter === "favorite") filtered = filtered.filter((asset) => asset.is_favorite);
   if (voiceAssetFilter === "recent") {
-    return rows.filter((asset) => asset.use_count > 0).sort((a, b) => String(b.last_used_at).localeCompare(String(a.last_used_at)));
+    filtered = filtered.filter((asset) => asset.use_count > 0).sort((a, b) => String(b.last_used_at).localeCompare(String(a.last_used_at)));
   }
-  if (voiceAssetFilter === "default") return rows.filter((asset) => asset.is_default);
-  return rows;
+  if (voiceAssetFilter === "default") filtered = filtered.filter((asset) => asset.is_default);
+  if (providerValue !== "all") filtered = filtered.filter((asset) => asset.provider === providerValue);
+  if (categoryValue !== "all") filtered = filtered.filter((asset) => normalizeTtsVoiceCategory({
+    category: asset.metadata?.category,
+    useCase: asset.metadata?.useCase,
+    description: asset.description || asset.metadata?.description,
+    name: asset.voice_name,
+  }) === categoryValue);
+  return filtered;
+}
+
+function renderVoiceLibraryFilters() {
+  if (voiceProviderFilter) {
+    const previous = voiceProviderFilter.value || "all";
+    const providers = [...new Set(voiceAssets.map((asset) => asset.provider).filter(Boolean))]
+      .sort((a, b) => (ttsProviderConfigs.find((item) => item.id === a)?.label || a).localeCompare(ttsProviderConfigs.find((item) => item.id === b)?.label || b, "zh-CN"));
+    voiceProviderFilter.innerHTML = [
+      '<option value="all">全部平台</option>',
+      ...providers.map((providerId) => {
+        const label = ttsProviderConfigs.find((item) => item.id === providerId)?.label || providerId;
+        return `<option value="${escapeHtml(providerId)}">${escapeHtml(label)}</option>`;
+      }),
+    ].join("");
+    voiceProviderFilter.value = providers.includes(previous) ? previous : "all";
+  }
+  if (voiceCategoryFilter) {
+    const previous = voiceCategoryFilter.value || "all";
+    const categories = sortTtsVoiceCategories(voiceAssets.map((asset) => normalizeTtsVoiceCategory({
+      category: asset.metadata?.category,
+      useCase: asset.metadata?.useCase,
+      description: asset.description || asset.metadata?.description,
+      name: asset.voice_name,
+    })));
+    voiceCategoryFilter.innerHTML = [
+      '<option value="all">全部分类</option>',
+      ...categories.map((category) => `<option value="${escapeHtml(category)}">${escapeHtml(category)}</option>`),
+    ].join("");
+    voiceCategoryFilter.value = categories.includes(previous) ? previous : "all";
+  }
 }
 
 function renderVoiceSummary() {
@@ -3096,15 +3136,21 @@ function renderVoiceSummary() {
 
 function renderVoiceAssets() {
   renderVoiceSummary();
+  renderVoiceLibraryFilters();
   const rows = filteredVoiceAssets();
   if (!rows.length) {
     voiceAssetsGrid.innerHTML = '<div class="voice-empty">当前分类还没有声音资产。</div>';
     return;
   }
-  voiceAssetsGrid.innerHTML = rows.map((asset) => {
+  const body = rows.map((asset) => {
     const provider = ttsProviderConfigs.find((item) => item.id === asset.provider);
-    const tags = Array.isArray(asset.tags) ? asset.tags : [];
     const description = asset.description || asset.metadata?.description || "暂无声音描述";
+    const category = normalizeTtsVoiceCategory({
+      category: asset.metadata?.category,
+      useCase: asset.metadata?.useCase,
+      description,
+      name: asset.voice_name,
+    });
     const rating = asset.rating_count
       ? `${asset.average_stars} 星 / ${asset.average_score} 分`
       : "尚未评分";
@@ -3114,45 +3160,57 @@ function renderVoiceAssets() {
         ? `<audio class="voice-card-audio" controls preload="none" src="${escapeHtml(asset.preview_url)}"></audio>`
         : "";
     return `
-      <article class="voice-asset-card ${asset.is_default ? "default" : ""}" data-voice-asset-id="${asset.id}">
-        <div class="voice-card-head">
-          <div>
-            <h3>${escapeHtml(asset.voice_name || asset.voice_id)}</h3>
-            <p>${escapeHtml(asset.voice_id)} · v${asset.version}</p>
+      <tr class="voice-asset-row voice-asset-card ${asset.is_default ? "default" : ""}" data-voice-asset-id="${asset.id}">
+        <td>
+          <strong>${escapeHtml(asset.voice_name || asset.voice_id)}</strong>
+          <small>${escapeHtml(asset.voice_id)} · v${asset.version}</small>
+        </td>
+        <td>${escapeHtml(provider?.label || asset.provider)}</td>
+        <td>${escapeHtml(category)}</td>
+        <td>${escapeHtml(asset.metadata?.target_model || asset.metadata?.model || "-")}</td>
+        <td>
+          <span class="voice-type-pill">${asset.voice_type === "preset" ? "预设" : "克隆"}</span>
+          ${asset.is_default ? '<span class="voice-type-pill">默认</span>' : ""}
+          ${asset.is_favorite ? '<span class="voice-type-pill">收藏</span>' : ""}
+          <span class="voice-type-pill">${escapeHtml(voiceStatusLabel(asset.status))}</span>
+        </td>
+        <td>${escapeHtml(description)}</td>
+        <td>${audio || '<span class="muted-text">无试听</span>'}</td>
+        <td>${escapeHtml(rating)}<small>使用 ${asset.use_count || 0} 次</small></td>
+        <td>
+          <div class="voice-table-actions">
+            <button class="ghost small voice-use" type="button">用于配音</button>
+            <button class="ghost small voice-test" type="button">测试</button>
+            <button class="ghost small voice-favorite" type="button">${asset.is_favorite ? "取消收藏" : "收藏"}</button>
+            <button class="ghost small voice-default" type="button">${asset.is_default ? "默认" : "设默认"}</button>
+            ${asset.voice_type === "clone" ? '<button class="ghost small voice-edit" type="button">编辑</button>' : ""}
+            ${asset.status === "clone_failed" ? '<button class="ghost small voice-retry" type="button">重试</button>' : ""}
+            ${asset.voice_type === "clone" ? '<button class="ghost small danger-action voice-archive" type="button">归档</button>' : ""}
           </div>
-          <div class="voice-card-badges">
-            <span>${asset.voice_type === "preset" ? "预设" : "克隆"}</span>
-            ${asset.is_default ? "<span>默认</span>" : ""}
-            ${asset.is_favorite ? "<span>收藏</span>" : ""}
-            <span>${escapeHtml(voiceStatusLabel(asset.status))}</span>
-          </div>
-        </div>
-        <p class="voice-card-description">${escapeHtml(description)}</p>
-        <div class="voice-card-tags">
-          ${tags.length ? tags.map((tag) => `<span>${escapeHtml(tag)}</span>`).join("") : "<span>未设置标签</span>"}
-        </div>
-        ${audio}
-        <div class="voice-card-meta">
-          <span>${escapeHtml(provider?.label || asset.provider)}</span>
-          <span>${escapeHtml(rating)}</span>
-        </div>
-        <div class="voice-card-meta">
-          <span>使用 ${asset.use_count || 0} 次</span>
-          <span>${escapeHtml(formatVoiceTime(asset.last_used_at))}</span>
-        </div>
-        <div class="voice-card-actions">
-          <button class="ghost voice-use" type="button">用于配音</button>
-          <button class="ghost voice-test" type="button">测试声音</button>
-          <button class="ghost voice-favorite" type="button">${asset.is_favorite ? "取消收藏" : "收藏"}</button>
-          <button class="ghost voice-default" type="button">${asset.is_default ? "当前默认" : "设为默认"}</button>
-          <button class="ghost voice-version" type="button">新版本</button>
-          <button class="ghost voice-edit" type="button">编辑</button>
-          ${asset.status === "clone_failed" ? '<button class="ghost voice-retry" type="button">重试复刻</button>' : ""}
-          ${asset.voice_type === "clone" ? '<button class="ghost danger-action voice-archive" type="button">归档</button>' : ""}
-        </div>
-      </article>
+        </td>
+      </tr>
     `;
   }).join("");
+  voiceAssetsGrid.innerHTML = `
+    <div class="voice-table-wrap">
+      <table class="voice-assets-table">
+        <thead>
+          <tr>
+            <th>音色</th>
+            <th>平台</th>
+            <th>分类</th>
+            <th>模型</th>
+            <th>状态</th>
+            <th>说明</th>
+            <th>试听</th>
+            <th>评分</th>
+            <th>操作</th>
+          </tr>
+        </thead>
+        <tbody>${body}</tbody>
+      </table>
+    </div>
+  `;
 }
 
 async function loadVoiceAssets({ applyDefault = false } = {}) {
