@@ -6682,6 +6682,17 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
+    if (req.method === "POST" && url.pathname === "/api/voice-assets/preview") {
+      const body = await readJsonBody(req, { maxBytes: 64 * 1024 });
+      const result = await voiceAssetService.generatePreview(Number(body.id || body.voice_asset_id || 0), body);
+      if (result.error) {
+        sendJson(res, 400, { ok: false, message: result.error });
+        return;
+      }
+      sendJson(res, result.cached ? 200 : 201, { ok: true, ...result });
+      return;
+    }
+
     if (req.method === "POST" && url.pathname === "/api/voice-assets/delete") {
       const body = await readJsonBody(req);
       const result = await voiceAssetService.deletePermanent(Number(body.id || 0));

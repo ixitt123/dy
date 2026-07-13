@@ -16,6 +16,7 @@ const MIME_EXTENSIONS = {
 };
 
 const VISIBLE_TTS_PROVIDER_IDS = ["aliyun_bailian", "minimax"];
+const DEFAULT_VOICE_PREVIEW_TEXT = "你好，这是当前音色试听。表达自然，节奏清楚，重点明确。";
 
 function safeJson(value, fallback) {
   try {
@@ -540,6 +541,49 @@ export function createVoiceAssetService({ baseDir, taskStore, ttsService, getSet
     return resolved && isWithin(cloneDraftsDir, resolved) && fs.existsSync(resolved) ? resolved : "";
   }
 
+  async function generatePreview(id, input = {}) {
+    const assetId = Number(id || 0);
+    const asset = taskStore.getVoiceAsset(assetId);
+    if (!asset) return { error: "声音资产不存在。" };
+    if (asset.archived || asset.status !== "active") return { error: "该音色不可用，不能生成试听。" };
+    if (!String(asset.voice_id || "").trim() || String(asset.voice_id || "").startsWith("pending-")) {
+      return { error: "该音色缺少可试听的 voice_id。" };
+    }
+    if (!VISIBLE_TTS_PROVIDER_IDS.includes(asset.provider)) {
+      return { error: "该平台已从 TTS 页面移除，不能生成试听。" };
+    }
+
+    const externalPreview = getAsset(assetId)?.preview_url || "";
+    const localPreviewPath = resolveAssetAudioPath(assetId, "preview");
+    if (externalPreview && !externalPreview.includes("/api/voice-assets/audio")) {
+      return { asset: getAsset(assetId), cached: true, preview_url: externalPreview };
+    }
+    if (localPreviewPath) {
+      return { asset: getAsset(assetId), cached: true, preview_url: `/api/voice-assets/audio?id=${assetId}&kind=preview` };
+    }
+
+    const metadata = safeJson(asset.metadata_json, {});
+    const filePath = path.join(previewsDir, `${Date.now()}-${safeFileSegment(asset.voice_name || asset.voice_id)}-${randomUUID().slice(0, 8)}.mp3`);
+    const result = await ttsService.generateStaticPreview({
+      provider: asset.provider,
+      voice_id: asset.voice_id,
+      voice_name: asset.voice_name,
+      model: String(input.model || metadata.target_model || metadata.model || ""),
+      text: String(input.text || metadata.previewText || metadata.preview_text || DEFAULT_VOICE_PREVIEW_TEXT).trim() || DEFAULT_VOICE_PREVIEW_TEXT,
+      outputPath: filePath,
+    });
+    if (result.error || !fs.existsSync(filePath)) {
+      if (fs.existsSync(filePath)) fs.rmSync(filePath, { force: true });
+      return { error: [result.error || "试听生成失败。", result.detail || ""].filter(Boolean).join(" ") };
+    }
+    taskStore.updateVoiceAsset(assetId, { preview_path: filePath });
+    return {
+      asset: getAsset(assetId),
+      cached: false,
+      preview_url: `/api/voice-assets/audio?id=${assetId}&kind=preview`,
+    };
+  }
+
   async function retryClone(id, input = {}) {
     const asset = taskStore.getVoiceAsset(id);
     if (!asset) return { error: "声音资产不存在。" };
@@ -803,6 +847,7 @@ export function createVoiceAssetService({ baseDir, taskStore, ttsService, getSet
     getDefault,
     archive,
     deletePermanent,
+    generatePreview,
     createCloneDraft,
     confirmCloneDraft,
     discardCloneDraft,
