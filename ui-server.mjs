@@ -2493,7 +2493,7 @@ function findExistingFile(videoInfo, extensions, marker = "") {
   for (const file of candidates) {
     const lower = file.name.toLowerCase();
     if ((videoId && lower.includes(videoId)) || (safeTitle && lower.startsWith(safeTitle))) {
-      const filePath = path.join(downloadsDir, file.name);
+      const filePath = file.path || path.join(downloadsDir, file.name);
       if (fs.existsSync(filePath) && fs.statSync(filePath).size > 0) return filePath;
     }
   }
@@ -3809,16 +3809,12 @@ function createTranscriptJob(shareLink, apiKey) {
     updateJob({ percent: 92, message: "正在自动校正文案" });
     const transcriptText = await correctTranscriptWithRewriteModel(rawTranscriptText, videoInfo);
     const transcriptPath = saveTranscript(videoInfo, transcriptText);
-    updateJob({ percent: 96, message: "正在进行 AI 分析" });
-    const analysis = await analyzeTranscriptWithDashScope(apiKey, transcriptText, videoInfo);
-    const analysisPath = saveAnalysis(videoInfo, analysis);
     updateJob({
       status: "done",
       percent: 100,
-      message: "文案和 AI 分析完成",
+      message: "文案提取和自动校正完成；未点击分析，已跳过 AI 分析",
       text: transcriptText,
       transcriptPath,
-      analysisPath,
       files: listDownloads(),
     });
   })()
@@ -3865,7 +3861,7 @@ function createLocalVideoTranscriptJob(filePath, apiKey) {
     normalizedUrl: `local:${resolvedPath.toLowerCase()}`,
     sourceText: resolvedPath,
     transcriptEnabled: true,
-    analysisEnabled: true,
+    analysisEnabled: false,
     onlyTranscript: true,
   }]);
   const task = imported.tasks[0] || imported.duplicates[0];
@@ -3921,32 +3917,20 @@ function createLocalVideoTranscriptJob(filePath, apiKey) {
     const transcriptText = await correctTranscriptWithRewriteModel(rawTranscriptText, videoInfo);
     const transcriptPath = saveTranscript(videoInfo, transcriptText);
     const subtitlePath = await ytDlpService.createApproximateSubtitle(resolvedPath, transcriptText, "", {});
-    updateJob({ percent: 94, message: "正在进行 AI 分析" });
     taskStore.updateTask(task.id, {
       txt_path: transcriptPath,
       subtitle_path: subtitlePath,
-      progress: 94,
-      message: "正在进行 AI 分析",
-    });
-    const analysis = await analyzeTranscriptWithDashScope(activeApiKey, transcriptText, videoInfo);
-    const analysisPath = saveAnalysis(videoInfo, analysis);
-    taskStore.updateTask(task.id, {
-      txt_path: transcriptPath,
-      subtitle_path: subtitlePath,
-      analysis_path: analysisPath,
-      ai_json: JSON.stringify(analysis),
       status: TASK_STATUS.DONE,
       progress: 100,
-      message: "本地视频文案和 AI 分析完成",
+      message: "本地视频文案、字幕和自动校正完成；未点击分析，已跳过 AI 分析",
       completed_at: new Date().toISOString(),
     });
     updateJob({
       status: "done",
       percent: 100,
-      message: "本地视频文案和 AI 分析完成",
+      message: "本地视频文案、字幕和自动校正完成；未点击分析，已跳过 AI 分析",
       text: transcriptText,
       transcriptPath,
-      analysisPath,
       files: listDownloads(),
     });
   })()
@@ -4260,22 +4244,11 @@ async function completeTaskWithTranscript(task, videoInfo, messagePrefix = "", s
   }
 
   if (task.analysis_enabled && transcriptText) {
-    if (!apiKey) {
-      updates.message = `${messagePrefix}视频和文案已完成；未配置 DashScope API Key，已跳过 AI 分析`;
-      return updates;
-    }
-    taskStore.updateTask(task.id, {
-      status: TASK_STATUS.TRANSCRIBING,
-      progress: 97,
-      message: "正在进行 AI 分析",
-    });
-    const analysis = await analyzeTranscriptWithDashScope(apiKey, transcriptText, videoInfo, signal);
-    const analysisPath = saveAnalysis(videoInfo, analysis);
-    updates.analysis_path = analysisPath;
-    updates.ai_json = JSON.stringify(analysis);
+    updates.message = `${messagePrefix}视频和文案已完成；未点击分析，已跳过 AI 分析`;
+    return updates;
   }
 
-  updates.message = `${messagePrefix}${txtPath ? (updates.analysis_path ? "视频、文案和 AI 分析已完成" : "视频和文案已完成") : "视频已完成"}`;
+  updates.message = `${messagePrefix}${txtPath ? "视频和文案已完成" : "视频已完成"}`;
   return updates;
 }
 
@@ -4539,19 +4512,29 @@ function startTaskQueue() {
 }
 
 function listDownloads() {
-  return fs
-    .readdirSync(downloadsDir, { withFileTypes: true })
-    .filter((entry) => entry.isFile())
-    .map((entry) => {
-      const filePath = path.join(downloadsDir, entry.name);
+  const rows = [];
+  const walk = (dir) => {
+    if (!fs.existsSync(dir)) return;
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const filePath = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        walk(filePath);
+        continue;
+      }
+      if (!entry.isFile()) continue;
       const stat = fs.statSync(filePath);
-      return {
-        name: entry.name,
+      const relativePath = path.relative(downloadsDir, filePath);
+      rows.push({
+        name: relativePath,
+        fileName: entry.name,
+        path: filePath,
         size: stat.size,
         updatedAt: stat.mtime.toISOString(),
-      };
-    })
-    .sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
+      });
+    }
+  };
+  walk(downloadsDir);
+  return rows.sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
 }
 
 function safeJsonParse(value) {
