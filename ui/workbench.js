@@ -612,7 +612,7 @@ function setupRewriteStudio() {
     </label>
     <div class="rewrite-simple-note">
       <strong>默认生成 1 个版本</strong>
-      <span>需要更多风格时可增加输出框，再选择最佳版本发送到配音或 AI 导演。</span>
+      <span>需要更多风格时可增加输出框，再选择最佳版本发送到配音或视频成片。</span>
     </div>
   `;
   settingsLane.appendChild(simpleControls);

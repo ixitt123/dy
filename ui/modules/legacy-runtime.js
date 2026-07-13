@@ -2259,7 +2259,7 @@ function renderDirectorRail(project = activeDirectorRailProject) {
         <div><span>镜头</span><strong>${escapeHtml(String(scenes))}</strong></div>
       </div>
       <div class="rail-task-group">
-        <span class="rail-subheading">导演文案</span>
+        <span class="rail-subheading">分镜文案</span>
         <small>${escapeHtml(textPreview || "等待提交文案。")}</small>
       </div>
       ${error ? `<div class="rail-failure-note">错误原因：${escapeHtml(error)}</div>` : ""}
@@ -2268,7 +2268,7 @@ function renderDirectorRail(project = activeDirectorRailProject) {
         <div class="video-product-output-files">${directorOutputLinks(project)}</div>
       </div>
       <div class="rail-task-actions">
-        <button type="button" data-nav="director">查看导演</button>
+        <button type="button" data-nav="video-output">查看成片</button>
       </div>
     </div>
   `;
@@ -2284,9 +2284,9 @@ function renderDirectorRailLists(projects = directorProjectsState) {
     const completed = rows.filter((project) => project.status === "completed").slice(0, 5);
     if (completed.length) {
       railRecentOutput.innerHTML = completed.map((project) => `
-        <button class="rail-list-item" type="button" data-nav="director">
-          <span>#${project.id} AI 导演稿 · ${escapeHtml(project.platform || "")}</span>
-          <strong>${escapeHtml(project.title || "导演稿已完成")}</strong>
+        <button class="rail-list-item" type="button" data-nav="video-output">
+          <span>#${project.id} 分镜规划 · ${escapeHtml(project.platform || "")}</span>
+          <strong>${escapeHtml(project.title || "分镜已完成")}</strong>
         </button>
       `).join("");
     }
@@ -2295,8 +2295,8 @@ function renderDirectorRailLists(projects = directorProjectsState) {
     const failed = rows.filter((project) => project.status === "failed").slice(0, 4);
     if (failed.length) {
       railErrors.innerHTML = failed.map((project) => `
-        <button class="rail-list-item error-item" type="button" data-nav="director">
-          <span>#${project.id} AI 导演稿失败</span>
+        <button class="rail-list-item error-item" type="button" data-nav="video-output">
+          <span>#${project.id} 分镜规划失败</span>
           <strong>${escapeHtml(project.metadata?.error || project.error || "未知错误")}</strong>
         </button>
       `).join("");
