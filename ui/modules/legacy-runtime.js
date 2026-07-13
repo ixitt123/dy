@@ -1699,15 +1699,6 @@ function renderMomentsImages(images = []) {
   }).join("");
 }
 
-function fileToDataUrl(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result || ""));
-    reader.onerror = () => reject(reader.error || new Error("读取文件失败"));
-    reader.readAsDataURL(file);
-  });
-}
-
 async function uploadMomentsMaterial(file, { promptIndex = null } = {}) {
   if (!file) return null;
   const imageData = await fileToDataUrl(file);
