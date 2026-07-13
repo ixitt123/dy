@@ -59,6 +59,39 @@ const mcpEntry = path.join(
   "dist",
   "index.js"
 );
+
+function parseEnvFile(filePath) {
+  const values = {};
+  if (!fs.existsSync(filePath)) return values;
+  const raw = fs.readFileSync(filePath, "utf8");
+  for (const line of raw.split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) continue;
+    const match = trimmed.match(/^([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$/);
+    if (!match) continue;
+    let value = match[2].trim();
+    if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+      value = value.slice(1, -1);
+    }
+    values[match[1]] = value;
+  }
+  return values;
+}
+
+const localEnv = [
+  ".env",
+  ".env.local",
+  ".env.development",
+  ".env.development.local",
+].reduce((acc, name) => ({ ...acc, ...parseEnvFile(path.join(__dirname, name)) }), {});
+
+function localConfigValue(keys = []) {
+  for (const key of keys) {
+    const value = String(process.env[key] || localEnv[key] || "").trim();
+    if (value) return value;
+  }
+  return "";
+}
 const autoClose = process.argv.includes("--auto-close");
 const pageSessions = new Map();
 const activeChildProcesses = new Set();
@@ -1497,6 +1530,107 @@ function saveUnifiedProvider(settings, body) {
   throw new Error("未知 API 服务");
 }
 
+const LOCAL_PROVIDER_ENV = {
+  dashscope: {
+    apiKey: ["DASHSCOPE_API_KEY", "DASHSCOPE_APIKEY", "QWEN_API_KEY", "BAILIAN_API_KEY", "ALIYUN_API_KEY", "ALIBABA_CLOUD_API_KEY"],
+    baseUrl: ["DASHSCOPE_BASE_URL", "QWEN_BASE_URL"],
+    model: ["DASHSCOPE_MODEL", "QWEN_MODEL"],
+  },
+  deepseek: {
+    apiKey: ["DEEPSEEK_API_KEY"],
+    baseUrl: ["DEEPSEEK_BASE_URL"],
+    model: ["DEEPSEEK_MODEL"],
+  },
+  openai: {
+    apiKey: ["OPENAI_API_KEY"],
+    baseUrl: ["OPENAI_BASE_URL"],
+    model: ["OPENAI_MODEL"],
+  },
+  moonshot: {
+    apiKey: ["MOONSHOT_API_KEY", "KIMI_API_KEY"],
+    baseUrl: ["MOONSHOT_BASE_URL", "KIMI_BASE_URL"],
+    model: ["MOONSHOT_MODEL", "KIMI_MODEL"],
+  },
+  zhipu: {
+    apiKey: ["ZHIPU_API_KEY", "GLM_API_KEY"],
+    baseUrl: ["ZHIPU_BASE_URL"],
+    model: ["ZHIPU_MODEL", "GLM_MODEL"],
+  },
+  volcengine: {
+    apiKey: ["ARK_API_KEY", "VOLCENGINE_API_KEY", "DOUBAO_API_KEY"],
+    baseUrl: ["ARK_BASE_URL", "VOLCENGINE_BASE_URL"],
+    model: ["ARK_MODEL", "DOUBAO_MODEL"],
+  },
+  qianfan: {
+    apiKey: ["QIANFAN_API_KEY", "BAIDU_API_KEY"],
+    baseUrl: ["QIANFAN_BASE_URL"],
+    model: ["QIANFAN_MODEL"],
+  },
+  hunyuan: {
+    apiKey: ["HUNYUAN_API_KEY", "TENCENT_HUNYUAN_API_KEY"],
+    baseUrl: ["HUNYUAN_BASE_URL"],
+    model: ["HUNYUAN_MODEL"],
+  },
+  minimax: {
+    apiKey: ["MINIMAX_API_KEY"],
+    baseUrl: ["MINIMAX_BASE_URL"],
+    model: ["MINIMAX_MODEL"],
+  },
+  xiaomi: {
+    apiKey: ["XIAOMI_API_KEY", "MIMO_API_KEY"],
+    baseUrl: ["XIAOMI_BASE_URL", "MIMO_BASE_URL"],
+    model: ["XIAOMI_MODEL", "MIMO_MODEL"],
+  },
+  openrouter: {
+    apiKey: ["OPENROUTER_API_KEY"],
+    baseUrl: ["OPENROUTER_BASE_URL"],
+    model: ["OPENROUTER_MODEL"],
+  },
+  custom: {
+    apiKey: ["CUSTOM_OPENAI_API_KEY", "LOCAL_LLM_API_KEY"],
+    baseUrl: ["CUSTOM_OPENAI_BASE_URL", "LOCAL_LLM_BASE_URL", "OLLAMA_BASE_URL"],
+    model: ["CUSTOM_OPENAI_MODEL", "LOCAL_LLM_MODEL", "OLLAMA_MODEL"],
+  },
+  aliyun_bailian: {
+    apiKey: ["DASHSCOPE_API_KEY", "DASHSCOPE_APIKEY", "QWEN_API_KEY", "BAILIAN_API_KEY", "ALIYUN_API_KEY", "ALIBABA_CLOUD_API_KEY"],
+    workspaceId: ["DASHSCOPE_WORKSPACE_ID", "ALIYUN_BAILIAN_WORKSPACE_ID"],
+    model: ["ALIYUN_TTS_MODEL", "DASHSCOPE_TTS_MODEL"],
+  },
+  fish_audio: {
+    apiKey: ["FISH_AUDIO_API_KEY"],
+    baseUrl: ["FISH_AUDIO_BASE_URL"],
+    model: ["FISH_AUDIO_MODEL"],
+  },
+  custom_tts: {
+    apiKey: ["CUSTOM_TTS_API_KEY"],
+    baseUrl: ["CUSTOM_TTS_BASE_URL"],
+    model: ["CUSTOM_TTS_MODEL"],
+  },
+};
+
+function applyLocalProviderConfig(settings, providerId) {
+  const id = String(providerId || "").trim();
+  const keys = LOCAL_PROVIDER_ENV[id];
+  if (!keys) return false;
+  const body = {
+    id,
+    apiKey: localConfigValue(keys.apiKey || []),
+    baseUrl: localConfigValue(keys.baseUrl || []),
+    workspaceId: localConfigValue(keys.workspaceId || []),
+    model: localConfigValue(keys.model || []),
+    setDefault: true,
+  };
+  if (!body.apiKey && !body.baseUrl && !body.workspaceId && !body.model) return false;
+  saveUnifiedProvider(settings, body);
+  if (id === "dashscope" && body.apiKey) {
+    saveUnifiedProvider(settings, { id: "aliyun_bailian", apiKey: body.apiKey, setDefault: false });
+  }
+  if (id === "aliyun_bailian" && body.apiKey) {
+    saveUnifiedProvider(settings, { id: "dashscope", apiKey: body.apiKey, setDefault: false });
+  }
+  return true;
+}
+
 function applyModelMapping(settings, mapping) {
   const normalized = { ...DEFAULT_MODEL_MAPPING, ...(mapping || {}) };
   settings.modelMap = normalized;
@@ -1588,6 +1722,7 @@ async function validateAndSaveRequiredProvider(body = {}) {
   const current = readSettings();
   const draft = normalizeSettings(JSON.parse(JSON.stringify(current)));
   saveUnifiedProvider(draft, body);
+  applyLocalProviderConfig(draft, id);
 
   if (draft.rewriteProviders?.[id]) {
     const provider = draft.rewriteProviders[id];
