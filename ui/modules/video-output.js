@@ -652,7 +652,7 @@ function payload({ forceExecution = false } = {}) {
 
 function isForceableVideoProductError(message = "") {
   const text = String(message || "");
-  return /相似度|随机音频匹配|质量审查未通过|码率偏低|标题仍是内部导演稿名称|缺少 BGM 素材/.test(text);
+  return /相似度|随机音频匹配|质量审查未通过|码率偏低|标题仍是内部生产线名称|缺少 BGM 素材/.test(text);
 }
 
 function confirmForceVideoProduct(message = "") {

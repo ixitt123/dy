@@ -341,7 +341,7 @@ async function linkCurrentProjectAsset(assetType, assetId, name = "", metadata =
 }
 
 function projectAssetCard(asset) {
-  const typeLabels = { image: "图片", video: "视频", bgm: "BGM", sfx: "音效", subtitle: "字幕", cover: "封面", tts: "配音", director: "导演稿" };
+  const typeLabels = { image: "图片", video: "视频", bgm: "BGM", sfx: "音效", subtitle: "字幕", cover: "封面", tts: "配音", director: "生产线分镜" };
   const imagePath = asset.assetType === "image" ? String(asset.metadata?.path || asset.metadata?.file_path || "") : "";
   const thumbnail = imagePath ? `/api/image/thumbnail?width=320&path=${encodeURIComponent(imagePath)}` : "";
   const original = imagePath ? `/api/image/file?path=${encodeURIComponent(imagePath)}` : "";
@@ -434,11 +434,11 @@ async function refreshProjectReadiness() {
 
 async function syncCurrentVideoProductSelections() {
   if (!currentVideoProjectId()) {
-    const directorSelect = typeof videoProductDirector !== "undefined" ? videoProductDirector : null;
-    const title = directorSelect?.selectedOptions?.[0]?.textContent
+    const audioSelect = typeof videoProductAudio !== "undefined" ? videoProductAudio : null;
+    const title = audioSelect?.selectedOptions?.[0]?.textContent
       ?.replace(/^#\d+\s*/, "")
       .replace(/路.*$/, "")
-      .trim() || "剪映草稿项目";
+      .trim() || "短视频成片项目";
     const created = await createVideoProject({
       title,
       videoType: "短视频",
@@ -458,18 +458,6 @@ async function syncCurrentVideoProductSelections() {
     if (audio.text) await linkCurrentProjectAsset("selected_rewrite", `tts-text-${audio.id}`, "当前配音文案", { text: audio.text, source: "tts" });
     const audioTitle = audio.title || audio.seo_title || audio.publish_title || audio.platform_titles?.douyin || audio.voice_name || `配音 #${audio.id}`;
     await linkCurrentProjectAsset("tts", audio.id, audioTitle, { ...audio, title: audioTitle, source: "local_upload" });
-  }
-
-  const directorId = Number(typeof videoProductDirector !== "undefined" ? videoProductDirector.value : 0);
-  if (directorId) {
-    const fullDirector = await fetch(`/api/director/project?id=${encodeURIComponent(directorId)}`).then((response) => response.json()).catch(() => ({}));
-    const director = fullDirector.project || videoProductSources.directors?.find((item) => Number(item.id) === directorId) || {};
-    await linkCurrentProjectAsset("director", directorId, director.title || `导演稿 #${directorId}`, {
-      ...director,
-      sceneCount: director.result?.storyboard?.length || director.scene_count || 0,
-      subtitleTimeline: director.result?.subtitle_timeline || director.subtitle_timeline || [],
-      source: "ai_generated",
-    });
   }
 
   const imageAssets = typeof videoProductSources !== "undefined" ? videoProductSources.imageAssets || [] : [];
@@ -751,7 +739,7 @@ function setupDirectorStudio() {
 
   addLaneHeading(sourceLane, "文案来源", "手动输入或选择已有内容");
   addLaneHeading(settingsLane, "导演设置", "类型、风格、平台、节奏和镜头");
-  addLaneHeading(resultLane, "导演稿结果", "镜头、字幕、画面提示词和导出");
+  addLaneHeading(resultLane, "生产线分镜结果", "镜头、字幕、画面提示词和导出");
 
   oldWorkbench.remove();
   studio.append(sourceLane, settingsLane, resultLane);
@@ -1080,7 +1068,7 @@ function friendlyVideoProductError(value) {
 }
 
 function isForceableVideoProductError(message = "") {
-  return /相似度|随机音频匹配|质量审查未通过|码率偏低|标题仍是内部导演稿名称|缺少 BGM 素材/.test(String(message || ""));
+  return /相似度|随机音频匹配|质量审查未通过|码率偏低|标题仍是内部生产线名称|缺少 BGM 素材/.test(String(message || ""));
 }
 
 function railVideoProductCard(project, variant = "normal") {
@@ -1379,7 +1367,7 @@ async function forceRailVideoProduct(projectId) {
   if (!project) throw new Error("没有找到要强制执行的成片任务。");
   const reason = project.error || (project.blockers || []).join("；") || "未知风险";
   if (!isForceableVideoProductError(reason)) {
-    throw new Error("这个失败不是软拦截，不能强制执行。请先补齐缺失的音频、导演稿或图片。");
+    throw new Error("这个失败不是软拦截，不能强制执行。请先补齐缺失的音频、生产线分镜或图片。");
   }
   if (!window.confirm(`当前成片任务有风险：\n\n${reason}\n\n确定后将用原参数重新创建强制执行任务，并在报告里保留风险记录。是否继续？`)) return;
   const metadata = project.metadata && typeof project.metadata === "object" ? project.metadata : {};
@@ -1978,7 +1966,7 @@ function setupImageStudio() {
   document.getElementById("exportDirectorPromptChatGptSet")?.addEventListener("click", () => {
     const projectId = activeDirectorImageImport?.projectId || importedDirectorImagePrompts[0]?.projectId || 0;
     if (!projectId) {
-      setStatus("请先从 AI 导演导入分镜。", "error");
+      setStatus("请先从生产线导入分镜。", "error");
       return;
     }
     window.open(`/api/director/export?id=${encodeURIComponent(projectId)}&format=chatgpt`, "_blank", "noopener,noreferrer");
@@ -1987,7 +1975,7 @@ function setupImageStudio() {
   document.getElementById("generateDirectorPromptSet")?.addEventListener("click", async () => {
     const projectId = activeDirectorImageImport?.projectId || importedDirectorImagePrompts[0]?.projectId || 0;
     if (!projectId) {
-      setStatus("请先从 AI 导演导入分镜。", "error");
+      setStatus("请先从生产线导入分镜。", "error");
       return;
     }
     const providerId = providerSelect?.value || "volcengine_ark";
@@ -2043,7 +2031,7 @@ function setupImageStudio() {
     importedDirectorImagePrompts = [];
     activeDirectorImageImport = null;
     renderImportedPrompts();
-    setStatus("已清空导演镜头导入。", "info");
+    setStatus("已清空生产线分镜导入。", "info");
   });
   document.getElementById("openImageSettings")?.addEventListener("click", () => {
     navigateWorkbench("settings", { preserveScroll: true });
@@ -2073,7 +2061,7 @@ function setupImageStudio() {
     if (ratioSelect && ["9:16", "16:9", "1:1"].includes(String(ratio || ""))) ratioSelect.value = String(ratio);
     navigateWorkbench("image-studio", { preserveScroll: true });
     panel.scrollIntoView({ behavior: "smooth", block: "start" });
-    setStatus(`已从“${title || "导演稿"}”导入 ${importedDirectorImagePrompts.length} 个镜头图片提示词。`, "ok");
+    setStatus(`已从“${title || "生产线分镜"}”导入 ${importedDirectorImagePrompts.length} 个镜头图片提示词。`, "ok");
     return true;
   };
 
@@ -2197,7 +2185,7 @@ function setupImageStudio() {
         const sourceId = String(asset.source_id || "");
         const projectKey = sourceId.includes(":") ? sourceId.split(":")[0] : "";
         const folderName = String(asset.folder_name || "").trim();
-        const label = folderName || (projectKey ? `导演项目 #${projectKey}` : `手动/通用素材 · ${(asset.created_at || "").slice(0, 10)}`);
+        const label = folderName || (projectKey ? `生产线分镜 #${projectKey}` : `手动/通用素材 · ${(asset.created_at || "").slice(0, 10)}`);
         const groupKey = `${label}::${asset.folder_path || projectKey || "local"}`;
         if (!groups.has(groupKey)) groups.set(groupKey, { label, rows: [] });
         groups.get(groupKey).rows.push(asset);

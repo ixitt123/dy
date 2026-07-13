@@ -1042,7 +1042,7 @@ export function createVideoProductService({
       blockers.push(`当前 TTS #${audioId} 不属于项目 ${project.id} 绑定的语音 #${linkedAudioId}，已阻止旧语音/新项目混用。`);
     }
     if (directorId && linkedDirectorId && directorId !== linkedDirectorId) {
-      blockers.push(`当前导演稿 #${directorId} 不属于项目 ${project.id} 绑定的导演稿 #${linkedDirectorId}，已阻止旧导演稿/新语音混用。`);
+      blockers.push(`当前分镜 #${directorId} 不属于项目 ${project.id} 绑定的分镜 #${linkedDirectorId}，已阻止旧分镜/新语音混用。`);
     }
     return { project, blockers };
   }
@@ -1994,7 +1994,7 @@ export function createVideoProductService({
     if (!directorScenes.length) blockers.push("生产线没有可用镜头列表。");
     const audioBinding = director && audio
       ? audioDirectorBinding(director, audio, directorScenes)
-      : { accepted: false, score: 0, reason: "缺少导演稿或音频，无法绑定。" };
+      : { accepted: false, score: 0, reason: "缺少生产线分镜或音频，无法绑定。" };
     if (isRouteAVoiceClock && director && audio && !audioBinding.accepted) {
       const message = `路线 A 已阻止随机音频匹配：${audioBinding.reason}`;
       if (!forceExecution) blockers.push(message);
@@ -2008,7 +2008,7 @@ export function createVideoProductService({
       ...selectImagesForScenes({ directorId, imageSource, selectedImageIds, manualBindings }),
     };
     if (needsImages && directorId && imageSource === "director" && !bindingContext.directorScoped.length) {
-      blockers.push(`当前导演稿 #${directorId || "未选择"} 没有绑定自己的图片素材，已阻止使用旧图片。请先为该导演稿生成/导入分镜图片。`);
+      blockers.push(`当前分镜 #${directorId || "未选择"} 没有绑定自己的图片素材，已阻止使用旧图片。请先为该分镜生成/导入图片。`);
     }
     if (needsImages && !bindingContext.pool.length) blockers.push("缺少可绑定的 AI 图片素材。");
 
@@ -2957,7 +2957,7 @@ ${sceneMarkup}
       errors.push("路线 A 缺少 BGM 素材，不能按可发布成片标准通过。请放入 assets/bgm、media/bgm 或 bgm 文件夹。");
     }
     if (project.output_type === "template_mp4" && titleLooksGeneric(publishTitle)) {
-      errors.push("路线 A 标题仍是内部导演稿名称，未生成面向观众的发布标题。");
+      errors.push("路线 A 标题仍是内部生产线名称，未生成面向观众的发布标题。");
     }
     if (!timelineFiles.coverPath) warnings.push("封面 cover.png 未生成，可能需要人工补封面。");
     if (media.duration && timelineFiles.timelineJson.duration && Math.abs(media.duration - timelineFiles.timelineJson.duration) > 2.5) {
