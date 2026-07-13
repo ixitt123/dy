@@ -1145,6 +1145,7 @@ function normalizeSettings(settings) {
     skipDownloaded: batch.skipDownloaded !== false,
     aiModel: String(batch.aiModel || "qwen-plus").trim() || "qwen-plus",
   };
+  const unifiedMiniMax = rewriteProviders.minimax || {};
   next.tts = {
     aliyun_bailian: {
       api_key: String(tts.aliyun_bailian?.api_key || "").trim(),
@@ -1173,10 +1174,10 @@ function normalizeSettings(settings) {
       voice: String(tts.custom_tts?.voice || "").trim(),
     },
     minimax: {
-      base_url: ["", "https://api.minimax.io/v1"].includes(String(tts.minimax?.base_url || "").trim())
+      base_url: ["", "https://api.minimax.io/v1"].includes(String(tts.minimax?.base_url || unifiedMiniMax.baseUrl || "").trim())
         ? "https://api.minimaxi.com"
-        : String(tts.minimax?.base_url || "").trim(),
-      api_key: String(tts.minimax?.api_key || "").trim(),
+        : String(tts.minimax?.base_url || unifiedMiniMax.baseUrl || "").trim(),
+      api_key: String(tts.minimax?.api_key || unifiedMiniMax.apiKey || "").trim(),
       model: ["", "minimax-speech"].includes(String(tts.minimax?.model || "").trim())
         ? "speech-2.6-hd"
         : String(tts.minimax?.model || "").trim(),

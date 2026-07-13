@@ -1303,7 +1303,7 @@ export function openTaskStore(baseDir) {
     const provider = String(input.provider || "");
     const voiceId = String(input.voice_id || "");
     const existing = normalizeVoice(getVoiceStmt.get(provider, voiceId));
-    if (existing && ["deleted", "archived"].includes(String(existing.status || ""))) return existing;
+    if (existing && (existing.archived || ["deleted", "archived"].includes(String(existing.status || "")))) return existing;
     if (existing && ["preset", "music"].includes(existing.voice_type)) {
       return updateVoiceAsset(existing.id, {
         voice_name: String(input.voice_name || existing.voice_name),
