@@ -6944,22 +6944,22 @@ momentsImagePromptList?.addEventListener("change", (event) => {
   element?.addEventListener("change", saveMomentsDraft);
 });
 
-directorSourceMode.addEventListener("change", () => {
+directorSourceMode?.addEventListener("change", () => {
   updateDirectorSourceOptions();
 });
 
-directorSourceSelect.addEventListener("change", () => {
+directorSourceSelect?.addEventListener("change", () => {
   applySelectedDirectorSource();
 });
 
-directorSourceText.addEventListener("input", () => {
+directorSourceText?.addEventListener("input", () => {
   updateDirectorCharacterCount();
   if (directorSourceMode.value === "manual") {
     directorSourceContext = { taskId: 0, rewriteId: 0, sourceKey: "", sourceType: "manual" };
   }
 });
 
-document.querySelector("#refreshDirectorSources").addEventListener("click", () => {
+document.querySelector("#refreshDirectorSources")?.addEventListener("click", () => {
   loadDirectorSources({ preserveText: true })
     .then(() => {
       directorStatus.textContent = `已刷新 ${directorSources.length} 条可用文案。`;
@@ -6969,11 +6969,11 @@ document.querySelector("#refreshDirectorSources").addEventListener("click", () =
     });
 });
 
-document.querySelector("#generateDirector").addEventListener("click", () => {
+document.querySelector("#generateDirector")?.addEventListener("click", () => {
   generateDirectorProject();
 });
 
-document.querySelector("#refreshDirectorProjects").addEventListener("click", () => {
+document.querySelector("#refreshDirectorProjects")?.addEventListener("click", () => {
   loadDirectorProjects().catch((error) => {
     directorStatus.textContent = error instanceof Error ? error.message : String(error);
   });
@@ -6983,7 +6983,7 @@ document.querySelector("#clearDirectorProjects")?.addEventListener("click", () =
   clearDirectorProjects().catch((error) => { directorStatus.textContent = error instanceof Error ? error.message : String(error); });
 });
 
-directorProjects.addEventListener("click", (event) => {
+directorProjects?.addEventListener("click", (event) => {
   const deleteButton = event.target.closest(".director-project-delete");
   const button = event.target.closest(".director-project-open");
   const row = event.target.closest(".director-project-row");
@@ -7000,32 +7000,32 @@ directorProjects.addEventListener("click", (event) => {
   });
 });
 
-directorResultTabs.addEventListener("click", (event) => {
+directorResultTabs?.addEventListener("click", (event) => {
   const button = event.target.closest("button[data-director-tab]");
   if (!button) return;
   activeDirectorTab = button.dataset.directorTab;
   renderDirectorResultView();
 });
 
-directorResultView.addEventListener("click", (event) => {
+directorResultView?.addEventListener("click", (event) => {
   const button = event.target.closest(".director-send-scene-image");
   if (!button) return;
   sendDirectorProjectToImage(button.dataset.directorScene || "");
 });
 
-document.querySelector("#copyDirectorResult").addEventListener("click", () => {
+document.querySelector("#copyDirectorResult")?.addEventListener("click", () => {
   copyDirectorResult();
 });
 
-document.querySelector("#exportDirectorJson").addEventListener("click", () => {
+document.querySelector("#exportDirectorJson")?.addEventListener("click", () => {
   directorExport("json");
 });
 
-document.querySelector("#exportDirectorMd").addEventListener("click", () => {
+document.querySelector("#exportDirectorMd")?.addEventListener("click", () => {
   directorExport("md");
 });
 
-document.querySelector("#exportDirectorPrompts").addEventListener("click", () => {
+document.querySelector("#exportDirectorPrompts")?.addEventListener("click", () => {
   directorExport("prompts");
 });
 
@@ -7033,25 +7033,25 @@ document.querySelector("#exportDirectorChatGptPrompts")?.addEventListener("click
   directorExport("chatgpt");
 });
 
-document.querySelector("#sendDirectorToVfo").addEventListener("click", () => {
+document.querySelector("#sendDirectorToVfo")?.addEventListener("click", () => {
   sendDirectorProjectToVfo();
 });
 
-document.querySelector("#sendDirectorToImage").addEventListener("click", () => {
+document.querySelector("#sendDirectorToImage")?.addEventListener("click", () => {
   sendDirectorProjectToImage();
 });
 
-document.querySelector("#openDirectorFile").addEventListener("click", () => {
+document.querySelector("#openDirectorFile")?.addEventListener("click", () => {
   openDirectorFile().catch((error) => {
     directorStatus.textContent = error instanceof Error ? error.message : String(error);
   });
 });
 
-vfoSourceMode.addEventListener("change", () => {
+vfoSourceMode?.addEventListener("change", () => {
   updateVfoSourceMode();
 });
 
-vfoDirectorSource.addEventListener("change", () => {
+vfoDirectorSource?.addEventListener("change", () => {
   const selected = selectedVfoSource();
   const mappedPlatform = vfoConfig?.director_platform_aliases?.[selected?.platform] || selected?.platform;
   if (mappedPlatform && vfoConfig?.platforms?.some((platform) => platform.id === mappedPlatform)) {
@@ -7060,15 +7060,15 @@ vfoDirectorSource.addEventListener("change", () => {
   renderVfoSourceSummary();
 });
 
-vfoManualJson.addEventListener("input", () => {
+vfoManualJson?.addEventListener("input", () => {
   renderVfoSourceSummary();
 });
 
-vfoManualTitle.addEventListener("input", () => {
+vfoManualTitle?.addEventListener("input", () => {
   renderVfoSourceSummary();
 });
 
-document.querySelector("#refreshVfoSources").addEventListener("click", () => {
+document.querySelector("#refreshVfoSources")?.addEventListener("click", () => {
   loadVfoSources()
     .then(() => {
       vfoStatus.textContent = `已刷新 ${vfoSources.length} 份可用 Storyboard。`;
@@ -7078,17 +7078,17 @@ document.querySelector("#refreshVfoSources").addEventListener("click", () => {
     });
 });
 
-document.querySelector("#generateVfo").addEventListener("click", () => {
+document.querySelector("#generateVfo")?.addEventListener("click", () => {
   generateVfoProject();
 });
 
-document.querySelector("#refreshVfoProjects").addEventListener("click", () => {
+document.querySelector("#refreshVfoProjects")?.addEventListener("click", () => {
   loadVfoProjects().catch((error) => {
     vfoStatus.textContent = error instanceof Error ? error.message : String(error);
   });
 });
 
-vfoProjects.addEventListener("click", (event) => {
+vfoProjects?.addEventListener("click", (event) => {
   const button = event.target.closest(".vfo-project-open");
   const row = event.target.closest(".vfo-project-row");
   if (!button || !row) return;
@@ -7097,30 +7097,30 @@ vfoProjects.addEventListener("click", (event) => {
   });
 });
 
-vfoResultTabs.addEventListener("click", (event) => {
+vfoResultTabs?.addEventListener("click", (event) => {
   const button = event.target.closest("button[data-vfo-tab]");
   if (!button) return;
   activeVfoTab = button.dataset.vfoTab;
   renderVfoResultView();
 });
 
-document.querySelector("#copyVfoResult").addEventListener("click", () => {
+document.querySelector("#copyVfoResult")?.addEventListener("click", () => {
   copyVfoResult();
 });
 
-document.querySelector("#exportRenderPlan").addEventListener("click", () => {
+document.querySelector("#exportRenderPlan")?.addEventListener("click", () => {
   vfoExport("render-plan");
 });
 
-document.querySelector("#exportAssetPlan").addEventListener("click", () => {
+document.querySelector("#exportAssetPlan")?.addEventListener("click", () => {
   vfoExport("asset-plan");
 });
 
-document.querySelector("#exportAssetPackage").addEventListener("click", () => {
+document.querySelector("#exportAssetPackage")?.addEventListener("click", () => {
   vfoExport("asset-package");
 });
 
-document.querySelector("#openVfoFile").addEventListener("click", () => {
+document.querySelector("#openVfoFile")?.addEventListener("click", () => {
   openVfoFile().catch((error) => {
     vfoStatus.textContent = error instanceof Error ? error.message : String(error);
   });
