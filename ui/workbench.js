@@ -64,7 +64,6 @@ const workbenchPages = {
 let activeWorkbenchPage = "dashboard";
 let activeRailTaskId = 0;
 let dashboardAudioJobs = [];
-let dashboardVideoProducts = [];
 let workbenchOverviewTimer = 0;
 let importedDirectorImagePrompts = [];
 let activeDirectorImageImport = null;
@@ -878,18 +877,6 @@ function railTaskIsFinished(task) {
   return RAIL_TASK_FINISHED_STATUSES.has(task?.status);
 }
 
-function railVideoProductId(project) {
-  return Number(project?.project_id || project?.id || 0);
-}
-
-function railVideoProductIsRunning(project) {
-  return RAIL_VIDEO_PRODUCT_RUNNING_STATUSES.has(project?.status);
-}
-
-function railVideoProductCanDelete(project) {
-  return railVideoProductId(project) > 0 && !railVideoProductIsRunning(project);
-}
-
 function railTaskActionLabel(task) {
   const action = task?.task_action || (task?.only_transcript ? "transcript" : "download");
   return typeof taskActionLabels !== "undefined" ? taskActionLabels[action] || "任务" : "任务";
@@ -958,71 +945,7 @@ function railTaskCard(task, variant = "normal") {
   `;
 }
 
-function railVideoProductStatusLabel(status) {
-  return {
-    pending: "等待",
-    binding_assets: "绑定素材",
-    building_timeline: "生成成片草稿",
-    rendering: "渲染 MP4",
-    exporting_draft: "导出草稿",
-    completed: "完成",
-    failed: "失败",
-  }[status] || status || "未知";
-}
-
-function friendlyVideoProductError(value) {
-  const message = String(value || "").trim();
-  if (!message) return "";
-  if (/ffmpeg|stream specifier|filtergraph|invalid argument|libavcodec/i.test(message)) {
-    return "成片合成失败，请检查音频、素材和输出设置后重试。";
-  }
-  return message.length > 140 ? `${message.slice(0, 140)}…` : message;
-}
-
-function isForceableVideoProductError(message = "") {
-  return /相似度|随机音频匹配|质量审查未通过|码率偏低|标题仍是内部生产线名称|缺少 BGM 素材/.test(String(message || ""));
-}
-
-function railVideoProductCard(project, variant = "normal") {
-  const id = railVideoProductId(project);
-  const progress = Math.max(0, Math.min(100, Number(project.progress || 0)));
-  const title = escapeHtml(project.metadata?.title || `成片 #${id}`);
-  const status = railVideoProductStatusLabel(project.status);
-  const blockers = Array.isArray(project.blockers) ? project.blockers.filter(Boolean) : [];
-  const detail = [
-    project.current_step || status,
-    blockers.length ? `阻塞 ${blockers.length} 项` : "",
-    friendlyVideoProductError(project.error),
-  ].filter(Boolean).join(" · ");
-  const output = project.mp4_path || project.output_dir || project.timeline_path || project.srt_path || "";
-  const hasOutput = Boolean(output);
-  const canDelete = railVideoProductCanDelete(project);
-  const canForce = project.status === "failed" && isForceableVideoProductError(project.error || blockers.join(" "));
-  return `
-    <article class="rail-task-card rail-video-product-card ${variant}">
-      <div class="rail-task-top">
-        <span class="rail-task-id">成片 #${id}</span>
-        <span class="status-badge ${workbenchStatusClass(project.status)}">${escapeHtml(status)}</span>
-      </div>
-      <strong title="${title}">${title}</strong>
-      <small title="${escapeHtml(detail)}">${escapeHtml(detail || "等待生成")}</small>
-      <div class="rail-progress rail-task-progress" aria-hidden="true"><i style="width:${progress}%"></i></div>
-      <div class="rail-task-meta">
-        <span>${progress}%</span>
-        <span title="${escapeHtml(output)}">${escapeHtml(shortPath(output) || project.output_type || "未生成文件")}</span>
-      </div>
-      ${blockers.length ? `<ul class="rail-video-blockers">${blockers.slice(0, 3).map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>` : ""}
-      <div class="rail-task-actions">
-        <button type="button" class="rail-video-product-open" data-video-product-id="${id}">查看</button>
-        ${canForce ? `<button type="button" class="rail-video-product-force" data-video-product-id="${id}">强制执行</button>` : ""}
-        ${hasOutput ? `<button type="button" class="rail-video-product-folder" data-video-product-id="${id}">打开</button>` : ""}
-        ${canDelete ? `<button type="button" class="rail-video-product-delete danger-action" data-video-product-id="${id}">删除</button>` : ""}
-      </div>
-    </article>
-  `;
-}
-
-function renderRail(tasks, directors, vfoProjects, audioJobs, videoProducts = []) {
+function renderRail(tasks, directors, vfoProjects, audioJobs) {
   const current = document.querySelector("#railCurrentTask");
   const recent = document.querySelector("#railRecentOutput");
   const errors = document.querySelector("#railErrors");
@@ -1032,13 +955,6 @@ function renderRail(tasks, directors, vfoProjects, audioJobs, videoProducts = []
   const finishedTasks = sortedTasks.filter(railTaskIsFinished);
   const failedTasks = sortedTasks.filter((task) => ["失败", "failed"].includes(task.status));
   const latestTasks = sortedTasks.filter((task) => !runningTasks.includes(task)).slice(0, 10);
-  const runningVideoProducts = videoProducts.filter(railVideoProductIsRunning);
-  const failedVideoProducts = videoProducts.filter((project) => project.status === "failed");
-  const deletableVideoProducts = videoProducts.filter(railVideoProductCanDelete);
-  const latestVideoProducts = videoProducts
-    .filter((project) => !runningVideoProducts.includes(project))
-    .slice(0, 4);
-
   if (current) {
     const summary = railStatusSummary(tasks)
       .map(([label, value]) => `<div><span>${label}</span><strong>${value}</strong></div>`)
@@ -1051,27 +967,12 @@ function renderRail(tasks, directors, vfoProjects, audioJobs, videoProducts = []
     const recentList = latestTasks.length
       ? latestTasks.map((task) => railTaskCard(task)).join("")
       : '<div class="rail-empty">暂无任务记录</div>';
-    const videoList = runningVideoProducts.length
-      ? runningVideoProducts.slice(0, 4).map((project) => railVideoProductCard(project, "active")).join("")
-      : latestVideoProducts.length
-        ? latestVideoProducts.map((project) => railVideoProductCard(project)).join("")
-        : '<div class="rail-empty">暂无成片任务</div>';
     current.innerHTML = `
       <div class="rail-task-console">
         <div class="rail-task-summary">${summary}</div>
         <div class="rail-task-group">
           <div class="rail-subheading"><span>运行 / 等待</span><em>${runningTasks.length + waitingTasks.length}</em></div>
           <div class="rail-task-list">${activeList}</div>
-        </div>
-        <div class="rail-task-group">
-          <div class="rail-subheading">
-            <span>成片任务</span>
-            <span class="rail-subheading-actions">
-              ${deletableVideoProducts.length ? `<button type="button" class="rail-subheading-action rail-video-product-clear danger-action" title="清理已完成/失败的成片记录和输出文件夹">清理</button>` : ""}
-              <em>${runningVideoProducts.length || latestVideoProducts.length}</em>
-            </span>
-          </div>
-          <div class="rail-task-list compact">${videoList}</div>
         </div>
         <div class="rail-task-group">
           <div class="rail-subheading">
@@ -1083,7 +984,7 @@ function renderRail(tasks, directors, vfoProjects, audioJobs, videoProducts = []
           </div>
           <div class="rail-task-list compact">${recentList}</div>
         </div>
-        ${failedTasks.length + failedVideoProducts.length ? `<div class="rail-failure-note">失败 ${failedTasks.length + failedVideoProducts.length} 条，请看下方错误提示。</div>` : ""}
+        ${failedTasks.length ? `<div class="rail-failure-note">失败 ${failedTasks.length} 条，请看下方错误提示。</div>` : ""}
       </div>
     `;
   }
@@ -1102,12 +1003,6 @@ function renderRail(tasks, directors, vfoProjects, audioJobs, videoProducts = []
         time: item.updated_at,
         page: "vfo",
       })),
-      ...videoProducts.filter((item) => item.status === "completed").slice(0, 3).map((item) => ({
-        type: item.output_type === "mp4" ? "MP4成片" : "剪映草稿",
-        title: item.metadata?.title || `成片 #${item.project_id || item.id}`,
-        time: item.completed_at || item.updated_at,
-        page: "vfo",
-      })),
     ]
       .sort((left, right) => String(right.time || "").localeCompare(String(left.time || "")))
       .slice(0, 5);
@@ -1123,19 +1018,12 @@ function renderRail(tasks, directors, vfoProjects, audioJobs, videoProducts = []
 
   if (errors) {
     const failed = tasks.filter((task) => ["失败", "failed"].includes(task.status)).slice(0, 3);
-    const failedTimelines = failedVideoProducts.slice(0, 3);
-    errors.innerHTML = failed.length || failedTimelines.length
+    errors.innerHTML = failed.length
       ? [
         ...failed.map((task) => `
         <button type="button" class="rail-list-item error-item rail-task-view" data-task-id="${Number(task.id || 0)}">
           <span>任务 #${Number(task.id || 0)}</span>
           <strong>${escapeHtml(task.error || task.message || "处理失败")}</strong>
-        </button>
-      `),
-        ...failedTimelines.map((project) => `
-        <button type="button" class="rail-list-item error-item rail-video-product-open" data-video-product-id="${Number(project.project_id || project.id || 0)}">
-          <span>成片 #${Number(project.project_id || project.id || 0)}</span>
-          <strong>${escapeHtml(friendlyVideoProductError(project.error) || project.current_step || "成片任务失败")}</strong>
         </button>
       `),
       ].join("")
@@ -1147,8 +1035,6 @@ function renderWorkbenchOverview() {
   const tasks = typeof allTasks === "undefined" ? [] : allTasks;
   const directors = typeof directorProjectsState === "undefined" ? [] : directorProjectsState;
   const vfoItems = typeof vfoProjectsState === "undefined" ? [] : vfoProjectsState;
-  const videoProducts = [];
-
   setMetric("metricTodayVideos", tasks.filter((task) => isToday(task.created_at)).length);
   setMetric("metricTranscripts", tasks.filter((task) => task.txt_path).length);
   setMetric("metricRewrites", tasks.filter(hasRewrite).length);
@@ -1156,7 +1042,7 @@ function renderWorkbenchOverview() {
   setMetric("metricDirectors", directors.filter((project) => project.status === "completed").length);
   setMetric("metricRenderPlans", vfoItems.filter((project) => project.status === "completed").length);
   renderDashboardTasks(tasks);
-  renderRail(tasks, directors, vfoItems, dashboardAudioJobs, videoProducts);
+  renderRail(tasks, directors, vfoItems, dashboardAudioJobs);
 }
 
 async function refreshWorkbenchOverview() {
@@ -1169,8 +1055,6 @@ async function refreshWorkbenchOverview() {
   } catch {
     dashboardAudioJobs = [];
   }
-
-  dashboardVideoProducts = [];
 
   // 加载 Provider 状态
   try {
@@ -1213,8 +1097,6 @@ async function updateWorkbenchConnection() {
 
 async function openLatestOutputLocation() {
   const candidates = [
-    typeof activeVideoProductProject !== "undefined" ? activeVideoProductProject?.output_dir : "",
-    dashboardVideoProducts?.[0]?.output_dir || "",
     typeof activeVfoProject !== "undefined" ? activeVfoProject?.render_plan_path : "",
     typeof vfoProjectsState !== "undefined" ? vfoProjectsState?.[0]?.render_plan_path : "",
     typeof activeDirectorProject !== "undefined" ? activeDirectorProject?.storyboard_path : "",
