@@ -2795,9 +2795,18 @@ pre {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 10px;
   margin-top: 18px;
   border-top: 1px solid var(--line);
   padding-top: 16px;
+}
+
+.tts-history-head h2 {
+  min-width: max-content;
+  margin: 0;
+  white-space: nowrap;
+  font-size: 18px;
+  line-height: 1.2;
 }
 
 .history-actions {
