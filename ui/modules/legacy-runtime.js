@@ -1919,6 +1919,18 @@ function addMomentsPublishPath(paths, value) {
   paths.add(text);
 }
 
+function extractMomentsImagePathsFromText(text = "") {
+  const value = String(text || "");
+  const paths = [];
+  for (const match of value.matchAll(/本地素材(?:参考)?：.*?（([A-Za-z]:\\[^\r\n]+?)）/g)) {
+    paths.push(match[1]);
+  }
+  for (const match of value.matchAll(/[A-Za-z]:\\[^\r\n]+?\.(?:png|jpe?g|webp)(?=$|[\s\r\n）])/gi)) {
+    paths.push(match[0]);
+  }
+  return paths;
+}
+
 function collectMomentsPublishImages() {
   const paths = new Set();
   for (const image of currentMomentsResult?.generatedImages || []) {
@@ -1928,9 +1940,8 @@ function collectMomentsPublishImages() {
     addMomentsPublishPath(paths, chip.getAttribute("title"));
   }
   for (const textarea of document.querySelectorAll(".moments-prompt-text")) {
-    const text = textarea.value || "";
-    for (const match of text.matchAll(/[A-Za-z]:\\[^\r\n）)]+/g)) {
-      addMomentsPublishPath(paths, match[0]);
+    for (const filePath of extractMomentsImagePathsFromText(textarea.value || "")) {
+      addMomentsPublishPath(paths, filePath);
     }
   }
   return [...paths];

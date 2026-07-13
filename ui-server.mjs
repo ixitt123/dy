@@ -530,6 +530,19 @@ function saveMomentsMaterialUpload(body = {}) {
 
 const momentsPublishImageExts = new Set([".png", ".jpg", ".jpeg", ".webp"]);
 
+function resolveMomentsPublishImagePath(rawPath = "") {
+  const filePath = path.resolve(String(rawPath || "").trim());
+  if (momentsPublishImageExts.has(path.extname(filePath).toLowerCase()) || fs.existsSync(filePath)) return filePath;
+  const dir = path.dirname(filePath);
+  const base = path.basename(filePath);
+  if (!fs.existsSync(dir)) return filePath;
+  const candidate = fs.readdirSync(dir)
+    .filter((name) => name.startsWith(base) && momentsPublishImageExts.has(path.extname(name).toLowerCase()))
+    .map((name) => path.join(dir, name))
+    .sort((a, b) => a.length - b.length)[0];
+  return candidate || filePath;
+}
+
 function normalizeMomentsPublishImagePaths(value = []) {
   const input = Array.isArray(value) ? value : [];
   const output = [];
@@ -537,7 +550,7 @@ function normalizeMomentsPublishImagePaths(value = []) {
   for (const item of input) {
     const rawPath = String(item || "").trim();
     if (!rawPath) continue;
-    const filePath = path.resolve(rawPath);
+    const filePath = resolveMomentsPublishImagePath(rawPath);
     if (seen.has(filePath.toLowerCase())) continue;
     const ext = path.extname(filePath).toLowerCase();
     if (!momentsPublishImageExts.has(ext)) {
