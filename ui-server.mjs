@@ -2871,15 +2871,31 @@ async function extractTranscriptForVideoInfo(videoInfo, apiKey, onProgress = () 
     let temporaryVideoPath = "";
     try {
       if (!localVideoPath) {
-        const downloaded = await downloadVideoFile(videoInfo, (progress) => {
-          const raw = Number(progress.percent || 0);
-          onProgress({
-            percent: Math.min(45, 20 + raw * 0.25),
-            message: progress.message || "正在本地下载视频",
+        const sourceUrl = String(options.sourceUrl || videoInfo.webpageUrl || "").trim();
+        if (sourceUrl) {
+          const downloaded = await ytDlpService.download(sourceUrl, {
+            signal,
+            onProgress: (progress) => {
+              const raw = Number(progress.percent || 0);
+              onProgress({
+                percent: Math.min(45, 20 + raw * 0.25),
+                message: progress.message || "正在通过 yt-dlp 本地下载视频",
+              });
+            },
           });
-        }, signal);
-        localVideoPath = downloaded.filePath;
-        temporaryVideoPath = localVideoPath;
+          localVideoPath = downloaded.videoPath;
+          temporaryVideoPath = localVideoPath;
+        } else {
+          const downloaded = await downloadVideoFile(videoInfo, (progress) => {
+            const raw = Number(progress.percent || 0);
+            onProgress({
+              percent: Math.min(45, 20 + raw * 0.25),
+              message: progress.message || "正在本地下载视频",
+            });
+          }, signal);
+          localVideoPath = downloaded.filePath;
+          temporaryVideoPath = localVideoPath;
+        }
       }
 
       return await transcribeLocalMediaWithDashScope(apiKey, localVideoPath, onProgress, signal);
@@ -3694,17 +3710,53 @@ function createTranscriptJob(shareLink, apiKey) {
 
   (async () => {
     updateJob({ percent: 5, message: "正在解析视频" });
-    const linkResult = await runMcpTool("get_douyin_download_link", shareLink);
-    if (linkResult.isError) {
-      throw new Error(linkResult.text || "解析视频失败");
+    const firstUrl = getFirstUrl(shareLink);
+    let videoInfo;
+    let localVideoPath = "";
+    let subtitlePath = "";
+
+    if (isLikelyDouyinUrl(firstUrl)) {
+      const linkResult = await runMcpTool("get_douyin_download_link", shareLink);
+      if (linkResult.isError) {
+        throw new Error(linkResult.text || "解析视频失败");
+      }
+      videoInfo = parseVideoInfoFromToolText(linkResult.text);
+    } else {
+      const info = await ytDlpService.info(firstUrl);
+      videoInfo = {
+        ...info.videoInfo,
+        sourceAdapter: "yt-dlp",
+      };
+      updateJob({ percent: 12, message: "正在下载视频用于文案识别" });
+      const downloaded = await ytDlpService.download(firstUrl, {
+        onProgress: (progress) => {
+          const raw = Number(progress.percent || 0);
+          updateJob({
+            percent: Math.max(12, Math.min(55, Math.round(12 + raw * 0.43))),
+            message: progress.message || "正在通过 yt-dlp 下载视频",
+          });
+        },
+      });
+      localVideoPath = downloaded.videoPath || "";
+      subtitlePath = downloaded.subtitlePath || "";
+      videoInfo = {
+        ...videoInfo,
+        ...downloaded.videoInfo,
+        sourceAdapter: "yt-dlp",
+      };
     }
 
-    const videoInfo = parseVideoInfoFromToolText(linkResult.text);
     if (!videoInfo.downloadUrl) {
       throw new Error("没有解析到可识别的视频地址");
     }
 
-    const rawTranscriptText = await extractTranscriptForVideoInfo(videoInfo, apiKey, updateJob);
+    let rawTranscriptText = subtitlePath ? textFromSubtitleFile(subtitlePath) : "";
+    if (!rawTranscriptText) {
+      rawTranscriptText = await extractTranscriptForVideoInfo(videoInfo, apiKey, updateJob, undefined, {
+        localVideoPath,
+        sourceUrl: firstUrl,
+      });
+    }
     updateJob({ percent: 92, message: "正在自动校正文案" });
     const transcriptText = await correctTranscriptWithRewriteModel(rawTranscriptText, videoInfo);
     const transcriptPath = saveTranscript(videoInfo, transcriptText);
