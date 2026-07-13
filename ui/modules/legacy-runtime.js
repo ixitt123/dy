@@ -3781,11 +3781,6 @@ async function generateTts() {
   ttsStatus.textContent = "正在检查 TTS API 配置...";
   setTtsMainProgress(5, "检查配置");
   await ensureTtsProviderConfigured();
-  syncDirectorSourceFromText(text, {
-    title: directorTitle?.value.trim() || "配音文案导演稿",
-    sourceKey: `tts:${Date.now()}`,
-    sourceType: "tts",
-  });
   generateTtsButton.disabled = true;
   ttsStatus.textContent = "正在提交生成任务...";
   renderTtsRail({
@@ -4317,11 +4312,6 @@ generateTts = async function generateTtsUnified() {
   }
   ttsStatus.textContent = "正在检查 TTS API 配置...";
   await ensureTtsProviderConfigured();
-  syncDirectorSourceFromText(text, {
-    title: directorTitle?.value.trim() || "配音文案导演稿",
-    sourceKey: `tts:${Date.now()}`,
-    sourceType: "tts",
-  });
   generateTtsButton.disabled = true;
   setTtsMainProgress(8, isMusicAsset ? "正在生成音乐音频" : "正在提交生成任务");
   ttsStatus.textContent = isMusicAsset ? "正在生成 MiniMax Music 音频..." : "正在提交生成任务...";
@@ -4504,12 +4494,6 @@ async function generateDefaultVoiceFromRewrite(versionKey) {
     rewriteStatus.textContent = "当前输出框没有文案，请先生成文案。";
     return;
   }
-  syncDirectorSourceFromText(text, {
-    title: "AI 改写导演稿",
-    sourceKey: `task-${rewriteTaskId.value || 0}-rewrite-${versionKey}`,
-    sourceType: "rewrite",
-    taskId: Number(rewriteTaskId.value || 0),
-  });
   ttsText.value = text;
   ttsCharacterCount.textContent = `${text.replace(/\s/g, "").length} 字`;
   window.workbenchNavigate?.("tts", { preserveScroll: true });
