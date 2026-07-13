@@ -1618,7 +1618,9 @@ async function ensureProviderConfigured(providerId, { title = "API 配置", reas
     const ttsProviderConfig = Array.isArray(settings.tts?.providers)
       ? settings.tts.providers.find((provider) => provider.id === id)
       : null;
-    const label = rewriteProvider?.label || ttsProviderConfig?.label || id;
+    const label = scope === "tts"
+      ? ttsProviderConfig?.label || rewriteProvider?.label || id
+      : rewriteProvider?.label || ttsProviderConfig?.label || id;
     const apiKey = window.prompt([
       `${title}需要配置：${label}`,
       reason,
