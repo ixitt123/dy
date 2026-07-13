@@ -231,7 +231,7 @@ flowchart TD
 
 1. 纯文字视频线：文案 + 音频 + 时间轴 + 分镜，生成文字动效视频。
 2. 小黑/图文视频线：文案 + 音频 + 小黑或其他 skill，生成图文解释视频。
-3. 免费素材混剪线：基于 money-printer-turbo 思路，自动更新素材并生成混剪视频。
+3. 免费素材混剪线：通过独立 MoneyPrinterTurbo 服务生成免费素材混剪视频。
 
 实现原则：
 
@@ -323,6 +323,7 @@ created
 - `/api/tts/*`：语音生成、试听、重试、声音资产。
 - `/api/director/*`：导演稿、storyboard、导出。
 - `/api/ian-xiaohei/*`：小黑视频风格生成、TTS、音乐素材、配图、输出记录和剪映草稿。
+- `/api/money-printer/*`：MoneyPrinterTurbo 服务检测、启动、任务提交、进度轮询和输出打开。
 - `/api/video-product/*`：浏览器预览、剪映草稿、素材包、输出记录。
 - `/api/assets/*`：素材库检索、标签、打开文件。
 - `/api/settings/*`：Provider、路径、默认配置。
@@ -468,7 +469,7 @@ created
 - 小红书、B 站、YouTube 输入链路。
 - 纯文字视频生产线。
 - 朋友圈图文分支。
-- 免费素材混剪线技术验证。
+- MoneyPrinterTurbo 免费素材混剪线：独立页面、API 启动、任务提交、进度轮询和 MP4 输出入口。
 - 多平台标题、封面、字幕、画幅适配。
 
 验收：
