@@ -690,7 +690,7 @@ export function createVoiceAssetService({ baseDir, taskStore, ttsService, getSet
       return { asset: getAsset(assetId), cached: true, preview_url: externalPreview };
     }
     if (!force && localPreviewPath) {
-      return { asset: getAsset(assetId), cached: true, preview_url: `/api/voice-assets/audio?id=${assetId}&kind=preview` };
+      return { asset: getAsset(assetId), cached: true, preview_url: `/api/voice-assets/audio?id=${assetId}&kind=preview`, audio_path: localPreviewPath };
     }
 
     const metadata = safeJson(asset.metadata_json, {});
@@ -715,6 +715,7 @@ export function createVoiceAssetService({ baseDir, taskStore, ttsService, getSet
       asset: getAsset(assetId),
       cached: false,
       preview_url: `/api/voice-assets/audio?id=${assetId}&kind=preview`,
+      audio_path: filePath,
     };
   }
 
