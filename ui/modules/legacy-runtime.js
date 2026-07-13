@@ -3351,6 +3351,23 @@ function ttsJobAudioFileName(job = {}) {
   return `tts-${number || "audio"}.${ext}`;
 }
 
+function ttsJobTitle(job = {}) {
+  const platformTitles = job.platform_titles || job.metadata?.platform_titles || {};
+  const value = String(
+    job.title
+    || job.seo_title
+    || job.publish_title
+    || platformTitles.douyin
+    || platformTitles.xiaohongshu
+    || job.metadata?.title
+    || job.metadata?.seo_title
+    || ""
+  ).trim();
+  if (value) return value;
+  const fromText = String(job.text || "").replace(/\s+/g, "").slice(0, 18);
+  return fromText || job.voice_name || `配音 #${job.id || ""}`.trim() || "TTS 三件套";
+}
+
 function renderTtsJobsEnhanced(jobs = []) {
   const visibleJobs = jobs.filter((job) => !isTtsJobHidden(job.id));
   if (!visibleJobs.length) {
@@ -3371,7 +3388,8 @@ function renderTtsJobsEnhanced(jobs = []) {
       ? `<audio controls preload="none" src="${escapeHtml(job.audio_url)}"></audio>`
       : `<span title="${escapeHtml(job.error || "")}">${escapeHtml(job.error || "等待生成")}</span>`;
     const displayNumber = Number(job.display_number || job.sequence_number || job.id || 0);
-    const timedSubtitleUrl = job.subtitle_url || job.timestamped_text_url || "";
+    const title = ttsJobTitle(job);
+    const timedSubtitleUrl = job.timestamped_text_url || job.subtitle_url || "";
     const fileLinks = [
       job.audio_url ? `<a href="${escapeHtml(job.audio_url)}" target="_blank" rel="noreferrer">音频</a>` : "",
       job.script_url ? `<a href="${escapeHtml(job.script_url)}" target="_blank" rel="noreferrer">文案</a>` : "",
@@ -3417,10 +3435,11 @@ function renderTtsJobsEnhanced(jobs = []) {
         <div class="tts-history-summary">
           <div class="tts-history-title">
             <strong>#${displayNumber || job.id}</strong>
-            <span class="tts-history-text" title="${escapeHtml(job.text)}">${escapeHtml(job.text)}</span>
+            <span class="tts-history-title-text" title="${escapeHtml(title)}">${escapeHtml(title)}</span>
           </div>
           <span class="tts-job-status ${escapeHtml(job.status)}">${escapeHtml(ttsStatusLabel(job.status))}</span>
         </div>
+        <div class="tts-history-text" title="${escapeHtml(job.text)}">${escapeHtml(job.text)}</div>
         <div class="tts-history-meta">${escapeHtml(job.voice_name || job.voice_id || "-")} · ${escapeHtml(labels[job.provider] || job.provider)} · ${escapeHtml(String(job.format || "mp3").toUpperCase())}</div>
         <div class="tts-history-audio">${audio}</div>
         <span class="tts-history-files">${fileLinks}</span>
@@ -3442,15 +3461,26 @@ async function refreshTtsJobs() {
 
 function confirmedTtsAudioPayload(job = activeTtsRailJob) {
   if (!job?.id || job.status !== "completed") return null;
-  const timedSubtitleUrl = job.subtitle_url || job.timestamped_text_url || "";
-  const timedSubtitlePath = job.subtitle_path || job.timestamped_text_path || "";
+  const title = ttsJobTitle(job);
+  const platformTitles = job.platform_titles || job.metadata?.platform_titles || {};
+  const seoKeywords = Array.isArray(job.seo_keywords) ? job.seo_keywords : Array.isArray(job.metadata?.seo_keywords) ? job.metadata.seo_keywords : [];
+  const hashtags = Array.isArray(job.hashtags) ? job.hashtags : Array.isArray(job.metadata?.hashtags) ? job.metadata.hashtags : [];
+  const timedSubtitleUrl = job.timestamped_text_url || job.subtitle_url || "";
+  const timedSubtitlePath = job.timestamped_text_path || job.subtitle_path || "";
   const files = [
-    { type: "audio", label: "音频", url: job.audio_url || "", path: job.audio_path || "" },
-    { type: "script", label: "文案", url: job.script_url || "", path: job.script_path || "" },
-    { type: "timed_subtitle", label: "带时间戳字幕", url: timedSubtitleUrl, path: timedSubtitlePath },
+    { type: "audio", label: "音频", title, url: job.audio_url || "", path: job.audio_path || "" },
+    { type: "script", label: "文案", title, url: job.script_url || "", path: job.script_path || "" },
+    { type: "timed_subtitle", label: "带时间戳字幕", title, url: timedSubtitleUrl, path: timedSubtitlePath },
   ].filter((item) => item.url || item.path);
   return {
     id: job.id,
+    title,
+    seo_title: job.seo_title || job.metadata?.seo_title || title,
+    publish_title: job.publish_title || job.metadata?.publish_title || title,
+    platform_titles: platformTitles,
+    seo_keywords: seoKeywords,
+    hashtags,
+    title_score: job.title_score || job.metadata?.title_score || {},
     display_number: job.display_number || job.sequence_number || job.id,
     sequence_number: job.sequence_number || job.display_number || job.id,
     file_base_name: job.file_base_name || job.metadata?.file_base_name || "",
@@ -3460,10 +3490,12 @@ function confirmedTtsAudioPayload(job = activeTtsRailJob) {
     audio_path: job.audio_path || "",
     script_url: job.script_url || "",
     script_path: job.script_path || "",
-    subtitle_url: timedSubtitleUrl,
-    subtitle_path: timedSubtitlePath,
+    subtitle_url: job.subtitle_url || "",
+    subtitle_path: job.subtitle_path || "",
     timed_subtitle_url: timedSubtitleUrl,
     timed_subtitle_path: timedSubtitlePath,
+    timestamped_text_url: job.timestamped_text_url || timedSubtitleUrl,
+    timestamped_text_path: job.timestamped_text_path || timedSubtitlePath,
     subtitle_timeline: Array.isArray(job.subtitle_timeline) ? job.subtitle_timeline : [],
     provider: job.provider || ttsProvider?.value || "",
     voice_id: job.voice_id || "",
@@ -3500,6 +3532,9 @@ function saveTtsAudioHandoff(target, payload) {
 }
 
 function ttsHandoffTitle(payload = {}) {
+  const platformTitles = payload.platform_titles || {};
+  const title = String(payload.title || payload.seo_title || payload.publish_title || platformTitles.douyin || platformTitles.xiaohongshu || "").trim();
+  if (title) return title;
   const fromText = String(payload.text || "").replace(/\s+/g, "").slice(0, 18);
   return fromText || payload.voice_name || `配音 #${payload.id || ""}`.trim() || "TTS 三件套";
 }
@@ -3516,8 +3551,8 @@ function ttsConsumerJob(payload = {}) {
     script_path: payload.script_path || "",
     subtitle_url: payload.subtitle_url || payload.timed_subtitle_url || "",
     subtitle_path: payload.subtitle_path || payload.timed_subtitle_path || "",
-    timestamped_text_url: payload.timed_subtitle_url || payload.subtitle_url || "",
-    timestamped_text_path: payload.timed_subtitle_path || payload.subtitle_path || "",
+    timestamped_text_url: payload.timestamped_text_url || payload.timed_subtitle_url || "",
+    timestamped_text_path: payload.timestamped_text_path || payload.timed_subtitle_path || "",
   };
 }
 
@@ -3600,7 +3635,7 @@ async function sendTtsPayloadToTargets(payload, targets = []) {
   const sent = [];
   if (targets.includes("video-output")) {
     await ensureVideoProjectForTts(payload);
-    await window.videoProjects?.linkCurrent?.("tts", payload.id, payload.voice_name || `配音 #${payload.id}`, payload);
+    await window.videoProjects?.linkCurrent?.("tts", payload.id, ttsHandoffTitle(payload), payload);
     if (window.videoOutputModule?.loadVideoProductSources) await window.videoOutputModule.loadVideoProductSources();
     else await loadVideoProductSources({ preferredAudioId: payload.id });
     await window.videoProjects?.refresh?.({ preserveSelection: true });

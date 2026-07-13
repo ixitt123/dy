@@ -405,9 +405,20 @@ export function createTtsService({ baseDir, taskStore, getSettings, ffmpegPath, 
   function publicJob(job) {
     if (!job) return null;
     const metadata = safeJson(job.metadata_json, {});
+    const platformTitles = metadata.platform_titles || metadata.platformTitles || {};
+    const seoKeywords = Array.isArray(metadata.seo_keywords) ? metadata.seo_keywords : Array.isArray(metadata.seoKeywords) ? metadata.seoKeywords : [];
+    const hashtags = Array.isArray(metadata.hashtags) ? metadata.hashtags : [];
+    const title = String(metadata.title || metadata.seo_title || metadata.publish_title || platformTitles.douyin || "").trim();
     return {
       ...job,
       error: visibleError(job, metadata),
+      title,
+      seo_title: String(metadata.seo_title || title),
+      publish_title: String(metadata.publish_title || title),
+      platform_titles: platformTitles,
+      seo_keywords: seoKeywords,
+      hashtags,
+      title_score: metadata.title_score || metadata.titleScore || {},
       audio_url: job.status === "completed" && job.audio_path ? `/api/tts/audio?id=${job.id}` : "",
       script_url: job.status === "completed" && metadata.script_path ? `/api/tts/script?id=${job.id}` : "",
       subtitle_url: job.status === "completed" && metadata.subtitle_path ? `/api/tts/subtitle?id=${job.id}` : "",
@@ -465,6 +476,7 @@ export function createTtsService({ baseDir, taskStore, getSettings, ffmpegPath, 
     taskStore.updateTtsJob(job.id, { status: "processing", error: "" });
     const prepared = prepareScript(job.text);
     const jobMetadata = safeJson(job.metadata_json, {});
+    const titleMetadata = ttsTitleMetadata(prepared.text, jobMetadata);
     const sequenceNumber = Number(jobMetadata.sequence_number || 0) || ttsSequenceNumber(job) || Number(job.id || 0);
     const fileBaseName = String(jobMetadata.file_base_name || "").trim() || ttsFileBaseName(sequenceNumber);
     const outputPath = path.join(outputDir, `${fileBaseName}.${job.format === "wav" ? "wav" : "mp3"}`);
@@ -507,6 +519,7 @@ export function createTtsService({ baseDir, taskStore, getSettings, ffmpegPath, 
       preparedText: prepared.text,
       result,
       fileBaseName,
+      title: titleMetadata.title,
     });
 
     taskStore.updateTtsJob(job.id, {
@@ -517,6 +530,7 @@ export function createTtsService({ baseDir, taskStore, getSettings, ffmpegPath, 
         ...jobMetadata,
         ...prepared.metadata,
         ...(result.metadata || {}),
+        ...titleMetadata,
         sequence_number: sequenceNumber,
         file_base_name: fileBaseName,
         ...timedText,
@@ -548,6 +562,11 @@ export function createTtsService({ baseDir, taskStore, getSettings, ffmpegPath, 
     const voiceSelection = resolveVoiceSelection(providerAdapter, providerConfig(settings, provider), input);
     const sequenceNumber = nextSequenceNumber();
     const fileBaseName = ttsFileBaseName(sequenceNumber);
+    const preparedForTitle = prepareScript(input.text);
+    const titleMetadata = ttsTitleMetadata(preparedForTitle.text, {
+      ...input,
+      source: String(input.source || ""),
+    });
     const job = taskStore.createTtsJob({
       task_id: input.task_id,
       rewrite_id: input.rewrite_id,
@@ -564,6 +583,7 @@ export function createTtsService({ baseDir, taskStore, getSettings, ffmpegPath, 
       status: "waiting",
       metadata_json: JSON.stringify({
         queued: true,
+        ...titleMetadata,
         sequence_number: sequenceNumber,
         file_base_name: fileBaseName,
         model: voiceSelection.model,
@@ -636,8 +656,13 @@ export function createTtsService({ baseDir, taskStore, getSettings, ffmpegPath, 
     const prepared = prepareScript(text);
     const provider = String(input.provider || "minimax");
     const voiceAssetId = Number(input.voice_asset_id || 0);
+    const titleMetadata = ttsTitleMetadata(prepared.text, {
+      ...input,
+      source: String(input.source || "generated_preview"),
+    });
     const metadata = {
       imported_generated_audio: true,
+      ...titleMetadata,
       sequence_number: sequenceNumber,
       file_base_name: fileBaseName,
       model: String(input.model || ""),
@@ -677,6 +702,7 @@ export function createTtsService({ baseDir, taskStore, getSettings, ffmpegPath, 
         metadata: input.metadata && typeof input.metadata === "object" ? input.metadata : {},
       },
       fileBaseName,
+      title: titleMetadata.title,
     });
     taskStore.updateTtsJob(job.id, {
       metadata_json: JSON.stringify({
