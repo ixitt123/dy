@@ -3664,6 +3664,113 @@ function createLocalVideoTranscriptJob(filePath, apiKey) {
   return job;
 }
 
+function createLocalVideoAudioJob(filePath, format = "mp3") {
+  const resolvedPath = path.resolve(String(filePath || "").trim());
+  if (!resolvedPath || !fs.existsSync(resolvedPath)) throw new Error("没有找到本地视频文件");
+  const stat = fs.statSync(resolvedPath);
+  if (!stat.isFile() || !isSupportedLocalVideo(resolvedPath)) throw new Error("请选择 mp4、mov、mkv、avi、m4v 或 webm 视频文件");
+  const title = path.basename(resolvedPath, path.extname(resolvedPath));
+  const imported = taskStore.importTasks([{
+    kind: "local-video",
+    taskAction: "audio",
+    url: resolvedPath,
+    normalizedUrl: `local-audio:${resolvedPath.toLowerCase()}:${String(format || "mp3").toLowerCase()}`,
+    sourceText: resolvedPath,
+    transcriptEnabled: false,
+    audioEnabled: true,
+    audioFormat: format,
+    analysisEnabled: false,
+    onlyTranscript: false,
+  }]);
+  const task = imported.tasks[0] || imported.duplicates[0];
+  if (!task) throw new Error("本地音频提取任务创建失败");
+
+  const id = `local-audio-${task.id}-${Date.now()}`;
+  const job = {
+    id,
+    taskId: task.id,
+    status: "running",
+    percent: 0,
+    message: "准备提取本地视频音频",
+    text: "",
+    audioPath: "",
+    files: listDownloads(),
+    startedAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+  downloadJobs.set(id, job);
+  const updateJob = (changes) => {
+    Object.assign(job, changes, { updatedAt: new Date().toISOString() });
+  };
+
+  taskStore.updateTask(task.id, {
+    kind: "local-video",
+    task_action: "audio",
+    status: TASK_STATUS.TRANSCRIBING,
+    progress: 8,
+    title,
+    video_id: `local_${createHash("sha1").update(resolvedPath).digest("hex").slice(0, 12)}`,
+    video_path: resolvedPath,
+    file_size: stat.size,
+    audio_enabled: 1,
+    audio_format: String(format || "mp3").toLowerCase(),
+    message: "准备提取本地视频音频",
+    error: "",
+  });
+
+  (async () => {
+    const audioPath = await ytDlpService.extractAudio(resolvedPath, {
+      format,
+      onProgress: (progress) => {
+        const percent = Math.max(10, Math.min(96, Math.round(Number(progress.percent || 0))));
+        updateJob({ percent, message: progress.message || "正在提取本地视频音频" });
+        taskStore.updateTask(task.id, {
+          status: TASK_STATUS.TRANSCRIBING,
+          progress: percent,
+          message: progress.message || "正在提取本地视频音频",
+        });
+      },
+    });
+    taskStore.updateTask(task.id, {
+      audio_path: audioPath,
+      status: TASK_STATUS.DONE,
+      progress: 100,
+      message: "本地视频音频提取完成",
+      completed_at: new Date().toISOString(),
+    });
+    updateJob({
+      status: "done",
+      percent: 100,
+      message: "本地视频音频提取完成",
+      audioPath,
+      text: audioPath,
+      files: listDownloads(),
+    });
+  })()
+    .catch((error) => {
+      const message = error instanceof Error ? error.message : String(error);
+      taskStore.updateTask(task.id, {
+        status: TASK_STATUS.FAILED,
+        progress: Math.max(taskStore.getTask(task.id)?.progress || 0, 1),
+        message: "本地视频音频提取失败",
+        error: message,
+        completed_at: new Date().toISOString(),
+      });
+      updateJob({
+        status: "error",
+        message,
+        text: message,
+        files: listDownloads(),
+      });
+    })
+    .finally(() => {
+      setTimeout(() => downloadJobs.delete(id), 30 * 60 * 1000);
+      scheduleShutdownIfIdle();
+    });
+
+  return job;
+}
+
 function getBatchSettings() {
   return readSettings().batch;
 }
@@ -3870,7 +3977,7 @@ async function processBatchTask(task, signal) {
       error: "",
     });
 
-    const videoInfo = await parseVideoInfoForTask(task, signal);
+    let videoInfo = await parseVideoInfoForTask(task, signal);
     taskStore.updateTask(task.id, {
       title: videoInfo.title,
       video_id: videoInfo.videoId,
@@ -4839,7 +4946,7 @@ const server = http.createServer(async (req, res) => {
       const body = await readJsonBody(req);
       const limit = clampNumber(body.limit, 1, 1000, getBatchSettings().limit || 10);
       const concurrency = clampNumber(body.concurrency, 1, 5, getBatchSettings().concurrency);
-      const taskAction = ["parse", "link", "download", "transcript"].includes(String(body.action || "download"))
+      const taskAction = ["parse", "link", "download", "transcript", "audio"].includes(String(body.action || "download"))
         ? String(body.action || "download")
         : "download";
       const batchSettings = saveBatchSettings({
@@ -4847,17 +4954,19 @@ const server = http.createServer(async (req, res) => {
         limit,
         skipDownloaded: body.skipDownloaded !== false,
       });
-      const extracted = extractDouyinUrls(String(body.text || ""), {
+      const extracted = extractAnyUrls(String(body.text || ""), {
         limit,
         kind: String(body.kind || "video"),
         taskAction,
-        transcriptEnabled: taskAction === "transcript",
+        transcriptEnabled: taskAction === "transcript" || (taskAction === "download" && body.extractTranscript === true),
+        audioEnabled: taskAction === "audio" || (taskAction === "download" && body.extractAudio === true),
+        audioFormat: body.audioFormat || "mp3",
         analysisEnabled: false,
         onlyTranscript: taskAction === "transcript",
       });
 
       if (extracted.items.length === 0) {
-        sendJson(res, 400, { ok: false, message: "没有识别到抖音链接" });
+        sendJson(res, 400, { ok: false, message: "没有识别到 yt-dlp 可尝试处理的链接" });
         return;
       }
 
