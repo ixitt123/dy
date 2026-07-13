@@ -6125,6 +6125,39 @@ body[data-active-module="video-output"] .floating-workflow-guide [data-nav="vide
   border-top: 1px solid #2b3342;
 }
 
+.tts-history-row-minimized {
+  display: flex;
+  align-items: center;
+  min-height: 34px;
+  gap: 0;
+  padding: 7px 10px;
+}
+
+.tts-minimized-file {
+  width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  border: 0;
+  background: transparent;
+  color: #f3f6fb;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 800;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tts-minimized-file:hover {
+  color: #ffffff;
+}
+
+.tts-minimized-file:focus-visible {
+  border-radius: 6px;
+  outline: 2px solid rgba(113, 91, 255, 0.45);
+  outline-offset: 2px;
+}
+
 .tts-history-summary {
   display: flex;
   align-items: flex-start;

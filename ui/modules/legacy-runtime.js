@@ -3305,13 +3305,68 @@ function renderTtsJobs(jobs = []) {
     .join("");
 }
 
+const TTS_HIDDEN_JOBS_KEY = "dy:tts:hidden-jobs";
+const TTS_MINIMIZED_JOBS_KEY = "dy:tts:minimized-jobs";
+
+function readTtsJobDisplaySet(key) {
+  try {
+    const raw = globalThis.localStorage?.getItem(key);
+    const values = raw ? JSON.parse(raw) : [];
+    return new Set(Array.isArray(values) ? values.map(String) : []);
+  } catch (_) {
+    return new Set();
+  }
+}
+
+function writeTtsJobDisplaySet(key, values) {
+  try {
+    globalThis.localStorage?.setItem(key, JSON.stringify(Array.from(values)));
+  } catch (_) {
+    // UI state is optional; generation files and records stay untouched.
+  }
+}
+
+function setTtsJobDisplayState(key, id, enabled) {
+  const value = String(id || "");
+  if (!value) return;
+  const values = readTtsJobDisplaySet(key);
+  if (enabled) values.add(value);
+  else values.delete(value);
+  writeTtsJobDisplaySet(key, values);
+}
+
+function isTtsJobHidden(id) {
+  return readTtsJobDisplaySet(TTS_HIDDEN_JOBS_KEY).has(String(id || ""));
+}
+
+function isTtsJobMinimized(id) {
+  return readTtsJobDisplaySet(TTS_MINIMIZED_JOBS_KEY).has(String(id || ""));
+}
+
+function ttsJobAudioFileName(job = {}) {
+  const ext = String(job.format || "mp3").replace(/^\./, "").toLowerCase() || "mp3";
+  const baseName = String(job.file_base_name || job.metadata?.file_base_name || "").trim();
+  if (baseName) return baseName.toLowerCase().endsWith(`.${ext}`) ? baseName : `${baseName}.${ext}`;
+  const number = Number(job.display_number || job.sequence_number || job.id || 0);
+  return `tts-${number || "audio"}.${ext}`;
+}
+
 function renderTtsJobsEnhanced(jobs = []) {
-  if (!jobs.length) {
+  const visibleJobs = jobs.filter((job) => !isTtsJobHidden(job.id));
+  if (!visibleJobs.length) {
     ttsHistory.innerHTML = '<div class="tts-empty">还没有生成记录。</div>';
     return;
   }
   const labels = Object.fromEntries(ttsProviderConfigs.map((provider) => [provider.id, provider.label]));
-  ttsHistory.innerHTML = jobs.map((job) => {
+  ttsHistory.innerHTML = visibleJobs.map((job) => {
+    if (isTtsJobMinimized(job.id)) {
+      const fileName = ttsJobAudioFileName(job);
+      return `
+        <div class="tts-history-row tts-history-row-minimized" data-tts-job-id="${job.id}">
+          <button class="tts-minimized-file" type="button" title="双击恢复完整显示">${escapeHtml(fileName)}</button>
+        </div>
+      `;
+    }
     const audio = job.audio_url
       ? `<audio controls preload="none" src="${escapeHtml(job.audio_url)}"></audio>`
       : `<span title="${escapeHtml(job.error || "")}">${escapeHtml(job.error || "等待生成")}</span>`;
@@ -3344,6 +3399,8 @@ function renderTtsJobsEnhanced(jobs = []) {
           <div class="tts-history-actions">
             <button class="primary small tts-job-send" type="button">发送所选</button>
             <button class="ghost small danger-action tts-job-delete" type="button">不满意，删除</button>
+            <button class="ghost small tts-job-hide" type="button">隐藏</button>
+            <button class="ghost small tts-job-minimize" type="button">最小化</button>
           </div>
           <small class="tts-job-handoff-status"></small>
         </div>
@@ -3351,6 +3408,8 @@ function renderTtsJobsEnhanced(jobs = []) {
       : `
         <div class="tts-history-actions tts-history-actions-simple">
           <button class="ghost small danger-action tts-job-delete" type="button" ${["waiting", "processing"].includes(job.status) ? "disabled" : ""}>删除</button>
+          <button class="ghost small tts-job-hide" type="button" ${["waiting", "processing"].includes(job.status) ? "disabled" : ""}>隐藏</button>
+          <button class="ghost small tts-job-minimize" type="button" ${["waiting", "processing"].includes(job.status) ? "disabled" : ""}>最小化</button>
         </div>
       `;
     return `
@@ -3597,6 +3656,8 @@ async function deleteTtsJob(id) {
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ id, deleteFile: true }),
   });
+  setTtsJobDisplayState(TTS_HIDDEN_JOBS_KEY, id, false);
+  setTtsJobDisplayState(TTS_MINIMIZED_JOBS_KEY, id, false);
   ttsStatus.textContent = `已删除 ${data.deleted || 0} 条语音记录。`;
   await refreshTtsJobs();
 }
@@ -3609,6 +3670,10 @@ async function clearTtsJobs(scope = "all") {
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ scope, deleteFiles: true }),
   });
+  if (scope === "all") {
+    writeTtsJobDisplaySet(TTS_HIDDEN_JOBS_KEY, new Set());
+    writeTtsJobDisplaySet(TTS_MINIMIZED_JOBS_KEY, new Set());
+  }
   ttsStatus.textContent = `已清理 ${data.deleted || 0} 条语音记录。`;
   await refreshTtsJobs();
 }
@@ -6929,11 +6994,14 @@ document.querySelector("#clearTtsJobs")?.addEventListener("click", () => {
 ttsHistory?.addEventListener("click", (event) => {
   const sendButton = event.target.closest(".tts-job-send");
   const deleteButton = event.target.closest(".tts-job-delete");
+  const hideButton = event.target.closest(".tts-job-hide");
+  const minimizeButton = event.target.closest(".tts-job-minimize");
   const row = event.target.closest("[data-tts-job-id]");
   if (!row) return;
+  const jobId = Number(row.dataset.ttsJobId || 0);
   if (sendButton && row) {
     (async () => {
-      const data = await fetchJson(`/api/tts/job?id=${encodeURIComponent(Number(row.dataset.ttsJobId || 0))}`);
+      const data = await fetchJson(`/api/tts/job?id=${encodeURIComponent(jobId)}`);
       const job = data.job;
       if (!job || job.status !== "completed") {
         setTtsHandoffStatus(row, "这条音频还没有生成完成，不能发送。");
@@ -6948,8 +7016,28 @@ ttsHistory?.addEventListener("click", (event) => {
     });
     return;
   }
+  if (hideButton) {
+    setTtsJobDisplayState(TTS_HIDDEN_JOBS_KEY, jobId, true);
+    setTtsJobDisplayState(TTS_MINIMIZED_JOBS_KEY, jobId, false);
+    ttsStatus.textContent = "已隐藏这条生成记录，文件仍然保留。";
+    refreshTtsJobs().catch((error) => { ttsStatus.textContent = error instanceof Error ? error.message : String(error); });
+    return;
+  }
+  if (minimizeButton) {
+    setTtsJobDisplayState(TTS_MINIMIZED_JOBS_KEY, jobId, true);
+    refreshTtsJobs().catch((error) => { ttsStatus.textContent = error instanceof Error ? error.message : String(error); });
+    return;
+  }
   if (!deleteButton) return;
-  deleteTtsJob(Number(row.dataset.ttsJobId || 0)).catch((error) => { ttsStatus.textContent = error instanceof Error ? error.message : String(error); });
+  deleteTtsJob(jobId).catch((error) => { ttsStatus.textContent = error instanceof Error ? error.message : String(error); });
+});
+
+ttsHistory?.addEventListener("dblclick", (event) => {
+  const fileButton = event.target.closest(".tts-minimized-file");
+  const row = event.target.closest("[data-tts-job-id]");
+  if (!fileButton || !row) return;
+  setTtsJobDisplayState(TTS_MINIMIZED_JOBS_KEY, Number(row.dataset.ttsJobId || 0), false);
+  refreshTtsJobs().catch((error) => { ttsStatus.textContent = error instanceof Error ? error.message : String(error); });
 });
 
 document.querySelector("#newVoiceAsset").addEventListener("click", () => {
