@@ -914,7 +914,6 @@ export function createIanXiaoheiRoutes({
           output: {
             package_dir: packageDir,
             status: "completed",
-            package_dir: packageDir,
             created_at: new Date().toISOString(),
           },
         });

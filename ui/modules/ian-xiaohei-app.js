@@ -874,8 +874,8 @@ async function generateCompleteWorkflow() {
     state.ttsJob = ttsJob;
     showAudio(ttsJob.audio_url || `/api/tts/audio?id=${ttsJob.id}`, `已确定使用 · 音频 #${ttsJob.id}`);
 
-    setStatus("正在创建剪映草稿", "图片、TTS 和字幕已绑定，正在写入剪映模板草稿。", 88, false, "提交剪映任务");
-    const queued = await fetchJson("/api/ian-xiaohei/export-draft", {
+    setStatus("正在生成小黑素材包", "图片、TTS 和字幕已绑定，正在写入小黑生产线输出目录。", 88, false, "写入文件");
+    const exported = await fetchJson("/api/ian-xiaohei/export-draft", {
       method: "POST",
       body: JSON.stringify({
         project_id: state.projectId,
@@ -886,21 +886,16 @@ async function generateCompleteWorkflow() {
         bgm_strategy: "none",
       }),
     });
-    const project = await pollVideoProject(queued.project.id);
+    const project = exported.project || {};
     await loadOutputs();
-    if (project.status !== "completed") throw new Error(project.error || "剪映草稿生成失败。");
+    if (project.status !== "completed") throw new Error(project.error || "小黑素材包生成失败。");
     setStatus(
       "完整素材已生成",
-      project.draft_path
-        ? `剪映草稿已写入：${project.draft_path}`
-        : `素材包已生成，但没有检测到可见剪映草稿：${project.output_dir || ""}`,
+      `素材包已生成：${project.output_dir || exported.packageDir || ""}`,
       100,
-      !project.draft_path,
+      false,
       "完成",
     );
-    if (project.draft_path) {
-      await fetchJson("/api/video-product/open-jianying", { method: "POST", body: "{}" }).catch(() => null);
-    }
   } catch (error) {
     setStatus("生成失败", error.payload?.message || error.message || String(error), 100, true, "已停止");
   } finally {
