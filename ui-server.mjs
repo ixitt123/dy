@@ -3623,6 +3623,8 @@ function normalizeMomentsResult(raw = {}, fallback = {}) {
     .slice(0, imageCount)
     .map((item, index) => {
       const prompt = String(item.prompt || "").trim();
+      const materialHint = String(item.local_material_hint || item.localMaterialHint || fallback.localMaterials || "").trim();
+      const cleanMaterialHint = /无本地素材|暂无本地素材/i.test(materialHint) ? "" : materialHint;
       return {
         index: index + 1,
         title: String(item.title || `配图 ${index + 1}`).trim().slice(0, 80),
@@ -3633,7 +3635,7 @@ function normalizeMomentsResult(raw = {}, fallback = {}) {
         purpose: String(item.purpose || item.source_segment || item.sourceSegment || "").trim().slice(0, 500),
         prompt,
         negative_prompt: String(item.negative_prompt || item.negativePrompt || "").trim(),
-        local_material_hint: String(item.local_material_hint || item.localMaterialHint || fallback.localMaterials || "").trim().slice(0, 800),
+        local_material_hint: cleanMaterialHint.slice(0, 800),
       };
     })
     .filter((item) => item.prompt);
