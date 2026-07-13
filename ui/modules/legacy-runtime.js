@@ -1087,7 +1087,7 @@ async function sendRewriteTextToTarget(target, text, meta = {}) {
   rewriteStatus.textContent = `已发送到${label}。`;
 }
 
-async function handleRewriteHandoff(button) {
+function rewriteHandoffTextFromButton(button) {
   const target = button.dataset.target || "";
   const source = button.dataset.source || "rewrite";
   const versionKey = button.dataset.versionKey || "";
@@ -1102,7 +1102,44 @@ async function handleRewriteHandoff(button) {
     const version = collectRewriteVersions().find((item) => item.key === versionKey);
     title = version?.name || title;
   }
+  return { target, source, versionKey, text, title };
+}
+
+async function handleRewriteHandoff(button) {
+  const { target, source, versionKey, text, title } = rewriteHandoffTextFromButton(button);
   await sendRewriteTextToTarget(target, text, { source, versionKey, title });
+}
+
+async function handleRewriteSelectedHandoff(button) {
+  const panel = button.closest(".rewrite-handoff-panel");
+  const targets = [...(panel?.querySelectorAll(".rewrite-handoff-choice:checked") || [])]
+    .map((item) => item.dataset.target)
+    .filter(Boolean);
+  if (!targets.length) {
+    rewriteStatus.textContent = "请先勾选要发送到的模块。";
+    return;
+  }
+  const source = button.dataset.source || "rewrite";
+  const versionKey = button.dataset.versionKey || "";
+  let text = "";
+  let title = "文案定制成品";
+  if (source === "original") {
+    text = rewriteOriginal.value;
+    title = "原始文案";
+  } else {
+    const textarea = rewriteVersions.querySelector(`.rewrite-version-text[data-version-key="${versionKey}"]`);
+    text = textarea?.value || "";
+    const version = collectRewriteVersions().find((item) => item.key === versionKey);
+    title = version?.name || title;
+  }
+  if (!String(text || "").trim()) {
+    rewriteStatus.textContent = "没有可发送的文案，请先填写或生成。";
+    return;
+  }
+  for (const target of targets) {
+    await sendRewriteTextToTarget(target, text, { source, versionKey, title });
+  }
+  rewriteStatus.textContent = `已发送到：${targets.map(handoffTargetLabel).join("、")}。`;
 }
 
 async function continueWorkflowFromTranscript(job = {}, { sourceUrl = "", title = "" } = {}) {
@@ -5373,10 +5410,10 @@ transcriptList.addEventListener("click", (event) => {
 });
 
 rewritePanel?.addEventListener("click", (event) => {
-  const button = event.target.closest(".rewrite-send-target");
+  const button = event.target.closest(".rewrite-send-selected");
   if (!button) return;
   button.disabled = true;
-  handleRewriteHandoff(button).finally(() => {
+  handleRewriteSelectedHandoff(button).finally(() => {
     button.disabled = false;
   });
 });

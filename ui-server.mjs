@@ -2647,7 +2647,7 @@ function runFfmpeg(args, signal) {
 }
 
 async function convertMediaToAsrWav(mediaPath, signal) {
-  const wavPath = makeUniquePath(`${path.basename(mediaPath, path.extname(mediaPath))}_asr`, ".wav");
+  const wavPath = makeUniquePath(`${path.basename(mediaPath, path.extname(mediaPath))}_asr`, ".wav", "audio");
   await runFfmpeg([
     "-y",
     "-i",

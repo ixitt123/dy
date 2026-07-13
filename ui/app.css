@@ -6916,7 +6916,28 @@ audio {
   gap: 7px;
 }
 
-.rewrite-handoff-actions button {
+.rewrite-handoff-actions label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 30px;
+  border: 1px solid #303846;
+  border-radius: 6px;
+  padding: 0 10px;
+  color: #dce2eb;
+  background: #111722;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.rewrite-handoff-actions input {
+  width: 14px;
+  height: 14px;
+  accent-color: var(--primary);
+}
+
+.rewrite-handoff-panel > .rewrite-send-selected {
+  margin-top: 10px;
   min-height: 30px;
 }
 
