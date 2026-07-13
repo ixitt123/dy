@@ -2507,11 +2507,11 @@ pre {
 }
 
 .tts-settings.tts-settings-summary {
-  grid-template-columns: minmax(220px, 0.8fr) minmax(0, 1.1fr) auto;
+  grid-template-columns: minmax(220px, 0.9fr) minmax(0, 1.3fr) auto;
   align-items: center;
   border: 1px solid var(--line);
   border-radius: 8px;
-  padding: 12px;
+  padding: 10px 12px;
   background: color-mix(in srgb, var(--panel) 92%, var(--primary) 8%);
 }
 
@@ -2605,7 +2605,7 @@ pre {
 }
 
 #ttsText {
-  min-height: 360px;
+  min-height: 420px;
 }
 
 .tts-script-foot {
@@ -5905,6 +5905,48 @@ body[data-active-module="video-output"] .floating-workflow-guide [data-nav="vide
 
 .tts-output-column .tts-generate-row button {
   width: 100%;
+}
+
+.tts-secondary-panel,
+.voice-center {
+  margin-top: 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0;
+  background: color-mix(in srgb, var(--panel) 96%, var(--primary) 4%);
+  overflow: hidden;
+}
+
+.tts-secondary-panel > summary,
+.voice-center > summary {
+  min-height: 46px;
+  padding: 13px 16px;
+  color: var(--text);
+  cursor: pointer;
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.tts-secondary-panel[open] > summary,
+.voice-center[open] > summary {
+  border-bottom: 1px solid var(--line);
+}
+
+.tts-secondary-panel > .tts-history-head,
+.tts-secondary-panel > .tts-history,
+.voice-center > :not(summary) {
+  margin-right: 16px;
+  margin-left: 16px;
+}
+
+.tts-secondary-panel > .tts-history-head,
+.voice-center > .voice-center-head {
+  margin-top: 14px;
+}
+
+.tts-secondary-panel > .tts-history,
+.voice-center > :last-child {
+  margin-bottom: 16px;
 }
 
 #ttsAudioHandoffStatus {
