@@ -4,7 +4,6 @@ export const WORKFLOW_STATES = [
   "titles_ready",
   "rewrite_ready",
   "tts_ready",
-  "director_ready",
   "image_ready",
   "timeline_ready",
   "draft_ready",
@@ -18,7 +17,6 @@ export const WORKFLOW_TO_PROJECT_STATUS = {
   titles_ready: "transcribed",
   rewrite_ready: "rewritten",
   tts_ready: "voiced",
-  director_ready: "directed",
   image_ready: "assets_ready",
   timeline_ready: "assets_ready",
   draft_ready: "draft_ready",
@@ -57,7 +55,6 @@ export function workflowStateFromProject(project = {}) {
   if (hasValue(project.outputHistory) || hasValue(project.jianyingDraft)) return "draft_ready";
   if (hasValue(project.timelineProject) || hasValue(project.lastTimelineProjectId)) return "timeline_ready";
   if (hasValue(project.selectedAssets)) return "image_ready";
-  if (hasValue(project.directorScript) || hasValue(project.lastDirectorProjectId)) return "director_ready";
   if (hasValue(project.selectedTtsAudio) || hasValue(project.lastTtsJobId)) return "tts_ready";
   if (hasValue(project.selectedRewriteText) || hasValue(project.lastRewriteId)) return "rewrite_ready";
   if (hasValue(project.platformTitles) || hasValue(project.seoKeywords) || hasValue(project.hashtags)) return "titles_ready";
