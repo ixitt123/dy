@@ -4528,6 +4528,258 @@ body[data-active-module="video-output"] .floating-workflow-guide [data-nav="vide
   background: #f4f6fa;
 }
 
+.money-printer-maker {
+  display: grid;
+  gap: 16px;
+}
+
+.money-printer-head {
+  align-items: center;
+}
+
+.money-printer-head p {
+  max-width: 760px;
+  margin: 5px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.money-printer-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  border: 1px solid #374151;
+  border-radius: 6px;
+  padding: 0 10px;
+  color: #cbd5e1;
+  background: #111827;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.money-printer-badge.ready {
+  border-color: #1f8a57;
+  color: #b8f4d4;
+  background: #0e2b20;
+}
+
+.money-printer-badge.warning {
+  border-color: #8a6a1f;
+  color: #f8e1a1;
+  background: #2c2411;
+}
+
+.money-printer-badge.error {
+  border-color: #8a2d2d;
+  color: #fecaca;
+  background: #2d1515;
+}
+
+.money-printer-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(360px, 0.45fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.money-printer-form,
+.money-printer-side {
+  display: grid;
+  gap: 14px;
+}
+
+.money-printer-card {
+  border: 1px solid #263142;
+  border-radius: 8px;
+  padding: 14px;
+  background: #0f141c;
+}
+
+.money-printer-card-head,
+.money-printer-actions,
+.money-printer-status-line,
+.money-printer-video-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.money-printer-card-head {
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.money-printer-card-head strong,
+.money-printer-status-line strong {
+  color: var(--text);
+}
+
+.money-printer-card-head small,
+.money-printer-status-line span,
+.money-printer-assets small {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.money-printer-actions {
+  flex-wrap: wrap;
+}
+
+.money-printer-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.money-printer-form label {
+  display: grid;
+  gap: 7px;
+  margin-bottom: 12px;
+}
+
+.money-printer-form label span {
+  color: #d7deea;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.money-printer-form input[type="text"],
+.money-printer-form select,
+.money-printer-form textarea {
+  width: 100%;
+  border: 1px solid #2f3a4d;
+  border-radius: 6px;
+  background: #0b1018;
+  color: var(--text);
+}
+
+.money-printer-form input[type="text"],
+.money-printer-form select {
+  min-height: 40px;
+  padding: 0 10px;
+}
+
+.money-printer-form textarea {
+  min-height: 128px;
+  padding: 10px;
+  resize: vertical;
+  line-height: 1.6;
+}
+
+.money-printer-local-materials {
+  display: none !important;
+}
+
+.money-printer-local-source .money-printer-local-materials {
+  display: grid !important;
+}
+
+.money-printer-check {
+  display: flex !important;
+  grid-template-columns: none !important;
+  align-items: center;
+  gap: 8px;
+}
+
+.money-printer-check input {
+  width: 16px;
+  min-height: 16px;
+}
+
+.money-printer-progress {
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #202a3a;
+}
+
+.money-printer-progress i {
+  display: block;
+  width: 0;
+  height: 100%;
+  background: linear-gradient(90deg, #56c2ff, #80f0b4);
+  transition: width 0.2s ease;
+}
+
+.money-printer-task-meta {
+  display: grid;
+  grid-template-columns: 80px minmax(0, 1fr);
+  gap: 8px 10px;
+  margin: 14px 0;
+  color: #cbd5e1;
+  font-size: 12px;
+}
+
+.money-printer-task-meta dt {
+  color: var(--muted);
+}
+
+.money-printer-task-meta dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.money-printer-videos,
+.money-printer-assets,
+.money-printer-task-list {
+  display: grid;
+  gap: 8px;
+}
+
+.money-printer-video-row {
+  justify-content: space-between;
+  border: 1px solid #263142;
+  border-radius: 6px;
+  padding: 8px;
+  background: #0b1018;
+}
+
+.money-printer-video-row a {
+  color: #91d5ff;
+  font-weight: 800;
+}
+
+.money-printer-assets div {
+  display: flex;
+  justify-content: space-between;
+  border-bottom: 1px solid #263142;
+  padding-bottom: 6px;
+  color: #cbd5e1;
+}
+
+.money-printer-task-list button {
+  display: grid;
+  gap: 4px;
+  width: 100%;
+  text-align: left;
+}
+
+.money-printer-log-card summary {
+  cursor: pointer;
+  color: #d7deea;
+  font-weight: 800;
+}
+
+.money-printer-log-card pre {
+  max-height: 220px;
+  overflow: auto;
+  white-space: pre-wrap;
+  color: #9fb0c7;
+  font-size: 11px;
+}
+
+.money-printer-error .money-printer-status-line strong {
+  color: #fecaca;
+}
+
+@media (max-width: 1080px) {
+  .money-printer-layout,
+  .money-printer-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 .workspace,
 .result-area,
 .files-area,
