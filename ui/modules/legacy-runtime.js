@@ -257,6 +257,7 @@ const momentsProgressBar = document.querySelector("#momentsProgressBar");
 const copyMomentsPromptsBtn = document.querySelector("#copyMomentsPrompts");
 const generateMomentsImagesBtn = document.querySelector("#generateMomentsImages");
 const publishMomentsWechatBtn = document.querySelector("#publishMomentsWechat");
+const momentsPublishStatus = document.querySelector("#momentsPublishStatus");
 const momentsPostOutput = document.querySelector("#momentsPostOutput");
 const momentsResultMeta = document.querySelector("#momentsResultMeta");
 const momentsImagePromptList = document.querySelector("#momentsImagePromptList");
@@ -1538,6 +1539,12 @@ function setMomentsStatus(message, type = "") {
   if (!momentsCopyStatus) return;
   momentsCopyStatus.textContent = message;
   momentsCopyStatus.dataset.status = type;
+}
+
+function setMomentsPublishStatus(message, type = "") {
+  if (!momentsPublishStatus) return;
+  momentsPublishStatus.textContent = message;
+  momentsPublishStatus.dataset.status = type;
 }
 
 function setMomentsProgress(percent, label) {
