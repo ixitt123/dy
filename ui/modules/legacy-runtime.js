@@ -3461,6 +3461,8 @@ async function generateTts() {
     return;
   }
   ttsStatus.textContent = "正在检查 TTS API 配置...";
+  setTtsMainProgress(5, "检查配置");
+  setTtsMainProgress(5, "检查配置");
   await ensureTtsProviderConfigured();
   syncDirectorSourceFromText(text, {
     title: directorTitle?.value.trim() || "配音文案导演稿",
@@ -4002,6 +4004,8 @@ generateTts = async function generateTtsUnified() {
     sourceType: "tts",
   });
   generateTtsButton.disabled = true;
+  setTtsMainProgress(8, isMusicAsset ? "正在生成音乐音频" : "正在提交生成任务");
+  setTtsMainProgress(8, "正在提交生成任务");
   ttsStatus.textContent = isMusicAsset ? "正在生成 MiniMax Music 音频..." : "正在提交生成任务...";
   renderTtsRail({
     id: "",
