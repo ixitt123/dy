@@ -3026,7 +3026,11 @@ async function analyzeTranscriptWithDashScope(apiKey, transcriptText, videoInfo,
 
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
-    throw new Error(data.message || data.error?.message || `AI 分析请求失败：HTTP ${response.status}`);
+    const message = data.message || data.error?.message || `AI 分析请求失败：HTTP ${response.status}`;
+    if (isModelContentInspectionError(message)) {
+      return normalizeAnalysis({ ...analyzeTranscriptText(transcriptText), source: "local-rules" }, transcriptText);
+    }
+    throw new Error(message);
   }
 
   const content = data.choices?.[0]?.message?.content || "";
@@ -3041,40 +3045,63 @@ function cleanModelText(value) {
     .trim();
 }
 
+function isModelContentInspectionError(error) {
+  return /DataInspectionFailed|inappropriate content|content inspection|内容审核|数据检查|输出内容/i.test(errorMessage(error));
+}
+
+function locallyCorrectTranscriptText(value) {
+  return String(value || "")
+    .replace(/\r/g, "\n")
+    .split(/\n+/)
+    .map((line) => line.replace(/\s+/g, " ").trim())
+    .filter(Boolean)
+    .join("\n")
+    .replace(/[，,]\s*/g, "，")
+    .replace(/[。\.]\s*/g, "。")
+    .replace(/[！？!?]\s*/g, (match) => match.includes("!") || match.includes("！") ? "！" : "？")
+    .replace(/([。！？]){2,}/g, "$1")
+    .trim();
+}
+
 async function correctTranscriptWithRewriteModel(rawText, videoInfo = {}, signal) {
   const text = String(rawText || "").trim();
   if (!text) throw new Error("没有可校正的文案");
   const provider = await getRewriteProvider("");
-  const content = await chatCompletion(provider, [
-    {
-      role: "system",
-      content: [
-        "你是短视频 ASR 文案校正员，使用 copy-editing 高分规则和短视频转写清洗规则。",
-        "采用 copy-editing 的核心原则：提升清晰度、修复语句问题、保持语气一致、保留作者原意。",
-        "采用短视频转写清洗原则：清理噪声 ASR、同音错词、断句、标点、重复口吃和明显识别错误。",
-        "禁止使用营销改写项：不要补利益点、不要添加证明、不要强化情绪、不要改写成新文案。",
-        "准确性优先：不确定的词不要编造；能从上下文确定才修正，无法确定时保留原词或标注【听不清】。",
-        "内部自检：逐句对照原文，确保核心信息、顺序、数字、人名、地名、品牌名没有被改动。",
-        "只输出校正后的最终文案。",
-      ].join("\n"),
-    },
-    {
-      role: "user",
-      content: [
-        `标题：${videoInfo.title || ""}`,
-        `平台：${videoInfo.extractor || videoInfo.platform || ""}`,
-        "待校正文案：",
-        text.slice(0, 20000),
-      ].join("\n"),
-    },
-  ], signal, {
-    temperature: 0.1,
-    requestName: "文案校正",
-    maxTokens: Math.min(12000, Math.max(2000, Math.ceil(text.length * 1.8))),
-  });
-  const corrected = cleanModelText(content);
-  if (!corrected) throw new Error("文案校正没有返回结果");
-  return corrected;
+  try {
+    const content = await chatCompletion(provider, [
+      {
+        role: "system",
+        content: [
+          "你是短视频 ASR 文案校正员，使用 copy-editing 高分规则和短视频转写清洗规则。",
+          "采用 copy-editing 的核心原则：提升清晰度、修复语句问题、保持语气一致、保留作者原意。",
+          "采用短视频转写清洗原则：清理噪声 ASR、同音错词、断句、标点、重复口吃和明显识别错误。",
+          "禁止使用营销改写项：不要补利益点、不要添加证明、不要强化情绪、不要改写成新文案。",
+          "准确性优先：不确定的词不要编造；能从上下文确定才修正，无法确定时保留原词或标注【听不清】。",
+          "内部自检：逐句对照原文，确保核心信息、顺序、数字、人名、地名、品牌名没有被改动。",
+          "只输出校正后的最终文案。",
+        ].join("\n"),
+      },
+      {
+        role: "user",
+        content: [
+          `标题：${videoInfo.title || ""}`,
+          `平台：${videoInfo.extractor || videoInfo.platform || ""}`,
+          "待校正文案：",
+          text.slice(0, 20000),
+        ].join("\n"),
+      },
+    ], signal, {
+      temperature: 0.1,
+      requestName: "文案校正",
+      maxTokens: Math.min(12000, Math.max(2000, Math.ceil(text.length * 1.8))),
+    });
+    const corrected = cleanModelText(content);
+    if (!corrected) throw new Error("文案校正没有返回结果");
+    return corrected;
+  } catch (error) {
+    if (!isModelContentInspectionError(error)) throw error;
+    return locallyCorrectTranscriptText(text);
+  }
 }
 
 function normalizeRewriteVersionContent(value) {
