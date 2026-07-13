@@ -242,6 +242,10 @@
             <input id="downloadExtractAudio" type="checkbox" />
             下载后提取音频
           </label>
+          <label class="check-row">
+            <input id="downloadCreateSubtitle" type="checkbox" />
+            下载后生成 SRT 字幕文件
+          </label>
           <label>
             音频格式
             <select id="downloadAudioFormat">
@@ -257,6 +261,7 @@
           <button id="linkBtn" type="button">获取下载链接</button>
           <button class="primary" id="downloadBtn" type="button">下载视频</button>
           <button class="accent" id="transcriptBtn" type="button">提取文案</button>
+          <button class="secondary" id="subtitleExtractBtn" type="button">提取字幕</button>
           <button class="secondary" id="audioExtractBtn" type="button">提取音频</button>
         </div>
 
@@ -275,6 +280,7 @@
               <option value="m4a">m4a</option>
             </select>
             <button class="accent" id="extractLocalVideoTranscript" type="button">提取本地文案</button>
+            <button class="secondary" id="extractLocalVideoSubtitle" type="button">提取本地字幕</button>
             <button class="secondary" id="extractLocalVideoAudio" type="button">提取本地音频</button>
           </div>
         </section>
