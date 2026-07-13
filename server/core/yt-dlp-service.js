@@ -162,6 +162,77 @@ function findInfoJsonForVideo(videoPath) {
   return fileExists(candidate) ? candidate : "";
 }
 
+function stripAnsi(value) {
+  return String(value || "").replace(/\x1B\[[0-?]*[ -/]*[@-~]/g, "");
+}
+
+function normalizePrintedPath(line, targetDir) {
+  const cleaned = stripAnsi(line)
+    .replace(/^file:/i, "")
+    .replace(/^["']|["']$/g, "")
+    .trim();
+  if (!cleaned) return "";
+  return path.isAbsolute(cleaned) ? cleaned : path.resolve(targetDir, cleaned);
+}
+
+function readJsonFile(filePath) {
+  try {
+    return JSON.parse(fs.readFileSync(filePath, "utf8"));
+  } catch {
+    return null;
+  }
+}
+
+function sameUrl(left, right) {
+  const normalize = (value) => String(value || "").replace(/[?#].*$/, "").replace(/\/$/, "");
+  return normalize(left) && normalize(left) === normalize(right);
+}
+
+function findDownloadedVideoFromDir(targetDir, { url = "", startedAt = 0, printed = [] } = {}) {
+  const files = fs.existsSync(targetDir) ? fs.readdirSync(targetDir) : [];
+  const infoRows = files
+    .filter((name) => name.endsWith(".info.json"))
+    .map((name) => {
+      const filePath = path.join(targetDir, name);
+      const stat = fs.statSync(filePath);
+      const raw = readJsonFile(filePath) || {};
+      return { filePath, name, stat, raw };
+    })
+    .filter((row) => {
+      if (!startedAt) return true;
+      return row.stat.mtimeMs >= startedAt - 60_000;
+    })
+    .sort((left, right) => right.stat.mtimeMs - left.stat.mtimeMs);
+
+  const printedText = printed.join("\n");
+  const matchingInfo = infoRows.find(({ raw, name }) => {
+    const id = String(raw.id || "");
+    return (id && (printedText.includes(id) || url.includes(id) || name.includes(id)))
+      || sameUrl(raw.webpage_url, url)
+      || sameUrl(raw.original_url, url);
+  }) || infoRows[0];
+
+  const videoRows = files
+    .filter((name) => VIDEO_EXTENSIONS.has(path.extname(name).toLowerCase()))
+    .map((name) => {
+      const filePath = path.join(targetDir, name);
+      const stat = fs.statSync(filePath);
+      return { filePath, name, stat };
+    })
+    .filter((row) => {
+      if (!startedAt) return true;
+      return row.stat.mtimeMs >= startedAt - 60_000;
+    })
+    .sort((left, right) => right.stat.mtimeMs - left.stat.mtimeMs);
+
+  if (matchingInfo?.raw?.id) {
+    const id = String(matchingInfo.raw.id);
+    const byId = videoRows.find((row) => row.name.includes(id));
+    if (byId) return byId.filePath;
+  }
+  return videoRows[0]?.filePath || "";
+}
+
 async function ffprobeDuration(ffprobePath, mediaPath, signal) {
   if (!ffprobePath || !fileExists(mediaPath)) return 0;
   try {
