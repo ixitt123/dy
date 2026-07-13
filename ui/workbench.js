@@ -75,8 +75,6 @@ let projectAssetsState = [];
 const COLLECTOR_TAB_KEY = "short-video-collector-tab";
 const RAIL_TASK_RUNNING_STATUSES = new Set(["下载中", "提取中", "running", "processing"]);
 const RAIL_TASK_FINISHED_STATUSES = new Set(["完成", "失败", "completed", "failed", "success", "error"]);
-const RAIL_VIDEO_PRODUCT_RUNNING_STATUSES = new Set(["pending", "binding_assets", "building_timeline", "rendering", "exporting_draft"]);
-
 const VIDEO_PROJECT_STEPS = [
   ["created", "采集素材", "collector"],
   ["collected", "文案库", "transcript"],
@@ -658,7 +656,7 @@ function setupDirectorStudio() {
 }
 
 function setupVfoFutureStep() {
-  // 独立成片中心已停用，不再追加旧的“下一阶段”占位卡。
+  // 独立旧生产线已停用，不再追加旧的“下一阶段”占位卡。
 }
 
 function createTranscriptVault() {
@@ -770,7 +768,7 @@ function buildWorkbenchInformationArchitecture() {
 }
 
 function navigateWorkbench(pageId, options = {}) {
-  const aliases = { analysis: "collector", transcript: "collector", director: "dashboard", files: "assets", "image-studio": "assets", vfo: "dashboard", "video-output": "dashboard" };
+  const aliases = { analysis: "collector", transcript: "collector", director: "dashboard", files: "assets", "image-studio": "assets", vfo: "dashboard" };
   const normalized = aliases[pageId] || pageId;
   const target = workbenchPages[normalized] ? normalized : "dashboard";
   const collectorTab = options.collectorTab || ((pageId === "analysis" || pageId === "transcript") ? "copybank" : "");
@@ -1118,34 +1116,11 @@ async function openLatestOutputLocation() {
   }
 }
 
-async function openRailVideoProduct() {
-  setRailActionStatus('视频成片生产线已停用，请使用 CS1、小黑或 MoneyPrinter。');
-  navigateWorkbench('dashboard');
-}
-
-async function openRailVideoProductLocation() {
-  setRailActionStatus('视频成片生产线已停用，旧输出已不再作为生产线入口。');
-}
-async function forceRailVideoProduct() {
-  setRailActionStatus('视频成片生产线已停用，不能再强制执行旧任务。');
-}
 function setRailActionStatus(message) {
   if (typeof batchStatus !== "undefined") batchStatus.textContent = message;
   if (typeof resultBox !== "undefined") resultBox.textContent = message;
 }
 
-async function refreshVideoProductSurfaces() {
-  dashboardVideoProducts = [];
-  await refreshWorkbenchOverview();
-}
-async function deleteRailVideoProduct() {
-  setRailActionStatus('视频成片生产线已停用，旧任务记录由本次清理统一删除。');
-}
-
-async function clearRailVideoProducts() {
-  dashboardVideoProducts = [];
-  setRailActionStatus('视频成片生产线已停用，旧任务记录由本次清理统一删除。');
-}
 async function clearFinishedRailTasks() {
   const tasks = typeof allTasks === "undefined" ? [] : allTasks;
   const finished = tasks.filter(railTaskIsFinished);
@@ -1250,51 +1225,11 @@ function bindWorkbenchInteractions() {
     const railOpen = event.target.closest(".rail-task-open");
     const railPause = event.target.closest(".rail-task-pause");
     const railDelete = event.target.closest(".rail-task-delete");
-    const videoProductOpen = event.target.closest(".rail-video-product-open");
-    const videoProductFolder = event.target.closest(".rail-video-product-folder");
-    const videoProductDelete = event.target.closest(".rail-video-product-delete");
-    const videoProductForce = event.target.closest(".rail-video-product-force");
-    const videoProductClear = event.target.closest(".rail-video-product-clear");
     const railTaskClearFinished = event.target.closest(".rail-task-clear-finished");
-    if (videoProductClear) {
-      event.preventDefault();
-      clearRailVideoProducts().catch((error) => {
-        setRailActionStatus(error instanceof Error ? error.message : String(error));
-      });
-      return;
-    }
     if (railTaskClearFinished) {
       event.preventDefault();
       clearFinishedRailTasks().catch((error) => {
         setRailActionStatus(error instanceof Error ? error.message : String(error));
-      });
-      return;
-    }
-    if (videoProductDelete) {
-      event.preventDefault();
-      deleteRailVideoProduct(videoProductDelete.dataset.videoProductId).catch((error) => {
-        setRailActionStatus(error instanceof Error ? error.message : String(error));
-      });
-      return;
-    }
-    if (videoProductForce) {
-      event.preventDefault();
-      forceRailVideoProduct(videoProductForce.dataset.videoProductId).catch((error) => {
-        setRailActionStatus(error instanceof Error ? error.message : String(error));
-      });
-      return;
-    }
-    if (videoProductOpen) {
-      event.preventDefault();
-      openRailVideoProduct(videoProductOpen.dataset.videoProductId).catch((error) => {
-        resultBox.textContent = error instanceof Error ? error.message : String(error);
-      });
-      return;
-    }
-    if (videoProductFolder) {
-      event.preventDefault();
-      openRailVideoProductLocation(videoProductFolder.dataset.videoProductId).catch((error) => {
-        resultBox.textContent = error instanceof Error ? error.message : String(error);
       });
       return;
     }
