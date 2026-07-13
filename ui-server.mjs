@@ -3829,26 +3829,30 @@ function momentsReferenceStrategy(referenceStyle = "") {
   return ({
     "名人名言": [
       "引用素材：名人名言。",
-      "可以使用大众熟知、短小准确的名人表达来增强分量，但不要硬塞，不要编造作者和原话。",
+      "必须使用 1 句大众熟知、短小准确的名人表达来增强分量，但不要硬塞，不要编造作者和原话。",
       "如果无法确认原话和作者，就改成“有句话很适合这件事”再用自己的话转述。",
       "引用长度要短，最多 1 句；引用后必须立刻落回原文主题和人设判断。",
+      "返回 JSON 的 reference_used 必须填写实际用到的那一句，并且 post 正文里必须出现这句或其清晰转述。",
     ],
     "网络热梗": [
       "引用素材：网络热梗。",
-      "可以使用安全、不过时感太强的轻量热梗或口语梗，例如“看起来很努力，其实没打到点上”这类表达。",
+      "必须使用 1 个安全、不过时感太强的轻量热梗或口语梗，例如“看起来很努力，其实没打到点上”“不是不努力，是没打到点上”这类表达。",
       "不要使用攻击性、低俗、政治化、饭圈化、地域化热梗；不要为了搞笑破坏专业感。",
       "热梗只能做开头钩子或转折，不要让整条朋友圈变成段子。",
+      "返回 JSON 的 reference_used 必须填写实际用到的热梗，并且 post 正文里必须出现。",
     ],
     "金句名句": [
       "引用素材：金句名句。",
       "必须产出 1 句可被记住的原创金句，最好是“不是 A，而是 B”“真正的 X，不是 Y，是 Z”的结构。",
       "金句要服务专业判断，不要空泛鸡汤。",
+      "返回 JSON 的 reference_used 必须填写这句原创金句，并且 post 正文里必须原样出现。",
     ],
     "古诗经典": [
       "引用素材：古诗经典。",
-      "可以引用大众熟知的短句或化用经典意象，例如“不积跬步，无以至千里”“纸上得来终觉浅”等。",
+      "必须引用 1 句大众熟知的短句或化用经典意象，例如“不积跬步，无以至千里”“纸上得来终觉浅”等。",
       "引用必须贴合主题，不能掉书袋；引用后要翻译成今天家长能懂的动作建议。",
       "不确定原句时只做意象化表达，不要硬标作者。",
+      "返回 JSON 的 reference_used 必须填写实际用到的古诗/经典短句，并且 post 正文里必须出现这句或清晰化用。",
     ],
     "不用引用": [
       "引用素材：不用引用。",
@@ -3856,9 +3860,30 @@ function momentsReferenceStrategy(referenceStyle = "") {
     ],
   }[value] || [
     "引用素材：自动引用。",
-    "根据原文和人设自动选择：名人名言、网络热梗、原创金句或古诗经典，最多使用一种。",
-    "引用必须短、准、自然；不能硬塞，不能编造出处；如果引用削弱真实感，就不用引用，改写原创金句。",
+    "必须根据原文和人设自动选择一种：名人名言、网络热梗、原创金句或古诗经典。",
+    "引用必须短、准、自然；不能硬塞，不能编造出处；如果不适合外部引用，就必须写 1 句原创金句。",
+    "返回 JSON 的 reference_used 必须填写实际用到的引用/热梗/金句/古诗，并且 post 正文里必须出现。",
   ]).join("\n");
+}
+
+function momentsReferenceRequired(referenceStyle = "") {
+  return String(referenceStyle || "").trim() !== "不用引用";
+}
+
+function compactReferenceText(value = "") {
+  return String(value || "")
+    .replace(/[“”"'\s，。！？、：；,.!?:;（）()《》【】\[\]-]/g, "")
+    .trim();
+}
+
+function momentsReferenceIsUsed(post = "", referenceUsed = "", referenceStyle = "") {
+  if (!momentsReferenceRequired(referenceStyle)) return true;
+  const compactPost = compactReferenceText(post);
+  const compactRef = compactReferenceText(referenceUsed);
+  if (!compactRef) return false;
+  if (compactPost.includes(compactRef)) return true;
+  const probeLength = Math.min(10, Math.max(4, Math.floor(compactRef.length * 0.55)));
+  return compactPost.includes(compactRef.slice(0, probeLength));
 }
 
 function normalizeMomentsResult(raw = {}, fallback = {}) {
@@ -3892,6 +3917,7 @@ function normalizeMomentsResult(raw = {}, fallback = {}) {
     post,
     image_count: Math.min(imageCount, images.length),
     theme: String(raw.theme || fallback.theme || "朋友圈图文").trim().slice(0, 120),
+    reference_used: String(raw.reference_used || raw.referenceUsed || "").trim().slice(0, 220),
     persona_used: String(raw.persona_used || fallback.persona || "").trim().slice(0, 1000),
     notes: Array.isArray(raw.notes) ? raw.notes.map((item) => String(item).trim()).filter(Boolean).slice(0, 6) : [],
     images,
@@ -4156,7 +4182,11 @@ async function generateMomentsPostJsonV2(body = {}) {
 
   let copyData = copyRun.data && typeof copyRun.data === "object" ? copyRun.data : {};
   let post = String(copyData.post || "").trim();
-  if (rewriteCharacterCount(post) < 110 || !String(copyData.core_judgment || "").trim()) {
+  if (
+    rewriteCharacterCount(post) < 110
+    || !String(copyData.core_judgment || "").trim()
+    || !momentsReferenceIsUsed(post, copyData.reference_used, referenceStyle)
+  ) {
     const repaired = await generateStructuredJson({
       providerId,
       temperature: 0.55,
@@ -4169,6 +4199,9 @@ async function generateMomentsPostJsonV2(body = {}) {
           content: [
             "上一版不合格：太短、太干或缺少专业判断。请重写。",
             "硬性要求：110-280 中文字符，4-8 个短段落；必须有强反差开场、急转弯判断、落差画面、专业判断、具体动作建议；不得编造事实。",
+            momentsReferenceRequired(referenceStyle)
+              ? "引用硬性要求：必须把引用素材真正写进 post 正文，并在 reference_used 填写实际使用的那句；不能只在 JSON 字段里写，正文里也必须出现。"
+              : "引用硬性要求：用户选择不用引用，正文不要出现名言、热梗、古诗或显眼金句。",
             "语气策略：",
             toneStrategy,
             "生成方式策略：",

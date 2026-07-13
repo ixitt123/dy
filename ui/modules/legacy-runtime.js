@@ -1774,7 +1774,8 @@ function renderMomentsResult(result) {
   if (momentsPostOutput && !momentsPostOutput.value.trim()) momentsPostOutput.value = result.post || "";
   const images = Array.isArray(result.images) ? result.images : [];
   if (momentsResultMeta) {
-    momentsResultMeta.textContent = `${result.theme || "朋友圈图文"} · ${images.length} 张配图 · ${momentsCharacterCount(momentsPostOutput?.value || result.post)} 字`;
+    const reference = result.reference_used ? ` · 引用：${result.reference_used}` : "";
+    momentsResultMeta.textContent = `${result.theme || "朋友圈图文"} · ${images.length} 张配图 · ${momentsCharacterCount(momentsPostOutput?.value || result.post)} 字${reference}`;
   }
   if (!momentsImagePromptList) return;
   if (!images.length) {
