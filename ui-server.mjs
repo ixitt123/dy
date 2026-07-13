@@ -528,6 +528,116 @@ function saveMomentsMaterialUpload(body = {}) {
   };
 }
 
+const momentsPublishImageExts = new Set([".png", ".jpg", ".jpeg", ".webp"]);
+
+function normalizeMomentsPublishImagePaths(value = []) {
+  const input = Array.isArray(value) ? value : [];
+  const output = [];
+  const seen = new Set();
+  for (const item of input) {
+    const filePath = path.resolve(String(item || "").trim());
+    if (!filePath || seen.has(filePath.toLowerCase())) continue;
+    const ext = path.extname(filePath).toLowerCase();
+    if (!momentsPublishImageExts.has(ext)) {
+      throw new Error(`朋友圈图片格式不支持：${path.basename(filePath)}`);
+    }
+    if (!fs.existsSync(filePath)) {
+      throw new Error(`朋友圈图片不存在：${filePath}`);
+    }
+    if (!isInsideManagedFilePath(filePath)) {
+      throw new Error(`朋友圈图片不在项目素材目录内：${filePath}`);
+    }
+    seen.add(filePath.toLowerCase());
+    output.push(filePath);
+  }
+  return output.slice(0, 9);
+}
+
+function parseJsonLine(text = "") {
+  const lines = String(text || "").split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  for (let index = lines.length - 1; index >= 0; index -= 1) {
+    try {
+      return JSON.parse(lines[index]);
+    } catch {
+      // Ignore non-JSON log lines.
+    }
+  }
+  return null;
+}
+
+function runCapturedProcess(command, args, { cwd = __dirname, timeoutMs = 120000 } = {}) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(command, args, {
+      cwd,
+      windowsHide: true,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    let stdout = "";
+    let stderr = "";
+    const timer = setTimeout(() => {
+      child.kill();
+      reject(new Error(`${command} 执行超时`));
+    }, timeoutMs);
+    child.stdout.on("data", (chunk) => { stdout += chunk.toString("utf8"); });
+    child.stderr.on("data", (chunk) => { stderr += chunk.toString("utf8"); });
+    child.on("error", (error) => {
+      clearTimeout(timer);
+      reject(error);
+    });
+    child.on("close", (code) => {
+      clearTimeout(timer);
+      const parsed = parseJsonLine(stdout);
+      if (code === 0 && (!parsed || parsed.ok !== false)) {
+        resolve({ code, stdout, stderr, parsed });
+        return;
+      }
+      const message = parsed?.message || stderr.trim() || stdout.trim() || `${command} exited with ${code}`;
+      const error = new Error(message);
+      error.code = code;
+      error.stdout = stdout;
+      error.stderr = stderr;
+      error.parsed = parsed;
+      reject(error);
+    });
+  });
+}
+
+async function publishWechatMomentWithPython({ text = "", imagePaths = [] } = {}) {
+  if (!fs.existsSync(wechatMomentsPublisherScript)) {
+    throw new Error("缺少微信朋友圈发布脚本：scripts/wechat_moments_publish.py");
+  }
+  fs.mkdirSync(momentsPublishDir, { recursive: true });
+  const payloadPath = path.join(momentsPublishDir, `${Date.now()}-${randomUUID().slice(0, 8)}.json`);
+  fs.writeFileSync(payloadPath, JSON.stringify({ text, imagePaths }, null, 2), "utf8");
+  const candidates = process.platform === "win32"
+    ? [
+        { command: "py", args: ["-3"] },
+        { command: "python", args: [] },
+      ]
+    : [
+        { command: "python3", args: [] },
+        { command: "python", args: [] },
+      ];
+  let lastError = null;
+  for (const candidate of candidates) {
+    try {
+      const result = await runCapturedProcess(candidate.command, [
+        ...candidate.args,
+        wechatMomentsPublisherScript,
+        payloadPath,
+      ]);
+      return result.parsed || { ok: true, message: "微信朋友圈发布完成。" };
+    } catch (error) {
+      lastError = error;
+      const parsedCode = String(error?.parsed?.code || "");
+      if (!["PYTHON_IMPORT_FAILED", "WXAUTOX4_NOT_INSTALLED"].includes(parsedCode) && error.code !== "ENOENT") {
+        break;
+      }
+    }
+  }
+  throw lastError || new Error("无法调用 Python 发布朋友圈。");
+}
+
 function saveDownloadsDir(nextDir) {
   const resolved = setDownloadsDir(nextDir);
   const settings = readSettings();
@@ -5687,8 +5797,27 @@ const server = http.createServer(async (req, res) => {
     if (req.method === "POST" && url.pathname === "/api/moments/generate") {
       try {
         const body = await readJsonBody(req, { maxBytes: 512 * 1024 });
-        const result = await generateMomentsPostJson(body);
+        const result = await generateMomentsPostJsonV2(body);
         sendJson(res, 200, result);
+      } catch (error) {
+        sendJson(res, 400, { ok: false, message: error instanceof Error ? error.message : String(error) });
+      }
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/moments/publish-wechat") {
+      try {
+        const body = await readJsonBody(req, { maxBytes: 512 * 1024 });
+        const text = String(body.text || "").trim();
+        if (!text) throw new Error("请先填写朋友圈文案成品。");
+        const imagePaths = normalizeMomentsPublishImagePaths(body.imagePaths || body.images || []);
+        const result = await publishWechatMomentWithPython({ text, imagePaths });
+        sendJson(res, 200, {
+          ok: true,
+          message: result.message || `微信朋友圈发布完成：${imagePaths.length} 张图片。`,
+          imageCount: imagePaths.length,
+          result,
+        });
       } catch (error) {
         sendJson(res, 400, { ok: false, message: error instanceof Error ? error.message : String(error) });
       }
