@@ -286,6 +286,7 @@ const voiceCategoryFilter = document.querySelector("#voiceCategoryFilter");
 const voiceFilterTabs = document.querySelector("#voiceFilterTabs");
 const voiceCenterStatus = document.querySelector("#voiceCenterStatus");
 const voiceAssetsGrid = document.querySelector("#voiceAssetsGrid");
+const voiceAssetCenter = document.querySelector("#voiceAssetCenter");
 const voiceTestsPanel = document.querySelector("#voiceTestsPanel");
 const voiceTestsTitle = document.querySelector("#voiceTestsTitle");
 const voiceTestsStatus = document.querySelector("#voiceTestsStatus");
@@ -3340,6 +3341,7 @@ function resetVoiceAssetForm() {
 }
 
 function openVoiceAssetForm(asset = null) {
+  if (voiceAssetCenter) voiceAssetCenter.open = true;
   resetVoiceAssetForm();
   if (asset) {
     voiceAssetEditId.value = String(asset.id);
