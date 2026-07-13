@@ -6827,8 +6827,19 @@ ttsHistory?.addEventListener("click", (event) => {
   const row = event.target.closest("[data-tts-job-id]");
   if (!row) return;
   if (sendButton && row) {
-    prepareTtsJobHandoff(Number(row.dataset.ttsJobId || 0)).catch((error) => {
-      ttsStatus.textContent = error instanceof Error ? error.message : String(error);
+    (async () => {
+      const data = await fetchJson(`/api/tts/job?id=${encodeURIComponent(Number(row.dataset.ttsJobId || 0))}`);
+      const job = data.job;
+      if (!job || job.status !== "completed") {
+        setTtsHandoffStatus(row, "这条音频还没有生成完成，不能发送。");
+        return;
+      }
+      activeTtsRailJob = job;
+      renderTtsRail(job);
+      showTtsPreview(job);
+      await sendConfirmedTtsAudio(row, job);
+    })().catch((error) => {
+      setTtsHandoffStatus(row, error instanceof Error ? error.message : String(error));
     });
     return;
   }
