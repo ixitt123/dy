@@ -5314,6 +5314,68 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
+    if (req.method === "GET" && url.pathname === "/api/moments/personas") {
+      sendJson(res, 200, {
+        ok: true,
+        personas: readMomentsPersonas(),
+        syncPath: momentsPersonasPath,
+      });
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/moments/personas") {
+      try {
+        const body = await readJsonBody(req, { maxBytes: 256 * 1024 });
+        const persona = normalizeMomentsPersona({
+          id: body.id,
+          name: body.name,
+          description: body.description,
+          updatedAt: new Date().toISOString(),
+        });
+        const current = readMomentsPersonas();
+        const next = [persona, ...current.filter((item) => item.id !== persona.id)];
+        const personas = writeMomentsPersonas(next);
+        sendJson(res, 200, {
+          ok: true,
+          persona,
+          personas,
+          syncPath: momentsPersonasPath,
+        });
+      } catch (error) {
+        sendJson(res, 400, { ok: false, message: error instanceof Error ? error.message : String(error) });
+      }
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/moments/personas/delete") {
+      try {
+        const body = await readJsonBody(req, { maxBytes: 64 * 1024 });
+        const id = safePersonaId(body.id || "");
+        if (!id) throw new Error("缺少人设 ID。");
+        if (id === DEFAULT_MOMENTS_PERSONA.id) throw new Error("默认人设不能删除，可以修改后另存为新的人设。");
+        const personas = writeMomentsPersonas(readMomentsPersonas().filter((item) => item.id !== id));
+        sendJson(res, 200, {
+          ok: true,
+          personas,
+          syncPath: momentsPersonasPath,
+        });
+      } catch (error) {
+        sendJson(res, 400, { ok: false, message: error instanceof Error ? error.message : String(error) });
+      }
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/moments/generate") {
+      try {
+        const body = await readJsonBody(req, { maxBytes: 512 * 1024 });
+        const result = await generateMomentsPostJson(body);
+        sendJson(res, 200, result);
+      } catch (error) {
+        sendJson(res, 400, { ok: false, message: error instanceof Error ? error.message : String(error) });
+      }
+      return;
+    }
+
     if (req.method === "POST" && url.pathname === "/api/tasks/rewrite") {
       const body = await readJsonBody(req);
       const id = Number(body.id || 0);
