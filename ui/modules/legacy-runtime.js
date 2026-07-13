@@ -1403,7 +1403,7 @@ async function sendRewriteTextToTarget(target, text, meta = {}) {
       source: meta.source || "rewrite_handoff",
     });
     await window.videoProjects?.refresh?.({ preserveSelection: true });
-    if (videoProductStatus) videoProductStatus.textContent = "已接收文案，可继续补导演稿、TTS 和素材后成片。";
+    if (videoProductStatus) videoProductStatus.textContent = "已接收文案，请先生成 TTS；成片时会在生产线内部生成分镜。";
   } else if (target === "cs1-video") {
     setTextareaValue(document.querySelector("#cs1VideoText"), cleanText);
     const titleInput = document.querySelector("#cs1VideoTitle");
@@ -7486,7 +7486,7 @@ rewriteVersions.addEventListener("click", async (event) => {
       style: version.style,
       source: "ai_generated",
     });
-    rewriteStatus.textContent = "已选为当前项目的最佳文案，可以发送到 TTS 或 AI 导演。";
+    rewriteStatus.textContent = "已选为当前项目的最佳文案，可以发送到 TTS 或生产线。";
     return;
   }
   if (button.classList.contains("rewrite-generate-one")) {

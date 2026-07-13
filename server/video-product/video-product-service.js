@@ -1453,26 +1453,12 @@ export function createVideoProductService({
     if (!audio || audio.status !== "completed" || !audio.audio_path || !fs.existsSync(audio.audio_path)) {
       throw new Error("路线 A 需要先选择一条已完成且可试听的 TTS 音频。");
     }
-    const ai = enqueueRouteAAiDirector(audio, input);
-    if (ai.project?.id) {
-      return {
-        directorId: Number(ai.project.id),
-        metadata: {
-          route_a_auto_director: true,
-          route_a_director_mode: "ai_director",
-          route_a_director_status: ai.project.status || "waiting",
-          source_tts_job_id: audio.id,
-        },
-      };
-    }
-    const fallback = createLocalRouteADirector(audio, input, ai.error || "AI 导演未能创建，已使用路线 A 本地 Skills 导演稿。");
     return {
-      directorId: Number(fallback.id),
+      directorId: 0,
       metadata: {
-        route_a_auto_director: true,
-        route_a_director_mode: "local_skill_fallback",
+        route_a_internal_storyboard: true,
+        route_a_director_mode: "production_line_internal",
         route_a_director_status: "completed",
-        route_a_director_fallback_reason: ai.error || "",
         source_tts_job_id: audio.id,
       },
     };
@@ -1480,6 +1466,7 @@ export function createVideoProductService({
 
   async function ensureRouteADirectorReady(project, input = {}) {
     if (!ROUTE_A_VOICE_CLOCK_OUTPUT_TYPES.has(project.output_type)) return project;
+    if (!Number(project.source_director_project_id || 0)) return project;
     const metadata = safeJson(project.metadata_json, {});
     if (!metadata.route_a_auto_director) return project;
     let director = taskStore.getDirectorProject(project.source_director_project_id);
@@ -2087,7 +2074,7 @@ export function createVideoProductService({
 
     let directorScenes = director ? taskStore.listDirectorScenes(director.id) : [];
     let routeAAutoPreview = false;
-    if (isRouteAVoiceClock && (!director || director.status !== "completed") && audio && audio.status === "completed") {
+    if ((!director || director.status !== "completed") && audio && audio.status === "completed") {
       const style = routeAStyleContract(input);
       directorScenes = buildRouteAAutoDirectorScenes(audio, input, 0);
       director = {
@@ -2100,14 +2087,15 @@ export function createVideoProductService({
         status: "completed",
         metadata_json: JSON.stringify({
           route_a_auto_preview: true,
+          production_line_internal_storyboard: true,
           route_a_style: style,
           skill_chain: ROUTE_A_SKILL_CHAIN,
         }),
       };
       routeAAutoPreview = true;
     }
-    if (!director || director.status !== "completed") blockers.push("缺少已完成的 AI 导演项目。");
-    if (!directorScenes.length) blockers.push("导演项目没有可用镜头列表。");
+    if (!director || director.status !== "completed") blockers.push("缺少生产线分镜。");
+    if (!directorScenes.length) blockers.push("生产线没有可用镜头列表。");
     const audioBinding = director && audio
       ? audioDirectorBinding(director, audio, directorScenes)
       : { accepted: false, score: 0, reason: "缺少导演稿或音频，无法绑定。" };
@@ -2116,14 +2104,14 @@ export function createVideoProductService({
       if (!forceExecution) blockers.push(message);
     }
 
-    const imageSource = String(input.image_source || "director");
+    const imageSource = String(input.image_source || (directorId ? "director" : "all"));
     const selectedImageIds = Array.isArray(input.image_asset_ids) ? input.image_asset_ids : [];
     const manualBindings = safeJson(input.manual_bindings, input.manual_bindings || {});
     const bindingContext = {
       directorId,
       ...selectImagesForScenes({ directorId, imageSource, selectedImageIds, manualBindings }),
     };
-    if (needsImages && imageSource === "director" && !bindingContext.directorScoped.length) {
+    if (needsImages && directorId && imageSource === "director" && !bindingContext.directorScoped.length) {
       blockers.push(`当前导演稿 #${directorId || "未选择"} 没有绑定自己的图片素材，已阻止使用旧图片。请先为该导演稿生成/导入分镜图片。`);
     }
     if (needsImages && !bindingContext.pool.length) blockers.push("缺少可绑定的 AI 图片素材。");
@@ -3134,7 +3122,7 @@ ${sceneMarkup}
       updateProject(project.id, {
         status: "binding_assets",
         progress: 15,
-        current_step: "正在绑定导演镜头、图片和音频",
+        current_step: "正在绑定生产线镜头、图片和音频",
         error: "",
       });
       const timeline = await buildTimeline({
@@ -3384,7 +3372,7 @@ ${sceneMarkup}
         title: String(input.title || ""),
         output_type: outputType,
         route_label: OUTPUT_TYPE_LABELS[outputType] || outputType,
-        image_source: String(input.image_source || "director"),
+        image_source: String(input.image_source || (directorId ? "director" : "all")),
         image_asset_ids: Array.isArray(input.image_asset_ids) ? input.image_asset_ids : [],
         manual_bindings: input.manual_bindings || {},
         route_a_style_id: routeAStyleId(input.route_a_style_id || input.style_id),
