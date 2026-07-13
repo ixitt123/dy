@@ -690,7 +690,7 @@ function compactTitleText(value) {
 function titleLooksGeneric(value) {
   const text = compactTitleText(value);
   return !text
-    || /导演稿|强钩子版|弱钩子版|版本|Timeline|timeline|成片中心/i.test(text)
+    || /导演|分镜|强钩子版|弱钩子版|版本|Timeline|timeline|成片中心/i.test(text)
     || text.length < 6;
 }
 
@@ -1390,7 +1390,7 @@ export function createVideoProductService({
     if (!metadata.route_a_auto_director) return project;
     return updateProject(project.id, {
       source_director_project_id: 0,
-      current_step: "已跳过旧的前置导演稿，改由生产线内部生成分镜",
+      current_step: "已跳过旧的前置分镜流程，改由生产线内部生成分镜",
       metadata_json: JSON.stringify({
         ...metadata,
         route_a_auto_director: false,
