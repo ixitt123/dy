@@ -123,7 +123,7 @@ function createVoicePreviewWav(voiceId = "") {
 
 const CURATED_TTS_PROVIDER_IDS = new Set(["aliyun_bailian", "minimax"]);
 const CURATED_REGULAR_LIMIT = 10;
-const CURATED_SPECIAL_BUCKETS = new Set(["funny", "rap", "quirky", "special"]);
+const CURATED_SPECIAL_BUCKETS = new Set(["funny", "rap", "singing", "quirky", "special"]);
 
 function presetVoiceText(voice = {}) {
   return [
@@ -137,7 +137,8 @@ function presetVoiceText(voice = {}) {
 
 function presetVoiceBucket(voice = {}) {
   const text = presetVoiceText(voice);
-  if (/rap|hip.?hop|lyrical|Lyrical|说唱|唱歌|类咏腔|抒情/i.test(text)) return "rap";
+  if (/rap|hip.?hop|说唱/i.test(text)) return "rap";
+  if (/sing|song|lyrical|jingle|唱歌|歌唱|歌曲|副歌|小调|音乐|抒情|类唱腔|类咏腔/i.test(text)) return "singing";
   if (/funny|humor|Humorous|搞笑|幽默|吐槽|反差|大爷|大婶|奶奶|热心/i.test(text)) return "funny";
   if (/quirky|cartoon|Cute|萌|搞怪|卡通|顽皮|调皮|童声|泡泡|小孩|萌兽|猪/i.test(text)) return "quirky";
   if (/special|robot|armor|arrogant|角色|特殊|机械|战甲|病娇|霸道|嚣张|剧情/i.test(text)) return "special";

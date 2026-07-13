@@ -2604,7 +2604,7 @@ function ttsVoiceOptionLabel(voice = {}) {
 
 const TTS_VISIBLE_PROVIDER_IDS = new Set(["aliyun_bailian", "minimax"]);
 const TTS_REGULAR_VOICE_LIMIT = 10;
-const TTS_SPECIAL_BUCKETS = new Set(["funny", "rap", "quirky", "special"]);
+const TTS_SPECIAL_BUCKETS = new Set(["funny", "rap", "singing", "quirky", "special"]);
 
 function voiceAssetText(asset = {}) {
   const metadata = asset.metadata || {};
@@ -2623,7 +2623,8 @@ function voiceAssetText(asset = {}) {
 function voiceAssetBucket(asset = {}) {
   if (asset.voice_type === "clone") return "clone";
   const text = voiceAssetText(asset);
-  if (/rap|hip.?hop|lyrical|Lyrical|说唱|唱歌|类咏腔|抒情/i.test(text)) return "rap";
+  if (/rap|hip.?hop|说唱/i.test(text)) return "rap";
+  if (/sing|song|lyrical|jingle|唱歌|歌唱|歌曲|副歌|小调|音乐|抒情|类唱腔|类咏腔/i.test(text)) return "singing";
   if (/funny|humor|Humorous|搞笑|幽默|吐槽|反差|大爷|大婶|奶奶|热心/i.test(text)) return "funny";
   if (/quirky|cartoon|Cute|萌|搞怪|卡通|顽皮|调皮|童声|泡泡|小孩|萌兽|猪/i.test(text)) return "quirky";
   if (/special|robot|armor|arrogant|角色|特殊|机械|战甲|病娇|霸道|嚣张|剧情/i.test(text)) return "special";
@@ -2667,6 +2668,7 @@ function ttsVoiceRowsForSource() {
   if (source === "favorite") return rows.filter((asset) => asset.is_favorite);
   if (source === "funny") return rows.filter((asset) => voiceAssetBucket(asset) === "funny");
   if (source === "rap") return rows.filter((asset) => voiceAssetBucket(asset) === "rap");
+  if (source === "singing") return rows.filter((asset) => voiceAssetBucket(asset) === "singing");
   if (source === "quirky") return rows.filter((asset) => voiceAssetBucket(asset) === "quirky");
   if (source === "special") return rows.filter((asset) => voiceAssetBucket(asset) === "special");
   if (source === "clone") return rows.filter((asset) => asset.voice_type === "clone");
@@ -2686,9 +2688,6 @@ function voiceAssetAudioUrl(asset = {}) {
   if (!asset) return "";
   if (asset.preview_url) return asset.preview_url;
   if (asset.sample_url) return asset.sample_url;
-  if (asset.voice_type === "preset" && asset.voice_id) {
-    return `/api/tts/voice-preview?provider=${encodeURIComponent(asset.provider)}&voice_id=${encodeURIComponent(asset.voice_id)}`;
-  }
   return "";
 }
 
