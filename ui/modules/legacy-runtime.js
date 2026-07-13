@@ -2600,6 +2600,137 @@ function ttsVoiceOptionLabel(voice = {}) {
   return parts.join(" · ");
 }
 
+const TTS_VISIBLE_PROVIDER_IDS = new Set(["aliyun_bailian", "minimax"]);
+const TTS_REGULAR_VOICE_LIMIT = 10;
+const TTS_SPECIAL_BUCKETS = new Set(["funny", "rap", "quirky", "special"]);
+
+function voiceAssetText(asset = {}) {
+  const metadata = asset.metadata || {};
+  return [
+    asset.voice_name,
+    asset.voice_id,
+    asset.description,
+    metadata.name,
+    metadata.category,
+    metadata.useCase,
+    metadata.description,
+    metadata.id,
+  ].filter(Boolean).join(" ");
+}
+
+function voiceAssetBucket(asset = {}) {
+  if (asset.voice_type === "clone") return "clone";
+  const text = voiceAssetText(asset);
+  if (/rap|hip.?hop|lyrical|Lyrical|说唱|唱歌|类咏腔|抒情/i.test(text)) return "rap";
+  if (/funny|humor|Humorous|搞笑|幽默|吐槽|反差|大爷|大婶|奶奶|热心/i.test(text)) return "funny";
+  if (/quirky|cartoon|Cute|萌|搞怪|卡通|顽皮|调皮|童声|泡泡|小孩|萌兽|猪/i.test(text)) return "quirky";
+  if (/special|robot|armor|arrogant|角色|特殊|机械|战甲|病娇|霸道|嚣张|剧情/i.test(text)) return "special";
+  return "regular";
+}
+
+function voiceRankScore(asset = {}) {
+  const rating = Number(asset.average_score || 0) + Number(asset.average_stars || 0) * 20;
+  const usage = Number(asset.use_count || 0) * 12;
+  const favorite = asset.is_favorite ? 500 : 0;
+  const selectedDefault = asset.is_default ? 450 : 0;
+  const tested = asset.rating_count || asset.preview_url || asset.sample_url ? 50 : 0;
+  const recency = asset.last_used_at ? Math.min(120, Date.parse(asset.last_used_at) / 100000000000) : 0;
+  return favorite + selectedDefault + rating + usage + tested + recency;
+}
+
+function currentProviderVoiceAssets() {
+  const providerId = ttsProvider?.value || "aliyun_bailian";
+  return voiceAssets
+    .filter((asset) => asset && !asset.archived && asset.status !== "deleted")
+    .filter((asset) => asset.provider === providerId)
+    .filter((asset) => asset.voice_type !== "clone" || asset.status === "active");
+}
+
+function curatedVoiceAssetsForProvider() {
+  const rows = currentProviderVoiceAssets();
+  const pinned = rows.filter((asset) => asset.is_default || asset.is_favorite || asset.voice_type === "clone");
+  const special = rows.filter((asset) => TTS_SPECIAL_BUCKETS.has(voiceAssetBucket(asset)));
+  const regular = rows
+    .filter((asset) => asset.voice_type === "preset" && voiceAssetBucket(asset) === "regular")
+    .sort((a, b) => voiceRankScore(b) - voiceRankScore(a) || String(a.voice_name).localeCompare(String(b.voice_name), "zh-CN"))
+    .slice(0, TTS_REGULAR_VOICE_LIMIT);
+  const selected = new Map();
+  for (const asset of [...pinned, ...regular, ...special]) selected.set(asset.id, asset);
+  return [...selected.values()];
+}
+
+function ttsVoiceRowsForSource() {
+  const source = ttsVoiceSource?.value || "recommended";
+  const rows = currentProviderVoiceAssets();
+  if (source === "favorite") return rows.filter((asset) => asset.is_favorite);
+  if (source === "funny") return rows.filter((asset) => voiceAssetBucket(asset) === "funny");
+  if (source === "rap") return rows.filter((asset) => voiceAssetBucket(asset) === "rap");
+  if (source === "quirky") return rows.filter((asset) => voiceAssetBucket(asset) === "quirky");
+  if (source === "special") return rows.filter((asset) => voiceAssetBucket(asset) === "special");
+  if (source === "clone") return rows.filter((asset) => asset.voice_type === "clone");
+  if (source === "recent") {
+    return rows.filter((asset) => asset.use_count > 0)
+      .sort((a, b) => String(b.last_used_at).localeCompare(String(a.last_used_at)));
+  }
+  if (source === "default") return rows.filter((asset) => asset.is_default);
+  if (source === "all") return curatedVoiceAssetsForProvider();
+  return curatedVoiceAssetsForProvider()
+    .filter((asset) => asset.is_default || asset.is_favorite || asset.voice_type === "clone" || voiceAssetBucket(asset) === "regular")
+    .sort((a, b) => voiceRankScore(b) - voiceRankScore(a) || String(a.voice_name).localeCompare(String(b.voice_name), "zh-CN"))
+    .slice(0, TTS_REGULAR_VOICE_LIMIT);
+}
+
+function voiceAssetAudioUrl(asset = {}) {
+  if (!asset) return "";
+  if (asset.preview_url) return asset.preview_url;
+  if (asset.sample_url) return asset.sample_url;
+  if (asset.voice_type === "preset" && asset.voice_id) {
+    return `/api/tts/voice-preview?provider=${encodeURIComponent(asset.provider)}&voice_id=${encodeURIComponent(asset.voice_id)}`;
+  }
+  return "";
+}
+
+function selectedVoiceAssetFromDropdown() {
+  const id = Number(ttsPresetVoice?.value || 0);
+  if (!id) return null;
+  return voiceAssets.find((asset) => Number(asset.id) === id) || null;
+}
+
+function renderTtsVoiceQuickPanel(asset = selectedVoiceAssetFromDropdown()) {
+  if (!ttsVoiceQuickPanel) return;
+  if (ttsVoiceSource?.value === "manual") {
+    ttsVoiceQuickPanel.innerHTML = '<div class="tts-voice-empty">手动 voice_id 不进入常用模板管理。</div>';
+    return;
+  }
+  if (!asset) {
+    ttsVoiceQuickPanel.innerHTML = '<div class="tts-voice-empty">当前分类没有可用音色。</div>';
+    return;
+  }
+  const provider = ttsProviderConfigs.find((item) => item.id === asset.provider);
+  const category = normalizeTtsVoiceCategory({
+    category: asset.metadata?.category,
+    useCase: asset.metadata?.useCase,
+    description: asset.description || asset.metadata?.description,
+    name: asset.voice_name,
+  });
+  const audioUrl = voiceAssetAudioUrl(asset);
+  ttsVoiceQuickPanel.innerHTML = `
+    <div class="tts-voice-current" data-voice-asset-id="${asset.id}">
+      <div class="tts-voice-current-main">
+        <strong>${escapeHtml(asset.voice_name || asset.voice_id)}</strong>
+        <span>${escapeHtml(provider?.label || asset.provider)} · ${escapeHtml(category)} · ${escapeHtml(asset.metadata?.target_model || asset.metadata?.model || "")}</span>
+      </div>
+      ${audioUrl ? `<audio controls preload="none" src="${escapeHtml(audioUrl)}"></audio>` : '<span class="muted-text">暂无试听</span>'}
+      <div class="tts-voice-actions">
+        <button class="ghost small tts-voice-use" type="button">用于配音</button>
+        <button class="ghost small tts-voice-favorite" type="button">${asset.is_favorite ? "移出常用" : "加入常用"}</button>
+        <button class="ghost small tts-voice-default" type="button">${asset.is_default ? "已默认" : "设为默认"}</button>
+        <button class="ghost small danger-action tts-voice-delete" type="button">永久删除</button>
+      </div>
+    </div>
+  `;
+}
+
 function renderTtsVoiceCategories(sourceVoices = ttsPresetVoices) {
   if (!ttsVoiceCategory) return;
   const previous = ttsVoiceCategory.value || "全部";
