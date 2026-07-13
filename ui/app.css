@@ -5552,6 +5552,18 @@ body[data-active-module="video-output"] .floating-workflow-guide [data-nav="vide
   min-height: 210px;
 }
 
+.rewrite-analysis-lane {
+  order: 1;
+}
+
+.rewrite-source-lane {
+  order: 2;
+}
+
+.rewrite-settings-lane {
+  order: 3;
+}
+
 .rewrite-source-lane .compact-pre {
   max-height: 280px;
   overflow: auto;

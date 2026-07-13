@@ -821,18 +821,13 @@ function collectRewriteVersions() {
     const version = {
       key: card.dataset.versionKey,
       name: cached.name || `版本 ${index + 1}`,
-      provider: card.querySelector(".rewrite-version-provider")?.value || rewriteProvider.value,
-      direction: card.querySelector(".rewrite-version-direction")?.value || rewriteDirection.value,
-      style: card.querySelector(".rewrite-version-style")?.value || rewriteStyle.value,
-      wordCount: card.querySelector(".rewrite-version-word-count")?.value.trim() || "160字左右",
-      params: {
-        toneLevel: Number(card.querySelector(".rewrite-version-tone-level")?.value || 8),
-        conflictLevel: Number(card.querySelector(".rewrite-version-conflict-level")?.value || 7),
-        emotionLevel: Number(card.querySelector(".rewrite-version-emotion-level")?.value || 7),
-        salesLevel: Number(card.querySelector(".rewrite-version-sales-level")?.value || 6),
-      },
-      humanizeLevel: card.querySelector(".rewrite-version-humanize-level")?.value || rewriteHumanizeLevel.value || "极强",
-      referenceStyle: card.querySelector(".rewrite-version-reference")?.value.trim() || rewriteReference.value,
+      provider: rewriteProvider.value,
+      direction: rewriteDirection.value,
+      style: rewriteStyle.value,
+      wordCount: rewriteWordRange?.value || card.querySelector(".rewrite-version-word-count")?.value.trim() || "120-180字",
+      params: rewriteParams(),
+      humanizeLevel: rewriteHumanizeLevel.value || "极强",
+      referenceStyle: buildRewriteReferenceStyle(),
       content: card.querySelector(".rewrite-version-text")?.value || "",
       revisionInstruction: card.querySelector(".rewrite-version-suggestion")?.value.trim() || "",
     };
@@ -1008,6 +1003,7 @@ async function openRewriteEditor(taskId) {
   renderReferenceExamples((rewrite.referenceExamples || item.referenceExamples || []).length
     ? (rewrite.referenceExamples || item.referenceExamples)
     : savedExamples.examples || []);
+  loadRewritePresetSettings();
   syncRewriteSliderLabels();
   lastRewritePath = item.rewritePath || "";
   rewriteVersionDrafts = new Map();
@@ -4491,6 +4487,7 @@ async function saveRewriteSettings() {
 }
 
 async function generateRewrite() {
+  saveRewritePresetSettings();
   const id = await ensureRewriteTaskReady();
   if (!id) return;
   if (document.activeElement === rewriteVersionCountInput) syncRewriteVersionCount();
@@ -5582,6 +5579,29 @@ rewriteVersionCountInput.addEventListener("input", () => {
   if (rewriteVersionCountInput.value === "") return;
   syncRewriteVersionCount();
 });
+
+[
+  rewriteProvider,
+  rewriteStyle,
+  rewriteTargetPlatform,
+  rewriteWordRange,
+  rewriteTonePreset,
+  rewritePersona,
+  rewriteDirection,
+  rewriteHumanizeLevel,
+].forEach((element) => {
+  element?.addEventListener("change", () => {
+    saveRewritePresetSettings();
+  });
+});
+
+[rewriteToneLevel, rewriteConflictLevel, rewriteEmotionLevel, rewriteSalesLevel, rewriteReference].forEach((element) => {
+  element?.addEventListener("input", () => {
+    saveRewritePresetSettings();
+  });
+});
+
+loadRewritePresetSettings();
 
 rewriteVersions.addEventListener("input", (event) => {
   const textarea = event.target.closest(".rewrite-version-text");
