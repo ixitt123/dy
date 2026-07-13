@@ -1639,8 +1639,8 @@ function collectMomentsPayload() {
     localMaterials: momentsLocalMaterials?.value.trim() || "",
     visualStyle: momentsVisualStyle?.value || "auto",
     imageCount: momentsImageCount?.value === "auto" ? 0 : Number(momentsImageCount?.value || 0),
-    tone: momentsTone?.value || "普通朋友聊天式分享",
-    intent: momentsIntent?.value || "不强销售的自然分享",
+    tone: momentsTone?.value || "强反差急转弯",
+    intent: momentsIntent?.value || "冲突反转",
   };
 }
 
@@ -1651,8 +1651,8 @@ function saveMomentsDraft() {
       localMaterials: momentsLocalMaterials?.value || "",
       visualStyle: momentsVisualStyle?.value || "auto",
       imageCount: momentsImageCount?.value || "auto",
-      tone: momentsTone?.value || "普通朋友聊天式分享",
-      intent: momentsIntent?.value || "不强销售的自然分享",
+      tone: momentsTone?.value || "强反差急转弯",
+      intent: momentsIntent?.value || "冲突反转",
       result: currentMomentsResult,
       post: momentsPostOutput?.value || "",
     }));
