@@ -27,6 +27,111 @@ if (typeof window.fetch !== "function") {
   });
 }
 
+const UI_CHOICE_STORAGE_KEY = "dy.ui.choicePreferences.v1";
+const UI_CHOICE_SELECTOR = 'select[id], input[id][type="checkbox"], input[id][type="radio"]';
+let uiChoiceRestoreTimer = 0;
+
+function readUiChoicePreferences() {
+  try {
+    return JSON.parse(window.localStorage?.getItem(UI_CHOICE_STORAGE_KEY) || "{}");
+  } catch {
+    return {};
+  }
+}
+
+function writeUiChoicePreferences(preferences) {
+  try {
+    window.localStorage?.setItem(UI_CHOICE_STORAGE_KEY, JSON.stringify(preferences));
+  } catch {
+    // Local persistence is a convenience; storage failures should not block the app.
+  }
+}
+
+function isPersistableChoiceControl(control) {
+  if (!control?.id || control.closest("[hidden]") || control.closest("[data-no-choice-persist]")) return false;
+  const text = `${control.id || ""} ${control.name || ""}`.toLowerCase();
+  if (/(api|key|secret|token|cookie|auth|password|credential)/i.test(text)) return false;
+  const type = String(control.type || "").toLowerCase();
+  return control.tagName === "SELECT" || type === "checkbox" || type === "radio";
+}
+
+function choicePreferenceKey(control) {
+  const type = String(control.type || "").toLowerCase();
+  return type === "radio" ? `radio:${control.name || control.id}` : `#${control.id}`;
+}
+
+function choicePreferenceValue(control) {
+  const type = String(control.type || "").toLowerCase();
+  if (control.tagName === "SELECT") {
+    return control.multiple ? [...control.selectedOptions].map((option) => option.value) : control.value;
+  }
+  if (type === "checkbox") return Boolean(control.checked);
+  if (type === "radio") return control.checked ? control.value : null;
+  return null;
+}
+
+function optionValues(select) {
+  return new Set([...select.options].map((option) => option.value));
+}
+
+function restoreChoiceControl(control, preferences, { dispatch = false } = {}) {
+  if (!isPersistableChoiceControl(control)) return;
+  const key = choicePreferenceKey(control);
+  if (!Object.prototype.hasOwnProperty.call(preferences, key)) return;
+  const stored = preferences[key];
+  let changed = false;
+  const type = String(control.type || "").toLowerCase();
+
+  if (control.tagName === "SELECT") {
+    const values = optionValues(control);
+    if (control.multiple && Array.isArray(stored)) {
+      for (const option of control.options) {
+        const selected = stored.includes(option.value);
+        changed = changed || option.selected !== selected;
+        option.selected = selected;
+      }
+    } else if (values.has(String(stored)) && control.value !== String(stored)) {
+      control.value = String(stored);
+      changed = true;
+    }
+  } else if (type === "checkbox" && control.checked !== Boolean(stored)) {
+    control.checked = Boolean(stored);
+    changed = true;
+  } else if (type === "radio" && control.checked !== (control.value === String(stored))) {
+    control.checked = control.value === String(stored);
+    changed = true;
+  }
+
+  if (changed && dispatch) control.dispatchEvent(new Event("change", { bubbles: true }));
+}
+
+function restoreUiChoicePreferences(options = {}) {
+  const preferences = readUiChoicePreferences();
+  for (const control of document.querySelectorAll(UI_CHOICE_SELECTOR)) {
+    restoreChoiceControl(control, preferences, options);
+  }
+}
+
+function scheduleUiChoicePreferenceRestore() {
+  window.clearTimeout(uiChoiceRestoreTimer);
+  uiChoiceRestoreTimer = window.setTimeout(() => restoreUiChoicePreferences(), 80);
+}
+
+document.addEventListener("change", (event) => {
+  const control = event.target?.closest?.(UI_CHOICE_SELECTOR);
+  if (!isPersistableChoiceControl(control)) return;
+  const value = choicePreferenceValue(control);
+  if (value === null) return;
+  const preferences = readUiChoicePreferences();
+  preferences[choicePreferenceKey(control)] = value;
+  writeUiChoicePreferences(preferences);
+}, true);
+
+new MutationObserver(scheduleUiChoicePreferenceRestore).observe(document.body, {
+  childList: true,
+  subtree: true,
+});
+
 const shareLink = document.querySelector("#shareLink");
 const resultBox = document.querySelector("#resultBox");
 const statusText = document.querySelector("#statusText");
