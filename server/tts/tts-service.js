@@ -325,6 +325,44 @@ export function createTtsService({ baseDir, taskStore, getSettings, ffmpegPath, 
     }
   }
 
+  function ensureSequenceNumbers() {
+    const rows = taskStore.listTtsJobs({ limit: 500 })
+      .slice()
+      .sort((a, b) => {
+        const left = Date.parse(a.created_at || "") || Number(a.id || 0);
+        const right = Date.parse(b.created_at || "") || Number(b.id || 0);
+        return left === right ? Number(a.id || 0) - Number(b.id || 0) : left - right;
+      });
+    const used = new Set();
+    for (const row of rows) {
+      const metadata = ttsJobMetadata(row);
+      let sequenceNumber = ttsSequenceNumber(row);
+      if (!sequenceNumber || used.has(sequenceNumber)) {
+        sequenceNumber = 1;
+        while (used.has(sequenceNumber)) sequenceNumber += 1;
+      }
+      used.add(sequenceNumber);
+      const fileBaseName = String(metadata.file_base_name || "").trim() || ttsFileBaseName(sequenceNumber);
+      if (Number(metadata.sequence_number || 0) !== sequenceNumber || metadata.file_base_name !== fileBaseName) {
+        taskStore.updateTtsJob(row.id, {
+          metadata_json: JSON.stringify({
+            ...metadata,
+            sequence_number: sequenceNumber,
+            file_base_name: fileBaseName,
+          }),
+        });
+      }
+    }
+  }
+
+  function nextSequenceNumber() {
+    ensureSequenceNumbers();
+    const used = new Set(taskStore.listTtsJobs({ limit: 500 }).map(ttsSequenceNumber).filter(Boolean));
+    let sequenceNumber = 1;
+    while (used.has(sequenceNumber)) sequenceNumber += 1;
+    return sequenceNumber;
+  }
+
   function getProvider(providerId) {
     const settings = getSettings();
     return createTtsProvider(providerId, {
@@ -348,8 +386,13 @@ export function createTtsService({ baseDir, taskStore, getSettings, ffmpegPath, 
       ...job,
       error: visibleError(job, metadata),
       audio_url: job.status === "completed" && job.audio_path ? `/api/tts/audio?id=${job.id}` : "",
+      script_url: job.status === "completed" && metadata.script_path ? `/api/tts/script?id=${job.id}` : "",
       subtitle_url: job.status === "completed" && metadata.subtitle_path ? `/api/tts/subtitle?id=${job.id}` : "",
       timestamped_text_url: job.status === "completed" && metadata.timestamped_text_path ? `/api/tts/timestamped-text?id=${job.id}` : "",
+      sequence_number: ttsSequenceNumber(job),
+      display_number: ttsSequenceNumber(job) || Number(job.id || 0),
+      file_base_name: String(metadata.file_base_name || ""),
+      script_path: String(metadata.script_path || ""),
       subtitle_path: String(metadata.subtitle_path || ""),
       timestamped_text_path: String(metadata.timestamped_text_path || ""),
       subtitle_timeline: Array.isArray(metadata.subtitle_timeline) ? metadata.subtitle_timeline : [],
@@ -399,7 +442,9 @@ export function createTtsService({ baseDir, taskStore, getSettings, ffmpegPath, 
     taskStore.updateTtsJob(job.id, { status: "processing", error: "" });
     const prepared = prepareScript(job.text);
     const jobMetadata = safeJson(job.metadata_json, {});
-    const outputPath = path.join(outputDir, `tts-${job.id}.${job.format === "wav" ? "wav" : "mp3"}`);
+    const sequenceNumber = Number(jobMetadata.sequence_number || 0) || ttsSequenceNumber(job) || Number(job.id || 0);
+    const fileBaseName = String(jobMetadata.file_base_name || "").trim() || ttsFileBaseName(sequenceNumber);
+    const outputPath = path.join(outputDir, `${fileBaseName}.${job.format === "wav" ? "wav" : "mp3"}`);
     const result = await provider.generateSpeech({
       text: prepared.text,
       voiceId: job.voice_id,
@@ -438,6 +483,7 @@ export function createTtsService({ baseDir, taskStore, getSettings, ffmpegPath, 
       job,
       preparedText: prepared.text,
       result,
+      fileBaseName,
     });
 
     taskStore.updateTtsJob(job.id, {
@@ -448,6 +494,8 @@ export function createTtsService({ baseDir, taskStore, getSettings, ffmpegPath, 
         ...jobMetadata,
         ...prepared.metadata,
         ...(result.metadata || {}),
+        sequence_number: sequenceNumber,
+        file_base_name: fileBaseName,
         ...timedText,
       }),
       completed_at: new Date().toISOString(),
@@ -475,6 +523,8 @@ export function createTtsService({ baseDir, taskStore, getSettings, ffmpegPath, 
     const provider = String(input.provider || settings.tts?.default_provider || "aliyun_bailian");
     const providerAdapter = getProvider(provider);
     const voiceSelection = resolveVoiceSelection(providerAdapter, providerConfig(settings, provider), input);
+    const sequenceNumber = nextSequenceNumber();
+    const fileBaseName = ttsFileBaseName(sequenceNumber);
     const job = taskStore.createTtsJob({
       task_id: input.task_id,
       rewrite_id: input.rewrite_id,
@@ -491,6 +541,8 @@ export function createTtsService({ baseDir, taskStore, getSettings, ffmpegPath, 
       status: "waiting",
       metadata_json: JSON.stringify({
         queued: true,
+        sequence_number: sequenceNumber,
+        file_base_name: fileBaseName,
         model: voiceSelection.model,
         voice_asset_id: Number(input.voice_asset_id || 0),
         project_id: String(input.project_id || input.projectId || ""),
@@ -531,6 +583,7 @@ export function createTtsService({ baseDir, taskStore, getSettings, ffmpegPath, 
   }
 
   function listJobs(limit = 50) {
+    ensureSequenceNumbers();
     return taskStore.listTtsJobs({ limit }).map(publicJob);
   }
 
