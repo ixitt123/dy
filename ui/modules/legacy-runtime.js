@@ -3316,11 +3316,11 @@ function renderTtsJobsEnhanced(jobs = []) {
       ? `<audio controls preload="none" src="${escapeHtml(job.audio_url)}"></audio>`
       : `<span title="${escapeHtml(job.error || "")}">${escapeHtml(job.error || "等待生成")}</span>`;
     const displayNumber = Number(job.display_number || job.sequence_number || job.id || 0);
+    const timedSubtitleUrl = job.subtitle_url || job.timestamped_text_url || "";
     const fileLinks = [
       job.audio_url ? `<a href="${escapeHtml(job.audio_url)}" target="_blank" rel="noreferrer">音频</a>` : "",
       job.script_url ? `<a href="${escapeHtml(job.script_url)}" target="_blank" rel="noreferrer">文案</a>` : "",
-      job.subtitle_url ? `<a href="${escapeHtml(job.subtitle_url)}" target="_blank" rel="noreferrer">字幕</a>` : "",
-      job.timestamped_text_url ? `<a href="${escapeHtml(job.timestamped_text_url)}" target="_blank" rel="noreferrer">时间戳文案</a>` : "",
+      timedSubtitleUrl ? `<a href="${escapeHtml(timedSubtitleUrl)}" target="_blank" rel="noreferrer">带时间戳字幕</a>` : "",
     ].filter(Boolean).join("");
     return `
       <div class="tts-history-row" data-tts-job-id="${job.id}">
@@ -3352,20 +3352,28 @@ async function refreshTtsJobs() {
 
 function confirmedTtsAudioPayload(job = activeTtsRailJob) {
   if (!job?.id || job.status !== "completed") return null;
+  const timedSubtitleUrl = job.subtitle_url || job.timestamped_text_url || "";
+  const timedSubtitlePath = job.subtitle_path || job.timestamped_text_path || "";
+  const files = [
+    { type: "audio", label: "音频", url: job.audio_url || "", path: job.audio_path || "" },
+    { type: "script", label: "文案", url: job.script_url || "", path: job.script_path || "" },
+    { type: "timed_subtitle", label: "带时间戳字幕", url: timedSubtitleUrl, path: timedSubtitlePath },
+  ].filter((item) => item.url || item.path);
   return {
     id: job.id,
     display_number: job.display_number || job.sequence_number || job.id,
     sequence_number: job.sequence_number || job.display_number || job.id,
     file_base_name: job.file_base_name || job.metadata?.file_base_name || "",
     type: "tts",
+    files,
     audio_url: job.audio_url || "",
     audio_path: job.audio_path || "",
     script_url: job.script_url || "",
     script_path: job.script_path || "",
-    subtitle_url: job.subtitle_url || "",
-    subtitle_path: job.subtitle_path || "",
-    timestamped_text_url: job.timestamped_text_url || "",
-    timestamped_text_path: job.timestamped_text_path || "",
+    subtitle_url: timedSubtitleUrl,
+    subtitle_path: timedSubtitlePath,
+    timed_subtitle_url: timedSubtitleUrl,
+    timed_subtitle_path: timedSubtitlePath,
     subtitle_timeline: Array.isArray(job.subtitle_timeline) ? job.subtitle_timeline : [],
     provider: job.provider || ttsProvider?.value || "",
     voice_id: job.voice_id || "",
@@ -3413,7 +3421,7 @@ async function sendConfirmedTtsAudio() {
     saveTtsAudioHandoff(target, payload);
     sent.push(label);
   }
-  ttsAudioHandoffStatus.textContent = `已发送确定好的音频到：${sent.join("、")}。`;
+  ttsAudioHandoffStatus.textContent = `已发送三件套（音频、文案、带时间戳字幕）到：${sent.join("、")}。`;
 }
 
 async function prepareTtsJobHandoff(id) {
@@ -3427,7 +3435,7 @@ async function prepareTtsJobHandoff(id) {
   renderTtsRail(job);
   showTtsPreview(job);
   updateTtsMainProgressFromJob(job);
-  ttsAudioHandoffStatus.textContent = `已选择 #${job.display_number || job.sequence_number || job.id}，勾选目标后点“发送所选”。`;
+  ttsAudioHandoffStatus.textContent = `已选择 #${job.display_number || job.sequence_number || job.id}，将发送：音频、文案、带时间戳字幕。`;
   document.querySelector("#ttsAudioHandoff")?.scrollIntoView({ behavior: "smooth", block: "center" });
 }
 
