@@ -393,15 +393,48 @@
         </div>
         <div class="rewrite-body">
           <input id="rewriteTaskId" type="hidden" />
-          <div class="rewrite-grid">
-            <div class="rewrite-column">
-              <label for="rewriteOriginal">原始文案展示区</label>
-              <textarea id="rewriteOriginal" rows="8"></textarea>
-              <label for="rewriteAnalysisView">AI分析结果展示区</label>
-              <pre id="rewriteAnalysisView" class="compact-pre">未生成 AI 分析。</pre>
+          <div class="rewrite-studio-grid">
+            <div class="rewrite-column rewrite-source-lane">
+              <div class="rewrite-section-head">
+                <div>
+                  <span class="section-eyebrow">Original</span>
+                  <h3>原始文案展示区</h3>
+                </div>
+              </div>
+              <textarea id="rewriteOriginal" rows="13" placeholder="从采集处理发送来的文案会出现在这里，也可以手动修改后再生成。"></textarea>
+              <div class="rewrite-handoff-panel">
+                <strong>发送原始文案到</strong>
+                <div class="rewrite-handoff-actions">
+                  <button class="ghost small rewrite-send-target" type="button" data-source="original" data-target="moments-copy">朋友圈文案定制</button>
+                  <button class="ghost small rewrite-send-target" type="button" data-source="original" data-target="tts">TTS语音</button>
+                  <button class="ghost small rewrite-send-target" type="button" data-source="original" data-target="video-output">视频成片</button>
+                  <button class="ghost small rewrite-send-target" type="button" data-source="original" data-target="cs1-video">CS1生成器</button>
+                  <button class="ghost small rewrite-send-target" type="button" data-source="original" data-target="xiaohei-video">小黑视频风格生成</button>
+                  <button class="ghost small rewrite-send-target" type="button" data-source="original" data-target="money-printer">MoneyPrinter</button>
+                </div>
+              </div>
             </div>
-            <div class="rewrite-column">
-              <div class="rewrite-controls">
+
+            <div class="rewrite-column rewrite-analysis-lane">
+              <div class="rewrite-section-head">
+                <div>
+                  <span class="section-eyebrow">Analysis</span>
+                  <h3>AI分析结果展示区</h3>
+                </div>
+                <button class="ghost small" id="rewriteRunAnalysis" type="button">点击分析</button>
+              </div>
+              <pre id="rewriteAnalysisView" class="compact-pre">点击分析后展示结果。</pre>
+              <p id="rewriteAnalysisStatus" class="rewrite-analysis-status">不点击分析就不会调用模型。</p>
+            </div>
+
+            <div class="rewrite-column rewrite-settings-lane">
+              <div class="rewrite-section-head">
+                <div>
+                  <span class="section-eyebrow">Preset</span>
+                  <h3>文案定制参数</h3>
+                </div>
+              </div>
+              <div class="rewrite-preset-grid">
                 <label>
                   模型选择
                   <select id="rewriteProvider">
@@ -411,29 +444,70 @@
                   </select>
                 </label>
                 <label>
-                  改写方向
-                  <select id="rewriteDirection">
-                    <option>招生引流</option>
-                    <option>家长焦虑</option>
-                    <option>单招升学</option>
-                    <option>暑假班转化</option>
-                    <option>英语提分</option>
-                    <option>朋友圈文案</option>
-                    <option selected>短视频口播</option>
+                  改写风格
+                  <select id="rewriteStyle">
+                    <option selected>小黑漫画解释类</option>
+                    <option>口播爆款</option>
+                    <option>知识解释</option>
+                    <option>朋友圈图文</option>
+                    <option>强钩子转化</option>
+                    <option>温和专业</option>
                   </select>
                 </label>
                 <label>
-                  语气风格
-                  <select id="rewriteStyle">
-                    <option>老板风格</option>
+                  目标平台
+                  <select id="rewriteTargetPlatform">
+                    <option selected>抖音</option>
+                    <option>视频号</option>
+                    <option>小红书</option>
+                    <option>朋友圈</option>
+                    <option>B站</option>
+                  </select>
+                </label>
+                <label>
+                  字数范围
+                  <select id="rewriteWordRange">
+                    <option>80-120字</option>
+                    <option selected>120-180字</option>
+                    <option>180-260字</option>
+                    <option>260-400字</option>
+                    <option>30秒口播</option>
+                  </select>
+                </label>
+                <label>
+                  语气
+                  <select id="rewriteTonePreset">
+                    <option selected>接地气、有观点</option>
                     <option>痞里带刺</option>
-                    <option>接地气</option>
-                    <option>温和专业</option>
-                    <option>强冲突</option>
-                    <option>强转化</option>
+                    <option>老师耐心解释</option>
+                    <option>朋友聊天</option>
+                    <option>强冲突强转化</option>
+                  </select>
+                </label>
+                <label>
+                  人设
+                  <select id="rewritePersona">
+                    <option selected>短视频内容策划</option>
+                    <option>小黑漫画旁白</option>
+                    <option>教育行业老板</option>
+                    <option>懂家长心理的老师</option>
+                    <option>普通朋友视角</option>
+                  </select>
+                </label>
+                <label>
+                  用途
+                  <select id="rewriteDirection">
+                    <option selected>短视频口播</option>
+                    <option>招生引流</option>
+                    <option>朋友圈文案</option>
+                    <option>视频成片口播稿</option>
+                    <option>知识解释</option>
+                    <option>成交转化</option>
                   </select>
                 </label>
               </div>
+              <details class="rewrite-advanced-settings">
+                <summary>高级微调</summary>
               <div class="rewrite-param-grid">
                 <label>
                   口语化 <span id="rewriteToneValue">8</span>
@@ -471,25 +545,26 @@
                 </div>
               </div>
               <textarea id="rewriteReferenceExamples" rows="7" placeholder="粘贴 3-10 条优秀文案；每条用空行或 --- 分隔。系统学习节奏、口吻、结构，不照抄内容。"></textarea>
+              </details>
             </div>
           </div>
           <div class="rewrite-result-head" id="rewriteAnchorName1" data-anchor-name="名称1">
             <div>
-              <h3>名称1</h3>
-              <p id="rewriteStatus">选择一条文案后开始改写。</p>
+              <h3>文案定制成品</h3>
+              <p id="rewriteStatus">选择参数后点击生成，默认生成 3 个可选成品。</p>
               <div class="rewrite-unified-actions">
-                <button class="ghost small" id="runRewrite" type="button">全部生成</button>
-                <button class="ghost small" id="saveRewrite" type="button">全部保存</button>
-                <button class="ghost small" id="saveRewriteTxt" type="button">全部另存 TXT</button>
-                <button class="ghost small" id="saveRewriteMd" type="button">全部另存 MD</button>
+                <button class="primary small" id="runRewrite" type="button">生成文案定制成品</button>
+                <button class="ghost small" id="saveRewrite" type="button">保存成品</button>
+                <button class="ghost small" id="saveRewriteTxt" type="button" hidden>另存 TXT</button>
+                <button class="ghost small" id="saveRewriteMd" type="button" hidden>另存 MD</button>
                 <button class="ghost small" id="openRewriteFile" type="button">打开文件位置</button>
                 <button class="ghost small" id="closeRewrite" type="button">关闭</button>
               </div>
             </div>
             <div class="rewrite-result-meta">
-              <label class="rewrite-count-control" for="rewriteVersionCountInput">
+              <label class="rewrite-count-control" for="rewriteVersionCountInput" hidden>
                 <span>输出框数量</span>
-                <input id="rewriteVersionCountInput" type="number" min="1" max="50" value="1" />
+                <input id="rewriteVersionCountInput" type="number" min="1" max="50" value="3" />
               </label>
             </div>
           </div>
@@ -1041,6 +1116,11 @@
             </div>
           </div>
           <p class="placeholder-copy">计划能力：选择人设、固定表达风格、输入主题或提取文案，一键生成朋友圈图文草稿，并进入预览与审核。</p>
+          <label class="moments-copy-receiver" for="momentsCopyInput">
+            文案输入区
+            <textarea id="momentsCopyInput" rows="10" placeholder="从文案定制改写发送来的原文案或成品文案会填到这里。"></textarea>
+          </label>
+          <p id="momentsCopyStatus" class="placeholder-copy">等待接收文案。</p>
         </section>
       </section>
 
