@@ -2005,11 +2005,11 @@ function collectMomentsPublishImages() {
 async function publishMomentsToWechat() {
   const text = (momentsPostOutput?.value || momentsCopyInput?.value || "").trim();
   if (!text) {
-    setMomentsStatus("请先生成或填写朋友圈文案成品。", "warning");
+    setMomentsPublishStatus("请先生成或填写朋友圈文案成品。", "warning");
     return;
   }
   const imagePaths = collectMomentsPublishImages();
-  setMomentsStatus(`正在调用微信客户端发布朋友圈：${imagePaths.length} 张图片...`);
+  setMomentsPublishStatus(`正在调用微信客户端发布朋友圈：${imagePaths.length} 张图片...`);
   if (publishMomentsWechatBtn) publishMomentsWechatBtn.disabled = true;
   try {
     const data = await fetchJson("/api/moments/publish-wechat", {
@@ -2020,9 +2020,9 @@ async function publishMomentsToWechat() {
         imagePaths,
       }),
     });
-    setMomentsStatus(data.message || `已提交微信朋友圈发布：${imagePaths.length} 张图片。`, "success");
+    setMomentsPublishStatus(data.message || `已提交微信朋友圈发布：${imagePaths.length} 张图片。`, "success");
   } catch (error) {
-    setMomentsStatus(error instanceof Error ? error.message : String(error), "error");
+    setMomentsPublishStatus(error instanceof Error ? error.message : String(error), "error");
   } finally {
     if (publishMomentsWechatBtn) publishMomentsWechatBtn.disabled = false;
   }

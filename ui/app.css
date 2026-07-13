@@ -7325,7 +7325,15 @@ audio {
   color: #52d89d;
 }
 
+#momentsPublishStatus[data-status="success"] {
+  color: #52d89d;
+}
+
 #momentsCopyStatus[data-status="warning"] {
+  color: #f6c35f;
+}
+
+#momentsPublishStatus[data-status="warning"] {
   color: #f6c35f;
 }
 
@@ -7333,8 +7341,16 @@ audio {
   color: #ff7b86;
 }
 
+#momentsPublishStatus[data-status="error"] {
+  color: #ff7b86;
+}
+
 .moments-progress {
   margin-top: 12px;
+}
+
+.moments-publish-status {
+  margin-top: 10px;
 }
 
 @media (max-width: 1040px) {
