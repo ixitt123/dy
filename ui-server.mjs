@@ -3895,6 +3895,10 @@ async function generateMomentsPostJson(body = {}) {
   const localMaterials = String(body.localMaterials || "").trim();
   const tone = String(body.tone || "普通朋友聊天式分享").trim();
   const intent = String(body.intent || "不强销售的自然分享").trim();
+  const referenceStyle = String(body.referenceStyle || "自动引用").trim();
+  const toneStrategy = momentsToneStrategy(tone);
+  const intentStrategy = momentsIntentStrategy(intent);
+  const referenceStrategy = momentsReferenceStrategy(referenceStyle);
   const providerId = String(body.provider || readSettings().rewrite?.defaultProvider || "").trim();
   const imageCountRule = fixedImageCount
     ? `必须生成 ${fixedImageCount} 张配图。`
@@ -4051,17 +4055,19 @@ async function generateMomentsPostJsonV2(body = {}) {
     realistic: "必须使用真实生活/产品场景类：像工作现场/学习现场/咨询现场的关键瞬间；必须有鲜明主物件和情绪现场，不要广告海报和普通资料摆拍。",
   }[visualStyle];
   const copySkill = [
-    "朋友圈文案 Skill v2：私域自然分享，不是短视频口播，不是广告海报文案。",
-    "目标：让读者感觉这是一个专业规划老师刚从真实工作里提炼出的观察，有人味、有判断、有具体动作。",
-    "固定结构：生活化触发点 -> 专业判断 -> 具体解释 -> 可执行动作 -> 自然收尾。",
-    "硬性质量：4-8 个短段落；110-260 个中文字符；必须有一个能记住的观点句、一个纠偏点、一个具体动作建议。",
+    "朋友圈文案 Skill v3：私域自然分享，但必须有强反差、急转弯、落差画面和视觉冲击。",
+    "目标：让读者感觉这是一个专业规划老师刚从真实工作里提炼出的观察，有人味、有判断、有具体动作，同时第一眼就有钩子。",
+    "推荐结构：强反差开场 -> 急转弯判断 -> 落差画面 -> 专业解释 -> 可执行动作 -> 自然收尾。",
+    "硬性质量：4-8 个短段落；110-280 个中文字符；必须有一个能记住的观点句、一个纠偏点、一个具体动作建议、一个可被画出来的视觉锚点。",
     "禁止：两句总结、鸡汤口号、硬广 CTA、制造焦虑、凭空编学生案例/成绩/机构名/具体数字。",
-    "不合格信号：像标语、像课程广告、只有提醒没有方法、只有观点没有场景、和原文关系弱。",
+    "不合格信号：像标语、像课程广告、只有提醒没有方法、只有观点没有场景、没有反差、没有转折、没有画面感、和原文关系弱。",
+    "开头不要平铺直叙，不要从“最近发现/今天聊聊/家长要注意”这种弱句开始。",
   ].join("\n");
   const imageSkill = [
-    "图片提示词 Skill v2：先做视觉策略，再写生图提示词。",
+    "图片提示词 Skill v3：先做视觉冲击策略，再写生图提示词。",
     "每张图必须来自成品文案的认知锚点，不允许把文案字面翻译成跑步、日历、道路、箭头、书本堆、奖杯、清单。",
-    "视觉锤公式：抽象观点 -> 物理冲突 -> 低科技怪物件/真实现场 -> 主体正在解决这个冲突。",
+    "视觉锤公式：抽象观点 -> 物理冲突 -> 强反差物件 -> 主体正在解决这个冲突。",
+    "必须有冲突或落差：轻重对比、堵塞/疏通、错路/正路、混乱/清晰、短期忙碌/长期路径。",
     "小黑图：16:9、白底、黑色手绘线稿、大量留白、少量红橙蓝短批注；小黑必须称重、修补、分拣、守门、拆包、扶梯子、拧阀门等，不是站着或跑着。",
     "真实图：像工作现场/学习现场/咨询现场，有主物件和关系，例如圈画的规划表、两套学习路径、沟通记录、反馈便签；不要广告海报、二维码、Logo、水印、大段文字。",
     "套组分工：1 张是封面冲击图；2 张是误区+方法；3 张是误区+方法+结果状态。多图必须统一视觉母题。",
@@ -4093,6 +4099,16 @@ async function generateMomentsPostJsonV2(body = {}) {
           "",
           `语气：${tone}`,
           `用途：${intent}`,
+          `引用素材：${referenceStyle}`,
+          "",
+          "语气策略：",
+          toneStrategy,
+          "",
+          "生成方式策略：",
+          intentStrategy,
+          "",
+          "引用策略：",
+          referenceStrategy,
           "",
           "原始文案：",
           sourceText.slice(0, 12000),
@@ -4104,8 +4120,12 @@ async function generateMomentsPostJsonV2(body = {}) {
             angle: "内容切入角度",
             core_judgment: "最有力度的专业判断句",
             visual_anchor: "后续图片应围绕的视觉母题",
+            reference_used: "实际使用的引用/热梗/金句/古诗；没有则为空",
             persona_used: "人设摘要",
             quality_gate: {
+              post_has_contrast_hook: true,
+              post_has_turning_point: true,
+              post_has_visual_anchor: true,
               post_has_scene: true,
               post_has_professional_judgment: true,
               post_not_dry_summary: true,
@@ -4131,7 +4151,13 @@ async function generateMomentsPostJsonV2(body = {}) {
           role: "user",
           content: [
             "上一版不合格：太短、太干或缺少专业判断。请重写。",
-            "硬性要求：110-260 中文字符，4-8 个短段落；必须有生活化触发点、专业判断、具体动作建议；不得编造事实。",
+            "硬性要求：110-280 中文字符，4-8 个短段落；必须有强反差开场、急转弯判断、落差画面、专业判断、具体动作建议；不得编造事实。",
+            "语气策略：",
+            toneStrategy,
+            "生成方式策略：",
+            intentStrategy,
+            "引用策略：",
+            referenceStrategy,
             "人设：",
             persona,
             "原始文案：",
@@ -4145,6 +4171,7 @@ async function generateMomentsPostJsonV2(body = {}) {
               angle: "内容切入角度",
               core_judgment: "专业判断句",
               visual_anchor: "视觉母题",
+              reference_used: "实际使用的引用/热梗/金句/古诗；没有则为空",
               persona_used: "人设摘要",
             }, null, 2),
           ].join("\n\n"),
@@ -4192,7 +4219,11 @@ async function generateMomentsPostJsonV2(body = {}) {
             angle: copyData.angle || "",
             core_judgment: copyData.core_judgment || "",
             visual_anchor: copyData.visual_anchor || "",
+            reference_used: copyData.reference_used || "",
           }, null, 2),
+          "",
+          "引用策略：",
+          referenceStrategy,
           "",
           "本地图片素材说明：",
           localMaterials || "用户没有提供本地素材；不要在最终提示词里写“无本地素材”。",
