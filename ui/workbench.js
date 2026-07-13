@@ -374,7 +374,6 @@ function renderProjectReadiness(readiness, qualityCheck) {
   projectReadinessState = readiness || null;
   const container = document.querySelector("#videoProjectReadiness");
   const quality = document.querySelector("#videoProjectQuality");
-  const generateButton = document.querySelector("#generateVideoProduct");
   if (container) {
     container.innerHTML = readiness?.checks?.length
       ? readiness.checks.map((item) => `
@@ -400,10 +399,6 @@ function renderProjectReadiness(readiness, qualityCheck) {
       ${qualityCheck.suggestions?.length ? `<div class="quality-actions">${qualityCheck.suggestions.slice(0, 3).map((item) => `<button class="ghost small" type="button" data-nav="${escapeHtml(item.page)}">${escapeHtml(item.label)}</button>`).join("")}</div>` : ""}
     ` : "";
   }
-  if (generateButton && !window.__modularVideoOutputReady) {
-    generateButton.disabled = !readiness?.ready;
-    generateButton.title = readiness?.ready ? "生成成片输出" : "请先补齐生成前检查中的关键项";
-  }
 }
 
 async function refreshProjectReadiness() {
@@ -418,75 +413,6 @@ async function refreshProjectReadiness() {
   ]);
   renderProjectReadiness(readinessData.readiness, qualityData.qualityCheck);
   return readinessData.readiness;
-}
-
-async function syncCurrentVideoProductSelections() {
-  if (!currentVideoProjectId()) {
-    const audioSelect = typeof videoProductAudio !== "undefined" ? videoProductAudio : null;
-    const title = audioSelect?.selectedOptions?.[0]?.textContent
-      ?.replace(/^#\d+\s*/, "")
-      .replace(/路.*$/, "")
-      .trim() || "短视频项目";
-    const created = await createVideoProject({
-      title,
-      videoType: "短视频",
-      outputMode: "jianying_template",
-    });
-    if (!created?.id) throw new Error("自动创建短视频项目失败。");
-    await loadVideoProjects();
-    setActiveVideoProject(created.id);
-  }
-  if (!currentVideoProjectId()) throw new Error("请先在首页新建或选择一个短视频项目。");
-  const outputType = typeof videoProductOutputType !== "undefined" ? videoProductOutputType.value : "jianying_template";
-  await updateCurrentVideoProject({ outputMode: outputType });
-
-  const audioId = Number(typeof videoProductAudio !== "undefined" ? videoProductAudio.value : 0);
-  const audio = typeof videoProductSources !== "undefined" ? videoProductSources.audioJobs?.find((item) => Number(item.id) === audioId) : null;
-  if (audio) {
-    if (audio.text) await linkCurrentProjectAsset("selected_rewrite", `tts-text-${audio.id}`, "当前配音文案", { text: audio.text, source: "tts" });
-    const audioTitle = audio.title || audio.seo_title || audio.publish_title || audio.platform_titles?.douyin || audio.voice_name || `配音 #${audio.id}`;
-    await linkCurrentProjectAsset("tts", audio.id, audioTitle, { ...audio, title: audioTitle, source: "local_upload" });
-  }
-
-  const imageAssets = typeof videoProductSources !== "undefined" ? videoProductSources.imageAssets || [] : [];
-  const selectedIds = typeof videoProductManualBindings !== "undefined" ? new Set(Object.values(videoProductManualBindings).map(String)) : new Set();
-  const selectedImages = selectedIds.size ? imageAssets.filter((item) => selectedIds.has(String(item.id))) : imageAssets.slice(0, 20);
-  for (const asset of selectedImages) {
-    await linkCurrentProjectAsset("image", asset.id, asset.filename || `图片 ${asset.id}`, {
-      path: asset.original_path || asset.path || "",
-      ratio: asset.aspect_ratio || "9:16",
-      style: typeof videoProductRouteAStyle !== "undefined" ? videoProductRouteAStyle.value : "",
-      source: asset.source_type === "director" ? "ai_generated" : "local_upload",
-      sourceId: asset.source_id || "",
-      sceneIndex: Number(asset.scene_index || 0),
-      assetOrder: Number(asset.asset_order || 0),
-      useCase: activeVideoProject?.videoType || "",
-      status: "ready",
-    });
-  }
-
-  if (typeof videoProductBgmStrategy !== "undefined" && videoProductBgm?.value) {
-    const selectedBgmId = videoProductBgm.value;
-    const selectedBgm = videoProductSources.bgmAssets?.find((item) => String(item.id) === String(selectedBgmId));
-    await linkCurrentProjectAsset("bgm", selectedBgmId, selectedBgm?.title || selectedBgm?.filename || "自动匹配本地 BGM", {
-      path: selectedBgm?.path || "",
-      source: selectedBgm ? "local_upload" : "ai_generated",
-      strategy: videoProductBgmStrategy.value || "auto",
-      style: videoProductRouteAStyle?.value || "",
-      status: "ready",
-    });
-  }
-  if (["jianying", "jianying_template"].includes(outputType)) {
-    const templateSelect = document.querySelector("#videoProductJianyingTemplate");
-    const templateId = templateSelect?.value || "education_tips";
-    const templateName = templateSelect?.selectedOptions?.[0]?.textContent || "学习技巧模板";
-    await linkCurrentProjectAsset("template", templateId, templateName, {
-      source: "local_upload",
-      ratio: "9:16",
-      status: "ready",
-    });
-  }
-  return refreshProjectReadiness();
 }
 
 function setupProjectWorkbench() {
@@ -534,8 +460,7 @@ function setupProjectWorkbench() {
         status: asset.status,
       });
     }
-    navigateWorkbench("vfo");
-    document.querySelector("#videoProductCenter")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    navigateWorkbench("assets");
   });
   document.querySelector("#refreshVideoProjectReadiness")?.addEventListener("click", () => refreshProjectReadiness());
 
@@ -546,7 +471,6 @@ function setupProjectWorkbench() {
     updateCurrent: updateCurrentVideoProject,
     linkCurrent: linkCurrentProjectAsset,
     refreshReadiness: refreshProjectReadiness,
-    syncSelections: syncCurrentVideoProductSelections,
     canGenerate: () => Boolean(projectReadinessState?.ready),
   };
 
