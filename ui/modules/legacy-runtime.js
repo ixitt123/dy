@@ -3322,19 +3322,50 @@ function renderTtsJobsEnhanced(jobs = []) {
       job.script_url ? `<a href="${escapeHtml(job.script_url)}" target="_blank" rel="noreferrer">文案</a>` : "",
       timedSubtitleUrl ? `<a href="${escapeHtml(timedSubtitleUrl)}" target="_blank" rel="noreferrer">带时间戳字幕</a>` : "",
     ].filter(Boolean).join("");
-    return `
-      <div class="tts-history-row" data-tts-job-id="${job.id}">
-        <strong>#${displayNumber || job.id}</strong>
-        <span>${escapeHtml(labels[job.provider] || job.provider)}</span>
-        <span class="tts-history-text" title="${escapeHtml(job.text)}">${escapeHtml(job.text)}</span>
-        <span>${escapeHtml(job.voice_name || job.voice_id || "-")}</span>
-        <span class="tts-job-status ${escapeHtml(job.status)}">${escapeHtml(ttsStatusLabel(job.status))}</span>
-        ${audio}
-        <span class="tts-history-files">${fileLinks}</span>
-        <div class="tts-history-actions">
-          <button class="ghost small tts-job-send" type="button" ${job.status !== "completed" ? "disabled" : ""}>一键发送</button>
+    const handoffTargets = [
+      ["video-output", "视频成片", true],
+      ["cs1-video", "CS1生成器", false],
+      ["xiaohei-video", "小黑视频风格生成", false],
+      ["money-printer", "MoneyPrinter", false],
+    ].map(([target, label, checked]) => `
+      <label>
+        <input class="tts-job-handoff-choice" type="checkbox" data-target="${target}" ${checked ? "checked" : ""} />
+        ${label}
+      </label>
+    `).join("");
+    const handoffPanel = job.status === "completed"
+      ? `
+        <div class="tts-job-handoff">
+          <div class="tts-job-handoff-head">
+            <strong>试听满意后发送</strong>
+            <span>发送：音频 / 文案 / 带时间戳字幕</span>
+          </div>
+          <div class="tts-job-handoff-options">${handoffTargets}</div>
+          <div class="tts-history-actions">
+            <button class="primary small tts-job-send" type="button">发送所选</button>
+            <button class="ghost small danger-action tts-job-delete" type="button">不满意，删除</button>
+          </div>
+          <small class="tts-job-handoff-status"></small>
+        </div>
+      `
+      : `
+        <div class="tts-history-actions tts-history-actions-simple">
           <button class="ghost small danger-action tts-job-delete" type="button" ${["waiting", "processing"].includes(job.status) ? "disabled" : ""}>删除</button>
         </div>
+      `;
+    return `
+      <div class="tts-history-row" data-tts-job-id="${job.id}">
+        <div class="tts-history-summary">
+          <div class="tts-history-title">
+            <strong>#${displayNumber || job.id}</strong>
+            <span class="tts-history-text" title="${escapeHtml(job.text)}">${escapeHtml(job.text)}</span>
+          </div>
+          <span class="tts-job-status ${escapeHtml(job.status)}">${escapeHtml(ttsStatusLabel(job.status))}</span>
+        </div>
+        <div class="tts-history-meta">${escapeHtml(job.voice_name || job.voice_id || "-")} · ${escapeHtml(labels[job.provider] || job.provider)} · ${escapeHtml(String(job.format || "mp3").toUpperCase())}</div>
+        <div class="tts-history-audio">${audio}</div>
+        <span class="tts-history-files">${fileLinks}</span>
+        ${handoffPanel}
       </div>
     `;
   }).join("");
@@ -3391,19 +3422,18 @@ function saveTtsAudioHandoff(target, payload) {
   localStorage.setItem(key, JSON.stringify(payload));
 }
 
-async function sendConfirmedTtsAudio() {
-  const payload = confirmedTtsAudioPayload();
-  if (!payload) {
-    ttsAudioHandoffStatus.textContent = "请先生成并完成一条语音，再发送。";
-    return;
-  }
-  const targets = [...document.querySelectorAll(".tts-audio-handoff-choice:checked")]
+function selectedTtsHandoffTargets(container = document) {
+  return [...container.querySelectorAll(".tts-job-handoff-choice:checked, .tts-audio-handoff-choice:checked")]
     .map((input) => input.dataset.target)
     .filter(Boolean);
-  if (!targets.length) {
-    ttsAudioHandoffStatus.textContent = "请至少勾选一个要发送的模块。";
-    return;
-  }
+}
+
+function setTtsHandoffStatus(container = document, message = "") {
+  const node = container.querySelector?.(".tts-job-handoff-status") || ttsAudioHandoffStatus || ttsStatus;
+  if (node) node.textContent = message;
+}
+
+async function sendTtsPayloadToTargets(payload, targets = []) {
   const sent = [];
   if (targets.includes("video-output")) {
     await window.videoProjects?.linkCurrent?.("tts", payload.id, payload.voice_name || `配音 #${payload.id}`, payload);
@@ -3421,7 +3451,22 @@ async function sendConfirmedTtsAudio() {
     saveTtsAudioHandoff(target, payload);
     sent.push(label);
   }
-  ttsAudioHandoffStatus.textContent = `已发送三件套（音频、文案、带时间戳字幕）到：${sent.join("、")}。`;
+  return sent;
+}
+
+async function sendConfirmedTtsAudio(container = document, job = activeTtsRailJob) {
+  const payload = confirmedTtsAudioPayload(job);
+  if (!payload) {
+    setTtsHandoffStatus(container, "请先生成并完成一条语音，再发送。");
+    return;
+  }
+  const targets = selectedTtsHandoffTargets(container);
+  if (!targets.length) {
+    setTtsHandoffStatus(container, "请至少勾选一个要发送的模块。");
+    return;
+  }
+  const sent = await sendTtsPayloadToTargets(payload, targets);
+  setTtsHandoffStatus(container, `已发送三件套到：${sent.join("、")}。`);
 }
 
 async function prepareTtsJobHandoff(id) {
