@@ -1811,6 +1811,33 @@ function parseVideoInfoFromToolText(text) {
   return { title, videoId, downloadUrl };
 }
 
+function textFromSubtitleFile(filePath) {
+  if (!filePath || !fs.existsSync(filePath)) return "";
+  const raw = fs.readFileSync(filePath, "utf8");
+  const extension = path.extname(filePath).toLowerCase();
+  if (extension === ".json3") {
+    try {
+      const data = JSON.parse(raw);
+      return (data.events || [])
+        .flatMap((event) => event.segs || [])
+        .map((seg) => seg.utf8 || "")
+        .join("")
+        .replace(/\s+/g, " ")
+        .trim();
+    } catch {
+      return "";
+    }
+  }
+  return raw
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line && !/^\d+$/.test(line) && !/-->/u.test(line) && !/^WEBVTT/i.test(line))
+    .join("\n")
+    .replace(/<[^>]+>/g, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
 function createPauseError() {
   const error = new Error("任务已暂停");
   error.name = "AbortError";
