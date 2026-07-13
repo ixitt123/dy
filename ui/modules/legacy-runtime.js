@@ -1274,9 +1274,17 @@ function renderTasks(tasks) {
         const message = escapeHtml(task.error || task.message || "");
         const canPause = task.status === "下载中" || task.status === "提取中";
         const canDelete = !canPause;
-        const actionButton = canPause
+        const primaryPath = primaryTaskFilePath(task);
+        const openButton = primaryPath
+          ? `<button class="ghost small task-open-location" type="button" data-task-id="${task.id}">打开位置</button>`
+          : "";
+        const rewriteButton = task.txt_path
+          ? `<button class="ghost small task-send-rewrite" type="button" data-task-id="${task.id}">去改写</button>`
+          : "";
+        const manageButton = canPause
           ? `<button class="ghost small task-pause" type="button" data-task-id="${task.id}">暂停</button>`
           : `<button class="ghost small danger-action task-delete" type="button" data-task-id="${task.id}" ${canDelete ? "" : "disabled"}>删除</button>`;
+        const actionButton = [openButton, rewriteButton, manageButton].filter(Boolean).join("");
         return `
           <div class="task-row">
             <div class="task-id">#${task.id}</div>
@@ -1291,7 +1299,7 @@ function renderTasks(tasks) {
             <div class="task-path" title="${escapeHtml([task.txt_path, task.analysis_path].filter(Boolean).join(" / "))}">${escapeHtml(txtParts) || "-"}</div>
             <div class="task-tags" title="${escapeHtml(labelText)}">${escapeHtml(labelText) || "-"}</div>
             <div class="task-message" title="${message}">${message || "-"}</div>
-            <div>${actionButton}</div>
+            <div class="task-actions-cell">${actionButton}</div>
           </div>
         `;
       })
