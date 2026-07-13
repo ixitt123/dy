@@ -1421,6 +1421,11 @@
               <label for="ttsStylePrompt">情绪 / 风格补充</label>
               <textarea id="ttsStylePrompt" class="tts-style-prompt" rows="3" placeholder="例如：像有经验的老师耐心解释，重点词稍微加重。"></textarea>
             </details>
+            <div class="tts-generate-row tts-main-generate">
+              <button class="primary" id="generateTts" type="button">根据文案生成音频</button>
+              <button class="ghost" id="openVoiceCloneFromTts" type="button" hidden>克隆音色</button>
+              <span id="ttsStatus">等待生成</span>
+            </div>
           </div>
 
           <div class="tts-step-card tts-output-column">
@@ -1430,11 +1435,6 @@
                 <strong>生成 / 试听 / 发送</strong>
                 <small>确认后发送到生产线</small>
               </div>
-            </div>
-            <div class="tts-generate-row">
-              <button class="primary" id="generateTts" type="button">生成语音</button>
-              <button class="ghost" id="openVoiceCloneFromTts" type="button" hidden>克隆音色</button>
-              <span id="ttsStatus">等待生成</span>
             </div>
             <div class="tts-preview" id="ttsPreview" hidden>
               <div>

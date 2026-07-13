@@ -2693,6 +2693,28 @@ pre {
   gap: 12px;
 }
 
+.tts-main-generate {
+  margin-top: 14px;
+  border-top: 1px solid #2b323e;
+  padding-top: 14px;
+}
+
+.tts-main-generate #generateTts {
+  width: 100%;
+  min-height: 52px;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: 800;
+}
+
+.tts-main-generate #ttsStatus {
+  min-height: 34px;
+  border: 1px solid #303744;
+  border-radius: 8px;
+  padding: 8px 10px;
+  background: #10151d;
+}
+
 #ttsStatus {
   color: var(--muted);
   font-size: 13px;
