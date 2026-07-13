@@ -47,6 +47,10 @@ const workbenchPages = {
     title: "小黑视频风格生成",
     description: "使用小黑配图软件生成 TTS、音乐素材、逐段配图和剪映草稿。",
   },
+  "money-printer": {
+    title: "MoneyPrinterTurbo",
+    description: "免费素材混剪生产线：启动本地 API，按主题或脚本生成 MP4。",
+  },
   files: {
     title: "素材资产库",
     description: "按类型、用途、风格和项目管理成片素材。",

@@ -66,10 +66,13 @@
             <button class="nav-item" type="button" data-nav="xiaohei-video">
               <span class="nav-index">11</span><span>小黑视频风格生成</span>
             </button>
+            <button class="nav-item" type="button" data-nav="money-printer">
+              <span class="nav-index">12</span><span>MoneyPrinter</span>
+            </button>
           </div>
           <div class="nav-group">
             <button class="nav-item" type="button" data-nav="settings">
-              <span class="nav-index">12</span><span>系统设置</span>
+              <span class="nav-index">13</span><span>系统设置</span>
             </button>
           </div>
         </nav>
@@ -223,6 +226,30 @@
                   </button>
                   <button type="button" data-nav="video-output">
                     <span>06</span><strong>剪映草稿</strong><small>检查导出</small>
+                  </button>
+                </div>
+              </section>
+
+              <section class="dashboard-panel priority-pipeline-panel" aria-labelledby="moneyPrinterPipelineTitle">
+                <div class="panel-heading">
+                  <div>
+                    <span class="section-eyebrow">第三生产线</span>
+                    <h2 id="moneyPrinterPipelineTitle">MoneyPrinterTurbo 免费素材混剪</h2>
+                  </div>
+                  <span class="phase-badge">主题/脚本 · 免费素材 · MP4</span>
+                </div>
+                <div class="priority-pipeline">
+                  <button type="button" data-nav="money-printer">
+                    <span>01</span><strong>启动 API</strong><small>检测本地服务</small>
+                  </button>
+                  <button type="button" data-nav="money-printer">
+                    <span>02</span><strong>输入主题</strong><small>脚本或关键词</small>
+                  </button>
+                  <button type="button" data-nav="money-printer">
+                    <span>03</span><strong>素材来源</strong><small>Pexels/Pixabay/本地</small>
+                  </button>
+                  <button type="button" data-nav="money-printer">
+                    <span>04</span><strong>生成 MP4</strong><small>轮询任务进度</small>
                   </button>
                 </div>
               </section>
@@ -1618,6 +1645,167 @@
       <section class="workbench-page" data-page="xiaohei-video" id="xiaoheiVideoPage">
         <section class="embedded-production-line">
           <div class="production-line-notice">正在初始化小黑视频风格生成工作台...</div>
+        </section>
+      </section>
+
+      <section class="workbench-page" data-page="money-printer" id="moneyPrinterPage">
+        <section class="money-printer-maker">
+          <div class="result-head money-printer-head">
+            <div>
+              <span class="section-eyebrow">PRODUCTION LINE 03</span>
+              <h2>MoneyPrinterTurbo 免费素材混剪</h2>
+              <p>独立对接 MoneyPrinterTurbo，本页负责启动 API、提交主题/脚本、轮询任务并打开最终 MP4。</p>
+            </div>
+            <span id="moneyPrinterApiBadge" class="money-printer-badge warning">检测中</span>
+          </div>
+
+          <section class="money-printer-layout">
+            <form id="moneyPrinterForm" class="money-printer-form">
+              <section class="money-printer-card">
+                <div class="money-printer-card-head">
+                  <div>
+                    <strong>服务连接</strong>
+                    <small id="moneyPrinterRootPath">正在读取路径...</small>
+                  </div>
+                  <div class="money-printer-actions">
+                    <button id="moneyPrinterStartApi" type="button">启动 API</button>
+                    <button id="moneyPrinterRefresh" class="ghost" type="button">刷新</button>
+                    <button id="moneyPrinterOpenDocs" class="ghost" type="button">API 文档</button>
+                    <button id="moneyPrinterOpenRoot" class="ghost" type="button">项目目录</button>
+                    <button id="moneyPrinterOpenTasks" class="ghost" type="button">输出目录</button>
+                  </div>
+                </div>
+                <div class="money-printer-status-line">
+                  <strong id="moneyPrinterStatus">检测中</strong>
+                  <span id="moneyPrinterDetail">正在检查 MoneyPrinterTurbo。</span>
+                </div>
+              </section>
+
+              <section class="money-printer-card">
+                <div class="money-printer-grid">
+                  <label>
+                    <span>视频主题</span>
+                    <input id="moneyPrinterSubject" type="text" placeholder="例如：人工智能如何改变普通人的日常生活" />
+                  </label>
+                  <label>
+                    <span>画幅</span>
+                    <select id="moneyPrinterAspect">
+                      <option value="16:9" selected>16:9 横屏</option>
+                      <option value="9:16">9:16 竖屏</option>
+                      <option value="1:1">1:1 方屏</option>
+                    </select>
+                  </label>
+                  <label>
+                    <span>素材来源</span>
+                    <select id="moneyPrinterSource">
+                      <option value="pexels" selected>Pexels 免费素材</option>
+                      <option value="pixabay">Pixabay 免费素材</option>
+                      <option value="coverr">Coverr 免费素材</option>
+                      <option value="local">MoneyPrinter 本地素材</option>
+                    </select>
+                  </label>
+                  <label>
+                    <span>配音音色</span>
+                    <input id="moneyPrinterVoice" type="text" value="zh-CN-XiaoxiaoNeural-Female" />
+                  </label>
+                </div>
+
+                <label>
+                  <span>完整脚本（可选，填写后跳过 AI 写稿）</span>
+                  <textarea id="moneyPrinterScript" placeholder="可以粘贴已经改写好的口播脚本；留空则按主题自动生成。"></textarea>
+                </label>
+
+                <div class="money-printer-grid">
+                  <label>
+                    <span>素材关键词（可选）</span>
+                    <input id="moneyPrinterTerms" type="text" placeholder="AI, daily life, technology" />
+                  </label>
+                  <label>
+                    <span>BGM</span>
+                    <select id="moneyPrinterBgm">
+                      <option value="random" selected>随机 BGM</option>
+                      <option value="none">不加 BGM</option>
+                    </select>
+                  </label>
+                  <label>
+                    <span>单素材时长</span>
+                    <select id="moneyPrinterClipDuration">
+                      <option value="3">3 秒</option>
+                      <option value="5" selected>5 秒</option>
+                      <option value="8">8 秒</option>
+                    </select>
+                  </label>
+                  <label>
+                    <span>生成数量</span>
+                    <select id="moneyPrinterVideoCount">
+                      <option value="1" selected>1 条</option>
+                      <option value="2">2 条</option>
+                      <option value="3">3 条</option>
+                    </select>
+                  </label>
+                </div>
+
+                <label class="money-printer-local-materials">
+                  <span>本地素材文件名</span>
+                  <textarea id="moneyPrinterLocalMaterials" placeholder="仅素材来源选择“本地”时使用。填写 MoneyPrinterTurbo/storage/local_videos 内的文件名，每行一个。"></textarea>
+                </label>
+
+                <label class="money-printer-check">
+                  <input id="moneyPrinterMatchScript" type="checkbox" />
+                  <span>按脚本顺序匹配素材</span>
+                </label>
+
+                <div class="money-printer-actions">
+                  <button id="moneyPrinterSubmit" class="primary" type="submit">生成 MoneyPrinter 视频</button>
+                  <button id="moneyPrinterExample" class="ghost" type="button">填入示例</button>
+                </div>
+              </section>
+            </form>
+
+            <aside class="money-printer-side">
+              <section class="money-printer-card">
+                <div class="money-printer-card-head">
+                  <strong>任务进度</strong>
+                  <span id="moneyPrinterProgressPercent">0%</span>
+                </div>
+                <div class="money-printer-progress" id="moneyPrinterProgress">
+                  <i id="moneyPrinterProgressFill"></i>
+                </div>
+                <dl class="money-printer-task-meta">
+                  <dt>Task ID</dt>
+                  <dd id="moneyPrinterTaskId">未创建</dd>
+                  <dt>状态</dt>
+                  <dd id="moneyPrinterTaskState">等待中</dd>
+                </dl>
+                <div id="moneyPrinterTaskVideos" class="money-printer-videos">
+                  <p>生成完成后这里会出现 MP4 链接。</p>
+                </div>
+              </section>
+
+              <section class="money-printer-card">
+                <div class="money-printer-card-head">
+                  <strong>素材概况</strong>
+                </div>
+                <div id="moneyPrinterAssets" class="money-printer-assets">
+                  <p>API 启动后显示本地 BGM 和本地素材。</p>
+                </div>
+              </section>
+
+              <section class="money-printer-card">
+                <div class="money-printer-card-head">
+                  <strong>最近任务</strong>
+                </div>
+                <div id="moneyPrinterTaskList" class="money-printer-task-list">
+                  <p>正在读取任务...</p>
+                </div>
+              </section>
+
+              <details class="money-printer-card money-printer-log-card">
+                <summary>API 启动日志</summary>
+                <pre id="moneyPrinterApiLogs">暂无 API 启动日志。</pre>
+              </details>
+            </aside>
+          </section>
         </section>
       </section>
 
