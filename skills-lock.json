@@ -12,6 +12,12 @@
       "sourceType": "github",
       "skillPath": ".agents/skills/visual-style/SKILL.md",
       "computedHash": "759e4ca1265cbde715a90f7e0cc25ef2a839ed619208b3e5517f21ebcc027a27"
+    },
+    "wxauto-dev": {
+      "source": "cluic/wxauto-skill",
+      "sourceType": "github",
+      "skillPath": "skills/wxauto-dev/SKILL.md",
+      "computedHash": "959d0d884516e9fafcded827abb6b2ccbeb92709809d3911f9487b4b9901ecc6"
     }
   }
 }
