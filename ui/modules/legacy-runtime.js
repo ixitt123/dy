@@ -6119,6 +6119,67 @@ document.querySelector("#closeRewrite").addEventListener("click", () => {
   rewritePanel.hidden = true;
 });
 
+momentsPersonaSelect?.addEventListener("change", () => {
+  applyMomentsPersona(currentMomentsPersona());
+  setMomentsPersonaStatus("已切换人设。");
+});
+
+document.querySelector("#saveMomentsPersona")?.addEventListener("click", () => {
+  saveMomentsPersona();
+});
+
+document.querySelector("#deleteMomentsPersona")?.addEventListener("click", () => {
+  deleteMomentsPersona();
+});
+
+generateMomentsPostBtn?.addEventListener("click", () => {
+  generateMomentsPost();
+});
+
+copyMomentsPromptsBtn?.addEventListener("click", () => {
+  copyAllMomentsPrompts().catch((error) => {
+    setMomentsStatus(error instanceof Error ? error.message : String(error), "error");
+  });
+});
+
+generateMomentsImagesBtn?.addEventListener("click", () => {
+  generateAllMomentsImages();
+});
+
+momentsImagePromptList?.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-moments-action]");
+  if (!button) return;
+  const index = Number(button.dataset.index || 0);
+  const action = button.dataset.momentsAction || "";
+  if (action === "copy-prompt") {
+    const card = button.closest(".moments-prompt-card");
+    const text = card?.querySelector(".moments-prompt-text")?.value.trim() || "";
+    if (!text) {
+      setMomentsStatus("当前配图没有提示词。", "warning");
+      return;
+    }
+    navigator.clipboard.writeText(text)
+      .then(() => setMomentsStatus(`已复制配图 ${index + 1} 的提示词。`, "success"))
+      .catch((error) => setMomentsStatus(error instanceof Error ? error.message : String(error), "error"));
+  }
+  if (action === "generate-image") {
+    generateMomentsImage(index);
+  }
+});
+
+[
+  momentsCopyInput,
+  momentsLocalMaterials,
+  momentsVisualStyle,
+  momentsImageCount,
+  momentsTone,
+  momentsIntent,
+  momentsPostOutput,
+].forEach((element) => {
+  element?.addEventListener("input", saveMomentsDraft);
+  element?.addEventListener("change", saveMomentsDraft);
+});
+
 directorSourceMode.addEventListener("change", () => {
   updateDirectorSourceOptions();
 });
