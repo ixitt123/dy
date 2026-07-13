@@ -586,6 +586,7 @@ function runCapturedProcess(command, args, { cwd = __dirname, timeoutMs = 120000
       cwd,
       env: {
         ...process.env,
+        PIP_DISABLE_PIP_VERSION_CHECK: "1",
         PYTHONIOENCODING: "utf-8",
         PYTHONUTF8: "1",
       },
@@ -645,7 +646,7 @@ async function publishWechatMomentWithPython({ text = "", imagePaths = [] } = {}
         ...candidate.args,
         wechatMomentsPublisherScript,
         payloadPath,
-      ]);
+      ], { timeoutMs: 360000 });
       return result.parsed || { ok: true, message: "微信朋友圈发布完成。" };
     } catch (error) {
       lastError = error;

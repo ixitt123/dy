@@ -6,6 +6,7 @@ from __future__ import annotations
 import json
 import logging
 import signal
+import subprocess
 import sys
 import time
 from pathlib import Path
@@ -59,13 +60,38 @@ def load_payload(payload_path: str) -> tuple[str, list[str]]:
     return text, media_files[:9]
 
 
-def publish(text: str, media_files: list[str], max_retries: int = 3) -> None:
+def import_wechat():
     try:
         from wxautox4 import WeChat
-    except ModuleNotFoundError as exc:
-        raise RuntimeError("发布朋友圈需要 wxautox4。当前本机 Python 环境未安装，请先执行：pip install wxautox4") from exc
+        return WeChat
+    except ModuleNotFoundError:
+        logger.info("wxautox4 not found, installing automatically with current Python...")
+        try:
+            result = subprocess.run(
+                [sys.executable, "-m", "pip", "install", "wxautox4"],
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=300,
+                check=False,
+            )
+        except Exception as exc:
+            raise RuntimeError(f"发布朋友圈需要 wxautox4，自动安装失败：{exc}") from exc
+        if result.returncode != 0:
+            detail = (result.stderr or result.stdout or "").strip()
+            raise RuntimeError(f"发布朋友圈需要 wxautox4，自动安装失败：{detail or 'pip install wxautox4 执行失败'}")
+        try:
+            from wxautox4 import WeChat
+            return WeChat
+        except ModuleNotFoundError as exc:
+            raise RuntimeError("wxautox4 已尝试自动安装，但当前 Python 仍无法导入。请检查本机 Python/pip 环境。") from exc
     except Exception as exc:  # pragma: no cover - import-time vendor errors
         raise RuntimeError(f"wxautox4 加载失败：{exc}") from exc
+
+
+def publish(text: str, media_files: list[str], max_retries: int = 3) -> None:
+    WeChat = import_wechat()
 
     try:
         wx = WeChat()
