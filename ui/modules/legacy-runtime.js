@@ -434,6 +434,9 @@ function formatSize(size) {
 function getFileAction(fileName) {
   const lower = String(fileName || "").toLowerCase();
   if (lower.endsWith(".mp4") || lower.endsWith(".mov") || lower.endsWith(".mkv")) return "视频";
+  if (lower.endsWith(".mp3") || lower.endsWith(".wav") || lower.endsWith(".m4a")) return "音频";
+  if (lower.endsWith(".srt") || lower.endsWith(".vtt") || lower.endsWith(".ass")) return "字幕";
+  if (lower.includes("ai分析")) return "AI分析";
   if (lower.endsWith(".txt") || lower.includes("_文案")) return "文案";
   return "文件";
 }
