@@ -726,8 +726,19 @@ function loadRewritePresetSettings() {
   if (data.conflictLevel && rewriteConflictLevel) rewriteConflictLevel.value = data.conflictLevel;
   if (data.emotionLevel && rewriteEmotionLevel) rewriteEmotionLevel.value = data.emotionLevel;
   if (data.salesLevel && rewriteSalesLevel) rewriteSalesLevel.value = data.salesLevel;
-  if (data.referenceStyle && rewriteReference) rewriteReference.value = data.referenceStyle;
+  const savedReference = String(data.referenceStyle || "");
+  if (savedReference && rewriteReference) {
+    rewriteReference.value = /教育招生|家长|学校|老师/.test(savedReference)
+      ? defaultRewriteReference
+      : savedReference;
+  }
   syncRewriteSliderLabels();
+}
+
+function sanitizeRewriteReference(value) {
+  const text = String(value || "").trim();
+  if (!text || /教育招生|家长|学校|老师/.test(text)) return defaultRewriteReference;
+  return text;
 }
 
 function buildRewriteReferenceStyle() {
