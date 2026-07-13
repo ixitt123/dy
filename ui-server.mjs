@@ -1707,12 +1707,13 @@ function publicUnifiedProviders(settings = readSettings()) {
 
 function saveUnifiedProvider(settings, body) {
   const id = String(body.id || "").trim();
+  const scope = String(body.scope || "").trim().toLowerCase();
   const apiKey = String(body.apiKey || "").trim();
   const baseUrl = String(body.baseUrl || "").trim();
   const workspaceId = String(body.workspaceId || "").trim();
   const model = String(body.model || "").trim();
 
-  if (settings.rewriteProviders?.[id]) {
+  if (scope !== "tts" && settings.rewriteProviders?.[id]) {
     const provider = settings.rewriteProviders[id];
     if (apiKey) provider.apiKey = apiKey;
     if (body.baseUrl !== undefined) provider.baseUrl = baseUrl;
