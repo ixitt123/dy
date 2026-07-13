@@ -63,6 +63,141 @@ function prepareScript(text) {
   };
 }
 
+function formatClock(seconds = 0, separator = ".") {
+  const totalMs = Math.max(0, Math.round(Number(seconds || 0) * 1000));
+  const hours = Math.floor(totalMs / 3600000);
+  const minutes = Math.floor((totalMs % 3600000) / 60000);
+  const secs = Math.floor((totalMs % 60000) / 1000);
+  const ms = totalMs % 1000;
+  return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(secs).padStart(2, "0")}${separator}${String(ms).padStart(3, "0")}`;
+}
+
+function timestampNumber(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number) || number < 0) return null;
+  return number > 1000 ? number / 1000 : number;
+}
+
+function pickTimestamp(item, keys = []) {
+  for (const key of keys) {
+    if (item?.[key] !== undefined) {
+      const value = timestampNumber(item[key]);
+      if (value !== null) return value;
+    }
+  }
+  return null;
+}
+
+function subtitleText(item) {
+  return String(
+    item?.text
+    || item?.word
+    || item?.content
+    || item?.subtitle
+    || item?.caption
+    || item?.value
+    || ""
+  ).trim();
+}
+
+function subtitleEntries(raw) {
+  const value = typeof raw === "string" ? safeJson(raw, []) : raw;
+  const list = Array.isArray(value)
+    ? value
+    : Array.isArray(value?.subtitles)
+      ? value.subtitles
+      : Array.isArray(value?.words)
+        ? value.words
+        : [];
+  return list
+    .map((item) => {
+      const text = subtitleText(item);
+      const start = pickTimestamp(item, ["start", "start_time", "startTime", "begin", "begin_time", "beginTime", "time_begin", "offset", "offset_ms"]);
+      const end = pickTimestamp(item, ["end", "end_time", "endTime", "stop", "stop_time", "time_end", "duration_end"]);
+      return text && start !== null ? { text, start, end: end ?? start } : null;
+    })
+    .filter(Boolean)
+    .sort((a, b) => a.start - b.start);
+}
+
+function appendTimedText(a = "", b = "") {
+  if (!a) return b;
+  if (!b) return a;
+  return /[A-Za-z0-9]$/.test(a) && /^[A-Za-z0-9]/.test(b) ? `${a} ${b}` : `${a}${b}`;
+}
+
+function collapseSubtitleEntries(entries = []) {
+  const rows = [];
+  let current = null;
+  for (const entry of entries) {
+    if (!current) {
+      current = { start: entry.start, end: Math.max(entry.end, entry.start + 0.25), text: entry.text };
+      continue;
+    }
+    current.text = appendTimedText(current.text, entry.text);
+    current.end = Math.max(entry.end, current.end, current.start + 0.25);
+    const duration = current.end - current.start;
+    if (/[。！？!?；;]$/.test(current.text) || current.text.length >= 28 || duration >= 4) {
+      rows.push(current);
+      current = null;
+    }
+  }
+  if (current) rows.push(current);
+  return rows.map((row, index) => ({
+    index: index + 1,
+    start: Math.max(0, row.start),
+    end: Math.max(row.start + 0.25, row.end),
+    text: row.text.trim(),
+  }));
+}
+
+function estimatedSubtitleTimeline(text = "", duration = 0) {
+  const segments = splitSentences(text).length ? splitSentences(text) : [String(text || "").trim()].filter(Boolean);
+  if (!segments.length) return [];
+  const totalChars = segments.reduce((sum, segment) => sum + Math.max(4, segment.length), 0);
+  const totalDuration = Number(duration || 0) > 0
+    ? Number(duration)
+    : Math.max(2, Math.min(900, totalChars / 4.2));
+  let cursor = 0;
+  return segments.map((segment, index) => {
+    const isLast = index === segments.length - 1;
+    const weight = Math.max(4, segment.length) / totalChars;
+    const span = isLast ? totalDuration - cursor : Math.max(0.8, totalDuration * weight);
+    const start = cursor;
+    const end = Math.min(totalDuration, cursor + span);
+    cursor = end;
+    return { index: index + 1, start, end: Math.max(start + 0.25, end), text: segment };
+  });
+}
+
+function writeTimedTextFiles({ directory, job, preparedText, result }) {
+  const providerTimeline = collapseSubtitleEntries(subtitleEntries(result.metadata?.subtitles || result.metadata?.subtitle));
+  const duration = Number(result.duration || result.metadata?.duration || 0)
+    || (Number(result.metadata?.audio_length_ms || 0) / 1000)
+    || 0;
+  const timeline = providerTimeline.length ? providerTimeline : estimatedSubtitleTimeline(preparedText, duration);
+  if (!timeline.length) return {};
+  fs.mkdirSync(directory, { recursive: true });
+  const srtPath = path.join(directory, `tts-${job.id}.srt`);
+  const textPath = path.join(directory, `tts-${job.id}-timestamped.txt`);
+  const srt = timeline.map((item, index) => [
+    String(index + 1),
+    `${formatClock(item.start, ",")} --> ${formatClock(item.end, ",")}`,
+    item.text,
+  ].join("\n")).join("\n\n") + "\n";
+  const timestampedText = timeline
+    .map((item) => `[${formatClock(item.start)} --> ${formatClock(item.end)}] ${item.text}`)
+    .join("\n") + "\n";
+  fs.writeFileSync(srtPath, srt, "utf8");
+  fs.writeFileSync(textPath, timestampedText, "utf8");
+  return {
+    subtitle_path: srtPath,
+    timestamped_text_path: textPath,
+    subtitle_timeline: timeline,
+    subtitle_source: providerTimeline.length ? "provider" : "estimated",
+  };
+}
+
 function providerConfig(settings, providerId) {
   const tts = settings.tts || {};
   return tts[providerId] || {};
@@ -159,11 +294,13 @@ function curatedPresetVoices(providerId, voices = []) {
 
 export function createTtsService({ baseDir, taskStore, getSettings, ffmpegPath, onJobCompleted = () => {} }) {
   const outputDir = path.join(baseDir, ".data", "tts", "audio");
+  const subtitleDir = path.join(baseDir, ".data", "tts", "subtitles");
   const promptsDir = path.join(baseDir, "prompts");
   const pending = [];
   let working = false;
 
   fs.mkdirSync(outputDir, { recursive: true });
+  fs.mkdirSync(subtitleDir, { recursive: true });
   for (const file of PROMPT_FILES) {
     if (!fs.existsSync(path.join(promptsDir, file))) {
       throw new Error(`缺少 TTS Prompt：${file}`);
@@ -193,6 +330,11 @@ export function createTtsService({ baseDir, taskStore, getSettings, ffmpegPath, 
       ...job,
       error: visibleError(job, metadata),
       audio_url: job.status === "completed" && job.audio_path ? `/api/tts/audio?id=${job.id}` : "",
+      subtitle_url: job.status === "completed" && metadata.subtitle_path ? `/api/tts/subtitle?id=${job.id}` : "",
+      timestamped_text_url: job.status === "completed" && metadata.timestamped_text_path ? `/api/tts/timestamped-text?id=${job.id}` : "",
+      subtitle_path: String(metadata.subtitle_path || ""),
+      timestamped_text_path: String(metadata.timestamped_text_path || ""),
+      subtitle_timeline: Array.isArray(metadata.subtitle_timeline) ? metadata.subtitle_timeline : [],
       metadata,
     };
   }
@@ -273,6 +415,13 @@ export function createTtsService({ baseDir, taskStore, getSettings, ffmpegPath, 
       return;
     }
 
+    const timedText = writeTimedTextFiles({
+      directory: subtitleDir,
+      job,
+      preparedText: prepared.text,
+      result,
+    });
+
     taskStore.updateTtsJob(job.id, {
       audio_path: result.audio_path,
       status: "completed",
@@ -281,6 +430,7 @@ export function createTtsService({ baseDir, taskStore, getSettings, ffmpegPath, 
         ...jobMetadata,
         ...prepared.metadata,
         ...(result.metadata || {}),
+        ...timedText,
       }),
       completed_at: new Date().toISOString(),
     });
@@ -410,11 +560,21 @@ export function createTtsService({ baseDir, taskStore, getSettings, ffmpegPath, 
     if (["waiting", "processing"].includes(job.status)) {
       throw new Error("语音正在生成，完成或失败后才能删除。");
     }
+    const metadata = safeJson(job.metadata_json, {});
     if (deleteFile && job.audio_path) {
       const root = path.resolve(outputDir);
       const target = path.resolve(job.audio_path);
       if (target !== root && target.startsWith(`${root}${path.sep}`) && fs.existsSync(target)) {
         fs.rmSync(target, { force: true });
+      }
+    }
+    if (deleteFile) {
+      const root = path.resolve(subtitleDir);
+      for (const filePath of [metadata.subtitle_path, metadata.timestamped_text_path]) {
+        const target = filePath ? path.resolve(filePath) : "";
+        if (target && target !== root && target.startsWith(`${root}${path.sep}`) && fs.existsSync(target)) {
+          fs.rmSync(target, { force: true });
+        }
       }
     }
     return { deleted: taskStore.deleteTtsJobs([job.id]), id: job.id };
@@ -507,5 +667,6 @@ export function createTtsService({ baseDir, taskStore, getSettings, ffmpegPath, 
     voicePreview,
     generateStaticPreview,
     outputDir,
+    subtitleDir,
   };
 }
