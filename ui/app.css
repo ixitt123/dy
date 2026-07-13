@@ -8094,6 +8094,62 @@ audio {
   margin-top: 16px;
 }
 
+.workbench-page[data-page="tts"] > #voiceAssetCenter[hidden],
+#openVoiceCloneFromTts[hidden] {
+  display: none !important;
+}
+
+.tts-settings.tts-provider-only {
+  grid-template-columns: minmax(220px, 320px) minmax(0, 1fr);
+}
+
+.tts-settings.tts-provider-only #ttsSettingsStatus {
+  grid-column: 1 / -1;
+}
+
+.tts-voice-quick-panel {
+  display: grid;
+  gap: 10px;
+  grid-column: 1 / -1;
+  margin-top: 4px;
+}
+
+.tts-voice-current {
+  display: grid;
+  gap: 10px;
+  border: 1px solid #303744;
+  border-radius: 8px;
+  padding: 12px;
+  background: #10151d;
+}
+
+.tts-voice-current-main {
+  display: grid;
+  gap: 4px;
+}
+
+.tts-voice-current-main strong {
+  color: #f2f5f9;
+  font-size: 13px;
+}
+
+.tts-voice-current-main span,
+.tts-voice-empty {
+  color: #8994a6;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.tts-voice-current audio {
+  width: 100%;
+}
+
+.tts-voice-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
 .tts-project-source {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;

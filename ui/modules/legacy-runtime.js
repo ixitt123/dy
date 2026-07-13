@@ -3600,6 +3600,171 @@ async function applyVoiceAssetToTts(asset) {
   ttsStatus.textContent = `已选择声音：${asset.voice_name}`;
 }
 
+function selectedTtsVoice() {
+  if (ttsVoiceSource.value === "manual") {
+    const voiceId = ttsManualVoice.value.trim();
+    return voiceId ? { id: voiceId, name: voiceId, model: ttsModel.value.trim(), asset: null } : null;
+  }
+  const asset = selectedVoiceAssetFromDropdown();
+  if (!asset) return null;
+  return {
+    id: asset.voice_id,
+    name: asset.voice_name || asset.voice_id,
+    model: asset.metadata?.target_model || asset.metadata?.model || "",
+    asset,
+  };
+}
+
+function syncTtsModelToSelectedVoice() {
+  const voice = selectedTtsVoice();
+  if (voice?.model) {
+    if (ttsModel && ![...ttsModel.options].some((option) => option.value === voice.model)) {
+      ttsModel.insertAdjacentHTML("afterbegin", `<option value="${escapeHtml(voice.model)}">${escapeHtml(voice.model)}</option>`);
+    }
+    ttsModel.value = voice.model;
+  }
+  if (ttsCurrentModelLabel) {
+    ttsCurrentModelLabel.textContent = voice?.model
+      ? `${voice.model} · API 在系统设置中管理`
+      : "API 在系统设置中管理";
+  }
+  renderTtsVoiceQuickPanel(voice?.asset || null);
+}
+
+function renderTtsVoices() {
+  const manual = ttsVoiceSource.value === "manual";
+  if (manual) {
+    renderTtsVoiceQuickPanel(null);
+    return;
+  }
+  const sourceAssets = ttsVoiceRowsForSource();
+  const categoryRows = sourceAssets.map((asset) => ({
+    category: asset.metadata?.category,
+    useCase: asset.metadata?.useCase,
+    description: asset.description || asset.metadata?.description,
+    name: asset.voice_name,
+  }));
+  renderTtsVoiceCategories(categoryRows);
+  const selectedCategory = ttsVoiceCategory?.value || "鍏ㄩ儴";
+  const voices = selectedCategory === "鍏ㄩ儴"
+    ? sourceAssets
+    : sourceAssets.filter((asset) => normalizeTtsVoiceCategory({
+      category: asset.metadata?.category,
+      useCase: asset.metadata?.useCase,
+      description: asset.description || asset.metadata?.description,
+      name: asset.voice_name,
+    }) === selectedCategory);
+  const previous = ttsPresetVoice.value;
+  ttsPresetVoice.innerHTML = voices.length
+    ? voices.map((asset) => {
+      const category = normalizeTtsVoiceCategory({
+        category: asset.metadata?.category,
+        useCase: asset.metadata?.useCase,
+        description: asset.description || asset.metadata?.description,
+        name: asset.voice_name,
+      });
+      const badges = [
+        asset.is_default ? "默认" : "",
+        asset.is_favorite ? "常用" : "",
+        asset.voice_type === "clone" ? "克隆" : category,
+      ].filter(Boolean).join(" / ");
+      return `<option value="${escapeHtml(asset.id)}">${escapeHtml(asset.voice_name || asset.voice_id)} · ${escapeHtml(badges)} · ${escapeHtml(asset.metadata?.target_model || asset.metadata?.model || asset.voice_id)}</option>`;
+    }).join("")
+    : '<option value="">当前分类暂无可用音色</option>';
+  if (voices.some((asset) => String(asset.id) === String(previous))) {
+    ttsPresetVoice.value = previous;
+  } else {
+    const configuredDefault = selectedTtsProviderConfig().default_voice || "";
+    const defaultAsset = voices.find((asset) => asset.is_default || asset.voice_id === configuredDefault);
+    if (defaultAsset) ttsPresetVoice.value = String(defaultAsset.id);
+  }
+  syncTtsModelToSelectedVoice();
+}
+
+async function applyVoiceAssetToTts(asset) {
+  const providerOption = ttsProviderConfigs.find((provider) => provider.id === asset.provider && provider.enabled);
+  if (!providerOption) throw new Error("这个声音对应的平台当前不可用。");
+  ttsProvider.value = asset.provider;
+  updateTtsProviderFields();
+  const model = asset.metadata?.target_model || asset.metadata?.model || selectedTtsProviderConfig().default_model || "";
+  if (model) ttsModel.value = model;
+  await loadTtsVoices();
+  ttsVoiceSource.value = asset.is_favorite ? "favorite" : asset.voice_type === "clone" ? "clone" : "all";
+  if (ttsVoiceCategory) ttsVoiceCategory.value = "鍏ㄩ儴";
+  updateTtsVoiceSource();
+  ttsPresetVoice.value = String(asset.id);
+  syncTtsModelToSelectedVoice();
+  ttsStatus.textContent = `已选择声音：${asset.voice_name}`;
+}
+
+async function generateTts() {
+  const text = ttsText.value.trim();
+  const selectedVoiceForModel = selectedTtsVoice();
+  const voiceId = selectedVoiceForModel?.id || "";
+  const voiceAsset = selectedVoiceForModel?.asset || null;
+  if (!text) {
+    ttsStatus.textContent = "请先输入配音文案。";
+    return;
+  }
+  if (!voiceId) {
+    ttsStatus.textContent = "请选择音色或填写 voice_id。";
+    return;
+  }
+  ttsStatus.textContent = "正在检查 TTS API 配置...";
+  await ensureTtsProviderConfigured();
+  syncDirectorSourceFromText(text, {
+    title: directorTitle?.value.trim() || "配音文案导演稿",
+    sourceKey: `tts:${Date.now()}`,
+    sourceType: "tts",
+  });
+  generateTtsButton.disabled = true;
+  ttsStatus.textContent = "正在提交生成任务...";
+  renderTtsRail({
+    id: "",
+    status: "waiting",
+    text,
+    voice_id: voiceId,
+    voice_name: selectedVoiceForModel?.name || voiceId,
+    format: ttsFormat.value,
+    progress: 8,
+  });
+  try {
+    const data = await fetchJson("/api/tts/generate", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        provider: ttsProvider.value,
+        project_id: window.videoProjects?.current?.()?.id || "",
+        text,
+        voice_id: voiceId,
+        voice_name: selectedVoiceForModel?.name || voiceId,
+        voice_asset_id: voiceAsset?.id || 0,
+        model: voiceAsset?.metadata?.target_model || voiceAsset?.metadata?.model || selectedVoiceForModel?.model || ttsModel.value.trim(),
+        speed: Number(ttsSpeed.value || 1),
+        emotion: ttsEmotion.value === "custom" ? ttsCustomEmotion.value.trim() : ttsEmotion.value,
+        style_prompt: ttsStylePrompt.value.trim(),
+        volume: Number(ttsVolume.value || 50),
+        pitch: Number(ttsPitch.value || 1),
+        format: ttsFormat.value,
+      }),
+    });
+    renderTtsRail(data.job);
+    await waitForTtsJob(data.job.id);
+    await loadVoiceAssets();
+  } catch (error) {
+    generateTtsButton.disabled = false;
+    ttsStatus.textContent = error instanceof Error ? error.message : String(error);
+    renderTtsRail({
+      ...(activeTtsRailJob || {}),
+      status: "failed",
+      error: error instanceof Error ? error.message : String(error),
+      text,
+      voice_id: voiceId,
+      format: ttsFormat.value,
+    });
+  }
+}
+
 async function openVoiceTests(asset) {
   selectedVoiceAssetId = asset.id;
   voiceTestsTitle.textContent = `声音测试：${asset.voice_name} v${asset.version}`;
@@ -6073,6 +6238,48 @@ ttsModel.addEventListener("change", syncTtsModelToSelectedVoice);
 ttsVoiceSource.addEventListener("change", updateTtsVoiceSource);
 ttsVoiceCategory?.addEventListener("change", renderTtsVoices);
 ttsPresetVoice.addEventListener("change", syncTtsModelToSelectedVoice);
+ttsVoiceQuickPanel?.addEventListener("click", async (event) => {
+  const button = event.target.closest("button");
+  const panel = event.target.closest("[data-voice-asset-id]");
+  if (!button || !panel) return;
+  const id = Number(panel.dataset.voiceAssetId || 0);
+  const asset = voiceAssets.find((item) => Number(item.id) === id);
+  if (!asset) return;
+  try {
+    if (button.classList.contains("tts-voice-use")) {
+      await applyVoiceAssetToTts(asset);
+      return;
+    }
+    if (button.classList.contains("tts-voice-favorite")) {
+      await updateVoiceAsset(id, { is_favorite: !asset.is_favorite });
+      ttsStatus.textContent = asset.is_favorite ? "已移出常用音频模板。" : "已加入常用音频模板。";
+      return;
+    }
+    if (button.classList.contains("tts-voice-default")) {
+      const data = await fetchJson("/api/voice-assets/default", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ id }),
+      });
+      defaultVoiceAsset = data.asset;
+      await loadVoiceAssets({ applyDefault: true });
+      ttsStatus.textContent = `已将“${asset.voice_name}”设为默认音色。`;
+      return;
+    }
+    if (button.classList.contains("tts-voice-delete")) {
+      if (!window.confirm(`永久删除“${asset.voice_name || asset.voice_id}”？此操作会删除 SQLite 记录；克隆音色会同步删除本地声音文件。`)) return;
+      await fetchJson("/api/voice-assets/delete", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ id }),
+      });
+      await loadVoiceAssets();
+      ttsStatus.textContent = `已永久删除“${asset.voice_name || asset.voice_id}”。`;
+    }
+  } catch (error) {
+    ttsStatus.textContent = error instanceof Error ? error.message : String(error);
+  }
+});
 ttsEmotion.addEventListener("change", updateTtsEmotionField);
 ttsVolume.addEventListener("input", updateTtsRangeLabels);
 ttsPitch.addEventListener("input", updateTtsRangeLabels);
