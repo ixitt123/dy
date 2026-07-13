@@ -1020,18 +1020,6 @@ async function handleAudioJobAction(event) {
   }
 }
 
-async function pollVideoProject(id) {
-  for (let attempt = 0; attempt < 600; attempt += 1) {
-    const data = await fetchJson(`/api/ian-xiaohei/video-job?id=${encodeURIComponent(id)}`);
-    const project = data.project;
-    const progress = Math.max(88, Math.min(99, Number(project.progress || 0) * 0.11 + 88));
-    setStatus("正在创建剪映草稿", project.current_step || "处理中。", progress, false, `${Math.round(Number(project.progress || 0))}%`);
-    if (project.status === "completed" || project.status === "failed") return project;
-    await delay(1500);
-  }
-  throw new Error("剪映草稿任务超时。");
-}
-
 async function handlePromptFileChange(event) {
   const input = event.target.closest("[data-shot-upload]");
   if (!input?.files?.[0]) return;
