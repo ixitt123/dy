@@ -3796,6 +3796,227 @@ async function generateMomentsPostJson(body = {}) {
   };
 }
 
+async function generateMomentsPostJsonV2(body = {}) {
+  const sourceText = String(body.text || "").trim();
+  const persona = String(body.persona || "").trim();
+  if (!sourceText) throw new Error("请先填写朋友圈文案输入区。");
+  if (!persona) throw new Error("请先选择或填写人设。");
+  const fixedImageCount = clampMomentsImageCount(body.imageCount);
+  const visualStyle = normalizeMomentsStyle(body.visualStyle);
+  const localMaterials = String(body.localMaterials || "").trim();
+  const tone = String(body.tone || "普通朋友聊天式分享").trim();
+  const intent = String(body.intent || "不强销售的自然分享").trim();
+  const providerId = String(body.provider || readSettings().rewrite?.defaultProvider || "").trim();
+  const imageCountRule = fixedImageCount
+    ? `必须生成 ${fixedImageCount} 张配图。`
+    : "根据成品文案判断生成 1-3 张配图：短内容 1 张；有误区+方法 2 张；有误区+方法+结果状态 3 张。";
+  const styleRule = {
+    auto: "可以自动选择小黑漫画解释类或真实生活/产品场景类；同一条朋友圈的多张图必须统一主题和视觉方向。",
+    xiaohei: "必须使用小黑漫画解释类：白底、黑色手绘线稿、少量红橙蓝短批注、大量留白，小黑承担核心动作；必须有视觉锤，禁止跑步、日历、道路、箭头、书本堆这种直译弱图。",
+    realistic: "必须使用真实生活/产品场景类：像工作现场/学习现场/咨询现场的关键瞬间；必须有鲜明主物件和情绪现场，不要广告海报和普通资料摆拍。",
+  }[visualStyle];
+  const copySkill = [
+    "朋友圈文案 Skill v2：私域自然分享，不是短视频口播，不是广告海报文案。",
+    "目标：让读者感觉这是一个专业规划老师刚从真实工作里提炼出的观察，有人味、有判断、有具体动作。",
+    "固定结构：生活化触发点 -> 专业判断 -> 具体解释 -> 可执行动作 -> 自然收尾。",
+    "硬性质量：4-8 个短段落；110-260 个中文字符；必须有一个能记住的观点句、一个纠偏点、一个具体动作建议。",
+    "禁止：两句总结、鸡汤口号、硬广 CTA、制造焦虑、凭空编学生案例/成绩/机构名/具体数字。",
+    "不合格信号：像标语、像课程广告、只有提醒没有方法、只有观点没有场景、和原文关系弱。",
+  ].join("\n");
+  const imageSkill = [
+    "图片提示词 Skill v2：先做视觉策略，再写生图提示词。",
+    "每张图必须来自成品文案的认知锚点，不允许把文案字面翻译成跑步、日历、道路、箭头、书本堆、奖杯、清单。",
+    "视觉锤公式：抽象观点 -> 物理冲突 -> 低科技怪物件/真实现场 -> 主体正在解决这个冲突。",
+    "小黑图：16:9、白底、黑色手绘线稿、大量留白、少量红橙蓝短批注；小黑必须称重、修补、分拣、守门、拆包、扶梯子、拧阀门等，不是站着或跑着。",
+    "真实图：像工作现场/学习现场/咨询现场，有主物件和关系，例如圈画的规划表、两套学习路径、沟通记录、反馈便签；不要广告海报、二维码、Logo、水印、大段文字。",
+    "套组分工：1 张是封面冲击图；2 张是误区+方法；3 张是误区+方法+结果状态。多图必须统一视觉母题。",
+    "没有真实素材时，不要写本地素材占位；用户上传素材后由系统追加。",
+  ].join("\n");
+
+  const copyRun = await generateStructuredJson({
+    providerId,
+    temperature: 0.82,
+    requestName: "朋友圈文案生成",
+    maxTokens: 5200,
+    messages: [
+      {
+        role: "system",
+        content: [
+          "你是专业私域朋友圈文案策划。你只负责生成可发布的朋友圈正文和内容策略。",
+          "必须忠于原文事实，不得凭空新增行业、案例、数据、人物身份或承诺效果。",
+          "输出要有人味、有力度、有专业判断，不干巴、不空泛、不硬广。",
+          "只输出严格 JSON。",
+        ].join("\n"),
+      },
+      {
+        role: "user",
+        content: [
+          copySkill,
+          "",
+          "人设：",
+          persona,
+          "",
+          `语气：${tone}`,
+          `用途：${intent}`,
+          "",
+          "原始文案：",
+          sourceText.slice(0, 12000),
+          "",
+          "返回 JSON：",
+          JSON.stringify({
+            post: "朋友圈正文，可直接发布，可编辑",
+            theme: "统一主题",
+            angle: "内容切入角度",
+            core_judgment: "最有力度的专业判断句",
+            visual_anchor: "后续图片应围绕的视觉母题",
+            persona_used: "人设摘要",
+            quality_gate: {
+              post_has_scene: true,
+              post_has_professional_judgment: true,
+              post_not_dry_summary: true,
+              post_has_action_advice: true,
+            },
+          }, null, 2),
+        ].join("\n"),
+      },
+    ],
+  });
+
+  let copyData = copyRun.data && typeof copyRun.data === "object" ? copyRun.data : {};
+  let post = String(copyData.post || "").trim();
+  if (rewriteCharacterCount(post) < 110 || !String(copyData.core_judgment || "").trim()) {
+    const repaired = await generateStructuredJson({
+      providerId,
+      temperature: 0.55,
+      requestName: "朋友圈文案质检修复",
+      maxTokens: 5200,
+      messages: [
+        { role: "system", content: "你是朋友圈文案质检修复器。只输出严格 JSON。" },
+        {
+          role: "user",
+          content: [
+            "上一版不合格：太短、太干或缺少专业判断。请重写。",
+            "硬性要求：110-260 中文字符，4-8 个短段落；必须有生活化触发点、专业判断、具体动作建议；不得编造事实。",
+            "人设：",
+            persona,
+            "原始文案：",
+            sourceText.slice(0, 12000),
+            "上一版：",
+            JSON.stringify(copyData, null, 2),
+            "返回 JSON：",
+            JSON.stringify({
+              post: "重写后的朋友圈正文",
+              theme: "统一主题",
+              angle: "内容切入角度",
+              core_judgment: "专业判断句",
+              visual_anchor: "视觉母题",
+              persona_used: "人设摘要",
+            }, null, 2),
+          ].join("\n\n"),
+        },
+      ],
+    });
+    copyData = repaired.data && typeof repaired.data === "object" ? repaired.data : copyData;
+    post = String(copyData.post || post).trim();
+  }
+
+  const imageRun = await generateStructuredJson({
+    providerId,
+    temperature: 0.72,
+    requestName: "朋友圈图片提示词生成",
+    maxTokens: 7200,
+    messages: [
+      {
+        role: "system",
+        content: [
+          "你是视觉创意总监和图片提示词工程师。",
+          "你只负责基于已定稿朋友圈文案生成图片策略和生图提示词，不要改写朋友圈正文。",
+          "只输出严格 JSON。",
+        ].join("\n"),
+      },
+      {
+        role: "user",
+        content: [
+          imageSkill,
+          "",
+          "视觉方向：",
+          styleRule,
+          "",
+          "配图数量规则：",
+          imageCountRule,
+          "",
+          "人设：",
+          persona,
+          "",
+          "朋友圈正文成品：",
+          post,
+          "",
+          "文案策略：",
+          JSON.stringify({
+            theme: copyData.theme || "",
+            angle: copyData.angle || "",
+            core_judgment: copyData.core_judgment || "",
+            visual_anchor: copyData.visual_anchor || "",
+          }, null, 2),
+          "",
+          "本地图片素材说明：",
+          localMaterials || "用户没有提供本地素材；不要在最终提示词里写“无本地素材”。",
+          "",
+          "返回 JSON：",
+          JSON.stringify({
+            image_count: fixedImageCount || "1-3",
+            theme: "统一图文主题",
+            notes: ["可选注意事项"],
+            images: [
+              {
+                title: "配图标题",
+                style: "xiaohei 或 realistic",
+                image_role: "封面冲击图 / 误区图 / 方法图 / 结果状态图",
+                visual_hook: "这张图的视觉锤，一句话说明",
+                composition_type: "前后对比 / 角色状态 / 概念隐喻 / 方法分层 / 小漫画分镜 / 真实现场",
+                purpose: "这张图对应成品文案的哪一层意思",
+                prompt: "完整可复制的图片生成提示词",
+                negative_prompt: "负面提示词",
+                local_material_hint: "",
+              },
+            ],
+            quality_gate: {
+              prompts_have_visual_hook: true,
+              prompts_not_literal_translation: true,
+              prompts_share_one_theme: true,
+              prompts_follow_visual_skill: true,
+            },
+          }, null, 2),
+        ].join("\n"),
+      },
+    ],
+  });
+
+  const merged = {
+    ...imageRun.data,
+    post,
+    theme: imageRun.data?.theme || copyData.theme || "朋友圈图文",
+    persona_used: copyData.persona_used || persona,
+    notes: [
+      ...(Array.isArray(copyData.notes) ? copyData.notes : []),
+      ...(Array.isArray(imageRun.data?.notes) ? imageRun.data.notes : []),
+    ].slice(0, 6),
+  };
+
+  return {
+    ok: true,
+    provider: imageRun.provider || copyRun.provider,
+    model: imageRun.model || copyRun.model,
+    result: normalizeMomentsResult(merged, {
+      imageCount: fixedImageCount,
+      visualStyle,
+      localMaterials,
+      persona,
+      theme: copyData.theme || "朋友圈图文",
+    }),
+  };
+}
+
 function chunkRowsByWordCount(rows, maxCharacters = 2600) {
   const chunks = [];
   let current = [];
