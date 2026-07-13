@@ -623,13 +623,13 @@ function runCapturedProcess(command, args, { cwd = __dirname, timeoutMs = 120000
   });
 }
 
-async function publishWechatMomentWithPython({ text = "", imagePaths = [] } = {}) {
+async function publishWechatMomentWithPython({ text = "", imagePaths = [], authCode = "" } = {}) {
   if (!fs.existsSync(wechatMomentsPublisherScript)) {
     throw new Error("缺少微信朋友圈发布脚本：scripts/wechat_moments_publish.py");
   }
   fs.mkdirSync(momentsPublishDir, { recursive: true });
   const payloadPath = path.join(momentsPublishDir, `${Date.now()}-${randomUUID().slice(0, 8)}.json`);
-  fs.writeFileSync(payloadPath, JSON.stringify({ text, imagePaths }, null, 2), "utf8");
+  fs.writeFileSync(payloadPath, JSON.stringify({ text, imagePaths, authCode }, null, 2), "utf8");
   const candidates = process.platform === "win32"
     ? [
         { command: "py", args: ["-3"] },
@@ -6051,7 +6051,8 @@ const server = http.createServer(async (req, res) => {
         const text = String(body.text || "").trim();
         if (!text) throw new Error("请先填写朋友圈文案成品。");
         const imagePaths = normalizeMomentsPublishImagePaths(body.imagePaths || body.images || []);
-        const result = await publishWechatMomentWithPython({ text, imagePaths });
+        const authCode = String(body.authCode || body.wxautoAuthCode || "").trim();
+        const result = await publishWechatMomentWithPython({ text, imagePaths, authCode });
         sendJson(res, 200, {
           ok: true,
           message: result.message || `微信朋友圈发布完成：${imagePaths.length} 张图片。`,
@@ -6059,7 +6060,12 @@ const server = http.createServer(async (req, res) => {
           result,
         });
       } catch (error) {
-        sendJson(res, 400, { ok: false, message: error instanceof Error ? error.message : String(error) });
+        sendJson(res, 400, {
+          ok: false,
+          message: error instanceof Error ? error.message : String(error),
+          code: error?.parsed?.code || "",
+          result: error?.parsed || null,
+        });
       }
       return;
     }

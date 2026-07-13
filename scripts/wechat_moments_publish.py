@@ -46,7 +46,7 @@ signal.signal(signal.SIGINT, signal_handler)
 signal.signal(signal.SIGTERM, signal_handler)
 
 
-def load_payload(payload_path: str) -> tuple[str, list[str]]:
+def load_payload(payload_path: str) -> tuple[str, list[str], str]:
     path = Path(payload_path)
     if not path.exists():
         raise ValueError(f"payload file not found: {payload_path}")
@@ -60,7 +60,27 @@ def load_payload(payload_path: str) -> tuple[str, list[str]]:
         if not file_path.exists():
             raise ValueError(f"image file not found: {file_path}")
         media_files.append(str(file_path))
-    return text, media_files[:9]
+    auth_code = str(payload.get("authCode") or "").strip()
+    return text, media_files[:9], auth_code
+
+
+def activate_wxautox4(auth_code: str) -> None:
+    code = str(auth_code or "").strip()
+    if not code:
+        return
+    logger.info("activating wxautox4 license...")
+    result = subprocess.run(
+        [sys.executable, "-m", "wxautox4", "--auth", code],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=120,
+        check=False,
+    )
+    if result.returncode != 0:
+        detail = (result.stderr or result.stdout or "").strip()
+        raise RuntimeError(f"wxautox4 授权激活失败：{detail or '授权命令执行失败'}")
 
 
 def import_wechat():
@@ -118,7 +138,8 @@ def main(argv: list[str]) -> int:
     if len(argv) < 2:
         return emit(False, "缺少发布参数文件。", code="MISSING_PAYLOAD")
     try:
-        text, media_files = load_payload(argv[1])
+        text, media_files, auth_code = load_payload(argv[1])
+        activate_wxautox4(auth_code)
         publish(text, media_files)
         return emit(True, f"微信朋友圈发布完成：{len(media_files)} 张图片。", imageCount=len(media_files))
     except ModuleNotFoundError as exc:
@@ -128,6 +149,8 @@ def main(argv: list[str]) -> int:
         code = "WXAUTO4_RUNTIME_ERROR"
         if "pip install wxautox4" in message:
             code = "WXAUTOX4_NOT_INSTALLED"
+        if "未授权设备" in message or "获取授权" in message:
+            code = "WXAUTOX4_UNAUTHORIZED"
         return emit(False, message, code=code)
     except Exception as exc:
         logger.exception("unexpected publish error")
