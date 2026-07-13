@@ -3492,7 +3492,9 @@ function createTranscriptJob(shareLink, apiKey) {
       throw new Error("没有解析到可识别的视频地址");
     }
 
-    const transcriptText = await extractTranscriptForVideoInfo(videoInfo, apiKey, updateJob);
+    const rawTranscriptText = await extractTranscriptForVideoInfo(videoInfo, apiKey, updateJob);
+    updateJob({ percent: 92, message: "正在自动校正文案" });
+    const transcriptText = await correctTranscriptWithRewriteModel(rawTranscriptText, videoInfo);
     const transcriptPath = saveTranscript(videoInfo, transcriptText);
     updateJob({ percent: 96, message: "正在进行 AI 分析" });
     const analysis = await analyzeTranscriptWithDashScope(apiKey, transcriptText, videoInfo);
@@ -3588,7 +3590,7 @@ function createLocalVideoTranscriptJob(filePath, apiKey) {
   });
 
   (async () => {
-    const transcriptText = await transcribeLocalMediaWithDashScope(activeApiKey, resolvedPath, (progress) => {
+    const rawTranscriptText = await transcribeLocalMediaWithDashScope(activeApiKey, resolvedPath, (progress) => {
       const percent = Math.max(10, Math.min(92, Math.round(Number(progress.percent || 0))));
       updateJob({ percent, message: progress.message || "正在识别本地视频" });
       taskStore.updateTask(task.id, {
@@ -3597,10 +3599,19 @@ function createLocalVideoTranscriptJob(filePath, apiKey) {
         message: progress.message || "正在识别本地视频",
       });
     });
+    updateJob({ percent: 93, message: "正在自动校正文案" });
+    taskStore.updateTask(task.id, {
+      status: TASK_STATUS.TRANSCRIBING,
+      progress: 93,
+      message: "正在自动校正文案",
+    });
+    const transcriptText = await correctTranscriptWithRewriteModel(rawTranscriptText, videoInfo);
     const transcriptPath = saveTranscript(videoInfo, transcriptText);
+    const subtitlePath = await ytDlpService.createApproximateSubtitle(resolvedPath, transcriptText, "", {});
     updateJob({ percent: 94, message: "正在进行 AI 分析" });
     taskStore.updateTask(task.id, {
       txt_path: transcriptPath,
+      subtitle_path: subtitlePath,
       progress: 94,
       message: "正在进行 AI 分析",
     });
@@ -3608,6 +3619,7 @@ function createLocalVideoTranscriptJob(filePath, apiKey) {
     const analysisPath = saveAnalysis(videoInfo, analysis);
     taskStore.updateTask(task.id, {
       txt_path: transcriptPath,
+      subtitle_path: subtitlePath,
       analysis_path: analysisPath,
       ai_json: JSON.stringify(analysis),
       status: TASK_STATUS.DONE,
@@ -3887,19 +3899,60 @@ async function processBatchTask(task, signal) {
     }
 
     if (taskAction === "transcript" || task.only_transcript) {
+      let transcriptVideoPath = task.video_path && fs.existsSync(task.video_path) ? task.video_path : "";
+      let subtitlePath = "";
+      if (videoInfo.sourceAdapter === "yt-dlp" && !transcriptVideoPath) {
+        const downloaded = await downloadVideoForTask(task, videoInfo, signal);
+        transcriptVideoPath = downloaded.videoPath;
+        subtitlePath = downloaded.subtitlePath || "";
+        videoInfo = { ...videoInfo, ...downloaded.videoInfo };
+      }
       const transcriptUpdates = await completeTaskWithTranscript(
         { ...taskStore.getTask(task.id), transcript_enabled: true, analysis_enabled: false },
         videoInfo,
         "仅提取文案：",
-        signal
+        signal,
+        { localVideoPath: transcriptVideoPath, subtitlePath }
       );
       taskStore.updateTask(task.id, {
         ...transcriptUpdates,
-        video_path: "",
+        video_path: transcriptVideoPath,
         file_size: 0,
         file_hash: "",
         status: TASK_STATUS.DONE,
         progress: 100,
+        completed_at: new Date().toISOString(),
+      });
+      return;
+    }
+
+    if (taskAction === "audio") {
+      const downloaded = await downloadVideoForTask(task, videoInfo, signal);
+      const videoPath = downloaded.videoPath;
+      const stat = fs.statSync(videoPath);
+      const audioPath = await ytDlpService.extractAudio(videoPath, {
+        format: task.audio_format || "mp3",
+        signal,
+        onProgress: (progress) => {
+          taskStore.updateTask(task.id, {
+            status: TASK_STATUS.TRANSCRIBING,
+            progress: Math.max(72, Math.min(96, Math.round(72 + Number(progress.percent || 0) * 0.24))),
+            message: progress.message || "正在提取音频",
+          });
+        },
+      });
+      taskStore.updateTask(task.id, {
+        title: downloaded.videoInfo.title || videoInfo.title,
+        video_id: downloaded.videoInfo.videoId || videoInfo.videoId,
+        video_path: videoPath,
+        audio_path: audioPath,
+        subtitle_path: downloaded.subtitlePath || "",
+        file_size: stat.size,
+        file_hash: await hashFile(videoPath),
+        stats_json: JSON.stringify({ source: downloaded.videoInfo.extractor || "yt-dlp", audioPath }),
+        status: TASK_STATUS.DONE,
+        progress: 100,
+        message: "音频提取完成",
         completed_at: new Date().toISOString(),
       });
       return;
@@ -3934,19 +3987,17 @@ async function processBatchTask(task, signal) {
         message: "检测到已下载视频，跳过下载",
       });
     } else {
-      const downloaded = await downloadVideoFile(videoInfo, (progress) => {
-        const raw = Number(progress.percent || 0);
-        taskStore.updateTask(task.id, {
-          status: TASK_STATUS.DOWNLOADING,
-          progress: Math.max(10, Math.min(70, Math.round(10 + raw * 0.6))),
-          message: progress.message || "正在下载视频",
-        });
-      }, signal);
-      videoPath = downloaded.filePath;
-      fileSize = downloaded.fileSize;
-      fileHash = downloaded.fileHash;
+      const downloaded = await downloadVideoForTask(task, videoInfo, signal);
+      videoPath = downloaded.videoPath;
+      const stat = fs.statSync(videoPath);
+      fileSize = stat.size;
+      fileHash = await hashFile(videoPath);
+      videoInfo = { ...videoInfo, ...downloaded.videoInfo };
       taskStore.updateTask(task.id, {
+        title: videoInfo.title,
+        video_id: videoInfo.videoId,
         video_path: videoPath,
+        subtitle_path: downloaded.subtitlePath || "",
         file_size: fileSize,
         file_hash: fileHash,
         progress: 70,
@@ -3954,9 +4005,36 @@ async function processBatchTask(task, signal) {
       });
     }
 
-    const transcriptUpdates = await completeTaskWithTranscript(taskStore.getTask(task.id), videoInfo, messagePrefix, signal);
+    let audioPath = "";
+    if (taskStore.getTask(task.id)?.audio_enabled) {
+      audioPath = await ytDlpService.extractAudio(videoPath, {
+        format: taskStore.getTask(task.id)?.audio_format || "mp3",
+        signal,
+        onProgress: (progress) => {
+          taskStore.updateTask(task.id, {
+            status: TASK_STATUS.TRANSCRIBING,
+            progress: Math.max(70, Math.min(82, Math.round(70 + Number(progress.percent || 0) * 0.12))),
+            message: progress.message || "正在提取音频",
+          });
+        },
+      });
+      taskStore.updateTask(task.id, {
+        audio_path: audioPath,
+        message: "音频提取完成，准备文案",
+      });
+    }
+
+    const currentTask = taskStore.getTask(task.id);
+    const transcriptUpdates = await completeTaskWithTranscript(
+      currentTask,
+      videoInfo,
+      messagePrefix,
+      signal,
+      { localVideoPath: videoPath, subtitlePath: currentTask?.subtitle_path || "" }
+    );
     taskStore.updateTask(task.id, {
       ...transcriptUpdates,
+      ...(audioPath ? { audio_path: audioPath } : {}),
       status: TASK_STATUS.DONE,
       progress: 100,
       completed_at: new Date().toISOString(),
