@@ -4428,6 +4428,7 @@ async function runTranscript() {
   resultBox.textContent = "文案提取已经开始，请看上方进度条。";
 
   try {
+    await ensureTranscriptProvidersConfigured();
     const startData = await fetchJson("/api/transcript/start", {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -4486,6 +4487,7 @@ async function runLocalVideoTranscript() {
   resultBox.textContent = "本地视频文案提取已经开始，请看上方进度条。";
 
   try {
+    await ensureTranscriptProvidersConfigured();
     const startData = await fetchJson("/api/local-video/transcript", {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -5068,6 +5070,21 @@ filesList.addEventListener("click", async (event) => {
 tasksTable.addEventListener("click", (event) => {
   const pauseButton = event.target.closest(".task-pause");
   const deleteButton = event.target.closest(".task-delete");
+  const openButton = event.target.closest(".task-open-location");
+  const rewriteButton = event.target.closest(".task-send-rewrite");
+  if (openButton) {
+    const task = allTasks.find((item) => String(item.id) === String(openButton.dataset.taskId));
+    openManagedPath(primaryTaskFilePath(task || {})).catch((error) => {
+      batchStatus.textContent = error instanceof Error ? error.message : String(error);
+    });
+    return;
+  }
+  if (rewriteButton) {
+    openRewriteEditor(rewriteButton.dataset.taskId).catch((error) => {
+      batchStatus.textContent = error instanceof Error ? error.message : String(error);
+    });
+    return;
+  }
   if (pauseButton) {
     pauseTask(pauseButton.dataset.taskId).catch((error) => {
       batchStatus.textContent = error instanceof Error ? error.message : String(error);
@@ -5079,6 +5096,19 @@ tasksTable.addEventListener("click", (event) => {
       batchStatus.textContent = error instanceof Error ? error.message : String(error);
     });
   }
+});
+
+openResultLocationBtn?.addEventListener("click", () => {
+  openManagedPath(activeResultFilePath).catch((error) => {
+    resultBox.textContent = error instanceof Error ? error.message : String(error);
+  });
+});
+
+sendResultRewriteBtn?.addEventListener("click", () => {
+  openRewriteEditor(activeResultRewriteTaskId).catch((error) => {
+    resultBox.textContent = error instanceof Error ? error.message : String(error);
+    setReady("打开改写失败", false);
+  });
 });
 
 transcriptList.addEventListener("click", (event) => {
