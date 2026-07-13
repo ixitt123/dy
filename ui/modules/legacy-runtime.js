@@ -3329,8 +3329,10 @@ function renderTtsJobsEnhanced(jobs = []) {
         <span class="tts-job-status ${escapeHtml(job.status)}">${escapeHtml(ttsStatusLabel(job.status))}</span>
         ${audio}
         <span class="tts-history-files">${fileLinks}</span>
-        <button class="ghost small tts-job-send" type="button" ${job.status !== "completed" ? "disabled" : ""}>一键发送</button>
-        <button class="ghost small danger-action tts-job-delete" type="button" ${["waiting", "processing"].includes(job.status) ? "disabled" : ""}>删除</button>
+        <div class="tts-history-actions">
+          <button class="ghost small tts-job-send" type="button" ${job.status !== "completed" ? "disabled" : ""}>一键发送</button>
+          <button class="ghost small danger-action tts-job-delete" type="button" ${["waiting", "processing"].includes(job.status) ? "disabled" : ""}>删除</button>
+        </div>
       </div>
     `;
   }).join("");
@@ -4093,12 +4095,33 @@ generateTts = async function generateTtsUnified() {
       Object.assign(voiceAsset, data.asset || {}, {
         preview_url: data.preview_url || data.asset?.preview_url || voiceAsset.preview_url || "",
       });
-      const musicJob = ttsMusicJobFromPreview(voiceAsset, data, text);
+      setTtsMainProgress(82, "正在保存生成记录");
+      const registered = await fetchJson("/api/tts/import-generated", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          provider: voiceAsset.provider || "minimax",
+          project_id: window.videoProjects?.current?.()?.id || "",
+          text,
+          voice_id: voiceAsset.voice_id || voiceId,
+          voice_name: selectedVoiceForModel?.name || voiceAsset.voice_name || voiceId,
+          voice_asset_id: voiceAsset.id,
+          model: voiceAsset?.metadata?.target_model || voiceAsset?.metadata?.model || "music-2.6-free",
+          source: "minimax_music",
+          asset_kind: voiceAsset?.metadata?.asset_kind || "minimax_music_preset",
+          format: "mp3",
+          audio_path: data.audio_path || "",
+          duration: data.duration || data.metadata?.duration || 0,
+          metadata: data.metadata || {},
+        }),
+      });
+      const musicJob = registered.job || ttsMusicJobFromPreview(voiceAsset, data, text);
       renderTtsRail(musicJob);
       setTtsMainProgress(100, "生成完成");
       showTtsPreview(musicJob);
       renderTtsVoiceQuickPanel(voiceAsset, { refreshAudio: true, previewMessage: "音乐音频已生成。" });
       await loadVoiceAssets();
+      await refreshTtsJobs();
       ttsStatus.textContent = "MiniMax Music 音频已生成，可以试听并发送到生产线。";
       return;
     }
