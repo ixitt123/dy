@@ -4073,7 +4073,13 @@ function saveBatchSettings(changes) {
 function getActiveProviderApiKey() {
   const settings = readSettings();
   const provider = settings.providers[settings.activeProvider] || settings.providers.dashscope;
-  return String(provider?.apiKey || "").trim();
+  return String(
+    provider?.apiKey
+    || settings.providers?.dashscope?.apiKey
+    || settings.rewriteProviders?.dashscope?.apiKey
+    || settings.tts?.aliyun_bailian?.api_key
+    || ""
+  ).trim();
 }
 
 function queueState(extra = {}) {
