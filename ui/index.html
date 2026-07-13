@@ -1306,15 +1306,6 @@
             Base URL
             <input id="ttsBaseUrl" type="hidden" />
           </label>
-          <input id="ttsModel" type="hidden" list="ttsModelOptions" />
-          <datalist id="ttsModelOptions">
-            <option value="cosyvoice-v2"></option>
-            <option value="cosyvoice-v3-flash"></option>
-            <option value="cosyvoice-v3-plus"></option>
-            <option value="qwen3-tts-flash"></option>
-            <option value="qwen3-tts-instruct-flash"></option>
-            <option value="qwen-tts-latest"></option>
-          </datalist>
         </div>
 
         <div class="tts-workbench">
@@ -1340,6 +1331,10 @@
               <label id="ttsVoiceCategoryField">
                 音色分类
                 <select id="ttsVoiceCategory"></select>
+              </label>
+              <label>
+                生成模型
+                <select id="ttsModel"></select>
               </label>
               <label id="ttsPresetVoiceField">
                 音色库

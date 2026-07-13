@@ -2549,6 +2549,17 @@ function selectedTtsProviderConfig() {
   return ttsProviderConfigs.find((provider) => provider.id === ttsProvider.value) || {};
 }
 
+function renderTtsModelOptions(provider = selectedTtsProviderConfig(), preferredModel = "") {
+  if (!ttsModel) return;
+  const models = Array.isArray(provider.models) ? provider.models.filter(Boolean) : [];
+  const configured = String(preferredModel || provider.default_model || provider.model || "").trim();
+  const options = [...new Set([configured, ...models].filter(Boolean))];
+  ttsModel.innerHTML = options.length
+    ? options.map((model) => `<option value="${escapeHtml(model)}">${escapeHtml(model)}</option>`).join("")
+    : '<option value="">沿用平台默认模型</option>';
+  ttsModel.value = options.includes(configured) ? configured : (options[0] || "");
+}
+
 function normalizeTtsVoiceCategory(voice = {}) {
   const text = [voice.category, voice.useCase, voice.description, voice.name, voice.voice_name]
     .map((item) => String(item || ""))
@@ -2617,7 +2628,7 @@ function updateTtsProviderFields() {
   if (ttsBaseUrlField) ttsBaseUrlField.hidden = true;
   ttsWorkspaceId.value = isAliyun ? provider.workspace_id || "" : "";
   ttsBaseUrl.value = supportsBaseUrl ? provider.base_url || "" : "";
-  ttsModel.value = provider.default_model || "";
+  renderTtsModelOptions(provider, provider.default_model || "");
   ttsApiKey.value = "";
   ttsApiKey.placeholder = "";
   if (ttsBaseUrlField) ttsBaseUrlField.hidden = !supportsBaseUrl;
@@ -2659,6 +2670,9 @@ function selectedTtsVoice() {
 function syncTtsModelToSelectedVoice() {
   const voice = selectedTtsVoice();
   if (voice?.model) {
+    if (ttsModel && ![...ttsModel.options].some((option) => option.value === voice.model)) {
+      ttsModel.insertAdjacentHTML("afterbegin", `<option value="${escapeHtml(voice.model)}">${escapeHtml(voice.model)}</option>`);
+    }
     ttsModel.value = voice.model;
     if (ttsCurrentModelLabel) {
       const provider = selectedTtsProviderConfig();
@@ -3321,6 +3335,7 @@ async function applyVoiceAssetToTts(asset) {
     item.provider === asset.provider && item.voice_id === asset.voice_id && item.voice_type === "clone" && item.status === "active"
   );
   ttsVoiceSource.value = presetExists ? "preset" : asset.voice_type === "clone" && cloneExists ? "cloned" : "manual";
+  if (ttsVoiceCategory) ttsVoiceCategory.value = "全部";
   updateTtsVoiceSource();
   if (presetExists || cloneExists) {
     ttsPresetVoice.value = asset.voice_id;

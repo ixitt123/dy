@@ -1269,6 +1269,14 @@ function publicTtsSettings(settings = readSettings()) {
       default_model: tts.aliyun_bailian.default_model,
       default_voice: tts.aliyun_bailian.default_voice,
       workspace_id: tts.aliyun_bailian.workspace_id,
+      models: [
+        "cosyvoice-v2",
+        "cosyvoice-v3-flash",
+        "cosyvoice-v3-plus",
+        "qwen3-tts-flash",
+        "qwen3-tts-instruct-flash",
+        "qwen-tts-latest",
+      ],
     },
     {
       id: "volcengine_doubao",
@@ -1279,6 +1287,7 @@ function publicTtsSettings(settings = readSettings()) {
       secret_mask: maskApiKey(tts.volcengine_doubao.api_key || tts.volcengine_doubao.secret_access_key),
       default_model: tts.volcengine_doubao.default_model,
       default_voice: tts.volcengine_doubao.default_voice,
+      models: [tts.volcengine_doubao.default_model].filter(Boolean),
     },
     {
       id: "tencent_tts",
@@ -1289,6 +1298,7 @@ function publicTtsSettings(settings = readSettings()) {
       secret_mask: maskApiKey(tts.tencent_tts.secret_key),
       region: tts.tencent_tts.region,
       default_voice: tts.tencent_tts.default_voice,
+      models: [],
     },
     {
       id: "custom_tts",
@@ -1300,6 +1310,7 @@ function publicTtsSettings(settings = readSettings()) {
       base_url: tts.custom_tts.base_url,
       default_model: tts.custom_tts.model,
       default_voice: tts.custom_tts.voice,
+      models: [tts.custom_tts.model].filter(Boolean),
     },
     {
       id: "minimax",
@@ -1311,6 +1322,7 @@ function publicTtsSettings(settings = readSettings()) {
       base_url: tts.minimax.base_url,
       default_model: tts.minimax.model,
       default_voice: tts.minimax.voice,
+      models: ["speech-2.6-hd", "speech-2.6-turbo"],
     },
     {
       id: "fish_audio",
@@ -1323,6 +1335,7 @@ function publicTtsSettings(settings = readSettings()) {
       default_model: tts.fish_audio.model,
       default_voice: tts.fish_audio.voice,
       default_format: tts.fish_audio.default_format,
+      models: ["s2-pro", "s1"],
     },
     {
       id: "elevenlabs",
@@ -1334,6 +1347,7 @@ function publicTtsSettings(settings = readSettings()) {
       base_url: tts.elevenlabs.base_url,
       default_model: tts.elevenlabs.model,
       default_voice: tts.elevenlabs.voice,
+      models: ["eleven_multilingual_v2"],
     },
   ];
   return {
