@@ -218,6 +218,7 @@ const ttsVoiceCategoryField = document.querySelector("#ttsVoiceCategoryField");
 const ttsVoiceCategory = document.querySelector("#ttsVoiceCategory");
 const ttsPresetVoiceField = document.querySelector("#ttsPresetVoiceField");
 const ttsPresetVoice = document.querySelector("#ttsPresetVoice");
+const ttsVoiceQuickPanel = document.querySelector("#ttsVoiceQuickPanel");
 const ttsManualVoiceField = document.querySelector("#ttsManualVoiceField");
 const ttsManualVoice = document.querySelector("#ttsManualVoice");
 const ttsSpeed = document.querySelector("#ttsSpeed");

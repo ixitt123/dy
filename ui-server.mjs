@@ -1258,6 +1258,7 @@ function maskApiKey(apiKey) {
 
 function publicTtsSettings(settings = readSettings()) {
   const tts = settings.tts;
+  const visibleProviderIds = new Set(["aliyun_bailian", "minimax"]);
   const providers = [
     {
       id: "aliyun_bailian",
@@ -1350,9 +1351,13 @@ function publicTtsSettings(settings = readSettings()) {
       models: ["eleven_multilingual_v2"],
     },
   ];
+  const visibleProviders = providers.filter((provider) => visibleProviderIds.has(provider.id));
+  const defaultProvider = visibleProviderIds.has(String(tts.default_provider || ""))
+    ? tts.default_provider
+    : "aliyun_bailian";
   return {
-    providers,
-    default_provider: tts.default_provider,
+    providers: visibleProviders,
+    default_provider: defaultProvider,
     default_speed: tts.default_speed,
     default_format: tts.default_format,
   };
@@ -1642,7 +1647,8 @@ function publicUnifiedProviders(settings = readSettings()) {
     },
   ];
 
-  for (const provider of ttsProviders) {
+  const visibleTtsProviderIds = new Set(["aliyun_bailian", "minimax"]);
+  for (const provider of ttsProviders.filter((item) => visibleTtsProviderIds.has(item.id))) {
     const config = provider.config || {};
     const apiKey = config.api_key || "";
     providers.push({
