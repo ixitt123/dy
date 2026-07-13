@@ -5211,6 +5211,33 @@ body[data-active-module="video-output"] .floating-workflow-guide [data-nav="vide
   background: #0b0e14;
 }
 
+.workspace .collector-options,
+.workspace .local-video-card {
+  border-color: #2c3442;
+  background: #151a23;
+}
+
+.workspace .collector-options label,
+.workspace .local-video-card h2 {
+  color: #edf2f8;
+}
+
+.workspace .collector-options .check-row {
+  color: #d7deea;
+}
+
+.workspace .collector-options select,
+.workspace .local-video-controls select,
+.workspace .local-video-controls input {
+  border-color: #303a4a;
+  background: #0b0e14;
+  color: #edf2f8;
+}
+
+.workspace .local-video-card p {
+  color: #9aa6b8;
+}
+
 .result-head,
 .director-head,
 .vfo-head,
