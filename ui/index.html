@@ -40,26 +40,18 @@
           </div>
           <div class="nav-group">
             <span class="nav-group-label">生产线</span>
-            <button class="nav-item" type="button" data-nav="video-output">
-              <span class="nav-index">06</span><span>视频成片</span>
+<button class="nav-item" type="button" data-nav="cs1-video">06<span class="nav-index">07</span><span>CS1 生成器</span>
             </button>
-            <button class="nav-item" type="button" data-nav="cs1-video">
-              <span class="nav-index">07</span><span>CS1 生成器</span>
+            <button class="nav-item" type="button" data-nav="xiaohei-video">07<span class="nav-index">08</span><span>小黑视频风格生成</span>
             </button>
-            <button class="nav-item" type="button" data-nav="xiaohei-video">
-              <span class="nav-index">08</span><span>小黑视频风格生成</span>
-            </button>
-            <button class="nav-item" type="button" data-nav="money-printer">
-              <span class="nav-index">09</span><span>MoneyPrinter</span>
+            <button class="nav-item" type="button" data-nav="money-printer">08<span class="nav-index">09</span><span>MoneyPrinter</span>
             </button>
           </div>
           <div class="nav-group">
             <span class="nav-group-label">资源管理</span>
-            <button class="nav-item" type="button" data-nav="assets" data-assets-focus="library">
-              <span class="nav-index">10</span><span>素材管理</span>
+            <button class="nav-item" type="button" data-nav="assets" data-assets-focus="library">09<span class="nav-index">10</span><span>素材管理</span>
             </button>
-            <button class="nav-item" type="button" data-nav="settings">
-              <span class="nav-index">11</span><span>系统设置</span>
+            <button class="nav-item" type="button" data-nav="settings">10<span class="nav-index">11</span><span>系统设置</span>
             </button>
           </div>
         </nav>
@@ -156,12 +148,7 @@
                       <strong>免费素材混剪</strong>
                       <small>接入 MoneyPrinterTurbo，用主题或脚本自动生成 MP4。</small>
                     </button>
-                    <button type="button" class="product-capability-card" data-nav="video-output">
-                      <span>06</span>
-                      <strong>视频草稿输出</strong>
-                      <small>在浏览器预览草稿，并继续生成剪映草稿或素材包。</small>
-                    </button>
-                  </div>
+</div>
                 </section>
 
                 <section class="product-section">
@@ -184,8 +171,7 @@
                         <h3>文案加音频生成纯文字视频</h3>
                         <p>适合口播、知识解释、轻量剪辑：文案、音频、时间轴、字幕和分镜一起生成草稿。</p>
                       </div>
-                      <button type="button" data-nav="video-output">进入成片中心</button>
-                    </article>
+</article>
                     <article class="product-line-card">
                       <div>
                         <span>LINE 03</span>
@@ -206,8 +192,7 @@
                     <button type="button" data-nav="settings"><strong>API 接入</strong><span>OpenAI / 阿里云 / 小米 / 素材平台</span></button>
                     <button type="button" data-nav="voices"><strong>声音资产</strong><span>预设音色、歌唱音频、自定义克隆</span></button>
                     <button type="button" data-nav="assets"><strong>素材管理</strong><span>按生产线、日期和标签整理</span></button>
-                    <button type="button" data-nav="video-output"><strong>输出检查</strong><span>浏览器预览、剪映草稿、MP4</span></button>
-                  </div>
+</div>
                 </section>
 
                 <a class="deerflow-signature" href="https://deerflow.tech" target="_blank" rel="noreferrer">Created By Deerflow</a>
@@ -407,8 +392,7 @@
                 <div class="rewrite-handoff-actions">
                   <label><input class="rewrite-handoff-choice" type="checkbox" data-target="moments-copy" />朋友圈文案定制</label>
                   <label><input class="rewrite-handoff-choice" type="checkbox" data-target="tts" />TTS语音</label>
-                  <label><input class="rewrite-handoff-choice" type="checkbox" data-target="video-output" />视频成片</label>
-                  <label><input class="rewrite-handoff-choice" type="checkbox" data-target="cs1-video" />CS1生成器</label>
+<label><input class="rewrite-handoff-choice" type="checkbox" data-target="cs1-video" />CS1生成器</label>
                   <label><input class="rewrite-handoff-choice" type="checkbox" data-target="xiaohei-video" />小黑视频风格生成</label>
                   <label><input class="rewrite-handoff-choice" type="checkbox" data-target="money-printer" />MoneyPrinter</label>
                 </div>
@@ -593,522 +577,6 @@
           </div>
           <div class="rewrite-versions" id="rewriteVersions"></div>
         </div>
-      </section>
-
-      </section>
-
-      <section class="workbench-page" data-page="director" id="directorPage" hidden>
-      <section class="director-system" id="directorSystem">
-        <div class="result-head director-head">
-          <div>
-            <h2>生产线分镜系统</h2>
-            <p>旧独立入口已停用；分镜只在对应生产线内部执行。</p>
-          </div>
-          <span class="director-stage-badge">专业分镜</span>
-        </div>
-
-        <div class="director-workbench">
-          <div class="director-script-panel">
-            <div class="director-source-tools">
-              <label>
-                文案来源
-                <select id="directorSourceMode">
-                  <option value="manual">手动输入</option>
-                  <option value="rewrite">从 AI 改写结果选择</option>
-                  <option value="transcript">从任务文案选择</option>
-                </select>
-              </label>
-              <label id="directorSourceSelectField" hidden>
-                选择文案
-                <select id="directorSourceSelect"></select>
-              </label>
-              <button class="ghost" id="refreshDirectorSources" type="button">刷新来源</button>
-            </div>
-            <label>
-              项目标题
-              <input id="directorTitle" type="text" maxlength="100" placeholder="例如：半年说好英语的正确方法" />
-            </label>
-            <label for="directorSourceText">导演文案</label>
-            <textarea id="directorSourceText" rows="14" placeholder="输入文案，或从 AI 改写结果、任务文案中选择。"></textarea>
-            <div class="director-script-meta">
-              <span id="directorCharacterCount">0 字</span>
-              <span>不会生成图片或视频</span>
-            </div>
-          </div>
-
-          <div class="director-control-panel">
-            <div class="director-params">
-              <label>
-                AI 模型
-                <select id="directorProvider"></select>
-              </label>
-              <label>
-                TTS 音频时长（秒，可选）
-                <input id="directorTtsDuration" type="number" min="0" max="7200" step="0.1" placeholder="未生成语音可留空" />
-              </label>
-              <label>
-                视频类型
-                <select id="directorVideoType"></select>
-              </label>
-              <label>
-                视觉风格
-                <select id="directorVisualStyle"></select>
-              </label>
-              <label>
-                目标平台
-                <select id="directorPlatform"></select>
-              </label>
-              <label>
-                节奏
-                <select id="directorPace"></select>
-              </label>
-              <label>
-                镜头数量
-                <select id="directorShotCount"></select>
-              </label>
-              <label>
-                预计时长（秒）
-                <input id="directorEstimatedDuration" type="number" min="10" max="7200" value="30" />
-              </label>
-            </div>
-            <label for="directorReferenceStyle">参考风格</label>
-            <textarea id="directorReferenceStyle" rows="5" placeholder="可粘贴参考视频的构图、色调、字幕、节奏和镜头说明。"></textarea>
-            <div class="director-reference-reserved">
-              <label>
-                参考截图（第二阶段预留）
-                <input type="file" accept="image/*" disabled />
-              </label>
-              <label>
-                参考视频（第二阶段预留）
-                <input type="file" accept="video/*" disabled />
-              </label>
-            </div>
-            <label class="check-row director-save-reference">
-              <input id="directorSaveReference" type="checkbox" checked />
-              保存参考说明到 reference-styles
-            </label>
-            <div class="director-generate-row">
-              <button class="primary" id="generateDirector" type="button">生成生产线分镜</button>
-              <span id="directorStatus" role="status">等待生成。</span>
-            </div>
-          </div>
-        </div>
-
-        <div class="director-history-head">
-          <h2>分镜项目</h2>
-          <div class="history-actions">
-            <button class="ghost small" id="refreshDirectorProjects" type="button">刷新</button>
-            <button class="ghost small danger-action" id="clearDirectorProjects" type="button">清空记录</button>
-          </div>
-        </div>
-        <div class="director-projects" id="directorProjects"></div>
-
-        <section class="director-result" id="directorResult" hidden>
-          <div class="director-result-head">
-            <div>
-              <h2 id="directorResultTitle">生产线分镜</h2>
-              <p id="directorResultMeta"></p>
-            </div>
-            <div class="director-result-actions">
-              <button class="ghost small" id="copyDirectorResult" type="button">复制当前结果</button>
-              <button class="ghost small" id="exportDirectorJson" type="button">导出 JSON</button>
-              <button class="ghost small" id="exportDirectorMd" type="button">导出 MD</button>
-              <button class="ghost small" id="exportDirectorPrompts" type="button">导出 Prompts</button>
-              <button class="ghost small" id="exportDirectorChatGptPrompts" type="button">导出 ChatGPT 生图词</button>
-              <button class="ghost small" id="sendDirectorToImage" type="button">发送到图片生成</button>
-              <button class="ghost small" id="sendDirectorToVideoProduct" type="button">发送到成片中心</button>
-              <button class="ghost small" id="sendDirectorToVfo" type="button">发送到成片规划</button>
-              <button class="ghost small" id="openDirectorFile" type="button">打开文件位置</button>
-            </div>
-          </div>
-          <div class="director-result-tabs" id="directorResultTabs" role="tablist" aria-label="生产线分镜结果">
-            <button class="active" type="button" data-director-tab="shot-list">Shot List</button>
-            <button type="button" data-director-tab="storyboard-json">分镜数据</button>
-            <button type="button" data-director-tab="subtitle">字幕时间轴</button>
-            <button type="button" data-director-tab="visual">画面提示词</button>
-            <button type="button" data-director-tab="bgm">BGM 方案</button>
-            <button type="button" data-director-tab="review">审美检查</button>
-          </div>
-          <div class="director-result-view" id="directorResultView"></div>
-        </section>
-      </section>
-
-      </section>
-
-      <section class="workbench-page" data-page="video-output" id="videoOutputPage">
-      <section class="vfo-system" id="vfoSystem">
-        <div class="result-head vfo-head">
-          <div>
-            <h2>视频成片</h2>
-            <p>从文案、配音和素材开始，检查完整度后生成成片草稿或 MP4。</p>
-          </div>
-          <span class="vfo-stage-badge">成片草稿</span>
-        </div>
-
-        <div class="vfo-pipeline" aria-label="视频工厂工作流">
-          <span>定制改写</span>
-          <strong>→</strong>
-          <span>分镜规划</span>
-          <strong>→</strong>
-          <span class="active">素材匹配</span>
-          <strong>→</strong>
-          <span class="active">字幕与配音</span>
-          <strong>→</strong>
-          <span class="active">成片草稿</span>
-          <strong>→</strong>
-          <span class="active">剪映草稿</span>
-          <strong>→</strong>
-          <span class="reserved">MP4 成片</span>
-        </div>
-
-        <section class="video-output-primary" aria-label="常用输出方式">
-          <div class="video-product-toolbar">
-            <div><h3>选择输出结果</h3><p>默认使用剪映母版替换素材；工具不可用时自动切换为兼容素材包。</p></div>
-            <div class="video-product-toolbar-actions">
-              <button class="ghost small" id="openJianyingApp" type="button" disabled>打开剪映专业版</button>
-              <button class="ghost small" id="refreshVideoOutputTools" type="button">重新检测工具</button>
-            </div>
-          </div>
-          <div class="video-output-primary-actions">
-            <button class="video-output-choice active" type="button" data-main-output="jianying_template"><strong>生成剪映模板草稿【推荐】</strong><small>母版替换、字幕、配音、BGM 与封面</small></button>
-            <button class="video-output-choice" type="button" data-main-output="mp4"><strong>生成 MP4 预览</strong><small>用于检查画面、字幕和音频效果</small></button>
-            <button class="video-output-choice" type="button" data-main-output="package"><strong>导出素材包</strong><small>兼容导出图片、音频、字幕与时间线</small></button>
-          </div>
-          <div class="video-output-tool-status" id="videoOutputToolStatus" aria-live="polite"></div>
-          <p id="videoOutputCompatibilityNote" class="video-output-compatibility-note">正在检测本机成片工具...</p>
-          <div class="local-jianying-config">
-            <label>
-              剪映程序路径
-              <input id="jianyingAppPathInput" type="text" placeholder="例如：C:\\Users\\...\\JianyingPro.exe" />
-            </label>
-            <label>
-              剪映草稿目录
-              <input id="jianyingDraftDirInput" type="text" placeholder="例如：C:\\Users\\...\\com.lveditor.draft" />
-            </label>
-            <button class="ghost small" id="saveJianyingLocalConfig" type="button">保存本地对接</button>
-          </div>
-        </section>
-
-        <details class="advanced-output-routes">
-          <summary>高级输出方式</summary>
-        <section class="video-route-map" aria-label="视频成片高级产出路线">
-          <article class="video-route-card route-a" data-video-output="template_mp4">
-            <div class="video-route-top">
-              <span>路线 A</span>
-              <strong>模板快剪 MP4</strong>
-            </div>
-            <p>TTS 音频 → 生产线内部分镜、标题大字、自动字幕、镜头节奏、片尾 CTA。</p>
-            <div class="video-route-flow">
-              <span>内部分镜</span>
-              <span>TTS 音频</span>
-              <span>模板节奏</span>
-              <span>MP4</span>
-            </div>
-            <small>适合口播、知识讲解、招生宣传和批量账号内容。</small>
-          </article>
-          <article class="video-route-card route-b" data-video-output="mp4">
-            <div class="video-route-top">
-              <span>路线 B</span>
-              <strong>AI 图文成片</strong>
-            </div>
-            <p>生产线分镜 + AI 图片 + 音频 → 图片推拉摇移、自动配音、字幕、转场、成片 MP4。</p>
-            <div class="video-route-flow">
-              <span>Shot List</span>
-              <span>AI 图片</span>
-              <span>成片时间线</span>
-              <span>MP4</span>
-            </div>
-            <small>未来主力路线，适合故事、分镜、教育宣传和电影感图文视频。</small>
-          </article>
-          <article class="video-route-card route-c" data-video-output="jianying">
-            <div class="video-route-top">
-              <span>路线 C</span>
-              <strong>标准素材包 / 兼容导出</strong>
-            </div>
-            <p>生产线分镜 + AI 图片 + 音频 → 图片轨、音频轨、字幕轨、分镜备注和素材文件夹。</p>
-            <div class="video-route-flow">
-              <span>素材绑定</span>
-              <span>SRT 字幕</span>
-              <span>timeline.json</span>
-              <span>剪映加工</span>
-            </div>
-            <small>历史兼容路线：保留 timeline、字幕和素材，供人工导入或故障回退。</small>
-          </article>
-          <article class="video-route-card route-d" data-video-output="mix_mp4">
-            <div class="video-route-top">
-              <span>路线 D</span>
-              <strong>下载素材混剪</strong>
-            </div>
-            <p>生产线分镜 + 原抖音素材/下载素材 + 音频 → 素材识别、画面匹配、字幕和混剪 MP4。</p>
-            <div class="video-route-flow">
-              <span>素材库</span>
-              <span>内部分镜</span>
-              <span>新配音</span>
-              <span>混剪</span>
-            </div>
-            <small>预留给素材二创、招生号剪辑、口播复用和爆款结构复刻。</small>
-          </article>
-        </section>
-        </details>
-
-        <section class="video-product-center" id="videoProductCenter">
-          <div class="video-product-toolbar">
-            <div>
-              <h3>成片草稿工作台</h3>
-              <p>先检查文案、语音、素材和 BGM；分镜与字幕由当前生产线内部生成。</p>
-            </div>
-            <button class="ghost small" id="refreshVideoProductSources" type="button">刷新素材</button>
-          </div>
-
-          <div class="video-product-workbench">
-            <section class="video-product-panel">
-              <h3>输入</h3>
-              <label hidden>
-                生产线内部分镜
-                <select id="videoProductDirector"></select>
-              </label>
-              <label>
-                TTS 音频
-                <select id="videoProductAudio"></select>
-              </label>
-              <label>
-                图片素材来源
-                <select id="videoProductImageSource">
-                  <option value="all" selected>使用图片资产库全部图片</option>
-                  <option value="director">仅使用当前生产线分镜图片</option>
-                </select>
-              </label>
-              <div class="video-product-local-assets">
-                <strong>本地素材</strong>
-                <div class="video-product-local-row">
-                  <input id="videoProductLocalImagePath" type="text" placeholder="添加现有图片素材" readonly />
-                  <button class="ghost small" id="chooseVideoProductImage" type="button">选择图片</button>
-                  <button class="ghost small" id="addVideoProductImageAsset" type="button">加入图片库</button>
-                </div>
-                <div class="video-product-local-row">
-                  <input id="videoProductLocalBgmPath" type="text" placeholder="添加背景音乐" readonly />
-                  <button class="ghost small" id="chooseVideoProductBgm" type="button">选择音乐</button>
-                  <button class="ghost small" id="addVideoProductBgmAsset" type="button">加入BGM库</button>
-                </div>
-                <small id="videoProductAssetStatus">本地图片会进入图片资产库；BGM 会用于最终 MP4 混音。</small>
-              </div>
-              <div class="video-product-local-assets video-product-bgm-options" id="videoProductBgmOptions">
-                <strong>本地素材 · 预设 BGM</strong>
-                <div class="video-product-route-a-grid">
-                  <label>
-                    BGM 策略
-                    <select id="videoProductBgmStrategy" data-main-bgm-strategy="true"></select>
-                  </label>
-                  <label>
-                    选择预设 / 本地 BGM
-                    <select id="videoProductBgm" data-main-bgm-select="true"></select>
-                  </label>
-                </div>
-                <small id="videoProductBgmLibraryHint">Auto uses 120-150 BPM only. Manual BGM is not restricted.</small>
-              </div>
-              <div class="video-product-route-a-options" id="videoProductRouteAOptions">
-                <strong>路线 A 高级成片</strong>
-                <div class="video-product-route-a-grid">
-                  <label>
-                    风格预设
-                    <select id="videoProductRouteAStyle"></select>
-                  </label>
-                  <label>
-                    BGM 策略
-                    <select class="video-product-bgm-strategy-legacy" disabled></select>
-                  </label>
-                </div>
-                <label>
-                  指定本地 BGM
-                  <select class="video-product-bgm-legacy" disabled></select>
-                  <small class="video-product-bgm-legacy" hidden></small>
-                </label>
-                <label>
-                  自定义风格
-                  <textarea id="videoProductRouteACustomStyle" rows="3" placeholder="例如：更像商业招生广告，节奏更快，字幕更有压迫感。"></textarea>
-                </label>
-                <small id="videoProductRouteAHelp">默认会用 TTS 文案在生产线内部生成分镜，再走标题、动态字幕、BGM 混音、片头片尾和质检。</small>
-              </div>
-              <label>
-                输出方式
-                <select id="videoProductOutputType">
-                  <option value="jianying_template" selected>剪映模板草稿【推荐】</option>
-                  <option value="mp4">MP4 预览</option>
-                  <option value="package">标准素材包 / 兼容导出</option>
-                  <option value="template_mp4">路线 A：模板快剪 MP4</option>
-                  <option value="mix_mp4">路线 D：下载素材混剪 MP4</option>
-                  <option value="jianying">路线 C：历史剪映素材包</option>
-                </select>
-              </label>
-              <label id="videoProductJianyingTemplateField">
-                剪映模板
-                <select id="videoProductJianyingTemplate">
-                  <option value="education_tips">学习技巧</option>
-                  <option value="promo_commercial">商业宣传</option>
-                  <option value="enrollment_conversion">招生转化</option>
-                  <option value="black_gold_business">黑金商业</option>
-                  <option value="clean_knowledge_card">清爽知识卡片</option>
-                  <option value="campus_education">校园教育</option>
-                  <option value="three_d_story">3D动画故事</option>
-                  <option value="parent_dialogue">家长对话</option>
-                  <option value="fast_hook_talk">强钩子口播</option>
-                  <option value="case_breakdown">案例拆解</option>
-                </select>
-                <small id="videoProductTemplateRecommendation">系统会按项目类型和导演视觉风格自动推荐模板。</small>
-              </label>
-              <div class="template-import-tools">
-                <label>
-                  导入本地模板母版目录
-                  <input id="jianyingTemplateSourcePath" type="text" placeholder="粘贴已解压的剪映模板母版目录路径" />
-                </label>
-                <button class="ghost small" id="importJianyingTemplate" type="button">导入模板</button>
-                <small id="jianyingTemplateStatus">可把你提供的模板包解压后导入，系统会自动分类并参与推荐。</small>
-              </div>
-              <div class="video-product-actions">
-                <button class="ghost" id="autoBindTimeline" type="button">自动匹配镜头素材</button>
-                <button class="ghost" id="autoRunWorkflow" type="button">一键自动流转</button>
-                <button class="primary" id="generateVideoProduct" type="button" title="快捷键 Ctrl+Shift+J">一键导入剪映草稿</button>
-              </div>
-              <p id="videoProductStatus" role="status">等待选择音频和图片素材；分镜会在当前生产线内部生成。</p>
-            </section>
-
-            <section class="video-product-panel">
-              <div class="video-product-preflight-head">
-                <h3>生成前检查</h3>
-                <button class="ghost small" id="refreshVideoProjectReadiness" type="button">重新检查</button>
-              </div>
-              <div class="video-product-readiness" id="videoProjectReadiness">
-                <span>选择当前短视频项目后显示检查结果。</span>
-              </div>
-              <div class="video-quality-summary" id="videoProjectQuality"></div>
-              <h3>需要补齐</h3>
-              <div class="video-product-blockers" id="videoProductBlockers">
-                <span>刷新后会显示缺失音频、缺失图片和时间线问题。</span>
-              </div>
-              <h3>任务进度</h3>
-              <div class="video-product-progress">
-                <div class="progress-track" aria-hidden="true"><div class="progress-bar" id="videoProductProgressBar"></div></div>
-                <span id="videoProductProgressText">0%</span>
-              </div>
-              <div class="video-product-output-files" id="videoProductOutputFiles"></div>
-              <button class="ghost" id="openVideoProductOutput" type="button" disabled>打开输出目录</button>
-            </section>
-          </div>
-
-          <div class="video-product-scene-head">
-            <h3>分镜素材列表</h3>
-            <span id="videoProductSceneMeta">尚未生成预览</span>
-          </div>
-          <div class="video-product-scenes" id="videoProductScenes"></div>
-
-          <div class="video-product-history-head">
-            <h3>成片项目</h3>
-            <div class="history-actions">
-              <button class="ghost small" id="refreshVideoProductProjects" type="button">刷新</button>
-              <button class="ghost small danger-action" id="clearVideoProductProjects" type="button">清空记录和文件</button>
-            </div>
-          </div>
-          <div class="video-product-projects" id="videoProductProjects"></div>
-        </section>
-
-        <details class="advanced-production-planner">
-          <summary>高级成片规划</summary>
-        <div class="vfo-section-title">
-          <h3>成片草稿规划区</h3>
-          <p>用于素材规划、平台适配和成片检查。</p>
-        </div>
-
-        <div class="vfo-workbench">
-          <div class="vfo-source-panel">
-            <div class="vfo-source-row">
-              <label>
-                生产线分镜来源
-                <select id="vfoSourceMode">
-                  <option value="director">当前生产线内部数据</option>
-                  <option value="manual">手动粘贴分镜数据</option>
-                </select>
-              </label>
-              <label id="vfoDirectorSourceField">
-                Director 项目
-                <select id="vfoDirectorSource"></select>
-              </label>
-              <button class="ghost" id="refreshVfoSources" type="button">刷新来源</button>
-            </div>
-            <label id="vfoManualTitleField" hidden>
-              项目标题
-              <input id="vfoManualTitle" type="text" maxlength="100" placeholder="手动 Storyboard 的项目名称" />
-            </label>
-            <label id="vfoManualJsonField" hidden>
-              分镜数据
-              <textarea id="vfoManualJson" rows="14" placeholder="粘贴当前生产线输出的完整分镜数据"></textarea>
-            </label>
-            <div class="vfo-source-summary" id="vfoSourceSummary">
-              <strong>等待选择生产线分镜</strong>
-              <span>选择后会显示镜头数、平台和导演评分。</span>
-            </div>
-          </div>
-
-          <div class="vfo-control-panel">
-            <div class="vfo-control-grid">
-              <label>
-                AI 模型
-                <select id="vfoProvider"></select>
-              </label>
-              <label>
-                目标平台
-                <select id="vfoPlatform"></select>
-              </label>
-            </div>
-            <div class="vfo-output-contract">
-              <h3>本次输出</h3>
-              <dl>
-                <div><dt>素材</dt><dd>素材包、素材检查和完整度</dd></div>
-                <div><dt>成片</dt><dd>素材匹配、输出策略和质量检查</dd></div>
-                <div><dt>文件</dt><dd>成片草稿计划</dd></div>
-              </dl>
-            </div>
-            <div class="vfo-guardrails">
-              <span>不生成图片</span>
-              <span>不生成视频</span>
-              <span>不接 Provider</span>
-            </div>
-            <div class="vfo-generate-row">
-              <button class="primary" id="generateVfo" type="button">生成成片草稿计划</button>
-              <span id="vfoStatus" role="status">等待调度。</span>
-            </div>
-          </div>
-        </div>
-
-        <div class="vfo-history-head">
-          <h2>成片草稿记录</h2>
-          <button class="ghost small" id="refreshVfoProjects" type="button">刷新</button>
-        </div>
-        <div class="vfo-projects" id="vfoProjects"></div>
-
-        <section class="vfo-result" id="vfoResult" hidden>
-          <div class="vfo-result-head">
-            <div>
-              <h2 id="vfoResultTitle">成片草稿计划</h2>
-              <p id="vfoResultMeta"></p>
-            </div>
-            <div class="vfo-result-actions">
-              <button class="ghost small" id="copyVfoResult" type="button">复制当前结果</button>
-              <button class="ghost small" id="exportRenderPlan" type="button">导出成片草稿计划</button>
-              <button class="ghost small" id="exportAssetPlan" type="button">导出素材计划</button>
-              <button class="ghost small" id="exportAssetPackage" type="button">导出素材包</button>
-              <button class="ghost small" id="openVfoFile" type="button">打开文件位置</button>
-            </div>
-          </div>
-          <div class="vfo-result-tabs" id="vfoResultTabs" role="tablist" aria-label="成片规划结果">
-            <button class="active" type="button" data-vfo-tab="overview">调度总览</button>
-            <button type="button" data-vfo-tab="assets">素材包</button>
-            <button type="button" data-vfo-tab="render">输出策略</button>
-            <button type="button" data-vfo-tab="qa">质量检查</button>
-            <button type="button" data-vfo-tab="json">草稿数据</button>
-          </div>
-          <div class="vfo-result-view" id="vfoResultView"></div>
-        </section>
-        </details>
       </section>
 
       </section>
@@ -1447,8 +915,7 @@
             <div class="tts-audio-handoff" id="ttsAudioHandoff">
               <strong>发送确定好的音频到</strong>
               <div class="tts-audio-handoff-grid">
-                <label><input class="tts-audio-handoff-choice" type="checkbox" data-target="video-output" checked />视频成片</label>
-                <label><input class="tts-audio-handoff-choice" type="checkbox" data-target="cs1-video" />CS1生成器</label>
+<label><input class="tts-audio-handoff-choice" type="checkbox" data-target="cs1-video" />CS1生成器</label>
                 <label><input class="tts-audio-handoff-choice" type="checkbox" data-target="xiaohei-video" />小黑视频风格生成</label>
                 <label><input class="tts-audio-handoff-choice" type="checkbox" data-target="money-printer" />MoneyPrinter</label>
               </div>
@@ -2232,8 +1699,7 @@
                 <button type="button" data-nav="collector">新建采集</button>
                 <button type="button" data-nav="rewrite">定制改写</button>
                 <button type="button" data-nav="tts">生成语音</button>
-                <button type="button" data-nav="video-output">视频成片</button>
-              </div>
+</div>
             </section>
           </aside>
 
@@ -2242,8 +1708,7 @@
             <button type="button" data-nav="rewrite"><span>2</span><strong>改写</strong></button>
             <button type="button" data-nav="moments-copy"><span>3</span><strong>朋友圈</strong></button>
             <button type="button" data-nav="tts"><span>4</span><strong>配音</strong></button>
-            <button type="button" data-nav="video-output"><span>5</span><strong>成片</strong></button>
-            <button type="button" data-nav="xiaohei-video"><span>6</span><strong>小黑</strong></button>
+<button type="button" data-nav="xiaohei-video"><span>6</span><strong>小黑</strong></button>
             <button type="button" data-nav="money-printer"><span>7</span><strong>Money</strong></button>
           </nav>
         </div>
@@ -2253,6 +1718,5 @@
     <script src="/modules/legacy-runtime.js"></script>
     <script src="/workbench.js"></script>
     <script type="module" src="/app.js"></script>
-    <script src="/jianying-import-button.js"></script>
-  </body>
+</body>
 </html>
