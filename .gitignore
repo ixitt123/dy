@@ -32,6 +32,7 @@ package-lock.json
 ui-server.pid
 ui-server.url
 .cache-tools/
+.agents/
 
 *.log
 *.tmp
