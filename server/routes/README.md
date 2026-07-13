@@ -11,7 +11,6 @@
 - `tts-routes.js`
 - `director-routes.js`
 - `assets-routes.js`
-- `video-output-routes.js`
 - `settings-routes.js`
 
 拆分时每个模块只注册自己的 HTTP 路由，继续复用现有 service、SQLite、Provider Router 和统一错误响应。完成单个模块迁移并通过回归检查后，再从 `ui-server.mjs` 移除对应内联路由。

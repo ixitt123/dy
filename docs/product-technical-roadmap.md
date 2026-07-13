@@ -62,13 +62,10 @@
 - 图片服务：`server/image/`
 - AI 导演系统：`server/director/director-service.js`
 - VFO：`server/vfo/vfo-service.js`
-- 成片中心：`server/video-product/video-product-service.js`
 - 小黑视频风格生成接口：`server/routes/ian-xiaohei-routes.js`
-- 成片输出接口：`server/routes/video-output-routes.js`
 - 项目知识与规则：`skills/`、`prompts/`、`config/`
 
-已有文档中，`docs/video-output-roadmap.md` 已明确“剪映模板草稿”为默认主路线。
-本路线图在此基础上继续扩展整体产品，不推翻已有方向。
+独立“视频成片”生产线已于 2026-07-13 废弃；后续音频、文案、字幕从 TTS 页面发送到 CS1、小黑视频风格生成或 MoneyPrinter。
 
 ## 4. 目标架构
 
@@ -294,7 +291,6 @@ flowchart TD
 | AudioJob | TTS 任务、音频路径、语音参数 | SQLite + voices/ |
 | DirectorProject | 导演稿、storyboard、字幕时间线 | SQLite + docs/.data |
 | AssetPackage | 图片/视频/BGM/字幕/草稿素材包 | SQLite + 本地素材目录 |
-| VideoProduct | 预览草稿、剪映草稿、输出历史 | SQLite + jianying-exports/ |
 | SettingProfile | API、路径、生产线默认值 | settings.json |
 
 状态机建议：
@@ -329,7 +325,6 @@ created
 - `/api/director/*`：导演稿、storyboard、导出。
 - `/api/ian-xiaohei/*`：小黑视频风格生成、TTS、音乐素材、配图、输出记录和剪映草稿。
 - `/api/money-printer/*`：MoneyPrinterTurbo 服务检测、启动、任务提交、进度轮询和输出打开。
-- `/api/video-product/*`：浏览器预览、剪映草稿、素材包、输出记录。
 - `/api/assets/*`：素材库检索、标签、打开文件。
 - `/api/settings/*`：Provider、路径、默认配置。
 
@@ -434,21 +429,20 @@ created
 - 产物能在本地打开检查。
 - 草稿记录进入当前项目。
 
-### P6：剪映草稿主路线
+### P6：保留生产线独立输出
 
-目标：把浏览器预览草稿转为可继续编辑的剪映草稿。
+目标：TTS 页面统一产出音频、文案和带时间戳字幕，再发送到 CS1、小黑视频风格生成或 MoneyPrinter，各生产线独立处理自己的导演、素材和输出。
 
 交付：
 
-- 小黑 storyboard、字幕、音频、素材包进入 `video-product`。
-- 默认输出剪映模板草稿。
-- 缺少 capcut-cli 或母版时降级为兼容素材包。
-- 支持打开剪映。
+- 小黑生产线自行生成分镜、音乐素材、逐段配图和输出记录。
+- CS1 和 MoneyPrinter 接收 TTS 三件套与标题，不依赖旧 `video-product` 中心。
+- 旧 `video-product`、`video-output`、`capcut-cli` 适配层不再作为产品路线。
 
 验收：
 
-- 能看到剪映草稿路径或兼容素材包路径。
-- 缺少本地工具时任务不崩溃，明确提示缺少什么。
+- TTS 生成记录刷新后仍保留。
+- 发送所选后，保留生产线能收到音频、文案、带时间戳字幕和标题。
 
 ### P7：素材管理器
 
