@@ -346,7 +346,7 @@ function projectAssetCard(asset) {
       </div>
       <div class="project-asset-card-foot">
         <small>已使用 ${Number(asset.usedCount || 0)} 次</small>
-        <button class="ghost small send-project-asset" type="button">发送到成片中心</button>
+        <button class="ghost small send-project-asset" type="button">加入素材库</button>
       </div>
     </article>
   `;
@@ -871,7 +871,7 @@ function navigateWorkbench(pageId, options = {}) {
 
   if (target === "collector") activateCollectorTab(collectorTab || (options.focusPrimary ? "link" : ""), { showAnalysis: pageId === "analysis" });
   if (target === "rewrite" && rewritePanel) rewritePanel.hidden = false;
-  if (target === "video-output") refreshProjectReadiness().catch(() => {});
+  if (target === "assets") refreshProjectReadiness().catch(() => {});
   if (target === "assets") refreshProjectAssets().catch(() => {});
   localStorage.setItem("short-video-workbench-page", target);
   if (!options.fromHash && window.location.hash !== `#${target}`) {
@@ -1223,14 +1223,14 @@ function renderWorkbenchOverview() {
   const tasks = typeof allTasks === "undefined" ? [] : allTasks;
   const directors = typeof directorProjectsState === "undefined" ? [] : directorProjectsState;
   const vfoItems = typeof vfoProjectsState === "undefined" ? [] : vfoProjectsState;
-  const videoProducts = dashboardVideoProducts;
+  const videoProducts = [];
 
   setMetric("metricTodayVideos", tasks.filter((task) => isToday(task.created_at)).length);
   setMetric("metricTranscripts", tasks.filter((task) => task.txt_path).length);
   setMetric("metricRewrites", tasks.filter(hasRewrite).length);
   setMetric("metricAudio", dashboardAudioJobs.filter((job) => job.status === "completed").length);
   setMetric("metricDirectors", directors.filter((project) => project.status === "completed").length);
-  setMetric("metricRenderPlans", vfoItems.filter((project) => project.status === "completed").length + videoProducts.filter((project) => project.status === "completed").length);
+  setMetric("metricRenderPlans", vfoItems.filter((project) => project.status === "completed").length);
   renderDashboardTasks(tasks);
   renderRail(tasks, directors, vfoItems, dashboardAudioJobs, videoProducts);
 }
@@ -1246,15 +1246,7 @@ async function refreshWorkbenchOverview() {
     dashboardAudioJobs = [];
   }
 
-  try {
-    const response = await fetch("/api/video-product/projects?limit=100");
-    if (response.ok) {
-      const data = await response.json();
-      dashboardVideoProducts = Array.isArray(data.projects) ? data.projects : [];
-    }
-  } catch {
-    dashboardVideoProducts = [];
-  }
+  dashboardVideoProducts = [];
 
   // 加载 Provider 状态
   try {
@@ -1626,7 +1618,7 @@ function bindWorkbenchInteractions() {
     if (event.target.closest(".transcript-analyze")) navigateWorkbench("analysis");
     if (event.target.closest(".transcript-rewrite")) navigateWorkbench("rewrite");
     if (event.target.closest(".rewrite-tts-one, .voice-use")) navigateWorkbench("tts");
-    if (event.target.closest(".rewrite-director-one")) navigateWorkbench("video-output");
+    if (event.target.closest(".rewrite-director-one")) navigateWorkbench("tts");
     if (event.target.closest("#sendDirectorToVfo")) navigateWorkbench("vfo");
     if (event.target.closest("#closeAnalysis, #closeRewrite")) navigateWorkbench("collector", { collectorTab: "copybank" });
   });
