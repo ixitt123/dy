@@ -3420,6 +3420,118 @@ function confirmedTtsAudioPayload(job = activeTtsRailJob) {
 function saveTtsAudioHandoff(target, payload) {
   const key = `dy:handoff:${target}:audio`;
   localStorage.setItem(key, JSON.stringify(payload));
+  localStorage.setItem(`video-factory-handoff:${target}`, JSON.stringify({
+    target,
+    source: "tts",
+    title: ttsHandoffTitle(payload),
+    text: payload.text || "",
+    tts: payload,
+    files: payload.files || [],
+    sentAt: new Date().toISOString(),
+  }));
+  localStorage.setItem("video-factory-last-handoff", JSON.stringify({
+    target,
+    source: "tts",
+    title: ttsHandoffTitle(payload),
+    text: payload.text || "",
+    tts: payload,
+    files: payload.files || [],
+    sentAt: new Date().toISOString(),
+  }));
+}
+
+function ttsHandoffTitle(payload = {}) {
+  const fromText = String(payload.text || "").replace(/\s+/g, "").slice(0, 18);
+  return fromText || payload.voice_name || `配音 #${payload.id || ""}`.trim() || "TTS 三件套";
+}
+
+function ttsConsumerJob(payload = {}) {
+  return {
+    ...payload,
+    id: payload.id,
+    status: "completed",
+    text: payload.text || "",
+    audio_url: payload.audio_url || "",
+    audio_path: payload.audio_path || "",
+    script_url: payload.script_url || "",
+    script_path: payload.script_path || "",
+    subtitle_url: payload.subtitle_url || payload.timed_subtitle_url || "",
+    subtitle_path: payload.subtitle_path || payload.timed_subtitle_path || "",
+    timestamped_text_url: payload.timed_subtitle_url || payload.subtitle_url || "",
+    timestamped_text_path: payload.timed_subtitle_path || payload.subtitle_path || "",
+  };
+}
+
+async function ensureVideoProjectForTts(payload = {}) {
+  let project = window.videoProjects?.current?.() || null;
+  if (project?.id) return project;
+  if (!window.videoProjects?.create) return null;
+  project = await window.videoProjects.create({
+    title: ttsHandoffTitle(payload),
+    videoType: "短视频",
+    outputMode: "jianying_template",
+  });
+  if (project?.id && window.videoProjects?.setActiveProject) {
+    await window.videoProjects.setActiveProject(project.id, { fetch: false });
+  }
+  return window.videoProjects?.current?.() || project || null;
+}
+
+function markProductionTargetReceived(target, payload = {}) {
+  const button = document.querySelector(`.nav-item[data-nav="${target}"]`);
+  if (!button) return;
+  button.classList.add("handoff-ready");
+  button.dataset.handoffLabel = `已接收 #${payload.display_number || payload.sequence_number || payload.id || ""}`.trim();
+}
+
+function applyTtsToCs1(payload = {}) {
+  setTextareaValue(document.querySelector("#cs1VideoText"), payload.text || "");
+  const titleInput = document.querySelector("#cs1VideoTitle");
+  if (titleInput && !titleInput.value.trim()) titleInput.value = ttsHandoffTitle(payload);
+  const bgmPathInput = document.querySelector("#cs1VideoBgmPath");
+  const bgmModeSelect = document.querySelector("#cs1VideoBgmMode");
+  if (bgmPathInput && payload.audio_path) bgmPathInput.value = payload.audio_path;
+  if (bgmModeSelect && payload.audio_path) bgmModeSelect.value = "local";
+  const status = document.querySelector("#cs1VideoStatus");
+  const message = document.querySelector("#cs1VideoMessage");
+  if (status) status.textContent = "已接收 TTS 三件套";
+  if (message) message.textContent = "文案已填入，音频和带时间戳字幕已绑定到本次生产线素材。";
+}
+
+function applyTtsToMoneyPrinter(payload = {}) {
+  setTextareaValue(document.querySelector("#moneyPrinterScript"), payload.text || "");
+  const subject = document.querySelector("#moneyPrinterSubject");
+  if (subject && !subject.value.trim()) subject.value = ttsHandoffTitle(payload);
+  const status = document.querySelector("#moneyPrinterStatus");
+  const detail = document.querySelector("#moneyPrinterDetail");
+  if (status) status.textContent = "已接收 TTS 三件套";
+  if (detail) detail.textContent = "脚本已填入，音频和带时间戳字幕已保存到 MoneyPrinter handoff。";
+}
+
+async function applyTtsToXiaohei(payload = {}) {
+  const project = await ensureVideoProjectForTts(payload);
+  const job = ttsConsumerJob(payload);
+  const handoff = {
+    projectId: project?.id || "",
+    projectTitle: project?.title || "",
+    title: project?.title || ttsHandoffTitle(payload),
+    text: payload.text || "",
+    ttsJob: job,
+    files: payload.files || [],
+    sentAt: new Date().toISOString(),
+  };
+  localStorage.setItem("video-factory-xiaohei-handoff", JSON.stringify(handoff));
+  if (typeof window.videoFactorySendToXiaohei === "function") {
+    try {
+      window.videoFactorySendToXiaohei(job, project || undefined);
+    } catch {
+      document.querySelector("#xiaoheiProductionFrame")?.contentWindow?.postMessage({ type: "video-factory:xiaohei-handoff", handoff }, window.location.origin);
+    }
+  } else {
+    document.querySelector("#xiaoheiProductionFrame")?.contentWindow?.postMessage({ type: "video-factory:xiaohei-handoff", handoff }, window.location.origin);
+  }
+  const status = document.querySelector("#xiaoheiHandoffStatus");
+  if (status) status.textContent = `已接收音频 #${payload.display_number || payload.id || "-"}：${handoff.title}`;
 }
 
 function selectedTtsHandoffTargets(container = document) {
@@ -3436,20 +3548,36 @@ function setTtsHandoffStatus(container = document, message = "") {
 async function sendTtsPayloadToTargets(payload, targets = []) {
   const sent = [];
   if (targets.includes("video-output")) {
+    await ensureVideoProjectForTts(payload);
     await window.videoProjects?.linkCurrent?.("tts", payload.id, payload.voice_name || `配音 #${payload.id}`, payload);
     if (window.videoOutputModule?.loadVideoProductSources) await window.videoOutputModule.loadVideoProductSources();
     else await loadVideoProductSources({ preferredAudioId: payload.id });
+    await window.videoProjects?.refresh?.({ preserveSelection: true });
+    const status = document.querySelector("#videoProductStatus");
+    if (status) status.textContent = "已接收 TTS 三件套，可继续生成视频成片。";
+    markProductionTargetReceived("video-output", payload);
     sent.push("视频成片");
   }
-  const passiveTargets = [
-    ["cs1-video", "CS1生成器"],
-    ["xiaohei-video", "小黑视频风格生成"],
-    ["money-printer", "MoneyPrinter"],
-  ];
-  for (const [target, label] of passiveTargets) {
-    if (!targets.includes(target)) continue;
+  if (targets.includes("cs1-video")) {
+    applyTtsToCs1(payload);
+    saveTtsAudioHandoff("cs1-video", payload);
+    markProductionTargetReceived("cs1-video", payload);
+    sent.push("CS1生成器");
+  }
+  if (targets.includes("xiaohei-video")) {
+    await applyTtsToXiaohei(payload);
+    saveTtsAudioHandoff("xiaohei-video", payload);
+    markProductionTargetReceived("xiaohei-video", payload);
+    sent.push("小黑视频风格生成");
+  }
+  if (targets.includes("money-printer")) {
+    applyTtsToMoneyPrinter(payload);
+    saveTtsAudioHandoff("money-printer", payload);
+    markProductionTargetReceived("money-printer", payload);
+    sent.push("MoneyPrinter");
+  }
+  for (const target of targets) {
     saveTtsAudioHandoff(target, payload);
-    sent.push(label);
   }
   return sent;
 }
