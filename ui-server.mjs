@@ -4037,6 +4037,38 @@ async function processBatchTask(task, signal) {
       return;
     }
 
+    if (taskAction === "subtitle") {
+      const downloaded = await downloadVideoForTask(task, videoInfo, signal);
+      const videoPath = downloaded.videoPath;
+      const stat = fs.statSync(videoPath);
+      videoInfo = { ...videoInfo, ...downloaded.videoInfo };
+      taskStore.updateTask(task.id, {
+        title: videoInfo.title,
+        video_id: videoInfo.videoId,
+        video_path: videoPath,
+        subtitle_path: downloaded.subtitlePath || "",
+        file_size: stat.size,
+        file_hash: await hashFile(videoPath),
+        progress: 70,
+        message: downloaded.subtitlePath ? "已获取平台字幕，准备校正文案" : "未获取到平台字幕，准备 ASR 生成字幕",
+      });
+      const transcriptUpdates = await completeTaskWithTranscript(
+        { ...taskStore.getTask(task.id), transcript_enabled: true, analysis_enabled: false },
+        videoInfo,
+        "字幕文件：",
+        signal,
+        { localVideoPath: videoPath, subtitlePath: downloaded.subtitlePath || "" }
+      );
+      taskStore.updateTask(task.id, {
+        ...transcriptUpdates,
+        status: TASK_STATUS.DONE,
+        progress: 100,
+        message: `字幕文件已完成：${transcriptUpdates.subtitle_path || "已生成"}`,
+        completed_at: new Date().toISOString(),
+      });
+      return;
+    }
+
     if (taskAction === "audio") {
       const downloaded = await downloadVideoForTask(task, videoInfo, signal);
       const videoPath = downloaded.videoPath;
@@ -4949,7 +4981,7 @@ const server = http.createServer(async (req, res) => {
       const body = await readJsonBody(req);
       const limit = clampNumber(body.limit, 1, 1000, getBatchSettings().limit || 10);
       const concurrency = clampNumber(body.concurrency, 1, 5, getBatchSettings().concurrency);
-      const taskAction = ["parse", "link", "download", "transcript", "audio"].includes(String(body.action || "download"))
+      const taskAction = ["parse", "link", "download", "transcript", "subtitle", "audio"].includes(String(body.action || "download"))
         ? String(body.action || "download")
         : "download";
       const batchSettings = saveBatchSettings({
@@ -4961,7 +4993,7 @@ const server = http.createServer(async (req, res) => {
         limit,
         kind: String(body.kind || "video"),
         taskAction,
-        transcriptEnabled: taskAction === "transcript" || (taskAction === "download" && body.extractTranscript === true),
+        transcriptEnabled: taskAction === "transcript" || taskAction === "subtitle" || (taskAction === "download" && (body.extractTranscript === true || body.extractSubtitle === true)),
         audioEnabled: taskAction === "audio" || (taskAction === "download" && body.extractAudio === true),
         audioFormat: body.audioFormat || "mp3",
         analysisEnabled: false,

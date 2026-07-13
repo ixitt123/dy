@@ -54,10 +54,12 @@ const saveDownloadDirBtn = document.querySelector("#saveDownloadDir");
 const localVideoPath = document.querySelector("#localVideoPath");
 const chooseLocalVideoBtn = document.querySelector("#chooseLocalVideo");
 const extractLocalVideoTranscriptBtn = document.querySelector("#extractLocalVideoTranscript");
+const extractLocalVideoSubtitleBtn = document.querySelector("#extractLocalVideoSubtitle");
 const extractLocalVideoAudioBtn = document.querySelector("#extractLocalVideoAudio");
 const localAudioFormat = document.querySelector("#localAudioFormat");
 const downloadExtractTranscript = document.querySelector("#downloadExtractTranscript");
 const downloadExtractAudio = document.querySelector("#downloadExtractAudio");
+const downloadCreateSubtitle = document.querySelector("#downloadCreateSubtitle");
 const downloadAudioFormat = document.querySelector("#downloadAudioFormat");
 const batchKind = document.querySelector("#batchKind");
 const batchLimit = document.querySelector("#batchLimit");
@@ -299,6 +301,7 @@ const taskActionLabels = {
   link: "获取下载链接",
   download: "下载视频",
   transcript: "提取并校正文案",
+  subtitle: "提取字幕",
   audio: "提取音频",
 };
 const defaultRewriteReference = "痞里带刺、幽默自嘲、生活化观察、少说废话、有冲突、有观点、适合教育招生、让家长有感觉、不要像官方通稿、不要像AI作文。";
@@ -1212,6 +1215,7 @@ async function enqueueTasks(action) {
         skipDownloaded: skipDownloaded.checked,
         extractTranscript: Boolean(downloadExtractTranscript?.checked),
         extractAudio: Boolean(downloadExtractAudio?.checked),
+        extractSubtitle: Boolean(downloadCreateSubtitle?.checked),
         audioFormat: downloadAudioFormat?.value || "mp3",
       }),
     });
@@ -4483,6 +4487,10 @@ document.querySelector("#transcriptBtn").addEventListener("click", () => {
   enqueueTasks("transcript");
 });
 
+document.querySelector("#subtitleExtractBtn")?.addEventListener("click", () => {
+  enqueueTasks("subtitle");
+});
+
 document.querySelector("#audioExtractBtn")?.addEventListener("click", () => {
   enqueueTasks("audio");
 });
@@ -4783,6 +4791,10 @@ chooseLocalVideoBtn?.addEventListener("click", () => {
 });
 
 extractLocalVideoTranscriptBtn?.addEventListener("click", () => {
+  runLocalVideoTranscript();
+});
+
+extractLocalVideoSubtitleBtn?.addEventListener("click", () => {
   runLocalVideoTranscript();
 });
 
