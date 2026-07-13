@@ -305,6 +305,7 @@ export function createIanXiaoheiRoutes({
           model: MINIMAX_MUSIC_MODEL,
           outputDir: musicOutputRoot,
           presets: MUSIC_PRESETS,
+          localAssets: listLocalMusicAssets(localMusicRoot),
         },
         referenceAudio: {
           outputDir: referenceAudioRoot,
@@ -333,6 +334,17 @@ export function createIanXiaoheiRoutes({
       const filePath = fileName ? path.join(musicOutputRoot, fileName) : "";
       if (!filePath || !fs.existsSync(filePath)) {
         sendJson(res, 404, { ok: false, message: "音乐文件不存在。" });
+        return true;
+      }
+      sendAudioFile(res, filePath);
+      return true;
+    }
+
+    if (req.method === "GET" && route === "local-music-audio") {
+      const fileName = safeMusicFileName(url.searchParams.get("file"));
+      const filePath = fileName ? path.join(localMusicRoot, fileName) : "";
+      if (!filePath || !isPathWithin(localMusicRoot, filePath) || !fs.existsSync(filePath)) {
+        sendJson(res, 404, { ok: false, message: "本地预制音频不存在。" });
         return true;
       }
       sendAudioFile(res, filePath);
@@ -2734,6 +2746,12 @@ function resolveBatchDir(outputRoot, id) {
   return "";
 }
 
+function isPathWithin(rootDir, targetPath) {
+  const root = path.resolve(rootDir);
+  const target = path.resolve(targetPath);
+  return target !== root && target.startsWith(`${root}${path.sep}`);
+}
+
 function readJsonFile(filePath, fallback = {}) {
   try {
     return parseStoredJsonObject(fs.readFileSync(filePath, "utf8"), fallback);
@@ -3103,8 +3121,39 @@ function redactMiniMaxSecret(value, apiKey) {
 }
 
 function safeMusicFileName(value) {
-  const fileName = String(value || "").replace(/[^A-Za-z0-9._-]/g, "");
-  return fileName.endsWith(".mp3") || fileName.endsWith(".wav") ? fileName : "";
+  const fileName = path.basename(String(value || "").replace(/\0/g, ""));
+  const extension = path.extname(fileName).toLowerCase();
+  return [".mp3", ".wav", ".m4a"].includes(extension) ? fileName : "";
+}
+
+function listLocalMusicAssets(rootDir) {
+  if (!rootDir || !fs.existsSync(rootDir)) return [];
+  return fs.readdirSync(rootDir, { withFileTypes: true })
+    .filter((entry) => entry.isFile())
+    .map((entry) => {
+      const fileName = safeMusicFileName(entry.name);
+      if (!fileName) return null;
+      const filePath = path.join(rootDir, fileName);
+      if (!isPathWithin(rootDir, filePath) || !fs.existsSync(filePath)) return null;
+      const stats = fs.statSync(filePath);
+      const title = path.basename(fileName, path.extname(fileName))
+        .replace(/^bgm_local_\d+_?/, "")
+        .replace(/[_-]+/g, " ")
+        .trim() || fileName;
+      return {
+        id: `local_bgm:${fileName}`,
+        source: "local_bgm",
+        label: title,
+        fileName,
+        description: "项目 assets/bgm 里的本地预制音频，可直接试听并作为后续视频素材使用。",
+        audio_url: `/api/ian-xiaohei/local-music-audio?file=${encodeURIComponent(fileName)}`,
+        instrumental: /bgm|纯音乐|instrumental|background/i.test(fileName),
+        size: stats.size,
+        updated_at: stats.mtime.toISOString(),
+      };
+    })
+    .filter(Boolean)
+    .sort((a, b) => String(a.label).localeCompare(String(b.label), "zh-CN"));
 }
 
 async function probeReferenceMedia(ffprobePath, filePath) {
