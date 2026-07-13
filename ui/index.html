@@ -230,26 +230,52 @@
 
       <section class="workbench-page" data-page="collector" id="collectorPage">
       <section class="workspace">
-        <label for="shareLink">抖音分享链接 / 批量导入链接</label>
-        <textarea id="shareLink" rows="8" placeholder="粘贴 1 条或多条抖音分享内容；有 1 条就处理 1 条，有多条会自动识别并加入队列"></textarea>
+        <label for="shareLink">平台视频链接 / 批量导入链接</label>
+        <textarea id="shareLink" rows="8" placeholder="粘贴 1 条或多条 yt-dlp 可识别的视频链接；抖音会优先走专用解析，失败再用 yt-dlp 兜底"></textarea>
+
+        <div class="collector-options" aria-label="下载附加选项">
+          <label class="check-row">
+            <input id="downloadExtractTranscript" type="checkbox" />
+            下载后提取并自动校正文案
+          </label>
+          <label class="check-row">
+            <input id="downloadExtractAudio" type="checkbox" />
+            下载后提取音频
+          </label>
+          <label>
+            音频格式
+            <select id="downloadAudioFormat">
+              <option value="mp3" selected>mp3</option>
+              <option value="wav">wav</option>
+              <option value="m4a">m4a</option>
+            </select>
+          </label>
+        </div>
 
         <div class="actions">
           <button id="parseBtn" type="button">解析信息</button>
           <button id="linkBtn" type="button">获取下载链接</button>
           <button class="primary" id="downloadBtn" type="button">下载视频</button>
           <button class="accent" id="transcriptBtn" type="button">提取文案</button>
+          <button class="secondary" id="audioExtractBtn" type="button">提取音频</button>
         </div>
 
-        <section class="local-video-card" aria-label="本地视频提取文案">
+        <section class="local-video-card" aria-label="本地视频提取文案和音频">
           <div>
             <span class="section-eyebrow">Local Video</span>
-            <h2>本地视频提取文案</h2>
-            <p>选择电脑里的视频文件，直接提取中文文案并进入文案库，可继续 AI 分析、AI 改写、TTS 和 AI 导演。</p>
+            <h2>本地视频提取文案 / 音频</h2>
+            <p>选择电脑里的视频文件，直接提取并自动校正文案，也可单独导出 mp3、wav 或 m4a 音频。</p>
           </div>
           <div class="local-video-controls">
             <input id="localVideoPath" type="text" placeholder="请选择本地视频文件" readonly />
             <button class="ghost" id="chooseLocalVideo" type="button">选择视频</button>
+            <select id="localAudioFormat" aria-label="本地音频格式">
+              <option value="mp3" selected>mp3</option>
+              <option value="wav">wav</option>
+              <option value="m4a">m4a</option>
+            </select>
             <button class="accent" id="extractLocalVideoTranscript" type="button">提取本地文案</button>
+            <button class="secondary" id="extractLocalVideoAudio" type="button">提取本地音频</button>
           </div>
         </section>
 

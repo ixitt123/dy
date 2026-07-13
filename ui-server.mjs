@@ -5607,6 +5607,18 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
+    if (req.method === "POST" && url.pathname === "/api/local-video/audio") {
+      const body = await readJsonBody(req);
+      const filePath = String(body.filePath || "").trim();
+      if (!filePath) {
+        sendJson(res, 400, { ok: false, message: "请先选择本地视频文件" });
+        return;
+      }
+      const job = createLocalVideoAudioJob(filePath, body.audioFormat || "mp3");
+      sendJson(res, 200, { ok: true, job });
+      return;
+    }
+
     if (req.method === "GET" && url.pathname === "/api/transcript/status") {
       const id = url.searchParams.get("id") || "";
       const job = transcriptJobs.get(id);
