@@ -2464,16 +2464,6 @@ pre {
   font-size: 13px;
 }
 
-.tts-stage-badge {
-  border: 1px solid #bad8cc;
-  border-radius: 6px;
-  padding: 6px 9px;
-  color: var(--primary-dark);
-  background: #f2faf7;
-  font-size: 12px;
-  font-weight: 700;
-}
-
 .tts-settings {
   display: grid;
   grid-template-columns: minmax(210px, 1.2fr) minmax(190px, 1fr) minmax(150px, 0.8fr) minmax(160px, 0.9fr) auto;
@@ -6009,7 +5999,7 @@ body[data-active-module="video-output"] .floating-workflow-guide [data-nav="vide
   width: 100%;
 }
 
-.tts-secondary-panel,
+.tts-history-panel,
 .voice-center {
   margin-top: 14px;
   border: 1px solid var(--line);
@@ -6019,7 +6009,6 @@ body[data-active-module="video-output"] .floating-workflow-guide [data-nav="vide
   overflow: hidden;
 }
 
-.tts-secondary-panel > summary,
 .voice-center > summary {
   min-height: 46px;
   padding: 13px 16px;
@@ -6029,24 +6018,23 @@ body[data-active-module="video-output"] .floating-workflow-guide [data-nav="vide
   font-weight: 800;
 }
 
-.tts-secondary-panel[open] > summary,
 .voice-center[open] > summary {
   border-bottom: 1px solid var(--line);
 }
 
-.tts-secondary-panel > .tts-history-head,
-.tts-secondary-panel > .tts-history,
+.tts-history-panel > .tts-history-head,
+.tts-history-panel > .tts-history,
 .voice-center > :not(summary) {
   margin-right: 16px;
   margin-left: 16px;
 }
 
-.tts-secondary-panel > .tts-history-head,
+.tts-history-panel > .tts-history-head,
 .voice-center > .voice-center-head {
   margin-top: 14px;
 }
 
-.tts-secondary-panel > .tts-history,
+.tts-history-panel > .tts-history,
 .voice-center > :last-child {
   margin-bottom: 16px;
 }
