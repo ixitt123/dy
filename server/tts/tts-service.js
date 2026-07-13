@@ -1,9 +1,10 @@
 import fs from "node:fs";
 import path from "node:path";
+import { generateSeoTitlePackage } from "../core/title-generator.js";
 import { createTtsProvider } from "./providers/index.js";
 import { redactSecrets } from "./provider-adapter.js";
 
-const PROMPT_FILES = ["tts_script_prepare.md", "tts_emotion_prompt.md"];
+const PROMPT_FILES = ["tts_script_prepare.md", "tts_emotion_prompt.md", "seo_title_generation.md"];
 
 function safeJson(value, fallback = {}) {
   try {
@@ -60,6 +61,26 @@ function prepareScript(text) {
       segment_count: segments.length,
       prompts: PROMPT_FILES,
     },
+  };
+}
+
+function ttsTitleMetadata(text = "", input = {}) {
+  const existingTitle = String(input.title || input.seo_title || input.publish_title || "").trim();
+  const titlePackage = generateSeoTitlePackage({
+    transcriptText: text,
+    videoType: input.video_type || input.videoType || input.source || "",
+    fallbackTitle: existingTitle,
+  });
+  return {
+    title: titlePackage.title,
+    seo_title: titlePackage.seoTitle,
+    publish_title: titlePackage.publishTitle,
+    platform_titles: titlePackage.platformTitles,
+    seo_keywords: titlePackage.seoKeywords,
+    hashtags: titlePackage.hashtags,
+    title_score: titlePackage.titleScore,
+    title_source: titlePackage.source,
+    title_prompt: titlePackage.prompt,
   };
 }
 
@@ -170,7 +191,7 @@ function estimatedSubtitleTimeline(text = "", duration = 0) {
   });
 }
 
-function writeTimedTextFiles({ directory, job, preparedText, result, fileBaseName }) {
+function writeTimedTextFiles({ directory, job, preparedText, result, fileBaseName, title = "" }) {
   const providerTimeline = collapseSubtitleEntries(subtitleEntries(result.metadata?.subtitles || result.metadata?.subtitle));
   const duration = Number(result.duration || result.metadata?.duration || 0)
     || (Number(result.metadata?.audio_length_ms || 0) / 1000)
@@ -190,9 +211,11 @@ function writeTimedTextFiles({ directory, job, preparedText, result, fileBaseNam
   const timestampedText = timeline
     .map((item) => `[${formatClock(item.start)} --> ${formatClock(item.end)}] ${item.text}`)
     .join("\n") + "\n";
-  fs.writeFileSync(scriptPath, `${preparedText.trim()}\n`, "utf8");
+  const cleanTitle = String(title || "").trim();
+  const titlePrefix = cleanTitle ? `标题：${cleanTitle}\n\n` : "";
+  fs.writeFileSync(scriptPath, `${titlePrefix}${preparedText.trim()}\n`, "utf8");
   fs.writeFileSync(srtPath, srt, "utf8");
-  fs.writeFileSync(textPath, timestampedText, "utf8");
+  fs.writeFileSync(textPath, `${titlePrefix}${timestampedText}`, "utf8");
   return {
     script_path: scriptPath,
     subtitle_path: srtPath,
