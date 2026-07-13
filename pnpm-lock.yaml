@@ -11,9 +11,6 @@ importers:
       '@yc-w-cn/douyin-mcp-server':
         specifier: 1.0.4
         version: 1.0.4
-      capcut-cli:
-        specifier: 0.11.3
-        version: 0.11.3
       ffmpeg-static:
         specifier: ^5.2.0
         version: 5.3.0
@@ -107,11 +104,6 @@ packages:
   call-bound@1.0.4:
     resolution: {integrity: sha512-+ys997U96po4Kx/ABpBCqhA9EuxJaQWDQg7295H4hBphv3IZg0boBKuwYpt4YXp6MZ5AmZQnU/tyMTlRpaSejg==}
     engines: {node: '>= 0.4'}
-
-  capcut-cli@0.11.3:
-    resolution: {integrity: sha512-tN+M75PmJdA+HdDlwPUvS6jsyq+NDZDHhPWu3rjMbZZyXCASoCo3YqEzOHf4IoHZHggu9PBO7okRezTcXdEbog==}
-    engines: {node: '>=18'}
-    hasBin: true
 
   caseless@0.12.0:
     resolution: {integrity: sha512-4tYFyifaFfGacoiObjJegolkwSU4xQNGbVgUiNYVUxbQ2x2lUsFvY4hVgVzGiIe6WLOPqycWXA40l+PWsxthUw==}
@@ -684,8 +676,6 @@ snapshots:
     dependencies:
       call-bind-apply-helpers: 1.0.2
       get-intrinsic: 1.3.0
-
-  capcut-cli@0.11.3: {}
 
   caseless@0.12.0: {}
 
