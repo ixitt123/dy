@@ -1727,6 +1727,14 @@ function saveUnifiedProvider(settings, body) {
       }
       settings.providers.dashscope.label = "阿里云百炼 DashScope";
     }
+    if (id === "minimax") {
+      if (!settings.tts.minimax) settings.tts.minimax = {};
+      if (apiKey) settings.tts.minimax.api_key = apiKey;
+      if (body.baseUrl !== undefined) settings.tts.minimax.base_url = baseUrl || "https://api.minimaxi.com";
+      if (!settings.tts.minimax.model || /^MiniMax-/i.test(settings.tts.minimax.model)) {
+        settings.tts.minimax.model = "speech-2.6-hd";
+      }
+    }
     if (body.setDefault === true) settings.rewrite.defaultProvider = id;
     return;
   }
