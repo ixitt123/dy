@@ -2048,7 +2048,7 @@ function errorMessage(error) {
 }
 
 function isRemoteFileFetchError(error) {
-  return /fetch failed|downloadfailed|cannot be downloaded|audio file cannot be downloaded|invalidfile/i.test(errorMessage(error));
+  return /fetch failed|downloadfailed|file_download_failed|cannot be downloaded|audio file cannot be downloaded|invalidfile/i.test(errorMessage(error));
 }
 
 function throwIfPaused(signal) {
