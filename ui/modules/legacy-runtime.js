@@ -3193,6 +3193,7 @@ function setTtsMainProgress(percent = 0, label = "") {
   if (ttsStatus && !ttsMainProgress.isConnected) ttsStatus.after(ttsMainProgress);
   const value = Math.max(0, Math.min(100, Math.round(Number(percent || 0))));
   ttsMainProgress.hidden = false;
+  if (ttsStatus) ttsStatus.hidden = value > 0 && value < 100;
   if (ttsMainProgressLabel) ttsMainProgressLabel.textContent = label || "正在生成音频";
   if (ttsMainProgressPercent) ttsMainProgressPercent.textContent = `${value}%`;
   if (ttsMainProgressFill) ttsMainProgressFill.style.width = `${value}%`;
@@ -3201,6 +3202,7 @@ function setTtsMainProgress(percent = 0, label = "") {
 
 function hideTtsMainProgress() {
   if (ttsMainProgress) ttsMainProgress.hidden = true;
+  if (ttsStatus) ttsStatus.hidden = false;
 }
 
 function updateTtsMainProgressFromJob(job = {}) {
@@ -3492,7 +3494,6 @@ async function waitForTtsJob(jobId) {
     await refreshTtsJobs();
     return;
   }
-  ttsStatus.textContent = job.status === "processing" ? "正在生成音频..." : "任务已进入队列...";
   updateTtsMainProgressFromJob(job);
   ttsPollTimer = setTimeout(() => {
     waitForTtsJob(jobId).catch((error) => {
@@ -3522,7 +3523,6 @@ async function generateTts() {
     return;
   }
   ttsStatus.textContent = "正在检查 TTS API 配置...";
-  setTtsMainProgress(5, "检查配置");
   setTtsMainProgress(5, "检查配置");
   await ensureTtsProviderConfigured();
   syncDirectorSourceFromText(text, {
@@ -4068,7 +4068,6 @@ generateTts = async function generateTtsUnified() {
   });
   generateTtsButton.disabled = true;
   setTtsMainProgress(8, isMusicAsset ? "正在生成音乐音频" : "正在提交生成任务");
-  setTtsMainProgress(8, "正在提交生成任务");
   ttsStatus.textContent = isMusicAsset ? "正在生成 MiniMax Music 音频..." : "正在提交生成任务...";
   renderTtsRail({
     id: "",
