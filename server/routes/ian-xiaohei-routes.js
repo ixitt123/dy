@@ -142,7 +142,6 @@ export function createIanXiaoheiRoutes({
   modelRouter = null,
   ttsService = null,
   voiceAssetService = null,
-  videoProductService = null,
   taskStore = null,
   getSettings = () => ({}),
   ffmpegPath = "",
@@ -676,21 +675,11 @@ export function createIanXiaoheiRoutes({
       return true;
     }
 
-    if (req.method === "GET" && route === "video-job") {
-      const project = videoProductService?.getProject?.(Number(url.searchParams.get("id") || 0));
-      if (!project) {
-        sendJson(res, 404, { ok: false, message: "没有找到这条剪映草稿任务。" });
-      } else {
-        sendJson(res, 200, { ok: true, project });
-      }
-      return true;
-    }
-
     if (req.method === "GET" && route === "outputs") {
       sendJson(res, 200, {
         ok: true,
         outputDir: outputRoot,
-        batches: listOutputBatches(outputRoot, videoProductService),
+        batches: listOutputBatches(outputRoot),
       });
       return true;
     }
@@ -722,19 +711,11 @@ export function createIanXiaoheiRoutes({
         const body = await readJsonBody(req, { maxBytes: 64 * 1024 });
         const batchDir = resolveBatchDir(outputRoot, body.id);
         if (!batchDir || !fs.existsSync(batchDir)) throw new Error("历史输出目录不存在。");
-        const result = readJsonFile(path.join(batchDir, "result.json"), {});
-        const manifest = readJsonFile(path.join(batchDir, "project_manifest.json"), {});
-        const timelineProjectId = Number(body.timeline_project_id || result.output?.timeline_project_id || manifest.timeline_project_id || 0);
-        let timelineDeleted = null;
-        if (timelineProjectId && videoProductService?.removeProject) {
-          timelineDeleted = videoProductService.removeProject(timelineProjectId, { deleteFiles: true });
-        }
         fs.rmSync(batchDir, { recursive: true, force: true });
         sendJson(res, 200, {
           ok: true,
           id: safeBatchId(body.id),
           deleted: true,
-          timelineDeleted,
         });
       } catch (error) {
         sendJson(res, error instanceof HttpBodyError ? error.statusCode : 400, {
@@ -898,7 +879,6 @@ export function createIanXiaoheiRoutes({
 
     if (req.method === "POST" && route === "export-draft") {
       try {
-        if (!videoProductService?.enqueue) throw new Error("视频成片服务不可用。");
         const body = await readJsonBody(req, { maxBytes: 2 * 1024 * 1024 });
         const plan = body.plan && typeof body.plan === "object" ? body.plan : null;
         const images = Array.isArray(body.images) ? body.images : [];
@@ -921,32 +901,24 @@ export function createIanXiaoheiRoutes({
         if (missing.length) throw new Error(`缺少配图：${missing.map((shot) => `#${shot.index}`).join("、")}。`);
         validateImageBindings({ plan, images, imageService });
         const packageDir = writeXiaoheiMaterialPackage(outputRoot, plan, images, audioJob);
-        const manualBindings = Object.fromEntries(images.map((image) => [String(image.index), String(image.assetId)]));
-        const result = videoProductService.enqueue({
-          source_director_project_id: Number(plan.directorProjectId),
-          director_project_id: Number(plan.directorProjectId),
-          audio_asset_id: Number(plan.ttsJobId),
-          tts_job_id: Number(plan.ttsJobId),
-          title: String(plan.title || "小黑配图视频"),
-          output_type: "jianying_template",
-          platform: platformForAspectRatio(plan.aspectRatio),
-          image_source: "director",
-          image_asset_ids: images.map((image) => image.assetId),
-          manual_bindings: manualBindings,
-          jianying_template: String(body.jianying_template || "education_tips"),
-          bgm_strategy: String(body.bgm_strategy || "none"),
-          force_execution: false,
-        });
-        if (!result?.project) throw new Error(result?.error || "剪映草稿任务创建失败。");
+        const project = {
+          id: plan.batchId,
+          status: "completed",
+          progress: 100,
+          current_step: "小黑素材包已生成",
+          output_dir: packageDir,
+          draft_path: "",
+          completed_at: new Date().toISOString(),
+        };
         updateResultFile(packageDir, {
           output: {
-            timeline_project_id: Number(result.project.id || 0),
-            timeline_project_status: result.project.status || "",
+            package_dir: packageDir,
+            status: "completed",
             package_dir: packageDir,
             created_at: new Date().toISOString(),
           },
         });
-        sendJson(res, 202, { ok: true, project: result.project, packageDir });
+        sendJson(res, 200, { ok: true, project, packageDir });
       } catch (error) {
         sendJson(res, error instanceof HttpBodyError ? error.statusCode : 400, {
           ok: false,
@@ -2636,7 +2608,7 @@ function promptsMarkdown(plan) {
   ].join("\n");
 }
 
-function listOutputBatches(outputRoot, videoProductService = null) {
+function listOutputBatches(outputRoot) {
   if (!fs.existsSync(outputRoot)) return [];
   return fs.readdirSync(outputRoot, { withFileTypes: true })
     .filter((entry) => entry.isDirectory() && !entry.name.startsWith("_"))
@@ -2666,17 +2638,13 @@ function listOutputBatches(outputRoot, videoProductService = null) {
           updatedAt: "",
         }))
         : directFiles;
-      const timelineProjectId = Number(result.output?.timeline_project_id || manifest.timeline_project_id || 0);
-      const timelineProject = timelineProjectId && videoProductService?.getProject
-        ? videoProductService.getProject(timelineProjectId)
-        : null;
       const stats = fs.statSync(folderPath);
       return {
         id: entry.name,
         title: manifest.title || "",
         folderPath,
-        timelineProjectId,
-        draftPath: timelineProject?.draft_path || result.output?.draft_path || manifest.draft_path || "",
+        timelineProjectId: 0,
+        draftPath: result.output?.draft_path || manifest.draft_path || "",
         updatedAt: stats.mtime.toISOString(),
         files,
       };
