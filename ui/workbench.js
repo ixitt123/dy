@@ -25,23 +25,11 @@ const workbenchPages = {
   },
   tts: {
     title: "TTS语音",
-    description: "选择项目文案和声音，生成、试听并发送到成片中心。",
+    description: "选择项目文案和声音，生成、试听并发送到保留生产线。",
   },
   voices: {
     title: "声音资产",
     description: "管理预设音色、克隆音色和默认声音。",
-  },
-  director: {
-    title: "视频成片",
-    description: "导演、分镜和字幕规划只在各条生产线内部执行。",
-  },
-  vfo: {
-    title: "视频成片",
-    description: "检查文案、语音、素材和 BGM 后生成成片草稿。",
-  },
-  "video-output": {
-    title: "视频成片",
-    description: "优先生成剪映模板草稿，也可生成 MP4 预览或兼容素材包。",
   },
   "cs1-video": {
     title: "CS1 生成器",
@@ -95,11 +83,11 @@ const VIDEO_PROJECT_STEPS = [
   ["collected", "文案库", "transcript"],
   ["transcribed", "定制改写", "rewrite"],
   ["rewritten", "TTS 配音", "tts"],
-  ["voiced", "生产线分镜", "video-output"],
+  ["voiced", "选择生产线", "tts"],
   ["directed", "素材匹配", "assets"],
-  ["assets_ready", "成片草稿", "video-output"],
-  ["draft_ready", "打开剪映", "video-output"],
-  ["exported", "已导出", "vfo"],
+  ["assets_ready", "生产线处理", "xiaohei-video"],
+  ["draft_ready", "查看输出", "assets"],
+  ["exported", "已导出", "assets"],
 ];
 
 function createWorkbenchPage(pageId) {
@@ -859,7 +847,7 @@ function buildWorkbenchInformationArchitecture() {
 }
 
 function navigateWorkbench(pageId, options = {}) {
-  const aliases = { analysis: "collector", transcript: "collector", director: "video-output", files: "assets", "image-studio": "assets", vfo: "video-output" };
+  const aliases = { analysis: "collector", transcript: "collector", director: "dashboard", files: "assets", "image-studio": "assets", vfo: "dashboard", "video-output": "dashboard" };
   const normalized = aliases[pageId] || pageId;
   const target = workbenchPages[normalized] ? normalized : "dashboard";
   const collectorTab = options.collectorTab || ((pageId === "analysis" || pageId === "transcript") ? "copybank" : "");
