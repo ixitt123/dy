@@ -663,6 +663,7 @@ function setupTtsStudio() {
   const controlColumn = oldWorkbench.querySelector(".tts-control-column");
   const settings = lab.querySelector(".tts-settings");
   const preview = lab.querySelector(".tts-preview");
+  const historyPanel = lab.querySelector(".tts-history-panel");
   const historyHead = lab.querySelector(".tts-history-head");
   const history = lab.querySelector(".tts-history");
   const studio = document.createElement("div");
@@ -681,6 +682,7 @@ function setupTtsStudio() {
   if (preview) resultLane.appendChild(preview);
   if (historyHead) resultLane.appendChild(historyHead);
   if (history) resultLane.appendChild(history);
+  if (historyPanel && historyPanel.children.length === 0) historyPanel.remove();
 
   addLaneHeading(inputLane, "项目文案", "手动输入或从当前项目的最佳改写带入");
   addLaneHeading(settingsLane, "选择声音", "我的克隆音色、平台预设和最近使用");
