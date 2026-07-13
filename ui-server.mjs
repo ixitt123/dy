@@ -3553,6 +3553,155 @@ async function generateDirectorJson(options) {
   });
 }
 
+function clampMomentsImageCount(value) {
+  const number = Number(value || 0);
+  if (!Number.isFinite(number) || number <= 0) return 0;
+  return Math.max(1, Math.min(3, Math.round(number)));
+}
+
+function normalizeMomentsStyle(value = "") {
+  const style = String(value || "auto").trim();
+  return ["auto", "xiaohei", "realistic"].includes(style) ? style : "auto";
+}
+
+function normalizeMomentsResult(raw = {}, fallback = {}) {
+  const imageCount = clampMomentsImageCount(raw.image_count || raw.imageCount)
+    || clampMomentsImageCount(fallback.imageCount)
+    || 1;
+  const post = String(raw.post || raw.copy || raw.text || "").trim();
+  if (!post) throw new Error("朋友圈生成结果缺少文案。");
+  const images = (Array.isArray(raw.images) ? raw.images : [])
+    .slice(0, imageCount)
+    .map((item, index) => {
+      const prompt = String(item.prompt || "").trim();
+      return {
+        index: index + 1,
+        title: String(item.title || `配图 ${index + 1}`).trim().slice(0, 80),
+        style: normalizeMomentsStyle(item.style || fallback.visualStyle),
+        purpose: String(item.purpose || item.source_segment || item.sourceSegment || "").trim().slice(0, 500),
+        prompt,
+        negative_prompt: String(item.negative_prompt || item.negativePrompt || "").trim(),
+        local_material_hint: String(item.local_material_hint || item.localMaterialHint || fallback.localMaterials || "").trim().slice(0, 800),
+      };
+    })
+    .filter((item) => item.prompt);
+  if (!images.length) throw new Error("朋友圈生成结果缺少配图提示词。");
+  return {
+    post,
+    image_count: Math.min(imageCount, images.length),
+    theme: String(raw.theme || fallback.theme || "朋友圈图文").trim().slice(0, 120),
+    persona_used: String(raw.persona_used || fallback.persona || "").trim().slice(0, 1000),
+    notes: Array.isArray(raw.notes) ? raw.notes.map((item) => String(item).trim()).filter(Boolean).slice(0, 6) : [],
+    images,
+  };
+}
+
+async function generateMomentsPostJson(body = {}) {
+  const sourceText = String(body.text || "").trim();
+  const persona = String(body.persona || "").trim();
+  if (!sourceText) throw new Error("请先填写朋友圈文案输入区。");
+  if (!persona) throw new Error("请先选择或填写人设。");
+  const fixedImageCount = clampMomentsImageCount(body.imageCount);
+  const visualStyle = normalizeMomentsStyle(body.visualStyle);
+  const localMaterials = String(body.localMaterials || "").trim();
+  const tone = String(body.tone || "普通朋友聊天式分享").trim();
+  const intent = String(body.intent || "不强销售的自然分享").trim();
+  const providerId = String(body.provider || readSettings().rewrite?.defaultProvider || "").trim();
+  const imageCountRule = fixedImageCount
+    ? `必须生成 ${fixedImageCount} 张配图。`
+    : "根据文案内容判断生成 1-3 张配图；短内容 1 张，包含多个转折/案例/方法时 2-3 张。";
+  const styleRule = {
+    auto: "可以自动选择小黑漫画解释类或真实生活/产品场景类；同一条朋友圈的多张图必须统一主题和视觉方向。",
+    xiaohei: "必须使用小黑漫画解释类：纯白背景、黑色手绘线稿、少量红橙蓝中文手写批注、大量留白，小黑作为核心动作主体。",
+    realistic: "必须使用真实生活/产品场景类：自然真实、像手机拍到的生活/教学/产品场景，不要广告海报感，不要夸张摆拍。",
+  }[visualStyle];
+
+  const { data, provider, model } = await generateStructuredJson({
+    providerId,
+    temperature: 0.68,
+    requestName: "朋友圈图文生成",
+    maxTokens: 9000,
+    messages: [
+      {
+        role: "system",
+        content: [
+          "你是专业朋友圈图文内容策划与图片提示词工程师。",
+          "你必须忠于用户给的原文主题和事实，不允许凭空编造行业、案例、数据、地点、人物身份或承诺效果。",
+          "输出必须是严格 JSON 对象，不要 Markdown，不要解释。",
+        ].join("\n"),
+      },
+      {
+        role: "user",
+        content: [
+          "任务：把原始文案改造成一条朋友圈图文草稿，并生成 1-3 张配图提示词。",
+          "",
+          "人设硬约束：",
+          persona,
+          "",
+          "生成原则：",
+          `- 语气：${tone}`,
+          `- 用途：${intent}`,
+          "- 做成不强销售的自然分享，像普通朋友真诚聊天，不要硬广，不要夸张承诺，不要制造焦虑。",
+          "- 所有观点、措辞、图片主题都必须围绕人设，不要脱离人设身份。",
+          "- 朋友圈文案需要保留原文核心意思，但可以调整结构、断句、表达顺序。",
+          "- 可以有轻微生活化表达和真实感，但不能编造不存在的具体成绩、学生案例、金额、机构名。",
+          "- 结尾允许自然提问或轻轻提醒，不要强 CTA。",
+          `- ${imageCountRule}`,
+          `- 视觉方向：${styleRule}`,
+          "- 多张图必须统一一个主题，每张承担不同角度；不要把多张图拼进一张图。",
+          "",
+          "小黑漫画解释类提示词要求：",
+          "- 16:9 横版中文正文配图，纯白背景，黑色手绘线稿，少量红/橙/蓝中文手写批注，大量留白。",
+          "- 小黑是黑色实心、白点眼、细腿、空表情的小怪物，必须承担核心动作，不只是装饰。",
+          "- 一张图只讲一个核心结构或隐喻，禁止 PPT、课程课件、商业插画、幼稚可爱、复杂架构、左上角标题。",
+          "",
+          "真实生活/产品场景类提示词要求：",
+          "- 画面真实自然，像手机或轻量商业摄影；可以是教室、书桌、咨询沟通、规划表、学习资料、家长沟通场景。",
+          "- 不要夸张营销海报，不要二维码、水印、Logo、过度摆拍、不可读大段文字。",
+          "",
+          "本地图片素材说明，必须写入每张提示词的参考/约束里：",
+          localMaterials || "暂无本地素材说明。",
+          "",
+          "原始文案：",
+          sourceText.slice(0, 12000),
+          "",
+          "只返回 JSON，结构如下：",
+          JSON.stringify({
+            post: "朋友圈正文，可直接发布，可编辑",
+            image_count: fixedImageCount || "1-3",
+            theme: "统一图文主题",
+            persona_used: "本次使用的人设摘要",
+            notes: ["可选注意事项"],
+            images: [
+              {
+                title: "配图标题",
+                style: "xiaohei 或 realistic",
+                purpose: "这张图对应原文/成品文案的哪一层意思",
+                prompt: "完整可复制的图片生成提示词，必须包含本地素材说明或无素材说明",
+                negative_prompt: "负面提示词",
+                local_material_hint: "本地图像素材如何使用",
+              },
+            ],
+          }, null, 2),
+        ].join("\n"),
+      },
+    ],
+  });
+
+  return {
+    ok: true,
+    provider,
+    model,
+    result: normalizeMomentsResult(data, {
+      imageCount: fixedImageCount,
+      visualStyle,
+      localMaterials,
+      persona,
+      theme: "朋友圈图文",
+    }),
+  };
+}
+
 function chunkRowsByWordCount(rows, maxCharacters = 2600) {
   const chunks = [];
   let current = [];
