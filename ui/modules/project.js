@@ -5,11 +5,11 @@ const STATUS_STEPS = [
   ["collected", "提取文案", "transcript"],
   ["transcribed", "AI 改写", "rewrite"],
   ["rewritten", "TTS 配音", "tts"],
-  ["voiced", "进入生产线", "video-output"],
-  ["directed", "进入生产线", "video-output"],
-  ["assets_ready", "成片草稿", "video-output"],
-  ["draft_ready", "打开剪映", "video-output"],
-  ["exported", "已导出", "video-output"],
+  ["voiced", "选择生产线", "tts"],
+  ["directed", "素材匹配", "assets"],
+  ["assets_ready", "生产线处理", "xiaohei-video"],
+  ["draft_ready", "查看输出", "assets"],
+  ["exported", "已导出", "assets"],
 ];
 
 const state = {
@@ -239,7 +239,7 @@ async function loadProjectAssets() {
       <div class="project-asset-card-top"><span>${escapeHtml(asset.assetType)}</span><strong class="asset-status-${escapeHtml(asset.status)}">${asset.status === "ready" ? "可用" : asset.status === "pending" ? "处理中" : "异常"}</strong></div>
       <h3>${escapeHtml(asset.name || asset.assetId || "未命名素材")}</h3>
       <div class="asset-tag-list">${[asset.useCase, asset.style, asset.ratio].filter(Boolean).map((tag) => `<span>${escapeHtml(tag)}</span>`).join("")}</div>
-      <div class="project-asset-card-foot"><small>已使用 ${Number(asset.usedCount || 0)} 次</small><button class="ghost small send-project-asset" type="button">发送到成片中心</button></div>
+      <div class="project-asset-card-foot"><small>已使用 ${Number(asset.usedCount || 0)} 次</small><button class="ghost small send-project-asset" type="button">加入素材库</button></div>
     </article>`).join("") : '<div class="empty">没有符合筛选条件的素材。</div>';
   return assets;
 }
