@@ -2830,7 +2830,6 @@ function renderTtsVoiceQuickPanel(asset = selectedVoiceAssetFromDropdown()) {
         ${audioUrl ? `<audio controls preload="none" src="${escapeHtml(audioUrl)}"></audio>` : '<button class="ghost small tts-voice-preview" type="button">生成试听</button>'}
       </div>
       <div class="tts-voice-actions">
-        <button class="ghost small tts-voice-use" type="button">用于配音</button>
         <button class="ghost small tts-voice-favorite" type="button">${asset.is_favorite ? "移出常用" : "加入常用"}</button>
         <button class="ghost small tts-voice-default" type="button">${asset.is_default ? "已默认" : "设为默认"}</button>
         <button class="ghost small danger-action tts-voice-delete" type="button">永久删除</button>
@@ -6422,10 +6421,6 @@ ttsVoiceQuickPanel?.addEventListener("click", async (event) => {
           button.textContent = previousText;
         }
       }
-      return;
-    }
-    if (button.classList.contains("tts-voice-use")) {
-      await applyVoiceAssetToTts(asset);
       return;
     }
     if (button.classList.contains("tts-voice-favorite")) {
