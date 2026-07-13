@@ -1122,42 +1122,40 @@
           </div>
         </section>
         <section class="moments-workbench">
-          <div class="moments-column">
-            <section class="dashboard-panel moments-panel">
+          <div class="moments-input-column">
+            <section class="dashboard-panel moments-panel moments-input-panel">
               <div class="panel-heading">
                 <div>
-                  <span class="section-eyebrow">Persona</span>
-                  <h2>人设与表达边界</h2>
+                  <span class="section-eyebrow">Input</span>
+                  <h2>输入与参数</h2>
                 </div>
               </div>
-              <div class="moments-form-grid">
+
+              <div class="moments-persona-row">
                 <label>
                   选择人设
                   <select id="momentsPersonaSelect"></select>
                 </label>
-                <label>
-                  人设名称
-                  <input id="momentsPersonaName" type="text" placeholder="例如：学业规划老师" />
-                </label>
+                <details class="moments-persona-editor">
+                  <summary>展开编辑</summary>
+                  <div class="moments-persona-editor-body">
+                    <label>
+                      人设名称
+                      <input id="momentsPersonaName" type="text" placeholder="例如：学业规划老师" />
+                    </label>
+                    <label class="moments-copy-receiver" for="momentsPersonaText">
+                      人设说明
+                      <textarea id="momentsPersonaText" rows="5" placeholder="先明确你是谁、长期服务谁、可信的经验和边界。"></textarea>
+                    </label>
+                    <div class="moments-actions compact-left">
+                      <button id="saveMomentsPersona" class="ghost small" type="button">保存人设</button>
+                      <button id="deleteMomentsPersona" class="ghost small danger-action" type="button">删除人设</button>
+                    </div>
+                    <p id="momentsPersonaStatus" class="placeholder-copy">同步到项目人设库。</p>
+                  </div>
+                </details>
               </div>
-              <label class="moments-copy-receiver" for="momentsPersonaText">
-                人设说明
-                <textarea id="momentsPersonaText" rows="5" placeholder="先明确你是谁、长期服务谁、可信的经验和边界。"></textarea>
-              </label>
-              <div class="moments-actions">
-                <button id="saveMomentsPersona" class="ghost small" type="button">保存人设</button>
-                <button id="deleteMomentsPersona" class="ghost small danger-action" type="button">删除人设</button>
-              </div>
-              <p id="momentsPersonaStatus" class="placeholder-copy">本地保存，不需要账号。</p>
-            </section>
 
-            <section class="dashboard-panel moments-panel">
-              <div class="panel-heading">
-                <div>
-                  <span class="section-eyebrow">Source</span>
-                  <h2>朋友圈图文输入</h2>
-                </div>
-              </div>
               <label class="moments-copy-receiver" for="momentsCopyInput">
                 文案输入区
                 <textarea id="momentsCopyInput" rows="11" placeholder="从文案定制改写发送来的原文案或成品文案会填到这里，也可以直接粘贴。"></textarea>
@@ -1205,14 +1203,12 @@
               </div>
               <div class="moments-actions">
                 <button id="generateMomentsPost" class="primary" type="button">生成朋友圈文案+图片提示词</button>
-                <button id="copyMomentsPrompts" class="ghost" type="button">复制全部提示词</button>
-                <button id="generateMomentsImages" class="ghost" type="button">调用图片 API 生成图片</button>
               </div>
               <p id="momentsCopyStatus" class="placeholder-copy">等待接收文案。</p>
             </section>
           </div>
 
-          <div class="moments-column">
+          <div class="moments-preview-column">
             <section class="dashboard-panel moments-panel moments-preview-panel">
               <div class="panel-heading">
                 <div>
@@ -1223,18 +1219,36 @@
               <textarea id="momentsPostOutput" class="moments-output" rows="12" placeholder="生成后的朋友圈文案会出现在这里，可直接修改。"></textarea>
               <div id="momentsResultMeta" class="moments-meta">尚未生成。</div>
             </section>
-
-            <section class="dashboard-panel moments-panel">
-              <div class="panel-heading">
-                <div>
-                  <span class="section-eyebrow">Image Prompts</span>
-                  <h2>配图提示词与图片预览</h2>
-                </div>
-              </div>
-              <div id="momentsImagePromptList" class="moments-prompt-list empty">生成后会显示 1-3 张配图提示词，每张都可以单独复制或调用图片 API。</div>
-              <div id="momentsGeneratedImages" class="moments-image-grid"></div>
-            </section>
           </div>
+
+          <section class="dashboard-panel moments-panel moments-assets-panel">
+            <div class="panel-heading">
+              <div>
+                <span class="section-eyebrow">Image Assets</span>
+                <h2>图片素材区</h2>
+              </div>
+              <div class="moments-actions compact">
+                <button id="copyMomentsPrompts" class="ghost small" type="button">复制全部提示词</button>
+                <button id="generateMomentsImages" class="primary small" type="button">调用图片 API 生成图片</button>
+              </div>
+            </div>
+            <div class="moments-assets-grid">
+              <div>
+                <div>
+                  <span class="section-eyebrow">Prompts</span>
+                  <h3 class="moments-subtitle">配图提示词</h3>
+                </div>
+                <div id="momentsImagePromptList" class="moments-prompt-list empty">生成后会显示 1-3 张配图提示词，每张都可以单独复制或调用图片 API。</div>
+              </div>
+              <div>
+                <div>
+                  <span class="section-eyebrow">Generated</span>
+                  <h3 class="moments-subtitle">生成图片预览</h3>
+                </div>
+                <div id="momentsGeneratedImages" class="moments-image-grid"></div>
+              </div>
+            </div>
+          </section>
         </section>
       </section>
 
