@@ -170,7 +170,7 @@ function estimatedSubtitleTimeline(text = "", duration = 0) {
   });
 }
 
-function writeTimedTextFiles({ directory, job, preparedText, result }) {
+function writeTimedTextFiles({ directory, job, preparedText, result, fileBaseName }) {
   const providerTimeline = collapseSubtitleEntries(subtitleEntries(result.metadata?.subtitles || result.metadata?.subtitle));
   const duration = Number(result.duration || result.metadata?.duration || 0)
     || (Number(result.metadata?.audio_length_ms || 0) / 1000)
@@ -178,8 +178,10 @@ function writeTimedTextFiles({ directory, job, preparedText, result }) {
   const timeline = providerTimeline.length ? providerTimeline : estimatedSubtitleTimeline(preparedText, duration);
   if (!timeline.length) return {};
   fs.mkdirSync(directory, { recursive: true });
-  const srtPath = path.join(directory, `tts-${job.id}.srt`);
-  const textPath = path.join(directory, `tts-${job.id}-timestamped.txt`);
+  const safeBaseName = String(fileBaseName || `tts-${job.id}`).replace(/[^a-z0-9_-]+/gi, "_") || `tts-${job.id}`;
+  const scriptPath = path.join(directory, `${safeBaseName}.txt`);
+  const srtPath = path.join(directory, `${safeBaseName}.srt`);
+  const textPath = path.join(directory, `${safeBaseName}-timestamped.txt`);
   const srt = timeline.map((item, index) => [
     String(index + 1),
     `${formatClock(item.start, ",")} --> ${formatClock(item.end, ",")}`,
@@ -188,14 +190,30 @@ function writeTimedTextFiles({ directory, job, preparedText, result }) {
   const timestampedText = timeline
     .map((item) => `[${formatClock(item.start)} --> ${formatClock(item.end)}] ${item.text}`)
     .join("\n") + "\n";
+  fs.writeFileSync(scriptPath, `${preparedText.trim()}\n`, "utf8");
   fs.writeFileSync(srtPath, srt, "utf8");
   fs.writeFileSync(textPath, timestampedText, "utf8");
   return {
+    script_path: scriptPath,
     subtitle_path: srtPath,
     timestamped_text_path: textPath,
     subtitle_timeline: timeline,
     subtitle_source: providerTimeline.length ? "provider" : "estimated",
   };
+}
+
+function ttsJobMetadata(job = {}) {
+  return safeJson(job.metadata_json, {});
+}
+
+function ttsSequenceNumber(job = {}) {
+  const metadata = ttsJobMetadata(job);
+  const value = Number(metadata.sequence_number || metadata.display_number || metadata.slot_number || 0);
+  return Number.isInteger(value) && value > 0 ? value : 0;
+}
+
+function ttsFileBaseName(sequenceNumber) {
+  return `tts-${Number(sequenceNumber || 0) || 1}`;
 }
 
 function providerConfig(settings, providerId) {
