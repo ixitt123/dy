@@ -99,7 +99,7 @@ const PRESET_VOICES = [
     id: "Chinese (Mandarin)_Lyrical_Voice",
     name: "抒情男声",
     gender: "male",
-    category: "抒情/类唱腔",
+    category: "唱歌/类唱腔",
     useCase: "抒情文案、慢节奏旁白",
     description: "更柔和的抒情声线；注意这不是歌曲生成",
   },

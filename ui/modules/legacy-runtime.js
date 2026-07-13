@@ -3148,6 +3148,48 @@ async function loadVoiceAssets({ applyDefault = false } = {}) {
   if (applyDefault && defaultVoiceAsset) await applyVoiceAssetToTts(defaultVoiceAsset);
 }
 
+function voiceCloneModelOptions(providerId = "aliyun_bailian") {
+  if (providerId === "minimax") {
+    return [
+      ["speech-2.6-hd", "MiniMax speech-2.6-hd（质量优先）"],
+      ["speech-2.6-turbo", "MiniMax speech-2.6-turbo（速度优先）"],
+    ];
+  }
+  if (providerId === "fish_audio") {
+    return [
+      ["s2-pro", "Fish Audio s2-pro"],
+      ["s1", "Fish Audio s1"],
+    ];
+  }
+  if (providerId === "custom_tts") {
+    return [["", "沿用自定义 Provider 默认模型"]];
+  }
+  return [
+    ["qwen3-tts-vc-2026-01-22", "Qwen3-TTS VC（质量优先）"],
+    ["qwen3-tts-vc-realtime-2026-01-15", "Qwen3-TTS VC Realtime（速度优先）"],
+  ];
+}
+
+function updateVoiceAssetProviderFields(preferredModel = "") {
+  if (!voiceAssetTargetModel) return;
+  const providerId = voiceAssetProvider?.value || "aliyun_bailian";
+  const options = voiceCloneModelOptions(providerId);
+  voiceAssetTargetModel.innerHTML = options
+    .map(([value, label]) => `<option value="${escapeHtml(value)}">${escapeHtml(label)}</option>`)
+    .join("");
+  const target = preferredModel && options.some(([value]) => value === preferredModel)
+    ? preferredModel
+    : options[0]?.[0] || "";
+  voiceAssetTargetModel.value = target;
+  if (voiceAssetReferenceId) {
+    voiceAssetReferenceId.closest("label").hidden = providerId !== "fish_audio";
+  }
+  if (voiceAssetFormStatus && !voiceAssetForm.hidden) {
+    const providerLabel = providerId === "minimax" ? "MiniMax" : providerId === "aliyun_bailian" ? "阿里云百炼" : providerId;
+    voiceAssetFormStatus.textContent = `当前将使用 ${providerLabel} 创建或登记克隆音色。`;
+  }
+}
+
 function resetVoiceAssetForm() {
   voiceAssetEditId.value = "";
   voiceAssetFormTitle.textContent = "创建克隆声音";
@@ -3155,7 +3197,7 @@ function resetVoiceAssetForm() {
   voiceAssetProvider.value = "aliyun_bailian";
   voiceAssetVoiceId.value = "";
   if (voiceAssetReferenceId) voiceAssetReferenceId.value = "";
-  voiceAssetTargetModel.value = "qwen3-tts-vc-2026-01-22";
+  updateVoiceAssetProviderFields("qwen3-tts-vc-2026-01-22");
   voiceAssetDescription.value = "";
   voiceAssetTags.value = "";
   voiceAssetSample.value = "";
@@ -3174,7 +3216,7 @@ function openVoiceAssetForm(asset = null) {
     voiceAssetProvider.value = asset.provider || "aliyun_bailian";
     voiceAssetVoiceId.value = asset.voice_id || "";
     if (voiceAssetReferenceId) voiceAssetReferenceId.value = asset.metadata?.reference_id || asset.metadata?.fish_audio?.reference_id || "";
-    voiceAssetTargetModel.value = asset.metadata?.target_model || "qwen3-tts-vc-2026-01-22";
+    updateVoiceAssetProviderFields(asset.metadata?.target_model || "");
     voiceAssetDescription.value = asset.description || "";
     voiceAssetTags.value = (asset.tags || []).join("、");
     document.querySelector("#saveVoiceAsset").textContent = "保存修改";
@@ -5760,6 +5802,7 @@ ttsProvider.addEventListener("change", () => {
 
 ttsModel.addEventListener("change", syncTtsModelToSelectedVoice);
 ttsVoiceSource.addEventListener("change", updateTtsVoiceSource);
+ttsVoiceCategory?.addEventListener("change", renderTtsVoices);
 ttsPresetVoice.addEventListener("change", syncTtsModelToSelectedVoice);
 ttsEmotion.addEventListener("change", updateTtsEmotionField);
 ttsVolume.addEventListener("input", updateTtsRangeLabels);
@@ -5823,6 +5866,10 @@ document.querySelector("#openVoiceCloneFromTts")?.addEventListener("click", () =
 document.querySelector("#cancelVoiceAsset").addEventListener("click", () => {
   voiceAssetForm.hidden = true;
   resetVoiceAssetForm();
+});
+
+voiceAssetProvider?.addEventListener("change", () => {
+  updateVoiceAssetProviderFields();
 });
 
 voiceAssetForm.addEventListener("submit", (event) => {

@@ -1173,9 +1173,13 @@ function normalizeSettings(settings) {
       voice: String(tts.custom_tts?.voice || "").trim(),
     },
     minimax: {
-      base_url: String(tts.minimax?.base_url || "https://api.minimax.io/v1").trim(),
+      base_url: ["", "https://api.minimax.io/v1"].includes(String(tts.minimax?.base_url || "").trim())
+        ? "https://api.minimaxi.com"
+        : String(tts.minimax?.base_url || "").trim(),
       api_key: String(tts.minimax?.api_key || "").trim(),
-      model: String(tts.minimax?.model || "minimax-speech").trim() || "minimax-speech",
+      model: ["", "minimax-speech"].includes(String(tts.minimax?.model || "").trim())
+        ? "speech-2.6-hd"
+        : String(tts.minimax?.model || "").trim(),
       voice: String(tts.minimax?.voice || "").trim(),
     },
     fish_audio: {
@@ -1300,8 +1304,8 @@ function publicTtsSettings(settings = readSettings()) {
     {
       id: "minimax",
       label: TTS_PROVIDER_LABELS.minimax,
-      phase: "扩展预留",
-      enabled: false,
+      phase: "可用",
+      enabled: true,
       configured: Boolean(tts.minimax.api_key),
       secret_mask: maskApiKey(tts.minimax.api_key),
       base_url: tts.minimax.base_url,
@@ -1596,11 +1600,11 @@ function publicUnifiedProviders(settings = readSettings()) {
       id: "minimax",
       label: TTS_PROVIDER_LABELS.minimax,
       config: tts.minimax || {},
-      description: "扩展预留 Provider，可先保存 Key，正式生成能力后续接入。",
-      baseUrl: tts.minimax?.base_url || "https://api.minimax.io/v1",
-      model: tts.minimax?.model || "minimax-speech",
-      models: ["minimax-speech"],
-      enabled: false,
+      description: "MiniMax 语音生成与声音克隆；适合小黑分支的搞笑、特殊、搞怪和类唱腔音色。",
+      baseUrl: tts.minimax?.base_url || "https://api.minimaxi.com",
+      model: tts.minimax?.model || "speech-2.6-hd",
+      models: ["speech-2.6-hd", "speech-2.6-turbo"],
+      enabled: true,
     },
     {
       id: "fish_audio",
@@ -6490,6 +6494,7 @@ const server = http.createServer(async (req, res) => {
         volcengine_doubao: ["api_key", "app_id", "access_key_id", "secret_access_key", "default_model", "default_voice"],
         tencent_tts: ["secret_id", "secret_key", "region", "default_voice"],
         custom_tts: ["base_url", "api_key", "model", "voice"],
+        minimax: ["base_url", "api_key", "model", "voice"],
         fish_audio: ["base_url", "api_key", "model", "voice", "reference_id", "default_format"],
       }[providerId] || [];
       const secretFields = new Set(["api_key", "secret_id", "secret_key", "access_key_id", "secret_access_key"]);
