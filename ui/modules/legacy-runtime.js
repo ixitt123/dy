@@ -2812,6 +2812,27 @@ function ttsVoicePreviewModel(asset = {}) {
   return String(metadata.target_model || metadata.model || ttsModel?.value || "").trim();
 }
 
+function isTtsMusicAsset(asset = {}) {
+  return asset?.voice_type === "music" || asset?.metadata?.asset_kind === "minimax_music_preset";
+}
+
+function ttsMusicJobFromPreview(asset = {}, data = {}, text = "") {
+  return {
+    id: `music-${asset.id}-${Date.now()}`,
+    provider: asset.provider || "minimax",
+    voice_id: asset.voice_id || "",
+    voice_name: asset.voice_name || asset.voice_id || "MiniMax Music",
+    text,
+    emotion: "music",
+    speed: 1,
+    format: "mp3",
+    audio_url: data.preview_url || data.asset?.preview_url || asset.preview_url || "",
+    audio_path: data.audio_path || "",
+    status: "completed",
+    source: "minimax_music",
+  };
+}
+
 function playRenderedTtsVoicePreview() {
   const audio = ttsVoiceQuickPanel?.querySelector(".tts-voice-preview-slot audio");
   if (!audio) return;
@@ -2874,30 +2895,8 @@ function renderTtsVoiceQuickPanel(asset = selectedVoiceAssetFromDropdown(), stat
 
 function renderTtsMusicPresets() {
   if (!ttsMusicPresetsPanel) return;
-  const presets = (ttsMusicPresets || []).filter((preset) => {
-    const text = [preset.id, preset.label, preset.prompt, preset.description].filter(Boolean).join(" ");
-    return /sing|song|rap|music|jingle|唱|歌|说唱|副歌|小调|音乐|BGM/i.test(text);
-  });
-  if (!presets.length) {
-    ttsMusicPresetsPanel.hidden = true;
-    ttsMusicPresetsPanel.innerHTML = "";
-    return;
-  }
-  ttsMusicPresetsPanel.hidden = false;
-  ttsMusicPresetsPanel.innerHTML = `
-    <div class="tts-music-head">
-      <strong>唱歌 / 音乐预设</strong>
-      <span>MiniMax Music</span>
-    </div>
-    <div class="tts-music-list">
-      ${presets.map((preset) => `
-        <button class="tts-music-chip" type="button" data-music-preset="${escapeHtml(preset.id)}">
-          <strong>${escapeHtml(preset.label || preset.id)}</strong>
-          <span>${escapeHtml(preset.description || preset.prompt || "")}</span>
-        </button>
-      `).join("")}
-    </div>
-  `;
+  ttsMusicPresetsPanel.hidden = true;
+  ttsMusicPresetsPanel.innerHTML = "";
 }
 
 async function loadTtsMusicPresets() {
@@ -3131,13 +3130,15 @@ function renderTtsRail(job = activeTtsRailJob) {
   activeTtsRailJob = job;
   const progress = Math.max(0, Math.min(100, ttsProgressValue(job)));
   const textPreview = String(job.text || ttsText?.value || "").trim().slice(0, 72);
+  const isMusicJob = job.source === "minimax_music" || String(job.voice_id || "").startsWith("music:");
+  const mediaLabel = isMusicJob ? "音乐音频" : "TTS 语音";
   const outputLink = job.audio_url
-    ? `<a href="${escapeHtml(job.audio_url)}" target="_blank" rel="noreferrer">语音文件</a>`
+    ? `<a href="${escapeHtml(job.audio_url)}" target="_blank" rel="noreferrer">${isMusicJob ? "音频文件" : "语音文件"}</a>`
     : "<span>完成后显示音频文件。</span>";
   railCurrentTask.innerHTML = `
     <div class="rail-video-product-card rail-tts-card">
-      <strong>#${job.id || "-"} TTS 语音生成</strong>
-      <small>当前步骤：${escapeHtml(job.status === "completed" ? "语音已生成，可以试听" : job.status === "failed" ? "语音生成失败" : job.status === "processing" ? "正在生成音频" : "任务已进入队列")}</small>
+      <strong>#${job.id || "-"} ${mediaLabel}生成</strong>
+      <small>当前步骤：${escapeHtml(job.status === "completed" ? `${mediaLabel}已生成，可以试听` : job.status === "failed" ? `${mediaLabel}生成失败` : job.status === "processing" ? "正在生成音频" : "任务已进入队列")}</small>
       <div class="rail-progress"><i style="width:${progress}%"></i></div>
       <div class="rail-task-summary">
         <div><span>进度</span><strong>${progress}%</strong></div>
@@ -3304,8 +3305,11 @@ async function clearTtsJobs(scope = "all") {
 
 function showTtsPreview(job) {
   ttsPreview.hidden = false;
-  ttsPreviewTitle.textContent = `语音 #${job.id}`;
-  ttsPreviewMeta.textContent = `${job.voice_name || job.voice_id || "音色"} · ${job.speed}x · ${String(job.format || "").toUpperCase()}`;
+  const isMusicJob = job.source === "minimax_music" || String(job.voice_id || "").startsWith("music:");
+  ttsPreviewTitle.textContent = `${isMusicJob ? "音频" : "语音"} #${job.id}`;
+  ttsPreviewMeta.textContent = isMusicJob
+    ? `${job.voice_name || job.voice_id || "MiniMax Music"} · ${String(job.format || "").toUpperCase()}`
+    : `${job.voice_name || job.voice_id || "音色"} · ${job.speed}x · ${String(job.format || "").toUpperCase()}`;
   ttsAudio.src = `${job.audio_url}&t=${Date.now()}`;
   ttsAudio.load();
 }
@@ -3888,6 +3892,7 @@ generateTts = async function generateTtsUnified() {
   const selectedVoiceForModel = selectedTtsVoice();
   const voiceId = selectedVoiceForModel?.id || "";
   const voiceAsset = selectedVoiceForModel?.asset || null;
+  const isMusicAsset = isTtsMusicAsset(voiceAsset);
   if (!text) {
     ttsStatus.textContent = "请先输入配音文案。";
     return;
@@ -3904,7 +3909,7 @@ generateTts = async function generateTtsUnified() {
     sourceType: "tts",
   });
   generateTtsButton.disabled = true;
-  ttsStatus.textContent = "正在提交生成任务...";
+  ttsStatus.textContent = isMusicAsset ? "正在生成 MiniMax Music 音频..." : "正在提交生成任务...";
   renderTtsRail({
     id: "",
     status: "waiting",
@@ -3915,6 +3920,28 @@ generateTts = async function generateTtsUnified() {
     progress: 8,
   });
   try {
+    if (isMusicAsset) {
+      const data = await fetchJson("/api/voice-assets/preview", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          id: voiceAsset.id,
+          model: voiceAsset?.metadata?.target_model || voiceAsset?.metadata?.model || "music-2.6-free",
+          text,
+          force: true,
+        }),
+      });
+      Object.assign(voiceAsset, data.asset || {}, {
+        preview_url: data.preview_url || data.asset?.preview_url || voiceAsset.preview_url || "",
+      });
+      const musicJob = ttsMusicJobFromPreview(voiceAsset, data, text);
+      renderTtsRail(musicJob);
+      showTtsPreview(musicJob);
+      renderTtsVoiceQuickPanel(voiceAsset, { refreshAudio: true, previewMessage: "音乐音频已生成。" });
+      await loadVoiceAssets();
+      ttsStatus.textContent = "MiniMax Music 音频已生成，可以试听并发送到生产线。";
+      return;
+    }
     const data = await fetchJson("/api/tts/generate", {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -3948,6 +3975,8 @@ generateTts = async function generateTtsUnified() {
       voice_id: voiceId,
       format: ttsFormat.value,
     });
+  } finally {
+    if (isMusicAsset) generateTtsButton.disabled = false;
   }
 };
 
