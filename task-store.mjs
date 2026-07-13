@@ -1058,6 +1058,20 @@ export function openTaskStore(baseDir) {
     return normalizeRow(getById.get(Number(id)));
   }
 
+  function hasTaskOutput(task, item) {
+    const action = item.taskAction || task.task_action || "download";
+    const needsTranscript = action === "transcript" || item.onlyTranscript || item.transcriptEnabled;
+    const needsSubtitle = action === "subtitle";
+    const needsAudio = action === "audio" || item.audioEnabled;
+    const needsVideo = action === "download" && !needsTranscript && !needsSubtitle && !needsAudio;
+
+    if (needsTranscript && !(task.txt_path && fs.existsSync(task.txt_path))) return false;
+    if (needsSubtitle && !(task.subtitle_path && fs.existsSync(task.subtitle_path))) return false;
+    if (needsAudio && !(task.audio_path && fs.existsSync(task.audio_path))) return false;
+    if (needsVideo && !(task.video_path && fs.existsSync(task.video_path))) return false;
+    return true;
+  }
+
   function importTasks(items) {
     const summary = {
       requested: items.length,
@@ -1082,13 +1096,20 @@ export function openTaskStore(baseDir) {
         const taskAction = item.taskAction || "download";
         const existing = normalizeRow(getByKindUrl.get(kind, taskAction, item.normalizedUrl));
         if (existing) {
-          const hasDownloadedFile = existing.video_path && fs.existsSync(existing.video_path);
-          if (existing.status === TASK_STATUS.DONE && hasDownloadedFile) {
+          const hasRequiredOutput = hasTaskOutput(existing, item);
+          if (existing.status === TASK_STATUS.DONE && hasRequiredOutput) {
             summary.skippedDownloaded += 1;
           } else {
+            updateTask(existing.id, {
+              status: TASK_STATUS.WAITING,
+              progress: 0,
+              message: "等待重新处理",
+              error: "",
+              completed_at: "",
+            });
             summary.duplicate += 1;
           }
-          summary.duplicates.push(existing);
+          summary.duplicates.push(getTask(existing.id) || existing);
           continue;
         }
 
