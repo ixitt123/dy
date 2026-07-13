@@ -4045,6 +4045,10 @@ async function generateMomentsPostJsonV2(body = {}) {
   const localMaterials = String(body.localMaterials || "").trim();
   const tone = String(body.tone || "普通朋友聊天式分享").trim();
   const intent = String(body.intent || "不强销售的自然分享").trim();
+  const referenceStyle = String(body.referenceStyle || "自动引用").trim();
+  const toneStrategy = momentsToneStrategy(tone);
+  const intentStrategy = momentsIntentStrategy(intent);
+  const referenceStrategy = momentsReferenceStrategy(referenceStyle);
   const providerId = String(body.provider || readSettings().rewrite?.defaultProvider || "").trim();
   const imageCountRule = fixedImageCount
     ? `必须生成 ${fixedImageCount} 张配图。`
