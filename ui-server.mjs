@@ -535,8 +535,10 @@ function normalizeMomentsPublishImagePaths(value = []) {
   const output = [];
   const seen = new Set();
   for (const item of input) {
-    const filePath = path.resolve(String(item || "").trim());
-    if (!filePath || seen.has(filePath.toLowerCase())) continue;
+    const rawPath = String(item || "").trim();
+    if (!rawPath) continue;
+    const filePath = path.resolve(rawPath);
+    if (seen.has(filePath.toLowerCase())) continue;
     const ext = path.extname(filePath).toLowerCase();
     if (!momentsPublishImageExts.has(ext)) {
       throw new Error(`朋友圈图片格式不支持：${path.basename(filePath)}`);
