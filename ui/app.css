@@ -279,6 +279,47 @@ select:focus {
   margin-top: 14px;
 }
 
+.collector-hub {
+  display: grid;
+  gap: 16px;
+}
+
+.collector-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 6px;
+  border: 1px solid #292f3a;
+  border-radius: 8px;
+  background: #11141b;
+}
+
+.collector-tabs button {
+  min-height: 36px;
+  border-color: transparent;
+  background: transparent;
+  color: #9aa6b8;
+}
+
+.collector-tabs button.active {
+  border-color: rgba(112, 89, 255, 0.55);
+  background: rgba(112, 89, 255, 0.18);
+  color: #f5f7fb;
+}
+
+.collector-panel {
+  display: grid;
+  gap: 16px;
+}
+
+.collector-panel[hidden] {
+  display: none !important;
+}
+
+.collector-result-panel {
+  min-height: 220px;
+}
+
 .collector-options {
   display: grid;
   grid-template-columns: repeat(3, minmax(180px, auto)) minmax(140px, 180px);
@@ -5236,6 +5277,20 @@ body[data-active-module="video-output"] .floating-workflow-guide [data-nav="vide
 
 .workspace .local-video-card p {
   color: #9aa6b8;
+}
+
+.collector-panel .local-video-card {
+  margin-top: 0;
+}
+
+.collector-panel .local-video-card h2 {
+  color: #eff2f7;
+}
+
+.placeholder-copy {
+  margin: 0;
+  color: #bac4d2;
+  line-height: 1.75;
 }
 
 .result-head,
