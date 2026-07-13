@@ -1900,8 +1900,6 @@ function setupImageStudio() {
     await Promise.allSettled([
       refreshProjectAssets(),
       refreshProjectReadiness(),
-      typeof loadVideoProductSources === "function" ? loadVideoProductSources() : Promise.resolve(),
-      window.videoOutputModule?.loadVideoProductSources ? window.videoOutputModule.loadVideoProductSources() : Promise.resolve(),
     ]);
     return linked;
   }
@@ -2117,8 +2115,7 @@ function setupImageStudio() {
   function renderResults(results, sourcePrompt = "") {
     const grid = document.getElementById("imageResultsGrid");
     if (!results.length) { grid.innerHTML = '<div class="empty-state">无结果</div>'; return; }
-    const hasSuccess = results.some((item) => item.success && item.assetId);
-    grid.innerHTML = `${hasSuccess ? '<div class="image-result-toolbar"><button class="primary small" type="button" id="importImagesToVideoProduct">一键导入视频成片</button></div>' : ""}${
+    grid.innerHTML = `${
       results.map((r, i) => {
       const safePrompt = String(sourcePrompt || r.prompt || "").replace(/\\/g, "\\\\").replace(/'/g, "\\'");
       if (!r.success) return `<div class="img-card error">
@@ -2141,15 +2138,6 @@ function setupImageStudio() {
         </div>
       </div>`;
     }).join("")}`;
-    document.getElementById("importImagesToVideoProduct")?.addEventListener("click", () => {
-      navigateWorkbench("video-output", { preserveScroll: true });
-      Promise.allSettled([
-        window.videoOutputModule?.loadVideoProductSources?.(),
-        typeof loadVideoProductSources === "function" ? loadVideoProductSources() : Promise.resolve(),
-      ]).then(() => {
-        window.videoOutputModule?.previewVideoProductTimeline?.().catch?.(() => {});
-      });
-    });
   }
 
   async function loadImageAssets() {
@@ -2533,7 +2521,6 @@ function setupV2Settings() {
       const data = await res.json();
       if (!res.ok || data.ok === false) throw new Error(data.message || data.error || `HTTP ${res.status}`);
       if (status) status.textContent = data.message || "测试生成成功。";
-      if (typeof loadVideoProductSources === "function") loadVideoProductSources().catch(() => {});
       if (data.job?.id && typeof waitForSettingsTtsJob === "function") waitForSettingsTtsJob(data.job.id, id);
     } catch (e) {
       if (status) status.textContent = e instanceof Error ? e.message : String(e);
