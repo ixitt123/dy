@@ -1078,7 +1078,6 @@ function rewriteHandoffChoicesMarkup() {
   return [
     ["moments-copy", "朋友圈文案定制"],
     ["tts", "TTS语音"],
-    ["video-output", "视频成片"],
     ["cs1-video", "CS1生成器"],
     ["xiaohei-video", "小黑视频风格生成"],
     ["money-printer", "MoneyPrinter"],
@@ -8182,15 +8181,6 @@ async function init() {
     downloadDirInput.value = status.downloadsDir || "";
     await loadSettings();
     await loadTtsMusicPresets();
-    await loadDirectorConfig();
-    await loadDirectorSources({ preserveText: true });
-    await loadDirectorProjects();
-    await loadVfoConfig();
-    await loadVfoSources();
-    updateVfoSourceMode();
-    await loadVfoProjects();
-    await loadVideoProductSources();
-    await loadVideoProductProjects();
     await loadVoiceAssets({ applyDefault: true });
     restoreUiChoicePreferences({ dispatch: true });
     await loadMomentsPersonas();

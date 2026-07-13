@@ -94,11 +94,11 @@ function nextAction(project) {
     collected: { label: "提取文案", page: "transcript" },
     transcribed: { label: "生成 3 个改写版本", page: "rewrite" },
     rewritten: { label: "生成配音", page: "tts" },
-    voiced: { label: "进入生产线", page: "video-output" },
-    directed: { label: "进入生产线", page: "video-output" },
-    assets_ready: { label: "生成成片草稿", page: "video-output" },
-    draft_ready: { label: "打开剪映并导出", page: "video-output" },
-    exported: { label: "查看成片记录", page: "video-output" },
+    voiced: { label: "选择生产线", page: "tts" },
+    directed: { label: "素材匹配", page: "assets" },
+    assets_ready: { label: "进入保留生产线", page: "xiaohei-video" },
+    draft_ready: { label: "查看输出", page: "assets" },
+    exported: { label: "查看素材", page: "assets" },
   };
   return actions[project.status] || actions.created;
 }
@@ -496,21 +496,15 @@ export function createProjectCenter(baseDir) {
       : Array.isArray(project.selectedTtsAudio?.metadata?.subtitle_timeline)
         ? project.selectedTtsAudio.metadata.subtitle_timeline
         : [];
-    const outputDir = path.join(baseDir, "video-products");
-    let outputReady = true;
-    try {
-      fs.mkdirSync(outputDir, { recursive: true });
-      fs.accessSync(outputDir, fs.constants.W_OK);
-    } catch {
-      outputReady = false;
-    }
+    const outputDir = baseDir;
+    const outputReady = true;
     const checks = [
       { id: "script", label: "文案", ok: hasValue(project.selectedRewriteText || project.transcriptText), ready: "已完成", missing: "缺失", page: "rewrite", action: "选择文案", critical: true },
       { id: "voice", label: "语音", ok: hasValue(project.selectedTtsAudio), ready: "已完成", missing: "缺失", page: "tts", action: "生成语音", critical: true },
-      { id: "subtitle", label: "字幕时间轴", ok: hasValue(project.subtitleTimeline) || hasValue(ttsTimeline), ready: "已完成", missing: "生产线内生成", page: "video-output", action: "生产线生成", critical: false },
+      { id: "subtitle", label: "字幕时间轴", ok: hasValue(project.subtitleTimeline) || hasValue(ttsTimeline), ready: "已完成", missing: "生产线内生成", page: "xiaohei-video", action: "生产线生成", critical: false },
       { id: "assets", label: "素材", ok: mediaAssets.length > 0 && missingAssets === 0, ready: `已完成 · ${mediaAssets.length} 个`, missing: "生产线内匹配", page: "assets", action: "补素材", critical: false },
       { id: "bgm", label: "BGM", ok: hasValue(project.bgm), ready: "已选择", missing: "可不选", page: "assets", action: "选择 BGM", critical: false },
-      { id: "template", label: "剪映模板", ok: !["jianying", "jianying_template"].includes(project.outputMode) || templateAssets.length > 0, ready: ["jianying", "jianying_template"].includes(project.outputMode) ? "已选择" : "当前路线不需要", missing: "未选择", page: "video-output", action: "选择模板", critical: ["jianying", "jianying_template"].includes(project.outputMode) },
+      { id: "template", label: "剪映模板", ok: !["jianying", "jianying_template"].includes(project.outputMode) || templateAssets.length > 0, ready: ["jianying", "jianying_template"].includes(project.outputMode) ? "已选择" : "当前路线不需要", missing: "未选择", page: "assets", action: "选择模板", critical: ["jianying", "jianying_template"].includes(project.outputMode) },
       { id: "output", label: "输出目录", ok: outputReady, ready: "正常", missing: "异常", page: "settings", action: "检查目录", critical: true },
     ].map((item) => ({ ...item, detail: item.ok ? item.ready : item.missing }));
     const blockers = checks.filter((item) => item.critical && !item.ok);
