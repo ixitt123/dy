@@ -48,8 +48,8 @@ export function createMoneyPrinterRoutes({ baseDir, sendJson }) {
         return true;
       }
       const [bgm, materials] = await Promise.all([
-        fetchMptJson(`${status.api.baseUrl}/musics`).catch((error) => ({ ok: false, error: error.message })),
-        fetchMptJson(`${status.api.baseUrl}/video_materials`).catch((error) => ({ ok: false, error: error.message })),
+        fetchMptJson(`${status.api.v1BaseUrl}/musics`).catch((error) => ({ ok: false, error: error.message })),
+        fetchMptJson(`${status.api.v1BaseUrl}/video_materials`).catch((error) => ({ ok: false, error: error.message })),
       ]);
       sendJson(res, 200, {
         ok: true,
@@ -66,7 +66,7 @@ export function createMoneyPrinterRoutes({ baseDir, sendJson }) {
         const status = await buildStatus(defaultRoot);
         if (!status.api.online) throw new Error("MoneyPrinterTurbo API 未运行，请先点击“启动 API”。");
         const payload = buildGeneratePayload(body);
-        const result = await fetchMptJson(`${status.api.baseUrl}/videos`, {
+        const result = await fetchMptJson(`${status.api.v1BaseUrl}/videos`, {
           method: "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify(payload),
@@ -93,7 +93,7 @@ export function createMoneyPrinterRoutes({ baseDir, sendJson }) {
         if (!taskId) throw new Error("缺少 MoneyPrinterTurbo 任务 ID。");
         const status = await buildStatus(defaultRoot);
         if (!status.api.online) throw new Error("MoneyPrinterTurbo API 未运行。");
-        const task = await fetchMptJson(`${status.api.baseUrl}/tasks/${encodeURIComponent(taskId)}`);
+        const task = await fetchMptJson(`${status.api.v1BaseUrl}/tasks/${encodeURIComponent(taskId)}`);
         if (Number(task?.status || 0) !== 200) throw new Error(task?.message || "读取任务失败。");
         sendJson(res, 200, {
           ok: true,
@@ -113,7 +113,7 @@ export function createMoneyPrinterRoutes({ baseDir, sendJson }) {
           sendJson(res, 200, { ok: true, tasks: [], apiOnline: false });
           return true;
         }
-        const result = await fetchMptJson(`${status.api.baseUrl}/tasks?page=1&page_size=20`);
+        const result = await fetchMptJson(`${status.api.v1BaseUrl}/tasks?page=1&page_size=20`);
         sendJson(res, 200, {
           ok: true,
           apiOnline: true,
@@ -154,8 +154,9 @@ async function buildStatus(rootDir) {
   const configExamplePath = path.join(root, "config.example.toml");
   const serverConfig = readServerConfig(fs.existsSync(configPath) ? configPath : configExamplePath);
   const apiBaseUrl = `http://${LOCAL_HOST}:${serverConfig.port || DEFAULT_API_PORT}`;
+  const apiV1BaseUrl = `${apiBaseUrl}/api/v1`;
   const webuiBaseUrl = `http://${LOCAL_HOST}:${DEFAULT_WEBUI_PORT}`;
-  const api = await checkApi(apiBaseUrl);
+  const api = await checkApi(apiV1BaseUrl);
   return {
     root,
     installed,
@@ -165,6 +166,7 @@ async function buildStatus(rootDir) {
     python: pythonVersion(),
     api: {
       baseUrl: apiBaseUrl,
+      v1BaseUrl: apiV1BaseUrl,
       docsUrl: `${apiBaseUrl}/docs`,
       online: api.online,
       message: api.message,
