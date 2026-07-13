@@ -320,17 +320,15 @@ const taskActionLabels = {
   audio: "提取音频",
 };
 const defaultRewriteReference = "痞里带刺、幽默自嘲、生活化观察、少说废话、有冲突、有观点、适合教育招生、让家长有感觉、不要像官方通稿、不要像AI作文。";
-const rewriteDirectionOptions = ["招生引流", "家长焦虑", "单招升学", "暑假班转化", "英语提分", "朋友圈文案", "短视频口播"];
-const rewriteStyleOptions = ["老板风格", "痞里带刺", "接地气", "温和专业", "强冲突", "强转化"];
+const rewriteDirectionOptions = ["短视频口播", "招生引流", "朋友圈文案", "视频成片口播稿", "知识解释", "成交转化"];
+const rewriteStyleOptions = ["小黑漫画解释类", "口播爆款", "知识解释", "朋友圈图文", "强钩子转化", "温和专业"];
 const rewriteHumanizeOptions = ["关闭", "普通", "强", "极强"];
 const rewriteVersionOptions = [
-  { key: "strongHook", name: "强钩子版", direction: "招生引流", wordCount: "160字左右" },
-  { key: "parentAnxiety", name: "家长焦虑版", direction: "家长焦虑", wordCount: "160字左右" },
-  { key: "shortVideoScript", name: "短视频口播版", direction: "短视频口播", wordCount: "160字左右" },
-  { key: "moments", name: "朋友圈版", direction: "朋友圈文案", wordCount: "160字左右" },
-  { key: "conversion", name: "成交转化版", direction: "暑假班转化", wordCount: "160字左右" },
+  { key: "hookVersion", name: "成品 1：强钩子版", direction: "短视频口播", wordCount: "120-180字" },
+  { key: "resonanceVersion", name: "成品 2：共鸣解释版", direction: "知识解释", wordCount: "120-180字" },
+  { key: "conversionVersion", name: "成品 3：转化行动版", direction: "成交转化", wordCount: "120-180字" },
 ];
-const defaultRewriteVersionCount = 1;
+const defaultRewriteVersionCount = 3;
 const maxRewriteVersionCount = 50;
 
 function setBusy(label) {
@@ -564,8 +562,8 @@ function rewriteProviderOptionsMarkup(selected = rewriteProvider?.value || "dash
 function defaultRewriteVersionSettings() {
   return {
     provider: rewriteProvider?.value || "deepseek",
-    style: rewriteStyle?.value || "痞里带刺",
-    referenceStyle: rewriteReference?.value || defaultRewriteReference,
+    style: rewriteStyle?.value || "小黑漫画解释类",
+    referenceStyle: buildRewriteReferenceStyle(),
     params: rewriteParams(),
     humanizeLevel: rewriteHumanizeLevel?.value || "极强",
   };
@@ -581,9 +579,36 @@ function rewriteVersionAt(index) {
     key: `version-${index + 1}`,
     name: `版本 ${index + 1}`,
     direction: rewriteDirection.value || "短视频口播",
-    wordCount: "160字左右",
+    wordCount: rewriteWordRange?.value || "120-180字",
   };
   return rewriteVersionDrafts.get(base.key) || { ...base, ...defaultRewriteVersionSettings(), content: "" };
+}
+
+function rewritePresetContext() {
+  return {
+    style: rewriteStyle?.value || "小黑漫画解释类",
+    platform: rewriteTargetPlatform?.value || "抖音",
+    wordRange: rewriteWordRange?.value || "120-180字",
+    tone: rewriteTonePreset?.value || "接地气、有观点",
+    persona: rewritePersona?.value || "短视频内容策划",
+    purpose: rewriteDirection?.value || rewritePurpose?.value || "短视频口播",
+  };
+}
+
+function buildRewriteReferenceStyle() {
+  const preset = rewritePresetContext();
+  const custom = rewriteReference?.value?.trim() || defaultRewriteReference;
+  return [
+    custom,
+    "",
+    "生成基础参考 dbskill 方法，但只输出可直接发布的中文文案：",
+    "1. 内容诊断：先把原文的核心事情、受众、矛盾和传播价值搞清楚，再改写。",
+    "2. 钩子设计：开头要有话题、悬念或反差，不要第一句就把答案讲完。",
+    "3. 共鸣机制：优先解除用户不敢说的沉默、点出真实动机和立场框架。",
+    "4. 口播流畅：短句、强节奏、少书面语，每一段只讲一个意思。",
+    "5. 去AI味检查：避免过度完整、空泛排比和万能鸡汤，保留人话里的锋利和停顿。",
+    `当前参数：风格=${preset.style}；平台=${preset.platform}；字数=${preset.wordRange}；语气=${preset.tone}；人设=${preset.persona}；用途=${preset.purpose}。`,
+  ].join("\n");
 }
 
 function countRewriteCharacters(value) {
@@ -768,26 +793,41 @@ function renderReferenceExamples(examples = []) {
 }
 
 function rewriteParams() {
+  const preset = rewritePresetContext();
   return {
     toneLevel: Number(rewriteToneLevel.value || 8),
     conflictLevel: Number(rewriteConflictLevel.value || 7),
     emotionLevel: Number(rewriteEmotionLevel.value || 7),
     salesLevel: Number(rewriteSalesLevel.value || 6),
     humanizeLevel: rewriteHumanizeLevel.value || "极强",
+    targetPlatform: preset.platform,
+    wordRange: preset.wordRange,
+    tonePreset: preset.tone,
+    persona: preset.persona,
+    purpose: preset.purpose,
+    rewriteStylePreset: preset.style,
   };
 }
 
 function rewritePayloadForVersion(id, version, extra = {}) {
+  const preset = rewritePresetContext();
+  const referenceStyle = version.referenceStyle || buildRewriteReferenceStyle();
   return {
     id,
     provider: version.provider || rewriteProvider.value,
-    direction: version.direction || rewriteDirection.value,
-    style: version.style || rewriteStyle.value,
-    referenceStyle: version.referenceStyle || rewriteReference.value,
+    direction: version.direction || preset.purpose,
+    style: version.style || preset.style,
+    referenceStyle,
     params: version.params || rewriteParams(),
     humanizeLevel: version.humanizeLevel || rewriteHumanizeLevel.value || "极强",
     referenceExamples: collectReferenceExamplesText(),
-    versionSpecs: [version],
+    versionSpecs: [{
+      ...version,
+      direction: version.direction || preset.purpose,
+      style: version.style || preset.style,
+      wordCount: version.wordCount || preset.wordRange,
+      referenceStyle,
+    }],
     text: rewriteOriginal.value,
     ...extra,
   };
