@@ -17,7 +17,6 @@ import { createSettingsCenter } from "./server/core/settings-center.js";
 import { createTaskCenterV2 } from "./server/core/task-center.js";
 import { providerRegistry } from "./server/core/provider-registry.js";
 import { createAnalysisEngine } from "./server/core/analysis-engine.js";
-import { createLegacyJianyingExporter } from "./server/core/jianying-exporter.js";
 import { PipelineRunner } from "./server/core/pipeline-bus/PipelineRunner.js";
 import { PipelineState } from "./server/core/pipeline-bus/PipelineState.js";
 import { PIPELINE_EVENTS } from "./server/core/pipeline-bus/PipelineEvents.js";
@@ -198,9 +197,6 @@ const taskCenter = createTaskCenterV2(__dirname, {
 
 // 统一内容分析引擎
 const analysisEngine = createAnalysisEngine(__dirname);
-
-// 剪映导出器
-const jianyingExporter = createLegacyJianyingExporter(__dirname);
 
 // P0 流水线执行器
 const pipelineState = new PipelineState(__dirname);
@@ -7441,74 +7437,6 @@ const server = http.createServer(async (req, res) => {
         } else {
           sendJson(res, 400, { ok: false, error: `未内置handler: ${body.stageId}` });
         }
-        return;
-      }
-
-      sendJson(res, 404, { ok: false });
-      return;
-    }
-
-    // ===== 剪映导出 API =====
-    if (url.pathname.startsWith("/api/jianying")) {
-      const route = url.pathname.replace("/api/jianying", "").replace(/^\//, "");
-
-      if (req.method === "GET" && route === "local-config") {
-        const settings = readSettings();
-        sendJson(res, 200, {
-          ok: true,
-          appPath: settings.jianyingAppPath || "",
-          draftDir: settings.jianyingDraftDir || "",
-        });
-        return;
-      }
-
-      if (req.method === "POST" && route === "local-config") {
-        const body = await readJsonBody(req);
-        try {
-          const appPath = String(body.appPath || body.jianyingAppPath || "").trim();
-          const draftDir = String(body.draftDir || body.jianyingDraftDir || "").trim();
-          if (appPath && (!fs.existsSync(appPath) || !fs.statSync(appPath).isFile())) {
-            throw new Error("剪映程序路径不存在，请填写 JianyingPro.exe 的完整路径。");
-          }
-          if (draftDir) fs.mkdirSync(path.resolve(draftDir), { recursive: true });
-          const settings = readSettings();
-          settings.jianyingAppPath = appPath;
-          settings.jianyingDraftDir = draftDir ? path.resolve(draftDir) : "";
-          settings.jianying = {
-            appPath: settings.jianyingAppPath,
-            draftDir: settings.jianyingDraftDir,
-          };
-          writeSettings(settings);
-          sendJson(res, 200, {
-            ok: true,
-            appPath: settings.jianyingAppPath,
-            draftDir: settings.jianyingDraftDir,
-          });
-        } catch (e) {
-          sendJson(res, 400, { ok: false, error: e.message, message: e.message });
-        }
-        return;
-      }
-
-      if (req.method === "POST" && route === "export") {
-        const body = await readJsonBody(req);
-        try {
-          const result = jianyingExporter.exportDraft(body);
-          sendJson(res, 200, { ok: true, ...result });
-        } catch (e) {
-          sendJson(res, 400, { ok: false, error: e.message });
-        }
-        return;
-      }
-
-      if (req.method === "GET" && route === "list") {
-        sendJson(res, 200, { ok: true, drafts: jianyingExporter.listDrafts() });
-        return;
-      }
-
-      if (req.method === "POST" && route === "delete") {
-        const body = await readJsonBody(req);
-        sendJson(res, 200, jianyingExporter.deleteDraft(body.id || ""));
         return;
       }
 
