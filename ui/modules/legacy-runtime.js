@@ -1600,12 +1600,13 @@ function getTaskDownloadUrl(task) {
 
 async function ensureProviderConfigured(providerId, { title = "API 配置", reason = "", model = "", baseUrl = "" } = {}) {
   const id = String(providerId || "").trim();
+  const scope = String(arguments[1]?.scope || "").trim();
   if (!id) return false;
   while (true) {
     const localCheck = await fetchJson("/api/settings/require-provider", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ id, setDefault: true, ...(model ? { model } : {}), ...(baseUrl ? { baseUrl } : {}) }),
+      body: JSON.stringify({ id, setDefault: true, ...(scope ? { scope } : {}), ...(model ? { model } : {}), ...(baseUrl ? { baseUrl } : {}) }),
     }).catch((error) => ({ ok: false, message: error instanceof Error ? error.message : String(error) }));
     if (localCheck.ok) {
       await loadSettings().catch(() => {});
@@ -1634,6 +1635,7 @@ async function ensureProviderConfigured(providerId, { title = "API 配置", reas
       apiKey: apiKey.trim(),
       setDefault: true,
     };
+    if (scope) body.scope = scope;
     if (model) body.model = model;
     if (baseUrl) body.baseUrl = baseUrl;
 
@@ -2182,6 +2184,7 @@ async function ensureTtsProviderConfigured() {
     title: "TTS 语音生成",
     reason: "生成语音需要当前选择的 TTS 服务可用。",
     model: ttsModel?.value?.trim() || "",
+    scope: "tts",
   });
 }
 
