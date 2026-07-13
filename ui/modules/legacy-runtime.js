@@ -1677,7 +1677,12 @@ function loadMomentsDraft() {
 
 function momentsPromptText(item) {
   const negative = item.negative_prompt ? `\n\n负面提示词：${item.negative_prompt}` : "";
-  const material = item.local_material_hint ? `\n\n本地素材参考：${item.local_material_hint}` : "";
+  const materialHint = String(item.local_material_hint || "").trim();
+  const hasRealMaterial = materialHint
+    && !/^无本地素材/i.test(materialHint)
+    && !/无本地素材/.test(materialHint)
+    && !/暂无本地素材/.test(materialHint);
+  const material = hasRealMaterial ? `\n\n本地素材参考：${materialHint}` : "";
   return `${item.prompt || ""}${material}${negative}`.trim();
 }
 
