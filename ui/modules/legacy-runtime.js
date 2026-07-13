@@ -3188,6 +3188,32 @@ function ttsProgressValue(job = {}) {
   return Number(job.progress || 0) || 8;
 }
 
+function setTtsMainProgress(percent = 0, label = "") {
+  if (!ttsMainProgress) return;
+  const value = Math.max(0, Math.min(100, Math.round(Number(percent || 0))));
+  ttsMainProgress.hidden = false;
+  if (ttsMainProgressLabel) ttsMainProgressLabel.textContent = label || "正在生成音频";
+  if (ttsMainProgressPercent) ttsMainProgressPercent.textContent = `${value}%`;
+  if (ttsMainProgressFill) ttsMainProgressFill.style.width = `${value}%`;
+  if (ttsMainProgressBar) ttsMainProgressBar.setAttribute("aria-valuenow", String(value));
+}
+
+function hideTtsMainProgress() {
+  if (ttsMainProgress) ttsMainProgress.hidden = true;
+}
+
+function updateTtsMainProgressFromJob(job = {}) {
+  const value = ttsProgressValue(job);
+  const label = job.status === "completed"
+    ? "生成完成"
+    : job.status === "failed"
+      ? "生成失败"
+      : job.status === "processing"
+        ? "正在生成音频"
+        : "任务排队中";
+  setTtsMainProgress(value, label);
+}
+
 function renderTtsRail(job = activeTtsRailJob) {
   if (!railCurrentTask || !job) return;
   activeTtsRailJob = job;
@@ -3382,9 +3408,11 @@ async function waitForTtsJob(jobId) {
   const data = await fetchJson(`/api/tts/job?id=${encodeURIComponent(jobId)}`);
   const job = data.job;
   renderTtsRail(job);
+  updateTtsMainProgressFromJob(job);
   if (job.status === "completed") {
     generateTtsButton.disabled = false;
     ttsStatus.textContent = "生成完成，可以试听。";
+    setTtsMainProgress(100, "生成完成");
     showTtsPreview(job);
     await window.videoProjects?.linkCurrent?.("tts", job.id, job.voice_name || `配音 #${job.id}`, {
       ...job,
@@ -3398,11 +3426,13 @@ async function waitForTtsJob(jobId) {
   if (job.status === "failed") {
     generateTtsButton.disabled = false;
     ttsStatus.textContent = job.error || "生成失败。";
+    updateTtsMainProgressFromJob(job);
     renderTtsRail(job);
     await refreshTtsJobs();
     return;
   }
   ttsStatus.textContent = job.status === "processing" ? "正在生成音频..." : "任务已进入队列...";
+  updateTtsMainProgressFromJob(job);
   ttsPollTimer = setTimeout(() => {
     waitForTtsJob(jobId).catch((error) => {
       generateTtsButton.disabled = false;
