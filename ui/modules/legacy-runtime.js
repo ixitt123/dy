@@ -3503,10 +3503,12 @@ async function generateTts() {
       }),
     });
     renderTtsRail(data.job);
+    updateTtsMainProgressFromJob(data.job);
     await waitForTtsJob(data.job.id);
   } catch (error) {
     generateTtsButton.disabled = false;
     ttsStatus.textContent = error instanceof Error ? error.message : String(error);
+    setTtsMainProgress(100, "生成失败");
     renderTtsRail({
       ...(activeTtsRailJob || {}),
       status: "failed",
@@ -4018,6 +4020,7 @@ generateTts = async function generateTtsUnified() {
   });
   try {
     if (isMusicAsset) {
+      setTtsMainProgress(35, "正在生成音乐音频");
       const data = await fetchJson("/api/voice-assets/preview", {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -4033,6 +4036,7 @@ generateTts = async function generateTtsUnified() {
       });
       const musicJob = ttsMusicJobFromPreview(voiceAsset, data, text);
       renderTtsRail(musicJob);
+      setTtsMainProgress(100, "生成完成");
       showTtsPreview(musicJob);
       renderTtsVoiceQuickPanel(voiceAsset, { refreshAudio: true, previewMessage: "音乐音频已生成。" });
       await loadVoiceAssets();
@@ -4059,11 +4063,13 @@ generateTts = async function generateTtsUnified() {
       }),
     });
     renderTtsRail(data.job);
+    updateTtsMainProgressFromJob(data.job);
     await waitForTtsJob(data.job.id);
     await loadVoiceAssets();
   } catch (error) {
     generateTtsButton.disabled = false;
     ttsStatus.textContent = error instanceof Error ? error.message : String(error);
+    setTtsMainProgress(100, "生成失败");
     renderTtsRail({
       ...(activeTtsRailJob || {}),
       status: "failed",
