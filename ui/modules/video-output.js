@@ -604,7 +604,8 @@ export async function syncSelectionsToProject({ preview = state.preview } = {}) 
   const audio = state.sources?.audioJobs?.find((item) => String(item.id) === String(audioId));
   if (audio) {
     if (audio.text) await window.videoProjects.linkCurrent("selected_rewrite", `tts-text-${audio.id}`, "当前配音文案", { text: audio.text, source: "tts" });
-    await window.videoProjects.linkCurrent("tts", audio.id, audio.voice_name || `配音 #${audio.id}`, { ...audio, source: "local_upload" });
+    const audioTitle = audio.title || audio.seo_title || audio.publish_title || audio.platform_titles?.douyin || audio.voice_name || `配音 #${audio.id}`;
+    await window.videoProjects.linkCurrent("tts", audio.id, audioTitle, { ...audio, title: audioTitle, source: "local_upload" });
   }
   const directorId = document.querySelector("#videoProductDirector")?.value || "";
   const director = state.sources?.directors?.find((item) => String(item.id) === String(directorId));

@@ -3605,10 +3605,11 @@ function applyTtsToMoneyPrinter(payload = {}) {
 async function applyTtsToXiaohei(payload = {}) {
   const project = await ensureVideoProjectForTts(payload);
   const job = ttsConsumerJob(payload);
+  const title = ttsHandoffTitle(payload);
   const handoff = {
     projectId: project?.id || "",
-    projectTitle: project?.title || "",
-    title: project?.title || ttsHandoffTitle(payload),
+    projectTitle: title || project?.title || "",
+    title,
     text: payload.text || "",
     ttsJob: job,
     files: payload.files || [],
@@ -3736,7 +3737,7 @@ async function waitForTtsJob(jobId) {
     setTtsMainProgress(100, "生成完成");
     showTtsPreview(job);
     const payload = confirmedTtsAudioPayload(job);
-    if (payload) await window.videoProjects?.linkCurrent?.("tts", payload.id, payload.voice_name || `配音 #${payload.id}`, payload);
+    if (payload) await window.videoProjects?.linkCurrent?.("tts", payload.id, ttsHandoffTitle(payload), payload);
     await refreshTtsJobs();
     return;
   }
@@ -7004,7 +7005,7 @@ document.querySelector("#sendTtsToVideoProduct")?.addEventListener("click", asyn
     ttsStatus.textContent = "请先生成并完成一条语音。";
     return;
   }
-  await window.videoProjects?.linkCurrent?.("tts", payload.id, payload.voice_name || `配音 #${payload.id}`, payload);
+  await window.videoProjects?.linkCurrent?.("tts", payload.id, ttsHandoffTitle(payload), payload);
   window.workbenchNavigate?.("vfo", { preserveScroll: true });
   if (window.videoOutputModule?.loadVideoProductSources) await window.videoOutputModule.loadVideoProductSources();
   else await loadVideoProductSources({ preferredAudioId: payload.id });
