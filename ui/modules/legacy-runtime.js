@@ -238,6 +238,8 @@ const ttsHistory = document.querySelector("#ttsHistory");
 const momentsCopyInput = document.querySelector("#momentsCopyInput");
 const momentsCopyStatus = document.querySelector("#momentsCopyStatus");
 const momentsPersonaSelect = document.querySelector("#momentsPersonaSelect");
+const addMomentsPersonaBtn = document.querySelector("#addMomentsPersona");
+const momentsPersonaEditor = document.querySelector("#momentsPersonaEditor");
 const momentsPersonaName = document.querySelector("#momentsPersonaName");
 const momentsPersonaText = document.querySelector("#momentsPersonaText");
 const momentsPersonaStatus = document.querySelector("#momentsPersonaStatus");
@@ -1697,20 +1699,6 @@ function renderMomentsImages(images = []) {
   }).join("");
 }
 
-function renderMomentsMaterialList(materials = []) {
-  if (!momentsMaterialList) return;
-  if (!materials.length) {
-    momentsMaterialList.innerHTML = "";
-    return;
-  }
-  momentsMaterialList.innerHTML = materials.map((material) => `
-    <span class="moments-material-chip" title="${escapeHtml(material.filePath || "")}">
-      ${material.imageUrl ? `<img src="${escapeHtml(material.imageUrl)}" alt="${escapeHtml(material.name || "素材")}" />` : ""}
-      <span>${escapeHtml(material.name || "素材")}</span>
-    </span>
-  `).join("");
-}
-
 function fileToDataUrl(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -1743,30 +1731,6 @@ function appendMaterialText(target, material) {
   target.value = current ? `${current}\n${line}` : line;
   target.dispatchEvent(new Event("input", { bubbles: true }));
   target.dispatchEvent(new Event("change", { bubbles: true }));
-}
-
-async function uploadGlobalMomentsMaterials(files) {
-  const list = [...(files || [])];
-  if (!list.length) return;
-  if (momentsMaterialStatus) momentsMaterialStatus.textContent = `正在上传 ${list.length} 张素材...`;
-  const uploaded = [];
-  try {
-    for (const file of list) {
-      const material = await uploadMomentsMaterial(file);
-      uploaded.push(material);
-      appendMaterialText(momentsLocalMaterials, material);
-    }
-    renderMomentsMaterialList(uploaded);
-    saveMomentsDraft();
-    if (momentsMaterialStatus) momentsMaterialStatus.textContent = `已上传 ${uploaded.length} 张素材，并写入素材说明。`;
-    setMomentsStatus(`已上传 ${uploaded.length} 张本地图片素材。`, "success");
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    if (momentsMaterialStatus) momentsMaterialStatus.textContent = message;
-    setMomentsStatus(message, "error");
-  } finally {
-    if (momentsMaterialInput) momentsMaterialInput.value = "";
-  }
 }
 
 async function uploadPromptMomentsMaterial(index, file) {
@@ -6224,6 +6188,14 @@ momentsPersonaSelect?.addEventListener("change", () => {
   setMomentsPersonaStatus("已切换人设。");
 });
 
+addMomentsPersonaBtn?.addEventListener("click", () => {
+  if (momentsPersonaName) momentsPersonaName.value = "";
+  if (momentsPersonaText) momentsPersonaText.value = "";
+  if (momentsPersonaEditor) momentsPersonaEditor.open = true;
+  setMomentsPersonaStatus("正在添加新人设，填写后点击“保存人设”。");
+  momentsPersonaName?.focus();
+});
+
 document.querySelector("#saveMomentsPersona")?.addEventListener("click", () => {
   saveMomentsPersona();
 });
@@ -6251,20 +6223,22 @@ momentsImagePromptList?.addEventListener("click", (event) => {
   if (!button) return;
   const index = Number(button.dataset.index || 0);
   const action = button.dataset.momentsAction || "";
-  if (action === "copy-prompt") {
-    const card = button.closest(".moments-prompt-card");
-    const text = card?.querySelector(".moments-prompt-text")?.value.trim() || "";
-    if (!text) {
-      setMomentsStatus("当前配图没有提示词。", "warning");
-      return;
-    }
-    navigator.clipboard.writeText(text)
-      .then(() => setMomentsStatus(`已复制配图 ${index + 1} 的提示词。`, "success"))
-      .catch((error) => setMomentsStatus(error instanceof Error ? error.message : String(error), "error"));
+  if (action === "choose-material") {
+    button.closest(".moments-prompt-card")?.querySelector(`[data-moments-material-file="${index}"]`)?.click();
   }
   if (action === "generate-image") {
     generateMomentsImage(index);
   }
+});
+
+momentsImagePromptList?.addEventListener("change", (event) => {
+  const input = event.target.closest("[data-moments-material-file]");
+  if (!input) return;
+  const index = Number(input.dataset.momentsMaterialFile || 0);
+  const file = input.files?.[0] || null;
+  uploadPromptMomentsMaterial(index, file).finally(() => {
+    input.value = "";
+  });
 });
 
 [
