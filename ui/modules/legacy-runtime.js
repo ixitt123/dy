@@ -1909,6 +1909,55 @@ async function generateAllMomentsImages() {
   if (generateMomentsImagesBtn) generateMomentsImagesBtn.disabled = false;
 }
 
+function addMomentsPublishPath(paths, value) {
+  const text = String(value || "").trim();
+  if (!text) return;
+  paths.add(text);
+}
+
+function collectMomentsPublishImages() {
+  const paths = new Set();
+  for (const image of currentMomentsResult?.generatedImages || []) {
+    addMomentsPublishPath(paths, image.imagePath || image.filePath || image.path);
+  }
+  for (const chip of document.querySelectorAll(".moments-material-chip[title]")) {
+    addMomentsPublishPath(paths, chip.getAttribute("title"));
+  }
+  for (const textarea of document.querySelectorAll(".moments-prompt-text")) {
+    const text = textarea.value || "";
+    for (const match of text.matchAll(/[A-Za-z]:\\[^\r\n）)]+/g)) {
+      addMomentsPublishPath(paths, match[0]);
+    }
+  }
+  return [...paths];
+}
+
+async function publishMomentsToWechat() {
+  const text = (momentsPostOutput?.value || momentsCopyInput?.value || "").trim();
+  if (!text) {
+    setMomentsStatus("请先生成或填写朋友圈文案成品。", "warning");
+    return;
+  }
+  const imagePaths = collectMomentsPublishImages();
+  setMomentsStatus(`正在调用微信客户端发布朋友圈：${imagePaths.length} 张图片...`);
+  if (publishMomentsWechatBtn) publishMomentsWechatBtn.disabled = true;
+  try {
+    const data = await fetchJson("/api/moments/publish-wechat", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        text,
+        imagePaths,
+      }),
+    });
+    setMomentsStatus(data.message || `已提交微信朋友圈发布：${imagePaths.length} 张图片。`, "success");
+  } catch (error) {
+    setMomentsStatus(error instanceof Error ? error.message : String(error), "error");
+  } finally {
+    if (publishMomentsWechatBtn) publishMomentsWechatBtn.disabled = false;
+  }
+}
+
 async function ensureTranscriptProvidersConfigured() {
   const textProviderId = rewriteProvider?.value || "dashscope";
   await ensureProviderConfigured(textProviderId, {
@@ -6219,6 +6268,10 @@ copyMomentsPromptsBtn?.addEventListener("click", () => {
 
 generateMomentsImagesBtn?.addEventListener("click", () => {
   generateAllMomentsImages();
+});
+
+publishMomentsWechatBtn?.addEventListener("click", () => {
+  publishMomentsToWechat();
 });
 
 momentsImagePromptList?.addEventListener("click", (event) => {

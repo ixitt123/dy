@@ -47,6 +47,8 @@ const rewritesDir = path.join(__dirname, "rewrites");
 const personasDir = path.join(__dirname, "personas");
 const momentsPersonasPath = path.join(personasDir, "moments-personas.json");
 const momentsMaterialsDir = path.join(__dirname, "assets", "moments-materials");
+const momentsPublishDir = path.join(__dirname, ".data", "moments-publish");
+const wechatMomentsPublisherScript = path.join(__dirname, "scripts", "wechat_moments_publish.py");
 const referenceExamplesPath = path.join(__dirname, "reference_examples.json");
 const defaultDownloadsDir = path.join(__dirname, "downloads");
 const localMediaDir = path.join(__dirname, "local-media");
@@ -2291,6 +2293,8 @@ function isInsideManagedFilePath(filePath) {
     vfoService.outputDirs.assetPackagesDir,
     vfoService.outputDirs.vfoDir,
     videoProductService.outputRoot,
+    momentsMaterialsDir,
+    path.join(__dirname, "image-assets"),
     path.join(__dirname, "jianying-exports"),
     path.join(__dirname, ".data", "cs1-video-maker"),
   ].map((item) => path.resolve(item));
