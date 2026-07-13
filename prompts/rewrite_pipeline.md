@@ -43,6 +43,19 @@ The rewritten copy must stay about the same subject as the Original Text.
 - Humanize level: {{humanize_level}}
 - Output boxes: {{version_specs}}
 
+## Professional Preset Contract
+
+The selected preset is not decoration. It must visibly affect the output:
+- Structure goal: {{structure_goal}}
+- Visible difference requirement: {{visible_difference}}
+- Forbidden inventions: {{forbidden_inventions}}
+- Target platform: {{target_platform}}
+- Persona: {{persona}}
+- Tone preset: {{tone_preset}}
+- Purpose: {{purpose}}
+
+You must make the structure and voice clearly match this contract while preserving the factual core.
+
 ## Revision Instruction
 
 {{revision_instruction}}
@@ -66,7 +79,7 @@ Step 2: Extract the original structure:
 - solution
 - cta
 
-Step 3: Rebuild the structure according to the rewrite direction without changing the factual core.
+Step 3: Rebuild the structure according to the selected Professional Preset Contract without changing the factual core.
 
 Step 4: Inject selected style profile.
 
@@ -78,6 +91,7 @@ Step 7: Run a fidelity check before output.
 - Every version must be traceable to the Original Text.
 - If a sentence cannot be supported by the Original Text, delete or rewrite it.
 - Do not output generic education, enrollment, parent, school, or teacher copy unless the Original Text is actually about that.
+- Confirm the preset made a visible structural and tonal difference. If not, rewrite again before output.
 
 Step 8: Output exactly the selected versions in Output boxes.
 - Use each selected version key exactly.
