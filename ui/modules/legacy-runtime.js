@@ -339,6 +339,24 @@ const ttsPitchValue = document.querySelector("#ttsPitchValue");
 const ttsStylePrompt = document.querySelector("#ttsStylePrompt");
 const generateTtsButton = document.querySelector("#generateTts");
 const ttsStatus = document.querySelector("#ttsStatus");
+const ttsMainProgress = document.createElement("div");
+ttsMainProgress.className = "tts-main-progress";
+ttsMainProgress.id = "ttsMainProgress";
+ttsMainProgress.hidden = true;
+ttsMainProgress.innerHTML = `
+  <div class="tts-main-progress-meta">
+    <span id="ttsMainProgressLabel">准备生成</span>
+    <strong id="ttsMainProgressPercent">0%</strong>
+  </div>
+  <div class="tts-main-progress-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+    <i></i>
+  </div>
+`;
+ttsStatus?.after(ttsMainProgress);
+const ttsMainProgressLabel = ttsMainProgress.querySelector("#ttsMainProgressLabel");
+const ttsMainProgressPercent = ttsMainProgress.querySelector("#ttsMainProgressPercent");
+const ttsMainProgressBar = ttsMainProgress.querySelector(".tts-main-progress-bar");
+const ttsMainProgressFill = ttsMainProgress.querySelector(".tts-main-progress-bar i");
 const ttsPreview = document.querySelector("#ttsPreview");
 const ttsPreviewTitle = document.querySelector("#ttsPreviewTitle");
 const ttsPreviewMeta = document.querySelector("#ttsPreviewMeta");
