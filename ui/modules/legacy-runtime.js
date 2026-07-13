@@ -952,6 +952,7 @@ function renderReferenceExamples(examples = []) {
 
 function rewriteParams() {
   const preset = rewritePresetContext();
+  const plan = rewritePlanPresets[preset.style] || rewritePlanPresets["保留原意强化表达"];
   return {
     toneLevel: Number(rewriteToneLevel.value || 8),
     conflictLevel: Number(rewriteConflictLevel.value || 7),
@@ -964,6 +965,9 @@ function rewriteParams() {
     persona: preset.persona,
     purpose: preset.purpose,
     rewriteStylePreset: preset.style,
+    structureGoal: plan.structure,
+    visibleDifference: plan.mustShow,
+    forbiddenInventions: plan.avoid,
   };
 }
 
