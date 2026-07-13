@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { createTtsProvider } from "../tts/providers/index.js";
+import { MINIMAX_MUSIC_MODEL, MINIMAX_MUSIC_PRESETS, minimaxMusicPresetFromVoiceId, minimaxMusicPresetToVoiceAsset } from "../tts/minimax-music-presets.js";
 
 const MAX_SAMPLE_BYTES = 20 * 1024 * 1024;
 const CLONE_PREVIEW_TEXT = "你好，这是一段克隆音色试听。请用自然、清晰、有交流感的方式讲述，重点明确，节奏舒适。";
@@ -17,6 +18,63 @@ const MIME_EXTENSIONS = {
 
 const VISIBLE_TTS_PROVIDER_IDS = ["aliyun_bailian", "minimax"];
 const DEFAULT_VOICE_PREVIEW_TEXT = "你好，这是当前音色试听。表达自然，节奏清楚，重点明确。";
+
+function minimaxEndpoint(baseUrl, pathname) {
+  const base = String(baseUrl || "https://api.minimaxi.com").replace(/\/+$/, "");
+  const suffix = pathname.startsWith("/") ? pathname : `/${pathname}`;
+  return base.endsWith("/v1") ? `${base}${suffix.replace(/^\/v1(?=\/|$)/, "")}` : `${base}${suffix}`;
+}
+
+function parseJsonObject(raw) {
+  try {
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+}
+
+function redactSecret(value, secret) {
+  const text = String(value || "");
+  return secret ? text.split(secret).join("[REDACTED]") : text;
+}
+
+function minimaxMusicError(status, data, raw, apiKey) {
+  const code = Number(data?.base_resp?.status_code || data?.status_code || 0);
+  const message = String(data?.base_resp?.status_msg || data?.message || data?.error?.message || raw || "").trim();
+  if (status === 401 || status === 403 || /unauthorized|invalid.*key|鉴权|密钥/i.test(message)) {
+    return "MiniMax：API Key 无效或未授权音乐生成。";
+  }
+  if (/balance|quota|insufficient|余额|额度|欠费/i.test(message)) return "MiniMax：余额不足或音乐生成额度不可用。";
+  if (/model/i.test(message)) return `MiniMax Music：模型不可用。${message ? ` ${message}` : ""}`;
+  const fallback = code || status ? `MiniMax Music 请求失败（${status || code}）：${message}` : "MiniMax Music 请求失败。";
+  return redactSecret(fallback, apiKey);
+}
+
+function formatMusicLyrics(text, preset = {}) {
+  const clean = String(text || "").replace(/\r\n/g, "\n").replace(/[ \t]+/g, " ").trim();
+  if (!clean) return "";
+  if (/^\s*\[(Intro|Verse|Pre Chorus|Chorus|Interlude|Bridge|Outro|Post Chorus|Transition|Break|Hook|Build Up|Inst|Solo)\]/im.test(clean)) {
+    return clean.slice(0, 3500);
+  }
+  const lines = clean
+    .split(/(?<=[。！？!?；;])|\n+/u)
+    .map((item) => item.replace(/[。！？!?；;]+$/u, "").trim())
+    .filter(Boolean)
+    .slice(0, 16);
+  if (!lines.length) return "";
+  const hook = lines[0].length <= 26 ? lines[0] : `${lines[0].slice(0, 24)}...`;
+  const midpoint = Math.max(1, Math.ceil(lines.length / 2));
+  return [
+    "[Intro]",
+    hook,
+    "[Verse]",
+    ...lines.slice(0, midpoint),
+    "[Chorus]",
+    ...(lines.slice(midpoint).length ? lines.slice(midpoint) : [preset.outro || hook]),
+    "[Outro]",
+    preset.outro || hook,
+  ].join("\n").slice(0, 3500);
+}
 
 function safeJson(value, fallback) {
   try {
@@ -187,6 +245,9 @@ export function createVoiceAssetService({ baseDir, taskStore, ttsService, getSet
   function ensurePresetAssets() {
     for (const providerId of VISIBLE_TTS_PROVIDER_IDS) {
       ttsService.listVoices(providerId);
+    }
+    for (const preset of MINIMAX_MUSIC_PRESETS) {
+      taskStore.upsertVoice(minimaxMusicPresetToVoiceAsset(preset));
     }
   }
 
