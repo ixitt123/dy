@@ -15,6 +15,8 @@ const MIME_EXTENSIONS = {
   "audio/x-m4a": ".m4a",
 };
 
+const VISIBLE_TTS_PROVIDER_IDS = ["aliyun_bailian", "minimax"];
+
 function safeJson(value, fallback) {
   try {
     return JSON.parse(value || "");
@@ -182,16 +184,31 @@ export function createVoiceAssetService({ baseDir, taskStore, ttsService, getSet
   }
 
   function ensurePresetAssets() {
-    const settings = getSettings() || {};
-    const tts = settings.tts || {};
-    const providers = [
-      String(tts.default_provider || ""),
-      "aliyun_bailian",
-      "minimax",
-    ].filter(Boolean);
-    for (const providerId of [...new Set(providers)]) {
+    for (const providerId of VISIBLE_TTS_PROVIDER_IDS) {
       ttsService.listVoices(providerId);
     }
+  }
+
+  function pruneHiddenPresetAssets(rows = []) {
+    const allowed = new Set();
+    for (const providerId of VISIBLE_TTS_PROVIDER_IDS) {
+      for (const voice of ttsService.listVoices(providerId)) {
+        allowed.add(`${providerId}:${voice.id}`);
+      }
+    }
+    let changed = false;
+    for (const row of rows) {
+      if (row.voice_type !== "preset") continue;
+      if (allowed.has(`${row.provider}:${row.voice_id}`)) continue;
+      taskStore.updateVoiceAsset(row.id, {
+        archived: true,
+        is_default: false,
+        is_favorite: false,
+        status: "deleted",
+      });
+      changed = true;
+    }
+    return changed ? taskStore.listVoices({}) : rows;
   }
 
   function readStylePresets() {
@@ -299,8 +316,9 @@ export function createVoiceAssetService({ baseDir, taskStore, ttsService, getSet
 
   function listAssets() {
     ensurePresetAssets();
+    const rows = pruneHiddenPresetAssets(taskStore.listVoices({}));
     const ratings = taskStore.listVoiceRatings({});
-    return taskStore.listVoices({}).map((row) => enrichAsset(row, ratings));
+    return rows.map((row) => enrichAsset(row, ratings));
   }
 
   function getAsset(id) {

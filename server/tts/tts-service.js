@@ -121,6 +121,41 @@ function createVoicePreviewWav(voiceId = "") {
   return buffer;
 }
 
+const CURATED_TTS_PROVIDER_IDS = new Set(["aliyun_bailian", "minimax"]);
+const CURATED_REGULAR_LIMIT = 10;
+const CURATED_SPECIAL_BUCKETS = new Set(["funny", "rap", "quirky", "special"]);
+
+function presetVoiceText(voice = {}) {
+  return [
+    voice.id,
+    voice.name,
+    voice.category,
+    voice.useCase,
+    voice.description,
+  ].filter(Boolean).join(" ");
+}
+
+function presetVoiceBucket(voice = {}) {
+  const text = presetVoiceText(voice);
+  if (/rap|hip.?hop|lyrical|Lyrical|说唱|唱歌|类咏腔|抒情/i.test(text)) return "rap";
+  if (/funny|humor|Humorous|搞笑|幽默|吐槽|反差|大爷|大婶|奶奶|热心/i.test(text)) return "funny";
+  if (/quirky|cartoon|Cute|萌|搞怪|卡通|顽皮|调皮|童声|泡泡|小孩|萌兽|猪/i.test(text)) return "quirky";
+  if (/special|robot|armor|arrogant|角色|特殊|机械|战甲|病娇|霸道|嚣张|剧情/i.test(text)) return "special";
+  return "regular";
+}
+
+function curatedPresetVoices(providerId, voices = []) {
+  if (!CURATED_TTS_PROVIDER_IDS.has(providerId)) return [];
+  const regular = [];
+  const special = [];
+  for (const voice of voices) {
+    const bucket = presetVoiceBucket(voice);
+    if (CURATED_SPECIAL_BUCKETS.has(bucket)) special.push(voice);
+    else regular.push(voice);
+  }
+  return [...regular.slice(0, CURATED_REGULAR_LIMIT), ...special];
+}
+
 export function createTtsService({ baseDir, taskStore, getSettings, ffmpegPath, onJobCompleted = () => {} }) {
   const outputDir = path.join(baseDir, ".data", "tts", "audio");
   const promptsDir = path.join(baseDir, "prompts");
@@ -395,9 +430,10 @@ export function createTtsService({ baseDir, taskStore, getSettings, ffmpegPath, 
   }
 
   function listVoices(providerId) {
+    if (!CURATED_TTS_PROVIDER_IDS.has(providerId)) return [];
     const provider = getProvider(providerId);
     if (!provider) return [];
-    const presets = provider.listPresetVoices();
+    const presets = curatedPresetVoices(providerId, provider.listPresetVoices());
     for (const voice of presets) {
       taskStore.upsertVoice({
         provider: providerId,

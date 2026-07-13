@@ -3600,6 +3600,31 @@ async function applyVoiceAssetToTts(asset) {
   ttsStatus.textContent = `已选择声音：${asset.voice_name}`;
 }
 
+function updateTtsProviderFields() {
+  const provider = selectedTtsProviderConfig();
+  if (ttsWorkspaceField) ttsWorkspaceField.hidden = true;
+  if (ttsBaseUrlField) ttsBaseUrlField.hidden = true;
+  if (ttsWorkspaceId) ttsWorkspaceId.value = "";
+  if (ttsBaseUrl) ttsBaseUrl.value = "";
+  renderTtsModelOptions(provider, provider.default_model || "");
+  if (ttsApiKey) {
+    ttsApiKey.value = "";
+    ttsApiKey.placeholder = "";
+  }
+  if (provider.id === "minimax" && ttsFormat.value !== "wav") {
+    ttsFormat.value = "mp3";
+  }
+  if (ttsCurrentProviderLabel) ttsCurrentProviderLabel.textContent = provider.label || "未设置";
+  if (ttsCurrentModelLabel) {
+    ttsCurrentModelLabel.textContent = `${provider.default_model || "未设置默认模型"} · API 在系统设置中管理`;
+  }
+  if (ttsSettingsStatus) {
+    ttsSettingsStatus.textContent = provider.configured
+      ? `${provider.label} 已配置，API 信息只在系统设置中维护。`
+      : `${provider.label || "当前平台"}尚未配置，请到系统设置中保存 API。`;
+  }
+}
+
 function selectedTtsVoice() {
   if (ttsVoiceSource.value === "manual") {
     const voiceId = ttsManualVoice.value.trim();
