@@ -2612,7 +2612,7 @@ function renderTtsProviderOptions(tts = {}) {
 function updateTtsProviderFields() {
   const provider = selectedTtsProviderConfig();
   const isAliyun = provider.id === "aliyun_bailian";
-  const supportsBaseUrl = ["custom_tts", "fish_audio"].includes(provider.id);
+  const supportsBaseUrl = ["custom_tts", "fish_audio", "minimax"].includes(provider.id);
   if (ttsWorkspaceField) ttsWorkspaceField.hidden = true;
   if (ttsBaseUrlField) ttsBaseUrlField.hidden = true;
   ttsWorkspaceId.value = isAliyun ? provider.workspace_id || "" : "";
@@ -2625,6 +2625,9 @@ function updateTtsProviderFields() {
   if (provider.id === "fish_audio") {
     ttsVoiceSource.value = "manual";
     ttsFormat.value = provider.default_format || "mp3";
+  }
+  if (provider.id === "minimax" && ttsFormat.value !== "wav") {
+    ttsFormat.value = "mp3";
   }
   if (ttsCurrentProviderLabel) ttsCurrentProviderLabel.textContent = provider.label || "未设置";
   if (ttsCurrentModelLabel) {
@@ -2674,18 +2677,22 @@ function renderTtsVoices() {
           id: asset.voice_id,
           name: asset.voice_name,
           model: asset.metadata?.target_model || "",
+          category: "克隆音色",
           description: `克隆音色 v${asset.version}`,
         }))
     : ttsPresetVoices;
-  const voices = sourceVoices;
+  renderTtsVoiceCategories(sourceVoices);
+  const selectedCategory = ttsVoiceCategory?.value || "全部";
+  const voices = selectedCategory === "全部"
+    ? sourceVoices
+    : sourceVoices.filter((voice) => normalizeTtsVoiceCategory(voice) === selectedCategory);
   ttsPresetVoice.innerHTML = voices.length
     ? voices
         .map((voice) => {
-          const model = voice.model ? ` · ${voice.model}` : "";
-          return `<option value="${escapeHtml(voice.id)}">${escapeHtml(voice.name)} · ${escapeHtml(voice.description || voice.id)}${escapeHtml(model)}</option>`;
+          return `<option value="${escapeHtml(voice.id)}">${escapeHtml(ttsVoiceOptionLabel(voice))}</option>`;
         })
         .join("")
-    : '<option value="">当前平台暂无预设音色</option>';
+    : '<option value="">当前分类暂无可用音色</option>';
   const configuredDefault = selectedTtsProviderConfig().default_voice || "";
   if (voices.some((voice) => voice.id === configuredDefault)) ttsPresetVoice.value = configuredDefault;
   syncTtsModelToSelectedVoice();
@@ -2709,6 +2716,7 @@ async function loadTtsVoices() {
 
 function updateTtsVoiceSource() {
   const manual = ttsVoiceSource.value === "manual";
+  if (ttsVoiceCategoryField) ttsVoiceCategoryField.hidden = manual;
   ttsPresetVoiceField.hidden = manual;
   ttsManualVoiceField.hidden = !manual;
   if (!manual) renderTtsVoices();
@@ -2740,6 +2748,11 @@ async function saveTtsProviderSettings() {
   if (provider.id === "custom_tts") {
     body.base_url = ttsBaseUrl.value.trim();
     body.model = ttsModel.value.trim();
+    body.voice = ttsVoiceSource.value === "manual" ? ttsManualVoice.value.trim() : ttsPresetVoice.value;
+  }
+  if (provider.id === "minimax") {
+    body.base_url = ttsBaseUrl.value.trim() || "https://api.minimaxi.com";
+    body.model = ttsModel.value.trim() || "speech-2.6-hd";
     body.voice = ttsVoiceSource.value === "manual" ? ttsManualVoice.value.trim() : ttsPresetVoice.value;
   }
   if (provider.id === "fish_audio") {
