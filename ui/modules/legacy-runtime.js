@@ -320,11 +320,11 @@ const taskActionLabels = {
   audio: "提取音频",
 };
 const defaultRewriteReference = "忠于原文主题、事实、人物和事件；只优化表达、结构、节奏、钩子和口播感；不要凭空换行业、换对象、换场景，不要强行改成教育招生或家长话题；不要像AI作文。";
-const rewriteDirectionOptions = ["短视频口播", "招生引流", "朋友圈文案", "视频成片口播稿", "知识解释", "成交转化"];
-const rewriteStyleOptions = ["小黑漫画解释类", "口播爆款", "知识解释", "朋友圈图文", "强钩子转化", "温和专业"];
+const rewriteDirectionOptions = ["保留原意优化", "短视频口播", "短视频开场钩子", "完整口播脚本", "知识解释", "痛点共鸣", "评论区引导", "朋友圈文案", "视频成片口播稿", "成交转化", "招生引流"];
+const rewriteStyleOptions = ["保留原意强化表达", "小黑漫画解释类", "爆款口播重构", "知识拆解型", "痛点共鸣型", "转化引导型", "朋友圈叙事型", "成片旁白型"];
 const rewriteHumanizeOptions = ["关闭", "普通", "强", "极强"];
 const rewriteVersionOptions = [
-  { key: "hookVersion", name: "成品 1：强钩子版", direction: "短视频口播", wordCount: "120-180字" },
+  { key: "hookVersion", name: "成品 1：忠实强化版", direction: "保留原意优化", wordCount: "120-180字" },
   { key: "resonanceVersion", name: "成品 2：共鸣解释版", direction: "知识解释", wordCount: "120-180字" },
   { key: "conversionVersion", name: "成品 3：转化行动版", direction: "成交转化", wordCount: "120-180字" },
 ];
@@ -566,7 +566,7 @@ function rewriteProviderOptionsMarkup(selected = rewriteProvider?.value || "dash
 function defaultRewriteVersionSettings() {
   return {
     provider: rewriteProvider?.value || "deepseek",
-    style: rewriteStyle?.value || "小黑漫画解释类",
+    style: rewriteStyle?.value || "保留原意强化表达",
     referenceStyle: buildRewriteReferenceStyle(),
     params: rewriteParams(),
     humanizeLevel: rewriteHumanizeLevel?.value || "极强",
@@ -582,7 +582,7 @@ function rewriteVersionAt(index) {
   const base = rewriteVersionOptions[index] || {
     key: `version-${index + 1}`,
     name: `版本 ${index + 1}`,
-    direction: rewriteDirection.value || "短视频口播",
+    direction: rewriteDirection.value || "保留原意优化",
     wordCount: rewriteWordRange?.value || "120-180字",
   };
   return rewriteVersionDrafts.get(base.key) || { ...base, ...defaultRewriteVersionSettings(), content: "" };
@@ -590,12 +590,12 @@ function rewriteVersionAt(index) {
 
 function rewritePresetContext() {
   return {
-    style: rewriteStyle?.value || "小黑漫画解释类",
-    platform: rewriteTargetPlatform?.value || "抖音",
+    style: rewriteStyle?.value || "保留原意强化表达",
+    platform: rewriteTargetPlatform?.value || "抖音短视频",
     wordRange: rewriteWordRange?.value || "120-180字",
-    tone: rewriteTonePreset?.value || "接地气、有观点",
-    persona: rewritePersona?.value || "短视频内容策划",
-    purpose: rewriteDirection?.value || rewritePurpose?.value || "短视频口播",
+    tone: rewriteTonePreset?.value || "清楚直接，不跑题",
+    persona: rewritePersona?.value || "普通朋友视角",
+    purpose: rewriteDirection?.value || rewritePurpose?.value || "保留原意优化",
   };
 }
 
