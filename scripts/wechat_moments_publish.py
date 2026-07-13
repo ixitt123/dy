@@ -11,6 +11,11 @@ import time
 from pathlib import Path
 
 
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8")
+if hasattr(sys.stderr, "reconfigure"):
+    sys.stderr.reconfigure(encoding="utf-8")
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(message)s",
@@ -58,7 +63,7 @@ def publish(text: str, media_files: list[str], max_retries: int = 3) -> None:
     try:
         from wxautox4 import WeChat
     except ModuleNotFoundError as exc:
-        raise RuntimeError("未安装 wxautox4，请先在本机 Python 环境执行：pip install wxautox4") from exc
+        raise RuntimeError("发布朋友圈需要 wxautox4。当前本机 Python 环境未安装，请先执行：pip install wxautox4") from exc
     except Exception as exc:  # pragma: no cover - import-time vendor errors
         raise RuntimeError(f"wxautox4 加载失败：{exc}") from exc
 

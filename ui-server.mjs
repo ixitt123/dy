@@ -584,6 +584,11 @@ function runCapturedProcess(command, args, { cwd = __dirname, timeoutMs = 120000
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, {
       cwd,
+      env: {
+        ...process.env,
+        PYTHONIOENCODING: "utf-8",
+        PYTHONUTF8: "1",
+      },
       windowsHide: true,
       stdio: ["ignore", "pipe", "pipe"],
     });
