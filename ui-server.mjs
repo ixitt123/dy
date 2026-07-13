@@ -1968,7 +1968,32 @@ function reloadModelRuntime(settings) {
   return normalized;
 }
 
-function providerConfigStatus(settings, providerId) {
+function ttsProviderConfigStatus(settings, providerId) {
+  const id = String(providerId || "").trim();
+  const tts = settings.tts || {};
+  const config = tts[id] || {};
+  const label = TTS_PROVIDER_LABELS[id] || id;
+  let configured = false;
+
+  if (id === "custom_tts") configured = Boolean(config.base_url);
+  else if (id === "tencent_tts") configured = Boolean(config.secret_id && config.secret_key);
+  else if (id === "volcengine_doubao") configured = Boolean(config.api_key || (config.access_key_id && config.secret_access_key));
+  else configured = Boolean(config.api_key);
+
+  if (!label) return { ok: false, message: "Unknown TTS provider" };
+  if (!configured) return { ok: false, status: "missing", message: `${label} TTS configuration is missing.` };
+  return {
+    ok: true,
+    status: "ready",
+    message: `${label} TTS configuration is saved.`,
+  };
+}
+
+function providerConfigStatus(settings, providerId, options = {}) {
+  const scope = typeof options === "string" ? options : String(options.scope || "").trim().toLowerCase();
+  if (scope === "tts" && TTS_PROVIDER_LABELS[providerId]) {
+    return ttsProviderConfigStatus(settings, providerId);
+  }
   const provider = publicUnifiedProviders(settings).find((item) => item.id === providerId);
   if (!provider) return { ok: false, message: "未知 API 服务" };
   if (!provider.configured) {
