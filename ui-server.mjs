@@ -4230,6 +4230,8 @@ function taskExportRows() {
       title: task.title,
       video_id: task.video_id,
       video_path: task.video_path,
+      audio_path: task.audio_path,
+      subtitle_path: task.subtitle_path,
       txt_path: task.txt_path,
       analysis_path: task.analysis_path,
       rewrite_path: task.rewrite_path,
