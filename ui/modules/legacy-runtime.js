@@ -2911,6 +2911,62 @@ async function refreshTtsJobs() {
   }
 }
 
+function confirmedTtsAudioPayload(job = activeTtsRailJob) {
+  if (!job?.id || job.status !== "completed") return null;
+  return {
+    id: job.id,
+    type: "tts",
+    audio_url: job.audio_url || "",
+    audio_path: job.audio_path || "",
+    provider: job.provider || ttsProvider?.value || "",
+    voice_id: job.voice_id || "",
+    voice_name: job.voice_name || "",
+    format: job.format || ttsFormat?.value || "mp3",
+    text: job.text || ttsText?.value.trim() || "",
+    source: "ai_generated",
+    status: "ready",
+    created_at: new Date().toISOString(),
+  };
+}
+
+function saveTtsAudioHandoff(target, payload) {
+  const key = `dy:handoff:${target}:audio`;
+  localStorage.setItem(key, JSON.stringify(payload));
+}
+
+async function sendConfirmedTtsAudio() {
+  const payload = confirmedTtsAudioPayload();
+  if (!payload) {
+    ttsAudioHandoffStatus.textContent = "请先生成并完成一条语音，再发送。";
+    return;
+  }
+  const targets = [...document.querySelectorAll(".tts-audio-handoff-choice:checked")]
+    .map((input) => input.dataset.target)
+    .filter(Boolean);
+  if (!targets.length) {
+    ttsAudioHandoffStatus.textContent = "请至少勾选一个要发送的模块。";
+    return;
+  }
+  const sent = [];
+  if (targets.includes("video-output")) {
+    await window.videoProjects?.linkCurrent?.("tts", payload.id, payload.voice_name || `配音 #${payload.id}`, payload);
+    if (window.videoOutputModule?.loadVideoProductSources) await window.videoOutputModule.loadVideoProductSources();
+    else await loadVideoProductSources({ preferredAudioId: payload.id });
+    sent.push("视频成片");
+  }
+  const passiveTargets = [
+    ["cs1-video", "CS1生成器"],
+    ["xiaohei-video", "小黑视频风格生成"],
+    ["money-printer", "MoneyPrinter"],
+  ];
+  for (const [target, label] of passiveTargets) {
+    if (!targets.includes(target)) continue;
+    saveTtsAudioHandoff(target, payload);
+    sent.push(label);
+  }
+  ttsAudioHandoffStatus.textContent = `已发送确定好的音频到：${sent.join("、")}。`;
+}
+
 async function deleteTtsJob(id) {
   const confirmed = window.confirm(`确定删除语音记录 #${id} 和对应音频文件吗？此操作不可撤销。`);
   if (!confirmed) return;
@@ -5890,6 +5946,12 @@ ttsText.addEventListener("input", () => {
 
 generateTtsButton.addEventListener("click", () => {
   generateTts();
+});
+
+sendConfirmedTtsAudioBtn?.addEventListener("click", () => {
+  sendConfirmedTtsAudio().catch((error) => {
+    ttsAudioHandoffStatus.textContent = error instanceof Error ? error.message : String(error);
+  });
 });
 
 document.querySelector("#sendTtsToVideoProduct")?.addEventListener("click", async () => {

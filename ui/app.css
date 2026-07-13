@@ -3216,7 +3216,8 @@ pre {
 
   .tts-settings,
   .tts-preview,
-  .tts-control-grid {
+  .tts-control-grid,
+  .tts-audio-handoff-grid {
     grid-template-columns: 1fr;
   }
 
@@ -5782,6 +5783,46 @@ body[data-active-module="video-output"] .floating-workflow-guide [data-nav="vide
 .tts-preview audio,
 .tts-history-row audio {
   width: 100%;
+}
+
+.tts-audio-handoff {
+  display: grid;
+  gap: 12px;
+  margin: 12px 0 18px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 14px;
+  background: color-mix(in srgb, var(--panel) 94%, var(--primary) 6%);
+}
+
+.tts-audio-handoff > strong {
+  color: var(--text);
+  font-size: 15px;
+}
+
+.tts-audio-handoff-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.tts-audio-handoff-grid label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 42px;
+  margin: 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0 12px;
+  color: var(--text);
+  background: var(--panel);
+  font-weight: 700;
+}
+
+#ttsAudioHandoffStatus {
+  color: var(--muted);
+  font-size: 13px;
 }
 
 .tts-history-head,
