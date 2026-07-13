@@ -105,235 +105,126 @@
         <div class="workbench-body">
           <main class="shell" id="workbenchContent">
             <section class="dashboard-page workbench-page active" id="dashboardPage" data-page="dashboard">
-              <section class="workflow-overview">
-                <div class="panel-heading">
-                  <div>
-                    <span class="section-eyebrow">制作流程</span>
-                    <h2>内容生产流程</h2>
-                  </div>
-                  <span class="phase-badge">项目制生产流程</span>
-                </div>
-                <div class="workflow-steps">
-                  <button type="button" data-nav="collector"><span>1</span><strong>采集素材</strong><small>链接与视频</small></button>
-                  <i></i>
-                  <button type="button" data-nav="transcript"><span>2</span><strong>提取文案</strong><small>语音转文字</small></button>
-                  <i></i>
-                  <button type="button" data-nav="rewrite"><span>3</span><strong>AI 改写</strong><small>选择最佳版本</small></button>
-                  <i></i>
-                  <button type="button" data-nav="tts"><span>4</span><strong>TTS 配音</strong><small>声音与试听</small></button>
-                  <i></i>
-                  <button type="button" data-nav="director"><span>5</span><strong>AI 导演</strong><small>分镜与字幕</small></button>
-                  <i></i>
-                  <button type="button" data-nav="assets"><span>6</span><strong>素材匹配</strong><small>画面与 BGM</small></button>
-                  <i></i>
-                  <button type="button" data-nav="video-output"><span>7</span><strong>成片草稿</strong><small>生成剪映草稿</small></button>
-                  <i></i>
-                  <button type="button" data-nav="video-output"><span>8</span><strong>打开剪映</strong><small>检查并导出</small></button>
-                </div>
-              </section>
-
-              <div class="dashboard-intro">
-                <div>
-                  <span class="section-eyebrow">短视频项目工作台</span>
-                  <h2>一条视频，一个完整项目</h2>
-                  <p>采集、文案、配音、导演、素材和成片记录统一归入当前项目。</p>
-                </div>
-                <div class="dashboard-project-actions">
-                  <label class="active-project-select">
-                    <span>当前项目</span>
-                    <select id="activeVideoProjectSelect"></select>
-                  </label>
-                  <button class="primary" id="newVideoProject" type="button">新建短视频项目</button>
-                </div>
-              </div>
-
-              <form class="video-project-create" id="videoProjectCreateForm" hidden>
-                <label>
-                  项目名称
-                  <input id="videoProjectTitle" type="text" maxlength="100" placeholder="例如：半年说好英语的正确方法" required />
-                </label>
-                <label>
-                  视频类型
-                  <select id="videoProjectType">
-                    <option>宣传类</option>
-                    <option>学习技巧类</option>
-                    <option>招生转化类</option>
-                    <option>科普类</option>
-                  </select>
-                </label>
-                <label>
-                  默认输出
-                  <select id="videoProjectOutputMode">
-                    <option value="jianying_template">剪映模板草稿【推荐】</option>
-                    <option value="mp4">MP4 预览</option>
-                    <option value="package">标准素材包</option>
-                  </select>
-                </label>
-                <div class="video-project-create-actions">
-                  <button class="primary" type="submit">创建并开始</button>
-                  <button class="ghost" id="cancelVideoProject" type="button">取消</button>
-                </div>
-              </form>
-
-              <div class="project-workbench-grid">
-                <section class="dashboard-panel current-project-panel">
-                  <div class="panel-heading">
-                    <div>
-                      <span class="section-eyebrow">继续制作</span>
-                      <h2 id="currentVideoProjectTitle">还没有短视频项目</h2>
+              <section class="product-home" aria-label="短视频内容生产工厂说明">
+                <div class="product-hero">
+                  <div class="product-hero-copy">
+                    <span class="section-eyebrow">短视频内容生产工厂</span>
+                    <h2>从平台链接到可预览视频草稿，一条线完成。</h2>
+                    <p>这个软件把抖音等平台链接解析、文案提取、AI 改写、TTS 配音、小黑视频风格生成、MoneyPrinterTurbo 混剪和剪映草稿输出放到一个工作台里。</p>
+                    <div class="product-hero-actions" aria-label="常用入口">
+                      <button class="primary" type="button" data-nav="collector">从平台链接开始</button>
+                      <button class="secondary" type="button" data-nav="xiaohei-video">小黑视频风格生成</button>
+                      <button class="ghost" type="button" data-nav="money-printer">MoneyPrinter 生产线</button>
                     </div>
-                    <span class="project-id-badge" id="currentVideoProjectId">未选择</span>
-                  </div>
-                  <div id="currentVideoProjectProgress" class="project-progress-panel"></div>
-                  <div id="currentVideoProjectSteps" class="project-step-strip"></div>
-                </section>
-
-                <section class="dashboard-panel next-action-panel">
-                  <div class="panel-heading">
-                    <div>
-                      <span class="section-eyebrow">下一步推荐</span>
-                      <h2 id="projectNextActionTitle">先新建项目</h2>
+                    <div class="product-proof-strip" aria-label="主要输出">
+                      <span>16:9 默认画幅</span>
+                      <span>约 30 秒成片</span>
+                      <span>浏览器草稿预览</span>
+                      <span>剪映草稿输出</span>
                     </div>
                   </div>
-                  <p id="projectNextActionDescription">创建项目后，系统会根据当前进度推荐下一步。</p>
-                  <button class="primary" id="projectNextAction" type="button">新建短视频项目</button>
-                </section>
-              </div>
-
-              <section class="dashboard-panel priority-pipeline-panel" aria-labelledby="priorityPipelineTitle">
-                <div class="panel-heading">
-                  <div>
-                    <span class="section-eyebrow">第一生产线</span>
-                    <h2 id="priorityPipelineTitle">抖音到小黑视频风格生成</h2>
-                  </div>
-                  <span class="phase-badge">16:9 · 约30秒 · 剪映草稿</span>
-                </div>
-                <div class="priority-pipeline">
-                  <button type="button" data-nav="collector">
-                    <span>01</span><strong>抖音链接</strong><small>采集源视频</small>
-                  </button>
-                  <button type="button" data-nav="transcript">
-                    <span>02</span><strong>提取文案</strong><small>ASR 与时间轴</small>
-                  </button>
-                  <button type="button" data-nav="rewrite">
-                    <span>03</span><strong>小黑改写</strong><small>30 秒脚本</small>
-                  </button>
-                  <button type="button" data-nav="tts">
-                    <span>04</span><strong>生成配音</strong><small>默认语音方案</small>
-                  </button>
-                  <button type="button" data-nav="xiaohei-video">
-                    <span>05</span><strong>风格生成</strong><small>小黑图文视频</small>
-                  </button>
-                  <button type="button" data-nav="video-output">
-                    <span>06</span><strong>剪映草稿</strong><small>检查导出</small>
-                  </button>
-                </div>
-              </section>
-
-              <section class="dashboard-panel priority-pipeline-panel" aria-labelledby="moneyPrinterPipelineTitle">
-                <div class="panel-heading">
-                  <div>
-                    <span class="section-eyebrow">第三生产线</span>
-                    <h2 id="moneyPrinterPipelineTitle">MoneyPrinterTurbo 免费素材混剪</h2>
-                  </div>
-                  <span class="phase-badge">主题/脚本 · 免费素材 · MP4</span>
-                </div>
-                <div class="priority-pipeline">
-                  <button type="button" data-nav="money-printer">
-                    <span>01</span><strong>启动 API</strong><small>检测本地服务</small>
-                  </button>
-                  <button type="button" data-nav="money-printer">
-                    <span>02</span><strong>输入主题</strong><small>脚本或关键词</small>
-                  </button>
-                  <button type="button" data-nav="money-printer">
-                    <span>03</span><strong>素材来源</strong><small>Pexels/Pixabay/本地</small>
-                  </button>
-                  <button type="button" data-nav="money-printer">
-                    <span>04</span><strong>生成 MP4</strong><small>轮询任务进度</small>
-                  </button>
-                </div>
-              </section>
-
-              <section class="recent-project-section">
-                <div class="panel-heading">
-                  <div>
-                    <span class="section-eyebrow">最近项目</span>
-                    <h2>继续上次的制作</h2>
-                  </div>
-                  <button class="ghost small danger-action" id="clearVideoProjects" type="button">清空项目记录</button>
-                </div>
-                <div class="recent-project-list" id="recentVideoProjects">
-                  <div class="empty">正在读取项目...</div>
-                </div>
-              </section>
-
-              <div class="dashboard-section-heading">
-                <span class="section-eyebrow">今日数据统计</span>
-                <h2>生产进度</h2>
-              </div>
-              <div class="dashboard-metrics">
-                <article class="metric-card">
-                  <span>今日处理视频</span>
-                  <strong id="metricTodayVideos">0</strong>
-                  <small>采集任务</small>
-                </article>
-                <article class="metric-card">
-                  <span>已提取文案</span>
-                  <strong id="metricTranscripts">0</strong>
-                  <small>可进入分析</small>
-                </article>
-                <article class="metric-card">
-                  <span>已生成改写</span>
-                  <strong id="metricRewrites">0</strong>
-                  <small>多版本文案</small>
-                </article>
-                <article class="metric-card">
-                  <span>已生成音频</span>
-                  <strong id="metricAudio">0</strong>
-                  <small>TTS 成品</small>
-                </article>
-                <article class="metric-card">
-                  <span>导演稿</span>
-                  <strong id="metricDirectors">0</strong>
-                  <small>专业分镜稿</small>
-                </article>
-                <article class="metric-card">
-                  <span>成片草稿</span>
-                  <strong id="metricRenderPlans">0</strong>
-                  <small>可继续导出</small>
-                </article>
-              </div>
-
-              <div class="dashboard-grid">
-                <section class="dashboard-panel">
-                  <div class="panel-heading">
-                    <div>
-                    <span class="section-eyebrow">最近任务</span>
-                      <h2>最近任务</h2>
+                  <div class="product-hero-visual" aria-label="生产流程动态示意">
+                    <div class="signal-board">
+                      <div class="signal-board-top">
+                        <span>LIVE PIPELINE</span>
+                        <i></i>
+                      </div>
+                      <div class="signal-row active"><span>01</span><strong>链接解析</strong><em>抖音优先</em></div>
+                      <div class="signal-row"><span>02</span><strong>文案提取</strong><em>时间轴 / 复制</em></div>
+                      <div class="signal-row"><span>03</span><strong>AI 改写</strong><em>小黑解释类</em></div>
+                      <div class="signal-row"><span>04</span><strong>TTS 配音</strong><em>预设 / 克隆</em></div>
+                      <div class="signal-row"><span>05</span><strong>视频草稿</strong><em>预览 / 剪映</em></div>
                     </div>
-                    <button class="ghost small" type="button" data-nav="collector">查看全部</button>
                   </div>
-                  <div class="dashboard-task-list" id="dashboardRecentTasks">
-                    <div class="empty">正在读取任务...</div>
+                </div>
+
+                <section class="product-section">
+                  <div class="product-section-head">
+                    <span class="section-eyebrow">它能做什么</span>
+                    <h2>把短视频制作拆成可以点击进入的能力模块</h2>
+                  </div>
+                  <div class="product-capability-grid">
+                    <button type="button" class="product-capability-card" data-nav="collector">
+                      <span>01</span>
+                      <strong>平台链接自动提取</strong>
+                      <small>粘贴抖音等链接，解析、下载、提取音频和文案。</small>
+                    </button>
+                    <button type="button" class="product-capability-card" data-nav="rewrite">
+                      <span>02</span>
+                      <strong>AI 文案改写</strong>
+                      <small>按口播、视频文案、小黑解释类等风格生成可用版本。</small>
+                    </button>
+                    <button type="button" class="product-capability-card" data-nav="tts">
+                      <span>03</span>
+                      <strong>TTS 音频生成</strong>
+                      <small>管理阿里云、小米、歌唱等预设声音，也支持自定义克隆。</small>
+                    </button>
+                    <button type="button" class="product-capability-card" data-nav="xiaohei-video">
+                      <span>04</span>
+                      <strong>小黑视频风格生成</strong>
+                      <small>用小黑配图规则生成图文、音乐素材和剪映草稿。</small>
+                    </button>
+                    <button type="button" class="product-capability-card" data-nav="money-printer">
+                      <span>05</span>
+                      <strong>免费素材混剪</strong>
+                      <small>接入 MoneyPrinterTurbo，用主题或脚本自动生成 MP4。</small>
+                    </button>
+                    <button type="button" class="product-capability-card" data-nav="video-output">
+                      <span>06</span>
+                      <strong>视频草稿输出</strong>
+                      <small>在浏览器预览草稿，并继续生成剪映草稿或素材包。</small>
+                    </button>
                   </div>
                 </section>
 
-                <section class="dashboard-panel">
-                  <div class="panel-heading">
-                    <div>
-                    <span class="section-eyebrow">快捷入口</span>
-                      <h2>快捷入口</h2>
-                    </div>
+                <section class="product-section">
+                  <div class="product-section-head">
+                    <span class="section-eyebrow">三条视频生产线</span>
+                    <h2>根据内容类型选择不同成片路线</h2>
                   </div>
-                  <div class="quick-entry-grid">
-                    <button type="button" data-nav="collector"><strong>采集项目素材</strong><span>下载或导入视频</span></button>
-                    <button type="button" data-nav="rewrite"><strong>打开AI改写</strong><span>生成多版本文案</span></button>
-                    <button type="button" data-nav="tts"><strong>生成TTS</strong><span>配音与试听</span></button>
-                    <button type="button" data-nav="director"><strong>进入AI导演</strong><span>生成专业分镜</span></button>
-                    <button type="button" data-nav="vfo"><strong>进入成片中心</strong><span>检查并生成草稿</span></button>
+                  <div class="product-lineup">
+                    <article class="product-line-card primary-line">
+                      <div>
+                        <span>LINE 01</span>
+                        <h3>抖音到小黑视频风格生成</h3>
+                        <p>最优先路线：链接采集、文案提取、小黑解释类改写、TTS 配音、图文视频、剪映草稿。</p>
+                      </div>
+                      <button type="button" data-nav="xiaohei-video">进入小黑生产线</button>
+                    </article>
+                    <article class="product-line-card">
+                      <div>
+                        <span>LINE 02</span>
+                        <h3>文案加音频生成纯文字视频</h3>
+                        <p>适合口播、知识解释、轻量剪辑：文案、音频、时间轴、字幕和分镜一起生成草稿。</p>
+                      </div>
+                      <button type="button" data-nav="video-output">进入成片中心</button>
+                    </article>
+                    <article class="product-line-card">
+                      <div>
+                        <span>LINE 03</span>
+                        <h3>MoneyPrinterTurbo 免费素材混剪</h3>
+                        <p>主题或脚本驱动，调用免费素材源自动混剪，适合快速批量生成素材型视频。</p>
+                      </div>
+                      <button type="button" data-nav="money-printer">进入 MoneyPrinter</button>
+                    </article>
                   </div>
                 </section>
-              </div>
+
+                <section class="product-ready-panel">
+                  <div>
+                    <span class="section-eyebrow">使用前准备</span>
+                    <h2>把接口和素材准备好，后面每条线就能连续跑。</h2>
+                  </div>
+                  <div class="product-ready-list">
+                    <button type="button" data-nav="settings"><strong>API 接入</strong><span>OpenAI / 阿里云 / 小米 / 素材平台</span></button>
+                    <button type="button" data-nav="voices"><strong>声音资产</strong><span>预设音色、歌唱音频、自定义克隆</span></button>
+                    <button type="button" data-nav="assets"><strong>素材管理</strong><span>按生产线、日期和标签整理</span></button>
+                    <button type="button" data-nav="video-output"><strong>输出检查</strong><span>浏览器预览、剪映草稿、MP4</span></button>
+                  </div>
+                </section>
+
+                <a class="deerflow-signature" href="https://deerflow.tech" target="_blank" rel="noreferrer">Created By Deerflow</a>
+              </section>
 
             </section>
 
