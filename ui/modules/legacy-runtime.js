@@ -248,6 +248,7 @@ const momentsVisualStyle = document.querySelector("#momentsVisualStyle");
 const momentsImageCount = document.querySelector("#momentsImageCount");
 const momentsTone = document.querySelector("#momentsTone");
 const momentsIntent = document.querySelector("#momentsIntent");
+const momentsReferenceStyle = document.querySelector("#momentsReferenceStyle");
 const generateMomentsPostBtn = document.querySelector("#generateMomentsPost");
 const copyMomentsPromptsBtn = document.querySelector("#copyMomentsPrompts");
 const generateMomentsImagesBtn = document.querySelector("#generateMomentsImages");
@@ -1641,6 +1642,7 @@ function collectMomentsPayload() {
     imageCount: momentsImageCount?.value === "auto" ? 0 : Number(momentsImageCount?.value || 0),
     tone: momentsTone?.value || "强反差急转弯",
     intent: momentsIntent?.value || "冲突反转",
+    referenceStyle: momentsReferenceStyle?.value || "自动引用",
   };
 }
 
@@ -1653,6 +1655,7 @@ function saveMomentsDraft() {
       imageCount: momentsImageCount?.value || "auto",
       tone: momentsTone?.value || "强反差急转弯",
       intent: momentsIntent?.value || "冲突反转",
+      referenceStyle: momentsReferenceStyle?.value || "自动引用",
       result: currentMomentsResult,
       post: momentsPostOutput?.value || "",
     }));
@@ -1668,6 +1671,7 @@ function loadMomentsDraft() {
     if (draft.imageCount && momentsImageCount) momentsImageCount.value = draft.imageCount;
     if (draft.tone && momentsTone) momentsTone.value = draft.tone;
     if (draft.intent && momentsIntent) momentsIntent.value = draft.intent;
+    if (draft.referenceStyle && momentsReferenceStyle) momentsReferenceStyle.value = draft.referenceStyle;
     if (draft.result) {
       currentMomentsResult = draft.result;
       if (momentsPostOutput) momentsPostOutput.value = draft.post || draft.result.post || "";
@@ -6304,6 +6308,7 @@ momentsImagePromptList?.addEventListener("change", (event) => {
   momentsImageCount,
   momentsTone,
   momentsIntent,
+  momentsReferenceStyle,
   momentsPostOutput,
 ].forEach((element) => {
   element?.addEventListener("input", saveMomentsDraft);
