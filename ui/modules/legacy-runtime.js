@@ -1568,20 +1568,9 @@ async function sendTranscriptToDirector(taskId) {
     taskId: Number(item.id || 0),
     source: "downloaded",
   });
-  directorSourceMode.value = "manual";
-  updateDirectorSourceOptions({ preserveText: true });
-  directorTitle.value = conciseDirectorTitle(item.title || `任务 ${item.id}`);
-  directorSourceText.value = item.text || "";
-  directorSourceContext = {
-    taskId: Number(item.id || 0),
-    rewriteId: 0,
-    sourceKey: `transcript:${item.id}`,
-    sourceType: "transcript",
-  };
-  updateDirectorCharacterCount();
-  window.workbenchNavigate?.("director", { preserveScroll: true });
-  document.querySelector("#directorSystem")?.scrollIntoView({ behavior: "smooth", block: "start" });
-  directorStatus.textContent = `已从文案库导入：${item.title || `任务 ${item.id}`}。`;
+  window.workbenchNavigate?.("video-output", { preserveScroll: true });
+  document.querySelector("#videoProductCenter")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  if (videoProductStatus) videoProductStatus.textContent = `已从文案库导入：${item.title || `任务 ${item.id}`}。生产线会在成片时内部生成分镜。`;
 }
 
 function statusClass(status) {
@@ -5011,7 +5000,7 @@ async function generateDirectorProject() {
   }
 }
 
-function sendRewriteToDirector(versionKey) {
+async function sendRewriteToDirector(versionKey) {
   const card = rewriteVersions.querySelector(`.rewrite-version[data-version-key="${versionKey}"]`);
   const text = card?.querySelector(".rewrite-version-text")?.value.trim() || "";
   if (!text) {
@@ -5019,15 +5008,15 @@ function sendRewriteToDirector(versionKey) {
     return;
   }
   const version = collectRewriteVersions().find((item) => item.key === versionKey);
-  syncDirectorSourceFromText(text, {
-    title: `${version?.name || "AI 改写"}导演稿`,
-    sourceKey: `task-${rewriteTaskId.value || 0}-rewrite-${versionKey}`,
-    sourceType: "rewrite",
+  await window.videoProjects?.linkCurrent?.("selected_rewrite", `task-${rewriteTaskId.value || 0}-rewrite-${versionKey}`, version?.name || "AI 改写版本", {
+    text,
     taskId: Number(rewriteTaskId.value || 0),
+    versionKey,
+    source: "rewrite",
   });
-  directorStatus.textContent = "已从 AI 改写载入文案，请设置导演参数。";
-  window.workbenchNavigate?.("director", { preserveScroll: true });
-  document.querySelector("#directorSystem").scrollIntoView({ behavior: "smooth", block: "start" });
+  rewriteStatus.textContent = "已发送到生产线；成片时会在当前生产线内部生成分镜。";
+  window.workbenchNavigate?.("video-output", { preserveScroll: true });
+  document.querySelector("#videoProductCenter")?.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
 function directorExport(format) {
@@ -7532,7 +7521,7 @@ rewriteVersions.addEventListener("click", async (event) => {
     return;
   }
   if (button.classList.contains("rewrite-director-one")) {
-    sendRewriteToDirector(button.dataset.versionKey);
+    await sendRewriteToDirector(button.dataset.versionKey);
     return;
   }
   const textarea = rewriteVersions.querySelector(`.rewrite-version-text[data-version-key="${button.dataset.versionKey}"]`);
