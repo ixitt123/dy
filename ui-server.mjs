@@ -6657,6 +6657,17 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
+    if (req.method === "POST" && url.pathname === "/api/tts/import-generated") {
+      const body = await readJsonBody(req);
+      const result = await ttsService.importGenerated(body);
+      if (result.error) {
+        sendJson(res, 400, { ok: false, message: result.error });
+        return;
+      }
+      sendJson(res, 201, { ok: true, job: result.job });
+      return;
+    }
+
     if (req.method === "POST" && url.pathname === "/api/tts/retry") {
       const body = await readJsonBody(req);
       const result = ttsService.retryJob(body.id || body.jobId || 0);

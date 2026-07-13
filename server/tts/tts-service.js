@@ -587,6 +587,85 @@ export function createTtsService({ baseDir, taskStore, getSettings, ffmpegPath, 
     return taskStore.listTtsJobs({ limit }).map(publicJob);
   }
 
+  async function importGenerated(input = {}) {
+    const sourceRaw = String(input.audio_path || "").trim();
+    if (!sourceRaw) return { error: "Missing generated audio path." };
+    const sourcePath = path.resolve(sourceRaw);
+    const allowedRoots = [
+      path.resolve(baseDir, "voices"),
+      path.resolve(baseDir, "ui", "assets", "voice-previews"),
+      path.resolve(outputDir),
+    ];
+    if (!allowedRoots.some((root) => sourcePath !== root && sourcePath.startsWith(`${root}${path.sep}`))) {
+      return { error: "Generated audio path is not allowed." };
+    }
+    if (!fs.existsSync(sourcePath)) return { error: "Generated audio file does not exist." };
+    const text = String(input.text || "").trim();
+    if (!text) return { error: "Missing text for generated audio." };
+
+    const sequenceNumber = nextSequenceNumber();
+    const fileBaseName = ttsFileBaseName(sequenceNumber);
+    const sourceExtension = path.extname(sourcePath).toLowerCase();
+    const format = input.format === "wav" || sourceExtension === ".wav" ? "wav" : "mp3";
+    const targetPath = path.join(outputDir, `${fileBaseName}.${format}`);
+    if (path.resolve(sourcePath) !== path.resolve(targetPath)) fs.copyFileSync(sourcePath, targetPath);
+
+    const prepared = prepareScript(text);
+    const provider = String(input.provider || "minimax");
+    const voiceAssetId = Number(input.voice_asset_id || 0);
+    const metadata = {
+      imported_generated_audio: true,
+      sequence_number: sequenceNumber,
+      file_base_name: fileBaseName,
+      model: String(input.model || ""),
+      voice_asset_id: voiceAssetId,
+      project_id: String(input.project_id || input.projectId || ""),
+      source: String(input.source || "generated_preview"),
+      asset_kind: String(input.asset_kind || ""),
+      selected_for_project: false,
+      workflow_auto_director: input.workflow_auto_director !== false,
+      ...prepared.metadata,
+    };
+    const job = taskStore.createTtsJob({
+      task_id: input.task_id,
+      rewrite_id: input.rewrite_id,
+      provider,
+      voice_id: String(input.voice_id || ""),
+      voice_name: String(input.voice_name || input.voice_id || ""),
+      text,
+      emotion: String(input.emotion || "music"),
+      style_prompt: String(input.style_prompt || ""),
+      speed: Number(input.speed || 1),
+      volume: Number(input.volume ?? 50),
+      pitch: Number(input.pitch || 1),
+      format,
+      audio_path: targetPath,
+      status: "completed",
+      error: "",
+      metadata_json: JSON.stringify(metadata),
+      completed_at: new Date().toISOString(),
+    });
+    const timedText = writeTimedTextFiles({
+      directory: subtitleDir,
+      job,
+      preparedText: prepared.text,
+      result: {
+        duration: Number(input.duration || 0),
+        metadata: input.metadata && typeof input.metadata === "object" ? input.metadata : {},
+      },
+      fileBaseName,
+    });
+    taskStore.updateTtsJob(job.id, {
+      metadata_json: JSON.stringify({
+        ...metadata,
+        ...timedText,
+      }),
+    });
+    if (voiceAssetId > 0) taskStore.recordVoiceUse(voiceAssetId);
+    Promise.resolve(onJobCompleted(taskStore.getTtsJob(job.id))).catch(() => {});
+    return { job: getJob(job.id) };
+  }
+
   function listProjectJobs(projectId, limit = 100) {
     const cleanProjectId = String(projectId || "").trim();
     return listJobs(limit).filter((job) => String(job.metadata?.project_id || "") === cleanProjectId);
@@ -727,6 +806,7 @@ export function createTtsService({ baseDir, taskStore, getSettings, ffmpegPath, 
 
   return {
     enqueue,
+    importGenerated,
     retryJob,
     getJob,
     listJobs,
