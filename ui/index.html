@@ -597,7 +597,7 @@
 
       </section>
 
-      <section class="workbench-page" data-page="director" id="directorPage">
+      <section class="workbench-page" data-page="director" id="directorPage" hidden>
       <section class="director-system" id="directorSystem">
         <div class="result-head director-head">
           <div>
@@ -797,9 +797,9 @@
               <span>路线 A</span>
               <strong>模板快剪 MP4</strong>
             </div>
-            <p>导演稿 + 已生成音频 → 背景模板、标题大字、自动字幕、镜头节奏、片尾 CTA。</p>
+            <p>TTS 音频 → 生产线内部分镜、标题大字、自动字幕、镜头节奏、片尾 CTA。</p>
             <div class="video-route-flow">
-              <span>Director</span>
+              <span>内部分镜</span>
               <span>TTS 音频</span>
               <span>模板节奏</span>
               <span>MP4</span>
@@ -811,7 +811,7 @@
               <span>路线 B</span>
               <strong>AI 图文成片</strong>
             </div>
-            <p>导演稿 + AI 图片 + 音频 → 图片推拉摇移、自动配音、字幕、转场、成片 MP4。</p>
+            <p>生产线分镜 + AI 图片 + 音频 → 图片推拉摇移、自动配音、字幕、转场、成片 MP4。</p>
             <div class="video-route-flow">
               <span>Shot List</span>
               <span>AI 图片</span>
@@ -825,7 +825,7 @@
               <span>路线 C</span>
               <strong>标准素材包 / 兼容导出</strong>
             </div>
-            <p>导演稿 + AI 图片 + 音频 → 图片轨、音频轨、字幕轨、分镜备注和素材文件夹。</p>
+            <p>生产线分镜 + AI 图片 + 音频 → 图片轨、音频轨、字幕轨、分镜备注和素材文件夹。</p>
             <div class="video-route-flow">
               <span>素材绑定</span>
               <span>SRT 字幕</span>
@@ -839,10 +839,10 @@
               <span>路线 D</span>
               <strong>下载素材混剪</strong>
             </div>
-            <p>导演稿 + 原抖音素材/下载素材 + 音频 → 素材识别、画面匹配、字幕和混剪 MP4。</p>
+            <p>生产线分镜 + 原抖音素材/下载素材 + 音频 → 素材识别、画面匹配、字幕和混剪 MP4。</p>
             <div class="video-route-flow">
               <span>素材库</span>
-              <span>导演稿</span>
+              <span>内部分镜</span>
               <span>新配音</span>
               <span>混剪</span>
             </div>
@@ -855,7 +855,7 @@
           <div class="video-product-toolbar">
             <div>
               <h3>成片草稿工作台</h3>
-              <p>先检查文案、语音、导演稿、素材和 BGM，再生成剪映草稿或 MP4。</p>
+              <p>先检查文案、语音、素材和 BGM；分镜与字幕由当前生产线内部生成。</p>
             </div>
             <button class="ghost small" id="refreshVideoProductSources" type="button">刷新素材</button>
           </div>
@@ -863,8 +863,8 @@
           <div class="video-product-workbench">
             <section class="video-product-panel">
               <h3>输入</h3>
-              <label>
-                导演项目（项目流程必选）
+              <label hidden>
+                生产线内部分镜
                 <select id="videoProductDirector"></select>
               </label>
               <label>
@@ -874,8 +874,8 @@
               <label>
                 图片素材来源
                 <select id="videoProductImageSource">
-                  <option value="director">优先匹配当前导演项目图片</option>
-                  <option value="all">使用图片资产库全部图片</option>
+                  <option value="all" selected>使用图片资产库全部图片</option>
+                  <option value="director">仅使用当前生产线分镜图片</option>
                 </select>
               </label>
               <div class="video-product-local-assets">
@@ -927,7 +927,7 @@
                   自定义风格
                   <textarea id="videoProductRouteACustomStyle" rows="3" placeholder="例如：更像商业招生广告，节奏更快，字幕更有压迫感。"></textarea>
                 </label>
-                <small id="videoProductRouteAHelp">默认会用 TTS 文案自动生成导演稿，再走标题、动态字幕、BGM 混音、片头片尾和质检。</small>
+                <small id="videoProductRouteAHelp">默认会用 TTS 文案在生产线内部生成分镜，再走标题、动态字幕、BGM 混音、片头片尾和质检。</small>
               </div>
               <label>
                 输出方式
