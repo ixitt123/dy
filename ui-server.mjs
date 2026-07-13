@@ -6687,6 +6687,21 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
+    if (req.method === "GET" && (url.pathname === "/api/tts/subtitle" || url.pathname === "/api/tts/timestamped-text")) {
+      const job = taskStore.getTtsJob(Number(url.searchParams.get("id") || 0));
+      const metadata = safeJson(job?.metadata_json, {});
+      const filePath = url.pathname === "/api/tts/subtitle" ? metadata.subtitle_path : metadata.timestamped_text_path;
+      const resolved = filePath ? path.resolve(filePath) : "";
+      const allowedRoot = path.resolve(ttsService.subtitleDir);
+      if (!job || !resolved.startsWith(`${allowedRoot}${path.sep}`) || !fs.existsSync(resolved)) {
+        sendJson(res, 404, { ok: false, message: "字幕或时间戳文案文件不存在。" });
+        return;
+      }
+      const contentType = url.pathname === "/api/tts/subtitle" ? "application/x-subrip; charset=utf-8" : "text/plain; charset=utf-8";
+      sendBuffer(res, 200, fs.readFileSync(resolved), contentType, path.basename(resolved));
+      return;
+    }
+
     if (req.method === "GET" && url.pathname === "/api/voice-assets") {
       sendJson(res, 200, {
         ok: true,
