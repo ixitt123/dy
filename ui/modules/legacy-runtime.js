@@ -3411,6 +3411,21 @@ async function sendConfirmedTtsAudio() {
   ttsAudioHandoffStatus.textContent = `已发送确定好的音频到：${sent.join("、")}。`;
 }
 
+async function prepareTtsJobHandoff(id) {
+  const data = await fetchJson(`/api/tts/job?id=${encodeURIComponent(id)}`);
+  const job = data.job;
+  if (!job || job.status !== "completed") {
+    ttsStatus.textContent = "这条语音还没有生成完成，不能发送。";
+    return;
+  }
+  activeTtsRailJob = job;
+  renderTtsRail(job);
+  showTtsPreview(job);
+  updateTtsMainProgressFromJob(job);
+  ttsAudioHandoffStatus.textContent = `已选择 #${job.display_number || job.sequence_number || job.id}，勾选目标后点“发送所选”。`;
+  document.querySelector("#ttsAudioHandoff")?.scrollIntoView({ behavior: "smooth", block: "center" });
+}
+
 async function deleteTtsJob(id) {
   const confirmed = window.confirm(`确定删除语音记录 #${id} 和对应音频文件吗？此操作不可撤销。`);
   if (!confirmed) return;
@@ -6739,9 +6754,17 @@ document.querySelector("#clearTtsJobs")?.addEventListener("click", () => {
 });
 
 ttsHistory?.addEventListener("click", (event) => {
-  const button = event.target.closest(".tts-job-delete");
+  const sendButton = event.target.closest(".tts-job-send");
+  const deleteButton = event.target.closest(".tts-job-delete");
   const row = event.target.closest("[data-tts-job-id]");
-  if (!button || !row) return;
+  if (!row) return;
+  if (sendButton && row) {
+    prepareTtsJobHandoff(Number(row.dataset.ttsJobId || 0)).catch((error) => {
+      ttsStatus.textContent = error instanceof Error ? error.message : String(error);
+    });
+    return;
+  }
+  if (!deleteButton) return;
   deleteTtsJob(Number(row.dataset.ttsJobId || 0)).catch((error) => { ttsStatus.textContent = error instanceof Error ? error.message : String(error); });
 });
 

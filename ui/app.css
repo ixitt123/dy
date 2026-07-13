@@ -2824,7 +2824,7 @@ pre {
 
 .tts-history-row {
   display: grid;
-  grid-template-columns: 54px minmax(140px, 0.8fr) minmax(200px, 1.4fr) 100px 82px minmax(190px, 1fr) auto;
+  grid-template-columns: 54px minmax(120px, 0.75fr) minmax(180px, 1.2fr) 96px 82px minmax(180px, 1fr) minmax(150px, 0.9fr) auto auto;
   align-items: center;
   gap: 10px;
   border-bottom: 1px solid #e8edef;
@@ -2845,6 +2845,22 @@ pre {
 .tts-history-row audio {
   width: 100%;
   height: 34px;
+}
+
+.tts-history-files {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  font-size: 12px;
+}
+
+.tts-history-files a {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 4px 7px;
+  color: var(--primary);
+  text-decoration: none;
+  background: color-mix(in srgb, var(--panel) 92%, var(--primary) 8%);
 }
 
 .tts-job-status {
@@ -6037,6 +6053,15 @@ body[data-active-module="video-output"] .floating-workflow-guide [data-nav="vide
 
 .tts-history-row audio {
   grid-column: 1 / -1;
+}
+
+.tts-history-row > .tts-history-files {
+  grid-column: 1 / -1;
+}
+
+.tts-history-row > .tts-job-send {
+  grid-column: 1;
+  justify-self: start;
 }
 
 .tts-history-row > .danger-action {
