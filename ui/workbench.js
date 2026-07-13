@@ -426,7 +426,7 @@ async function syncCurrentVideoProductSelections() {
     const title = audioSelect?.selectedOptions?.[0]?.textContent
       ?.replace(/^#\d+\s*/, "")
       .replace(/路.*$/, "")
-      .trim() || "短视频成片项目";
+      .trim() || "短视频项目";
     const created = await createVideoProject({
       title,
       videoType: "短视频",
@@ -589,7 +589,7 @@ function setupRewriteStudio() {
     </label>
     <div class="rewrite-simple-note">
       <strong>默认生成 1 个版本</strong>
-      <span>需要更多风格时可增加输出框，再选择最佳版本发送到配音或视频成片。</span>
+      <span>需要更多风格时可增加输出框，再选择最佳版本发送到配音或保留生产线。</span>
     </div>
   `;
   settingsLane.appendChild(simpleControls);
@@ -663,7 +663,7 @@ function setupTtsStudio() {
 
   addLaneHeading(inputLane, "项目文案", "手动输入或从当前项目的最佳改写带入");
   addLaneHeading(settingsLane, "选择声音", "我的克隆音色、平台预设和最近使用");
-  addLaneHeading(resultLane, "试听与发送", "确认语音后继续进入成片中心");
+  addLaneHeading(resultLane, "试听与发送", "确认语音后发送到保留生产线");
 
   oldWorkbench.remove();
   studio.append(inputLane, settingsLane, resultLane);
@@ -735,7 +735,7 @@ function setupDirectorStudio() {
 }
 
 function setupVfoFutureStep() {
-  // 成片中心已经在 VFO 页面启用，不再追加旧的“下一阶段”占位卡。
+  // 独立成片中心已停用，不再追加旧的“下一阶段”占位卡。
 }
 
 function createTranscriptVault() {
@@ -1312,119 +1312,34 @@ async function openLatestOutputLocation() {
   }
 }
 
-async function openRailVideoProduct(projectId) {
-  const id = Number(projectId || 0);
-  if (!id) return;
-  navigateWorkbench("vfo", { preserveScroll: true });
-  if (typeof openVideoProductProject === "function") {
-    await openVideoProductProject(id);
-  }
-  document.querySelector("#videoProductCenter")?.scrollIntoView({ behavior: "smooth", block: "start" });
+async function openRailVideoProduct() {
+  setRailActionStatus('视频成片生产线已停用，请使用 CS1、小黑或 MoneyPrinter。');
+  navigateWorkbench('dashboard');
 }
 
-async function openRailVideoProductLocation(projectId) {
-  const id = Number(projectId || 0);
-  const project = dashboardVideoProducts.find((item) => Number(item.project_id || item.id || 0) === id);
-  if (!project?.output_dir) {
-    await openRailVideoProduct(id);
-    return;
-  }
-  const response = await fetch("/api/open-path", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ filePath: project.output_dir }),
-  });
-  if (!response.ok) {
-    const data = await response.json().catch(() => ({}));
-    throw new Error(data.message || "打开成片输出目录失败");
-  }
+async function openRailVideoProductLocation() {
+  setRailActionStatus('视频成片生产线已停用，旧输出已不再作为生产线入口。');
 }
-
-async function forceRailVideoProduct(projectId) {
-  const id = Number(projectId || 0);
-  if (!id) return;
-  const project = dashboardVideoProducts.find((item) => railVideoProductId(item) === id);
-  if (!project) throw new Error("没有找到要强制执行的成片任务。");
-  const reason = project.error || (project.blockers || []).join("；") || "未知风险";
-  if (!isForceableVideoProductError(reason)) {
-    throw new Error("这个失败不是软拦截，不能强制执行。请先补齐缺失的音频、生产线分镜或图片。");
-  }
-  if (!window.confirm(`当前成片任务有风险：\n\n${reason}\n\n确定后将用原参数重新创建强制执行任务，并在报告里保留风险记录。是否继续？`)) return;
-  const metadata = project.metadata && typeof project.metadata === "object" ? project.metadata : {};
-  const body = {
-    ...metadata,
-    projectId: metadata.video_project_id || metadata.projectId || "",
-    video_project_id: metadata.video_project_id || metadata.projectId || "",
-    source_director_project_id: project.source_director_project_id || metadata.source_director_project_id || metadata.director_project_id || 0,
-    audio_asset_id: project.audio_asset_id || metadata.audio_asset_id || metadata.tts_job_id || 0,
-    platform: project.platform || metadata.platform || "douyin",
-    output_type: project.output_type || metadata.output_type || "jianying_template",
-    ratio: project.ratio || metadata.ratio || "9:16",
-    resolution: project.resolution || metadata.resolution || "1080x1920",
-    force_execution: true,
-    force_timeline_blockers: true,
-    force_quality_review: true,
-  };
-  const data = await fetchJson("/api/video-product/generate", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  setRailActionStatus(`已确认风险并重新创建强制执行任务 #${data.project?.project_id || data.project?.id || ""}`);
-  await refreshVideoProductSurfaces();
+async function forceRailVideoProduct() {
+  setRailActionStatus('视频成片生产线已停用，不能再强制执行旧任务。');
 }
-
 function setRailActionStatus(message) {
   if (typeof batchStatus !== "undefined") batchStatus.textContent = message;
   if (typeof resultBox !== "undefined") resultBox.textContent = message;
 }
 
 async function refreshVideoProductSurfaces() {
-  const refreshJobs = [];
-  if (typeof loadVideoProductProjects === "function") {
-    refreshJobs.push(loadVideoProductProjects());
-  }
-  if (window.videoOutputModule?.loadVideoProductProjects) {
-    refreshJobs.push(window.videoOutputModule.loadVideoProductProjects());
-  }
-  await Promise.allSettled(refreshJobs);
+  dashboardVideoProducts = [];
   await refreshWorkbenchOverview();
 }
-
-async function deleteRailVideoProduct(projectId) {
-  const id = Number(projectId || 0);
-  if (!id) return;
-  const project = dashboardVideoProducts.find((item) => railVideoProductId(item) === id);
-  if (project && railVideoProductIsRunning(project)) {
-    throw new Error("成片任务正在处理，完成或失败后才能删除。");
-  }
-  const title = project?.metadata?.title || `成片 #${id}`;
-  if (!window.confirm(`确定删除「${title}」的成片记录和输出文件夹吗？\n\nMP4、字幕、封面、报告和素材包都会一起删除，此操作不可撤销。`)) return;
-  const data = await fetchJson("/api/video-product/delete", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ id, deleteFiles: true }),
-  });
-  setRailActionStatus(`已删除 ${data.deleted || 0} 条成片记录`);
-  await refreshVideoProductSurfaces();
+async function deleteRailVideoProduct() {
+  setRailActionStatus('视频成片生产线已停用，旧任务记录由本次清理统一删除。');
 }
 
 async function clearRailVideoProducts() {
-  const deletable = dashboardVideoProducts.filter(railVideoProductCanDelete);
-  if (!deletable.length) {
-    setRailActionStatus("当前没有可清理的成片记录");
-    return;
-  }
-  if (!window.confirm(`确定清理 ${deletable.length} 条已结束成片记录和对应输出文件夹吗？\n\n正在运行的任务会保留，此操作不可撤销。`)) return;
-  const data = await fetchJson("/api/video-product/clear", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ scope: "all", deleteFiles: true }),
-  });
-  setRailActionStatus(`已清理 ${data.deleted || 0} 条成片记录`);
-  await refreshVideoProductSurfaces();
+  dashboardVideoProducts = [];
+  setRailActionStatus('视频成片生产线已停用，旧任务记录由本次清理统一删除。');
 }
-
 async function clearFinishedRailTasks() {
   const tasks = typeof allTasks === "undefined" ? [] : allTasks;
   const finished = tasks.filter(railTaskIsFinished);
@@ -1661,7 +1576,6 @@ function initWorkbench() {
     ws.onmessage = (e) => {
       const data = JSON.parse(e.data);
       if (data.type === "video-product") {
-        if (typeof loadVideoProductProjects === "function") loadVideoProductProjects().catch(() => {});
         refreshWorkbenchOverview();
         return;
       }
