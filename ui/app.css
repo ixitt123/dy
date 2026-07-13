@@ -7229,6 +7229,52 @@ audio {
   font-weight: 800;
 }
 
+.moments-prompt-material-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-top: 10px;
+}
+
+.moments-material-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.moments-material-list.compact {
+  min-height: 30px;
+  align-items: center;
+}
+
+.moments-material-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 320px;
+  border: 1px solid #303846;
+  border-radius: 7px;
+  padding: 4px 8px;
+  color: #dce2eb;
+  background: #101722;
+  font-size: 11px;
+}
+
+.moments-material-chip img {
+  width: 24px;
+  height: 24px;
+  border-radius: 5px;
+  object-fit: cover;
+  background: #080c12;
+}
+
+.moments-material-chip span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .moments-prompt-status {
   min-height: 18px;
   margin-top: 8px;

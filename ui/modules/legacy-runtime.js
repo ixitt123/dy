@@ -1724,14 +1724,25 @@ function appendMaterialText(target, material) {
   target.dispatchEvent(new Event("change", { bubbles: true }));
 }
 
+function appendMaterialToPrompt(card, material) {
+  const promptText = card?.querySelector(".moments-prompt-text");
+  if (!promptText || !material) return;
+  const line = `本地素材参考：${material.name}（${material.filePath}）`;
+  if (!promptText.value.includes(material.filePath)) {
+    promptText.value = `${promptText.value.trim()}\n\n${line}`.trim();
+    promptText.dispatchEvent(new Event("input", { bubbles: true }));
+    promptText.dispatchEvent(new Event("change", { bubbles: true }));
+  }
+}
+
 async function uploadPromptMomentsMaterial(index, file) {
   const status = document.querySelector(`[data-moments-prompt-status="${index}"]`);
-  const input = document.querySelector(`[data-moments-material="${index}"]`);
-  if (!file || !input) return;
+  const card = document.querySelector(`[data-moments-prompt="${index}"]`);
+  if (!file || !card) return;
   if (status) status.textContent = "正在上传本条素材...";
   try {
     const material = await uploadMomentsMaterial(file, { promptIndex: index });
-    appendMaterialText(input, material);
+    appendMaterialToPrompt(card, material);
     const preview = document.querySelector(`[data-moments-material-preview="${index}"]`);
     if (preview) {
       preview.innerHTML = `
@@ -1742,7 +1753,7 @@ async function uploadPromptMomentsMaterial(index, file) {
       `;
     }
     saveMomentsDraft();
-    if (status) status.textContent = "本条素材已上传并写入提示词素材栏。";
+    if (status) status.textContent = "本条素材已上传并写入提示词。";
   } catch (error) {
     if (status) status.textContent = error instanceof Error ? error.message : String(error);
   }
@@ -1775,10 +1786,6 @@ function renderMomentsResult(result) {
         </div>
       </div>
       <textarea class="moments-prompt-text" rows="7">${escapeHtml(momentsPromptText(item))}</textarea>
-      <label class="moments-local-image-note">
-        本地图片素材
-        <input type="text" value="${escapeHtml(item.local_material_hint || "")}" data-moments-material="${index}" placeholder="例如：参考 C:\\素材\\课堂照片.png；保持同一主题" />
-      </label>
       <div class="moments-prompt-material-actions">
         <button class="ghost small" type="button" data-moments-action="choose-material" data-index="${index}">上传本条素材</button>
         <input hidden type="file" accept=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp" data-moments-material-file="${index}" />
@@ -1823,8 +1830,7 @@ async function generateMomentsPost() {
 function collectRenderedMomentsPrompts() {
   return [...document.querySelectorAll(".moments-prompt-card")].map((card, index) => {
     const text = card.querySelector(".moments-prompt-text")?.value.trim() || "";
-    const material = card.querySelector("[data-moments-material]")?.value.trim() || "";
-    return { index, text, material };
+    return { index, text };
   }).filter((item) => item.text);
 }
 
@@ -2969,7 +2975,7 @@ function fileToDataUrl(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(String(reader.result || ""));
-    reader.onerror = () => reject(new Error("参考音频读取失败。"));
+    reader.onerror = () => reject(new Error("文件读取失败。"));
     reader.readAsDataURL(file);
   });
 }
