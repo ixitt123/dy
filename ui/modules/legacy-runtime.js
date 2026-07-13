@@ -2905,12 +2905,12 @@ function renderTtsVoiceQuickPanel(asset = selectedVoiceAssetFromDropdown(), stat
     name: asset.voice_name,
   });
   const audioUrl = state.refreshAudio ? cacheBustAudioUrl(voiceAssetAudioUrl(asset)) : voiceAssetAudioUrl(asset);
+  const previewBusy = state.previewBusy === true;
   const previewHint = state.previewError
     ? `<small class="tts-voice-preview-status error">${escapeHtml(state.previewError)}</small>`
-    : state.previewMessage
+    : state.previewMessage && !previewBusy
       ? `<small class="tts-voice-preview-status">${escapeHtml(state.previewMessage)}</small>`
       : "";
-  const previewBusy = state.previewBusy === true;
   const previewProgress = Math.max(0, Math.min(100, Math.round(Number(state.previewProgress || 0))));
   const previewProgressMarkup = previewBusy ? `
     <div class="tts-voice-preview-progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${previewProgress}">
