@@ -330,7 +330,7 @@ const rewriteVersionOptions = [
 ];
 const defaultRewriteVersionCount = 3;
 const maxRewriteVersionCount = 50;
-const rewritePresetStorageKey = "video-factory:rewrite-preset-v1";
+const rewritePresetStorageKey = "video-factory:rewrite-preset-v2";
 const rewritePlanPresets = {
   "保留原意强化表达": {
     direction: "保留原意优化",
@@ -710,6 +710,11 @@ function loadRewritePresetSettings() {
     data = JSON.parse(localStorage.getItem(rewritePresetStorageKey) || "{}");
   } catch {
     data = {};
+  }
+  if (!Object.keys(data).length) {
+    applyRewritePlanPreset(rewriteStyle?.value || "保留原意强化表达", { save: false });
+    syncRewriteSliderLabels();
+    return;
   }
   setSelectIfOption(rewriteProvider, data.provider);
   setSelectIfOption(rewriteStyle, data.style);
