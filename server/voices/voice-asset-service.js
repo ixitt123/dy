@@ -190,13 +190,7 @@ export function createVoiceAssetService({ baseDir, taskStore, ttsService, getSet
       "minimax",
     ].filter(Boolean);
     for (const providerId of [...new Set(providers)]) {
-      const config = tts[providerId] || {};
-      const configured = providerId === "aliyun_bailian"
-        ? Boolean(config.api_key)
-        : providerId === "minimax"
-          ? Boolean(config.api_key)
-          : false;
-      if (configured) ttsService.listVoices(providerId);
+      ttsService.listVoices(providerId);
     }
   }
 
