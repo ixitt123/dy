@@ -3670,8 +3670,9 @@ renderTtsVoices = function renderTtsVoicesUnified() {
     name: asset.voice_name,
   }));
   renderTtsVoiceCategories(categoryRows);
-  const selectedCategory = ttsVoiceCategory?.value || "鍏ㄩ儴";
-  const voices = selectedCategory === "鍏ㄩ儴"
+  const allCategoryValue = ttsVoiceCategory?.options?.[0]?.value || "all";
+  const selectedCategory = ttsVoiceCategory?.value || allCategoryValue;
+  const voices = selectedCategory === allCategoryValue
     ? sourceAssets
     : sourceAssets.filter((asset) => normalizeTtsVoiceCategory({
       category: asset.metadata?.category,
@@ -3689,13 +3690,13 @@ renderTtsVoices = function renderTtsVoicesUnified() {
         name: asset.voice_name,
       });
       const badges = [
-        asset.is_default ? "默认" : "",
-        asset.is_favorite ? "常用" : "",
-        asset.voice_type === "clone" ? "克隆" : category,
+        asset.is_default ? "default" : "",
+        asset.is_favorite ? "favorite" : "",
+        asset.voice_type === "clone" ? "clone" : category,
       ].filter(Boolean).join(" / ");
-      return `<option value="${escapeHtml(asset.id)}">${escapeHtml(asset.voice_name || asset.voice_id)} · ${escapeHtml(badges)} · ${escapeHtml(asset.metadata?.target_model || asset.metadata?.model || asset.voice_id)}</option>`;
+      return "<option value="" + escapeHtml(asset.id) + "">" + escapeHtml(asset.voice_name || asset.voice_id) + " - " + escapeHtml(badges) + " - " + escapeHtml(asset.metadata?.target_model || asset.metadata?.model || asset.voice_id) + "</option>";
     }).join("")
-    : '<option value="">当前分类暂无可用音色</option>';
+    : "<option value="">No voice in this group</option>";
   if (voices.some((asset) => String(asset.id) === String(previous))) {
     ttsPresetVoice.value = previous;
   } else {
@@ -3705,7 +3706,6 @@ renderTtsVoices = function renderTtsVoicesUnified() {
   }
   syncTtsModelToSelectedVoice();
 };
-
 applyVoiceAssetToTts = async function applyVoiceAssetToTtsUnified(asset) {
   const providerOption = ttsProviderConfigs.find((provider) => provider.id === asset.provider && provider.enabled);
   if (!providerOption) throw new Error("这个声音对应的平台当前不可用。");
