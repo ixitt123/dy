@@ -3485,12 +3485,8 @@ async function waitForTtsJob(jobId) {
     ttsStatus.textContent = "生成完成，可以试听。";
     setTtsMainProgress(100, "生成完成");
     showTtsPreview(job);
-    await window.videoProjects?.linkCurrent?.("tts", job.id, job.voice_name || `配音 #${job.id}`, {
-      ...job,
-      text: job.text || ttsText.value.trim(),
-      source: "ai_generated",
-      status: "ready",
-    });
+    const payload = confirmedTtsAudioPayload(job);
+    if (payload) await window.videoProjects?.linkCurrent?.("tts", payload.id, payload.voice_name || `配音 #${payload.id}`, payload);
     await refreshTtsJobs();
     return;
   }
@@ -6753,21 +6749,17 @@ sendConfirmedTtsAudioBtn?.addEventListener("click", () => {
 });
 
 document.querySelector("#sendTtsToVideoProduct")?.addEventListener("click", async () => {
-  if (!activeTtsRailJob?.id || activeTtsRailJob.status !== "completed") {
+  const payload = confirmedTtsAudioPayload();
+  if (!payload) {
     ttsStatus.textContent = "请先生成并完成一条语音。";
     return;
   }
-  await window.videoProjects?.linkCurrent?.("tts", activeTtsRailJob.id, activeTtsRailJob.voice_name || `配音 #${activeTtsRailJob.id}`, {
-    ...activeTtsRailJob,
-    text: activeTtsRailJob.text || ttsText.value.trim(),
-    source: "ai_generated",
-    status: "ready",
-  });
+  await window.videoProjects?.linkCurrent?.("tts", payload.id, payload.voice_name || `配音 #${payload.id}`, payload);
   window.workbenchNavigate?.("vfo", { preserveScroll: true });
   if (window.videoOutputModule?.loadVideoProductSources) await window.videoOutputModule.loadVideoProductSources();
-  else await loadVideoProductSources({ preferredAudioId: activeTtsRailJob.id });
+  else await loadVideoProductSources({ preferredAudioId: payload.id });
   document.querySelector("#videoProductCenter")?.scrollIntoView({ behavior: "smooth", block: "start" });
-  ttsStatus.textContent = "已把当前语音发送到成片中心。";
+  ttsStatus.textContent = "已把三件套（音频、文案、带时间戳字幕）发送到成片中心。";
 });
 
 document.querySelector("#refreshTtsJobs").addEventListener("click", () => {
