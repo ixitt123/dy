@@ -31,6 +31,8 @@ const COLUMNS = [
   "title",
   "video_id",
   "video_path",
+  "audio_path",
+  "subtitle_path",
   "txt_path",
   "analysis_path",
   "rewrite_path",
@@ -50,6 +52,8 @@ const COLUMNS = [
   "file_hash",
   "file_size",
   "transcript_enabled",
+  "audio_enabled",
+  "audio_format",
   "analysis_enabled",
   "only_transcript",
   "created_at",
@@ -323,6 +327,8 @@ function normalizeRow(row) {
     progress: Number(row.progress || 0),
     file_size: Number(row.file_size || 0),
     transcript_enabled: Boolean(row.transcript_enabled),
+    audio_enabled: Boolean(row.audio_enabled),
+    audio_format: String(row.audio_format || "mp3"),
     analysis_enabled: Boolean(row.analysis_enabled),
     only_transcript: Boolean(row.only_transcript),
   };
@@ -353,6 +359,8 @@ export function openTaskStore(baseDir) {
       title TEXT NOT NULL DEFAULT '',
       video_id TEXT NOT NULL DEFAULT '',
       video_path TEXT NOT NULL DEFAULT '',
+      audio_path TEXT NOT NULL DEFAULT '',
+      subtitle_path TEXT NOT NULL DEFAULT '',
       txt_path TEXT NOT NULL DEFAULT '',
       analysis_path TEXT NOT NULL DEFAULT '',
       rewrite_path TEXT NOT NULL DEFAULT '',
@@ -372,6 +380,8 @@ export function openTaskStore(baseDir) {
       file_hash TEXT NOT NULL DEFAULT '',
       file_size INTEGER NOT NULL DEFAULT 0,
       transcript_enabled INTEGER NOT NULL DEFAULT 1,
+      audio_enabled INTEGER NOT NULL DEFAULT 0,
+      audio_format TEXT NOT NULL DEFAULT 'mp3',
       analysis_enabled INTEGER NOT NULL DEFAULT 1,
       only_transcript INTEGER NOT NULL DEFAULT 0,
       created_at TEXT NOT NULL,
@@ -713,6 +723,18 @@ export function openTaskStore(baseDir) {
   if (!taskColumns.has("humanize_level")) {
     db.exec("ALTER TABLE tasks ADD COLUMN humanize_level TEXT NOT NULL DEFAULT '普通'");
   }
+  if (!taskColumns.has("audio_path")) {
+    db.exec("ALTER TABLE tasks ADD COLUMN audio_path TEXT NOT NULL DEFAULT ''");
+  }
+  if (!taskColumns.has("subtitle_path")) {
+    db.exec("ALTER TABLE tasks ADD COLUMN subtitle_path TEXT NOT NULL DEFAULT ''");
+  }
+  if (!taskColumns.has("audio_enabled")) {
+    db.exec("ALTER TABLE tasks ADD COLUMN audio_enabled INTEGER NOT NULL DEFAULT 0");
+  }
+  if (!taskColumns.has("audio_format")) {
+    db.exec("ALTER TABLE tasks ADD COLUMN audio_format TEXT NOT NULL DEFAULT 'mp3'");
+  }
 
   const voiceColumns = new Set(db.prepare("PRAGMA table_info(voices)").all().map((column) => column.name));
   const voiceMigrations = [
@@ -746,9 +768,9 @@ export function openTaskStore(baseDir) {
   const insertTask = db.prepare(`
     INSERT INTO tasks (
       kind, task_action, url, normalized_url, status, progress, message, source_text,
-      transcript_enabled, analysis_enabled, only_transcript, created_at, updated_at
+      transcript_enabled, audio_enabled, audio_format, analysis_enabled, only_transcript, created_at, updated_at
     )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
   const getById = db.prepare(`SELECT ${COLUMNS.join(", ")} FROM tasks WHERE id = ?`);
   const getNextWaiting = db.prepare(`
@@ -1080,6 +1102,8 @@ export function openTaskStore(baseDir) {
           "等待处理",
           item.sourceText || item.url,
           item.transcriptEnabled ? 1 : 0,
+          item.audioEnabled ? 1 : 0,
+          String(item.audioFormat || "mp3"),
           item.analysisEnabled ? 1 : 0,
           item.onlyTranscript ? 1 : 0,
           createdAt,
