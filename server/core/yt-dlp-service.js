@@ -314,6 +314,7 @@ function createYtDlpService({
     const bin = await binary();
     const targetDir = ensureDir(outputDir());
     const printed = [];
+    const startedAt = Date.now();
     const args = [
       "--no-playlist",
       "--newline",
@@ -349,11 +350,12 @@ function createYtDlpService({
       },
     });
     const videoPath = printed
-      .map((line) => line.replace(/^file:/, ""))
+      .map((line) => normalizePrintedPath(line, targetDir))
       .find((line) => fileExists(line) && VIDEO_EXTENSIONS.has(path.extname(line).toLowerCase()))
-      || "";
+      || findDownloadedVideoFromDir(targetDir, { url, startedAt, printed });
     if (!videoPath) {
-      throw new Error("yt-dlp 下载完成，但没有找到本地视频文件");
+      const hint = printed.slice(-3).join(" | ");
+      throw new Error(`yt-dlp 下载完成，但没有找到本地视频文件${hint ? `；输出：${hint}` : ""}`);
     }
     const infoPath = findInfoJsonForVideo(videoPath);
     let raw = {};
