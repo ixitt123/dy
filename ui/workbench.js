@@ -456,7 +456,8 @@ async function syncCurrentVideoProductSelections() {
   const audio = typeof videoProductSources !== "undefined" ? videoProductSources.audioJobs?.find((item) => Number(item.id) === audioId) : null;
   if (audio) {
     if (audio.text) await linkCurrentProjectAsset("selected_rewrite", `tts-text-${audio.id}`, "当前配音文案", { text: audio.text, source: "tts" });
-    await linkCurrentProjectAsset("tts", audio.id, audio.voice_name || `配音 #${audio.id}`, { ...audio, source: "local_upload" });
+    const audioTitle = audio.title || audio.seo_title || audio.publish_title || audio.platform_titles?.douyin || audio.voice_name || `配音 #${audio.id}`;
+    await linkCurrentProjectAsset("tts", audio.id, audioTitle, { ...audio, title: audioTitle, source: "local_upload" });
   }
 
   const directorId = Number(typeof videoProductDirector !== "undefined" ? videoProductDirector.value : 0);
