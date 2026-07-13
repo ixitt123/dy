@@ -206,9 +206,12 @@ function textToApproximateSrt(text, duration = 0) {
 function createYtDlpService({
   baseDir,
   downloadsDir,
+  getDownloadsDir,
   ffmpegPath,
   ffprobePath,
 }) {
+  const outputDir = () => String(typeof getDownloadsDir === "function" ? getDownloadsDir() : downloadsDir);
+
   async function binary() {
     return ensureYtDlpBinary(baseDir);
   }
@@ -238,14 +241,14 @@ function createYtDlpService({
 
   async function download(url, { signal, onProgress = () => {} } = {}) {
     const bin = await binary();
-    ensureDir(downloadsDir);
+    const targetDir = ensureDir(outputDir());
     const printed = [];
     const args = [
       "--no-playlist",
       "--newline",
       "--windows-filenames",
       "--merge-output-format", "mp4",
-      "--paths", downloadsDir,
+      "--paths", targetDir,
       "-o", "%(title).120B_%(id)s.%(ext)s",
       "--write-info-json",
       "--write-subs",
@@ -306,9 +309,9 @@ function createYtDlpService({
     const safeFormat = AUDIO_FORMATS.has(String(format || "").toLowerCase()) ? String(format).toLowerCase() : "mp3";
     if (!ffmpegPath) throw new Error("未找到 ffmpeg，无法提取音频");
     if (!fileExists(mediaPath)) throw new Error("没有找到可提取音频的视频文件");
-    ensureDir(downloadsDir);
+    const targetDir = ensureDir(outputDir());
     const base = safeBaseName(path.basename(mediaPath, path.extname(mediaPath)));
-    const outputPath = path.join(downloadsDir, `${base}_audio.${safeFormat}`);
+    const outputPath = path.join(targetDir, `${base}_audio.${safeFormat}`);
     const argsByFormat = {
       mp3: ["-y", "-i", mediaPath, "-vn", "-codec:a", "libmp3lame", "-q:a", "2", outputPath],
       wav: ["-y", "-i", mediaPath, "-vn", "-acodec", "pcm_s16le", "-ar", "44100", outputPath],
@@ -325,7 +328,7 @@ function createYtDlpService({
     const srt = textToApproximateSrt(text, duration);
     if (!srt) return "";
     const target = outputPath || path.join(
-      downloadsDir,
+      ensureDir(outputDir()),
       `${safeBaseName(path.basename(mediaPath || "transcript", path.extname(mediaPath || "")))}_校正文案.srt`,
     );
     fs.writeFileSync(target, srt, "utf8");

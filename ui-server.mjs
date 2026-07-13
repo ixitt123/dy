@@ -72,6 +72,7 @@ fs.mkdirSync(rewritesDir, { recursive: true });
 const ytDlpService = createYtDlpService({
   baseDir: __dirname,
   downloadsDir,
+  getDownloadsDir: () => downloadsDir,
   ffmpegPath,
   ffprobePath,
 });
