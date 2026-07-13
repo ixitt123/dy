@@ -242,10 +242,6 @@ const momentsPersonaName = document.querySelector("#momentsPersonaName");
 const momentsPersonaText = document.querySelector("#momentsPersonaText");
 const momentsPersonaStatus = document.querySelector("#momentsPersonaStatus");
 const momentsLocalMaterials = document.querySelector("#momentsLocalMaterials");
-const chooseMomentsMaterialBtn = document.querySelector("#chooseMomentsMaterial");
-const momentsMaterialInput = document.querySelector("#momentsMaterialInput");
-const momentsMaterialStatus = document.querySelector("#momentsMaterialStatus");
-const momentsMaterialList = document.querySelector("#momentsMaterialList");
 const momentsVisualStyle = document.querySelector("#momentsVisualStyle");
 const momentsImageCount = document.querySelector("#momentsImageCount");
 const momentsTone = document.querySelector("#momentsTone");
@@ -1701,6 +1697,102 @@ function renderMomentsImages(images = []) {
   }).join("");
 }
 
+function renderMomentsMaterialList(materials = []) {
+  if (!momentsMaterialList) return;
+  if (!materials.length) {
+    momentsMaterialList.innerHTML = "";
+    return;
+  }
+  momentsMaterialList.innerHTML = materials.map((material) => `
+    <span class="moments-material-chip" title="${escapeHtml(material.filePath || "")}">
+      ${material.imageUrl ? `<img src="${escapeHtml(material.imageUrl)}" alt="${escapeHtml(material.name || "素材")}" />` : ""}
+      <span>${escapeHtml(material.name || "素材")}</span>
+    </span>
+  `).join("");
+}
+
+function fileToDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(reader.error || new Error("读取文件失败"));
+    reader.readAsDataURL(file);
+  });
+}
+
+async function uploadMomentsMaterial(file, { promptIndex = null } = {}) {
+  if (!file) return null;
+  const imageData = await fileToDataUrl(file);
+  const data = await fetchJson("/api/moments/materials/upload", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      file_name: file.name,
+      image_mime: file.type,
+      image_data: imageData,
+      prompt_index: promptIndex,
+    }),
+  });
+  return data.material;
+}
+
+function appendMaterialText(target, material) {
+  if (!target || !material) return;
+  const line = `本地素材：${material.name}（${material.filePath}）`;
+  const current = target.value.trim();
+  target.value = current ? `${current}\n${line}` : line;
+  target.dispatchEvent(new Event("input", { bubbles: true }));
+  target.dispatchEvent(new Event("change", { bubbles: true }));
+}
+
+async function uploadGlobalMomentsMaterials(files) {
+  const list = [...(files || [])];
+  if (!list.length) return;
+  if (momentsMaterialStatus) momentsMaterialStatus.textContent = `正在上传 ${list.length} 张素材...`;
+  const uploaded = [];
+  try {
+    for (const file of list) {
+      const material = await uploadMomentsMaterial(file);
+      uploaded.push(material);
+      appendMaterialText(momentsLocalMaterials, material);
+    }
+    renderMomentsMaterialList(uploaded);
+    saveMomentsDraft();
+    if (momentsMaterialStatus) momentsMaterialStatus.textContent = `已上传 ${uploaded.length} 张素材，并写入素材说明。`;
+    setMomentsStatus(`已上传 ${uploaded.length} 张本地图片素材。`, "success");
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (momentsMaterialStatus) momentsMaterialStatus.textContent = message;
+    setMomentsStatus(message, "error");
+  } finally {
+    if (momentsMaterialInput) momentsMaterialInput.value = "";
+  }
+}
+
+async function uploadPromptMomentsMaterial(index, file) {
+  const status = document.querySelector(`[data-moments-prompt-status="${index}"]`);
+  const input = document.querySelector(`[data-moments-material="${index}"]`);
+  if (!file || !input) return;
+  if (status) status.textContent = "正在上传本条素材...";
+  try {
+    const material = await uploadMomentsMaterial(file, { promptIndex: index });
+    appendMaterialText(input, material);
+    const preview = document.querySelector(`[data-moments-material-preview="${index}"]`);
+    if (preview) {
+      preview.innerHTML = `
+        <span class="moments-material-chip" title="${escapeHtml(material.filePath || "")}">
+          ${material.imageUrl ? `<img src="${escapeHtml(material.imageUrl)}" alt="${escapeHtml(material.name || "素材")}" />` : ""}
+          <span>${escapeHtml(material.name || "素材")}</span>
+        </span>
+      `;
+    }
+    saveMomentsDraft();
+    if (status) status.textContent = "本条素材已上传并写入提示词素材栏。";
+  } catch (error) {
+    if (status) status.textContent = error instanceof Error ? error.message : String(error);
+  }
+}
+
 function renderMomentsResult(result) {
   if (!result) return;
   if (momentsPostOutput && !momentsPostOutput.value.trim()) momentsPostOutput.value = result.post || "";
@@ -1724,7 +1816,6 @@ function renderMomentsResult(result) {
           <p>${escapeHtml([item.image_role, item.composition_type, item.visual_hook || item.purpose].filter(Boolean).join(" · "))}</p>
         </div>
         <div class="moments-actions compact">
-          <button class="ghost small" type="button" data-moments-action="copy-prompt" data-index="${index}">复制</button>
           <button class="primary small" type="button" data-moments-action="generate-image" data-index="${index}">生成图片</button>
         </div>
       </div>
@@ -1733,6 +1824,11 @@ function renderMomentsResult(result) {
         本地图片素材
         <input type="text" value="${escapeHtml(item.local_material_hint || "")}" data-moments-material="${index}" placeholder="例如：参考 C:\\素材\\课堂照片.png；保持同一主题" />
       </label>
+      <div class="moments-prompt-material-actions">
+        <button class="ghost small" type="button" data-moments-action="choose-material" data-index="${index}">上传本条素材</button>
+        <input hidden type="file" accept=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp" data-moments-material-file="${index}" />
+        <div class="moments-material-list compact" data-moments-material-preview="${index}"></div>
+      </div>
       <div class="moments-prompt-status" data-moments-prompt-status="${index}"></div>
     </article>
   `).join("");
