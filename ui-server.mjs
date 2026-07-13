@@ -1983,12 +1983,36 @@ function sanitizeFileName(value) {
     .trim();
 }
 
-function makeUniquePath(baseName, extension) {
+function downloadDateStamp(date = new Date()) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+const downloadTypeFolders = {
+  video: "视频",
+  audio: "音频",
+  subtitle: "字幕",
+  transcript: "文案",
+  analysis: "AI分析",
+  other: "其他",
+};
+
+function downloadOutputDir(type = "other", date = new Date()) {
+  const folder = downloadTypeFolders[type] || downloadTypeFolders.other;
+  const dir = path.join(downloadsDir, downloadDateStamp(date), folder);
+  fs.mkdirSync(dir, { recursive: true });
+  return dir;
+}
+
+function makeUniquePath(baseName, extension, type = "other") {
   const safeBase = (sanitizeFileName(baseName) || `douyin_${Date.now()}`).slice(0, 120);
-  let filePath = path.join(downloadsDir, `${safeBase}${extension}`);
+  const dir = downloadOutputDir(type);
+  let filePath = path.join(dir, `${safeBase}${extension}`);
   let index = 2;
   while (fs.existsSync(filePath)) {
-    filePath = path.join(downloadsDir, `${safeBase}_${index}${extension}`);
+    filePath = path.join(dir, `${safeBase}_${index}${extension}`);
     index += 1;
   }
   return filePath;
