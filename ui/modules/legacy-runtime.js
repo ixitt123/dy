@@ -273,36 +273,6 @@ const vfoResultTitle = document.querySelector("#vfoResultTitle");
 const vfoResultMeta = document.querySelector("#vfoResultMeta");
 const vfoResultTabs = document.querySelector("#vfoResultTabs");
 const vfoResultView = document.querySelector("#vfoResultView");
-const videoProductDirector = document.querySelector("#videoProductDirector");
-const videoProductAudio = document.querySelector("#videoProductAudio");
-const videoProductImageSource = document.querySelector("#videoProductImageSource");
-const videoProductOutputType = document.querySelector("#videoProductOutputType");
-const videoProductJianyingTemplate = document.querySelector("#videoProductJianyingTemplate");
-const videoProductLocalImagePath = document.querySelector("#videoProductLocalImagePath");
-const videoProductLocalBgmPath = document.querySelector("#videoProductLocalBgmPath");
-const videoProductRouteAOptions = document.querySelector("#videoProductRouteAOptions");
-const videoProductRouteAStyle = document.querySelector("#videoProductRouteAStyle");
-const videoProductRouteACustomStyle = document.querySelector("#videoProductRouteACustomStyle");
-const videoProductBgmStrategy = document.querySelector("#videoProductBgmStrategy");
-const videoProductBgm = document.querySelector("#videoProductBgm");
-const chooseVideoProductImageBtn = document.querySelector("#chooseVideoProductImage");
-const addVideoProductImageAssetBtn = document.querySelector("#addVideoProductImageAsset");
-const chooseVideoProductBgmBtn = document.querySelector("#chooseVideoProductBgm");
-const addVideoProductBgmAssetBtn = document.querySelector("#addVideoProductBgmAsset");
-const videoProductAssetStatus = document.querySelector("#videoProductAssetStatus");
-const refreshVideoProductSourcesBtn = document.querySelector("#refreshVideoProductSources");
-const autoBindTimelineBtn = document.querySelector("#autoBindTimeline");
-const generateVideoProductBtn = document.querySelector("#generateVideoProduct");
-const videoProductStatus = document.querySelector("#videoProductStatus");
-const videoProductBlockers = document.querySelector("#videoProductBlockers");
-const videoProductProgressBar = document.querySelector("#videoProductProgressBar");
-const videoProductProgressText = document.querySelector("#videoProductProgressText");
-const openVideoProductOutputBtn = document.querySelector("#openVideoProductOutput");
-const videoProductOutputFiles = document.querySelector("#videoProductOutputFiles");
-const videoProductSceneMeta = document.querySelector("#videoProductSceneMeta");
-const videoProductScenes = document.querySelector("#videoProductScenes");
-const refreshVideoProductProjectsBtn = document.querySelector("#refreshVideoProductProjects");
-const videoProductProjects = document.querySelector("#videoProductProjects");
 const railCurrentTask = document.querySelector("#railCurrentTask");
 const railRecentOutput = document.querySelector("#railRecentOutput");
 const railErrors = document.querySelector("#railErrors");
@@ -463,12 +433,6 @@ let vfoProjectsState = [];
 let activeVfoProject = null;
 let activeVfoTab = "overview";
 let vfoPollTimer = 0;
-let videoProductSources = { directors: [], audioJobs: [], imageAssets: [], bgmAssets: [], timelines: [], platforms: [], routeAStyles: [], bgmStrategies: [], jianyingTemplates: [] };
-let videoProductPreview = null;
-let videoProductManualBindings = {};
-let videoProductProjectsState = [];
-let activeVideoProductProject = null;
-let videoProductPollTimer = 0;
 let ttsProviderConfigs = [];
 let ttsPresetVoices = [];
 let ttsMusicPresets = [];
@@ -489,7 +453,7 @@ const taskActionLabels = {
   audio: "提取音频",
 };
 const defaultRewriteReference = "忠于原文主题、事实、人物和事件；只优化表达、结构、节奏、钩子和口播感；不要凭空换行业、换对象、换场景，不要强行改成教育招生或家长话题；不要像AI作文。";
-const rewriteDirectionOptions = ["保留原意优化", "短视频口播", "短视频开场钩子", "完整口播脚本", "知识解释", "痛点共鸣", "评论区引导", "朋友圈文案", "视频成片口播稿", "成交转化", "招生引流"];
+const rewriteDirectionOptions = ["保留原意优化", "短视频口播", "短视频开场钩子", "完整口播脚本", "知识解释", "痛点共鸣", "评论区引导", "朋友圈文案", "短视频口播稿", "成交转化", "招生引流"];
 const rewriteStyleOptions = ["保留原意强化表达", "小黑漫画解释类", "爆款口播重构", "知识拆解型", "痛点共鸣型", "转化引导型", "朋友圈叙事型", "成片旁白型"];
 const rewriteHumanizeOptions = ["关闭", "普通", "强", "极强"];
 const rewriteVersionOptions = [
@@ -558,7 +522,7 @@ const rewritePlanPresets = {
     avoid: "不要口号化；不要过度专业术语。",
   },
   "成片旁白型": {
-    direction: "视频成片口播稿",
+    direction: "短视频口播稿",
     tone: "专业可信，有判断",
     persona: "专业讲解者",
     structure: "镜头开场旁白 -> 逐段解释画面 -> 情绪递进 -> 收束金句。",
