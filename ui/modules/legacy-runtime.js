@@ -3190,6 +3190,7 @@ function ttsProgressValue(job = {}) {
 
 function setTtsMainProgress(percent = 0, label = "") {
   if (!ttsMainProgress) return;
+  if (ttsStatus && !ttsMainProgress.isConnected) ttsStatus.after(ttsMainProgress);
   const value = Math.max(0, Math.min(100, Math.round(Number(percent || 0))));
   ttsMainProgress.hidden = false;
   if (ttsMainProgressLabel) ttsMainProgressLabel.textContent = label || "正在生成音频";
