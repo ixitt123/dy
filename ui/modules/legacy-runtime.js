@@ -1350,7 +1350,6 @@ function handoffTargetLabel(target) {
   return {
     "moments-copy": "朋友圈文案定制",
     tts: "TTS语音",
-    "video-output": "视频成片",
     "cs1-video": "CS1生成器",
     "xiaohei-video": "小黑视频风格生成",
     "money-printer": "MoneyPrinter",
@@ -1394,15 +1393,6 @@ async function sendRewriteTextToTarget(target, text, meta = {}) {
     setTextareaValue(ttsText, cleanText);
     if (ttsCharacterCount) ttsCharacterCount.textContent = `${countRewriteCharacters(cleanText)} 字`;
     if (ttsStatus) ttsStatus.textContent = "已接收文案，可直接生成语音。";
-  } else if (target === "video-output") {
-    await window.videoProjects?.linkCurrent?.("selected_rewrite", `rewrite-handoff-${Date.now()}`, meta.title || "文案定制成品", {
-      text: cleanText,
-      taskId: Number(rewriteTaskId.value || 0),
-      versionKey: meta.versionKey || "",
-      source: meta.source || "rewrite_handoff",
-    });
-    await window.videoProjects?.refresh?.({ preserveSelection: true });
-    if (videoProductStatus) videoProductStatus.textContent = "已接收文案，请先生成 TTS；成片时会在生产线内部生成分镜。";
   } else if (target === "cs1-video") {
     setTextareaValue(document.querySelector("#cs1VideoText"), cleanText);
     const titleInput = document.querySelector("#cs1VideoTitle");
@@ -3385,7 +3375,6 @@ function renderTtsJobsEnhanced(jobs = []) {
       timedSubtitleUrl ? `<a href="${escapeHtml(timedSubtitleUrl)}" target="_blank" rel="noreferrer">带时间戳字幕</a>` : "",
     ].filter(Boolean).join("");
     const handoffTargets = [
-      ["video-output", "视频成片", true],
       ["cs1-video", "CS1生成器", false],
       ["xiaohei-video", "小黑视频风格生成", false],
       ["money-printer", "MoneyPrinter", false],
@@ -3623,17 +3612,6 @@ function setTtsHandoffStatus(container = document, message = "") {
 
 async function sendTtsPayloadToTargets(payload, targets = []) {
   const sent = [];
-  if (targets.includes("video-output")) {
-    await ensureVideoProjectForTts(payload);
-    await window.videoProjects?.linkCurrent?.("tts", payload.id, ttsHandoffTitle(payload), payload);
-    if (window.videoOutputModule?.loadVideoProductSources) await window.videoOutputModule.loadVideoProductSources();
-    else await loadVideoProductSources({ preferredAudioId: payload.id });
-    await window.videoProjects?.refresh?.({ preserveSelection: true });
-    const status = document.querySelector("#videoProductStatus");
-    if (status) status.textContent = "已接收 TTS 三件套，可继续生成视频成片。";
-    markProductionTargetReceived("video-output", payload);
-    sent.push("视频成片");
-  }
   if (targets.includes("cs1-video")) {
     applyTtsToCs1(payload);
     saveTtsAudioHandoff("cs1-video", payload);
@@ -6947,20 +6925,6 @@ sendConfirmedTtsAudioBtn?.addEventListener("click", () => {
   sendConfirmedTtsAudio().catch((error) => {
     ttsAudioHandoffStatus.textContent = error instanceof Error ? error.message : String(error);
   });
-});
-
-document.querySelector("#sendTtsToVideoProduct")?.addEventListener("click", async () => {
-  const payload = confirmedTtsAudioPayload();
-  if (!payload) {
-    ttsStatus.textContent = "请先生成并完成一条语音。";
-    return;
-  }
-  await window.videoProjects?.linkCurrent?.("tts", payload.id, ttsHandoffTitle(payload), payload);
-  window.workbenchNavigate?.("vfo", { preserveScroll: true });
-  if (window.videoOutputModule?.loadVideoProductSources) await window.videoOutputModule.loadVideoProductSources();
-  else await loadVideoProductSources({ preferredAudioId: payload.id });
-  document.querySelector("#videoProductCenter")?.scrollIntoView({ behavior: "smooth", block: "start" });
-  ttsStatus.textContent = "已把三件套（音频、文案、带时间戳字幕）发送到成片中心。";
 });
 
 document.querySelector("#refreshTtsJobs").addEventListener("click", () => {
