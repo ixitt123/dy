@@ -1011,6 +1011,80 @@ function getTaskDownloadUrl(task) {
   return stats.downloadUrl || stats.url || messageUrl;
 }
 
+async function ensureProviderConfigured(providerId, { title = "API 配置", reason = "", model = "", baseUrl = "" } = {}) {
+  const id = String(providerId || "").trim();
+  if (!id) return false;
+  while (true) {
+    const settings = await fetchJson("/api/settings");
+    const rewriteProvider = settings.rewrite?.providers?.[id];
+    const ttsProviderConfig = Array.isArray(settings.tts?.providers)
+      ? settings.tts.providers.find((provider) => provider.id === id)
+      : null;
+    const configured = rewriteProvider?.apiKeyConfigured || ttsProviderConfig?.configured;
+    if (configured) return true;
+
+    const label = rewriteProvider?.label || ttsProviderConfig?.label || id;
+    const apiKey = window.prompt([
+      `${title}需要配置：${label}`,
+      reason,
+      "请输入 API Key，点击确定后会先检测，检测通过才保存并继续。",
+    ].filter(Boolean).join("\n\n"));
+    if (!apiKey || !apiKey.trim()) {
+      window.alert("当前步骤必须配置可用 API，流程已暂停。");
+      continue;
+    }
+
+    const body = {
+      id,
+      apiKey: apiKey.trim(),
+      setDefault: true,
+    };
+    if (model) body.model = model;
+    if (baseUrl) body.baseUrl = baseUrl;
+
+    const result = await fetchJson("/api/settings/require-provider", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    }).catch((error) => ({ ok: false, message: error instanceof Error ? error.message : String(error) }));
+
+    if (result.ok) {
+      window.alert(`${label} 检测通过，已保存。`);
+      await loadSettings().catch(() => {});
+      return true;
+    }
+    window.alert(`检测失败：${result.message || "请检查 API Key、模型或额度后重新填写。"}`);
+  }
+}
+
+async function ensureTranscriptProvidersConfigured() {
+  const textProviderId = rewriteProvider?.value || "dashscope";
+  await ensureProviderConfigured(textProviderId, {
+    title: "文案校正",
+    reason: "提取文案后需要调用文本模型自动校正错字、断句和标点。",
+  });
+  await ensureProviderConfigured("dashscope", {
+    title: "文案识别",
+    reason: "如果平台没有字幕，需要使用 DashScope ASR 从音频识别文案。",
+  });
+  return true;
+}
+
+async function ensureRewriteProviderConfigured() {
+  return ensureProviderConfigured(rewriteProvider?.value || "dashscope", {
+    title: "文案定制改写",
+    reason: "生成改写内容需要当前选择的文本模型可用。",
+  });
+}
+
+async function ensureTtsProviderConfigured() {
+  return ensureProviderConfigured(ttsProvider?.value || "aliyun_bailian", {
+    title: "TTS 语音生成",
+    reason: "生成语音需要当前选择的 TTS 服务可用。",
+    model: ttsModel?.value?.trim() || "",
+  });
+}
+
 function formatTaskResult(task, index) {
   const action = task.task_action || (task.only_transcript ? "transcript" : "download");
   const label = taskActionLabels[action] || "任务";
@@ -1044,6 +1118,65 @@ function trackImportedTasks(action, imported = {}) {
       .map((task) => String(task.id || ""))
       .filter(Boolean)
   );
+  activeResultFilePath = "";
+  activeResultRewriteTaskId = "";
+  autoOpenedResultTaskIds = new Set();
+  autoRewriteResultTaskIds = new Set();
+  if (openResultLocationBtn) openResultLocationBtn.hidden = true;
+  if (sendResultRewriteBtn) sendResultRewriteBtn.hidden = true;
+}
+
+function primaryTaskFilePath(task = {}) {
+  return task.audio_path || task.video_path || task.subtitle_path || task.txt_path || task.analysis_path || "";
+}
+
+async function openManagedPath(filePath) {
+  if (!filePath) return;
+  await fetchJson("/api/open-path", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ filePath }),
+  });
+}
+
+function updateResultActionButtons(rows = []) {
+  const latestWithFile = [...rows].reverse().find((task) => primaryTaskFilePath(task));
+  activeResultFilePath = latestWithFile ? primaryTaskFilePath(latestWithFile) : "";
+  if (openResultLocationBtn) openResultLocationBtn.hidden = !activeResultFilePath;
+
+  const latestWithText = [...rows].reverse().find((task) => task.txt_path);
+  activeResultRewriteTaskId = latestWithText ? String(latestWithText.id || "") : "";
+  if (sendResultRewriteBtn) sendResultRewriteBtn.hidden = !activeResultRewriteTaskId;
+}
+
+function handleFinishedResultWorkflow(rows = []) {
+  for (const task of rows) {
+    const id = String(task.id || "");
+    if (!id || task.status !== "完成") continue;
+
+    if (task.txt_path && !autoRewriteResultTaskIds.has(id)) {
+      autoRewriteResultTaskIds.add(id);
+      openRewriteEditor(id).catch((error) => {
+        resultBox.textContent = error instanceof Error ? error.message : String(error);
+        setReady("打开改写失败", false);
+      });
+      return;
+    }
+
+    const filePath = task.audio_path || task.video_path;
+    const shouldPromptOpen = filePath && ["download", "audio"].includes(task.task_action || activeResultAction);
+    if (shouldPromptOpen && !autoOpenedResultTaskIds.has(id)) {
+      autoOpenedResultTaskIds.add(id);
+      setTimeout(() => {
+        if (window.confirm("视频/音频已完成，是否打开本地文件所在位置？")) {
+          openManagedPath(filePath).catch((error) => {
+            resultBox.textContent = error instanceof Error ? error.message : String(error);
+          });
+        }
+      }, 120);
+      return;
+    }
+  }
 }
 
 function updateResultFromTasks(tasks) {
@@ -1063,11 +1196,13 @@ function updateResultFromTasks(tasks) {
 
   const finished = rows.filter((task) => task.status === "完成" || task.status === "失败").length;
   const label = taskActionLabels[activeResultAction] || "任务";
+  updateResultActionButtons(rows);
   resultBox.textContent = [
     `${label}结果（${finished}/${rows.length} 已结束）`,
     "",
     rows.map(formatTaskResult).join("\n\n"),
   ].join("\n");
+  handleFinishedResultWorkflow(rows);
 }
 
 function renderTaskStats(summary, running, concurrency) {

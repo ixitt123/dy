@@ -1582,6 +1582,60 @@ async function testUnifiedProvider(settings, providerId) {
   return providerConfigStatus(settings, providerId);
 }
 
+async function validateAndSaveRequiredProvider(body = {}) {
+  const id = String(body.id || "").trim();
+  if (!id) return { ok: false, status: "missing", message: "缺少 API 服务 ID" };
+  const current = readSettings();
+  const draft = normalizeSettings(JSON.parse(JSON.stringify(current)));
+  saveUnifiedProvider(draft, body);
+
+  if (draft.rewriteProviders?.[id]) {
+    const provider = draft.rewriteProviders[id];
+    if (!String(provider.apiKey || "").trim()) {
+      return { ok: false, status: "missing", message: `${provider.label || id} API Key 不能为空。` };
+    }
+    if (!String(provider.baseUrl || "").trim()) {
+      return { ok: false, status: "missing", message: `${provider.label || id} Base URL 不能为空。` };
+    }
+    if (!String(provider.model || "").trim()) {
+      await refreshProviderModel(draft, id);
+    }
+    if (!String(provider.model || "").trim()) {
+      return { ok: false, status: "missing", message: `${provider.label || id} 模型不能为空。` };
+    }
+    try {
+      await chatCompletion({ id, ...provider }, [
+        { role: "system", content: "你是连接测试助手，只能回复 OK。" },
+        { role: "user", content: "回复 OK" },
+      ], undefined, {
+        temperature: 0,
+        requestName: `${provider.label || id} 连接测试`,
+        maxTokens: 8,
+      });
+    } catch (error) {
+      return { ok: false, status: "failed", message: error instanceof Error ? error.message : String(error) };
+    }
+  } else if (TTS_PROVIDER_LABELS[id]) {
+    const status = providerConfigStatus(draft, id);
+    if (!status.ok) return status;
+  } else {
+    const status = await testUnifiedProvider(draft, id);
+    if (!status.ok) return status;
+  }
+
+  const normalized = reloadModelRuntime(draft);
+  return {
+    ok: true,
+    status: "success",
+    message: "检测通过，配置已保存。",
+    providers: publicUnifiedProviders(normalized),
+    settings: {
+      rewrite: publicRewriteSettings(normalized),
+      tts: publicTtsSettings(normalized),
+    },
+  };
+}
+
 async function testProviderSample(providerId) {
   const provider = publicUnifiedProviders(readSettings()).find((item) => item.id === providerId);
   if (!provider) return { ok: false, message: "未知 API 服务" };
@@ -6200,6 +6254,13 @@ const server = http.createServer(async (req, res) => {
         } catch (error) {
           sendJson(res, 400, { ok: false, message: error instanceof Error ? error.message : String(error) });
         }
+        return;
+      }
+
+      if (req.method === "POST" && route === "require-provider") {
+        const body = await readJsonBody(req);
+        const result = await validateAndSaveRequiredProvider(body);
+        sendJson(res, result.ok ? 200 : 400, result);
         return;
       }
 
