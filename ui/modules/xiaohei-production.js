@@ -47,15 +47,10 @@ export function initXiaoheiProductionModule() {
 
   page.innerHTML = `
     <section class="embedded-production-line">
-      <div class="result-head production-line-head">
-        <div>
-          <span class="section-eyebrow">PRODUCTION LINE 02</span>
-          <h2>小黑视频风格生成</h2>
-          <p>使用文案、TTS 音频、参考音频和小黑配图规则，生成逐段配图、音乐素材和剪映草稿。</p>
-        </div>
+      <div class="production-line-toolbar">
+        <div class="production-line-notice" id="xiaoheiHandoffStatus">可以直接输入文案生成，也可以先在 TTS 语音页确认音频后发送到这里。</div>
         <button class="ghost" id="refreshXiaoheiProduction" type="button">刷新工作台</button>
       </div>
-      <div class="production-line-notice" id="xiaoheiHandoffStatus">可以直接输入文案生成，也可以先在 TTS 语音页确认音频后发送到这里。</div>
       <iframe
         id="xiaoheiProductionFrame"
         class="production-line-frame"

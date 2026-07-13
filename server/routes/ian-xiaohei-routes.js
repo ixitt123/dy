@@ -204,11 +204,13 @@ export function createIanXiaoheiRoutes({
   const uploadRoot = path.join(outputRoot, "_uploaded-audio");
   const voicePreviewRoot = path.join(baseDir, "ui", "assets", "voice-previews");
   const musicOutputRoot = path.join(baseDir, ".data", "music", "minimax");
+  const localMusicRoot = path.join(baseDir, "assets", "bgm");
   const referenceAudioRoot = path.join(baseDir, ".data", "audio-reference", "ian-xiaohei");
   fs.mkdirSync(outputRoot, { recursive: true });
   fs.mkdirSync(uploadRoot, { recursive: true });
   fs.mkdirSync(voicePreviewRoot, { recursive: true });
   fs.mkdirSync(musicOutputRoot, { recursive: true });
+  fs.mkdirSync(localMusicRoot, { recursive: true });
   fs.mkdirSync(referenceAudioRoot, { recursive: true });
 
   return async function handleIanXiaoheiRoutes(req, res, url) {
