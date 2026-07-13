@@ -2812,6 +2812,46 @@ async function analyzeTranscriptWithDashScope(apiKey, transcriptText, videoInfo,
   return normalizeAnalysis({ ...parsed, source: model }, transcriptText);
 }
 
+function cleanModelText(value) {
+  return String(value || "")
+    .replace(/^```(?:text|markdown|md)?\s*/i, "")
+    .replace(/```$/i, "")
+    .trim();
+}
+
+async function correctTranscriptWithRewriteModel(rawText, videoInfo = {}, signal) {
+  const text = String(rawText || "").trim();
+  if (!text) throw new Error("没有可校正的文案");
+  const provider = await getRewriteProvider("");
+  const content = await chatCompletion(provider, [
+    {
+      role: "system",
+      content: [
+        "你是短视频 ASR 文案校正员。",
+        "任务：修正识别错字、明显同音错词、断句、标点和多余空格。",
+        "限制：不要改写，不要扩写，不要改变原意，不要加入解释，不要输出标题。",
+        "只输出校正后的最终文案。",
+      ].join("\n"),
+    },
+    {
+      role: "user",
+      content: [
+        `标题：${videoInfo.title || ""}`,
+        `平台：${videoInfo.extractor || videoInfo.platform || ""}`,
+        "待校正文案：",
+        text.slice(0, 20000),
+      ].join("\n"),
+    },
+  ], signal, {
+    temperature: 0.1,
+    requestName: "文案校正",
+    maxTokens: Math.min(12000, Math.max(2000, Math.ceil(text.length * 1.8))),
+  });
+  const corrected = cleanModelText(content);
+  if (!corrected) throw new Error("文案校正没有返回结果");
+  return corrected;
+}
+
 function normalizeRewriteVersionContent(value) {
   if (Array.isArray(value)) return value.map((item) => String(item || "").trim()).filter(Boolean).join("\n");
   if (value && typeof value === "object") {
@@ -3640,30 +3680,93 @@ function queueState(extra = {}) {
 }
 
 async function parseVideoInfoForTask(task, signal) {
-  const linkResult = await runMcpTool("get_douyin_download_link", task.url, (progress) => {
-    taskStore.updateTask(task.id, {
-      progress: Math.max(3, Math.min(9, Math.round(Number(progress.percent || 0)))),
-      message: progress.message || "正在解析视频",
-    });
-  }, { signal });
+  if (isLikelyDouyinUrl(task.url)) {
+    try {
+      const linkResult = await runMcpTool("get_douyin_download_link", task.url, (progress) => {
+        taskStore.updateTask(task.id, {
+          progress: Math.max(3, Math.min(9, Math.round(Number(progress.percent || 0)))),
+          message: progress.message || "正在解析抖音视频",
+        });
+      }, { signal });
 
-  if (linkResult.isError) {
-    throw new Error(linkResult.text || "解析视频失败");
+      if (linkResult.isError) {
+        throw new Error(linkResult.text || "解析视频失败");
+      }
+
+      const videoInfo = parseVideoInfoFromToolText(linkResult.text);
+      if (!videoInfo.downloadUrl) {
+        throw new Error("没有解析到可下载视频地址");
+      }
+      return { ...videoInfo, extractor: "douyin-mcp", sourceAdapter: "douyin-mcp" };
+    } catch (error) {
+      taskStore.updateTask(task.id, {
+        progress: 6,
+        message: `抖音专用解析失败，改用 yt-dlp：${errorMessage(error)}`,
+      });
+    }
   }
 
-  const videoInfo = parseVideoInfoFromToolText(linkResult.text);
-  if (!videoInfo.downloadUrl) {
-    throw new Error("没有解析到可下载视频地址");
-  }
-  return videoInfo;
+  const { videoInfo } = await ytDlpService.info(task.url, { signal });
+  return { ...videoInfo, sourceAdapter: "yt-dlp" };
 }
 
-async function completeTaskWithTranscript(task, videoInfo, messagePrefix = "", signal) {
+async function downloadVideoForTask(task, videoInfo, signal) {
+  if (videoInfo.sourceAdapter === "yt-dlp") {
+    return ytDlpService.download(task.url, {
+      signal,
+      onProgress: (progress) => {
+        const raw = Number(progress.percent || 0);
+        taskStore.updateTask(task.id, {
+          status: TASK_STATUS.DOWNLOADING,
+          progress: Math.max(10, Math.min(70, Math.round(10 + raw * 0.6))),
+          message: progress.message || "正在通过 yt-dlp 下载视频",
+        });
+      },
+    });
+  }
+
+  try {
+    const downloaded = await downloadVideoFile(videoInfo, (progress) => {
+      const raw = Number(progress.percent || 0);
+      taskStore.updateTask(task.id, {
+        status: TASK_STATUS.DOWNLOADING,
+        progress: Math.max(10, Math.min(70, Math.round(10 + raw * 0.6))),
+        message: progress.message || "正在下载视频",
+      });
+    }, signal);
+    return {
+      videoPath: downloaded.filePath,
+      subtitlePath: "",
+      raw: {},
+      videoInfo,
+    };
+  } catch (error) {
+    if (!isLikelyDouyinUrl(task.url)) throw error;
+    taskStore.updateTask(task.id, {
+      progress: 15,
+      message: `抖音专用下载失败，改用 yt-dlp：${errorMessage(error)}`,
+    });
+    return ytDlpService.download(task.url, {
+      signal,
+      onProgress: (progress) => {
+        const raw = Number(progress.percent || 0);
+        taskStore.updateTask(task.id, {
+          status: TASK_STATUS.DOWNLOADING,
+          progress: Math.max(15, Math.min(70, Math.round(15 + raw * 0.55))),
+          message: progress.message || "正在通过 yt-dlp 兜底下载",
+        });
+      },
+    });
+  }
+}
+
+async function completeTaskWithTranscript(task, videoInfo, messagePrefix = "", signal, options = {}) {
   throwIfPaused(signal);
   const apiKey = getActiveProviderApiKey();
   const updates = {};
   let transcriptText = "";
   let txtPath = findExistingTranscript(videoInfo);
+  let subtitlePath = options.subtitlePath && fs.existsSync(options.subtitlePath) ? options.subtitlePath : "";
 
   if (txtPath) {
     transcriptText = fs.readFileSync(txtPath, "utf8").trim();
@@ -3671,29 +3774,51 @@ async function completeTaskWithTranscript(task, videoInfo, messagePrefix = "", s
   }
 
   if (task.transcript_enabled && !txtPath) {
-    if (!apiKey) {
-      updates.message = `${messagePrefix}视频已完成；未配置 DashScope API Key，已跳过文案和 AI 分析`;
-      return updates;
+    let rawTranscript = subtitlePath ? textFromSubtitleFile(subtitlePath) : "";
+    if (!rawTranscript) {
+      if (!apiKey) {
+        updates.message = `${messagePrefix}视频已完成；没有平台字幕且未配置 DashScope API Key，无法进行 ASR 文案识别`;
+        return updates;
+      }
+
+      taskStore.updateTask(task.id, {
+        status: TASK_STATUS.TRANSCRIBING,
+        progress: 72,
+        message: "平台字幕不可用，准备 ASR 提取文案",
+      });
+      const localVideoPath = options.localVideoPath && fs.existsSync(options.localVideoPath)
+        ? options.localVideoPath
+        : task.video_path && fs.existsSync(task.video_path)
+          ? task.video_path
+          : findExistingVideo(videoInfo);
+      rawTranscript = await extractTranscriptForVideoInfo(videoInfo, apiKey, (progress) => {
+        const raw = Number(progress.percent || 0);
+        taskStore.updateTask(task.id, {
+          status: TASK_STATUS.TRANSCRIBING,
+          progress: Math.max(72, Math.min(91, Math.round(72 + raw * 0.19))),
+          message: progress.message || "正在提取文案",
+        });
+      }, signal, { localVideoPath });
     }
 
     taskStore.updateTask(task.id, {
       status: TASK_STATUS.TRANSCRIBING,
-      progress: 72,
-      message: "准备提取文案",
+      progress: 92,
+      message: "正在自动校正文案",
     });
-    const localVideoPath = task.video_path && fs.existsSync(task.video_path)
-      ? task.video_path
-      : findExistingVideo(videoInfo);
-    transcriptText = await extractTranscriptForVideoInfo(videoInfo, apiKey, (progress) => {
-      const raw = Number(progress.percent || 0);
-      taskStore.updateTask(task.id, {
-        status: TASK_STATUS.TRANSCRIBING,
-        progress: Math.max(72, Math.min(96, Math.round(72 + raw * 0.24))),
-        message: progress.message || "正在提取文案",
-      });
-    }, signal, { localVideoPath });
+    transcriptText = await correctTranscriptWithRewriteModel(rawTranscript, videoInfo, signal);
     txtPath = saveTranscript(videoInfo, transcriptText);
     updates.txt_path = txtPath;
+
+    if (!subtitlePath) {
+      const mediaPath = options.localVideoPath || task.video_path || findExistingVideo(videoInfo);
+      if (mediaPath && fs.existsSync(mediaPath)) {
+        subtitlePath = await ytDlpService.createApproximateSubtitle(mediaPath, transcriptText, "", { signal });
+      }
+    }
+    if (subtitlePath) updates.subtitle_path = subtitlePath;
+  } else if (subtitlePath) {
+    updates.subtitle_path = subtitlePath;
   }
 
   if (task.analysis_enabled && transcriptText) {
