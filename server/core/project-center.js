@@ -94,8 +94,8 @@ function nextAction(project) {
     collected: { label: "提取文案", page: "transcript" },
     transcribed: { label: "生成 3 个改写版本", page: "rewrite" },
     rewritten: { label: "生成配音", page: "tts" },
-    voiced: { label: "生成导演稿", page: "director" },
-    directed: { label: "匹配素材", page: "assets" },
+    voiced: { label: "进入生产线", page: "video-output" },
+    directed: { label: "进入生产线", page: "video-output" },
     assets_ready: { label: "生成成片草稿", page: "video-output" },
     draft_ready: { label: "打开剪映并导出", page: "video-output" },
     exported: { label: "查看成片记录", page: "video-output" },
@@ -308,7 +308,6 @@ export function createProjectCenter(baseDir) {
     if (hasValue(project.outputHistory)) return "exported";
     if (hasValue(project.jianyingDraft)) return "draft_ready";
     if (hasValue(project.selectedAssets) && hasValue(project.bgm)) return "assets_ready";
-    if (hasValue(project.directorScript)) return "directed";
     if (hasValue(project.selectedTtsAudio)) return "voiced";
     if (hasValue(project.selectedRewriteText)) return "rewritten";
     if (hasValue(project.transcriptText)) return "transcribed";
