@@ -2758,7 +2758,7 @@ function renderTtsProviderOptions(tts = {}) {
   ttsFormat.value = tts.default_format === "wav" ? "wav" : "mp3";
 }
 
-function updateTtsProviderFields() {
+updateTtsProviderFields = function updateTtsProviderFieldsUnified() {
   const provider = selectedTtsProviderConfig();
   const isAliyun = provider.id === "aliyun_bailian";
   const supportsBaseUrl = ["custom_tts", "fish_audio", "minimax"].includes(provider.id);
@@ -3623,9 +3623,9 @@ function updateTtsProviderFields() {
       ? `${provider.label} 已配置，API 信息只在系统设置中维护。`
       : `${provider.label || "当前平台"}尚未配置，请到系统设置中保存 API。`;
   }
-}
+};
 
-function selectedTtsVoice() {
+selectedTtsVoice = function selectedTtsVoiceUnified() {
   if (ttsVoiceSource.value === "manual") {
     const voiceId = ttsManualVoice.value.trim();
     return voiceId ? { id: voiceId, name: voiceId, model: ttsModel.value.trim(), asset: null } : null;
@@ -3638,9 +3638,9 @@ function selectedTtsVoice() {
     model: asset.metadata?.target_model || asset.metadata?.model || "",
     asset,
   };
-}
+};
 
-function syncTtsModelToSelectedVoice() {
+syncTtsModelToSelectedVoice = function syncTtsModelToSelectedVoiceUnified() {
   const voice = selectedTtsVoice();
   if (voice?.model) {
     if (ttsModel && ![...ttsModel.options].some((option) => option.value === voice.model)) {
@@ -3654,9 +3654,9 @@ function syncTtsModelToSelectedVoice() {
       : "API 在系统设置中管理";
   }
   renderTtsVoiceQuickPanel(voice?.asset || null);
-}
+};
 
-function renderTtsVoices() {
+renderTtsVoices = function renderTtsVoicesUnified() {
   const manual = ttsVoiceSource.value === "manual";
   if (manual) {
     renderTtsVoiceQuickPanel(null);
@@ -3704,9 +3704,9 @@ function renderTtsVoices() {
     if (defaultAsset) ttsPresetVoice.value = String(defaultAsset.id);
   }
   syncTtsModelToSelectedVoice();
-}
+};
 
-async function applyVoiceAssetToTts(asset) {
+applyVoiceAssetToTts = async function applyVoiceAssetToTtsUnified(asset) {
   const providerOption = ttsProviderConfigs.find((provider) => provider.id === asset.provider && provider.enabled);
   if (!providerOption) throw new Error("这个声音对应的平台当前不可用。");
   ttsProvider.value = asset.provider;
@@ -3720,9 +3720,9 @@ async function applyVoiceAssetToTts(asset) {
   ttsPresetVoice.value = String(asset.id);
   syncTtsModelToSelectedVoice();
   ttsStatus.textContent = `已选择声音：${asset.voice_name}`;
-}
+};
 
-async function generateTts() {
+generateTts = async function generateTtsUnified() {
   const text = ttsText.value.trim();
   const selectedVoiceForModel = selectedTtsVoice();
   const voiceId = selectedVoiceForModel?.id || "";
@@ -3788,7 +3788,7 @@ async function generateTts() {
       format: ttsFormat.value,
     });
   }
-}
+};
 
 async function openVoiceTests(asset) {
   selectedVoiceAssetId = asset.id;
