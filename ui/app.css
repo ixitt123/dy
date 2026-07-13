@@ -8100,11 +8100,14 @@ audio {
 }
 
 .tts-settings.tts-provider-only {
-  grid-template-columns: minmax(220px, 320px) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 360px);
+  align-items: end;
+  max-width: 380px;
 }
 
+.tts-settings.tts-provider-only > div,
 .tts-settings.tts-provider-only #ttsSettingsStatus {
-  grid-column: 1 / -1;
+  display: none !important;
 }
 
 .tts-voice-quick-panel {

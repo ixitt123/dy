@@ -1290,12 +1290,12 @@
             语音平台
             <select id="ttsProvider"></select>
           </label>
-          <div>
+          <div hidden aria-hidden="true">
             <span>当前语音服务</span>
             <strong id="ttsCurrentProviderLabel">加载中</strong>
             <small id="ttsCurrentModelLabel">API 在系统设置中统一管理</small>
           </div>
-          <p id="ttsSettingsStatus">API Key、Base URL 和默认模型全部在系统设置中配置。</p>
+          <p id="ttsSettingsStatus" hidden>API Key、Base URL 和默认模型全部在系统设置中配置。</p>
           <input id="ttsApiKey" type="password" hidden autocomplete="off" />
           <label id="ttsWorkspaceField" hidden>
             Workspace ID
