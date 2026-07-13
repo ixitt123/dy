@@ -6095,6 +6095,144 @@ body[data-active-module="video-output"] .floating-workflow-guide [data-nav="vide
   justify-self: end;
 }
 
+#ttsAudioHandoff {
+  display: none !important;
+}
+
+.tts-history-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: stretch;
+  gap: 10px;
+  margin-bottom: 10px;
+  border: 1px solid #2b3342;
+  border-radius: 8px;
+  padding: 12px;
+  background: #10151d;
+}
+
+.tts-history-row:first-child {
+  border-top: 1px solid #2b3342;
+}
+
+.tts-history-summary {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.tts-history-title {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+}
+
+.tts-history-title strong {
+  color: #ffffff;
+  font-size: 14px;
+}
+
+.tts-history-title .tts-history-text {
+  color: #f3f6fb;
+  font-weight: 800;
+}
+
+.tts-history-meta {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.tts-history-audio {
+  grid-column: 1 / -1;
+}
+
+.tts-history-row > .tts-history-files {
+  display: flex !important;
+  grid-column: 1 / -1;
+  align-items: center;
+  gap: 7px;
+}
+
+.tts-history-files::before {
+  content: "三件套";
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.tts-job-handoff {
+  display: grid;
+  grid-column: 1 / -1;
+  gap: 9px;
+  border-top: 1px solid #27303c;
+  padding-top: 10px;
+}
+
+.tts-job-handoff-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.tts-job-handoff-head strong {
+  color: #eef3fb;
+  font-size: 13px;
+}
+
+.tts-job-handoff-head span,
+.tts-job-handoff-status {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.tts-job-handoff-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.tts-job-handoff-options label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  border: 1px solid #303846;
+  border-radius: 7px;
+  padding: 0 10px;
+  background: #111722;
+  color: #dce2eb;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.tts-job-handoff-options input {
+  width: 14px;
+  height: 14px;
+  accent-color: var(--primary);
+}
+
+.tts-history-row > .tts-history-actions,
+.tts-job-handoff .tts-history-actions {
+  display: flex;
+  grid-column: 1 / -1;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  white-space: normal;
+}
+
+.tts-history-actions-simple {
+  justify-content: flex-end;
+}
+
+.tts-job-handoff .tts-job-send {
+  min-height: 34px;
+  min-width: 92px;
+}
+
 .director-source-lane textarea {
   min-height: 350px;
 }
