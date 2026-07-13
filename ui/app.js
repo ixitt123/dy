@@ -9,6 +9,7 @@ import { initAssetsModule } from "./modules/assets.js";
 import { initVideoOutputModule } from "./modules/video-output.js";
 import { initCs1VideoModule } from "./modules/cs1-video.js";
 import { initXiaoheiProductionModule } from "./modules/xiaohei-production.js";
+import { initMoneyPrinterModule } from "./modules/money-printer.js";
 import { initSettingsModule } from "./modules/settings.js";
 
 const modules = [
@@ -23,6 +24,7 @@ const modules = [
   initVideoOutputModule,
   initCs1VideoModule,
   initXiaoheiProductionModule,
+  initMoneyPrinterModule,
   initSettingsModule,
 ];
 
