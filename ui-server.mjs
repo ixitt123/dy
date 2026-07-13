@@ -2303,10 +2303,7 @@ function runMcpTool(name, shareLink, onProgress = () => {}, options = {}) {
 function validateShareLink(shareLink) {
   const firstUrl = getFirstUrl(shareLink);
   if (!firstUrl) {
-    return "请先粘贴抖音分享链接";
-  }
-  if (!isLikelyDouyinUrl(firstUrl)) {
-    return "这个不像抖音分享链接，请重新复制抖音里的分享内容";
+    return "请先粘贴 yt-dlp 可识别的平台视频链接";
   }
   return "";
 }
