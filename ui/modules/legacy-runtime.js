@@ -54,6 +54,11 @@ const saveDownloadDirBtn = document.querySelector("#saveDownloadDir");
 const localVideoPath = document.querySelector("#localVideoPath");
 const chooseLocalVideoBtn = document.querySelector("#chooseLocalVideo");
 const extractLocalVideoTranscriptBtn = document.querySelector("#extractLocalVideoTranscript");
+const extractLocalVideoAudioBtn = document.querySelector("#extractLocalVideoAudio");
+const localAudioFormat = document.querySelector("#localAudioFormat");
+const downloadExtractTranscript = document.querySelector("#downloadExtractTranscript");
+const downloadExtractAudio = document.querySelector("#downloadExtractAudio");
+const downloadAudioFormat = document.querySelector("#downloadAudioFormat");
 const batchKind = document.querySelector("#batchKind");
 const batchLimit = document.querySelector("#batchLimit");
 const batchConcurrency = document.querySelector("#batchConcurrency");
@@ -293,7 +298,8 @@ const taskActionLabels = {
   parse: "解析信息",
   link: "获取下载链接",
   download: "下载视频",
-  transcript: "提取文案",
+  transcript: "提取并校正文案",
+  audio: "提取音频",
 };
 const defaultRewriteReference = "痞里带刺、幽默自嘲、生活化观察、少说废话、有冲突、有观点、适合教育招生、让家长有感觉、不要像官方通稿、不要像AI作文。";
 const rewriteDirectionOptions = ["招生引流", "家长焦虑", "单招升学", "暑假班转化", "英语提分", "朋友圈文案", "短视频口播"];
@@ -1180,8 +1186,8 @@ async function refreshTasks() {
 async function enqueueTasks(action) {
   const text = shareLink.value.trim();
   if (!text) {
-    batchStatus.textContent = "请先在上方粘贴抖音分享链接";
-    resultBox.textContent = "请先在上方粘贴抖音分享链接。";
+    batchStatus.textContent = "请先在上方粘贴平台视频链接";
+    resultBox.textContent = "请先在上方粘贴 yt-dlp 可识别的平台视频链接。";
     return;
   }
 
@@ -1199,6 +1205,9 @@ async function enqueueTasks(action) {
         limit: Number(batchLimit.value || 10),
         concurrency: Number(batchConcurrency.value || 3),
         skipDownloaded: skipDownloaded.checked,
+        extractTranscript: Boolean(downloadExtractTranscript?.checked),
+        extractAudio: Boolean(downloadExtractAudio?.checked),
+        audioFormat: downloadAudioFormat?.value || "mp3",
       }),
     });
     const imported = data.imported || {};
@@ -4354,6 +4363,58 @@ async function runLocalVideoTranscript() {
   }
 }
 
+async function runLocalVideoAudio() {
+  const filePath = localVideoPath.value.trim();
+  if (!filePath) {
+    resultBox.textContent = "请先选择本地视频文件。";
+    setReady("缺少本地视频", false);
+    return;
+  }
+
+  setBusy("正在提取本地视频音频");
+  setTranscriptActions();
+  showProgress(0, "准备提取本地视频音频");
+  resultBox.textContent = "本地视频音频提取已经开始，请看上方进度条。";
+
+  try {
+    const startData = await fetchJson("/api/local-video/audio", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        filePath,
+        audioFormat: localAudioFormat?.value || "mp3",
+      }),
+    });
+
+    let finished = false;
+    while (!finished) {
+      await delay(1000);
+      const data = await fetchJson(`/api/download/status?id=${encodeURIComponent(startData.job.id)}`);
+      const job = data.job;
+      showProgress(job.percent || 0, job.message || "正在提取本地视频音频");
+
+      if (job.status === "done") {
+        showProgress(100, "本地视频音频提取完成");
+        resultBox.textContent = job.audioPath || job.text || "本地视频音频提取完成";
+        renderFiles(job.files || allFiles);
+        await refreshTasks();
+        setReady("完成", true);
+        finished = true;
+      }
+
+      if (job.status === "error") {
+        resultBox.textContent = job.text || job.message || "本地视频音频提取失败";
+        await refreshTasks().catch(() => {});
+        setReady("失败", false);
+        finished = true;
+      }
+    }
+  } catch (error) {
+    resultBox.textContent = error instanceof Error ? error.message : String(error);
+    setReady("失败", false);
+  }
+}
+
 async function runDownload() {
   const text = shareLink.value.trim();
   if (!text) {
@@ -4415,6 +4476,10 @@ document.querySelector("#downloadBtn").addEventListener("click", () => {
 
 document.querySelector("#transcriptBtn").addEventListener("click", () => {
   enqueueTasks("transcript");
+});
+
+document.querySelector("#audioExtractBtn")?.addEventListener("click", () => {
+  enqueueTasks("audio");
 });
 
 document.querySelector("#saveApiKey")?.addEventListener("click", () => {
