@@ -3892,22 +3892,50 @@ function momentsReferenceIsUsed(post = "", referenceUsed = "", referenceStyle = 
   return compactPost.includes(compactRef.slice(0, probeLength));
 }
 
+function momentsSeriesStyleLock(style = "xiaohei", theme = "") {
+  const themeText = String(theme || "本条朋友圈主题").trim();
+  if (style === "realistic") {
+    return `统一系列风格：本组所有图片必须是真实生活/产品场景类，统一主题为「${themeText}」。保持同一套真实工作/学习现场质感、同一色调、同一镜头语言、同一主物件系统；禁止混入小黑漫画、海报、PPT、卡通插画或不同画风。`;
+  }
+  return `统一系列风格：本组所有图片必须是小黑漫画解释类，统一主题为「${themeText}」。保持 16:9 白底、黑色手绘线稿、小黑角色、少量红橙蓝手写批注、大量留白；禁止混入真实摄影、商业海报、PPT、3D、复杂插画或不同画风。`;
+}
+
+function ensureMomentsSeriesPrompt(prompt = "", style = "xiaohei", theme = "") {
+  const text = String(prompt || "").trim();
+  const lock = momentsSeriesStyleLock(style, theme);
+  if (!text) return lock;
+  if (/统一系列风格/.test(text)) return text;
+  return `${lock}\n\n${text}`;
+}
+
+function normalizeMomentsSeriesStyle(raw = {}, fallback = {}) {
+  const requested = normalizeMomentsStyle(fallback.visualStyle);
+  if (requested !== "auto") return requested;
+  const explicit = normalizeMomentsStyle(raw.series_style || raw.seriesStyle || raw.visual_style || raw.visualStyle);
+  if (explicit !== "auto") return explicit;
+  const first = Array.isArray(raw.images) ? raw.images.find((item) => item && item.style) : null;
+  const firstStyle = normalizeMomentsStyle(first?.style);
+  return firstStyle === "auto" ? "xiaohei" : firstStyle;
+}
+
 function normalizeMomentsResult(raw = {}, fallback = {}) {
   const imageCount = clampMomentsImageCount(raw.image_count || raw.imageCount)
     || clampMomentsImageCount(fallback.imageCount)
     || 1;
   const post = String(raw.post || raw.copy || raw.text || "").trim();
   if (!post) throw new Error("朋友圈生成结果缺少文案。");
+  const theme = String(raw.theme || fallback.theme || "朋友圈图文").trim().slice(0, 120);
+  const seriesStyle = normalizeMomentsSeriesStyle(raw, fallback);
   const images = (Array.isArray(raw.images) ? raw.images : [])
     .slice(0, imageCount)
     .map((item, index) => {
-      const prompt = String(item.prompt || "").trim();
+      const prompt = ensureMomentsSeriesPrompt(item.prompt || "", seriesStyle, theme);
       const materialHint = String(item.local_material_hint || item.localMaterialHint || fallback.localMaterials || "").trim();
       const cleanMaterialHint = /无本地素材|暂无本地素材/i.test(materialHint) ? "" : materialHint;
       return {
         index: index + 1,
         title: String(item.title || `配图 ${index + 1}`).trim().slice(0, 80),
-        style: normalizeMomentsStyle(item.style || fallback.visualStyle),
+        style: seriesStyle,
         image_role: String(item.image_role || item.imageRole || "").trim().slice(0, 80),
         visual_hook: String(item.visual_hook || item.visualHook || "").trim().slice(0, 180),
         composition_type: String(item.composition_type || item.compositionType || "").trim().slice(0, 80),
@@ -3922,7 +3950,8 @@ function normalizeMomentsResult(raw = {}, fallback = {}) {
   return {
     post,
     image_count: Math.min(imageCount, images.length),
-    theme: String(raw.theme || fallback.theme || "朋友圈图文").trim().slice(0, 120),
+    theme,
+    series_style: seriesStyle,
     reference_used: String(raw.reference_used || raw.referenceUsed || "").trim().slice(0, 220),
     persona_used: String(raw.persona_used || fallback.persona || "").trim().slice(0, 1000),
     notes: Array.isArray(raw.notes) ? raw.notes.map((item) => String(item).trim()).filter(Boolean).slice(0, 6) : [],
@@ -4114,6 +4143,8 @@ async function generateMomentsPostJsonV2(body = {}) {
   ].join("\n");
   const imageSkill = [
     "图片提示词 Skill v3：先做视觉冲击策略，再写生图提示词。",
+    "系列统一硬规则：一条朋友圈的一组图只能有一个 series_style。必须先选择 xiaohei 或 realistic，然后所有 images[].style 必须完全一致；禁止同一组图混合小黑漫画、真实摄影、海报、3D、PPT 等不同风格。",
+    "每条图片 prompt 开头必须写清楚同一套“统一系列风格”，包括统一主题、统一画面比例、统一角色/主物件、统一色调、统一镜头语言。",
     "每张图必须来自成品文案的认知锚点，不允许把文案字面翻译成跑步、日历、道路、箭头、书本堆、奖杯、清单。",
     "视觉锤公式：抽象观点 -> 物理冲突 -> 强反差物件 -> 主体正在解决这个冲突。",
     "必须有冲突或落差：轻重对比、堵塞/疏通、错路/正路、混乱/清晰、短期忙碌/长期路径。",
@@ -4288,6 +4319,7 @@ async function generateMomentsPostJsonV2(body = {}) {
           JSON.stringify({
             image_count: fixedImageCount || "1-3",
             theme: "统一图文主题",
+            series_style: "xiaohei 或 realistic，整组图片只能选一个",
             notes: ["可选注意事项"],
             images: [
               {

@@ -26,6 +26,9 @@ logging.basicConfig(
     ],
 )
 logger = logging.getLogger(__name__)
+logging.getLogger("comtypes").setLevel(logging.WARNING)
+logging.getLogger("comtypes.client").setLevel(logging.WARNING)
+logging.getLogger("comtypes.gen").setLevel(logging.WARNING)
 
 
 def emit(ok: bool, message: str, **extra: object) -> int:
