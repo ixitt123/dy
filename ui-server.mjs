@@ -33,6 +33,7 @@ import { createVideoOutputRoutes } from "./server/routes/video-output-routes.js"
 import { createCs1VideoRoutes } from "./server/routes/cs1-video-routes.js";
 import { createIanXiaoheiRoutes } from "./server/routes/ian-xiaohei-routes.js";
 import { createMoneyPrinterRoutes } from "./server/routes/money-printer-routes.js";
+import { createYtDlpService } from "./server/core/yt-dlp-service.js";
 import { HttpBodyError, readBody, readJsonBody } from "./server/utils/http-body.js";
 import { DEFAULT_REWRITE_REFERENCE, REWRITE_DIRECTIONS, REWRITE_STYLES, REWRITE_VERSION_DEFS, REWRITE_VERSION_DEFAULTS } from "./server/config/rewrite-presets.js";
 import { DEFAULT_MODEL_MAPPING, DEFAULT_VOLCENGINE_ARK_IMAGE_MODEL, SETTINGS_TASKS } from "./server/config/model-defaults.js";
@@ -50,6 +51,12 @@ const pidPath = path.join(__dirname, "ui-server.pid");
 const urlPath = path.join(__dirname, "ui-server.url");
 const settingsPath = path.join(__dirname, "settings.json");
 const ffprobePath = ffprobeStatic?.path || "";
+const ytDlpService = createYtDlpService({
+  baseDir: __dirname,
+  downloadsDir,
+  ffmpegPath,
+  ffprobePath,
+});
 const mcpEntry = path.join(
   __dirname,
   "node_modules",
