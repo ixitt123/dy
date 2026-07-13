@@ -528,7 +528,7 @@ function ttsJobText(audio) {
 }
 
 function audioDirectorBinding(director, audio, directorScenes = []) {
-  if (!director || !audio) return { accepted: false, score: 0, reason: "缺少导演稿或音频。" };
+  if (!director || !audio) return { accepted: false, score: 0, reason: "缺少生产线分镜或音频。" };
   const narrationText = directorScenes.map((scene) => scene.voice_text || scene.subtitle || "").join("");
   const audioText = ttsJobText(audio);
   const score = Math.max(
@@ -546,8 +546,8 @@ function audioDirectorBinding(director, audio, directorScenes = []) {
     same_task: sameTask,
     same_rewrite: sameRewrite,
     reason: accepted
-      ? "音频和导演稿已通过绑定校验。"
-      : `当前音频与导演稿相似度 ${score}%，低于 28%，已阻止随机匹配。`,
+      ? "音频和生产线分镜已通过绑定校验。"
+      : `当前音频与生产线分镜相似度 ${score}%，低于 28%，已阻止随机匹配。`,
   };
 }
 
@@ -813,7 +813,7 @@ function routeAAutoTitle(audio, input = {}) {
   const first = sentenceParts(text)[0] || text.slice(0, 28);
   if (/英语/.test(text) && /背单词/.test(text)) return "半年说流利英语？先别死背单词";
   if (/招生|家长|报名|升学|补课/.test(text)) return titleClip(`${first}，家长一定要听`, 28);
-  return titleClip(first || "路线 A 自动导演稿", 28);
+  return titleClip(first || "生产线自动分镜", 28);
 }
 
 function estimateSpeechDuration(text) {
@@ -893,11 +893,11 @@ function buildRouteAAutoDirectorResult(project, scenes, style) {
       transition: scene.transition,
       asset_type: scene.asset_type,
       subtitle_style: { highlight_words: [compactTitleText(scene.subtitle).slice(0, 4)].filter(Boolean) },
-      notes: "路线 A 自动导演稿，服务于模板快剪 MP4。",
+      notes: "路线 A 生产线内部分镜，服务于模板快剪 MP4。",
     })),
     aesthetic_review: {
       score: 88,
-      summary: "路线 A 自动导演稿已锁定风格、节奏、字幕和混音要求。",
+      summary: "路线 A 生产线内部分镜已锁定风格、节奏、字幕和混音要求。",
     },
   };
 }
