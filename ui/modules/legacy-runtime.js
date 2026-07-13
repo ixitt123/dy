@@ -1343,6 +1343,13 @@ async function enqueueTasks(action) {
   batchStatus.textContent = `正在导入${label}队列`;
   resultBox.textContent = `正在导入${label}任务，请稍等...`;
   try {
+    const needsTranscript = action === "transcript"
+      || action === "subtitle"
+      || (action === "download" && (downloadExtractTranscript?.checked || downloadCreateSubtitle?.checked));
+    if (needsTranscript) {
+      batchStatus.textContent = "正在检查文案识别和校正 API...";
+      await ensureTranscriptProvidersConfigured();
+    }
     const data = await fetchJson("/api/tasks/import", {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -1905,6 +1912,8 @@ async function generateTts() {
     ttsStatus.textContent = "请选择音色或填写 voice_id。";
     return;
   }
+  ttsStatus.textContent = "正在检查 TTS API 配置...";
+  await ensureTtsProviderConfigured();
   syncDirectorSourceFromText(text, {
     title: directorTitle?.value.trim() || "配音文案导演稿",
     sourceKey: `tts:${Date.now()}`,
@@ -4139,6 +4148,7 @@ async function generateRewrite() {
   rewriteStatus.textContent = `正在生成 ${versionSpecs.length} 个改写版本...`;
   startRewriteProgress(versionSpecs.length);
   try {
+    await ensureRewriteProviderConfigured();
     const generatedVersions = [];
     let latestTranscripts = [];
     let latestTask = null;
@@ -4197,6 +4207,7 @@ async function generateSingleRewrite(versionKey) {
   rewriteStatus.textContent = "正在生成当前输出框...";
   startRewriteProgress(1);
   try {
+    await ensureRewriteProviderConfigured();
     const data = await fetchJson("/api/tasks/rewrite", {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -4233,6 +4244,7 @@ async function reviseSingleRewrite(versionKey) {
   rewriteStatus.textContent = "正在按修改建议二次改写...";
   startRewriteProgress(1);
   try {
+    await ensureRewriteProviderConfigured();
     const data = await fetchJson("/api/tasks/rewrite", {
       method: "POST",
       headers: { "content-type": "application/json" },
