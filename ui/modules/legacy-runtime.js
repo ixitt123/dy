@@ -7694,6 +7694,7 @@ async function init() {
     await loadVideoProductSources();
     await loadVideoProductProjects();
     await loadVoiceAssets({ applyDefault: true });
+    restoreUiChoicePreferences({ dispatch: true });
     await loadMomentsPersonas();
     loadMomentsDraft();
     updateTtsVoiceSource();
