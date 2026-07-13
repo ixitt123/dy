@@ -6664,7 +6664,8 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.method === "GET" && url.pathname === "/api/voice-assets/audio") {
-      const filePath = voiceAssetService.resolveSamplePath(Number(url.searchParams.get("id") || 0));
+      const kind = url.searchParams.get("kind") === "preview" ? "preview" : "sample";
+      const filePath = voiceAssetService.resolveAssetAudioPath(Number(url.searchParams.get("id") || 0), kind);
       if (!filePath) {
         sendJson(res, 404, { ok: false, message: "参考音频不存在。" });
         return;
@@ -6678,6 +6679,17 @@ const server = http.createServer(async (req, res) => {
         "cache-control": "no-store",
       });
       fs.createReadStream(filePath).pipe(res);
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/voice-assets/delete") {
+      const body = await readJsonBody(req);
+      const result = await voiceAssetService.deletePermanent(Number(body.id || 0));
+      if (result.error) {
+        sendJson(res, 400, { ok: false, message: result.error });
+        return;
+      }
+      sendJson(res, 200, { ok: true, ...result });
       return;
     }
 
