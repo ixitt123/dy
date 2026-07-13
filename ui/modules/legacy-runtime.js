@@ -612,7 +612,9 @@ async function fetchJson(url, options = {}) {
   const response = await fetch(url, options);
   const data = await response.json();
   if (!response.ok || data.ok === false) {
-    throw new Error(data.message || data.error || data.text || "操作失败");
+    const error = new Error(data.message || data.error || data.text || "操作失败");
+    error.data = data;
+    throw error;
   }
   return data;
 }
@@ -2002,7 +2004,7 @@ function collectMomentsPublishImages() {
   return [...paths];
 }
 
-async function publishMomentsToWechat() {
+async function publishMomentsToWechat(authCode = "") {
   const text = (momentsPostOutput?.value || momentsCopyInput?.value || "").trim();
   if (!text) {
     setMomentsPublishStatus("请先生成或填写朋友圈文案成品。", "warning");
@@ -2018,10 +2020,22 @@ async function publishMomentsToWechat() {
       body: JSON.stringify({
         text,
         imagePaths,
+        authCode,
       }),
     });
     setMomentsPublishStatus(data.message || `已提交微信朋友圈发布：${imagePaths.length} 张图片。`, "success");
   } catch (error) {
+    const errorCode = String(error?.data?.code || error?.data?.result?.code || "");
+    const message = error instanceof Error ? error.message : String(error);
+    if (!authCode && (errorCode === "WXAUTOX4_UNAUTHORIZED" || /未授权|授权/.test(message))) {
+      const code = window.prompt("微信朋友圈发布需要 wxautox4 授权码。请输入授权码，确定后软件会自动激活并继续发布：");
+      if (code && code.trim()) {
+        setMomentsPublishStatus("正在激活 wxautox4 授权并继续发布...");
+        return publishMomentsToWechat(code.trim());
+      }
+      setMomentsPublishStatus("未填写授权码，朋友圈发布已暂停。", "warning");
+      return;
+    }
     setMomentsPublishStatus(error instanceof Error ? error.message : String(error), "error");
   } finally {
     if (publishMomentsWechatBtn) publishMomentsWechatBtn.disabled = false;
