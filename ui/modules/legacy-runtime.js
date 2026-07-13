@@ -330,6 +330,7 @@ const rewriteVersionOptions = [
 ];
 const defaultRewriteVersionCount = 3;
 const maxRewriteVersionCount = 50;
+const rewritePresetStorageKey = "video-factory:rewrite-preset-v1";
 
 function setBusy(label) {
   statusText.textContent = label;
@@ -596,6 +597,58 @@ function rewritePresetContext() {
     persona: rewritePersona?.value || "短视频内容策划",
     purpose: rewriteDirection?.value || rewritePurpose?.value || "短视频口播",
   };
+}
+
+function setSelectIfOption(select, value) {
+  if (!select || value === undefined || value === null) return false;
+  const text = String(value);
+  if (![...select.options].some((option) => option.value === text || option.textContent === text)) return false;
+  select.value = text;
+  return true;
+}
+
+function saveRewritePresetSettings() {
+  const data = {
+    provider: rewriteProvider?.value || "",
+    style: rewriteStyle?.value || "",
+    targetPlatform: rewriteTargetPlatform?.value || "",
+    wordRange: rewriteWordRange?.value || "",
+    tonePreset: rewriteTonePreset?.value || "",
+    persona: rewritePersona?.value || "",
+    direction: rewriteDirection?.value || "",
+    toneLevel: rewriteToneLevel?.value || "",
+    conflictLevel: rewriteConflictLevel?.value || "",
+    emotionLevel: rewriteEmotionLevel?.value || "",
+    salesLevel: rewriteSalesLevel?.value || "",
+    humanizeLevel: rewriteHumanizeLevel?.value || "",
+    referenceStyle: rewriteReference?.value || "",
+  };
+  try {
+    localStorage.setItem(rewritePresetStorageKey, JSON.stringify(data));
+  } catch {}
+}
+
+function loadRewritePresetSettings() {
+  let data = {};
+  try {
+    data = JSON.parse(localStorage.getItem(rewritePresetStorageKey) || "{}");
+  } catch {
+    data = {};
+  }
+  setSelectIfOption(rewriteProvider, data.provider);
+  setSelectIfOption(rewriteStyle, data.style);
+  setSelectIfOption(rewriteTargetPlatform, data.targetPlatform);
+  setSelectIfOption(rewriteWordRange, data.wordRange);
+  setSelectIfOption(rewriteTonePreset, data.tonePreset);
+  setSelectIfOption(rewritePersona, data.persona);
+  setSelectIfOption(rewriteDirection, data.direction);
+  setSelectIfOption(rewriteHumanizeLevel, data.humanizeLevel);
+  if (data.toneLevel && rewriteToneLevel) rewriteToneLevel.value = data.toneLevel;
+  if (data.conflictLevel && rewriteConflictLevel) rewriteConflictLevel.value = data.conflictLevel;
+  if (data.emotionLevel && rewriteEmotionLevel) rewriteEmotionLevel.value = data.emotionLevel;
+  if (data.salesLevel && rewriteSalesLevel) rewriteSalesLevel.value = data.salesLevel;
+  if (data.referenceStyle && rewriteReference) rewriteReference.value = data.referenceStyle;
+  syncRewriteSliderLabels();
 }
 
 function buildRewriteReferenceStyle() {
@@ -997,6 +1050,31 @@ async function runRewriteInlineAnalysis() {
     rewriteAnalysisView.textContent = message;
     if (rewriteAnalysisStatus) rewriteAnalysisStatus.textContent = "分析失败，请检查模型配置。";
   }
+}
+
+async function ensureRewriteTaskReady() {
+  const existingId = rewriteTaskId.value;
+  if (existingId) return existingId;
+  const text = rewriteOriginal.value.trim();
+  if (!text) {
+    rewriteStatus.textContent = "原始文案为空，无法生成文案定制成品。";
+    return "";
+  }
+  rewriteStatus.textContent = "正在创建本地文案任务...";
+  const data = await fetchJson("/api/workflow/from-transcript", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      transcriptText: text,
+      title: "手动文案定制",
+      sourceUrl: "",
+    }),
+  });
+  const id = data.task?.id || data.project?.workflowState?.lastTaskId || 0;
+  if (!id) throw new Error("本地文案任务创建失败，无法生成。");
+  rewriteTaskId.value = String(id);
+  await refreshTranscripts().catch(() => []);
+  return rewriteTaskId.value;
 }
 
 function handoffTargetLabel(target) {
@@ -4413,9 +4491,12 @@ async function saveRewriteSettings() {
 }
 
 async function generateRewrite() {
-  const id = rewriteTaskId.value;
+  const id = await ensureRewriteTaskReady();
   if (!id) return;
   if (document.activeElement === rewriteVersionCountInput) syncRewriteVersionCount();
+  if (!rewriteVersions.querySelector(".rewrite-version")) {
+    renderRewriteVersions({}, { allowDefaults: true });
+  }
   const versionSpecs = collectRewriteVersions();
   if (versionSpecs.length === 0) {
     rewriteStatus.textContent = "请至少保留一个输出框。";
