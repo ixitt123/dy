@@ -1164,6 +1164,12 @@
                 本地图片素材说明
                 <textarea id="momentsLocalMaterials" rows="4" placeholder="可写：已有学生反馈截图、课堂照片、产品图、人物形象、品牌色、必须出现/避免出现的元素。生成的每张图片提示词会参考这里。"></textarea>
               </label>
+              <div class="moments-material-upload">
+                <button id="chooseMomentsMaterial" class="ghost small" type="button">上传本地素材</button>
+                <input id="momentsMaterialInput" hidden type="file" accept=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp" multiple />
+                <span id="momentsMaterialStatus">支持 png / jpg / webp，可多选。</span>
+              </div>
+              <div id="momentsMaterialList" class="moments-material-list"></div>
               <div class="moments-form-grid">
                 <label>
                   视觉风格
@@ -1228,7 +1234,7 @@
                 <h2>图片素材区</h2>
               </div>
               <div class="moments-actions compact">
-                <button id="copyMomentsPrompts" class="ghost small" type="button">复制全部提示词</button>
+                <button id="copyMomentsPrompts" class="ghost small" type="button">复制提示词</button>
                 <button id="generateMomentsImages" class="primary small" type="button">调用图片 API 生成图片</button>
               </div>
             </div>
@@ -1238,7 +1244,7 @@
                   <span class="section-eyebrow">Prompts</span>
                   <h3 class="moments-subtitle">配图提示词</h3>
                 </div>
-                <div id="momentsImagePromptList" class="moments-prompt-list empty">生成后会显示 1-3 张配图提示词，每张都可以单独复制或调用图片 API。</div>
+                <div id="momentsImagePromptList" class="moments-prompt-list empty">生成后会显示 1-3 张配图提示词，点击“复制提示词”会一次复制全部。</div>
               </div>
               <div>
                 <div>

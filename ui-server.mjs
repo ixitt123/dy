@@ -46,6 +46,7 @@ const promptsDir = path.join(__dirname, "prompts");
 const rewritesDir = path.join(__dirname, "rewrites");
 const personasDir = path.join(__dirname, "personas");
 const momentsPersonasPath = path.join(personasDir, "moments-personas.json");
+const momentsMaterialsDir = path.join(__dirname, "assets", "moments-materials");
 const referenceExamplesPath = path.join(__dirname, "reference_examples.json");
 const defaultDownloadsDir = path.join(__dirname, "downloads");
 const localMediaDir = path.join(__dirname, "local-media");
@@ -475,6 +476,54 @@ function writeMomentsPersonas(personas = []) {
   }
   fs.writeFileSync(momentsPersonasPath, JSON.stringify({ personas: deduped }, null, 2), "utf8");
   return deduped;
+}
+
+function decodeMomentsMaterialUpload(body = {}) {
+  const raw = String(body.image_data || body.imageData || "").trim();
+  const mime = String(body.image_mime || body.imageMime || "").trim().toLowerCase();
+  const allowed = {
+    "image/png": ".png",
+    "image/jpeg": ".jpg",
+    "image/jpg": ".jpg",
+    "image/webp": ".webp",
+  };
+  const dataUrlMatch = raw.match(/^data:(image\/(?:png|jpeg|jpg|webp));base64,(.+)$/i);
+  const finalMime = (dataUrlMatch?.[1] || mime).toLowerCase();
+  const base64 = dataUrlMatch ? dataUrlMatch[2] : raw.replace(/^data:image\/\w+;base64,/, "");
+  const ext = allowed[finalMime];
+  if (!ext) throw new Error("只支持 png / jpg / webp 图片素材。");
+  if (!base64) throw new Error("缺少图片数据。");
+  const buffer = Buffer.from(base64, "base64");
+  if (!buffer.length) throw new Error("图片数据为空。");
+  if (buffer.length > 12 * 1024 * 1024) throw new Error("单张素材不能超过 12MB。");
+  return { buffer, ext, mime: finalMime };
+}
+
+function safeMaterialFileName(value = "") {
+  const base = path.basename(String(value || "moments-material")).replace(/\.[^.]+$/, "");
+  return (base || "moments-material")
+    .replace(/[<>:"/\\|?*\x00-\x1F]+/g, "-")
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-")
+    .slice(0, 60)
+    || "moments-material";
+}
+
+function saveMomentsMaterialUpload(body = {}) {
+  const decoded = decodeMomentsMaterialUpload(body);
+  const date = new Date().toISOString().slice(0, 10);
+  const targetDir = path.join(momentsMaterialsDir, date);
+  fs.mkdirSync(targetDir, { recursive: true });
+  const name = safeMaterialFileName(body.file_name || body.fileName || "moments-material");
+  const filePath = path.join(targetDir, `${Date.now()}-${randomUUID().slice(0, 8)}-${name}${decoded.ext}`);
+  fs.writeFileSync(filePath, decoded.buffer);
+  return {
+    name: path.basename(filePath),
+    filePath,
+    imageUrl: `/api/image/file?path=${encodeURIComponent(filePath)}`,
+    mime: decoded.mime,
+    size: decoded.buffer.length,
+  };
 }
 
 function saveDownloadsDir(nextDir) {
@@ -5415,6 +5464,20 @@ const server = http.createServer(async (req, res) => {
         sendJson(res, 200, result);
       } catch (error) {
         sendJson(res, 400, { ok: false, message: error instanceof Error ? error.message : String(error) });
+      }
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/moments/materials/upload") {
+      try {
+        const body = await readJsonBody(req, { maxBytes: 16 * 1024 * 1024 });
+        const material = saveMomentsMaterialUpload(body);
+        sendJson(res, 200, { ok: true, material });
+      } catch (error) {
+        sendJson(res, error instanceof HttpBodyError ? error.statusCode : 400, {
+          ok: false,
+          message: error instanceof Error ? error.message : String(error),
+        });
       }
       return;
     }
