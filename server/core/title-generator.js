@@ -46,9 +46,16 @@ function pickTitleCore(text = "", keywords = [], fallbackTitle = "") {
   const fallback = compactText(fallbackTitle);
   if (fallback) return clipChineseTitle(fallback);
   const sentences = titleSentences(text);
-  const keywordHit = sentences.find((item) => keywords.some((keyword) => item.includes(keyword)));
-  const question = sentences.find((item) => /吗|怎么|为什么|如何|是不是|别|不要|一定|避坑|报名|家长|孩子/.test(item));
-  return clipChineseTitle(keywordHit || question || sentenceStart(text));
+  const scored = sentences
+    .map((item, index) => {
+      const keywordHits = keywords.filter((keyword) => item.includes(keyword)).length;
+      const practical = /方法|经验|效果|坚持|报名|学习|避坑|问题|解决|怎么|如何|为什么|别|不要|一定|家长|孩子/.test(item) ? 8 : 0;
+      const lengthScore = item.length >= 10 && item.length <= 32 ? 6 : item.length >= 6 && item.length <= 42 ? 3 : 0;
+      const rhetoricalPenalty = /吗$|呢$|吧$/.test(item) ? -8 : 0;
+      return { item, score: keywordHits * 7 + practical + lengthScore + rhetoricalPenalty - index };
+    })
+    .sort((a, b) => b.score - a.score);
+  return clipChineseTitle(scored[0]?.item || sentenceStart(text));
 }
 
 function titleClip(value, maxLength = 28) {
