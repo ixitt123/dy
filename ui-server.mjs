@@ -2124,6 +2124,7 @@ function validateShareLink(shareLink) {
 
 function createDownloadJob(shareLink) {
   const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const firstUrl = getFirstUrl(shareLink);
   const job = {
     id,
     status: "running",
@@ -2140,13 +2141,31 @@ function createDownloadJob(shareLink) {
     Object.assign(job, changes, { updatedAt: new Date().toISOString() });
   };
 
-  runMcpTool("download_douyin_video", shareLink, (progress) => {
-    updateJob({
-      percent: Math.max(job.percent, Math.round(Number(progress.percent || 0))),
-      message: progress.message || job.message,
-    });
-  })
-    .then((result) => {
+  const runner = isLikelyDouyinUrl(firstUrl)
+    ? runMcpTool("download_douyin_video", shareLink, (progress) => {
+      updateJob({
+        percent: Math.max(job.percent, Math.round(Number(progress.percent || 0))),
+        message: progress.message || job.message,
+      });
+    })
+    : ytDlpService.download(firstUrl, {
+      onProgress: (progress) => {
+        updateJob({
+          percent: Math.max(job.percent, Math.round(Number(progress.percent || 0))),
+          message: progress.message || job.message,
+        });
+      },
+    }).then((result) => ({
+      isError: false,
+      text: [
+        "yt-dlp 下载完成",
+        `标题：${result.videoInfo?.title || ""}`,
+        `视频：${result.videoPath || ""}`,
+        result.subtitlePath ? `字幕：${result.subtitlePath}` : "",
+      ].filter(Boolean).join("\n"),
+    }));
+
+  runner.then((result) => {
       updateJob({
         status: result.isError ? "error" : "done",
         percent: result.isError ? job.percent : 100,
@@ -5568,9 +5587,8 @@ const server = http.createServer(async (req, res) => {
     if (req.method === "POST" && url.pathname === "/api/download/start") {
       const body = await readJsonBody(req);
       const shareLink = String(body.shareLink || "").trim();
-      const validationMessage = validateShareLink(shareLink);
-      if (validationMessage) {
-        sendJson(res, 400, { ok: false, message: validationMessage });
+      if (!getFirstUrl(shareLink)) {
+        sendJson(res, 400, { ok: false, message: "请先粘贴 yt-dlp 可识别的平台视频链接" });
         return;
       }
 
