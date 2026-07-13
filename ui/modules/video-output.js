@@ -58,7 +58,6 @@ function currentVideoProject() {
 
 function projectSourcePreferences(project = currentVideoProject()) {
   return {
-    directorId: String(project?.directorScript?.id || project?.directorScript?.assetId || ""),
     audioId: String(project?.selectedTtsAudio?.id || project?.selectedTtsAudio?.assetId || ""),
     bgmId: String(project?.bgm?.id || project?.bgm?.assetId || ""),
     bgmStrategy: String(project?.bgm?.strategy || project?.bgm?.source || ""),
@@ -79,14 +78,12 @@ function bgmOptionLabel(row = {}) {
 
 function canAttemptGeneration() {
   return Boolean(
-    document.querySelector("#videoProductDirector")?.value
-    && document.querySelector("#videoProductAudio")?.value
+    document.querySelector("#videoProductAudio")?.value
   );
 }
 
 function generationMissingReason() {
   if (!currentVideoProject()?.id) return "请先在首页新建或选择一个短视频项目。";
-  if (!document.querySelector("#videoProductDirector")?.value) return "请先选择已完成的导演稿。";
   if (!document.querySelector("#videoProductAudio")?.value) return "请先选择已完成的 TTS 语音。";
   return "";
 }
@@ -102,10 +99,10 @@ function updateGenerateAvailability() {
 async function ensureVideoProjectForOutput() {
   const current = currentVideoProject();
   if (current?.id) return current;
-  const directorText = document.querySelector("#videoProductDirector")?.selectedOptions?.[0]?.textContent || "";
-  const title = directorText
+  const audioText = document.querySelector("#videoProductAudio")?.selectedOptions?.[0]?.textContent || "";
+  const title = audioText
     .replace(/^#\d+\s*/, "")
-    .replace(/路.*$/, "")
+    .replace(/·.*$/, "")
     .trim() || "高质量剪映草稿";
   const created = await window.videoProjects?.create?.({
     title,
@@ -177,20 +174,6 @@ function selectLatestAvailableAudio() {
   return selected || null;
 }
 
-function selectBestDirector() {
-  const select = document.querySelector("#videoProductDirector");
-  const directors = state.sources?.directors || [];
-  if (!select || select.value || !directors.length) return directors.find((item) => String(item.id) === String(select?.value || "")) || null;
-  const preferred = projectSourcePreferences().directorId;
-  const selected = directors.find((director) => String(director.id) === String(preferred))
-    || directors.slice().sort((a, b) => Number(b.id || 0) - Number(a.id || 0))[0];
-  if (selected) {
-    select.value = String(selected.id);
-    select.dispatchEvent(new Event("change", { bubbles: true }));
-  }
-  return selected || null;
-}
-
 async function selectAndLinkTemplate() {
   await loadVideoProductSources();
   const select = document.querySelector("#videoProductJianyingTemplate");
@@ -245,12 +228,12 @@ function scoreTemplateKeywordList(list, targetText) {
 
 function currentTemplateContext() {
   const project = currentVideoProject();
-  const directorId = document.querySelector("#videoProductDirector")?.value || "";
-  const director = state.sources?.directors?.find((item) => String(item.id) === String(directorId));
+  const audioId = document.querySelector("#videoProductAudio")?.value || "";
+  const audio = state.sources?.audioJobs?.find((item) => String(item.id) === String(audioId));
   return {
     videoType: project?.videoType || project?.type || "",
-    title: project?.title || director?.title || "",
-    visualStyle: director?.visual_style || director?.style || "",
+    title: project?.title || audio?.title || audio?.seo_title || "",
+    visualStyle: "",
   };
 }
 
@@ -329,9 +312,8 @@ export async function loadVideoProductSources() {
   const preferred = projectSourcePreferences();
   const directorSelect = document.querySelector("#videoProductDirector");
   const audioSelect = document.querySelector("#videoProductAudio");
-  if (!preferred.directorId && directorSelect) directorSelect.value = "";
   if (!preferred.audioId && audioSelect) audioSelect.value = "";
-  setOptions(directorSelect, [{ id: "", title: "请选择当前项目的导演稿", scene_count: 0 }, ...(data.directors || [])], (row) => row.id ? `#${row.id} ${row.title || "导演稿"} · ${row.scene_count || 0} 镜头` : row.title, preferred.directorId);
+  setOptions(directorSelect, [{ id: "", title: "生产线内部自动分镜", scene_count: 0 }], (row) => row.title, "");
   setOptions(audioSelect, [{ id: "", label: "请选择当前项目的已完成语音" }, ...(data.audioJobs || [])], (row) => row.label || `#${row.id} ${row.voice_name || "配音"}`, preferred.audioId);
   setOptions(document.querySelector("#videoProductBgm"), [{ id: "", filename: "自动匹配本地 BGM；没有则基础生成" }, ...(data.bgmAssets || [])], bgmOptionLabel, preferred.bgmId);
   setOptions(document.querySelector("#videoProductRouteAStyle"), data.routeAStyles || [], (row) => row.label || row.id);
@@ -342,10 +324,6 @@ export async function loadVideoProductSources() {
   if (bgmHint) {
     const deleted = Array.isArray(data.deletedOutOfRangeBgmAssets) ? data.deletedOutOfRangeBgmAssets.length : 0;
     bgmHint.textContent = `已识别 ${(data.bgmAssets || []).length} 首 BGM；自动匹配只使用 120-150 BPM${deleted ? `，已删除 ${deleted} 首不合格预设` : ""}。`;
-  }
-  if (directorSelect && !directorSelect.value && data.directors?.length) {
-    const latestDirector = data.directors.slice().sort((a, b) => Number(b.id || 0) - Number(a.id || 0))[0];
-    if (latestDirector?.id) directorSelect.value = String(latestDirector.id);
   }
   if (audioSelect && !audioSelect.value && data.audioJobs?.length) {
     const latestAudio = data.audioJobs.slice().sort((a, b) => Number(b.id || 0) - Number(a.id || 0))[0];
@@ -515,12 +493,12 @@ async function loadTimelineProject(id) {
 
 export async function previewVideoProductTimeline() {
   const status = document.querySelector("#videoProductStatus");
-  if (!document.querySelector("#videoProductDirector")?.value || !document.querySelector("#videoProductAudio")?.value) {
-    if (status) status.textContent = "请先选择导演稿和已完成的 TTS 音频。";
+  if (!document.querySelector("#videoProductAudio")?.value) {
+    if (status) status.textContent = "请先选择已完成的 TTS 音频。";
     updateGenerateAvailability();
     return null;
   }
-  if (status) status.textContent = "正在按当前导演稿和音频匹配镜头素材...";
+  if (status) status.textContent = "正在按当前 TTS 音频生成生产线分镜并匹配素材...";
   const data = await postJson("/api/video-product/preview", payload());
   state.preview = data;
   for (const scene of data.scenes || []) {
@@ -537,7 +515,6 @@ export async function previewVideoProductTimeline() {
 async function autoMatchExistingImageAssets() {
   const status = document.querySelector("#videoProductStatus");
   await loadVideoProductSources();
-  selectBestDirector();
   selectLatestAvailableAudio();
   const imageSource = document.querySelector("#videoProductImageSource");
   const imageCount = state.sources?.imageAssets?.length || 0;
@@ -546,7 +523,7 @@ async function autoMatchExistingImageAssets() {
     window.appNavigate?.("image");
     return null;
   }
-  if (imageSource) imageSource.value = "director";
+  if (imageSource) imageSource.value = "all";
   let preview = await previewVideoProductTimeline();
   if (preview?.blockers?.some((item) => String(item).includes("缺少镜头图片") || String(item).includes("图片素材"))) {
     if (imageSource) imageSource.value = "all";
@@ -607,13 +584,6 @@ export async function syncSelectionsToProject({ preview = state.preview } = {}) 
     const audioTitle = audio.title || audio.seo_title || audio.publish_title || audio.platform_titles?.douyin || audio.voice_name || `配音 #${audio.id}`;
     await window.videoProjects.linkCurrent("tts", audio.id, audioTitle, { ...audio, title: audioTitle, source: "local_upload" });
   }
-  const directorId = document.querySelector("#videoProductDirector")?.value || "";
-  const director = state.sources?.directors?.find((item) => String(item.id) === String(directorId));
-  if (director) {
-    const full = await getJson(`/api/director/project?id=${encodeURIComponent(directorId)}`).catch(() => ({ project: director }));
-    const value = full.project || director;
-    await window.videoProjects.linkCurrent("director", directorId, value.title || `导演稿 #${directorId}`, { ...value, sceneCount: value.result?.storyboard?.length || value.scene_count || 0, subtitleTimeline: value.result?.subtitle_timeline || value.subtitle_timeline || [], source: "ai_generated" });
-  }
   const selectedImageIds = new Set([
     ...Object.values(state.manualBindings || {}).map(String),
     ...(preview?.scenes || []).map((scene) => String(scene.image_asset_id || "")),
@@ -663,9 +633,9 @@ function payload({ forceExecution = false } = {}) {
   return {
     projectId: project?.id || "",
     video_project_id: project?.id || "",
-    source_director_project_id: Number(document.querySelector("#videoProductDirector")?.value || 0),
+    source_director_project_id: 0,
     audio_asset_id: Number(document.querySelector("#videoProductAudio")?.value || 0),
-    image_source: document.querySelector("#videoProductImageSource")?.value || "director",
+    image_source: document.querySelector("#videoProductImageSource")?.value || "all",
     output_type: document.querySelector("#videoProductOutputType")?.value || "jianying_template",
     jianying_template: document.querySelector("#videoProductJianyingTemplate")?.value || "education_tips",
     route_a_style_id: document.querySelector("#videoProductRouteAStyle")?.value || "black_gold_knowledge",
@@ -698,8 +668,6 @@ export async function generateVideoProduct({ forceExecution = false } = {}) {
     if (status) status.textContent = missingReason;
     if (!currentVideoProject()?.id) {
       document.querySelector("#videoProjectReadiness")?.scrollIntoView({ behavior: "smooth", block: "center" });
-    } else if (!document.querySelector("#videoProductDirector")?.value) {
-      document.querySelector("#videoProductDirector")?.focus();
     } else {
       document.querySelector("#videoProductAudio")?.focus();
     }
@@ -716,7 +684,7 @@ export async function generateVideoProduct({ forceExecution = false } = {}) {
   }
   try {
     if (!state.preview) await previewVideoProductTimeline();
-    if (status) status.textContent = "正在同步项目文案、语音、导演稿、素材和 BGM...";
+    if (status) status.textContent = "正在同步项目文案、语音、素材和 BGM...";
     await syncSelectionsToProject({ preview: state.preview });
     const readiness = await refreshReadiness();
     await refreshQualityCheck();
@@ -745,7 +713,6 @@ async function generateJianyingDraftAndOpen({ forceExecution = false } = {}) {
   if (missingReason) {
     if (status) status.textContent = missingReason;
     if (!currentVideoProject()?.id) document.querySelector("#videoProjectReadiness")?.scrollIntoView({ behavior: "smooth", block: "center" });
-    else if (!document.querySelector("#videoProductDirector")?.value) document.querySelector("#videoProductDirector")?.focus();
     else document.querySelector("#videoProductAudio")?.focus();
     return null;
   }
