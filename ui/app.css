@@ -7027,7 +7027,7 @@ audio {
 
 .moments-persona-row {
   display: grid;
-  grid-template-columns: minmax(190px, 1fr) auto;
+  grid-template-columns: minmax(190px, 1fr) auto auto;
   gap: 10px;
   align-items: end;
 }
@@ -7045,6 +7045,12 @@ audio {
 .moments-persona-editor {
   min-width: 120px;
   justify-self: end;
+}
+
+.moments-add-persona {
+  min-height: 38px;
+  align-self: end;
+  white-space: nowrap;
 }
 
 .moments-persona-editor summary {
