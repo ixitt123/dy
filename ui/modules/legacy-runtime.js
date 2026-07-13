@@ -331,6 +331,72 @@ const rewriteVersionOptions = [
 const defaultRewriteVersionCount = 3;
 const maxRewriteVersionCount = 50;
 const rewritePresetStorageKey = "video-factory:rewrite-preset-v1";
+const rewritePlanPresets = {
+  "保留原意强化表达": {
+    direction: "保留原意优化",
+    tone: "清楚直接，不跑题",
+    persona: "普通朋友视角",
+    structure: "原文顺序不大改；压缩废话，强化第一句、转折句和结尾记忆点。",
+    mustShow: "成品要明显比原文更清楚、更短句、更有节奏，但主题和事实不变。",
+    avoid: "不要新增行业背景、不要加陌生人物、不要硬塞销售话术。",
+  },
+  "小黑漫画解释类": {
+    direction: "知识解释",
+    tone: "朋友聊天，有现场感",
+    persona: "小黑漫画旁白",
+    structure: "用“现象/画面 -> 本质解释 -> 反差比喻 -> 一句话结论”的结构，把抽象内容解释成能画出来的场景。",
+    mustShow: "要有画面感、类比、反差和解释动作，但只解释原文的核心意思。",
+    avoid: "不要脱离原文创造新剧情；不要把图像风格当成正文主题。",
+  },
+  "爆款口播重构": {
+    direction: "短视频口播",
+    tone: "犀利反差，但不虚构",
+    persona: "短视频内容策划",
+    structure: "3秒强钩子 -> 原文核心事件 -> 反常识判断 -> 具体展开 -> 评论/关注引导。",
+    mustShow: "开头和段落顺序要有明显短视频感，句子短、停顿强、信息密度高。",
+    avoid: "不要编造数据和案例；不要为了爆款改掉原文事实。",
+  },
+  "知识拆解型": {
+    direction: "知识解释",
+    tone: "专业可信，有判断",
+    persona: "专业讲解者",
+    structure: "先给结论 -> 拆 2-3 个原因/步骤 -> 举原文里的具体点 -> 给行动建议。",
+    mustShow: "逻辑层级要比原文清楚，适合做知识类视频字幕或口播。",
+    avoid: "不要写成营销广告；不要出现原文没有的权威背书。",
+  },
+  "痛点共鸣型": {
+    direction: "痛点共鸣",
+    tone: "情绪共鸣，克制表达",
+    persona: "普通朋友视角",
+    structure: "先说用户熟悉的真实感受 -> 点出矛盾 -> 回到原文事件/观点 -> 给一句共鸣结论。",
+    mustShow: "要让人觉得“说的是我”，但不能煽情过头。",
+    avoid: "不要卖惨；不要把原文改成另一种情绪故事。",
+  },
+  "转化引导型": {
+    direction: "成交转化",
+    tone: "强行动号召，低夸张",
+    persona: "创业者/老板视角",
+    structure: "价值判断 -> 原文核心证据 -> 为什么现在要行动 -> 低压 CTA。",
+    mustShow: "结尾要有明确行动，但必须围绕原文主题转化。",
+    avoid: "不要虚构优惠、名额、承诺、成功案例。",
+  },
+  "朋友圈叙事型": {
+    direction: "朋友圈文案",
+    tone: "朋友聊天，有现场感",
+    persona: "普通朋友视角",
+    structure: "生活化开场 -> 原文事件/观察 -> 自己的感受 -> 轻 CTA 或开放式提问。",
+    mustShow: "像真人发朋友圈，不像广告和新闻稿。",
+    avoid: "不要口号化；不要过度专业术语。",
+  },
+  "成片旁白型": {
+    direction: "视频成片口播稿",
+    tone: "专业可信，有判断",
+    persona: "专业讲解者",
+    structure: "镜头开场旁白 -> 逐段解释画面 -> 情绪递进 -> 收束金句。",
+    mustShow: "适合直接配音，句子要可断句，画面可跟随。",
+    avoid: "不要出现无法配画面的空泛概念。",
+  },
+};
 
 function setBusy(label) {
   statusText.textContent = label;
