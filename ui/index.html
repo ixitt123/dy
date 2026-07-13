@@ -601,8 +601,8 @@
       <section class="director-system" id="directorSystem">
         <div class="result-head director-head">
           <div>
-            <h2>AI 导演系统</h2>
-            <p>先完成故事弧、分镜、视觉、字幕和声音设计，只生成专业导演稿。</p>
+            <h2>生产线分镜系统</h2>
+            <p>旧独立入口已停用；分镜只在对应生产线内部执行。</p>
           </div>
           <span class="director-stage-badge">专业分镜</span>
         </div>
@@ -688,14 +688,14 @@
               保存参考说明到 reference-styles
             </label>
             <div class="director-generate-row">
-              <button class="primary" id="generateDirector" type="button">生成专业导演稿</button>
+              <button class="primary" id="generateDirector" type="button">生成生产线分镜</button>
               <span id="directorStatus" role="status">等待生成。</span>
             </div>
           </div>
         </div>
 
         <div class="director-history-head">
-          <h2>导演项目</h2>
+          <h2>分镜项目</h2>
           <div class="history-actions">
             <button class="ghost small" id="refreshDirectorProjects" type="button">刷新</button>
             <button class="ghost small danger-action" id="clearDirectorProjects" type="button">清空记录</button>
@@ -706,7 +706,7 @@
         <section class="director-result" id="directorResult" hidden>
           <div class="director-result-head">
             <div>
-              <h2 id="directorResultTitle">导演稿</h2>
+              <h2 id="directorResultTitle">生产线分镜</h2>
               <p id="directorResultMeta"></p>
             </div>
             <div class="director-result-actions">
@@ -721,7 +721,7 @@
               <button class="ghost small" id="openDirectorFile" type="button">打开文件位置</button>
             </div>
           </div>
-          <div class="director-result-tabs" id="directorResultTabs" role="tablist" aria-label="导演稿结果">
+          <div class="director-result-tabs" id="directorResultTabs" role="tablist" aria-label="生产线分镜结果">
             <button class="active" type="button" data-director-tab="shot-list">Shot List</button>
             <button type="button" data-director-tab="storyboard-json">分镜数据</button>
             <button type="button" data-director-tab="subtitle">字幕时间轴</button>
@@ -969,7 +969,7 @@
                 <button class="ghost" id="autoRunWorkflow" type="button">一键自动流转</button>
                 <button class="primary" id="generateVideoProduct" type="button" title="快捷键 Ctrl+Shift+J">一键导入剪映草稿</button>
               </div>
-              <p id="videoProductStatus" role="status">等待选择导演项目、音频和图片素材。</p>
+              <p id="videoProductStatus" role="status">等待选择音频和图片素材；分镜会在当前生产线内部生成。</p>
             </section>
 
             <section class="video-product-panel">
@@ -1022,9 +1022,9 @@
           <div class="vfo-source-panel">
             <div class="vfo-source-row">
               <label>
-                导演稿来源
+                生产线分镜来源
                 <select id="vfoSourceMode">
-                  <option value="director">已完成的 Director 项目</option>
+                  <option value="director">当前生产线内部数据</option>
                   <option value="manual">手动粘贴分镜数据</option>
                 </select>
               </label>
@@ -1040,10 +1040,10 @@
             </label>
             <label id="vfoManualJsonField" hidden>
               分镜数据
-              <textarea id="vfoManualJson" rows="14" placeholder="粘贴 AI 导演输出的完整分镜数据"></textarea>
+              <textarea id="vfoManualJson" rows="14" placeholder="粘贴当前生产线输出的完整分镜数据"></textarea>
             </label>
             <div class="vfo-source-summary" id="vfoSourceSummary">
-              <strong>等待选择导演稿</strong>
+              <strong>等待选择生产线分镜</strong>
               <span>选择后会显示镜头数、平台和导演评分。</span>
             </div>
           </div>
@@ -2082,7 +2082,7 @@
               <button class="ghost small" id="openImageSettings" type="button">去系统设置</button>
             </div>
             <div class="image-import-panel" id="imageDirectorImportPanel" hidden>
-              <label for="imageDirectorPromptSelect">已导入导演镜头</label>
+              <label for="imageDirectorPromptSelect">已导入生产线分镜</label>
               <div class="image-import-row">
                 <select id="imageDirectorPromptSelect"></select>
                 <button class="ghost small" id="useDirectorPrompt" type="button">使用当前镜头</button>

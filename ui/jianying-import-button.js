@@ -62,9 +62,9 @@
     return {
       projectId,
       video_project_id: projectId,
-      source_director_project_id: Number(document.querySelector("#videoProductDirector")?.value || 0),
+      source_director_project_id: 0,
       audio_asset_id: Number(document.querySelector("#videoProductAudio")?.value || 0),
-      image_source: document.querySelector("#videoProductImageSource")?.value || "director",
+      image_source: document.querySelector("#videoProductImageSource")?.value || "all",
       output_type: "jianying_template",
       jianying_template: document.querySelector("#videoProductJianyingTemplate")?.value || "education_tips",
       route_a_style_id: document.querySelector("#videoProductRouteAStyle")?.value || "black_gold_knowledge",
@@ -80,7 +80,7 @@
   }
 
   function isForceableError(message = "") {
-    return /相似度|随机音频匹配|质量审查未通过|码率偏低|标题仍是内部导演稿名称|缺少 BGM 素材/.test(String(message || ""));
+    return /相似度|随机音频匹配|质量审查未通过|码率偏低|标题仍是内部生产线名称|缺少 BGM 素材/.test(String(message || ""));
   }
 
   function confirmForce(message = "") {
@@ -105,11 +105,6 @@
   async function runImportJianyingDraft({ forceExecution = false } = {}) {
     const projectId = await ensureProjectId();
     const body = payload(projectId, { forceExecution });
-    if (!body.source_director_project_id) {
-      status("请先选择已完成的导演稿。");
-      document.querySelector("#videoProductDirector")?.focus();
-      return null;
-    }
     if (!body.audio_asset_id) {
       status("请先选择已完成的 TTS 语音。");
       document.querySelector("#videoProductAudio")?.focus();
