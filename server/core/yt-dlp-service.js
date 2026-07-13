@@ -190,7 +190,7 @@ function sameUrl(left, right) {
 
 function findDownloadedVideoFromDir(targetDir, { url = "", startedAt = 0, printed = [] } = {}) {
   const files = fs.existsSync(targetDir) ? fs.readdirSync(targetDir) : [];
-  const infoRows = files
+  const allInfoRows = files
     .filter((name) => name.endsWith(".info.json"))
     .map((name) => {
       const filePath = path.join(targetDir, name);
@@ -198,36 +198,36 @@ function findDownloadedVideoFromDir(targetDir, { url = "", startedAt = 0, printe
       const raw = readJsonFile(filePath) || {};
       return { filePath, name, stat, raw };
     })
-    .filter((row) => {
-      if (!startedAt) return true;
-      return row.stat.mtimeMs >= startedAt - 60_000;
-    })
     .sort((left, right) => right.stat.mtimeMs - left.stat.mtimeMs);
+  const infoRows = allInfoRows.filter((row) => {
+    if (!startedAt) return true;
+    return row.stat.mtimeMs >= startedAt - 60_000;
+  });
 
   const printedText = printed.join("\n");
-  const matchingInfo = infoRows.find(({ raw, name }) => {
+  const matchingInfo = allInfoRows.find(({ raw, name }) => {
     const id = String(raw.id || "");
     return (id && (printedText.includes(id) || url.includes(id) || name.includes(id)))
       || sameUrl(raw.webpage_url, url)
       || sameUrl(raw.original_url, url);
   }) || infoRows[0];
 
-  const videoRows = files
+  const allVideoRows = files
     .filter((name) => VIDEO_EXTENSIONS.has(path.extname(name).toLowerCase()))
     .map((name) => {
       const filePath = path.join(targetDir, name);
       const stat = fs.statSync(filePath);
       return { filePath, name, stat };
     })
-    .filter((row) => {
-      if (!startedAt) return true;
-      return row.stat.mtimeMs >= startedAt - 60_000;
-    })
     .sort((left, right) => right.stat.mtimeMs - left.stat.mtimeMs);
+  const videoRows = allVideoRows.filter((row) => {
+    if (!startedAt) return true;
+    return row.stat.mtimeMs >= startedAt - 60_000;
+  });
 
   if (matchingInfo?.raw?.id) {
     const id = String(matchingInfo.raw.id);
-    const byId = videoRows.find((row) => row.name.includes(id));
+    const byId = allVideoRows.find((row) => row.name.includes(id));
     if (byId) return byId.filePath;
   }
   return videoRows[0]?.filePath || "";

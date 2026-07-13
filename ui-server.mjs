@@ -5701,12 +5701,40 @@ const server = http.createServer(async (req, res) => {
 
       const firstUrl = getFirstUrl(shareLink);
       if (!firstUrl) {
-        sendJson(res, 400, { ok: false, message: "请先粘贴抖音分享链接" });
+        sendJson(res, 400, { ok: false, message: "请先粘贴 yt-dlp 可识别的平台视频链接" });
         return;
       }
+
       if (!isLikelyDouyinUrl(firstUrl)) {
-        sendJson(res, 400, { ok: false, message: "这个不像抖音分享链接，请重新复制抖音里的分享内容" });
-        return;
+        if (action === "parse" || action === "link") {
+          const info = await ytDlpService.info(firstUrl);
+          const videoInfo = info.videoInfo || {};
+          sendJson(res, 200, {
+            ok: true,
+            text: [
+              `视频标题: ${videoInfo.title || ""}`,
+              `视频ID: ${videoInfo.videoId || ""}`,
+              `平台: ${videoInfo.extractor || "yt-dlp"}`,
+              `下载链接: ${videoInfo.downloadUrl || videoInfo.webpageUrl || firstUrl}`,
+            ].join("\n"),
+            files: listDownloads(),
+          });
+          return;
+        }
+        if (action === "download") {
+          const result = await ytDlpService.download(firstUrl);
+          sendJson(res, 200, {
+            ok: true,
+            text: [
+              "yt-dlp 下载完成",
+              `标题：${result.videoInfo?.title || ""}`,
+              `视频：${result.videoPath || ""}`,
+              result.subtitlePath ? `字幕：${result.subtitlePath}` : "",
+            ].filter(Boolean).join("\n"),
+            files: listDownloads(),
+          });
+          return;
+        }
       }
 
       const tools = {
