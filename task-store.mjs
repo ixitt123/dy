@@ -1303,9 +1303,13 @@ export function openTaskStore(baseDir) {
     const provider = String(input.provider || "");
     const voiceId = String(input.voice_id || "");
     const existing = normalizeVoice(getVoiceStmt.get(provider, voiceId));
-    if (existing && existing.voice_type === "preset") {
+    if (existing && ["deleted", "archived"].includes(String(existing.status || ""))) return existing;
+    if (existing && ["preset", "music"].includes(existing.voice_type)) {
       return updateVoiceAsset(existing.id, {
         voice_name: String(input.voice_name || existing.voice_name),
+        voice_type: String(input.voice_type || existing.voice_type),
+        description: String(input.description || existing.description),
+        tags_json: String(input.tags_json || existing.tags_json || "[]"),
         metadata_json: String(input.metadata_json || existing.metadata_json || "{}"),
         status: String(input.status || existing.status || "active"),
       });

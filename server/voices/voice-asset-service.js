@@ -602,6 +602,75 @@ export function createVoiceAssetService({ baseDir, taskStore, ttsService, getSet
     return resolved && isWithin(cloneDraftsDir, resolved) && fs.existsSync(resolved) ? resolved : "";
   }
 
+  async function generateMinimaxMusicPreview({ asset, metadata, input, outputPath }) {
+    const settings = getSettings();
+    const config = settings.tts?.minimax || {};
+    const apiKey = String(config.api_key || "").trim();
+    if (!apiKey) return { error: "MiniMax：未配置 API Key，无法生成唱歌或音乐试听。" };
+    const preset = minimaxMusicPresetFromVoiceId(asset.voice_id) || metadata;
+    const text = String(input.text || metadata.previewText || metadata.preview_text || preset.outro || DEFAULT_VOICE_PREVIEW_TEXT).trim().slice(0, 3200);
+    if (!preset.instrumental && !text) return { error: "唱歌和说唱预设需要文案或口号才能生成试听。" };
+    const prompt = [
+      preset.prompt || metadata.prompt || "中文短视频音乐",
+      String(input.prompt_extra || "").trim(),
+      input.title ? `视频标题：${String(input.title).trim().slice(0, 80)}` : "",
+    ].filter(Boolean).join("，");
+    const body = {
+      model: String(input.model || preset.model || metadata.model || MINIMAX_MUSIC_MODEL).trim() || MINIMAX_MUSIC_MODEL,
+      prompt,
+      stream: false,
+      output_format: "hex",
+      audio_setting: {
+        sample_rate: 44100,
+        bitrate: 256000,
+        format: "mp3",
+      },
+      aigc_watermark: false,
+      lyrics_optimizer: false,
+      is_instrumental: Boolean(preset.instrumental),
+    };
+    if (!preset.instrumental) body.lyrics = formatMusicLyrics(text, preset);
+
+    try {
+      const response = await fetch(minimaxEndpoint(config.base_url, "/v1/music_generation"), {
+        method: "POST",
+        headers: {
+          authorization: `Bearer ${apiKey}`,
+          "content-type": "application/json",
+        },
+        body: JSON.stringify(body),
+      });
+      const raw = await response.text();
+      const data = parseJsonObject(raw);
+      const statusCode = Number(data?.base_resp?.status_code || 0);
+      if (!response.ok || statusCode !== 0) {
+        return { error: minimaxMusicError(response.status, data, raw, apiKey) };
+      }
+      const audioHex = String(data?.data?.audio || "").trim();
+      const buffer = audioHex ? Buffer.from(audioHex, "hex") : null;
+      if (!buffer?.length) return { error: `MiniMax Music 没有返回可用音频，状态：${String(data?.data?.status || "unknown")}` };
+      fs.mkdirSync(path.dirname(outputPath), { recursive: true });
+      fs.writeFileSync(outputPath, buffer);
+      return {
+        success: true,
+        audio_path: outputPath,
+        metadata: {
+          model: body.model,
+          provider: "minimax",
+          provider_kind: "minimax_music",
+          preset_id: preset.id || metadata.music_preset_id || "",
+          prompt,
+          instrumental: Boolean(preset.instrumental),
+          trace_id: String(data.trace_id || ""),
+          bytes: buffer.length,
+          duration_ms: Number(data?.extra_info?.music_duration || 0),
+        },
+      };
+    } catch (error) {
+      return { error: "MiniMax Music 试听生成失败。", detail: error instanceof Error ? error.message : String(error) };
+    }
+  }
+
   async function generatePreview(id, input = {}) {
     const assetId = Number(id || 0);
     const asset = taskStore.getVoiceAsset(assetId);
@@ -614,25 +683,29 @@ export function createVoiceAssetService({ baseDir, taskStore, ttsService, getSet
       return { error: "该平台已从 TTS 页面移除，不能生成试听。" };
     }
 
+    const force = input.force === true;
     const externalPreview = getAsset(assetId)?.preview_url || "";
     const localPreviewPath = resolveAssetAudioPath(assetId, "preview");
-    if (externalPreview && !externalPreview.includes("/api/voice-assets/audio")) {
+    if (!force && externalPreview && !externalPreview.includes("/api/voice-assets/audio")) {
       return { asset: getAsset(assetId), cached: true, preview_url: externalPreview };
     }
-    if (localPreviewPath) {
+    if (!force && localPreviewPath) {
       return { asset: getAsset(assetId), cached: true, preview_url: `/api/voice-assets/audio?id=${assetId}&kind=preview` };
     }
 
     const metadata = safeJson(asset.metadata_json, {});
     const filePath = path.join(previewsDir, `${Date.now()}-${safeFileSegment(asset.voice_name || asset.voice_id)}-${randomUUID().slice(0, 8)}.mp3`);
-    const result = await ttsService.generateStaticPreview({
-      provider: asset.provider,
-      voice_id: asset.voice_id,
-      voice_name: asset.voice_name,
-      model: String(input.model || metadata.target_model || metadata.model || ""),
-      text: String(input.text || metadata.previewText || metadata.preview_text || DEFAULT_VOICE_PREVIEW_TEXT).trim() || DEFAULT_VOICE_PREVIEW_TEXT,
-      outputPath: filePath,
-    });
+    const isMusicPreset = metadata.asset_kind === "minimax_music_preset" || asset.voice_type === "music";
+    const result = isMusicPreset
+      ? await generateMinimaxMusicPreview({ asset, metadata, input, outputPath: filePath })
+      : await ttsService.generateStaticPreview({
+        provider: asset.provider,
+        voice_id: asset.voice_id,
+        voice_name: asset.voice_name,
+        model: String(input.model || metadata.target_model || metadata.model || ""),
+        text: String(input.text || metadata.previewText || metadata.preview_text || DEFAULT_VOICE_PREVIEW_TEXT).trim() || DEFAULT_VOICE_PREVIEW_TEXT,
+        outputPath: filePath,
+      });
     if (result.error || !fs.existsSync(filePath)) {
       if (fs.existsSync(filePath)) fs.rmSync(filePath, { force: true });
       return { error: [result.error || "试听生成失败。", result.detail || ""].filter(Boolean).join(" ") };
