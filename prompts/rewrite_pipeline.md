@@ -11,9 +11,10 @@ The rewritten copy must stay about the same subject as the Original Text.
 - If the selected direction is marketing or conversion, convert only around the original topic. Do not force education enrollment language onto unrelated content.
 - If the Original Text is about AI tools, software, video generation, content workflow, or another non-education topic, keep that topic.
 
-## Loaded Skills
+## Optional Style Reference
 
-{{skill_rewrite_douyin_education}}
+The following reference may only be used for rhythm, sentence sharpness, and human tone.
+Never copy its topic, industry, audience, examples, or business scenario.
 
 {{skill_boss_style}}
 
