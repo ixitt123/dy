@@ -2990,7 +2990,6 @@ pre {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .video-product-workbench,
   .vfo-workbench {
     grid-template-columns: 1fr;
   }
@@ -3901,8 +3900,7 @@ a {
   justify-self: end;
 }
 
-.director-project-row > div:last-child,
-.video-product-project-row > div:last-child {
+.director-project-row > div:last-child {
   display: flex;
   align-items: center;
   justify-content: flex-end;
@@ -6561,7 +6559,6 @@ audio {
 }
 
 @media (max-width: 780px) {
-  .video-product-local-row,
   .image-import-row {
     grid-template-columns: 1fr;
   }

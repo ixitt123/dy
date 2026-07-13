@@ -3,7 +3,6 @@ const ROUTE_ALIASES = {
   files: "assets",
   "image-studio": "assets",
   vfo: "dashboard",
-  "video-output": "dashboard",
 };
 
 export function normalizeRoute(route) {

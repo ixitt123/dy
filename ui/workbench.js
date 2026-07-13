@@ -1316,10 +1316,6 @@ function initWorkbench() {
     const ws = new WebSocket(`ws://127.0.0.1:${location.port}/ws/progress`);
     ws.onmessage = (e) => {
       const data = JSON.parse(e.data);
-      if (data.type === "video-product") {
-        refreshWorkbenchOverview();
-        return;
-      }
       if (data.taskId) {
         refreshTasks().catch(() => renderWorkbenchOverview());
       }

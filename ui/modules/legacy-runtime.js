@@ -3171,7 +3171,7 @@ function renderTtsRail(job = activeTtsRailJob) {
     ? `<a href="${escapeHtml(job.audio_url)}" target="_blank" rel="noreferrer">${isMusicJob ? "音频文件" : "语音文件"}</a>`
     : "<span>完成后显示音频文件。</span>";
   railCurrentTask.innerHTML = `
-    <div class="rail-video-product-card rail-tts-card">
+    <div class="rail-production-card rail-tts-card">
       <strong>#${job.id || "-"} ${escapeHtml(title || `${mediaLabel}生成`)}</strong>
       <small>当前步骤：${escapeHtml(job.status === "completed" ? `${mediaLabel}已生成，可以试听` : job.status === "failed" ? `${mediaLabel}生成失败` : job.status === "processing" ? "正在生成音频" : "任务已进入队列")}</small>
       <div class="rail-progress"><i style="width:${progress}%"></i></div>
@@ -3187,7 +3187,7 @@ function renderTtsRail(job = activeTtsRailJob) {
       ${job.error ? `<div class="rail-failure-note">错误原因：${escapeHtml(job.error)}</div>` : ""}
       <div class="rail-task-group">
         <span class="rail-subheading">输出文件</span>
-        <div class="video-product-output-files">${outputLink}</div>
+        <div class="rail-output-files">${outputLink}</div>
       </div>
       <div class="rail-task-actions">
         <button type="button" data-nav="tts">查看语音</button>
@@ -4510,7 +4510,7 @@ function renderDirectorRail(project = activeDirectorRailProject) {
   if (signature === activeDirectorRailSignature) return;
   activeDirectorRailSignature = signature;
   railCurrentTask.innerHTML = `
-    <div class="rail-video-product-card rail-director-card">
+    <div class="rail-production-card rail-director-card">
       <strong>#${project.id || "-"} ${escapeHtml(title)}</strong>
       <small>当前步骤：${escapeHtml(directorCurrentStep(project))}</small>
       <div class="rail-progress"><i style="width:${progress}%"></i></div>
@@ -4526,7 +4526,7 @@ function renderDirectorRail(project = activeDirectorRailProject) {
       ${error ? `<div class="rail-failure-note">错误原因：${escapeHtml(error)}</div>` : ""}
       <div class="rail-task-group">
         <span class="rail-subheading">输出文件</span>
-        <div class="video-product-output-files">${directorOutputLinks(project)}</div>
+        <div class="rail-output-files">${directorOutputLinks(project)}</div>
       </div>
       <div class="rail-task-actions">
         <button type="button" data-nav="tts">生成语音</button>
