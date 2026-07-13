@@ -3410,6 +3410,7 @@ async function loadVoiceAssets({ applyDefault = false } = {}) {
   voiceAssets = Array.isArray(data.assets) ? data.assets : [];
   defaultVoiceAsset = data.default_voice || voiceAssets.find((asset) => asset.is_default) || null;
   renderVoiceAssets();
+  renderTtsVoices();
   voiceCenterStatus.textContent = `已加载 ${voiceAssets.length} 个声音资产。`;
   if (applyDefault && defaultVoiceAsset) await applyVoiceAssetToTts(defaultVoiceAsset);
 }
