@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { createTtsProvider } from "../tts/providers/index.js";
 import { MINIMAX_MUSIC_MODEL, MINIMAX_MUSIC_PRESETS, minimaxMusicPresetFromVoiceId, minimaxMusicPresetToVoiceAsset } from "../tts/minimax-music-presets.js";
 
@@ -157,6 +157,7 @@ export function createVoiceAssetService({ baseDir, taskStore, ttsService, getSet
   const samplesDir = path.join(voicesDir, "samples");
   const clonesDir = path.join(voicesDir, "clones");
   const previewsDir = path.join(voicesDir, "previews");
+  const staticPreviewsDir = path.join(baseDir, "ui", "assets", "voice-previews");
   const cloneDraftsDir = path.join(voicesDir, "clone-drafts");
   const stylePresetPath = path.join(voicesDir, "audio-style-presets.json");
   const promptPath = path.join(baseDir, "prompts", "voice_test_script.md");
@@ -188,6 +189,21 @@ export function createVoiceAssetService({ baseDir, taskStore, ttsService, getSet
       status: asset.status,
       updated_at: asset.updated_at,
     }, null, 2), "utf8");
+  }
+
+  function staticVoicePreview(provider, voiceId) {
+    const safeProvider = String(provider || "unknown").replace(/[^a-z0-9_-]+/gi, "_") || "unknown";
+    const key = createHash("sha1").update(`${safeProvider}:${voiceId}`).digest("hex").slice(0, 20);
+    return {
+      path: path.join(staticPreviewsDir, safeProvider, `${key}.mp3`),
+      url: `/assets/voice-previews/${encodeURIComponent(safeProvider)}/${key}.mp3`,
+    };
+  }
+
+  function resolveStaticPreviewUrl(row) {
+    if (!row?.provider || !row?.voice_id) return "";
+    const preview = staticVoicePreview(row.provider, row.voice_id);
+    return fs.existsSync(preview.path) ? preview.url : "";
   }
 
   function providerFor(providerId) {
@@ -229,11 +245,11 @@ export function createVoiceAssetService({ baseDir, taskStore, ttsService, getSet
       tags,
       metadata,
       sample_url: row.sample_path ? `/api/voice-assets/audio?id=${row.id}&kind=sample` : metadata.sample_url || "",
-      preview_url: previewTest
+      preview_url: resolveStaticPreviewUrl(row) || (previewTest
         ? `/api/tts/audio?id=${previewTest.tts_job_id}`
         : row.preview_path
           ? `/api/voice-assets/audio?id=${row.id}&kind=preview`
-          : String(metadata.demo_audio || ""),
+          : String(metadata.demo_audio || "")),
       supports_emotion: metadata.supports_emotion !== false,
       supports_speed: metadata.supports_speed !== false,
       rating_count: ownRatings.length,
