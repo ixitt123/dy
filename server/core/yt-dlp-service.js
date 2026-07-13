@@ -132,6 +132,12 @@ function parseProgress(text) {
   return Math.max(0, Math.min(100, Number(match[1] || 0)));
 }
 
+function shouldFallbackToFfmpegDownloader(error, url) {
+  const message = String(error?.message || error || "");
+  const isYoutube = /(^|\.)youtu\.be\/|(^|\.)youtube\.com\//i.test(String(url || ""));
+  return isYoutube && /EOF occurred in violation of protocol|SSL|TLS|Giving up after \d+ retries/i.test(message);
+}
+
 function parseInfoJson(stdout) {
   const text = String(stdout || "").trim();
   const lines = text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
@@ -315,7 +321,7 @@ function createYtDlpService({
     const targetDir = ensureDir(outputDir());
     const printed = [];
     const startedAt = Date.now();
-    const args = [
+    const baseArgs = [
       "--no-playlist",
       "--newline",
       "--windows-filenames",
@@ -330,25 +336,46 @@ function createYtDlpService({
       "--convert-subs", "srt",
       "--print", "after_move:filepath",
       ...(ffmpegPath ? ["--ffmpeg-location", path.dirname(ffmpegPath)] : []),
+    ];
+    const defaultArgs = [
+      ...baseArgs,
       url,
     ];
-    await runProcess(bin, args, {
-      cwd: baseDir,
-      signal,
-      onStdout: (text) => {
-        for (const line of text.split(/\r?\n/)) {
-          const trimmed = line.trim();
-          if (!trimmed) continue;
-          printed.push(trimmed);
-          const percent = parseProgress(trimmed);
-          if (percent !== null) onProgress({ percent, message: `yt-dlp 下载 ${percent.toFixed(1)}%` });
-        }
-      },
-      onStderr: (text) => {
-        const percent = parseProgress(text);
-        if (percent !== null) onProgress({ percent, message: `yt-dlp 下载 ${percent.toFixed(1)}%` });
-      },
-    });
+    const runDownload = async (args, label = "yt-dlp 下载") => {
+      await runProcess(bin, args, {
+        cwd: baseDir,
+        signal,
+        onStdout: (text) => {
+          for (const line of text.split(/\r?\n/)) {
+            const trimmed = line.trim();
+            if (!trimmed) continue;
+            printed.push(trimmed);
+            const percent = parseProgress(trimmed);
+            if (percent !== null) onProgress({ percent, message: `${label} ${percent.toFixed(1)}%` });
+          }
+        },
+        onStderr: (text) => {
+          const percent = parseProgress(text);
+          if (percent !== null) onProgress({ percent, message: `${label} ${percent.toFixed(1)}%` });
+        },
+      });
+    };
+    try {
+      await runDownload(defaultArgs);
+    } catch (error) {
+      if (!ffmpegPath || !shouldFallbackToFfmpegDownloader(error, url)) throw error;
+      onProgress({ percent: 10, message: "yt-dlp 下载断开，正在切换 ffmpeg 兜底下载" });
+      printed.length = 0;
+      const fallbackArgs = [
+        ...baseArgs,
+        "-f", "18/best[ext=mp4]/best",
+        "--downloader", "ffmpeg",
+        "--downloader-args", "ffmpeg:-nostdin",
+        url,
+      ];
+      await runDownload(fallbackArgs, "ffmpeg 兜底下载");
+      onProgress({ percent: 100, message: "ffmpeg 兜底下载完成" });
+    }
     const videoPath = printed
       .map((line) => normalizePrintedPath(line, targetDir))
       .find((line) => fileExists(line) && VIDEO_EXTENSIONS.has(path.extname(line).toLowerCase()))
