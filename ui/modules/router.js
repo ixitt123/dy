@@ -2,7 +2,8 @@ const ROUTE_ALIASES = {
   analysis: "transcript",
   files: "assets",
   "image-studio": "assets",
-  vfo: "video-output",
+  vfo: "dashboard",
+  "video-output": "dashboard",
 };
 
 export function normalizeRoute(route) {

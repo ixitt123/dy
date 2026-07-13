@@ -18,7 +18,6 @@ import { createTaskCenterV2 } from "./server/core/task-center.js";
 import { providerRegistry } from "./server/core/provider-registry.js";
 import { createAnalysisEngine } from "./server/core/analysis-engine.js";
 import { createLegacyJianyingExporter } from "./server/core/jianying-exporter.js";
-import { createCapcutCliAdapter } from "./server/core/capcut-cli/capcut-cli-adapter.js";
 import { PipelineRunner } from "./server/core/pipeline-bus/PipelineRunner.js";
 import { PipelineState } from "./server/core/pipeline-bus/PipelineState.js";
 import { PIPELINE_EVENTS } from "./server/core/pipeline-bus/PipelineEvents.js";
@@ -28,8 +27,6 @@ import { TTS_PROVIDER_LABELS } from "./server/tts/providers/index.js";
 import { createVoiceAssetService } from "./server/voices/voice-asset-service.js";
 import { createDirectorService } from "./server/director/director-service.js";
 import { createVfoService } from "./server/vfo/vfo-service.js";
-import { createVideoProductService } from "./server/video-product/video-product-service.js";
-import { createVideoOutputRoutes } from "./server/routes/video-output-routes.js";
 import { createCs1VideoRoutes } from "./server/routes/cs1-video-routes.js";
 import { createIanXiaoheiRoutes } from "./server/routes/ian-xiaohei-routes.js";
 import { createMoneyPrinterRoutes } from "./server/routes/money-printer-routes.js";
@@ -156,31 +153,6 @@ const imageService = createImageService({
   ffmpegPath,
 });
 
-// VideoProject 是主项目；TimelineProject 作为每次成片输出记录回写到这里。
-const capcutCliAdapter = createCapcutCliAdapter({
-  baseDir: __dirname,
-  ffmpegPath,
-  getSettings: readSettings,
-});
-
-const videoProductService = createVideoProductService({
-  baseDir: __dirname,
-  taskStore,
-  imageService,
-  directorService,
-  ffmpegPath,
-  capcutCliAdapter,
-  projectCenter,
-  getSettings: readSettings,
-  onProgress: (data) => broadcastProgress({ type: "video-product", ...data }),
-  onIdle: scheduleShutdownIfIdle,
-});
-
-const handleVideoOutputRoutes = createVideoOutputRoutes({
-  videoProductService,
-  sendJson,
-  sendBuffer,
-});
 const handleCs1VideoRoutes = createCs1VideoRoutes({
   baseDir: __dirname,
   sendJson,
@@ -199,7 +171,6 @@ const handleIanXiaoheiRoutes = createIanXiaoheiRoutes({
   modelRouter,
   ttsService,
   voiceAssetService,
-  videoProductService,
   taskStore,
   getSettings: readSettings,
   ffmpegPath,
@@ -2490,7 +2461,6 @@ function isInsideManagedFilePath(filePath) {
     vfoService.outputDirs.assetPlansDir,
     vfoService.outputDirs.assetPackagesDir,
     vfoService.outputDirs.vfoDir,
-    videoProductService.outputRoot,
     momentsMaterialsDir,
     path.join(__dirname, "image-assets"),
     path.join(__dirname, "jianying-exports"),
@@ -7683,7 +7653,6 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
-    if (await handleVideoOutputRoutes(req, res, url)) return;
     if (await handleCs1VideoRoutes(req, res, url)) return;
     if (await handleMoneyPrinterRoutes(req, res, url)) return;
     if (await handleIanXiaoheiRoutes(req, res, url)) return;
