@@ -727,11 +727,7 @@ function loadRewritePresetSettings() {
   if (data.emotionLevel && rewriteEmotionLevel) rewriteEmotionLevel.value = data.emotionLevel;
   if (data.salesLevel && rewriteSalesLevel) rewriteSalesLevel.value = data.salesLevel;
   const savedReference = String(data.referenceStyle || "");
-  if (savedReference && rewriteReference) {
-    rewriteReference.value = /教育招生|家长|学校|老师/.test(savedReference)
-      ? defaultRewriteReference
-      : savedReference;
-  }
+  if (savedReference && rewriteReference) rewriteReference.value = sanitizeRewriteReference(savedReference);
   syncRewriteSliderLabels();
 }
 
@@ -1095,7 +1091,7 @@ async function openRewriteEditor(taskId) {
   rewriteStyle.value = rewriteStyleOptions.includes(rewrite.style || item.rewriteStyle)
     ? (rewrite.style || item.rewriteStyle)
     : "小黑漫画解释类";
-  rewriteReference.value = rewrite.referenceStyle || rewriteReference.value || defaultRewriteReference;
+  rewriteReference.value = sanitizeRewriteReference(rewrite.referenceStyle || rewriteReference.value || defaultRewriteReference);
   const params = rewrite.params || item.rewriteParams || {};
   rewriteToneLevel.value = String(params.toneLevel || 8);
   rewriteConflictLevel.value = String(params.conflictLevel || 7);

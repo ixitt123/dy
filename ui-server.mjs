@@ -877,9 +877,9 @@ function normalizeSettings(settings) {
     defaultProvider: rewriteProviders[String(rewrite.defaultProvider || "dashscope")]
       ? String(rewrite.defaultProvider || "dashscope")
       : "dashscope",
-    defaultDirection: REWRITE_DIRECTIONS.includes(String(rewrite.defaultDirection || "招生引流"))
-      ? String(rewrite.defaultDirection || "招生引流")
-      : "招生引流",
+    defaultDirection: REWRITE_DIRECTIONS.includes(String(rewrite.defaultDirection || "保留原意优化"))
+      ? String(rewrite.defaultDirection || "保留原意优化")
+      : "保留原意优化",
     defaultStyle: REWRITE_STYLES.includes(String(rewrite.defaultStyle || "痞里带刺"))
       ? String(rewrite.defaultStyle || "痞里带刺")
       : "痞里带刺",
