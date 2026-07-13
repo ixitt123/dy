@@ -2007,9 +2007,18 @@ function downloadOutputDir(type = "other", date = new Date()) {
   return dir;
 }
 
-function makeUniquePath(baseName, extension, type = "other") {
+function classifyDownloadType(fileName) {
+  const lower = String(fileName || "").toLowerCase();
+  if (/\.(mp4|mov|mkv|avi|m4v|webm)$/i.test(lower)) return "video";
+  if (/\.(mp3|wav|m4a|aac|flac)$/i.test(lower)) return "audio";
+  if (/\.(srt|vtt|ass|json3)$/i.test(lower) || lower.includes("字幕")) return "subtitle";
+  if (lower.includes("ai分析")) return "analysis";
+  if (/\.(txt|md)$/i.test(lower) || lower.includes("文案")) return "transcript";
+  return "other";
+}
+
+function uniquePathInDir(dir, baseName, extension) {
   const safeBase = (sanitizeFileName(baseName) || `douyin_${Date.now()}`).slice(0, 120);
-  const dir = downloadOutputDir(type);
   let filePath = path.join(dir, `${safeBase}${extension}`);
   let index = 2;
   while (fs.existsSync(filePath)) {
@@ -2017,6 +2026,11 @@ function makeUniquePath(baseName, extension, type = "other") {
     index += 1;
   }
   return filePath;
+}
+
+function makeUniquePath(baseName, extension, type = "other") {
+  const dir = downloadOutputDir(type);
+  return uniquePathInDir(dir, baseName, extension);
 }
 
 function parseVideoInfoFromToolText(text) {
@@ -2109,6 +2123,39 @@ function resolveDownloadFilePath(fileName) {
   if (!normalized || path.isAbsolute(normalized) || normalized.split(path.sep).includes("..")) return "";
   const filePath = path.resolve(downloadsDir, normalized);
   return isInsideDownloads(filePath) ? filePath : "";
+}
+
+function organizeLooseDownloadFiles() {
+  const moved = [];
+  if (!fs.existsSync(downloadsDir)) return moved;
+  for (const entry of fs.readdirSync(downloadsDir, { withFileTypes: true })) {
+    if (!entry.isFile()) continue;
+    const sourcePath = path.join(downloadsDir, entry.name);
+    const stat = fs.statSync(sourcePath);
+    const type = classifyDownloadType(entry.name);
+    const targetDir = downloadOutputDir(type, stat.mtime);
+    const parsed = path.parse(entry.name);
+    const targetPath = uniquePathInDir(targetDir, parsed.name, parsed.ext);
+    if (path.resolve(sourcePath) === path.resolve(targetPath)) continue;
+    fs.renameSync(sourcePath, targetPath);
+    moved.push({ from: path.resolve(sourcePath), to: path.resolve(targetPath) });
+  }
+  return moved;
+}
+
+function syncMovedDownloadTaskPaths(moved = []) {
+  if (!moved.length) return;
+  const map = new Map(moved.map((item) => [path.resolve(item.from).toLowerCase(), item.to]));
+  const pathColumns = ["video_path", "audio_path", "subtitle_path", "txt_path", "analysis_path"];
+  for (const task of taskStore.allTasks()) {
+    const changes = {};
+    for (const column of pathColumns) {
+      const current = String(task[column] || "");
+      const next = current ? map.get(path.resolve(current).toLowerCase()) : "";
+      if (next) changes[column] = next;
+    }
+    if (Object.keys(changes).length) taskStore.updateTask(task.id, changes);
+  }
 }
 
 function isInsideManagedFilePath(filePath) {
@@ -6682,6 +6729,12 @@ function listen(port) {
 }
 
 async function start() {
+  const movedDownloads = organizeLooseDownloadFiles();
+  syncMovedDownloadTaskPaths(movedDownloads);
+  if (movedDownloads.length) {
+    console.log(`Organized downloads: ${movedDownloads.length} file(s)`);
+  }
+
   let port = 8787;
   while (port < 8800) {
     try {
