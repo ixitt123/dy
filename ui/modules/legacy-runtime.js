@@ -2901,14 +2901,8 @@ function renderTtsMusicPresets() {
 
 async function loadTtsMusicPresets() {
   if (!ttsMusicPresetsPanel) return;
-  try {
-    const data = await fetchJson("/api/ian-xiaohei/config");
-    ttsMusicPresets = Array.isArray(data.music?.presets) ? data.music.presets : [];
-    renderTtsMusicPresets();
-  } catch {
-    ttsMusicPresets = [];
-    renderTtsMusicPresets();
-  }
+  ttsMusicPresets = [];
+  renderTtsMusicPresets();
 }
 
 function renderTtsVoiceCategories(sourceVoices = ttsPresetVoices) {

@@ -1178,7 +1178,7 @@ function normalizeSettings(settings) {
         ? "https://api.minimaxi.com"
         : String(tts.minimax?.base_url || unifiedMiniMax.baseUrl || "").trim(),
       api_key: String(tts.minimax?.api_key || unifiedMiniMax.apiKey || "").trim(),
-      model: ["", "minimax-speech"].includes(String(tts.minimax?.model || "").trim())
+      model: ["", "minimax-speech"].includes(String(tts.minimax?.model || "").trim()) || /^MiniMax-/i.test(String(tts.minimax?.model || "").trim())
         ? "speech-2.6-hd"
         : String(tts.minimax?.model || "").trim(),
       voice: String(tts.minimax?.voice || "").trim(),
@@ -1776,7 +1776,14 @@ function saveUnifiedProvider(settings, body) {
     if (!settings.tts[id]) settings.tts[id] = {};
     if (apiKey) settings.tts[id].api_key = apiKey;
     if (body.baseUrl !== undefined) settings.tts[id].base_url = baseUrl;
-    if (body.model !== undefined) settings.tts[id].model = model;
+    if (body.model !== undefined) {
+      if (id === "minimax") {
+        if (/^(speech|music)-/i.test(model)) settings.tts[id].model = model;
+        else if (!settings.tts[id].model || /^MiniMax-/i.test(settings.tts[id].model)) settings.tts[id].model = "speech-2.6-hd";
+      } else {
+        settings.tts[id].model = model;
+      }
+    }
     if (id === "fish_audio") {
       if (body.format !== undefined) settings.tts[id].default_format = ["wav", "mp3", "opus"].includes(String(body.format).toLowerCase())
         ? String(body.format).toLowerCase()
