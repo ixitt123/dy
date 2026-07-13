@@ -251,6 +251,7 @@ const momentsIntent = document.querySelector("#momentsIntent");
 const generateMomentsPostBtn = document.querySelector("#generateMomentsPost");
 const copyMomentsPromptsBtn = document.querySelector("#copyMomentsPrompts");
 const generateMomentsImagesBtn = document.querySelector("#generateMomentsImages");
+const publishMomentsWechatBtn = document.querySelector("#publishMomentsWechat");
 const momentsPostOutput = document.querySelector("#momentsPostOutput");
 const momentsResultMeta = document.querySelector("#momentsResultMeta");
 const momentsImagePromptList = document.querySelector("#momentsImagePromptList");
