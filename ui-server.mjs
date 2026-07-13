@@ -2104,6 +2104,13 @@ function isInsideDownloads(filePath) {
   return resolved === root || resolved.startsWith(`${root}${path.sep}`);
 }
 
+function resolveDownloadFilePath(fileName) {
+  const normalized = String(fileName || "").trim().replace(/[\\/]+/g, path.sep);
+  if (!normalized || path.isAbsolute(normalized) || normalized.split(path.sep).includes("..")) return "";
+  const filePath = path.resolve(downloadsDir, normalized);
+  return isInsideDownloads(filePath) ? filePath : "";
+}
+
 function isInsideManagedFilePath(filePath) {
   const resolved = path.resolve(filePath);
   const roots = [
@@ -5800,7 +5807,7 @@ const server = http.createServer(async (req, res) => {
     if (req.method === "POST" && url.pathname === "/api/open-file") {
       const body = await readJsonBody(req);
       const fileName = String(body.fileName || "").trim();
-      const filePath = path.join(downloadsDir, fileName);
+      const filePath = resolveDownloadFilePath(fileName);
       if (!fileName || !isInsideDownloads(filePath) || !fs.existsSync(filePath)) {
         sendJson(res, 400, { ok: false, message: "没有找到可打开的文件" });
         return;
@@ -5830,7 +5837,7 @@ const server = http.createServer(async (req, res) => {
       for (const name of fileNames) {
         const fileName = String(name || "").trim();
         if (!fileName) continue;
-        const filePath = path.join(downloadsDir, fileName);
+        const filePath = resolveDownloadFilePath(fileName);
         if (!isInsideDownloads(filePath) || !fs.existsSync(filePath)) continue;
         const stat = fs.statSync(filePath);
         if (!stat.isFile()) continue;

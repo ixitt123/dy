@@ -729,8 +729,9 @@ function renderRewriteVersions(rewrite = {}, { allowDefaults = true } = {}) {
         <div class="rewrite-handoff-panel rewrite-version-handoff">
           <strong>发送这个成品到</strong>
           <div class="rewrite-handoff-actions">
-            ${rewriteHandoffButtonsMarkup("rewrite", version.key)}
+            ${rewriteHandoffChoicesMarkup()}
           </div>
+          <button class="primary small rewrite-send-selected" type="button" data-source="rewrite" data-version-key="${escapeHtml(version.key)}">发送所选</button>
         </div>
         <div class="rewrite-revision-box">
           <label>
@@ -747,8 +748,7 @@ function renderRewriteVersions(rewrite = {}, { allowDefaults = true } = {}) {
     .join("");
 }
 
-function rewriteHandoffButtonsMarkup(source, versionKey = "") {
-  const attrs = `data-source="${escapeHtml(source)}"${versionKey ? ` data-version-key="${escapeHtml(versionKey)}"` : ""}`;
+function rewriteHandoffChoicesMarkup() {
   return [
     ["moments-copy", "朋友圈文案定制"],
     ["tts", "TTS语音"],
@@ -756,7 +756,7 @@ function rewriteHandoffButtonsMarkup(source, versionKey = "") {
     ["cs1-video", "CS1生成器"],
     ["xiaohei-video", "小黑视频风格生成"],
     ["money-printer", "MoneyPrinter"],
-  ].map(([target, label]) => `<button class="ghost small rewrite-send-target" type="button" ${attrs} data-target="${target}">${label}</button>`).join("");
+  ].map(([target, label]) => `<label><input class="rewrite-handoff-choice" type="checkbox" data-target="${target}" />${label}</label>`).join("");
 }
 
 function collectRewriteVersions() {

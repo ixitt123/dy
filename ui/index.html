@@ -405,13 +405,14 @@
               <div class="rewrite-handoff-panel">
                 <strong>发送原始文案到</strong>
                 <div class="rewrite-handoff-actions">
-                  <button class="ghost small rewrite-send-target" type="button" data-source="original" data-target="moments-copy">朋友圈文案定制</button>
-                  <button class="ghost small rewrite-send-target" type="button" data-source="original" data-target="tts">TTS语音</button>
-                  <button class="ghost small rewrite-send-target" type="button" data-source="original" data-target="video-output">视频成片</button>
-                  <button class="ghost small rewrite-send-target" type="button" data-source="original" data-target="cs1-video">CS1生成器</button>
-                  <button class="ghost small rewrite-send-target" type="button" data-source="original" data-target="xiaohei-video">小黑视频风格生成</button>
-                  <button class="ghost small rewrite-send-target" type="button" data-source="original" data-target="money-printer">MoneyPrinter</button>
+                  <label><input class="rewrite-handoff-choice" type="checkbox" data-target="moments-copy" />朋友圈文案定制</label>
+                  <label><input class="rewrite-handoff-choice" type="checkbox" data-target="tts" />TTS语音</label>
+                  <label><input class="rewrite-handoff-choice" type="checkbox" data-target="video-output" />视频成片</label>
+                  <label><input class="rewrite-handoff-choice" type="checkbox" data-target="cs1-video" />CS1生成器</label>
+                  <label><input class="rewrite-handoff-choice" type="checkbox" data-target="xiaohei-video" />小黑视频风格生成</label>
+                  <label><input class="rewrite-handoff-choice" type="checkbox" data-target="money-printer" />MoneyPrinter</label>
                 </div>
+                <button class="primary small rewrite-send-selected" type="button" data-source="original">发送所选</button>
               </div>
             </div>
 
