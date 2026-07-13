@@ -319,7 +319,7 @@ const taskActionLabels = {
   subtitle: "提取字幕",
   audio: "提取音频",
 };
-const defaultRewriteReference = "痞里带刺、幽默自嘲、生活化观察、少说废话、有冲突、有观点、适合教育招生、让家长有感觉、不要像官方通稿、不要像AI作文。";
+const defaultRewriteReference = "忠于原文主题、事实、人物和事件；只优化表达、结构、节奏、钩子和口播感；不要凭空换行业、换对象、换场景，不要强行改成教育招生或家长话题；不要像AI作文。";
 const rewriteDirectionOptions = ["短视频口播", "招生引流", "朋友圈文案", "视频成片口播稿", "知识解释", "成交转化"];
 const rewriteStyleOptions = ["小黑漫画解释类", "口播爆款", "知识解释", "朋友圈图文", "强钩子转化", "温和专业"];
 const rewriteHumanizeOptions = ["关闭", "普通", "强", "极强"];
