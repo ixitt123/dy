@@ -2742,7 +2742,8 @@ function renderTtsVoiceCategories(sourceVoices = ttsPresetVoices) {
 }
 
 function renderTtsProviderOptions(tts = {}) {
-  ttsProviderConfigs = Array.isArray(tts.providers) ? tts.providers : [];
+  ttsProviderConfigs = (Array.isArray(tts.providers) ? tts.providers : [])
+    .filter((provider) => TTS_VISIBLE_PROVIDER_IDS.has(provider.id));
   ttsProvider.innerHTML = ttsProviderConfigs
     .map((provider) => {
       const suffix = provider.enabled ? "" : `（${provider.phase || "预留"}）`;
