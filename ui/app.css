@@ -4502,15 +4502,8 @@ body[data-active-module="video-output"] .floating-workflow-guide [data-nav="vide
   margin-bottom: 12px;
 }
 
-.production-line-head,
 .production-line-notice {
   margin-bottom: 12px;
-}
-
-.production-line-head p {
-  margin-top: 5px;
-  color: #7d8797;
-  font-size: 11px;
 }
 
 .production-line-notice {
