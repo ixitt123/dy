@@ -811,9 +811,8 @@ function renderTranscripts(items) {
           </div>
           <div class="transcript-actions">
             <button class="ghost small transcript-analyze" type="button" data-task-id="${item.id}">AI 分析</button>
-            <button class="ghost small transcript-rewrite" type="button" data-task-id="${item.id}">AI 改写</button>
+            <button class="ghost small transcript-rewrite" type="button" data-task-id="${item.id}">定制改写</button>
             <button class="ghost small transcript-tts" type="button" data-task-id="${item.id}">导入 TTS</button>
-            <button class="ghost small transcript-director" type="button" data-task-id="${item.id}">导入 AI 导演</button>
           </div>
         </div>
       `;

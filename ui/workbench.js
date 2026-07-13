@@ -868,7 +868,7 @@ function buildWorkbenchInformationArchitecture() {
 }
 
 function navigateWorkbench(pageId, options = {}) {
-  const aliases = { analysis: "collector", transcript: "collector", files: "assets", "image-studio": "assets", vfo: "video-output" };
+  const aliases = { analysis: "collector", transcript: "collector", director: "video-output", files: "assets", "image-studio": "assets", vfo: "video-output" };
   const normalized = aliases[pageId] || pageId;
   const target = workbenchPages[normalized] ? normalized : "dashboard";
   const collectorTab = options.collectorTab || ((pageId === "analysis" || pageId === "transcript") ? "copybank" : "");
@@ -1653,9 +1653,9 @@ function bindWorkbenchInteractions() {
     if (event.target.closest(".transcript-analyze")) navigateWorkbench("analysis");
     if (event.target.closest(".transcript-rewrite")) navigateWorkbench("rewrite");
     if (event.target.closest(".rewrite-tts-one, .voice-use")) navigateWorkbench("tts");
-    if (event.target.closest(".rewrite-director-one")) navigateWorkbench("director");
+    if (event.target.closest(".rewrite-director-one")) navigateWorkbench("video-output");
     if (event.target.closest("#sendDirectorToVfo")) navigateWorkbench("vfo");
-    if (event.target.closest("#closeAnalysis, #closeRewrite")) navigateWorkbench("transcript");
+    if (event.target.closest("#closeAnalysis, #closeRewrite")) navigateWorkbench("collector", { collectorTab: "copybank" });
   });
 
   document.querySelector("#headerOpenDownloads")?.addEventListener("click", () => {
@@ -2283,8 +2283,8 @@ function setupV2Settings() {
 
   const MODEL_DEFS = [
     { key: "analyze", label: "内容分析", hint: "脚本结构、受众、爆款点" },
-    { key: "rewrite", label: "AI 改写", hint: "多版本文案生成" },
-    { key: "director", label: "AI 导演", hint: "故事弧、分镜、镜头计划" },
+    { key: "rewrite", label: "文案定制改写", hint: "多版本文案生成" },
+    { key: "director", label: "生产线分镜", hint: "故事弧、分镜、镜头计划" },
     { key: "storyboard", label: "分镜生成", hint: "镜头拆解和画面描述" },
     { key: "image_prompt", label: "图片提示词", hint: "画面提示词和风格描述" },
     { key: "image", label: "图片生成", hint: "生成图片资产" },
