@@ -2038,13 +2038,14 @@ async function testUnifiedProvider(settings, providerId) {
 
 async function validateAndSaveRequiredProvider(body = {}) {
   const id = String(body.id || "").trim();
+  const scope = String(body.scope || "").trim().toLowerCase();
   if (!id) return { ok: false, status: "missing", message: "缺少 API 服务 ID" };
   const current = readSettings();
   const draft = normalizeSettings(JSON.parse(JSON.stringify(current)));
   saveUnifiedProvider(draft, body);
   applyLocalProviderConfig(draft, id);
 
-  if (draft.rewriteProviders?.[id]) {
+  if (scope !== "tts" && draft.rewriteProviders?.[id]) {
     const provider = draft.rewriteProviders[id];
     if (!String(provider.apiKey || "").trim()) {
       return { ok: false, status: "missing", message: `${provider.label || id} API Key 不能为空。` };
@@ -2071,7 +2072,7 @@ async function validateAndSaveRequiredProvider(body = {}) {
       return { ok: false, status: "failed", message: error instanceof Error ? error.message : String(error) };
     }
   } else if (TTS_PROVIDER_LABELS[id]) {
-    const status = providerConfigStatus(draft, id);
+    const status = providerConfigStatus(draft, id, { scope: scope || "tts" });
     if (!status.ok) return status;
   } else {
     const status = await testUnifiedProvider(draft, id);
