@@ -661,15 +661,17 @@ function renderRewriteVersions(rewrite = {}, { allowDefaults = true } = {}) {
     .map((version) => `
       <div class="rewrite-version" data-version-key="${escapeHtml(version.key)}">
         <div class="rewrite-version-head">
-          <button class="primary small rewrite-select-best" type="button" data-version-key="${escapeHtml(version.key)}">选择最佳版本</button>
-          <button class="ghost small rewrite-generate-one" type="button" data-version-key="${escapeHtml(version.key)}">生成</button>
-          <button class="ghost small rewrite-save-one" type="button" data-version-key="${escapeHtml(version.key)}">保存</button>
-          <button class="ghost small rewrite-tts-one" type="button" data-version-key="${escapeHtml(version.key)}">生成语音</button>
-          <button class="ghost small rewrite-director-one" type="button" data-version-key="${escapeHtml(version.key)}">导演稿</button>
-          <button class="ghost small rewrite-copy" type="button" data-version-key="${escapeHtml(version.key)}">复制</button>
+          <div>
+            <strong>${escapeHtml(version.name)}</strong>
+            <small>${escapeHtml(version.direction || rewriteDirection.value || "")} · ${escapeHtml(version.wordCount || rewriteWordRange?.value || "120-180字")}</small>
+          </div>
+          <div class="rewrite-version-tools">
+            <button class="ghost small rewrite-generate-one" type="button" data-version-key="${escapeHtml(version.key)}">生成</button>
+            <button class="ghost small rewrite-save-one" type="button" data-version-key="${escapeHtml(version.key)}">保存</button>
+            <button class="ghost small rewrite-copy" type="button" data-version-key="${escapeHtml(version.key)}">复制</button>
+          </div>
         </div>
-        <details class="rewrite-version-advanced">
-          <summary>这个版本的高级设置</summary>
+        <div class="rewrite-version-hidden-fields" hidden>
         <div class="rewrite-version-options">
           <label>
             模型
@@ -720,10 +722,16 @@ function renderRewriteVersions(rewrite = {}, { allowDefaults = true } = {}) {
         </div>
         <label class="rewrite-version-reference-field">
           参考风格输入
-          <textarea class="rewrite-version-reference" rows="3" placeholder="给这个输出框单独指定参考风格">${escapeHtml(version.referenceStyle || rewriteReference.value || defaultRewriteReference)}</textarea>
+          <textarea class="rewrite-version-reference" rows="3" placeholder="给这个输出框单独指定参考风格">${escapeHtml(version.referenceStyle || buildRewriteReferenceStyle())}</textarea>
         </label>
-        </details>
-        <textarea class="rewrite-version-text" rows="8" data-version-key="${escapeHtml(version.key)}" placeholder="生成后可继续手动编辑">${escapeHtml(version.content)}</textarea>
+        </div>
+        <textarea class="rewrite-version-text" rows="10" data-version-key="${escapeHtml(version.key)}" placeholder="点击“生成文案定制成品”后这里会出现可直接发送的成品，也可以继续手动编辑。">${escapeHtml(version.content)}</textarea>
+        <div class="rewrite-handoff-panel rewrite-version-handoff">
+          <strong>发送这个成品到</strong>
+          <div class="rewrite-handoff-actions">
+            ${rewriteHandoffButtonsMarkup("rewrite", version.key)}
+          </div>
+        </div>
         <div class="rewrite-revision-box">
           <label>
             修改建议
@@ -737,6 +745,18 @@ function renderRewriteVersions(rewrite = {}, { allowDefaults = true } = {}) {
       </div>
     `)
     .join("");
+}
+
+function rewriteHandoffButtonsMarkup(source, versionKey = "") {
+  const attrs = `data-source="${escapeHtml(source)}"${versionKey ? ` data-version-key="${escapeHtml(versionKey)}"` : ""}`;
+  return [
+    ["moments-copy", "朋友圈文案定制"],
+    ["tts", "TTS语音"],
+    ["video-output", "视频成片"],
+    ["cs1-video", "CS1生成器"],
+    ["xiaohei-video", "小黑视频风格生成"],
+    ["money-printer", "MoneyPrinter"],
+  ].map(([target, label]) => `<button class="ghost small rewrite-send-target" type="button" ${attrs} data-target="${target}">${label}</button>`).join("");
 }
 
 function collectRewriteVersions() {
@@ -908,7 +928,10 @@ async function openRewriteEditor(taskId) {
 
   rewriteTaskId.value = item.id;
   rewriteOriginal.value = item.text || "";
-  rewriteAnalysisView.textContent = formatAnalysisForRewrite(item.ai || {});
+  rewriteAnalysisView.textContent = "点击分析后展示结果。";
+  if (rewriteAnalysisStatus) {
+    rewriteAnalysisStatus.textContent = item.ai?.hook ? "已有历史分析；点击分析可重新生成并展示。" : "不点击分析就不会调用模型。";
+  }
   const rewrite = item.rewrite || {};
   if (rewrite.provider && [...rewriteProvider.options].some((option) => option.value === rewrite.provider)) {
     rewriteProvider.value = rewrite.provider;
