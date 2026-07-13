@@ -4518,14 +4518,14 @@ function directorProgressValue(project = {}) {
 }
 
 function directorCurrentStep(project = {}) {
-  if (project.status === "completed") return "导演稿已完成并保存";
-  if (project.status === "failed") return "导演稿生成失败";
-  if (project.status === "processing") return "正在生成专业导演稿";
+  if (project.status === "completed") return "分镜已完成并保存";
+  if (project.status === "failed") return "分镜生成失败";
+  if (project.status === "processing") return "正在生成生产线分镜";
   if (project.status === "waiting" || project.status === "pending") return "任务已进入队列";
   return directorStatusLabel(project.status);
 }
 
-function syncDirectorSourceFromText(text, { title = "配音文案导演稿", sourceKey = "tts:text", sourceType = "tts", taskId = 0, rewriteId = 0 } = {}) {
+function syncDirectorSourceFromText(text, { title = "配音文案分镜", sourceKey = "tts:text", sourceType = "tts", taskId = 0, rewriteId = 0 } = {}) {
   const sourceText = String(text || "").trim();
   if (!sourceText || !directorSourceText) return false;
   directorSourceMode.value = "manual";
@@ -4544,7 +4544,7 @@ function syncDirectorSourceFromText(text, { title = "配音文案导演稿", sou
 
 function directorOutputLinks(project = {}) {
   if (!project.id || project.status !== "completed") {
-    return '<span>完成后显示导演稿文件。</span>';
+    return '<span>完成后显示分镜文件。</span>';
   }
   return [
     ["json", "JSON"],
@@ -4561,7 +4561,7 @@ function renderDirectorRail(project = activeDirectorRailProject) {
   activeDirectorRailProject = project;
   const meta = project.metadata || {};
   const progress = Math.max(0, Math.min(100, directorProgressValue(project)));
-  const title = project.title || directorTitle?.value || "AI 导演稿";
+  const title = project.title || directorTitle?.value || "生产线分镜";
   const scenes = meta.scene_count || project.result?.storyboard?.length || project.scenes?.length || meta.shot_count || directorShotCount?.value || "-";
   const textPreview = String(project.source_text || directorSourceText?.value || "").trim().slice(0, 72);
   const error = meta.error || project.error || "";
@@ -4700,7 +4700,7 @@ async function loadDirectorSources({ preserveText = true } = {}) {
 
 function renderDirectorProjects() {
   if (!directorProjectsState.length) {
-    directorProjects.innerHTML = '<div class="director-empty">还没有导演项目。</div>';
+    directorProjects.innerHTML = '<div class="director-empty">还没有分镜项目。</div>';
     renderDirectorRailLists(directorProjectsState);
     return;
   }
@@ -4837,7 +4837,7 @@ function directorReviewMarkup(result) {
 function renderDirectorResultView() {
   const result = activeDirectorProject?.result;
   if (!result) {
-    directorResultView.innerHTML = '<div class="director-empty">导演稿尚未生成完成。</div>';
+    directorResultView.innerHTML = '<div class="director-empty">分镜尚未生成完成。</div>';
     return;
   }
   const markup = {
@@ -4874,14 +4874,7 @@ function renderDirectorProject(project) {
     `${project.score} 分`,
     meta.model || meta.provider,
   ].filter(Boolean).join(" · ");
-  directorStatus.textContent = `导演稿 #${project.id} 已完成并保存。`;
-  window.videoProjects?.linkCurrent?.("director", project.id, project.title || `导演稿 #${project.id}`, {
-    ...project,
-    sceneCount: project.result?.storyboard?.length || meta.scene_count || 0,
-    subtitleTimeline: project.result?.subtitle_timeline || [],
-    source: "ai_generated",
-    status: "ready",
-  }).catch(() => {});
+  directorStatus.textContent = `分镜 #${project.id} 已完成并保存。`;
   renderDirectorResultView();
   if (!autoImportedDirectorImageProjectIds.has(Number(project.id))) {
     autoImportedDirectorImageProjectIds.add(Number(project.id));
@@ -4917,24 +4910,24 @@ async function pollDirectorProject(id) {
 }
 
 async function deleteDirectorProject(id) {
-  if (!window.confirm(`确定删除导演稿 #${id}、分镜记录和导出文件吗？此操作不可撤销。`)) return;
+  if (!window.confirm(`确定删除分镜 #${id}、分镜记录和导出文件吗？此操作不可撤销。`)) return;
   const data = await fetchJson("/api/director/delete", {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ id, deleteFiles: true }),
   });
-  directorStatus.textContent = `已删除 ${data.deleted || 0} 条导演稿记录。`;
+  directorStatus.textContent = `已删除 ${data.deleted || 0} 条分镜记录。`;
   await loadDirectorProjects();
 }
 
 async function clearDirectorProjects() {
-  if (!window.confirm("确定清空全部已结束导演稿记录和导出文件吗？正在生成的导演稿会保留，此操作不可撤销。")) return;
+  if (!window.confirm("确定清空全部已结束分镜记录和导出文件吗？正在生成的分镜会保留，此操作不可撤销。")) return;
   const data = await fetchJson("/api/director/clear", {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ scope: "all", deleteFiles: true }),
   });
-  directorStatus.textContent = `已清理 ${data.deleted || 0} 条导演稿记录。`;
+  directorStatus.textContent = `已清理 ${data.deleted || 0} 条分镜记录。`;
   await loadDirectorProjects();
 }
 
@@ -4950,7 +4943,7 @@ async function generateDirectorProject() {
   renderDirectorRail({
     id: "",
     status: "waiting",
-    title: directorTitle.value.trim() || "AI 导演稿",
+    title: directorTitle.value.trim() || "生产线分镜",
     source_text: sourceText,
     metadata: { shot_count: directorShotCount.value },
     progress: 8,
