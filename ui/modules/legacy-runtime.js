@@ -2845,6 +2845,42 @@ function playRenderedTtsVoicePreview() {
   }
 }
 
+function setTtsVoicePreviewProgress(percent = 0, message = "正在生成试听...") {
+  const panel = ttsVoiceQuickPanel?.querySelector("[data-voice-asset-id]");
+  if (!panel) return;
+  const value = Math.max(0, Math.min(100, Math.round(Number(percent || 0))));
+  panel.style.setProperty("--tts-preview-progress", `${value}%`);
+  const progressNode = panel.querySelector(".tts-voice-preview-progress");
+  if (progressNode) progressNode.setAttribute("aria-valuenow", String(value));
+  const barNode = panel.querySelector(".tts-voice-preview-bar i");
+  if (barNode) barNode.style.width = `${value}%`;
+  const percentNode = panel.querySelector("[data-tts-preview-percent]");
+  if (percentNode) percentNode.textContent = `${value}%`;
+  const messageNode = panel.querySelector("[data-tts-preview-message]");
+  if (messageNode) messageNode.textContent = message;
+}
+
+function startTtsVoicePreviewProgress(asset = {}) {
+  let progress = 6;
+  const baseMessage = isTtsMusicAsset(asset) ? "正在生成音乐试听..." : "正在生成试听...";
+  setTtsVoicePreviewProgress(progress, baseMessage);
+  const timer = window.setInterval(() => {
+    const increment = progress < 45 ? 7 : progress < 75 ? 4 : 1;
+    progress = Math.min(92, progress + increment);
+    setTtsVoicePreviewProgress(progress, progress >= 75 ? "音频生成时间较长，请稍等..." : baseMessage);
+  }, 850);
+  return {
+    complete(message = "试听已生成。") {
+      window.clearInterval(timer);
+      setTtsVoicePreviewProgress(100, message);
+    },
+    stop(message = "试听生成失败。") {
+      window.clearInterval(timer);
+      setTtsVoicePreviewProgress(progress, message);
+    },
+  };
+}
+
 function selectedVoiceAssetFromDropdown() {
   const id = Number(ttsPresetVoice?.value || 0);
   if (!id) return null;
@@ -2874,6 +2910,15 @@ function renderTtsVoiceQuickPanel(asset = selectedVoiceAssetFromDropdown(), stat
     : state.previewMessage
       ? `<small class="tts-voice-preview-status">${escapeHtml(state.previewMessage)}</small>`
       : "";
+  const previewBusy = state.previewBusy === true;
+  const previewProgress = Math.max(0, Math.min(100, Math.round(Number(state.previewProgress || 0))));
+  const previewProgressMarkup = previewBusy ? `
+    <div class="tts-voice-preview-progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${previewProgress}">
+      <div class="tts-voice-preview-bar"><i style="width:${previewProgress}%"></i></div>
+      <span data-tts-preview-percent>${previewProgress}%</span>
+    </div>
+    <small class="tts-voice-preview-status" data-tts-preview-message>${escapeHtml(state.previewMessage || "正在生成试听...")}</small>
+  ` : "";
   ttsVoiceQuickPanel.innerHTML = `
     <div class="tts-voice-current" data-voice-asset-id="${asset.id}">
       <div class="tts-voice-current-main">
@@ -2881,7 +2926,8 @@ function renderTtsVoiceQuickPanel(asset = selectedVoiceAssetFromDropdown(), stat
         <span>${escapeHtml(provider?.label || asset.provider)} · ${escapeHtml(category)} · ${escapeHtml(asset.metadata?.target_model || asset.metadata?.model || "")}</span>
       </div>
       <div class="tts-voice-preview-slot">
-        ${audioUrl ? `<audio controls preload="none" src="${escapeHtml(audioUrl)}"></audio>` : '<button class="ghost small tts-voice-preview" type="button">生成试听</button>'}
+        ${audioUrl ? `<audio controls preload="none" src="${escapeHtml(audioUrl)}"></audio>` : `<button class="ghost small tts-voice-preview" type="button" ${previewBusy ? "disabled" : ""}>${previewBusy ? "生成中..." : "生成试听"}</button>`}
+        ${previewProgressMarkup}
         ${previewHint}
       </div>
       <div class="tts-voice-actions">
@@ -6456,9 +6502,12 @@ ttsVoiceQuickPanel?.addEventListener("click", async (event) => {
   if (!asset) return;
   try {
     if (button.classList.contains("tts-voice-preview")) {
-      const previousText = button.textContent;
-      button.disabled = true;
-      button.textContent = "生成中...";
+      renderTtsVoiceQuickPanel(asset, {
+        previewBusy: true,
+        previewProgress: 6,
+        previewMessage: isTtsMusicAsset(asset) ? "正在生成音乐试听..." : "正在生成试听...",
+      });
+      const progress = startTtsVoicePreviewProgress(asset);
       ttsStatus.textContent = `正在生成“${asset.voice_name || asset.voice_id}”的试听。`;
       try {
         const data = await fetchJson("/api/voice-assets/preview", {
@@ -6473,6 +6522,7 @@ ttsVoiceQuickPanel?.addEventListener("click", async (event) => {
         Object.assign(asset, data.asset || {}, {
           preview_url: data.preview_url || data.asset?.preview_url || asset.preview_url || "",
         });
+        progress.complete(data.cached ? "已载入缓存试听。" : "试听已生成。");
         renderTtsVoiceQuickPanel(asset, {
           refreshAudio: true,
           previewMessage: data.cached ? "已载入缓存试听。" : "试听已生成。",
@@ -6482,13 +6532,9 @@ ttsVoiceQuickPanel?.addEventListener("click", async (event) => {
         ttsStatus.textContent = data.cached ? "试听已存在，可以播放。" : "试听已生成，可以播放。";
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
+        progress.stop(message || "试听生成失败。");
         renderTtsVoiceQuickPanel(asset, { previewError: message || "试听生成失败。" });
         ttsStatus.textContent = message || "试听生成失败。";
-      } finally {
-        if (button.isConnected) {
-          button.disabled = false;
-          button.textContent = previousText;
-        }
       }
       return;
     }

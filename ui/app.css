@@ -8189,6 +8189,37 @@ audio {
   color: #ff8f8f;
 }
 
+.tts-voice-preview-progress {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 42px;
+  align-items: center;
+  gap: 8px;
+}
+
+.tts-voice-preview-bar {
+  height: 7px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #283142;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04);
+}
+
+.tts-voice-preview-bar i {
+  display: block;
+  width: var(--tts-preview-progress, 0%);
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #6d5dfc, #55c6ff);
+  transition: width 360ms ease;
+}
+
+.tts-voice-preview-progress span {
+  color: #c8d5e8;
+  font-size: 11px;
+  font-weight: 700;
+  text-align: right;
+}
+
 .tts-voice-actions {
   display: flex;
   flex-wrap: wrap;
