@@ -1787,7 +1787,7 @@ function saveUnifiedProvider(settings, body) {
     if (body.baseUrl !== undefined) settings.tts[id].base_url = baseUrl;
     if (body.model !== undefined) {
       if (id === "minimax") {
-        if (/^(speech|music)-/i.test(model)) settings.tts[id].model = model;
+        if (/^speech-/i.test(model)) settings.tts[id].model = model;
         else if (!settings.tts[id].model || /^MiniMax-/i.test(settings.tts[id].model)) settings.tts[id].model = "speech-2.6-hd";
       } else {
         settings.tts[id].model = model;
