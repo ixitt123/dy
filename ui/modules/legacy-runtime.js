@@ -1017,6 +1017,8 @@ function formatTaskResult(task, index) {
   if (task.video_id) lines.push(`视频ID：${task.video_id}`);
   if (downloadUrl) lines.push(`下载链接：${downloadUrl}`);
   if (task.video_path) lines.push(`视频文件：${task.video_path}`);
+  if (task.audio_path) lines.push(`音频文件：${task.audio_path}`);
+  if (task.subtitle_path) lines.push(`字幕文件：${task.subtitle_path}`);
   if (task.txt_path) lines.push(`文案文件：${task.txt_path}`);
   if (task.analysis_path) lines.push(`AI分析：${task.analysis_path}`);
   if (task.file_size) lines.push(`文件大小：${formatSize(Number(task.file_size))}`);
@@ -1109,6 +1111,7 @@ function renderTasks(tasks) {
       <div>进度</div>
       <div>链接</div>
       <div>视频</div>
+      <div>音频 / 字幕</div>
       <div>文案 / AI</div>
       <div>标签 / 分类</div>
       <div>消息</div>
@@ -1119,6 +1122,7 @@ function renderTasks(tasks) {
         const progress = Math.max(0, Math.min(100, Number(task.progress || 0)));
         const url = escapeHtml(task.url || "");
         const videoPath = escapeHtml(shortPath(task.video_path));
+        const mediaParts = [shortPath(task.audio_path), shortPath(task.subtitle_path)].filter(Boolean).join(" / ");
         const txtParts = [shortPath(task.txt_path), shortPath(task.analysis_path)].filter(Boolean).join(" / ");
         const ai = parseJson(task.ai_json);
         const tags = Array.isArray(ai.tags) ? ai.tags.join("、") : "";
@@ -1140,6 +1144,7 @@ function renderTasks(tasks) {
             </div>
             <div class="task-url" title="${url}">${url}</div>
             <div class="task-path" title="${escapeHtml(task.video_path || "")}">${videoPath || "-"}</div>
+            <div class="task-path" title="${escapeHtml([task.audio_path, task.subtitle_path].filter(Boolean).join(" / "))}">${escapeHtml(mediaParts) || "-"}</div>
             <div class="task-path" title="${escapeHtml([task.txt_path, task.analysis_path].filter(Boolean).join(" / "))}">${escapeHtml(txtParts) || "-"}</div>
             <div class="task-tags" title="${escapeHtml(labelText)}">${escapeHtml(labelText) || "-"}</div>
             <div class="task-message" title="${message}">${message || "-"}</div>
@@ -4779,6 +4784,10 @@ chooseLocalVideoBtn?.addEventListener("click", () => {
 
 extractLocalVideoTranscriptBtn?.addEventListener("click", () => {
   runLocalVideoTranscript();
+});
+
+extractLocalVideoAudioBtn?.addEventListener("click", () => {
+  runLocalVideoAudio();
 });
 
 document.querySelector("#startQueue").addEventListener("click", () => {
