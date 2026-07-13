@@ -1245,6 +1245,7 @@ async function sendRewriteTextToTarget(target, text, meta = {}) {
   if (target === "moments-copy") {
     setTextareaValue(momentsCopyInput, cleanText);
     if (momentsCopyStatus) momentsCopyStatus.textContent = `已接收来自文案定制改写的文案，${countRewriteCharacters(cleanText)} 字。`;
+    saveMomentsDraft();
   } else if (target === "tts") {
     setTextareaValue(ttsText, cleanText);
     if (ttsCharacterCount) ttsCharacterCount.textContent = `${countRewriteCharacters(cleanText)} 字`;
@@ -1522,6 +1523,323 @@ async function ensureProviderConfigured(providerId, { title = "API 配置", reas
     }
     window.alert(`检测失败：${result.message || "请检查 API Key、模型或额度后重新填写。"}`);
   }
+}
+
+function setMomentsStatus(message, type = "") {
+  if (!momentsCopyStatus) return;
+  momentsCopyStatus.textContent = message;
+  momentsCopyStatus.dataset.status = type;
+}
+
+function setMomentsPersonaStatus(message) {
+  if (momentsPersonaStatus) momentsPersonaStatus.textContent = message;
+}
+
+function momentsCharacterCount(value) {
+  return Array.from(String(value || "").replace(/\s+/g, "")).length;
+}
+
+function currentMomentsPersona() {
+  const id = momentsPersonaSelect?.value || "";
+  return momentsPersonas.find((item) => item.id === id) || momentsPersonas[0] || defaultMomentsPersona;
+}
+
+function applyMomentsPersona(persona) {
+  if (!persona) return;
+  if (momentsPersonaSelect) momentsPersonaSelect.value = persona.id;
+  if (momentsPersonaName) momentsPersonaName.value = persona.name || "";
+  if (momentsPersonaText) momentsPersonaText.value = persona.description || "";
+  try {
+    localStorage.setItem(MOMENTS_ACTIVE_PERSONA_KEY, persona.id);
+  } catch {}
+}
+
+function renderMomentsPersonas(personas = []) {
+  momentsPersonas = (Array.isArray(personas) && personas.length ? personas : [defaultMomentsPersona])
+    .map((item) => ({
+      id: item.id || defaultMomentsPersona.id,
+      name: item.name || "未命名人设",
+      description: item.description || "",
+      updatedAt: item.updatedAt || "",
+    }));
+  if (!momentsPersonaSelect) return;
+  const activeId = localStorage.getItem(MOMENTS_ACTIVE_PERSONA_KEY) || momentsPersonaSelect.value || defaultMomentsPersona.id;
+  momentsPersonaSelect.innerHTML = momentsPersonas
+    .map((persona) => `<option value="${escapeHtml(persona.id)}">${escapeHtml(persona.name)}</option>`)
+    .join("");
+  const selected = momentsPersonas.find((item) => item.id === activeId) || momentsPersonas[0];
+  applyMomentsPersona(selected);
+}
+
+async function loadMomentsPersonas() {
+  try {
+    const data = await fetchJson("/api/moments/personas");
+    renderMomentsPersonas(data.personas || []);
+    setMomentsPersonaStatus(`人设库已同步：${data.syncPath || "项目文件"}`);
+  } catch (error) {
+    renderMomentsPersonas([defaultMomentsPersona]);
+    setMomentsPersonaStatus(error instanceof Error ? error.message : "人设库加载失败，已使用默认人设。");
+  }
+}
+
+async function saveMomentsPersona() {
+  if (!momentsPersonaName || !momentsPersonaText) return;
+  const name = momentsPersonaName.value.trim();
+  const description = momentsPersonaText.value.trim();
+  if (!name || !description) {
+    setMomentsPersonaStatus("请先填写人设名称和说明。");
+    return;
+  }
+  setMomentsPersonaStatus("正在保存并同步人设库...");
+  try {
+    const selected = currentMomentsPersona();
+    const data = await fetchJson("/api/moments/personas", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        id: selected?.name === name ? selected.id : "",
+        name,
+        description,
+      }),
+    });
+    renderMomentsPersonas(data.personas || []);
+    applyMomentsPersona(data.persona);
+    setMomentsPersonaStatus(`已保存并同步：${data.syncPath || "personas/moments-personas.json"}`);
+  } catch (error) {
+    setMomentsPersonaStatus(error instanceof Error ? error.message : String(error));
+  }
+}
+
+async function deleteMomentsPersona() {
+  const persona = currentMomentsPersona();
+  if (!persona) return;
+  setMomentsPersonaStatus("正在删除人设...");
+  try {
+    const data = await fetchJson("/api/moments/personas/delete", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ id: persona.id }),
+    });
+    renderMomentsPersonas(data.personas || []);
+    setMomentsPersonaStatus(`已删除并同步：${data.syncPath || "personas/moments-personas.json"}`);
+  } catch (error) {
+    setMomentsPersonaStatus(error instanceof Error ? error.message : String(error));
+  }
+}
+
+function collectMomentsPayload() {
+  const persona = currentMomentsPersona();
+  return {
+    text: momentsCopyInput?.value.trim() || "",
+    persona: momentsPersonaText?.value.trim() || persona?.description || "",
+    personaName: momentsPersonaName?.value.trim() || persona?.name || "",
+    localMaterials: momentsLocalMaterials?.value.trim() || "",
+    visualStyle: momentsVisualStyle?.value || "auto",
+    imageCount: momentsImageCount?.value === "auto" ? 0 : Number(momentsImageCount?.value || 0),
+    tone: momentsTone?.value || "普通朋友聊天式分享",
+    intent: momentsIntent?.value || "不强销售的自然分享",
+  };
+}
+
+function saveMomentsDraft() {
+  try {
+    localStorage.setItem(MOMENTS_DRAFT_KEY, JSON.stringify({
+      text: momentsCopyInput?.value || "",
+      localMaterials: momentsLocalMaterials?.value || "",
+      visualStyle: momentsVisualStyle?.value || "auto",
+      imageCount: momentsImageCount?.value || "auto",
+      tone: momentsTone?.value || "普通朋友聊天式分享",
+      intent: momentsIntent?.value || "不强销售的自然分享",
+      result: currentMomentsResult,
+      post: momentsPostOutput?.value || "",
+    }));
+  } catch {}
+}
+
+function loadMomentsDraft() {
+  try {
+    const draft = JSON.parse(localStorage.getItem(MOMENTS_DRAFT_KEY) || "{}");
+    if (draft.text && momentsCopyInput && !momentsCopyInput.value.trim()) momentsCopyInput.value = draft.text;
+    if (draft.localMaterials && momentsLocalMaterials) momentsLocalMaterials.value = draft.localMaterials;
+    if (draft.visualStyle && momentsVisualStyle) momentsVisualStyle.value = draft.visualStyle;
+    if (draft.imageCount && momentsImageCount) momentsImageCount.value = draft.imageCount;
+    if (draft.tone && momentsTone) momentsTone.value = draft.tone;
+    if (draft.intent && momentsIntent) momentsIntent.value = draft.intent;
+    if (draft.result) {
+      currentMomentsResult = draft.result;
+      if (momentsPostOutput) momentsPostOutput.value = draft.post || draft.result.post || "";
+      renderMomentsResult(currentMomentsResult);
+    }
+  } catch {}
+}
+
+function momentsPromptText(item) {
+  const negative = item.negative_prompt ? `\n\n负面提示词：${item.negative_prompt}` : "";
+  const material = item.local_material_hint ? `\n\n本地素材参考：${item.local_material_hint}` : "";
+  return `${item.prompt || ""}${material}${negative}`.trim();
+}
+
+function renderMomentsImages(images = []) {
+  if (!momentsGeneratedImages) return;
+  if (!images.length) {
+    momentsGeneratedImages.innerHTML = "";
+    return;
+  }
+  momentsGeneratedImages.innerHTML = images.map((image) => {
+    const imageUrl = image.imageUrl || image.thumbnailUrl || (image.imagePath ? `/api/image/file?path=${encodeURIComponent(image.imagePath)}` : "");
+    return `
+      <article class="moments-image-card">
+        ${imageUrl ? `<img src="${escapeHtml(imageUrl)}" alt="${escapeHtml(image.title || "朋友圈配图")}" />` : ""}
+        <strong>${escapeHtml(image.title || `配图 ${image.index || ""}`)}</strong>
+        <small>${escapeHtml(image.imagePath || image.error || "")}</small>
+      </article>
+    `;
+  }).join("");
+}
+
+function renderMomentsResult(result) {
+  if (!result) return;
+  if (momentsPostOutput && !momentsPostOutput.value.trim()) momentsPostOutput.value = result.post || "";
+  const images = Array.isArray(result.images) ? result.images : [];
+  if (momentsResultMeta) {
+    momentsResultMeta.textContent = `${result.theme || "朋友圈图文"} · ${images.length} 张配图 · ${momentsCharacterCount(momentsPostOutput?.value || result.post)} 字`;
+  }
+  if (!momentsImagePromptList) return;
+  if (!images.length) {
+    momentsImagePromptList.className = "moments-prompt-list empty";
+    momentsImagePromptList.textContent = "还没有生成配图提示词。";
+    return;
+  }
+  momentsImagePromptList.className = "moments-prompt-list";
+  momentsImagePromptList.innerHTML = images.map((item, index) => `
+    <article class="moments-prompt-card" data-moments-prompt="${index}">
+      <div class="moments-prompt-head">
+        <div>
+          <span class="section-eyebrow">${escapeHtml(item.style === "realistic" ? "Realistic" : item.style === "xiaohei" ? "Xiaohei" : "Auto")}</span>
+          <h3>#${index + 1} ${escapeHtml(item.title || "配图")}</h3>
+          <p>${escapeHtml(item.purpose || "")}</p>
+        </div>
+        <div class="moments-actions compact">
+          <button class="ghost small" type="button" data-moments-action="copy-prompt" data-index="${index}">复制</button>
+          <button class="primary small" type="button" data-moments-action="generate-image" data-index="${index}">生成图片</button>
+        </div>
+      </div>
+      <textarea class="moments-prompt-text" rows="7">${escapeHtml(momentsPromptText(item))}</textarea>
+      <label class="moments-local-image-note">
+        本地图片素材
+        <input type="text" value="${escapeHtml(item.local_material_hint || "")}" data-moments-material="${index}" placeholder="例如：参考 C:\\素材\\课堂照片.png；保持同一主题" />
+      </label>
+      <div class="moments-prompt-status" data-moments-prompt-status="${index}"></div>
+    </article>
+  `).join("");
+  renderMomentsImages(result.generatedImages || []);
+}
+
+async function generateMomentsPost() {
+  const payload = collectMomentsPayload();
+  if (!payload.text) {
+    setMomentsStatus("请先填写朋友圈文案输入区。", "warning");
+    return;
+  }
+  if (!payload.persona) {
+    setMomentsStatus("请先选择或填写人设。", "warning");
+    return;
+  }
+  setMomentsStatus("正在生成朋友圈文案和配图提示词...");
+  if (generateMomentsPostBtn) generateMomentsPostBtn.disabled = true;
+  try {
+    const data = await fetchJson("/api/moments/generate", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    currentMomentsResult = data.result;
+    if (momentsPostOutput) momentsPostOutput.value = currentMomentsResult.post || "";
+    renderMomentsResult(currentMomentsResult);
+    saveMomentsDraft();
+    setMomentsStatus(`已生成：${currentMomentsResult.image_count || currentMomentsResult.images?.length || 0} 张配图提示词，可继续修改。`, "success");
+  } catch (error) {
+    setMomentsStatus(error instanceof Error ? error.message : String(error), "error");
+  } finally {
+    if (generateMomentsPostBtn) generateMomentsPostBtn.disabled = false;
+  }
+}
+
+function collectRenderedMomentsPrompts() {
+  return [...document.querySelectorAll(".moments-prompt-card")].map((card, index) => {
+    const text = card.querySelector(".moments-prompt-text")?.value.trim() || "";
+    const material = card.querySelector("[data-moments-material]")?.value.trim() || "";
+    return { index, text, material };
+  }).filter((item) => item.text);
+}
+
+async function copyAllMomentsPrompts() {
+  const prompts = collectRenderedMomentsPrompts();
+  if (!prompts.length) {
+    setMomentsStatus("还没有可复制的图片提示词。", "warning");
+    return;
+  }
+  await navigator.clipboard.writeText(prompts.map((item) => `#${item.index + 1}\n${item.text}`).join("\n\n---\n\n"));
+  setMomentsStatus(`已复制 ${prompts.length} 条图片提示词。`, "success");
+}
+
+async function generateMomentsImage(index) {
+  const prompts = collectRenderedMomentsPrompts();
+  const target = prompts.find((item) => item.index === Number(index));
+  if (!target?.text) {
+    setMomentsStatus("当前配图没有提示词。", "warning");
+    return;
+  }
+  const status = document.querySelector(`[data-moments-prompt-status="${index}"]`);
+  if (status) status.textContent = "正在调用图片 API...";
+  try {
+    const data = await fetchJson("/api/image/generate", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        prompt: target.text,
+        aspectRatio: "16:9",
+        count: 1,
+        sourceType: "moments-copy",
+        sourceId: `moments-${Date.now()}-${Number(index) + 1}`,
+      }),
+    });
+    const first = (data.results || []).find((item) => item.success);
+    if (!first) throw new Error((data.results || []).find((item) => item.error)?.error || "图片生成失败。");
+    currentMomentsResult = currentMomentsResult || { images: [] };
+    const generated = {
+      index: Number(index) + 1,
+      title: currentMomentsResult.images?.[index]?.title || `配图 ${Number(index) + 1}`,
+      imagePath: first.imagePath,
+      thumbnailUrl: first.thumbnailUrl,
+      imageUrl: first.imagePath ? `/api/image/file?path=${encodeURIComponent(first.imagePath)}` : first.thumbnailUrl,
+    };
+    currentMomentsResult.generatedImages = [
+      ...(currentMomentsResult.generatedImages || []).filter((item) => Number(item.index) !== Number(index) + 1),
+      generated,
+    ].sort((a, b) => Number(a.index) - Number(b.index));
+    renderMomentsImages(currentMomentsResult.generatedImages);
+    saveMomentsDraft();
+    if (status) status.textContent = `已生成：${first.imagePath || first.filename || ""}`;
+    setMomentsStatus("图片已生成并保存到图片资产库。", "success");
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (status) status.textContent = message;
+    setMomentsStatus(message, "error");
+  }
+}
+
+async function generateAllMomentsImages() {
+  const prompts = collectRenderedMomentsPrompts();
+  if (!prompts.length) {
+    setMomentsStatus("还没有可生成图片的提示词。", "warning");
+    return;
+  }
+  if (generateMomentsImagesBtn) generateMomentsImagesBtn.disabled = true;
+  for (const item of prompts) {
+    await generateMomentsImage(item.index);
+  }
+  if (generateMomentsImagesBtn) generateMomentsImagesBtn.disabled = false;
 }
 
 async function ensureTranscriptProvidersConfigured() {
@@ -6301,6 +6619,8 @@ async function init() {
     await loadVideoProductSources();
     await loadVideoProductProjects();
     await loadVoiceAssets({ applyDefault: true });
+    await loadMomentsPersonas();
+    loadMomentsDraft();
     updateTtsVoiceSource();
     updateTtsEmotionField();
     updateTtsRangeLabels();
