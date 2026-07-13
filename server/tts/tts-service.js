@@ -641,7 +641,7 @@ export function createTtsService({ baseDir, taskStore, getSettings, ffmpegPath, 
     }
     if (deleteFile) {
       const root = path.resolve(subtitleDir);
-      for (const filePath of [metadata.subtitle_path, metadata.timestamped_text_path]) {
+      for (const filePath of [metadata.script_path, metadata.subtitle_path, metadata.timestamped_text_path]) {
         const target = filePath ? path.resolve(filePath) : "";
         if (target && target !== root && target.startsWith(`${root}${path.sep}`) && fs.existsSync(target)) {
           fs.rmSync(target, { force: true });
@@ -717,6 +717,7 @@ export function createTtsService({ baseDir, taskStore, getSettings, ffmpegPath, 
         };
   }
 
+  ensureSequenceNumbers();
   for (const job of taskStore.listTtsJobs({ limit: 500 })) {
     if (!["waiting", "processing"].includes(job.status)) continue;
     taskStore.updateTtsJob(job.id, { status: "waiting", error: "" });

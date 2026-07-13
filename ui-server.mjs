@@ -6687,10 +6687,14 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
-    if (req.method === "GET" && (url.pathname === "/api/tts/subtitle" || url.pathname === "/api/tts/timestamped-text")) {
+    if (req.method === "GET" && (url.pathname === "/api/tts/script" || url.pathname === "/api/tts/subtitle" || url.pathname === "/api/tts/timestamped-text")) {
       const job = taskStore.getTtsJob(Number(url.searchParams.get("id") || 0));
-      const metadata = safeJson(job?.metadata_json, {});
-      const filePath = url.pathname === "/api/tts/subtitle" ? metadata.subtitle_path : metadata.timestamped_text_path;
+      const metadata = safeJsonParse(job?.metadata_json);
+      const filePath = url.pathname === "/api/tts/script"
+        ? metadata.script_path
+        : url.pathname === "/api/tts/subtitle"
+          ? metadata.subtitle_path
+          : metadata.timestamped_text_path;
       const resolved = filePath ? path.resolve(filePath) : "";
       const allowedRoot = path.resolve(ttsService.subtitleDir);
       if (!job || !resolved.startsWith(`${allowedRoot}${path.sep}`) || !fs.existsSync(resolved)) {
