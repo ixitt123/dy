@@ -3302,9 +3302,42 @@ function renderTtsJobs(jobs = []) {
     .join("");
 }
 
+function renderTtsJobsEnhanced(jobs = []) {
+  if (!jobs.length) {
+    ttsHistory.innerHTML = '<div class="tts-empty">还没有生成记录。</div>';
+    return;
+  }
+  const labels = Object.fromEntries(ttsProviderConfigs.map((provider) => [provider.id, provider.label]));
+  ttsHistory.innerHTML = jobs.map((job) => {
+    const audio = job.audio_url
+      ? `<audio controls preload="none" src="${escapeHtml(job.audio_url)}"></audio>`
+      : `<span title="${escapeHtml(job.error || "")}">${escapeHtml(job.error || "等待生成")}</span>`;
+    const displayNumber = Number(job.display_number || job.sequence_number || job.id || 0);
+    const fileLinks = [
+      job.audio_url ? `<a href="${escapeHtml(job.audio_url)}" target="_blank" rel="noreferrer">音频</a>` : "",
+      job.script_url ? `<a href="${escapeHtml(job.script_url)}" target="_blank" rel="noreferrer">文案</a>` : "",
+      job.subtitle_url ? `<a href="${escapeHtml(job.subtitle_url)}" target="_blank" rel="noreferrer">字幕</a>` : "",
+      job.timestamped_text_url ? `<a href="${escapeHtml(job.timestamped_text_url)}" target="_blank" rel="noreferrer">时间戳文案</a>` : "",
+    ].filter(Boolean).join("");
+    return `
+      <div class="tts-history-row" data-tts-job-id="${job.id}">
+        <strong>#${displayNumber || job.id}</strong>
+        <span>${escapeHtml(labels[job.provider] || job.provider)}</span>
+        <span class="tts-history-text" title="${escapeHtml(job.text)}">${escapeHtml(job.text)}</span>
+        <span>${escapeHtml(job.voice_name || job.voice_id || "-")}</span>
+        <span class="tts-job-status ${escapeHtml(job.status)}">${escapeHtml(ttsStatusLabel(job.status))}</span>
+        ${audio}
+        <span class="tts-history-files">${fileLinks}</span>
+        <button class="ghost small tts-job-send" type="button" ${job.status !== "completed" ? "disabled" : ""}>一键发送</button>
+        <button class="ghost small danger-action tts-job-delete" type="button" ${["waiting", "processing"].includes(job.status) ? "disabled" : ""}>删除</button>
+      </div>
+    `;
+  }).join("");
+}
+
 async function refreshTtsJobs() {
   const data = await fetchJson("/api/tts/jobs?limit=30");
-  renderTtsJobs(data.jobs || []);
+  renderTtsJobsEnhanced(data.jobs || []);
   renderTtsRailLists(data.jobs || []);
   if (activeTtsRailJob?.id) {
     const latest = (data.jobs || []).find((job) => String(job.id) === String(activeTtsRailJob.id));
@@ -3316,9 +3349,19 @@ function confirmedTtsAudioPayload(job = activeTtsRailJob) {
   if (!job?.id || job.status !== "completed") return null;
   return {
     id: job.id,
+    display_number: job.display_number || job.sequence_number || job.id,
+    sequence_number: job.sequence_number || job.display_number || job.id,
+    file_base_name: job.file_base_name || job.metadata?.file_base_name || "",
     type: "tts",
     audio_url: job.audio_url || "",
     audio_path: job.audio_path || "",
+    script_url: job.script_url || "",
+    script_path: job.script_path || "",
+    subtitle_url: job.subtitle_url || "",
+    subtitle_path: job.subtitle_path || "",
+    timestamped_text_url: job.timestamped_text_url || "",
+    timestamped_text_path: job.timestamped_text_path || "",
+    subtitle_timeline: Array.isArray(job.subtitle_timeline) ? job.subtitle_timeline : [],
     provider: job.provider || ttsProvider?.value || "",
     voice_id: job.voice_id || "",
     voice_name: job.voice_name || "",
