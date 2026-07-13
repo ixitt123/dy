@@ -1308,8 +1308,15 @@
           </label>
         </div>
 
-        <div class="tts-workbench">
-          <div class="tts-script-column">
+        <div class="tts-workbench tts-step-workbench">
+          <div class="tts-script-column tts-step-card">
+            <div class="tts-step-heading">
+              <span>1</span>
+              <div>
+                <strong>选文案</strong>
+                <small>项目文案或手动输入</small>
+              </div>
+            </div>
             <label for="ttsText">配音文案</label>
             <textarea id="ttsText" rows="12" placeholder="输入或粘贴文案。系统会先清洗、切句、处理情绪和停顿，再交给语音平台。"></textarea>
             <div class="tts-script-foot">
@@ -1318,7 +1325,14 @@
             </div>
           </div>
 
-          <div class="tts-control-column">
+          <div class="tts-control-column tts-step-card">
+            <div class="tts-step-heading">
+              <span>2</span>
+              <div>
+                <strong>选声音</strong>
+                <small>平台、分类、音色和克隆声音</small>
+              </div>
+            </div>
             <div class="tts-control-grid">
               <label>
                 声音来源
@@ -1344,83 +1358,95 @@
                 voice_id
                 <input id="ttsManualVoice" type="text" placeholder="填写平台提供的 voice_id" />
               </label>
-              <label>
-                倍速
-                <select id="ttsSpeed">
-                  <option value="0.75">0.75x</option>
-                  <option value="0.9">0.9x</option>
-                  <option value="1" selected>1.0x</option>
-                  <option value="1.1">1.1x</option>
-                  <option value="1.25">1.25x</option>
-                  <option value="1.5">1.5x</option>
-                  <option value="2">2.0x</option>
-                </select>
-              </label>
-              <label>
-                情绪
-                <select id="ttsEmotion">
-                  <option>自然</option>
-                  <option>兴奋</option>
-                  <option>严肃</option>
-                  <option>亲切</option>
-                  <option>焦急</option>
-                  <option>震惊</option>
-                  <option>温柔</option>
-                  <option>痞里带刺</option>
-                  <option>家长劝告</option>
-                  <option>招生转化</option>
-                  <option value="custom">自定义情绪描述</option>
-                </select>
-              </label>
-              <label id="ttsCustomEmotionField" hidden>
-                自定义情绪
-                <input id="ttsCustomEmotion" type="text" placeholder="例如：克制但有紧迫感" />
-              </label>
-              <label>
-                输出格式
-                <select id="ttsFormat">
-                  <option value="mp3" selected>MP3</option>
-                  <option value="wav">WAV</option>
-                </select>
-              </label>
-              <label class="tts-range-field">
-                音量 <output id="ttsVolumeValue">50</output>
-                <input id="ttsVolume" type="range" min="0" max="100" value="50" />
-              </label>
-              <label class="tts-range-field">
-                音高 <output id="ttsPitchValue">1.00</output>
-                <input id="ttsPitch" type="range" min="0.5" max="2" step="0.05" value="1" />
-              </label>
             </div>
-            <label for="ttsStylePrompt">情绪 / 风格补充</label>
-            <textarea id="ttsStylePrompt" class="tts-style-prompt" rows="3" placeholder="例如：像有经验的老师耐心解释，重点词稍微加重。"></textarea>
+            <details class="tts-advanced-settings">
+              <summary>高级设置</summary>
+              <div class="tts-control-grid">
+                <label>
+                  倍速
+                  <select id="ttsSpeed">
+                    <option value="0.75">0.75x</option>
+                    <option value="0.9">0.9x</option>
+                    <option value="1" selected>1.0x</option>
+                    <option value="1.1">1.1x</option>
+                    <option value="1.25">1.25x</option>
+                    <option value="1.5">1.5x</option>
+                    <option value="2">2.0x</option>
+                  </select>
+                </label>
+                <label>
+                  情绪
+                  <select id="ttsEmotion">
+                    <option>自然</option>
+                    <option>兴奋</option>
+                    <option>严肃</option>
+                    <option>亲切</option>
+                    <option>焦急</option>
+                    <option>震惊</option>
+                    <option>温柔</option>
+                    <option>痞里带刺</option>
+                    <option>家长劝告</option>
+                    <option>招生转化</option>
+                    <option value="custom">自定义情绪描述</option>
+                  </select>
+                </label>
+                <label id="ttsCustomEmotionField" hidden>
+                  自定义情绪
+                  <input id="ttsCustomEmotion" type="text" placeholder="例如：克制但有紧迫感" />
+                </label>
+                <label>
+                  输出格式
+                  <select id="ttsFormat">
+                    <option value="mp3" selected>MP3</option>
+                    <option value="wav">WAV</option>
+                  </select>
+                </label>
+                <label class="tts-range-field">
+                  音量 <output id="ttsVolumeValue">50</output>
+                  <input id="ttsVolume" type="range" min="0" max="100" value="50" />
+                </label>
+                <label class="tts-range-field">
+                  音高 <output id="ttsPitchValue">1.00</output>
+                  <input id="ttsPitch" type="range" min="0.5" max="2" step="0.05" value="1" />
+                </label>
+              </div>
+              <label for="ttsStylePrompt">情绪 / 风格补充</label>
+              <textarea id="ttsStylePrompt" class="tts-style-prompt" rows="3" placeholder="例如：像有经验的老师耐心解释，重点词稍微加重。"></textarea>
+            </details>
+          </div>
+
+          <div class="tts-step-card tts-output-column">
+            <div class="tts-step-heading">
+              <span>3</span>
+              <div>
+                <strong>生成 / 试听 / 发送</strong>
+                <small>确认后发送到生产线</small>
+              </div>
+            </div>
             <div class="tts-generate-row">
               <button class="primary" id="generateTts" type="button">生成语音</button>
               <button class="ghost" id="openVoiceCloneFromTts" type="button">克隆音色</button>
-              <button class="ghost" id="sendTtsToVideoProduct" type="button">发送到成片中心</button>
               <span id="ttsStatus">等待生成</span>
             </div>
+            <div class="tts-preview" id="ttsPreview" hidden>
+              <div>
+                <strong id="ttsPreviewTitle">最新语音</strong>
+                <span id="ttsPreviewMeta"></span>
+              </div>
+              <audio id="ttsAudio" controls preload="metadata"></audio>
+            </div>
+            <div class="tts-audio-handoff" id="ttsAudioHandoff">
+              <strong>发送确定好的音频到</strong>
+              <div class="tts-audio-handoff-grid">
+                <label><input class="tts-audio-handoff-choice" type="checkbox" data-target="video-output" checked />视频成片</label>
+                <label><input class="tts-audio-handoff-choice" type="checkbox" data-target="cs1-video" />CS1生成器</label>
+                <label><input class="tts-audio-handoff-choice" type="checkbox" data-target="xiaohei-video" />小黑视频风格生成</label>
+                <label><input class="tts-audio-handoff-choice" type="checkbox" data-target="money-printer" />MoneyPrinter</label>
+              </div>
+              <button class="primary" id="sendConfirmedTtsAudio" type="button">发送所选</button>
+              <span id="ttsAudioHandoffStatus">生成并试听后再发送。</span>
+            </div>
           </div>
-        </div>
-
-        <div class="tts-preview" id="ttsPreview" hidden>
-          <div>
-            <strong id="ttsPreviewTitle">最新语音</strong>
-            <span id="ttsPreviewMeta"></span>
-          </div>
-          <audio id="ttsAudio" controls preload="metadata"></audio>
-        </div>
-
-        <div class="tts-audio-handoff" id="ttsAudioHandoff">
-          <strong>发送确定好的音频到</strong>
-          <div class="tts-audio-handoff-grid">
-            <label><input class="tts-audio-handoff-choice" type="checkbox" data-target="video-output" checked />视频成片</label>
-            <label><input class="tts-audio-handoff-choice" type="checkbox" data-target="cs1-video" />CS1生成器</label>
-            <label><input class="tts-audio-handoff-choice" type="checkbox" data-target="xiaohei-video" />小黑视频风格生成</label>
-            <label><input class="tts-audio-handoff-choice" type="checkbox" data-target="money-printer" />MoneyPrinter</label>
-          </div>
-          <button class="primary" id="sendConfirmedTtsAudio" type="button">发送所选</button>
-          <span id="ttsAudioHandoffStatus">生成并试听后再发送。</span>
         </div>
 
         <div class="tts-history-head">

@@ -2548,18 +2548,64 @@ pre {
 
 .tts-workbench {
   display: grid;
-  grid-template-columns: minmax(0, 1.18fr) minmax(420px, 0.9fr);
-  gap: 20px;
+  grid-template-columns: minmax(280px, 0.92fr) minmax(360px, 1.05fr) minmax(300px, 0.9fr);
+  align-items: start;
+  gap: 12px;
   padding: 18px 0;
 }
 
 .tts-script-column,
-.tts-control-column {
+.tts-control-column,
+.tts-output-column {
   min-width: 0;
 }
 
+.tts-step-card {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 14px;
+  background: color-mix(in srgb, var(--panel) 96%, var(--primary) 4%);
+}
+
+.tts-step-heading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 10px;
+}
+
+.tts-step-heading > span {
+  display: inline-grid;
+  width: 26px;
+  height: 26px;
+  place-items: center;
+  border-radius: 50%;
+  color: #fff;
+  background: var(--primary);
+  font-weight: 800;
+  font-size: 12px;
+}
+
+.tts-step-heading strong,
+.tts-step-heading small {
+  display: block;
+}
+
+.tts-step-heading strong {
+  color: var(--text);
+  font-size: 15px;
+}
+
+.tts-step-heading small {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
 #ttsText {
-  min-height: 338px;
+  min-height: 360px;
 }
 
 .tts-script-foot {
@@ -2583,6 +2629,39 @@ pre {
 
 #ttsPresetVoiceField {
   grid-column: 1 / -1;
+}
+
+.tts-advanced-settings {
+  margin-top: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0;
+  overflow: hidden;
+}
+
+.tts-advanced-settings summary {
+  min-height: 38px;
+  padding: 10px 12px;
+  color: var(--muted);
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.tts-advanced-settings[open] {
+  padding-bottom: 12px;
+}
+
+.tts-advanced-settings[open] summary {
+  margin-bottom: 12px;
+  border-bottom: 1px solid var(--line);
+  color: var(--text);
+}
+
+.tts-advanced-settings .tts-control-grid,
+.tts-advanced-settings > label,
+.tts-advanced-settings .tts-style-prompt {
+  margin-right: 12px;
+  margin-left: 12px;
 }
 
 .tts-range-field {
@@ -2609,9 +2688,9 @@ pre {
 
 .tts-generate-row {
   display: flex;
-  align-items: center;
+  align-items: stretch;
+  flex-direction: column;
   gap: 12px;
-  margin-top: 12px;
 }
 
 #ttsStatus {
@@ -5788,7 +5867,7 @@ body[data-active-module="video-output"] .floating-workflow-guide [data-nav="vide
 .tts-audio-handoff {
   display: grid;
   gap: 12px;
-  margin: 12px 0 18px;
+  margin: 12px 0 0;
   border: 1px solid var(--line);
   border-radius: 8px;
   padding: 14px;
@@ -5802,7 +5881,7 @@ body[data-active-module="video-output"] .floating-workflow-guide [data-nav="vide
 
 .tts-audio-handoff-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
 }
 
@@ -5818,6 +5897,14 @@ body[data-active-module="video-output"] .floating-workflow-guide [data-nav="vide
   color: var(--text);
   background: var(--panel);
   font-weight: 700;
+}
+
+.tts-output-column .tts-preview {
+  margin-top: 12px;
+}
+
+.tts-output-column .tts-generate-row button {
+  width: 100%;
 }
 
 #ttsAudioHandoffStatus {
