@@ -1361,10 +1361,6 @@ export function createVideoProductService({
     return { path: "", warning: `剪映母版草稿复制失败：${tried.join("；")}` };
   }
 
-  function wait(ms) {
-    return new Promise((resolve) => setTimeout(resolve, ms));
-  }
-
   function ensureRouteADirectorForEnqueue(input = {}) {
     const outputType = OUTPUT_TYPES.has(String(input.output_type || "")) ? String(input.output_type) : "jianying_template";
     const isRouteAVoiceClock = ROUTE_A_VOICE_CLOCK_OUTPUT_TYPES.has(outputType);
@@ -1390,42 +1386,18 @@ export function createVideoProductService({
 
   async function ensureRouteADirectorReady(project, input = {}) {
     if (!ROUTE_A_VOICE_CLOCK_OUTPUT_TYPES.has(project.output_type)) return project;
-    if (!Number(project.source_director_project_id || 0)) return project;
     const metadata = safeJson(project.metadata_json, {});
     if (!metadata.route_a_auto_director) return project;
-    let director = taskStore.getDirectorProject(project.source_director_project_id);
-    if (director?.status === "completed") return project;
-    const maxWaitMs = 5 * 60 * 1000;
-    const startedAt = Date.now();
-    while (director && ["waiting", "processing"].includes(director.status) && Date.now() - startedAt < maxWaitMs) {
-      updateProject(project.id, {
-        status: "binding_assets",
-        progress: 12,
-        current_step: `正在等待路线 A AI 导演稿完成：Director #${director.id}`,
-        metadata_json: JSON.stringify({
-          ...metadata,
-          route_a_director_status: director.status,
-        }),
-      });
-      await wait(1600);
-      director = taskStore.getDirectorProject(project.source_director_project_id);
-    }
-    if (director?.status === "completed") return taskStore.getTimelineProject(project.id);
-
-    const audio = taskStore.getTtsJob(project.audio_asset_id);
-    const reason = director?.status === "failed"
-      ? safeJson(director.metadata_json, {})?.error || "AI 导演稿生成失败。"
-      : "AI 导演稿等待超时，已使用路线 A 本地 Skills 导演稿。";
-    const fallback = createLocalRouteADirector(audio, input, reason);
     return updateProject(project.id, {
-      source_director_project_id: fallback.id,
-      current_step: "AI 导演稿不可用，已切换到路线 A 本地 Skills 导演稿",
+      source_director_project_id: 0,
+      current_step: "已跳过旧的前置导演稿，改由生产线内部生成分镜",
       metadata_json: JSON.stringify({
         ...metadata,
-        route_a_director_mode: "local_skill_fallback",
-        route_a_director_status: "completed",
-        route_a_director_fallback_reason: reason,
-        fallback_director_project_id: fallback.id,
+        route_a_auto_director: false,
+        route_a_internal_storyboard: true,
+        route_a_director_mode: "production_line_internal",
+        route_a_director_status: "skipped_legacy_prework",
+        legacy_director_project_id: Number(project.source_director_project_id || 0),
       }),
     });
   }
