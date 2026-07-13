@@ -908,7 +908,7 @@ async function continueWorkflowFromTranscript(job = {}, { sourceUrl = "", title 
   if (data.project?.id) await window.videoProjects?.select?.(data.project.id);
   await refreshTranscripts();
   if (data.task?.id) {
-    window.workbenchNavigate?.("transcript", { preserveScroll: true });
+    await openRewriteEditor(data.task.id);
     resultBox.textContent = `文案提取成功，已自动生成标题和项目名：${data.titles?.projectTitle || data.project?.title || ""}`;
   }
   return data;
@@ -1021,7 +1021,18 @@ async function ensureProviderConfigured(providerId, { title = "API 配置", reas
       ? settings.tts.providers.find((provider) => provider.id === id)
       : null;
     const configured = rewriteProvider?.apiKeyConfigured || ttsProviderConfig?.configured;
-    if (configured) return true;
+    if (configured) {
+      const check = await fetchJson("/api/settings/require-provider", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ id, setDefault: true }),
+      }).catch((error) => ({ ok: false, message: error instanceof Error ? error.message : String(error) }));
+      if (check.ok) {
+        await loadSettings().catch(() => {});
+        return true;
+      }
+      window.alert(`当前已保存的 ${rewriteProvider?.label || ttsProviderConfig?.label || id} 不可用：${check.message || "检测失败"}，请重新填写。`);
+    }
 
     const label = rewriteProvider?.label || ttsProviderConfig?.label || id;
     const apiKey = window.prompt([

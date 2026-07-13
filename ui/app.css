@@ -1007,6 +1007,12 @@ button:disabled {
   white-space: nowrap;
 }
 
+.task-actions-cell {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
 .task-tags {
   color: var(--primary-dark);
   font-weight: 700;
