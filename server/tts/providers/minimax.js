@@ -236,11 +236,32 @@ const EMOTION_MAP = {
   "亲切": "happy",
   "专业": "neutral",
   "热情": "happy",
-  "沉稳": "neutral",
+  "兴奋": "happy",
+  "沉稳": "calm",
   "激励": "surprised",
-  "严肃": "neutral",
+  "严肃": "calm",
   "温柔": "calm",
+  "焦急": "fearful",
+  "震惊": "surprised",
+  "痞里带刺": "angry",
+  "家长劝告": "calm",
+  "招生转化": "happy",
 };
+
+function normalizeMiniMaxEmotion(emotion = "", stylePrompt = "") {
+  const selected = String(emotion || "").trim();
+  if (EMOTION_MAP[selected]) return EMOTION_MAP[selected];
+  const text = [selected, stylePrompt].map((item) => String(item || "")).join(" ");
+  if (/开心|高兴|亲切|热情|兴奋|鼓励|转化|积极|活力|明亮|轻快/i.test(text)) return "happy";
+  if (/焦急|紧迫|担心|害怕|恐惧|催促|急迫/i.test(text)) return "fearful";
+  if (/震惊|惊讶|意外|惊喜|激励|高能|强调/i.test(text)) return "surprised";
+  if (/愤怒|生气|强硬|犀利|吐槽|讽刺|痞|带刺/i.test(text)) return "angry";
+  if (/难过|悲伤|遗憾|低落/i.test(text)) return "sad";
+  if (/嫌弃|厌恶|反感/i.test(text)) return "disgusted";
+  if (/温柔|沉稳|严肃|克制|耐心|家长|老师|平稳|安静|稳重/i.test(text)) return "calm";
+  if (/流畅|顺滑|连贯|自然讲述/i.test(text)) return "fluent";
+  return "neutral";
+}
 
 function endpoint(baseUrl, pathname) {
   const base = String(baseUrl || DEFAULT_BASE_URL).replace(/\/+$/, "");
@@ -415,6 +436,7 @@ export class MinimaxProvider extends TtsProviderAdapter {
     text,
     voiceId,
     emotion = "自然",
+    stylePrompt = "",
     speed = 1,
     volume = 50,
     pitch = 1,
@@ -433,7 +455,7 @@ export class MinimaxProvider extends TtsProviderAdapter {
     const normalizedSpeed = clampNumber(speed, 0.5, 2, 1);
     const normalizedVolume = clampNumber(Number(volume) / 50, 0.1, 2, 1);
     const normalizedPitch = Math.round(clampNumber((Number(pitch || 1) - 1) * 6, -12, 12, 0));
-    const normalizedEmotion = EMOTION_MAP[String(emotion || "").trim()] || "neutral";
+    const normalizedEmotion = normalizeMiniMaxEmotion(emotion, stylePrompt);
 
     try {
       const response = await fetch(endpoint(this.config.base_url, "/v1/t2a_v2"), {

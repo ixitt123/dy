@@ -66,6 +66,26 @@ try {
   assert.equal(speechBody.voice_setting.speed, 1.2);
   assert.equal(speechBody.voice_setting.emotion, "neutral");
 
+  const expressivePath = path.join(tempDir, "expressive.mp3");
+  const expressive = await provider.generateSpeech({
+    text: "这是一条情绪测试文案。",
+    voiceId: voices[0].id,
+    emotion: "痞里带刺",
+    stylePrompt: "犀利吐槽，重点词稍微加重。",
+    speed: 0.9,
+    volume: 80,
+    pitch: 1.5,
+    format: "wav",
+    outputPath: expressivePath,
+  });
+  assert.equal(expressive.success, true);
+  const expressiveBody = JSON.parse(requests.at(-1).options.body);
+  assert.equal(expressiveBody.voice_setting.speed, 0.9);
+  assert.equal(expressiveBody.voice_setting.vol, 1.6);
+  assert.equal(expressiveBody.voice_setting.pitch, 3);
+  assert.equal(expressiveBody.voice_setting.emotion, "angry");
+  assert.equal(expressiveBody.audio_setting.format, "wav");
+
   const samplePath = path.join(tempDir, "sample.mp3");
   fs.writeFileSync(samplePath, "sample");
   const cloned = await provider.cloneVoice({
