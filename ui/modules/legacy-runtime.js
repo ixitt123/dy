@@ -214,6 +214,8 @@ const ttsSettingsStatus = document.querySelector("#ttsSettingsStatus");
 const ttsText = document.querySelector("#ttsText");
 const ttsCharacterCount = document.querySelector("#ttsCharacterCount");
 const ttsVoiceSource = document.querySelector("#ttsVoiceSource");
+const ttsVoiceCategoryField = document.querySelector("#ttsVoiceCategoryField");
+const ttsVoiceCategory = document.querySelector("#ttsVoiceCategory");
 const ttsPresetVoiceField = document.querySelector("#ttsPresetVoiceField");
 const ttsPresetVoice = document.querySelector("#ttsPresetVoice");
 const ttsManualVoiceField = document.querySelector("#ttsManualVoiceField");
@@ -2529,8 +2531,66 @@ function updateRewritePresetFields() {
   }
 }
 
+const TTS_VOICE_CATEGORY_ORDER = [
+  "全部",
+  "常用口播",
+  "教培讲解",
+  "搞笑类",
+  "搞怪角色",
+  "特殊角色",
+  "唱歌/类唱腔",
+  "方言口味",
+  "氛围叙事",
+  "克隆音色",
+  "其他",
+];
+
 function selectedTtsProviderConfig() {
   return ttsProviderConfigs.find((provider) => provider.id === ttsProvider.value) || {};
+}
+
+function normalizeTtsVoiceCategory(voice = {}) {
+  const text = [voice.category, voice.useCase, voice.description, voice.name, voice.voice_name]
+    .map((item) => String(item || ""))
+    .join(" ");
+  if (!text.trim()) return "其他";
+  if (/唱|歌|抒情|类唱腔|lyrical/i.test(text)) return "唱歌/类唱腔";
+  if (/搞笑|幽默|吐槽|反差|大爷|大婶|花甲|热梗/i.test(text)) return "搞笑类";
+  if (/搞怪|卡通|萌|童声|萝莉|俏皮|顽皮|憨憨|猪小琪|小孩/i.test(text)) return "搞怪角色";
+  if (/特殊|机械|战甲|病娇|霸道|嚣张|角色|剧情/i.test(text)) return "特殊角色";
+  if (/方言|粤语|港普|东北|闽南|陕北/i.test(text)) return "方言口味";
+  if (/氛围|叙事|故事|电台|旁白/i.test(text)) return "氛围叙事";
+  if (/教培|教育|课程|讲解|学习|老师|知识|科普/i.test(text)) return "教培讲解";
+  return voice.category || "常用口播";
+}
+
+function sortTtsVoiceCategories(categories = []) {
+  return [...new Set(categories)].sort((a, b) => {
+    const ia = TTS_VOICE_CATEGORY_ORDER.indexOf(a);
+    const ib = TTS_VOICE_CATEGORY_ORDER.indexOf(b);
+    if (ia >= 0 || ib >= 0) return (ia >= 0 ? ia : 99) - (ib >= 0 ? ib : 99);
+    return a.localeCompare(b, "zh-CN");
+  });
+}
+
+function ttsVoiceOptionLabel(voice = {}) {
+  const parts = [
+    voice.name || voice.voice_name || voice.id || voice.voice_id,
+    normalizeTtsVoiceCategory(voice),
+    voice.useCase || voice.description || voice.id || voice.voice_id,
+    voice.model,
+  ].filter(Boolean);
+  return parts.join(" · ");
+}
+
+function renderTtsVoiceCategories(sourceVoices = ttsPresetVoices) {
+  if (!ttsVoiceCategory) return;
+  const previous = ttsVoiceCategory.value || "全部";
+  const categories = sortTtsVoiceCategories((sourceVoices || []).map(normalizeTtsVoiceCategory));
+  ttsVoiceCategory.innerHTML = ["全部", ...categories]
+    .map((category) => `<option value="${escapeHtml(category)}">${escapeHtml(category)}</option>`)
+    .join("");
+  ttsVoiceCategory.value = [...categories, "全部"].includes(previous) ? previous : "全部";
 }
 
 function renderTtsProviderOptions(tts = {}) {

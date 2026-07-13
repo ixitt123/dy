@@ -1286,6 +1286,10 @@
         </div>
 
         <div class="tts-settings tts-settings-summary">
+          <label class="tts-provider-picker">
+            语音平台
+            <select id="ttsProvider"></select>
+          </label>
           <div>
             <span>当前语音服务</span>
             <strong id="ttsCurrentProviderLabel">加载中</strong>
@@ -1293,7 +1297,6 @@
           </div>
           <button class="ghost" id="openTtsSettingsHub" type="button">去系统设置配置 API</button>
           <p id="ttsSettingsStatus">平台、API Key、Workspace 和默认模型已统一放在系统设置。</p>
-          <select id="ttsProvider" hidden></select>
           <input id="ttsApiKey" type="password" hidden autocomplete="off" />
           <label id="ttsWorkspaceField" hidden>
             Workspace ID
@@ -1334,8 +1337,12 @@
                   <option value="cloned">我的克隆音色</option>
                 </select>
               </label>
+              <label id="ttsVoiceCategoryField">
+                音色分类
+                <select id="ttsVoiceCategory"></select>
+              </label>
               <label id="ttsPresetVoiceField">
-                预设音色
+                音色库
                 <select id="ttsPresetVoice"></select>
               </label>
               <label id="ttsManualVoiceField" hidden>
@@ -1447,6 +1454,7 @@
               Provider
               <select id="voiceAssetProvider">
                 <option value="aliyun_bailian">阿里云百炼 CosyVoice / Qwen-TTS</option>
+                <option value="minimax">MiniMax Speech</option>
                 <option value="fish_audio">Fish Audio</option>
                 <option value="custom_tts">自定义 Provider</option>
               </select>
