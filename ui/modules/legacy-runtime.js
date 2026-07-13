@@ -961,6 +961,146 @@ async function openRewriteEditor(taskId) {
   rewritePanel.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
+async function runRewriteInlineAnalysis() {
+  const id = rewriteTaskId.value;
+  if (!id) {
+    rewriteStatus.textContent = "请先从采集处理选择一条文案。";
+    return;
+  }
+  const text = rewriteOriginal.value.trim();
+  if (!text) {
+    rewriteStatus.textContent = "原始文案为空，无法分析。";
+    return;
+  }
+  if (rewriteAnalysisStatus) rewriteAnalysisStatus.textContent = "正在检查模型配置...";
+  rewriteAnalysisView.textContent = "正在分析文案结构、钩子、痛点、情绪和行动号召...";
+  try {
+    await ensureTranscriptProvidersConfigured();
+    const data = await fetchJson("/api/tasks/analyze", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ id, text }),
+    });
+    rewriteAnalysisView.textContent = formatAnalysisForRewrite(data.analysis || {});
+    if (rewriteAnalysisStatus) rewriteAnalysisStatus.textContent = "AI 分析已生成。";
+    renderTranscripts(data.transcripts);
+    await refreshTasks();
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    rewriteAnalysisView.textContent = message;
+    if (rewriteAnalysisStatus) rewriteAnalysisStatus.textContent = "分析失败，请检查模型配置。";
+  }
+}
+
+function handoffTargetLabel(target) {
+  return {
+    "moments-copy": "朋友圈文案定制",
+    tts: "TTS语音",
+    "video-output": "视频成片",
+    "cs1-video": "CS1生成器",
+    "xiaohei-video": "小黑视频风格生成",
+    "money-printer": "MoneyPrinter",
+  }[target] || target || "目标模块";
+}
+
+function setTextareaValue(element, text) {
+  if (!element) return false;
+  element.value = text;
+  element.dispatchEvent(new Event("input", { bubbles: true }));
+  element.dispatchEvent(new Event("change", { bubbles: true }));
+  return true;
+}
+
+async function sendRewriteTextToTarget(target, text, meta = {}) {
+  const cleanText = String(text || "").trim();
+  if (!cleanText) {
+    rewriteStatus.textContent = "没有可发送的文案，请先填写或生成。";
+    return;
+  }
+  const label = handoffTargetLabel(target);
+  const payload = {
+    target,
+    text: cleanText,
+    source: meta.source || "rewrite",
+    versionKey: meta.versionKey || "",
+    taskId: Number(rewriteTaskId.value || 0),
+    title: meta.title || label,
+    sentAt: new Date().toISOString(),
+  };
+  try {
+    localStorage.setItem(`video-factory-handoff:${target}`, JSON.stringify(payload));
+    localStorage.setItem("video-factory-last-handoff", JSON.stringify(payload));
+  } catch {}
+
+  if (target === "moments-copy") {
+    setTextareaValue(momentsCopyInput, cleanText);
+    if (momentsCopyStatus) momentsCopyStatus.textContent = `已接收来自文案定制改写的文案，${countRewriteCharacters(cleanText)} 字。`;
+  } else if (target === "tts") {
+    setTextareaValue(ttsText, cleanText);
+    if (ttsCharacterCount) ttsCharacterCount.textContent = `${countRewriteCharacters(cleanText)} 字`;
+    if (ttsStatus) ttsStatus.textContent = "已接收文案，可直接生成语音。";
+  } else if (target === "video-output") {
+    await window.videoProjects?.linkCurrent?.("selected_rewrite", `rewrite-handoff-${Date.now()}`, meta.title || "文案定制成品", {
+      text: cleanText,
+      taskId: Number(rewriteTaskId.value || 0),
+      versionKey: meta.versionKey || "",
+      source: meta.source || "rewrite_handoff",
+    });
+    await window.videoProjects?.refresh?.({ preserveSelection: true });
+    if (videoProductStatus) videoProductStatus.textContent = "已接收文案，可继续补导演稿、TTS 和素材后成片。";
+  } else if (target === "cs1-video") {
+    setTextareaValue(document.querySelector("#cs1VideoText"), cleanText);
+    const titleInput = document.querySelector("#cs1VideoTitle");
+    if (titleInput && !titleInput.value.trim()) titleInput.value = "文案定制成品";
+    const status = document.querySelector("#cs1VideoStatus");
+    const message = document.querySelector("#cs1VideoMessage");
+    if (status) status.textContent = "已接收文案";
+    if (message) message.textContent = "文案已填入输入区，可直接生成 CS1 视频。";
+  } else if (target === "xiaohei-video") {
+    const handoff = {
+      projectId: window.videoProjects?.current?.()?.id || "",
+      projectTitle: window.videoProjects?.current?.()?.title || "",
+      title: "文案定制成品",
+      text: cleanText,
+      source: meta.source || "rewrite",
+      sentAt: new Date().toISOString(),
+    };
+    try {
+      localStorage.setItem("video-factory-xiaohei-handoff", JSON.stringify(handoff));
+    } catch {}
+    document.querySelector("#xiaoheiProductionFrame")?.contentWindow?.postMessage({ type: "video-factory:xiaohei-handoff", handoff }, window.location.origin);
+    const status = document.querySelector("#xiaoheiHandoffStatus");
+    if (status) status.textContent = `已接收文案：${countRewriteCharacters(cleanText)} 字`;
+  } else if (target === "money-printer") {
+    setTextareaValue(document.querySelector("#moneyPrinterScript"), cleanText);
+    const subject = document.querySelector("#moneyPrinterSubject");
+    if (subject && !subject.value.trim()) subject.value = "文案定制成品视频";
+    const status = document.querySelector("#moneyPrinterStatus");
+    const detail = document.querySelector("#moneyPrinterDetail");
+    if (status) status.textContent = "已接收文案";
+    if (detail) detail.textContent = "脚本已填入 MoneyPrinter，可补主题和素材参数后生成。";
+  }
+  rewriteStatus.textContent = `已发送到${label}。`;
+}
+
+async function handleRewriteHandoff(button) {
+  const target = button.dataset.target || "";
+  const source = button.dataset.source || "rewrite";
+  const versionKey = button.dataset.versionKey || "";
+  let text = "";
+  let title = "文案定制成品";
+  if (source === "original") {
+    text = rewriteOriginal.value;
+    title = "原始文案";
+  } else {
+    const textarea = rewriteVersions.querySelector(`.rewrite-version-text[data-version-key="${versionKey}"]`);
+    text = textarea?.value || "";
+    const version = collectRewriteVersions().find((item) => item.key === versionKey);
+    title = version?.name || title;
+  }
+  await sendRewriteTextToTarget(target, text, { source, versionKey, title });
+}
+
 async function continueWorkflowFromTranscript(job = {}, { sourceUrl = "", title = "" } = {}) {
   const text = String(job.text || "").trim();
   if (!text) return null;
