@@ -6177,9 +6177,21 @@ body[data-active-module="video-output"] .floating-workflow-guide [data-nav="vide
   font-size: 14px;
 }
 
-.tts-history-title .tts-history-text {
+.tts-history-title .tts-history-title-text {
   color: #f3f6fb;
+  overflow: hidden;
   font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tts-history-text {
+  overflow: hidden;
+  color: #aab5c5;
+  font-size: 12px;
+  line-height: 1.45;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .tts-history-meta {

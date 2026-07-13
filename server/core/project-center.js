@@ -341,6 +341,19 @@ export function createProjectCenter(baseDir) {
     return db.prepare(sql).all(...values).map(decodeAsset);
   }
 
+  function ttsAssetTitle(metadata = {}, asset = {}) {
+    const platformTitles = metadata.platform_titles || metadata.platformTitles || {};
+    return String(
+      metadata.title
+      || metadata.seo_title
+      || metadata.publish_title
+      || platformTitles.douyin
+      || platformTitles.xiaohongshu
+      || asset.name
+      || ""
+    ).trim();
+  }
+
   function upsertProjectField(project, asset) {
     const metadata = asset.metadata || {};
     const item = {
@@ -362,6 +375,16 @@ export function createProjectCenter(baseDir) {
       changes.ttsAudios = uniqueById([...project.ttsAudios, item]);
       changes.selectedTtsAudio = item;
       changes.lastTtsJobId = Number(asset.assetId || metadata.id || 0);
+      const title = ttsAssetTitle(metadata, asset);
+      if (title) changes.title = title;
+      const platformTitles = metadata.platform_titles || metadata.platformTitles;
+      if (platformTitles && typeof platformTitles === "object") changes.platformTitles = platformTitles;
+      const seoKeywords = metadata.seo_keywords || metadata.seoKeywords;
+      if (Array.isArray(seoKeywords)) changes.seoKeywords = seoKeywords;
+      const titleScore = metadata.title_score || metadata.titleScore;
+      if (titleScore && typeof titleScore === "object") changes.titleScore = titleScore;
+      const timeline = metadata.subtitle_timeline || metadata.subtitleTimeline;
+      if (Array.isArray(timeline) && timeline.length) changes.subtitleTimeline = timeline;
     }
     if (asset.assetType === "director") {
       changes.directorScript = item;
