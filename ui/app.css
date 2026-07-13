@@ -6854,6 +6854,110 @@ audio {
   box-shadow: inset 3px 0 0 var(--success);
 }
 
+.rewrite-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #272e39;
+}
+
+.rewrite-section-head h3 {
+  margin: 4px 0 0;
+  color: #eef2f7;
+  font-size: 14px;
+}
+
+.rewrite-analysis-status {
+  margin: 8px 0 0;
+  color: #8c97aa;
+  font-size: 11px;
+}
+
+.rewrite-preset-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 9px;
+}
+
+.rewrite-preset-grid label,
+.moments-copy-receiver {
+  display: grid;
+  gap: 7px;
+  color: #dce2eb;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.rewrite-preset-grid select {
+  min-width: 0;
+}
+
+.rewrite-handoff-panel {
+  margin-top: 10px;
+  border: 1px solid #2b3342;
+  border-radius: 7px;
+  padding: 10px;
+  background: #0d1118;
+}
+
+.rewrite-handoff-panel strong {
+  display: block;
+  margin-bottom: 8px;
+  color: #dce2eb;
+  font-size: 12px;
+}
+
+.rewrite-handoff-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.rewrite-handoff-actions button {
+  min-height: 30px;
+}
+
+.rewrite-analysis-lane .compact-pre {
+  min-height: 300px;
+  max-height: 430px;
+  overflow: auto;
+}
+
+.rewrite-version-head {
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.rewrite-version-head small {
+  display: block;
+  margin-top: 4px;
+  color: #7d8899;
+  font-size: 10px;
+}
+
+.rewrite-version-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+.rewrite-version-handoff {
+  margin-top: 8px;
+}
+
+.moments-copy-receiver {
+  margin-top: 14px;
+}
+
+.moments-copy-receiver textarea {
+  min-height: 190px;
+}
+
 .settings-category-grid {
   display: grid;
   grid-template-columns: repeat(5, minmax(120px, 1fr));

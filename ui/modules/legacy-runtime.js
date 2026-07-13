@@ -936,8 +936,12 @@ async function openRewriteEditor(taskId) {
   if (rewrite.provider && [...rewriteProvider.options].some((option) => option.value === rewrite.provider)) {
     rewriteProvider.value = rewrite.provider;
   }
-  rewriteDirection.value = rewrite.direction || item.rewriteDirection || rewriteDirection.value || "招生引流";
-  rewriteStyle.value = rewrite.style || item.rewriteStyle || rewriteStyle.value || "痞里带刺";
+  rewriteDirection.value = rewriteDirectionOptions.includes(rewrite.direction || item.rewriteDirection)
+    ? (rewrite.direction || item.rewriteDirection)
+    : "短视频口播";
+  rewriteStyle.value = rewriteStyleOptions.includes(rewrite.style || item.rewriteStyle)
+    ? (rewrite.style || item.rewriteStyle)
+    : "小黑漫画解释类";
   rewriteReference.value = rewrite.referenceStyle || rewriteReference.value || defaultRewriteReference;
   const params = rewrite.params || item.rewriteParams || {};
   rewriteToneLevel.value = String(params.toneLevel || 8);
@@ -4289,8 +4293,12 @@ async function loadSettings() {
     const selectedProvider = rewrite.defaults?.defaultProvider || "deepseek";
     renderProviderOptions(rewriteProvider, providers, selectedProvider, { disableUnconfigured: true });
     renderProviderOptions(rewriteSettingsProvider, providers, selectedProvider);
-    rewriteDirection.value = rewrite.defaults?.defaultDirection || "短视频口播";
-    rewriteStyle.value = rewrite.defaults?.defaultStyle || "痞里带刺";
+    rewriteDirection.value = rewriteDirectionOptions.includes(rewrite.defaults?.defaultDirection)
+      ? rewrite.defaults.defaultDirection
+      : "短视频口播";
+    rewriteStyle.value = rewriteStyleOptions.includes(rewrite.defaults?.defaultStyle)
+      ? rewrite.defaults.defaultStyle
+      : "小黑漫画解释类";
     rewriteHumanizeLevel.value = rewrite.defaults?.humanizeLevel || "极强";
     rewriteReference.value = rewrite.defaults?.referenceStyle || rewrite.options?.defaultReference || defaultRewriteReference;
     updateRewritePresetFields();
@@ -5364,6 +5372,15 @@ transcriptList.addEventListener("click", (event) => {
   });
 });
 
+rewritePanel?.addEventListener("click", (event) => {
+  const button = event.target.closest(".rewrite-send-target");
+  if (!button) return;
+  button.disabled = true;
+  handleRewriteHandoff(button).finally(() => {
+    button.disabled = false;
+  });
+});
+
 rewriteVersions.addEventListener("click", async (event) => {
   const button = event.target.closest(".rewrite-select-best, .rewrite-generate-one, .rewrite-save-one, .rewrite-revise-one, .rewrite-tts-one, .rewrite-director-one, .rewrite-copy");
   if (!button) return;
@@ -5477,6 +5494,10 @@ rewriteVersions.addEventListener("change", (event) => {
 
 document.querySelector("#runRewrite").addEventListener("click", () => {
   generateRewrite();
+});
+
+rewriteRunAnalysis?.addEventListener("click", () => {
+  runRewriteInlineAnalysis();
 });
 
 document.querySelector("#saveRewrite").addEventListener("click", () => {
