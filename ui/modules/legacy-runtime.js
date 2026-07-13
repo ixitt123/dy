@@ -2721,7 +2721,9 @@ function renderTtsVoiceQuickPanel(asset = selectedVoiceAssetFromDropdown()) {
         <strong>${escapeHtml(asset.voice_name || asset.voice_id)}</strong>
         <span>${escapeHtml(provider?.label || asset.provider)} · ${escapeHtml(category)} · ${escapeHtml(asset.metadata?.target_model || asset.metadata?.model || "")}</span>
       </div>
-      ${audioUrl ? `<audio controls preload="none" src="${escapeHtml(audioUrl)}"></audio>` : '<span class="muted-text">暂无试听</span>'}
+      <div class="tts-voice-preview-slot">
+        ${audioUrl ? `<audio controls preload="none" src="${escapeHtml(audioUrl)}"></audio>` : '<button class="ghost small tts-voice-preview" type="button">生成试听</button>'}
+      </div>
       <div class="tts-voice-actions">
         <button class="ghost small tts-voice-use" type="button">用于配音</button>
         <button class="ghost small tts-voice-favorite" type="button">${asset.is_favorite ? "移出常用" : "加入常用"}</button>
@@ -2730,6 +2732,46 @@ function renderTtsVoiceQuickPanel(asset = selectedVoiceAssetFromDropdown()) {
       </div>
     </div>
   `;
+}
+
+function renderTtsMusicPresets() {
+  if (!ttsMusicPresetsPanel) return;
+  const presets = (ttsMusicPresets || []).filter((preset) => {
+    const text = [preset.id, preset.label, preset.prompt, preset.description].filter(Boolean).join(" ");
+    return /sing|song|rap|music|jingle|唱|歌|说唱|副歌|小调|音乐|BGM/i.test(text);
+  });
+  if (!presets.length) {
+    ttsMusicPresetsPanel.hidden = true;
+    ttsMusicPresetsPanel.innerHTML = "";
+    return;
+  }
+  ttsMusicPresetsPanel.hidden = false;
+  ttsMusicPresetsPanel.innerHTML = `
+    <div class="tts-music-head">
+      <strong>唱歌 / 音乐预设</strong>
+      <span>MiniMax Music</span>
+    </div>
+    <div class="tts-music-list">
+      ${presets.map((preset) => `
+        <button class="tts-music-chip" type="button" data-music-preset="${escapeHtml(preset.id)}">
+          <strong>${escapeHtml(preset.label || preset.id)}</strong>
+          <span>${escapeHtml(preset.description || preset.prompt || "")}</span>
+        </button>
+      `).join("")}
+    </div>
+  `;
+}
+
+async function loadTtsMusicPresets() {
+  if (!ttsMusicPresetsPanel) return;
+  try {
+    const data = await fetchJson("/api/ian-xiaohei/config");
+    ttsMusicPresets = Array.isArray(data.music?.presets) ? data.music.presets : [];
+    renderTtsMusicPresets();
+  } catch {
+    ttsMusicPresets = [];
+    renderTtsMusicPresets();
+  }
 }
 
 function renderTtsVoiceCategories(sourceVoices = ttsPresetVoices) {
@@ -6272,6 +6314,31 @@ ttsVoiceQuickPanel?.addEventListener("click", async (event) => {
   const asset = voiceAssets.find((item) => Number(item.id) === id);
   if (!asset) return;
   try {
+    if (button.classList.contains("tts-voice-preview")) {
+      const previousText = button.textContent;
+      button.disabled = true;
+      button.textContent = "生成中...";
+      ttsStatus.textContent = `正在生成“${asset.voice_name || asset.voice_id}”的试听。`;
+      try {
+        const data = await fetchJson("/api/voice-assets/preview", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ id }),
+        });
+        Object.assign(asset, data.asset || {}, {
+          preview_url: data.preview_url || data.asset?.preview_url || asset.preview_url || "",
+        });
+        renderTtsVoiceQuickPanel(asset);
+        renderVoiceAssets();
+        ttsStatus.textContent = data.cached ? "试听已存在，可以播放。" : "试听已生成，可以播放。";
+      } finally {
+        if (button.isConnected) {
+          button.disabled = false;
+          button.textContent = previousText;
+        }
+      }
+      return;
+    }
     if (button.classList.contains("tts-voice-use")) {
       await applyVoiceAssetToTts(asset);
       return;
@@ -6306,6 +6373,21 @@ ttsVoiceQuickPanel?.addEventListener("click", async (event) => {
     ttsStatus.textContent = error instanceof Error ? error.message : String(error);
   }
 });
+
+ttsMusicPresetsPanel?.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-music-preset]");
+  if (!button) return;
+  const presetId = button.dataset.musicPreset || "";
+  window.workbenchNavigate?.("xiaohei-video", { preserveScroll: true });
+  window.setTimeout(() => {
+    const musicPreset = document.querySelector("#musicPreset");
+    if (!musicPreset) return;
+    musicPreset.value = presetId;
+    musicPreset.dispatchEvent(new Event("change", { bubbles: true }));
+    musicPreset.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, 120);
+});
+
 ttsEmotion.addEventListener("change", updateTtsEmotionField);
 ttsVolume.addEventListener("input", updateTtsRangeLabels);
 ttsPitch.addEventListener("input", updateTtsRangeLabels);
