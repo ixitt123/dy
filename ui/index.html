@@ -1118,23 +1118,124 @@
           <div>
             <span class="section-eyebrow">Moments Copy</span>
             <h2>朋友圈文案定制</h2>
-            <p>这里后续会接入人设、固定风格、图文生成和审核预览。当前先作为独立入口占位。</p>
+            <p>先选择人设，再围绕原始文案生成自然分享式朋友圈图文，支持复制提示词或调用本地图片 API 生成配图。</p>
           </div>
           <button class="primary" type="button" data-nav="rewrite">先去文案定制改写</button>
         </section>
-        <section class="dashboard-panel">
-          <div class="panel-heading">
-            <div>
-              <span class="section-eyebrow">待开发</span>
-              <h2>朋友圈图文分支</h2>
-            </div>
+        <section class="moments-workbench">
+          <div class="moments-column">
+            <section class="dashboard-panel moments-panel">
+              <div class="panel-heading">
+                <div>
+                  <span class="section-eyebrow">Persona</span>
+                  <h2>人设与表达边界</h2>
+                </div>
+              </div>
+              <div class="moments-form-grid">
+                <label>
+                  选择人设
+                  <select id="momentsPersonaSelect"></select>
+                </label>
+                <label>
+                  人设名称
+                  <input id="momentsPersonaName" type="text" placeholder="例如：学业规划老师" />
+                </label>
+              </div>
+              <label class="moments-copy-receiver" for="momentsPersonaText">
+                人设说明
+                <textarea id="momentsPersonaText" rows="5" placeholder="先明确你是谁、长期服务谁、可信的经验和边界。"></textarea>
+              </label>
+              <div class="moments-actions">
+                <button id="saveMomentsPersona" class="ghost small" type="button">保存人设</button>
+                <button id="deleteMomentsPersona" class="ghost small danger-action" type="button">删除人设</button>
+              </div>
+              <p id="momentsPersonaStatus" class="placeholder-copy">本地保存，不需要账号。</p>
+            </section>
+
+            <section class="dashboard-panel moments-panel">
+              <div class="panel-heading">
+                <div>
+                  <span class="section-eyebrow">Source</span>
+                  <h2>朋友圈图文输入</h2>
+                </div>
+              </div>
+              <label class="moments-copy-receiver" for="momentsCopyInput">
+                文案输入区
+                <textarea id="momentsCopyInput" rows="11" placeholder="从文案定制改写发送来的原文案或成品文案会填到这里，也可以直接粘贴。"></textarea>
+              </label>
+              <label class="moments-copy-receiver" for="momentsLocalMaterials">
+                本地图片素材说明
+                <textarea id="momentsLocalMaterials" rows="4" placeholder="可写：已有学生反馈截图、课堂照片、产品图、人物形象、品牌色、必须出现/避免出现的元素。生成的每张图片提示词会参考这里。"></textarea>
+              </label>
+              <div class="moments-form-grid">
+                <label>
+                  视觉风格
+                  <select id="momentsVisualStyle">
+                    <option value="auto" selected>自动判断</option>
+                    <option value="xiaohei">小黑漫画解释类</option>
+                    <option value="realistic">真实生活/产品场景类</option>
+                  </select>
+                </label>
+                <label>
+                  配图数量
+                  <select id="momentsImageCount">
+                    <option value="auto" selected>自动 1-3 张</option>
+                    <option value="1">固定 1 张</option>
+                    <option value="2">固定 2 张</option>
+                    <option value="3">固定 3 张</option>
+                  </select>
+                </label>
+                <label>
+                  分享语气
+                  <select id="momentsTone">
+                    <option value="普通朋友聊天式分享" selected>普通朋友聊天式分享</option>
+                    <option value="真诚复盘">真诚复盘</option>
+                    <option value="轻松提醒">轻松提醒</option>
+                    <option value="温和建议">温和建议</option>
+                  </select>
+                </label>
+                <label>
+                  生成方式
+                  <select id="momentsIntent">
+                    <option value="不强销售的自然分享" selected>不强销售的自然分享</option>
+                    <option value="经验分享">经验分享</option>
+                    <option value="案例启发">案例启发</option>
+                    <option value="观点表达">观点表达</option>
+                  </select>
+                </label>
+              </div>
+              <div class="moments-actions">
+                <button id="generateMomentsPost" class="primary" type="button">生成朋友圈文案+图片提示词</button>
+                <button id="copyMomentsPrompts" class="ghost" type="button">复制全部提示词</button>
+                <button id="generateMomentsImages" class="ghost" type="button">调用图片 API 生成图片</button>
+              </div>
+              <p id="momentsCopyStatus" class="placeholder-copy">等待接收文案。</p>
+            </section>
           </div>
-          <p class="placeholder-copy">计划能力：选择人设、固定表达风格、输入主题或提取文案，一键生成朋友圈图文草稿，并进入预览与审核。</p>
-          <label class="moments-copy-receiver" for="momentsCopyInput">
-            文案输入区
-            <textarea id="momentsCopyInput" rows="10" placeholder="从文案定制改写发送来的原文案或成品文案会填到这里。"></textarea>
-          </label>
-          <p id="momentsCopyStatus" class="placeholder-copy">等待接收文案。</p>
+
+          <div class="moments-column">
+            <section class="dashboard-panel moments-panel moments-preview-panel">
+              <div class="panel-heading">
+                <div>
+                  <span class="section-eyebrow">Preview</span>
+                  <h2>朋友圈文案成品</h2>
+                </div>
+              </div>
+              <textarea id="momentsPostOutput" class="moments-output" rows="12" placeholder="生成后的朋友圈文案会出现在这里，可直接修改。"></textarea>
+              <div id="momentsResultMeta" class="moments-meta">尚未生成。</div>
+            </section>
+
+            <section class="dashboard-panel moments-panel">
+              <div class="panel-heading">
+                <div>
+                  <span class="section-eyebrow">Image Prompts</span>
+                  <h2>配图提示词与图片预览</h2>
+                </div>
+              </div>
+              <div id="momentsImagePromptList" class="moments-prompt-list empty">生成后会显示 1-3 张配图提示词，每张都可以单独复制或调用图片 API。</div>
+              <div id="momentsGeneratedImages" class="moments-image-grid"></div>
+            </section>
+          </div>
         </section>
       </section>
 

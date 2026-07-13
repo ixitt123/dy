@@ -237,6 +237,22 @@ const ttsAudio = document.querySelector("#ttsAudio");
 const ttsHistory = document.querySelector("#ttsHistory");
 const momentsCopyInput = document.querySelector("#momentsCopyInput");
 const momentsCopyStatus = document.querySelector("#momentsCopyStatus");
+const momentsPersonaSelect = document.querySelector("#momentsPersonaSelect");
+const momentsPersonaName = document.querySelector("#momentsPersonaName");
+const momentsPersonaText = document.querySelector("#momentsPersonaText");
+const momentsPersonaStatus = document.querySelector("#momentsPersonaStatus");
+const momentsLocalMaterials = document.querySelector("#momentsLocalMaterials");
+const momentsVisualStyle = document.querySelector("#momentsVisualStyle");
+const momentsImageCount = document.querySelector("#momentsImageCount");
+const momentsTone = document.querySelector("#momentsTone");
+const momentsIntent = document.querySelector("#momentsIntent");
+const generateMomentsPostBtn = document.querySelector("#generateMomentsPost");
+const copyMomentsPromptsBtn = document.querySelector("#copyMomentsPrompts");
+const generateMomentsImagesBtn = document.querySelector("#generateMomentsImages");
+const momentsPostOutput = document.querySelector("#momentsPostOutput");
+const momentsResultMeta = document.querySelector("#momentsResultMeta");
+const momentsImagePromptList = document.querySelector("#momentsImagePromptList");
+const momentsGeneratedImages = document.querySelector("#momentsGeneratedImages");
 const voiceAssetForm = document.querySelector("#voiceAssetForm");
 const voiceAssetEditId = document.querySelector("#voiceAssetEditId");
 const voiceAssetFormTitle = document.querySelector("#voiceAssetFormTitle");
@@ -278,6 +294,16 @@ let autoOpenedResultTaskIds = new Set();
 let autoRewriteResultTaskIds = new Set();
 let rewriteProviderConfigs = {};
 let currentRewriteSpecs = [];
+const MOMENTS_PERSONAS_KEY = "video-factory:moments-personas-v1";
+const MOMENTS_ACTIVE_PERSONA_KEY = "video-factory:moments-active-persona-v1";
+const MOMENTS_DRAFT_KEY = "video-factory:moments-draft-v1";
+const defaultMomentsPersona = {
+  id: "academic-planner",
+  name: "学业规划老师",
+  description: "从事多年教培行业的规划老师，服务小学到高中学生家庭，也做高考志愿填报和出国留学规划。表达要真实可信，强调正常学习、长期陪伴、能力提升和效果可见，不夸张承诺，不制造焦虑。",
+};
+let momentsPersonas = [];
+let currentMomentsResult = null;
 let rewriteVersionDrafts = new Map();
 let directorConfig = null;
 let directorSources = [];
