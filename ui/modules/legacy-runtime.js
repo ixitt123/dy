@@ -2876,11 +2876,7 @@ function renderTtsVoices() {
           description: `克隆音色 v${asset.version}`,
         }))
     : ttsPresetVoices;
-  renderTtsVoiceCategories(sourceVoices);
-  const selectedCategory = ttsVoiceCategory?.value || "全部";
-  const voices = selectedCategory === "全部"
-    ? sourceVoices
-    : sourceVoices.filter((voice) => normalizeTtsVoiceCategory(voice) === selectedCategory);
+  const voices = sourceVoices;
   ttsPresetVoice.innerHTML = voices.length
     ? voices
         .map((voice) => {
@@ -2911,7 +2907,7 @@ async function loadTtsVoices() {
 
 function updateTtsVoiceSource() {
   const manual = ttsVoiceSource.value === "manual";
-  if (ttsVoiceCategoryField) ttsVoiceCategoryField.hidden = manual;
+  if (ttsVoiceCategoryField) ttsVoiceCategoryField.hidden = true;
   ttsPresetVoiceField.hidden = manual;
   ttsManualVoiceField.hidden = !manual;
   if (!manual) renderTtsVoices();
@@ -3706,23 +3702,7 @@ renderTtsVoices = function renderTtsVoicesUnified() {
     return;
   }
   const sourceAssets = ttsVoiceRowsForSource();
-  const categoryRows = sourceAssets.map((asset) => ({
-    category: asset.metadata?.category,
-    useCase: asset.metadata?.useCase,
-    description: asset.description || asset.metadata?.description,
-    name: asset.voice_name,
-  }));
-  renderTtsVoiceCategories(categoryRows);
-  const allCategoryValue = ttsVoiceCategory?.options?.[0]?.value || "all";
-  const selectedCategory = ttsVoiceCategory?.value || allCategoryValue;
-  const voices = selectedCategory === allCategoryValue
-    ? sourceAssets
-    : sourceAssets.filter((asset) => normalizeTtsVoiceCategory({
-      category: asset.metadata?.category,
-      useCase: asset.metadata?.useCase,
-      description: asset.description || asset.metadata?.description,
-      name: asset.voice_name,
-    }) === selectedCategory);
+  const voices = sourceAssets;
   const previous = ttsPresetVoice.value;
   ttsPresetVoice.innerHTML = voices.length
     ? voices.map((asset) => {
