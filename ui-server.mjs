@@ -51,12 +51,6 @@ const pidPath = path.join(__dirname, "ui-server.pid");
 const urlPath = path.join(__dirname, "ui-server.url");
 const settingsPath = path.join(__dirname, "settings.json");
 const ffprobePath = ffprobeStatic?.path || "";
-const ytDlpService = createYtDlpService({
-  baseDir: __dirname,
-  downloadsDir,
-  ffmpegPath,
-  ffprobePath,
-});
 const mcpEntry = path.join(
   __dirname,
   "node_modules",
@@ -75,6 +69,12 @@ let downloadsDir = defaultDownloadsDir;
 downloadsDir = setDownloadsDir(readSettings().downloadsDir);
 fs.mkdirSync(downloadsDir, { recursive: true });
 fs.mkdirSync(rewritesDir, { recursive: true });
+const ytDlpService = createYtDlpService({
+  baseDir: __dirname,
+  downloadsDir,
+  ffmpegPath,
+  ffprobePath,
+});
 const taskStore = openTaskStore(__dirname);
 taskStore.resetActiveTasks();
 const projectCenter = createProjectCenter(__dirname);
@@ -311,6 +311,40 @@ function extractDouyinUrls(text, { limit = 1000, kind = "video", taskAction = "d
       taskAction,
       sourceText: url,
       transcriptEnabled,
+      analysisEnabled,
+      onlyTranscript,
+    });
+    if (items.length >= limit) break;
+  }
+
+  return {
+    items,
+    discovered: seen.size,
+    overflow: Math.max(0, matches.length - items.length),
+  };
+}
+
+function extractAnyUrls(text, { limit = 1000, kind = "video", taskAction = "download", transcriptEnabled = false, audioEnabled = false, audioFormat = "mp3", analysisEnabled = false, onlyTranscript = false } = {}) {
+  const matches = String(text || "").match(/https?:\/\/[^\s"'<>]+/g) || [];
+  const seen = new Set();
+  const items = [];
+
+  for (const match of matches) {
+    const url = cleanUrlToken(match);
+    const normalizedUrl = normalizeTaskUrl(url);
+    if (!normalizedUrl || seen.has(normalizedUrl)) continue;
+    seen.add(normalizedUrl);
+    items.push({
+      url,
+      normalizedUrl,
+      kind: inferTaskKind(normalizedUrl, kind),
+      taskAction,
+      sourceText: url,
+      transcriptEnabled,
+      audioEnabled,
+      audioFormat: ["mp3", "wav", "m4a"].includes(String(audioFormat || "").toLowerCase())
+        ? String(audioFormat).toLowerCase()
+        : "mp3",
       analysisEnabled,
       onlyTranscript,
     });
