@@ -2796,13 +2796,41 @@ function voiceAssetAudioUrl(asset = {}) {
   return "";
 }
 
+function cacheBustAudioUrl(url = "") {
+  const cleanUrl = String(url || "").trim();
+  if (!cleanUrl || cleanUrl.startsWith("data:") || cleanUrl.startsWith("blob:")) return cleanUrl;
+  return `${cleanUrl}${cleanUrl.includes("?") ? "&" : "?"}_=${Date.now()}`;
+}
+
+function ttsVoicePreviewText(asset = {}) {
+  const metadata = asset.metadata || {};
+  return String(metadata.previewText || metadata.preview_text || "").trim();
+}
+
+function ttsVoicePreviewModel(asset = {}) {
+  const metadata = asset.metadata || {};
+  return String(metadata.target_model || metadata.model || ttsModel?.value || "").trim();
+}
+
+function playRenderedTtsVoicePreview() {
+  const audio = ttsVoiceQuickPanel?.querySelector(".tts-voice-preview-slot audio");
+  if (!audio) return;
+  audio.load();
+  const playAttempt = audio.play();
+  if (playAttempt && typeof playAttempt.catch === "function") {
+    playAttempt.catch(() => {
+      if (ttsStatus) ttsStatus.textContent = "试听已生成，请点击播放器播放。";
+    });
+  }
+}
+
 function selectedVoiceAssetFromDropdown() {
   const id = Number(ttsPresetVoice?.value || 0);
   if (!id) return null;
   return voiceAssets.find((asset) => Number(asset.id) === id) || null;
 }
 
-function renderTtsVoiceQuickPanel(asset = selectedVoiceAssetFromDropdown()) {
+function renderTtsVoiceQuickPanel(asset = selectedVoiceAssetFromDropdown(), state = {}) {
   if (!ttsVoiceQuickPanel) return;
   if (ttsVoiceSource?.value === "manual") {
     ttsVoiceQuickPanel.innerHTML = '<div class="tts-voice-empty">手动 voice_id 不进入常用模板管理。</div>';
@@ -2819,7 +2847,12 @@ function renderTtsVoiceQuickPanel(asset = selectedVoiceAssetFromDropdown()) {
     description: asset.description || asset.metadata?.description,
     name: asset.voice_name,
   });
-  const audioUrl = voiceAssetAudioUrl(asset);
+  const audioUrl = state.refreshAudio ? cacheBustAudioUrl(voiceAssetAudioUrl(asset)) : voiceAssetAudioUrl(asset);
+  const previewHint = state.previewError
+    ? `<small class="tts-voice-preview-status error">${escapeHtml(state.previewError)}</small>`
+    : state.previewMessage
+      ? `<small class="tts-voice-preview-status">${escapeHtml(state.previewMessage)}</small>`
+      : "";
   ttsVoiceQuickPanel.innerHTML = `
     <div class="tts-voice-current" data-voice-asset-id="${asset.id}">
       <div class="tts-voice-current-main">
@@ -2828,6 +2861,7 @@ function renderTtsVoiceQuickPanel(asset = selectedVoiceAssetFromDropdown()) {
       </div>
       <div class="tts-voice-preview-slot">
         ${audioUrl ? `<audio controls preload="none" src="${escapeHtml(audioUrl)}"></audio>` : '<button class="ghost small tts-voice-preview" type="button">生成试听</button>'}
+        ${previewHint}
       </div>
       <div class="tts-voice-actions">
         <button class="ghost small tts-voice-favorite" type="button">${asset.is_favorite ? "移出常用" : "加入常用"}</button>
@@ -6407,14 +6441,26 @@ ttsVoiceQuickPanel?.addEventListener("click", async (event) => {
         const data = await fetchJson("/api/voice-assets/preview", {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ id }),
+          body: JSON.stringify({
+            id,
+            model: ttsVoicePreviewModel(asset),
+            text: ttsVoicePreviewText(asset),
+          }),
         });
         Object.assign(asset, data.asset || {}, {
           preview_url: data.preview_url || data.asset?.preview_url || asset.preview_url || "",
         });
-        renderTtsVoiceQuickPanel(asset);
+        renderTtsVoiceQuickPanel(asset, {
+          refreshAudio: true,
+          previewMessage: data.cached ? "已载入缓存试听。" : "试听已生成。",
+        });
         renderVoiceAssets();
+        playRenderedTtsVoicePreview();
         ttsStatus.textContent = data.cached ? "试听已存在，可以播放。" : "试听已生成，可以播放。";
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        renderTtsVoiceQuickPanel(asset, { previewError: message || "试听生成失败。" });
+        ttsStatus.textContent = message || "试听生成失败。";
       } finally {
         if (button.isConnected) {
           button.disabled = false;

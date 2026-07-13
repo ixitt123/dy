@@ -8170,11 +8170,23 @@ audio {
 }
 
 .tts-voice-preview-slot {
+  display: grid;
+  gap: 6px;
   min-height: 34px;
 }
 
 .tts-voice-preview-slot audio {
   display: block;
+}
+
+.tts-voice-preview-status {
+  color: #8fa0b8;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.tts-voice-preview-status.error {
+  color: #ff8f8f;
 }
 
 .tts-voice-actions {
