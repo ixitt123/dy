@@ -1449,18 +1449,22 @@
           </div>
         </div>
 
-        <div class="tts-history-head">
-          <h2>生成记录</h2>
-          <div class="history-actions">
-            <button class="ghost small" id="refreshTtsJobs" type="button">刷新</button>
-            <button class="ghost small" id="clearFailedTtsJobs" type="button">清理失败</button>
-            <button class="ghost small danger-action" id="clearTtsJobs" type="button">清空记录和音频</button>
+        <details class="tts-secondary-panel">
+          <summary>生成记录</summary>
+          <div class="tts-history-head">
+            <h2>生成记录</h2>
+            <div class="history-actions">
+              <button class="ghost small" id="refreshTtsJobs" type="button">刷新</button>
+              <button class="ghost small" id="clearFailedTtsJobs" type="button">清理失败</button>
+              <button class="ghost small danger-action" id="clearTtsJobs" type="button">清空记录和音频</button>
+            </div>
           </div>
-        </div>
-        <div class="tts-history" id="ttsHistory"></div>
+          <div class="tts-history" id="ttsHistory"></div>
+        </details>
       </section>
 
-      <section class="voice-center" id="voiceAssetCenter">
+      <details class="voice-center" id="voiceAssetCenter">
+        <summary>声音资产中心</summary>
         <div class="result-head voice-center-head">
           <div>
             <h2>声音资产中心</h2>
@@ -1576,7 +1580,8 @@
           <p id="voiceTestsStatus">等待测试。</p>
           <div class="voice-tests-list" id="voiceTestsList"></div>
         </section>
-      </section>
+
+      </details>
 
       </section>
 
