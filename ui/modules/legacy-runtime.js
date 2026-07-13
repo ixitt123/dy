@@ -5962,6 +5962,9 @@ voiceFilterTabs.addEventListener("click", (event) => {
   renderVoiceAssets();
 });
 
+voiceProviderFilter?.addEventListener("change", renderVoiceAssets);
+voiceCategoryFilter?.addEventListener("change", renderVoiceAssets);
+
 voiceAssetsGrid.addEventListener("click", async (event) => {
   const button = event.target.closest("button");
   const card = event.target.closest(".voice-asset-card");
