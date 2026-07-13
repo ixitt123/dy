@@ -673,6 +673,16 @@ function setSelectIfOption(select, value) {
   return true;
 }
 
+function applyRewritePlanPreset(style = rewriteStyle?.value, { save = true, overwrite = true } = {}) {
+  const preset = rewritePlanPresets[String(style || "")] || null;
+  if (!preset || !overwrite) return preset;
+  setSelectIfOption(rewriteTonePreset, preset.tone);
+  setSelectIfOption(rewritePersona, preset.persona);
+  setSelectIfOption(rewriteDirection, preset.direction);
+  if (save) saveRewritePresetSettings();
+  return preset;
+}
+
 function saveRewritePresetSettings() {
   const data = {
     provider: rewriteProvider?.value || "",
@@ -703,11 +713,14 @@ function loadRewritePresetSettings() {
   }
   setSelectIfOption(rewriteProvider, data.provider);
   setSelectIfOption(rewriteStyle, data.style);
+  const selectedPlan = rewritePlanPresets[rewriteStyle?.value] ? rewriteStyle.value : "保留原意强化表达";
+  setSelectIfOption(rewriteStyle, selectedPlan);
   setSelectIfOption(rewriteTargetPlatform, data.targetPlatform);
   setSelectIfOption(rewriteWordRange, data.wordRange);
   setSelectIfOption(rewriteTonePreset, data.tonePreset);
   setSelectIfOption(rewritePersona, data.persona);
   setSelectIfOption(rewriteDirection, data.direction);
+  if (!data.tonePreset || !data.persona || !data.direction) applyRewritePlanPreset(rewriteStyle?.value, { save: false });
   setSelectIfOption(rewriteHumanizeLevel, data.humanizeLevel);
   if (data.toneLevel && rewriteToneLevel) rewriteToneLevel.value = data.toneLevel;
   if (data.conflictLevel && rewriteConflictLevel) rewriteConflictLevel.value = data.conflictLevel;
@@ -719,9 +732,17 @@ function loadRewritePresetSettings() {
 
 function buildRewriteReferenceStyle() {
   const preset = rewritePresetContext();
+  const plan = rewritePlanPresets[preset.style] || rewritePlanPresets["保留原意强化表达"];
   const custom = rewriteReference?.value?.trim() || defaultRewriteReference;
   return [
     custom,
+    "",
+    "当前专业改写方案：",
+    `- 方案：${preset.style}`,
+    `- 结构目标：${plan.structure}`,
+    `- 必须看得出的差异：${plan.mustShow}`,
+    `- 禁止事项：${plan.avoid}`,
+    `- 绑定参数：平台=${preset.platform}；字数=${preset.wordRange}；语气=${preset.tone}；人设=${preset.persona}；用途=${preset.purpose}。`,
     "",
     "生成基础参考 dbskill 方法，但只输出可直接发布的中文文案：",
     "1. 内容诊断：先把原文的核心事情、受众、矛盾和传播价值搞清楚，再改写。",
@@ -729,7 +750,7 @@ function buildRewriteReferenceStyle() {
     "3. 共鸣机制：优先解除用户不敢说的沉默、点出真实动机和立场框架。",
     "4. 口播流畅：短句、强节奏、少书面语，每一段只讲一个意思。",
     "5. 去AI味检查：避免过度完整、空泛排比和万能鸡汤，保留人话里的锋利和停顿。",
-    `当前参数：风格=${preset.style}；平台=${preset.platform}；字数=${preset.wordRange}；语气=${preset.tone}；人设=${preset.persona}；用途=${preset.purpose}。`,
+    "最终自检：同一原文切换不同方案时，结构和口吻必须明显不同；但主题、事实和核心意思必须仍能逐句对回原文。",
   ].join("\n");
 }
 
@@ -5648,7 +5669,6 @@ rewriteVersionCountInput.addEventListener("input", () => {
 
 [
   rewriteProvider,
-  rewriteStyle,
   rewriteTargetPlatform,
   rewriteWordRange,
   rewriteTonePreset,
@@ -5659,6 +5679,10 @@ rewriteVersionCountInput.addEventListener("input", () => {
   element?.addEventListener("change", () => {
     saveRewritePresetSettings();
   });
+});
+
+rewriteStyle?.addEventListener("change", () => {
+  applyRewritePlanPreset(rewriteStyle.value);
 });
 
 [rewriteToneLevel, rewriteConflictLevel, rewriteEmotionLevel, rewriteSalesLevel, rewriteReference].forEach((element) => {
