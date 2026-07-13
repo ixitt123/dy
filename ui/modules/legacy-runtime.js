@@ -3694,9 +3694,9 @@ renderTtsVoices = function renderTtsVoicesUnified() {
         asset.is_favorite ? "favorite" : "",
         asset.voice_type === "clone" ? "clone" : category,
       ].filter(Boolean).join(" / ");
-      return "<option value="" + escapeHtml(asset.id) + "">" + escapeHtml(asset.voice_name || asset.voice_id) + " - " + escapeHtml(badges) + " - " + escapeHtml(asset.metadata?.target_model || asset.metadata?.model || asset.voice_id) + "</option>";
+      return '<option value="' + escapeHtml(asset.id) + '">' + escapeHtml(asset.voice_name || asset.voice_id) + " - " + escapeHtml(badges) + " - " + escapeHtml(asset.metadata?.target_model || asset.metadata?.model || asset.voice_id) + "</option>";
     }).join("")
-    : "<option value="">No voice in this group</option>";
+    : '<option value="">No voice in this group</option>';
   if (voices.some((asset) => String(asset.id) === String(previous))) {
     ttsPresetVoice.value = previous;
   } else {
