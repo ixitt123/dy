@@ -491,6 +491,11 @@ export function createProjectCenter(baseDir) {
     const templateAssets = assets.filter((item) => item.assetType === "template" && item.status === "ready");
     const expectedAssets = Math.max(1, Number(project.directorScript?.sceneCount || project.directorScript?.scene_count || project.directorScript?.result?.storyboard?.length || 1));
     const missingAssets = Math.max(0, expectedAssets - mediaAssets.length);
+    const ttsTimeline = Array.isArray(project.selectedTtsAudio?.subtitle_timeline)
+      ? project.selectedTtsAudio.subtitle_timeline
+      : Array.isArray(project.selectedTtsAudio?.metadata?.subtitle_timeline)
+        ? project.selectedTtsAudio.metadata.subtitle_timeline
+        : [];
     const outputDir = path.join(baseDir, "video-products");
     let outputReady = true;
     try {
@@ -502,9 +507,8 @@ export function createProjectCenter(baseDir) {
     const checks = [
       { id: "script", label: "文案", ok: hasValue(project.selectedRewriteText || project.transcriptText), ready: "已完成", missing: "缺失", page: "rewrite", action: "选择文案", critical: true },
       { id: "voice", label: "语音", ok: hasValue(project.selectedTtsAudio), ready: "已完成", missing: "缺失", page: "tts", action: "生成语音", critical: true },
-      { id: "director", label: "导演稿", ok: hasValue(project.directorScript), ready: "已完成", missing: "缺失", page: "director", action: "生成导演稿", critical: true },
-      { id: "subtitle", label: "字幕时间轴", ok: hasValue(project.subtitleTimeline), ready: "已完成", missing: "缺失", page: "director", action: "补齐字幕", critical: true },
-      { id: "assets", label: "素材", ok: mediaAssets.length > 0 && missingAssets === 0, ready: `已完成 · ${mediaAssets.length} 个`, missing: `缺少 ${missingAssets || expectedAssets} 个`, page: "assets", action: "匹配素材", critical: true },
+      { id: "subtitle", label: "字幕时间轴", ok: hasValue(project.subtitleTimeline) || hasValue(ttsTimeline), ready: "已完成", missing: "生产线内生成", page: "video-output", action: "生产线生成", critical: false },
+      { id: "assets", label: "素材", ok: mediaAssets.length > 0 && missingAssets === 0, ready: `已完成 · ${mediaAssets.length} 个`, missing: "生产线内匹配", page: "assets", action: "补素材", critical: false },
       { id: "bgm", label: "BGM", ok: hasValue(project.bgm), ready: "已选择", missing: "可不选", page: "assets", action: "选择 BGM", critical: false },
       { id: "template", label: "剪映模板", ok: !["jianying", "jianying_template"].includes(project.outputMode) || templateAssets.length > 0, ready: ["jianying", "jianying_template"].includes(project.outputMode) ? "已选择" : "当前路线不需要", missing: "未选择", page: "video-output", action: "选择模板", critical: ["jianying", "jianying_template"].includes(project.outputMode) },
       { id: "output", label: "输出目录", ok: outputReady, ready: "正常", missing: "异常", page: "settings", action: "检查目录", critical: true },

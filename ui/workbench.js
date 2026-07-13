@@ -32,12 +32,12 @@ const workbenchPages = {
     description: "管理预设音色、克隆音色和默认声音。",
   },
   director: {
-    title: "AI导演",
-    description: "从文案生成专业分镜、字幕时间轴和导演稿。",
+    title: "视频成片",
+    description: "导演、分镜和字幕规划只在各条生产线内部执行。",
   },
   vfo: {
     title: "视频成片",
-    description: "检查文案、语音、导演稿、素材和 BGM 后生成成片草稿。",
+    description: "检查文案、语音、素材和 BGM 后生成成片草稿。",
   },
   "video-output": {
     title: "视频成片",
@@ -180,7 +180,7 @@ function projectStatusLabel(status) {
     transcribed: "文案已提取",
     rewritten: "改写已选择",
     voiced: "配音已完成",
-    directed: "导演稿已完成",
+    directed: "生产线已规划",
     assets_ready: "素材已就绪",
     draft_ready: "成片草稿已就绪",
     exported: "已导出",
@@ -1195,12 +1195,6 @@ function renderRail(tasks, directors, vfoProjects, audioJobs, videoProducts = []
         title: job.voice_name || job.voice_id || `TTS #${job.id}`,
         time: job.completed_at || job.created_at,
         page: "tts",
-      })),
-      ...directors.filter((item) => item.status === "completed").slice(0, 2).map((item) => ({
-        type: "导演稿",
-        title: item.title,
-        time: item.updated_at,
-        page: "director",
       })),
       ...vfoProjects.filter((item) => item.status === "completed").slice(0, 2).map((item) => ({
         type: "渲染计划",
