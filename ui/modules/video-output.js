@@ -749,14 +749,9 @@ async function autoRunWorkflowFromCurrentProject() {
       ttsText.value = text;
       ttsText.dispatchEvent(new Event("input", { bubbles: true }));
     }
-    if (status) status.textContent = "已把当前文案送入 TTS，点击或等待默认语音生成后会自动进入导演稿。";
+    if (status) status.textContent = "已把当前文案送入 TTS，语音完成后可直接进入生产线。";
     window.appNavigate?.("tts");
     document.querySelector("#generateTts")?.click();
-    return null;
-  }
-  if (!project.directorScript?.id) {
-    if (status) status.textContent = "语音已有，但导演稿还未完成；请稍等后刷新，或在 AI 导演页手动生成。";
-    window.appNavigate?.("director");
     return null;
   }
   if (!state.preview) await previewVideoProductTimeline();
@@ -831,7 +826,7 @@ function simplifyVideoOutputActions() {
   const generateButton = document.querySelector("#generateVideoProduct");
   if (generateButton) {
     generateButton.textContent = "一键导入剪映草稿";
-    generateButton.title = "自动绑定导演稿、语音和镜头素材，生成剪映草稿并尝试打开剪映。";
+    generateButton.title = "自动绑定语音、生产线分镜和镜头素材，生成剪映草稿并尝试打开剪映。";
   }
   ["autoBindTimeline", "autoRunWorkflow"].forEach((id) => {
     const button = document.querySelector(`#${id}`);
@@ -934,7 +929,7 @@ function bindEvents() {
     state.preview = null;
     previewVideoProductTimeline().catch(() => {});
   });
-  ["videoProductDirector", "videoProductAudio", "videoProductImageSource", "videoProductOutputType", "videoProductBgmStrategy", "videoProductBgm", "videoProductRouteAStyle", "videoProductRouteACustomStyle"].forEach((id) => {
+  ["videoProductAudio", "videoProductImageSource", "videoProductOutputType", "videoProductBgmStrategy", "videoProductBgm", "videoProductRouteAStyle", "videoProductRouteACustomStyle"].forEach((id) => {
     document.querySelector(`#${id}`)?.addEventListener("change", () => {
       if (id === "videoProductBgmStrategy" && document.querySelector("#videoProductBgmStrategy")?.value !== "manual") {
         const bgmSelect = document.querySelector("#videoProductBgm");
@@ -944,11 +939,10 @@ function bindEvents() {
         const strategySelect = document.querySelector("#videoProductBgmStrategy");
         if (strategySelect) strategySelect.value = "manual";
       }
-      if (id === "videoProductDirector" || id === "videoProductAudio") {
+      if (id === "videoProductAudio") {
         state.manualBindings = {};
       }
       state.preview = null;
-      if (id === "videoProductDirector") renderJianyingTemplateOptions();
       updateGenerateAvailability();
       previewVideoProductTimeline().catch(() => {});
     });
