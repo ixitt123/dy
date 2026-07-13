@@ -3222,6 +3222,7 @@ function renderTtsRail(job = activeTtsRailJob) {
   activeTtsRailJob = job;
   const progress = Math.max(0, Math.min(100, ttsProgressValue(job)));
   const textPreview = String(job.text || ttsText?.value || "").trim().slice(0, 72);
+  const title = ttsJobTitle(job);
   const isMusicJob = job.source === "minimax_music" || String(job.voice_id || "").startsWith("music:");
   const mediaLabel = isMusicJob ? "音乐音频" : "TTS 语音";
   const outputLink = job.audio_url
@@ -3229,7 +3230,7 @@ function renderTtsRail(job = activeTtsRailJob) {
     : "<span>完成后显示音频文件。</span>";
   railCurrentTask.innerHTML = `
     <div class="rail-video-product-card rail-tts-card">
-      <strong>#${job.id || "-"} ${mediaLabel}生成</strong>
+      <strong>#${job.id || "-"} ${escapeHtml(title || `${mediaLabel}生成`)}</strong>
       <small>当前步骤：${escapeHtml(job.status === "completed" ? `${mediaLabel}已生成，可以试听` : job.status === "failed" ? `${mediaLabel}生成失败` : job.status === "processing" ? "正在生成音频" : "任务已进入队列")}</small>
       <div class="rail-progress"><i style="width:${progress}%"></i></div>
       <div class="rail-task-summary">
@@ -3261,7 +3262,7 @@ function renderTtsRailLists(jobs = []) {
       railRecentOutput.innerHTML = completed.map((job) => `
         <button class="rail-list-item" type="button" data-nav="tts">
           <span>#${job.id} TTS 语音 · ${escapeHtml(job.voice_name || job.voice_id || job.provider || "")}</span>
-          <strong>${escapeHtml(String(job.text || "").slice(0, 48) || "语音已生成")}</strong>
+          <strong>${escapeHtml(ttsJobTitle(job) || "语音已生成")}</strong>
         </button>
       `).join("");
     }
@@ -3496,7 +3497,7 @@ function confirmedTtsAudioPayload(job = activeTtsRailJob) {
     timed_subtitle_path: timedSubtitlePath,
     timestamped_text_url: job.timestamped_text_url || timedSubtitleUrl,
     timestamped_text_path: job.timestamped_text_path || timedSubtitlePath,
-    subtitle_timeline: Array.isArray(job.subtitle_timeline) ? job.subtitle_timeline : [],
+    subtitle_timeline: Array.isArray(job.subtitle_timeline) ? job.subtitle_timeline : Array.isArray(job.metadata?.subtitle_timeline) ? job.metadata.subtitle_timeline : [],
     provider: job.provider || ttsProvider?.value || "",
     voice_id: job.voice_id || "",
     voice_name: job.voice_name || "",
@@ -3717,7 +3718,7 @@ async function clearTtsJobs(scope = "all") {
 function showTtsPreview(job) {
   ttsPreview.hidden = false;
   const isMusicJob = job.source === "minimax_music" || String(job.voice_id || "").startsWith("music:");
-  ttsPreviewTitle.textContent = `${isMusicJob ? "音频" : "语音"} #${job.id}`;
+  ttsPreviewTitle.textContent = ttsJobTitle(job) || `${isMusicJob ? "音频" : "语音"} #${job.id}`;
   ttsPreviewMeta.textContent = isMusicJob
     ? `${job.voice_name || job.voice_id || "MiniMax Music"} · ${String(job.format || "").toUpperCase()}`
     : `${job.voice_name || job.voice_id || "音色"} · ${job.speed}x · ${String(job.format || "").toUpperCase()}`;

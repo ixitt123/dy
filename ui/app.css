@@ -6178,6 +6178,7 @@ body[data-active-module="video-output"] .floating-workflow-guide [data-nav="vide
 }
 
 .tts-history-title .tts-history-title-text {
+  min-width: 0;
   color: #f3f6fb;
   overflow: hidden;
   font-weight: 800;
