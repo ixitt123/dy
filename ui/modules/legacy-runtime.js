@@ -3521,15 +3521,7 @@ async function applyTtsToXiaohei(payload = {}) {
     sentAt: new Date().toISOString(),
   };
   localStorage.setItem("video-factory-xiaohei-handoff", JSON.stringify(handoff));
-  if (typeof window.videoFactorySendToXiaohei === "function") {
-    try {
-      window.videoFactorySendToXiaohei(job, project || undefined);
-    } catch {
-      document.querySelector("#xiaoheiProductionFrame")?.contentWindow?.postMessage({ type: "video-factory:xiaohei-handoff", handoff }, window.location.origin);
-    }
-  } else {
-    document.querySelector("#xiaoheiProductionFrame")?.contentWindow?.postMessage({ type: "video-factory:xiaohei-handoff", handoff }, window.location.origin);
-  }
+  document.querySelector("#xiaoheiProductionFrame")?.contentWindow?.postMessage({ type: "video-factory:xiaohei-handoff", handoff }, window.location.origin);
   const status = document.querySelector("#xiaoheiHandoffStatus");
   if (status) status.textContent = `已接收音频 #${payload.display_number || payload.id || "-"}：${handoff.title}`;
 }
