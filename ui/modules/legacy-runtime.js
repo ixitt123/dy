@@ -4529,7 +4529,7 @@ function renderDirectorRail(project = activeDirectorRailProject) {
         <div class="video-product-output-files">${directorOutputLinks(project)}</div>
       </div>
       <div class="rail-task-actions">
-        <button type="button" data-nav="video-output">查看成片</button>
+        <button type="button" data-nav="tts">生成语音</button>
       </div>
     </div>
   `;
@@ -4545,7 +4545,7 @@ function renderDirectorRailLists(projects = directorProjectsState) {
     const completed = rows.filter((project) => project.status === "completed").slice(0, 5);
     if (completed.length) {
       railRecentOutput.innerHTML = completed.map((project) => `
-        <button class="rail-list-item" type="button" data-nav="video-output">
+        <button class="rail-list-item" type="button" data-nav="tts">
           <span>#${project.id} 分镜规划 · ${escapeHtml(project.platform || "")}</span>
           <strong>${escapeHtml(project.title || "分镜已完成")}</strong>
         </button>
@@ -4556,7 +4556,7 @@ function renderDirectorRailLists(projects = directorProjectsState) {
     const failed = rows.filter((project) => project.status === "failed").slice(0, 4);
     if (failed.length) {
       railErrors.innerHTML = failed.map((project) => `
-        <button class="rail-list-item error-item" type="button" data-nav="video-output">
+        <button class="rail-list-item error-item" type="button" data-nav="tts">
           <span>#${project.id} 分镜规划失败</span>
           <strong>${escapeHtml(project.metadata?.error || project.error || "未知错误")}</strong>
         </button>
@@ -7035,10 +7035,6 @@ document.querySelector("#exportDirectorChatGptPrompts")?.addEventListener("click
 
 document.querySelector("#sendDirectorToVfo").addEventListener("click", () => {
   sendDirectorProjectToVfo();
-});
-
-document.querySelector("#sendDirectorToVideoProduct")?.addEventListener("click", () => {
-  sendDirectorProjectToVideoProduct();
 });
 
 document.querySelector("#sendDirectorToImage").addEventListener("click", () => {
