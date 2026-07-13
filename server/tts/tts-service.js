@@ -404,7 +404,11 @@ export function createTtsService({ baseDir, taskStore, getSettings, ffmpegPath, 
 
   function publicJob(job) {
     if (!job) return null;
-    const metadata = safeJson(job.metadata_json, {});
+    const rawMetadata = safeJson(job.metadata_json, {});
+    const fallbackTitleMetadata = rawMetadata.title || rawMetadata.seo_title || rawMetadata.publish_title
+      ? {}
+      : ttsTitleMetadata(job.text, rawMetadata);
+    const metadata = { ...fallbackTitleMetadata, ...rawMetadata };
     const platformTitles = metadata.platform_titles || metadata.platformTitles || {};
     const seoKeywords = Array.isArray(metadata.seo_keywords) ? metadata.seo_keywords : Array.isArray(metadata.seoKeywords) ? metadata.seoKeywords : [];
     const hashtags = Array.isArray(metadata.hashtags) ? metadata.hashtags : [];

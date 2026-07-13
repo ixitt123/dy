@@ -58,6 +58,17 @@ function pickTitleCore(text = "", keywords = [], fallbackTitle = "") {
   return clipChineseTitle(scored[0]?.item || sentenceStart(text));
 }
 
+function intentTitle(text = "", leadKeyword = "短视频") {
+  const value = compactText(text);
+  const keyword = leadKeyword || "短视频";
+  if (/(报名|交钱|买了|买课|课程)/.test(value) && /(家长|孩子)/.test(value)) return `${keyword}报名后家长别只交钱`;
+  if (/(坚持|每周|固定时间|陪孩子)/.test(value) && /(学习|英语|孩子|效果)/.test(value)) return `${keyword}学习效果靠长期坚持`;
+  if (/(招生|咨询|转化|成交|私域)/.test(value)) return `${keyword}转化先抓真实痛点`;
+  if (/(AI|视频|剪映|成片|生产线)/i.test(value)) return `${keyword}视频流程别再乱做`;
+  if (/(避坑|踩坑|误区|错误)/.test(value)) return `${keyword}避坑先看这几点`;
+  return "";
+}
+
 function titleClip(value, maxLength = 28) {
   return clipChineseTitle(value, 8, maxLength);
 }
@@ -99,11 +110,17 @@ export function generatePlatformTitles({ transcriptText = "", videoType = "", fa
   const text = compactText(transcriptText);
   const keywords = keywordCandidates(`${videoType} ${text}`);
   const leadKeyword = keywords[0] || "短视频";
-  const baseCore = pickTitleCore(text, keywords, fallbackTitle);
+  const baseCore = String(fallbackTitle || "").trim()
+    ? pickTitleCore(text, keywords, fallbackTitle)
+    : intentTitle(text, leadKeyword) || pickTitleCore(text, keywords, fallbackTitle);
   const base = baseCore.includes(leadKeyword) ? baseCore : titleClip(`${leadKeyword}：${baseCore}`, 28);
   const douyinTitle = titleClip(base, 28);
-  const xiaohongshuTitle = titleClip(`${leadKeyword}经验：${baseCore}`, 30);
-  const shipinhaoTitle = titleClip(`${leadKeyword}内容分享：${baseCore}`, 32);
+  const xiaohongshuTitle = baseCore.includes(leadKeyword)
+    ? titleClip(`${baseCore}，真实经验`, 30)
+    : titleClip(`${leadKeyword}经验：${baseCore}`, 30);
+  const shipinhaoTitle = baseCore.includes(leadKeyword)
+    ? titleClip(`${baseCore}，内容分享`, 32)
+    : titleClip(`${leadKeyword}内容分享：${baseCore}`, 32);
   const bilibiliTitle = titleClip(`${baseCore}｜${leadKeyword}实用方法`, 36);
   const hashtags = keywords.slice(0, 5).map((item) => `#${item.replace(/^#/, "")}`);
   const projectTitle = `${safeFileName(douyinTitle || xiaohongshuTitle)}_${dateStamp()}`;
