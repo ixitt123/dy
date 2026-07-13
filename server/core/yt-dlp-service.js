@@ -284,10 +284,17 @@ function createYtDlpService({
   baseDir,
   downloadsDir,
   getDownloadsDir,
+  getTypedDownloadsDir,
   ffmpegPath,
   ffprobePath,
 }) {
-  const outputDir = () => String(typeof getDownloadsDir === "function" ? getDownloadsDir() : downloadsDir);
+  const outputDir = (type = "other") => String(
+    typeof getTypedDownloadsDir === "function"
+      ? getTypedDownloadsDir(type)
+      : typeof getDownloadsDir === "function"
+        ? getDownloadsDir()
+        : downloadsDir
+  );
 
   async function binary() {
     return ensureYtDlpBinary(baseDir);
@@ -318,7 +325,7 @@ function createYtDlpService({
 
   async function download(url, { signal, onProgress = () => {} } = {}) {
     const bin = await binary();
-    const targetDir = ensureDir(outputDir());
+    const targetDir = ensureDir(outputDir("video"));
     const printed = [];
     const startedAt = Date.now();
     const baseArgs = [
@@ -409,7 +416,7 @@ function createYtDlpService({
     const safeFormat = AUDIO_FORMATS.has(String(format || "").toLowerCase()) ? String(format).toLowerCase() : "mp3";
     if (!ffmpegPath) throw new Error("未找到 ffmpeg，无法提取音频");
     if (!fileExists(mediaPath)) throw new Error("没有找到可提取音频的视频文件");
-    const targetDir = ensureDir(outputDir());
+    const targetDir = ensureDir(outputDir("audio"));
     const base = safeBaseName(path.basename(mediaPath, path.extname(mediaPath)));
     const outputPath = path.join(targetDir, `${base}_audio.${safeFormat}`);
     const argsByFormat = {
@@ -428,7 +435,7 @@ function createYtDlpService({
     const srt = textToApproximateSrt(text, duration);
     if (!srt) return "";
     const target = outputPath || path.join(
-      ensureDir(outputDir()),
+      ensureDir(outputDir("subtitle")),
       `${safeBaseName(path.basename(mediaPath || "transcript", path.extname(mediaPath || "")))}_校正文案.srt`,
     );
     fs.writeFileSync(target, srt, "utf8");

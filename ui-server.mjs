@@ -106,6 +106,7 @@ const ytDlpService = createYtDlpService({
   baseDir: __dirname,
   downloadsDir,
   getDownloadsDir: () => downloadsDir,
+  getTypedDownloadsDir: (type) => downloadOutputDir(type),
   ffmpegPath,
   ffprobePath,
 });
@@ -2476,7 +2477,7 @@ function extractTranscriptText(resultJson) {
 
 function saveTranscript(videoInfo, transcriptText) {
   const title = videoInfo.title || videoInfo.videoId || `douyin_${Date.now()}`;
-  const filePath = makeUniquePath(`${title}_文案`, ".txt");
+  const filePath = makeUniquePath(`${title}_文案`, ".txt", "transcript");
   fs.writeFileSync(filePath, `${transcriptText}\n`, "utf8");
   return filePath;
 }
@@ -2522,7 +2523,7 @@ async function downloadVideoFile(videoInfo, onProgress = () => {}, signal) {
   }
 
   const baseName = `${videoInfo.title || videoInfo.videoId || "douyin"}_${videoInfo.videoId || Date.now()}`;
-  const filePath = makeUniquePath(baseName, ".mp4");
+  const filePath = makeUniquePath(baseName, ".mp4", "video");
   const partialPath = `${filePath}.download`;
   const response = await fetch(videoInfo.downloadUrl, {
     headers: {
@@ -3721,7 +3722,7 @@ async function rewriteTranscriptWithProvider({ providerId, transcriptText, analy
 
 function saveAnalysis(videoInfo, analysis) {
   const title = videoInfo.title || videoInfo.videoId || `douyin_${Date.now()}`;
-  const filePath = makeUniquePath(`${title}_AI分析`, ".txt");
+  const filePath = makeUniquePath(`${title}_AI分析`, ".txt", "analysis");
   const body = [
     `爆款钩子：${analysis.hook}`,
     `情绪点：${analysis.emotionPoints.join("；")}`,
