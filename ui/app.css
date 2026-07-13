@@ -7333,6 +7333,10 @@ audio {
   color: #ff7b86;
 }
 
+.moments-progress {
+  margin-top: 12px;
+}
+
 @media (max-width: 1040px) {
   .moments-workbench {
     grid-template-columns: 1fr;

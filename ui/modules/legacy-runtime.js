@@ -250,6 +250,10 @@ const momentsTone = document.querySelector("#momentsTone");
 const momentsIntent = document.querySelector("#momentsIntent");
 const momentsReferenceStyle = document.querySelector("#momentsReferenceStyle");
 const generateMomentsPostBtn = document.querySelector("#generateMomentsPost");
+const momentsProgress = document.querySelector("#momentsProgress");
+const momentsProgressLabel = document.querySelector("#momentsProgressLabel");
+const momentsProgressPercent = document.querySelector("#momentsProgressPercent");
+const momentsProgressBar = document.querySelector("#momentsProgressBar");
 const copyMomentsPromptsBtn = document.querySelector("#copyMomentsPrompts");
 const generateMomentsImagesBtn = document.querySelector("#generateMomentsImages");
 const publishMomentsWechatBtn = document.querySelector("#publishMomentsWechat");
@@ -289,6 +293,7 @@ let currentPage = 1;
 let currentTaskPage = 1;
 let tasksPollTimer = 0;
 let rewriteProgressTimer = 0;
+let momentsProgressTimer = 0;
 let lastFinishedTaskCount = 0;
 let activeResultAction = "";
 let activeResultTaskIds = new Set();
@@ -1535,6 +1540,43 @@ function setMomentsStatus(message, type = "") {
   momentsCopyStatus.dataset.status = type;
 }
 
+function setMomentsProgress(percent, label) {
+  if (!momentsProgress || !momentsProgressLabel || !momentsProgressPercent || !momentsProgressBar) return;
+  const value = Math.max(0, Math.min(100, Math.round(Number(percent) || 0)));
+  momentsProgress.hidden = false;
+  momentsProgressLabel.textContent = label || "正在生成";
+  momentsProgressPercent.textContent = `${value}%`;
+  momentsProgressBar.style.width = `${value}%`;
+}
+
+function stopMomentsProgress(label = "", percent = 100) {
+  if (momentsProgressTimer) {
+    clearInterval(momentsProgressTimer);
+    momentsProgressTimer = 0;
+  }
+  if (label) setMomentsProgress(percent, label);
+}
+
+function startMomentsProgress() {
+  if (momentsProgressTimer) clearInterval(momentsProgressTimer);
+  const startedAt = Date.now();
+  const stages = [
+    [0, 6, "正在提交生成任务"],
+    [900, 18, "正在生成朋友圈文案"],
+    [2800, 38, "正在加入引用素材和金句"],
+    [5200, 58, "正在做反差和落差质检"],
+    [8200, 76, "正在生成图片提示词"],
+    [12000, 88, "正在整理结果"],
+  ];
+  setMomentsProgress(3, stages[0][2]);
+  momentsProgressTimer = setInterval(() => {
+    const elapsed = Date.now() - startedAt;
+    const current = [...stages].reverse().find(([time]) => elapsed >= time) || stages[0];
+    const drift = Math.min(4, Math.floor(elapsed / 7000));
+    setMomentsProgress(Math.min(92, current[1] + drift), current[2]);
+  }, 700);
+}
+
 function setMomentsPersonaStatus(message) {
   if (momentsPersonaStatus) momentsPersonaStatus.textContent = message;
 }
@@ -1812,13 +1854,16 @@ async function generateMomentsPost() {
   const payload = collectMomentsPayload();
   if (!payload.text) {
     setMomentsStatus("请先填写朋友圈文案输入区。", "warning");
+    stopMomentsProgress();
     return;
   }
   if (!payload.persona) {
     setMomentsStatus("请先选择或填写人设。", "warning");
+    stopMomentsProgress();
     return;
   }
   setMomentsStatus("正在生成朋友圈文案和配图提示词...");
+  startMomentsProgress();
   if (generateMomentsPostBtn) generateMomentsPostBtn.disabled = true;
   try {
     const data = await fetchJson("/api/moments/generate", {
@@ -1830,8 +1875,10 @@ async function generateMomentsPost() {
     if (momentsPostOutput) momentsPostOutput.value = currentMomentsResult.post || "";
     renderMomentsResult(currentMomentsResult);
     saveMomentsDraft();
+    stopMomentsProgress("朋友圈文案和图片提示词生成完成", 100);
     setMomentsStatus(`已生成：${currentMomentsResult.image_count || currentMomentsResult.images?.length || 0} 张配图提示词，可继续修改。`, "success");
   } catch (error) {
+    stopMomentsProgress("生成失败", 100);
     setMomentsStatus(error instanceof Error ? error.message : String(error), "error");
   } finally {
     if (generateMomentsPostBtn) generateMomentsPostBtn.disabled = false;
