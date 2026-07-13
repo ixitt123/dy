@@ -127,28 +127,33 @@ flowchart TD
 - 用 `server/core/workflow-state.js` 和 PipelineBus 统一状态。
 - 后续把首页状态从零散 DOM 更新收束为统一 `GET /api/workflow/status`。
 
-### 5.2 文案提取模块
+### 5.2 视频下载 / 文案提取模块
 
-目标：支持多平台输入，但第一阶段抖音优先。
+目标：把原“抖音下载”升级为基于 `yt-dlp` 的多平台链接处理器，同时确保抖音仍然优先走原专用逻辑。
 
 核心能力：
 
-- 基于现有 adapter 体系统一平台输入。
-- 第一阶段支持抖音链接解析、视频下载、音频提取、文案提取。
-- 长期支持小红书、B 站、YouTube、网页、本地视频、PDF。
-- 功能选择：下载视频、提取文案、提取音频。
-- 文案格式选择：纯文本、带时间戳、分段文案、字幕格式。
-- 音频格式选择：默认 mp3，后续扩展 wav/m4a。
+- 任意 `yt-dlp` 可识别的视频链接都先允许入队处理。
+- 抖音链接必须优先走原来的抖音专用解析/下载；失败时再用 `yt-dlp` 兜底。
+- 默认动作是“下载视频”；下载时可勾选“提取并校正文案”和“提取音频”。
+- 音频格式默认 `mp3`，页面允许切换 `mp3`、`wav`、`m4a`。
+- 文案识别优先级：平台自带字幕 → 本地音频 ASR。
+- 所有识别后的文案必须自动校正后保存，只保存最终校正文案。
+- 文案校正直接复用当前 AI 改写/模型路由的默认文本模型。
+- 文案校正规则采用高热度 `copy-editing` skill 的“不改核心信息、清晰度、语气一致、多轮自检”原则，并叠加短视频 ASR 清洗规则。
+- 字幕时间轴默认保存为 `srt`，用于后续精准加效果、字幕动画和剪映草稿。
+- 本地视频同样支持提取并校正文案、提取音频、保存字幕文件。
 - 提取后支持文案预览、一键复制、一键发送到改写模块。
 - 支持打开下载资源目录。
 
 技术落点：
 
-- 复用 `server/core/adapters/douyin-adapter.js` 等 adapter。
+- 新增 `server/core/yt-dlp-service.js`，项目运行时自动下载 `yt-dlp` 到 `.data/bin`，不要求用户手动安装。
+- 任务中心新增并维护 `audio_path`、`subtitle_path`、`audio_enabled`、`audio_format`。
+- 复用 `server/core/adapters/douyin-adapter.js` 等 adapter，抖音专用能力保留为最高优先级。
 - 复用 `ui/modules/transcript.js` 和 `ui/modules/legacy-runtime.js` 中已有入口。
 - 提取结果统一写入任务中心和 copybank。
-- 后续接入 yt-dlp 时，不直接写在前端，封装为 `server/core/adapters/generic-url-adapter.js`
-  或独立 downloader service。
+- `yt-dlp` 不直接写在前端，所有解析、下载、字幕和音频提取都由后端服务执行。
 
 ### 5.3 文案改写模块
 
