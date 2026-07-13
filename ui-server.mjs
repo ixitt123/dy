@@ -3633,8 +3633,8 @@ async function repairRewriteWordCounts(provider, versions, specs, signal) {
 
 async function rewriteTranscriptWithProvider({ providerId, transcriptText, analysis, direction, style, referenceStyle, params = {}, humanizeLevel: requestedHumanizeLevel = "", referenceExamples: inputReferenceExamples = [], versionSpecs: inputVersionSpecs = [], revisionInstruction = "", task, signal }) {
   const provider = await getRewriteProvider(providerId);
-  const safeDirection = REWRITE_DIRECTIONS.includes(direction) ? direction : "招生引流";
-  const safeStyle = REWRITE_STYLES.includes(style) ? style : "老板风格";
+  const safeDirection = REWRITE_DIRECTIONS.includes(direction) ? direction : "短视频口播";
+  const safeStyle = REWRITE_STYLES.includes(style) ? style : "小黑漫画解释类";
   const safeReference = String(referenceStyle || DEFAULT_REWRITE_REFERENCE).trim() || DEFAULT_REWRITE_REFERENCE;
   const safeParams = params && typeof params === "object" ? params : {};
   const versionSpecs = normalizeVersionSpecs(inputVersionSpecs, safeDirection);
@@ -3682,7 +3682,8 @@ async function rewriteTranscriptWithProvider({ providerId, transcriptText, analy
       {
         role: "system",
         content: [
-          "你是本地招生文案改写实验室的 rewrite pipeline 执行器。",
+          "你是本地短视频文案定制改写 pipeline 执行器。",
+          "你的第一优先级是忠于原文主题和事实，不允许把原文改成无关行业或无关故事。",
           "必须遵守注入的 Skill 和 Prompt 模板。",
           "只输出 JSON，不要 Markdown，不要解释。",
         ].join("\n"),
