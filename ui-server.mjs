@@ -3199,7 +3199,7 @@ function normalizeWordCount(input, fallback = "160字左右") {
   return value ? value.slice(0, 32) : fallback;
 }
 
-function normalizeVersionSpecs(input = [], fallbackDirection = "招生引流") {
+function normalizeVersionSpecs(input = [], fallbackDirection = "保留原意优化") {
   const defs = new Map(REWRITE_VERSION_DEFS.map(([key, name]) => [key, { key, name }]));
   const rows = Array.isArray(input) && input.length > 0
     ? input
@@ -3241,7 +3241,7 @@ function readVersionValue(source, spec) {
 
 function normalizeRewrite(raw, meta = {}) {
   const source = raw && typeof raw === "object" ? raw : {};
-  const versionSpecs = normalizeVersionSpecs(meta.versionSpecs, meta.direction || "招生引流");
+  const versionSpecs = normalizeVersionSpecs(meta.versionSpecs, meta.direction || "保留原意优化");
   const versions = versionSpecs.map((spec) => {
     const value = readVersionValue(source, spec);
       return {
@@ -3258,7 +3258,7 @@ function normalizeRewrite(raw, meta = {}) {
   return {
     provider: meta.provider || "",
     model: meta.model || "",
-    direction: meta.direction || "招生引流",
+    direction: meta.direction || "保留原意优化",
     style: meta.style || "痞里带刺",
     referenceStyle: meta.referenceStyle || DEFAULT_REWRITE_REFERENCE,
     params: meta.params || {},
@@ -3274,7 +3274,7 @@ function normalizeRewrite(raw, meta = {}) {
 function rewriteFromBody(body = {}, task = {}) {
   const versionsInput = Array.isArray(body.versions) ? body.versions : [];
   const params = body.params && typeof body.params === "object" ? body.params : safeJsonParse(task.rewrite_params_json);
-  const versionSpecs = normalizeVersionSpecs(versionsInput, body.direction || task.rewrite_direction || "招生引流");
+  const versionSpecs = normalizeVersionSpecs(versionsInput, body.direction || task.rewrite_direction || "保留原意优化");
   return normalizeRewrite({
     versions: Object.fromEntries(
       versionsInput.map((item) => [
@@ -3285,7 +3285,7 @@ function rewriteFromBody(body = {}, task = {}) {
   }, {
     provider: body.provider || task.rewrite_model || "",
     model: body.model || task.rewrite_model || "",
-    direction: body.direction || task.rewrite_direction || "招生引流",
+    direction: body.direction || task.rewrite_direction || "保留原意优化",
     style: body.style || task.rewrite_style || "痞里带刺",
     referenceStyle: body.referenceStyle || DEFAULT_REWRITE_REFERENCE,
     params,

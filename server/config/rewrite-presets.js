@@ -3,7 +3,7 @@ export const REWRITE_DIRECTIONS = ["保留原意优化", "短视频口播", "短
 export const REWRITE_STYLES = ["保留原意强化表达", "小黑漫画解释类", "爆款口播重构", "知识拆解型", "痛点共鸣型", "转化引导型", "朋友圈叙事型", "成片旁白型", "老板风格", "痞里带刺", "接地气", "强冲突", "强转化"];
 export const REWRITE_VERSION_DEFS = [
   ["strongHook", "强钩子版"],
-  ["parentAnxiety", "家长焦虑版"],
+  ["parentAnxiety", "共鸣解释版"],
   ["shortVideoScript", "短视频口播版"],
   ["moments", "朋友圈版"],
   ["conversion", "成交转化版"],

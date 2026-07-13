@@ -886,7 +886,7 @@ function renderRewriteVersions(rewrite = {}, { allowDefaults = true } = {}) {
         <div class="rewrite-revision-box">
           <label>
             修改建议
-            <textarea class="rewrite-version-suggestion" rows="2" placeholder="例如：开头更强烈、增加家长焦虑、语气更口语、结尾加强行动号召">${escapeHtml(version.revisionInstruction || "")}</textarea>
+            <textarea class="rewrite-version-suggestion" rows="2" placeholder="例如：开头更强烈、解释更清楚、语气更口语、结尾加强行动号召">${escapeHtml(version.revisionInstruction || "")}</textarea>
           </label>
           <button class="ghost small rewrite-revise-one" type="button" data-version-key="${escapeHtml(version.key)}">按建议二次改写</button>
         </div>
