@@ -1015,29 +1015,26 @@ async function ensureProviderConfigured(providerId, { title = "API 配置", reas
   const id = String(providerId || "").trim();
   if (!id) return false;
   while (true) {
+    const localCheck = await fetchJson("/api/settings/require-provider", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ id, setDefault: true, ...(model ? { model } : {}), ...(baseUrl ? { baseUrl } : {}) }),
+    }).catch((error) => ({ ok: false, message: error instanceof Error ? error.message : String(error) }));
+    if (localCheck.ok) {
+      await loadSettings().catch(() => {});
+      return true;
+    }
+
     const settings = await fetchJson("/api/settings");
     const rewriteProvider = settings.rewrite?.providers?.[id];
     const ttsProviderConfig = Array.isArray(settings.tts?.providers)
       ? settings.tts.providers.find((provider) => provider.id === id)
       : null;
-    const configured = rewriteProvider?.apiKeyConfigured || ttsProviderConfig?.configured;
-    if (configured) {
-      const check = await fetchJson("/api/settings/require-provider", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ id, setDefault: true }),
-      }).catch((error) => ({ ok: false, message: error instanceof Error ? error.message : String(error) }));
-      if (check.ok) {
-        await loadSettings().catch(() => {});
-        return true;
-      }
-      window.alert(`当前已保存的 ${rewriteProvider?.label || ttsProviderConfig?.label || id} 不可用：${check.message || "检测失败"}，请重新填写。`);
-    }
-
     const label = rewriteProvider?.label || ttsProviderConfig?.label || id;
     const apiKey = window.prompt([
       `${title}需要配置：${label}`,
       reason,
+      `本地项目没有检测到可用配置，或当前配置不可用：${localCheck.message || "检测失败"}`,
       "请输入 API Key，点击确定后会先检测，检测通过才保存并继续。",
     ].filter(Boolean).join("\n\n"));
     if (!apiKey || !apiKey.trim()) {
