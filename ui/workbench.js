@@ -1,7 +1,7 @@
 const workbenchPages = {
   dashboard: {
     title: "首页",
-    description: "管理短视频项目、当前进度和下一步制作动作。",
+    description: "了解软件能力、视频生产线和常用入口。",
   },
   collector: {
     title: "视频下载",
