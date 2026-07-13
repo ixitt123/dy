@@ -407,6 +407,76 @@ function writeSettings(settings) {
   fs.writeFileSync(settingsPath, JSON.stringify(normalizeSettings(settings), null, 2), "utf8");
 }
 
+const DEFAULT_MOMENTS_PERSONA = {
+  id: "academic-planner",
+  name: "学业规划老师",
+  description: "从事多年教培行业的规划老师，服务小学到高中学生家庭，也做高考志愿填报和出国留学规划。表达要真实可信，强调正常学习、长期陪伴、能力提升和效果可见，不夸张承诺，不制造焦虑。",
+  updatedAt: "2026-07-13T00:00:00.000Z",
+};
+
+function safePersonaId(value = "") {
+  const cleaned = String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9\u4e00-\u9fa5_-]+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "")
+    .slice(0, 48);
+  return cleaned || `persona-${Date.now().toString(36)}`;
+}
+
+function normalizeMomentsPersona(input = {}) {
+  const name = String(input.name || "").trim().slice(0, 80);
+  const description = String(input.description || input.text || "").trim().slice(0, 3000);
+  if (!name) throw new Error("请填写人设名称。");
+  if (!description) throw new Error("请填写人设说明。");
+  return {
+    id: safePersonaId(input.id || name),
+    name,
+    description,
+    updatedAt: input.updatedAt || new Date().toISOString(),
+  };
+}
+
+function readMomentsPersonas() {
+  try {
+    const parsed = JSON.parse(fs.readFileSync(momentsPersonasPath, "utf8"));
+    const rawPersonas = Array.isArray(parsed?.personas) ? parsed.personas : Array.isArray(parsed) ? parsed : [];
+    const normalized = rawPersonas
+      .map((item) => {
+        try {
+          return normalizeMomentsPersona(item);
+        } catch {
+          return null;
+        }
+      })
+      .filter(Boolean);
+    if (!normalized.some((item) => item.id === DEFAULT_MOMENTS_PERSONA.id)) {
+      normalized.unshift(DEFAULT_MOMENTS_PERSONA);
+    }
+    return normalized;
+  } catch {
+    return [DEFAULT_MOMENTS_PERSONA];
+  }
+}
+
+function writeMomentsPersonas(personas = []) {
+  fs.mkdirSync(personasDir, { recursive: true });
+  const deduped = [];
+  const seen = new Set();
+  for (const persona of personas) {
+    const normalized = normalizeMomentsPersona(persona);
+    if (seen.has(normalized.id)) continue;
+    seen.add(normalized.id);
+    deduped.push(normalized);
+  }
+  if (!deduped.some((item) => item.id === DEFAULT_MOMENTS_PERSONA.id)) {
+    deduped.unshift(DEFAULT_MOMENTS_PERSONA);
+  }
+  fs.writeFileSync(momentsPersonasPath, JSON.stringify({ personas: deduped }, null, 2), "utf8");
+  return deduped;
+}
+
 function saveDownloadsDir(nextDir) {
   const resolved = setDownloadsDir(nextDir);
   const settings = readSettings();
