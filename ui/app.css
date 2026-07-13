@@ -8169,10 +8169,82 @@ audio {
   width: 100%;
 }
 
+.tts-voice-preview-slot {
+  min-height: 34px;
+}
+
+.tts-voice-preview-slot audio {
+  display: block;
+}
+
 .tts-voice-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 7px;
+}
+
+.tts-music-presets {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+  border: 1px solid #303744;
+  border-radius: 8px;
+  padding: 10px;
+  background: #10151d;
+}
+
+.tts-music-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.tts-music-head strong {
+  color: #f2f5f9;
+  font-size: 13px;
+}
+
+.tts-music-head span {
+  color: #8994a6;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.tts-music-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.tts-music-chip {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  min-height: 52px;
+  border: 1px solid #343b49;
+  border-radius: 8px;
+  padding: 7px 9px;
+  color: #dbe2ee;
+  background: #0b1017;
+  text-align: left;
+}
+
+.tts-music-chip strong,
+.tts-music-chip span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tts-music-chip strong {
+  font-size: 12px;
+}
+
+.tts-music-chip span {
+  color: #8994a6;
+  font-size: 11px;
 }
 
 .tts-project-source {

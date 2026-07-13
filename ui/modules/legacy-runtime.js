@@ -7598,6 +7598,7 @@ async function init() {
     savePath.textContent = `下载位置：${status.downloadsDir}`;
     downloadDirInput.value = status.downloadsDir || "";
     await loadSettings();
+    await loadTtsMusicPresets();
     await loadDirectorConfig();
     await loadDirectorSources({ preserveText: true });
     await loadDirectorProjects();
