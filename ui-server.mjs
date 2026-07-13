@@ -3578,6 +3578,9 @@ function normalizeMomentsResult(raw = {}, fallback = {}) {
         index: index + 1,
         title: String(item.title || `配图 ${index + 1}`).trim().slice(0, 80),
         style: normalizeMomentsStyle(item.style || fallback.visualStyle),
+        image_role: String(item.image_role || item.imageRole || "").trim().slice(0, 80),
+        visual_hook: String(item.visual_hook || item.visualHook || "").trim().slice(0, 180),
+        composition_type: String(item.composition_type || item.compositionType || "").trim().slice(0, 80),
         purpose: String(item.purpose || item.source_segment || item.sourceSegment || "").trim().slice(0, 500),
         prompt,
         negative_prompt: String(item.negative_prompt || item.negativePrompt || "").trim(),
@@ -3612,8 +3615,8 @@ async function generateMomentsPostJson(body = {}) {
     : "根据文案内容判断生成 1-3 张配图；短内容 1 张，包含多个转折/案例/方法时 2-3 张。";
   const styleRule = {
     auto: "可以自动选择小黑漫画解释类或真实生活/产品场景类；同一条朋友圈的多张图必须统一主题和视觉方向。",
-    xiaohei: "必须使用小黑漫画解释类：纯白背景、黑色手绘线稿、少量红橙蓝中文手写批注、大量留白，小黑作为核心动作主体。",
-    realistic: "必须使用真实生活/产品场景类：自然真实、像手机拍到的生活/教学/产品场景，不要广告海报感，不要夸张摆拍。",
+    xiaohei: "必须使用小黑漫画解释类：纯白背景、黑色手绘线稿、少量红橙蓝中文手写批注、大量留白，小黑作为核心动作主体；必须有视觉锤，不能只是小黑跑步、日历、路线或口号字。",
+    realistic: "必须使用真实生活/产品场景类：自然真实、像手机拍到的生活/教学/产品场景，不要广告海报感，不要夸张摆拍；必须有鲜明主物件和情绪现场，不要普通资料摆拍。",
   }[visualStyle];
   const momentsCopySkill = [
     "朋友圈文案专业 Skill：",
@@ -3629,12 +3632,16 @@ async function generateMomentsPostJson(body = {}) {
   ].join("\n");
   const imagePromptSkill = [
     "图片提示词专业 Skill：",
-    "1. 每张图必须服务朋友圈正文里的一个认知锚点，不做装饰图。",
-    "2. 先判断这张图要表达：误区、方法、对比、路径、状态，任选一个，不要一张图塞多个概念。",
-    "3. 小黑图要遵守 Ian 小黑正文配图规则：16:9、白底、黑色手绘、小黑承担核心动作、短中文批注、怪诞但清楚、禁止 PPT 和课程课件感。",
-    "4. 真实图要像生活/工作现场，不像广告海报；画面里可以出现书桌、规划表、课堂、沟通场景、学习资料，但不要二维码、Logo、水印和大段文字。",
-    "5. 多图必须统一主题，但每张角度不同：例如一张讲误区，一张讲正确动作，一张讲最终状态。",
-    "6. 提示词必须包含本地素材参考说明；如果没有素材，也要写“无本地素材，按统一主题生成”。",
+    "1. 每张图必须服务朋友圈正文里的一个认知锚点，不做装饰图；必须和朋友圈正文是同一套主题，而不是孤立插图。",
+    "2. 每张图都要有视觉锤：一个读者 1 秒能记住的核心画面。公式：抽象观点 -> 物理问题 -> 低科技怪物件 -> 小黑承担关键动作。",
+    "3. 先判断这张图要表达：误区、方法、对比、路径、状态，任选一个，不要一张图塞多个概念。",
+    "4. 小黑图要遵守 Ian 小黑正文配图规则：16:9、白底、黑色手绘、小黑承担核心动作、短中文批注、怪诞但清楚、禁止 PPT 和课程课件感。",
+    "5. 禁止直译式弱图：不要只画小黑跑步、日历、打卡、普通道路、箭头、清单、奖杯、书本堆、空白大字；不要让中文大字成为画面主体。",
+    "6. 小黑图优先从这些结构里选一个：前后对比、角色状态、概念隐喻、方法分层、小漫画分镜。要写清楚小黑在做什么怪动作，例如称重、修补、搬运、塞进漏斗、守门、拆包、扶梯子、拧阀门。",
+    "7. 真实图要像生活/工作现场，不像广告海报；必须有明确主物件和关系，例如被圈画的规划表、桌面上两套学习路径、家长沟通记录、课堂反馈便签；不要二维码、Logo、水印和大段文字。",
+    "8. 多图必须统一主题但分工不同：1 张时做封面冲击图；2 张时一张讲误区、一张讲正确动作；3 张时依次讲误区、方法、结果状态。",
+    "9. 提示词必须包含：画面主题、视觉锤、结构类型、小黑/真实人物正在做什么、主要物件、最多 3-5 个短中文标注、颜色使用、本地素材参考。",
+    "10. 提示词必须包含本地素材参考说明；如果没有素材，也要写“无本地素材，按统一主题生成”。",
   ].join("\n");
 
   const { data, provider, model } = await generateStructuredJson({
@@ -3703,6 +3710,9 @@ async function generateMomentsPostJson(body = {}) {
               {
                 title: "配图标题",
                 style: "xiaohei 或 realistic",
+                image_role: "封面冲击图 / 误区图 / 方法图 / 结果状态图",
+                visual_hook: "这张图的视觉锤，一句话说明",
+                composition_type: "前后对比 / 角色状态 / 概念隐喻 / 方法分层 / 小漫画分镜 / 真实现场",
                 purpose: "这张图对应原文/成品文案的哪一层意思",
                 prompt: "完整可复制的图片生成提示词，必须包含本地素材说明或无素材说明",
                 negative_prompt: "负面提示词",

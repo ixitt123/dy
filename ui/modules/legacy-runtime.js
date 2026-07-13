@@ -1717,7 +1717,7 @@ function renderMomentsResult(result) {
         <div>
           <span class="section-eyebrow">${escapeHtml(item.style === "realistic" ? "Realistic" : item.style === "xiaohei" ? "Xiaohei" : "Auto")}</span>
           <h3>#${index + 1} ${escapeHtml(item.title || "配图")}</h3>
-          <p>${escapeHtml(item.purpose || "")}</p>
+          <p>${escapeHtml([item.image_role, item.composition_type, item.visual_hook || item.purpose].filter(Boolean).join(" · "))}</p>
         </div>
         <div class="moments-actions compact">
           <button class="ghost small" type="button" data-moments-action="copy-prompt" data-index="${index}">复制</button>
