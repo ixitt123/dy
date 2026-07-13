@@ -4,20 +4,24 @@ const workbenchPages = {
     description: "了解软件能力、视频生产线和常用入口。",
   },
   collector: {
-    title: "视频下载",
-    description: "粘贴链接、创建批量任务并管理下载队列。",
+    title: "采集处理",
+    description: "统一处理链接下载、本地视频、字幕、音频、文案库和批量任务。",
   },
   transcript: {
-    title: "文案提取",
-    description: "查看提取结果，并将文案送入改写。",
+    title: "采集处理",
+    description: "统一处理链接下载、本地视频、字幕、音频、文案库和批量任务。",
   },
   analysis: {
-    title: "AI分析",
-    description: "分析钩子、情绪、痛点、标签和行动号召。",
+    title: "采集处理",
+    description: "查看文案库，并分析钩子、情绪、痛点、标签和行动号召。",
   },
   rewrite: {
-    title: "AI改写",
+    title: "文案定制改写",
     description: "选择视频类型，默认生成 1 个版本，需要时可增加输出框。",
+  },
+  "moments-copy": {
+    title: "朋友圈文案定制",
+    description: "面向朋友圈图文、人设表达和固定风格的文案定制入口。",
   },
   tts: {
     title: "TTS语音",
@@ -32,11 +36,11 @@ const workbenchPages = {
     description: "从文案生成专业分镜、字幕时间轴和导演稿。",
   },
   vfo: {
-    title: "视频成片中心",
+    title: "视频成片",
     description: "检查文案、语音、导演稿、素材和 BGM 后生成成片草稿。",
   },
   "video-output": {
-    title: "视频成片中心",
+    title: "视频成片",
     description: "优先生成剪映模板草稿，也可生成 MP4 预览或兼容素材包。",
   },
   "cs1-video": {
@@ -52,12 +56,12 @@ const workbenchPages = {
     description: "免费素材混剪生产线：启动本地 API，按主题或脚本生成 MP4。",
   },
   files: {
-    title: "素材资产库",
+    title: "素材管理",
     description: "按类型、用途、风格和项目管理成片素材。",
   },
   assets: {
-    title: "素材资产库",
-    description: "统一管理图片、视频、BGM、封面和项目素材。",
+    title: "素材管理",
+    description: "统一管理已下载或生成的视频、音频、字幕和项目素材。",
   },
   settings: {
     title: "系统设置",
@@ -81,16 +85,17 @@ let activeVideoProject = null;
 let projectReadinessState = null;
 let projectAssetsState = [];
 
+const COLLECTOR_TAB_KEY = "short-video-collector-tab";
 const RAIL_TASK_RUNNING_STATUSES = new Set(["下载中", "提取中", "running", "processing"]);
 const RAIL_TASK_FINISHED_STATUSES = new Set(["完成", "失败", "completed", "failed", "success", "error"]);
 const RAIL_VIDEO_PRODUCT_RUNNING_STATUSES = new Set(["pending", "binding_assets", "building_timeline", "rendering", "exporting_draft"]);
 
 const VIDEO_PROJECT_STEPS = [
   ["created", "采集素材", "collector"],
-  ["collected", "提取文案", "transcript"],
-  ["transcribed", "AI 改写", "rewrite"],
+  ["collected", "文案库", "transcript"],
+  ["transcribed", "定制改写", "rewrite"],
   ["rewritten", "TTS 配音", "tts"],
-  ["voiced", "AI 导演", "director"],
+  ["voiced", "生产线分镜", "video-output"],
   ["directed", "素材匹配", "assets"],
   ["assets_ready", "成片草稿", "video-output"],
   ["draft_ready", "打开剪映", "video-output"],
@@ -115,6 +120,35 @@ function addLaneHeading(container, title, description) {
   heading.className = "studio-lane-heading";
   heading.innerHTML = `<strong>${title}</strong><span>${description}</span>`;
   container.prepend(heading);
+}
+
+function activateCollectorTab(tabId = "", options = {}) {
+  const allowed = new Set(["link", "local", "copybank", "batch"]);
+  const stored = localStorage.getItem(COLLECTOR_TAB_KEY) || "link";
+  const target = allowed.has(tabId) ? tabId : stored;
+  const normalized = allowed.has(target) ? target : "link";
+
+  document.querySelectorAll("[data-collector-tab]").forEach((button) => {
+    const active = button.dataset.collectorTab === normalized;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-selected", active ? "true" : "false");
+  });
+  document.querySelectorAll("[data-collector-panel]").forEach((panel) => {
+    const active = panel.dataset.collectorPanel === normalized;
+    panel.classList.toggle("active", active);
+    panel.hidden = !active;
+  });
+
+  if (options.showAnalysis && analysisPanel) analysisPanel.hidden = false;
+  localStorage.setItem(COLLECTOR_TAB_KEY, normalized);
+  return normalized;
+}
+
+function setupCollectorTabs() {
+  document.querySelectorAll("[data-collector-tab]").forEach((button) => {
+    button.addEventListener("click", () => activateCollectorTab(button.dataset.collectorTab || "link"));
+  });
+  activateCollectorTab();
 }
 
 async function projectApi(path, options = {}) {
@@ -834,9 +868,10 @@ function buildWorkbenchInformationArchitecture() {
 }
 
 function navigateWorkbench(pageId, options = {}) {
-  const aliases = { analysis: "transcript", files: "assets", "image-studio": "assets", vfo: "video-output" };
+  const aliases = { analysis: "collector", transcript: "collector", files: "assets", "image-studio": "assets", vfo: "video-output" };
   const normalized = aliases[pageId] || pageId;
   const target = workbenchPages[normalized] ? normalized : "dashboard";
+  const collectorTab = options.collectorTab || ((pageId === "analysis" || pageId === "transcript") ? "copybank" : "");
   activeWorkbenchPage = target;
   document.body.dataset.activeModule = target;
   document.querySelectorAll(".workbench-page").forEach((page) => {
@@ -855,7 +890,7 @@ function navigateWorkbench(pageId, options = {}) {
   if (title) title.textContent = config.title;
   if (description) description.textContent = config.description;
 
-  if ((pageId === "analysis" || target === "transcript") && analysisPanel && pageId === "analysis") analysisPanel.hidden = false;
+  if (target === "collector") activateCollectorTab(collectorTab || (options.focusPrimary ? "link" : ""), { showAnalysis: pageId === "analysis" });
   if (target === "rewrite" && rewritePanel) rewritePanel.hidden = false;
   if (target === "video-output") refreshProjectReadiness().catch(() => {});
   if (target === "assets") refreshProjectAssets().catch(() => {});
@@ -1651,6 +1686,7 @@ function startWorkbenchObservers() {
 
 function initWorkbench() {
   buildWorkbenchInformationArchitecture();
+  setupCollectorTabs();
   bindWorkbenchInteractions();
   startWorkbenchObservers();
 
@@ -2636,5 +2672,6 @@ function setupV2Settings() {
 
 window.workbenchNavigate = navigateWorkbench;
 window.navigateWorkbench = navigateWorkbench;
+window.workbenchOpenCollectorTab = activateCollectorTab;
 window.appNavigate = window.appNavigate || ((pageId, options = {}) => navigateWorkbench(pageId, options));
 initWorkbench();
