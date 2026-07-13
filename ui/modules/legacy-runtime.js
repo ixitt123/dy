@@ -5537,7 +5537,7 @@ function videoProductOutputLabel(outputType) {
 function videoProductCompletedSteps(project = {}) {
   const order = [
     ["pending", "进入 SQLite 队列"],
-    ["binding_assets", "绑定导演稿、音频和素材"],
+    ["binding_assets", "绑定生产线分镜、音频和素材"],
     ["building_timeline", "生成成片草稿"],
     [["jianying_template", "jianying", "package"].includes(project.output_type) ? "exporting_draft" : "rendering", project.output_type === "jianying_template" ? "生成剪映模板草稿" : project.output_type === "jianying" ? "导出历史剪映素材包" : project.output_type === "package" ? "导出素材包" : "渲染 MP4"],
     ["completed", "写入输出文件"],
@@ -5638,9 +5638,9 @@ function renderVideoProductRailLists(projects = videoProductProjectsState) {
 function videoProductPayload() {
   const selectedBgmId = videoProductBgm?.value || "";
   return {
-    source_director_project_id: Number(videoProductDirector.value || 0),
+    source_director_project_id: 0,
     audio_asset_id: Number(videoProductAudio.value || 0),
-    image_source: videoProductImageSource.value || "director",
+    image_source: videoProductImageSource.value || "all",
     output_type: videoProductOutputType.value || "jianying_template",
     jianying_template: videoProductJianyingTemplate?.value || "education_tips",
     route_a_style_id: videoProductRouteAStyle?.value || "black_gold_knowledge",
@@ -5798,25 +5798,17 @@ function updateRouteAOptionsVisibility() {
 }
 
 function renderVideoProductSourceOptions({ preferredDirectorId = 0, preferredAudioId = 0 } = {}) {
-  const directors = videoProductSources.directors || [];
   const audios = videoProductSources.audioJobs || [];
-  const routeA = isRouteAVideoProduct();
-  const directorOptions = directors
-    .map((project) => `<option value="${project.id}">#${project.id} ${escapeHtml(project.title || "未命名导演稿")} · ${Number(project.scene_count || 0)} 镜头</option>`);
-  videoProductDirector.innerHTML = directorOptions.length
-    ? directorOptions.join("")
-    : '<option value="">暂无已完成导演项目</option>';
-  if (preferredDirectorId && directors.some((item) => Number(item.id) === Number(preferredDirectorId))) {
-    videoProductDirector.value = String(preferredDirectorId);
+  if (videoProductDirector) {
+    videoProductDirector.innerHTML = '<option value="">生产线内部自动分镜</option>';
+    videoProductDirector.value = "";
   }
-  const selectedDirector = directors.find((item) => Number(item.id) === Number(videoProductDirector.value || preferredDirectorId || 0))
-    || (routeA ? null : directors[0] || null);
-  renderVideoProductTemplateOptions(selectedDirector);
+  renderVideoProductTemplateOptions(null);
   const scoredAudios = audios
-    .map((job) => ({ ...job, match_score: videoProductAudioScoreForDirector(selectedDirector, job) }))
-    .sort((a, b) => Number(b.match_score || 0) - Number(a.match_score || 0) || Number(b.id || 0) - Number(a.id || 0));
+    .slice()
+    .sort((a, b) => Number(b.id || 0) - Number(a.id || 0));
   videoProductAudio.innerHTML = audios.length
-    ? scoredAudios.map((job) => `<option value="${job.id}">匹配${Number(job.match_score || 0)}% · #${job.id} ${escapeHtml(job.voice_name || job.voice_id || job.provider)} · ${escapeHtml((job.text || "").slice(0, 24))}</option>`).join("")
+    ? scoredAudios.map((job) => `<option value="${job.id}">#${job.id} ${escapeHtml(job.voice_name || job.voice_id || job.provider)} · ${escapeHtml((job.text || "").slice(0, 24))}</option>`).join("")
     : '<option value="">暂无已完成 TTS 音频</option>';
   if (preferredAudioId && audios.some((item) => Number(item.id) === Number(preferredAudioId))) {
     videoProductAudio.value = String(preferredAudioId);
@@ -5884,11 +5876,11 @@ async function addVideoProductLocalImage() {
       aspectRatio: "9:16",
       prompt: `本地成片素材：${filePath.split(/[\\/]/).pop() || "image"}`,
       sourceType: "manual_import",
-      directorProjectId: Number(videoProductDirector?.value || 0),
+      directorProjectId: 0,
     }),
   });
   if (videoProductImageSource) videoProductImageSource.value = "all";
-  await loadVideoProductSources({ preferredDirectorId: Number(videoProductDirector.value || 0), preferredAudioId: Number(videoProductAudio.value || 0) });
+  await loadVideoProductSources({ preferredDirectorId: 0, preferredAudioId: Number(videoProductAudio.value || 0) });
   if (videoProductAssetStatus) videoProductAssetStatus.textContent = "本地图片已加入图片资产库，可以在镜头列表里绑定。";
   await previewVideoProductTimeline().catch(() => {});
 }
@@ -5916,7 +5908,7 @@ async function addVideoProductLocalBgm() {
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ filePath }),
   });
-  await loadVideoProductSources({ preferredDirectorId: Number(videoProductDirector.value || 0), preferredAudioId: Number(videoProductAudio.value || 0) });
+  await loadVideoProductSources({ preferredDirectorId: 0, preferredAudioId: Number(videoProductAudio.value || 0) });
   if (data.asset?.id && videoProductBgm) {
     videoProductBgmStrategy.value = "manual";
     videoProductBgm.value = String(data.asset.id);
@@ -5942,7 +5934,7 @@ function imageSelectMarkup(scene) {
 function renderVideoProductScenes(preview = videoProductPreview) {
   const scenes = preview?.scenes || [];
   if (!scenes.length) {
-    videoProductScenes.innerHTML = '<div class="vfo-empty">选择导演项目和音频后，点击自动匹配镜头素材。</div>';
+    videoProductScenes.innerHTML = '<div class="vfo-empty">选择音频后，点击自动匹配镜头素材。</div>';
     videoProductSceneMeta.textContent = "尚未生成预览";
     return;
   }
@@ -5969,15 +5961,11 @@ function renderVideoProductScenes(preview = videoProductPreview) {
 }
 
 async function previewVideoProductTimeline() {
-  if (!Number(videoProductDirector.value || 0)) {
-    videoProductStatus.textContent = "请先选择导演项目。";
-    return null;
-  }
   if (!Number(videoProductAudio.value || 0)) {
     videoProductStatus.textContent = "请先选择已完成的 TTS 音频。";
     return null;
   }
-  videoProductStatus.textContent = "正在自动匹配镜头素材...";
+  videoProductStatus.textContent = "正在按当前 TTS 音频生成生产线分镜并匹配素材...";
   const data = await fetchJson("/api/video-product/preview", {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -6004,7 +5992,7 @@ function renderVideoProductProjects(projects = videoProductProjectsState) {
       <strong>#${project.project_id || project.id}</strong>
       <div class="vfo-project-title">
         <strong>${escapeHtml(project.metadata?.title || `成片 #${project.project_id || project.id}`)}</strong>
-        <span>Director #${project.source_director_project_id || "-"} · Audio #${project.audio_asset_id || "-"} · ${escapeHtml(videoProductOutputLabel(project.output_type))}</span>
+        <span>生产线内部分镜 · Audio #${project.audio_asset_id || "-"} · ${escapeHtml(videoProductOutputLabel(project.output_type))}</span>
       </div>
       <span>${escapeHtml(project.ratio)} · ${escapeHtml(project.resolution)}</span>
       <span>${Number(project.duration || 0).toFixed(1)}s</span>
@@ -6124,16 +6112,12 @@ async function generateVideoProduct() {
     document.querySelector("#videoProjectReadiness")?.scrollIntoView({ behavior: "smooth", block: "center" });
     return null;
   }
-  if (!Number(videoProductDirector.value || 0)) {
-    videoProductStatus.textContent = "请先选择导演项目。";
-    return;
-  }
   if (!Number(videoProductAudio.value || 0)) {
     videoProductStatus.textContent = "请先选择已生成的 TTS 音频。";
     return;
   }
   generateVideoProductBtn.disabled = true;
-  videoProductStatus.textContent = "正在检查当前项目的文案、语音、导演稿、素材和 BGM...";
+  videoProductStatus.textContent = "正在检查当前项目的文案、语音、素材和 BGM；分镜由生产线内部生成...";
   try {
     if (!readiness?.ready) {
       const missing = readiness?.blockers?.map((item) => `${item.label}${item.detail}`).join("、") || "关键内容未完成";
