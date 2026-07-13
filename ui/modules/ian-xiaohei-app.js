@@ -10,6 +10,7 @@ const state = {
   voiceChoices: new Map(),
   savedApis: [],
   musicPresets: [],
+  selectedMusic: null,
   referenceProfile: null,
   referenceCloneDraft: null,
   referenceStylePresets: [],
@@ -147,8 +148,7 @@ function bindEvents() {
   els.setDefaultReferenceStyle.addEventListener("click", () => setCurrentReferenceStyleDefault());
   els.deleteReferenceStyle.addEventListener("click", () => deleteCurrentReferenceStyle());
   els.musicPreset.addEventListener("change", () => {
-    const preset = currentMusicPreset();
-    if (preset) els.musicStatus.textContent = `${preset.label}：${preset.description || "可生成本地 mp3 素材。"}`;
+    renderSelectedMusicStatus(state.config?.music || {});
   });
   els.previewVoice.addEventListener("click", () => previewCurrentVoice());
   els.setDefaultVoice.addEventListener("click", () => setCurrentVoiceDefault());
@@ -241,7 +241,11 @@ function renderIntegrationStatus(integrations) {
 }
 
 function renderMusicPresets(music, referenceAudio = {}) {
-  state.musicPresets = Array.isArray(music.presets) ? music.presets : [];
+  const generatedPresets = (Array.isArray(music.presets) ? music.presets : [])
+    .map((preset) => ({ ...preset, source: preset.source || "minimax_music" }));
+  const localAssets = (Array.isArray(music.localAssets) ? music.localAssets : [])
+    .map((asset) => ({ ...asset, source: "local_bgm" }));
+  state.musicPresets = [...generatedPresets, ...localAssets];
   state.referenceStylePresets = Array.isArray(referenceAudio.stylePresets) ? referenceAudio.stylePresets : [];
   renderReferenceStyleChoices();
   if (!state.musicPresets.length) {
@@ -250,12 +254,9 @@ function renderMusicPresets(music, referenceAudio = {}) {
     return;
   }
   els.musicPreset.innerHTML = state.musicPresets.map((preset, index) => `
-    <option value="${escapeAttr(preset.id)}">${index + 1}. ${escapeHtml(preset.label)}${preset.instrumental ? " · 纯音乐" : ""}</option>
+    <option value="${escapeAttr(preset.id)}">${index + 1}. ${escapeHtml(preset.source === "local_bgm" ? "本地预制 · " : "在线生成 · ")}${escapeHtml(preset.label)}${preset.instrumental ? " · 纯音乐" : ""}</option>
   `).join("");
-  const first = state.musicPresets[0];
-  els.musicStatus.textContent = music.configured
-    ? `${first.label}：${first.description || "可生成本地 mp3 素材。"}`
-    : "MiniMax API 未配置，音乐生成不可用。";
+  renderSelectedMusicStatus(music);
 }
 
 function renderReferenceStyleChoices() {
@@ -285,10 +286,45 @@ function currentMusicPreset() {
   return state.musicPresets.find((preset) => preset.id === els.musicPreset.value) || state.musicPresets[0] || null;
 }
 
+function isLocalMusicPreset(preset) {
+  return preset?.source === "local_bgm" || String(preset?.id || "").startsWith("local_bgm:");
+}
+
+function renderSelectedMusicStatus(music = {}) {
+  const preset = currentMusicPreset();
+  if (!preset) {
+    els.musicStatus.textContent = "当前没有可用音乐预设。";
+    return;
+  }
+  state.selectedMusic = preset;
+  if (isLocalMusicPreset(preset)) {
+    els.generateMusic.textContent = "试听本地音频";
+    els.musicStatus.textContent = `${preset.label}：${preset.description || "本地预制音频，可直接试听。"}`;
+    return;
+  }
+  els.generateMusic.textContent = "生成音乐素材";
+  els.musicStatus.textContent = music.configured
+    ? `${preset.label}：${preset.description || "可生成本地 mp3 素材。"}`
+    : "MiniMax API 未配置；仍可选择下方“本地预制”音频试听。";
+}
+
 async function generateMusicMaterial() {
   const preset = currentMusicPreset();
   if (!preset) {
     setStatus("没有音乐预设", "请先刷新配置或检查 MiniMax 配置。", 0, true);
+    return;
+  }
+  if (isLocalMusicPreset(preset)) {
+    if (!preset.audio_url) {
+      setStatus("本地音频不可用", "这个本地预制音频缺少可试听地址。", 0, true);
+      return;
+    }
+    state.selectedMusic = preset;
+    els.musicPreview.src = preset.audio_url;
+    els.musicPreviewTitle.textContent = `本地预制 · ${preset.label}`;
+    els.musicPreviewPanel.hidden = false;
+    els.musicStatus.textContent = `已载入本地预制音频：${preset.fileName || preset.label}`;
+    setStatus("已载入本地预制音频", preset.fileName || preset.label, 100, false, "本地音乐素材");
     return;
   }
   const lyrics = (els.musicLyrics.value.trim() || els.copyInput.value.trim()).slice(0, 3200);
