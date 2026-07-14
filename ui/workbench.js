@@ -603,6 +603,10 @@ function setupProjectWorkbench() {
     refreshReadiness: refreshProjectReadiness,
     canGenerate: () => Boolean(projectReadinessState?.ready),
   };
+  window.projectAssetLibrary = {
+    refresh: refreshProjectAssets,
+    selectType: selectProjectAssetType,
+  };
 
   refreshVideoProjects()
     .then(() => Promise.allSettled([refreshProjectReadiness(), refreshProjectAssets()]))

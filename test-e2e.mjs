@@ -97,6 +97,35 @@ test("Single page title and choice-memory sources", async () => {
   }
 });
 
+test("Archived assets details view", async () => {
+  const [pageResponse, workbenchResponse, projectResponse, legacyResponse] = await Promise.all([
+    fetch(`${BASE}/`),
+    fetch(`${BASE}/workbench.js`),
+    fetch(`${BASE}/modules/project.js`),
+    fetch(`${BASE}/modules/legacy-runtime.js`),
+  ]);
+  const [page, workbench, project, legacy] = await Promise.all([
+    pageResponse.text(),
+    workbenchResponse.text(),
+    projectResponse.text(),
+    legacyResponse.text(),
+  ]);
+  const assetTypes = ["image", "video", "bgm", "sfx", "subtitle", "cover"];
+  if (!assetTypes.every((type) => page.includes(`data-project-asset-type="${type}"`))
+    || !page.includes('id="projectAssetDetailModal"')
+    || !page.includes('id="projectAssetGrid"')
+    || page.includes('id="projectAssetTypeFilter"')
+    || page.includes('id="projectAssetUseCaseFilter"')
+    || !workbench.includes("PROJECT_ASSET_TYPE_KEY")
+    || !workbench.includes("projectAssetDetailsRow")
+    || !workbench.includes("assetType: activeProjectAssetType")
+    || !workbench.includes("window.projectAssetLibrary")
+    || !project.includes("window.projectAssetLibrary?.refresh?.()")
+    || !legacy.includes("allFiles = [...(Array.isArray(files) ? files : [])].sort")) {
+    throw new Error("Archived asset category details view is incomplete");
+  }
+});
+
 // Run all
 let passed = 0;
 let failed = 0;

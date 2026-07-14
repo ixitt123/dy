@@ -54,20 +54,12 @@ function replaceProject(project) {
 
 function renderSelectors() {
   const selector = document.querySelector("#activeVideoProjectSelect");
-  const assetFilter = document.querySelector("#projectAssetProjectFilter");
   const options = state.projects.map((project) => (
     `<option value="${escapeHtml(project.id)}">${escapeHtml(project.title)} · ${escapeHtml(statusLabel(project.status))}</option>`
   ));
   if (selector) {
     selector.innerHTML = options.length ? options.join("") : '<option value="">请先新建项目</option>';
     selector.value = state.activeProject?.id || "";
-  }
-  if (assetFilter) {
-    const current = assetFilter.value;
-    assetFilter.innerHTML = ['<option value="all">全部项目</option>', ...state.projects.map((project) => (
-      `<option value="${escapeHtml(project.id)}">${escapeHtml(project.title)}</option>`
-    ))].join("");
-    assetFilter.value = [...assetFilter.options].some((option) => option.value === current) ? current : "all";
   }
 }
 
@@ -222,26 +214,7 @@ async function linkCurrent(assetType, assetId, name = "", metadata = {}) {
 }
 
 async function loadProjectAssets() {
-  const container = document.querySelector("#projectAssetGrid");
-  if (!container) return [];
-  const params = new URLSearchParams();
-  const filters = {
-    assetType: document.querySelector("#projectAssetTypeFilter")?.value || "all",
-    useCase: document.querySelector("#projectAssetUseCaseFilter")?.value || "all",
-    style: document.querySelector("#projectAssetStyleFilter")?.value || "all",
-    projectId: document.querySelector("#projectAssetProjectFilter")?.value || "all",
-  };
-  Object.entries(filters).forEach(([key, value]) => { if (value && value !== "all") params.set(key, value); });
-  const data = await getJson(`/api/projects/assets?${params}`);
-  const assets = data.assets || [];
-  container.innerHTML = assets.length ? assets.map((asset) => `
-    <article class="project-asset-card" data-project-asset-id="${escapeHtml(asset.id)}">
-      <div class="project-asset-card-top"><span>${escapeHtml(asset.assetType)}</span><strong class="asset-status-${escapeHtml(asset.status)}">${asset.status === "ready" ? "可用" : asset.status === "pending" ? "处理中" : "异常"}</strong></div>
-      <h3>${escapeHtml(asset.name || asset.assetId || "未命名素材")}</h3>
-      <div class="asset-tag-list">${[asset.useCase, asset.style, asset.ratio].filter(Boolean).map((tag) => `<span>${escapeHtml(tag)}</span>`).join("")}</div>
-      <div class="project-asset-card-foot"><small>已使用 ${Number(asset.usedCount || 0)} 次</small><button class="ghost small send-project-asset" type="button">加入素材库</button></div>
-    </article>`).join("") : '<div class="empty">没有符合筛选条件的素材。</div>';
-  return assets;
+  return window.projectAssetLibrary?.refresh?.() || [];
 }
 
 function bindProjectEvents() {
@@ -277,10 +250,6 @@ function bindProjectEvents() {
     if (event.currentTarget.dataset.projectAction === "create") document.querySelector("#newVideoProject")?.click();
     else if (event.currentTarget.dataset.nav) window.appNavigate?.(event.currentTarget.dataset.nav);
   });
-  ["projectAssetTypeFilter", "projectAssetUseCaseFilter", "projectAssetStyleFilter", "projectAssetProjectFilter"].forEach((id) => {
-    document.querySelector(`#${id}`)?.addEventListener("change", loadProjectAssets);
-  });
-  document.querySelector("#refreshProjectAssets")?.addEventListener("click", loadProjectAssets);
 }
 
 export async function initProjectModule() {
