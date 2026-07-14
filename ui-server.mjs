@@ -3739,7 +3739,12 @@ function normalizeMomentsWordCount(value = "100", customValue = "100") {
 }
 
 function momentsWordCountRule(spec = normalizeMomentsWordCount()) {
-  return `建议正文约 ${spec.target} 字，允许根据表达自然浮动在 ${spec.min}-${spec.max} 字；不要为了凑字数重复观点，也不要为了缩短删掉宣传对象、适用人群、核心价值和温和行动建议。`;
+  const structure = spec.target <= 120
+    ? "短文模式：只保留一个核心观点、一个真实场景、一个宣传价值和一个轻收尾；2-3 个短段落，最多 4 句，不要同时展开多个卖点。"
+    : spec.target <= 220
+      ? "标准模式：保留一个核心观点，补充一个场景和一个价值解释；3-5 个短段落，结尾只保留一个自然行动建议。"
+      : "完整模式：可以展开场景、判断、价值、适用人群和行动建议；4-6 个短段落，但仍然只围绕一个核心主题。";
+  return `建议正文约 ${spec.target} 字，允许根据表达自然浮动在 ${spec.min}-${spec.max} 字。${structure}不要为了凑字数重复观点，也不要为了缩短删掉最核心的信息。`;
 }
 
 function stripMomentsEmoji(value = "") {
@@ -4186,8 +4191,17 @@ async function generateMomentsPostJsonV2(body = {}) {
       ? `主角描述：${mainCharacter}。主角在每张图中保持同一外形、服装和识别特征，并且参与核心动作。`
       : "未提供主角描述时，使用所选 Skill 的默认主角，并在整组图片中保持形体和识别特征一致。",
   ].join("\n");
+  const rewriteEducationSkillLoaded = Boolean(readSkill("rewrite-douyin-education").trim());
+  const humanizerSkillLoaded = Boolean(readSkill("humanizer-zh").trim());
+  const projectCopySkillRules = [
+    `项目文案 Skill：rewrite-douyin-education（${rewriteEducationSkillLoaded ? "已加载" : "未找到，使用内置规则"}）+ humanizer-zh（${humanizerSkillLoaded ? "已加载" : "未找到，使用内置规则"}）。`,
+    "继承规则：先提炼 hook、痛点/处境、情绪、反转、解决方案和 CTA，再按朋友圈用途重组；保留原文事实，不编造案例、数据或承诺。",
+    "人性化规则：短句、节奏不完全整齐、使用具体生活场景，去掉官方腔、AI 套话、空泛口号和机械三段式。",
+    "本页面覆盖规则：只输出一条朋友圈正文 JSON，不执行 rewrite-douyin-education 原本的“五版本输出”要求。",
+  ].join("\n");
   const copySkill = [
-    "朋友圈宣传文案 Skill v4：以真实分享为外壳，以产品、课程、服务、门店、活动或个人品牌价值为核心。",
+    projectCopySkillRules,
+    "朋友圈宣传规则：以真实分享为外壳，以产品、课程、服务、门店、活动或个人品牌价值为核心。",
     "主要目标：让读者自然看懂宣传对象、适合人群、具体价值和下一步，但读起来像真人分享，不像广告稿。",
     "推荐结构：真实场景或观察 -> 温和判断 -> 宣传对象解决的问题 -> 适用人群或体验细节 -> 低压力行动邀请 -> 自然收尾。",
     momentsWordCountRule(wordCount),
@@ -4294,7 +4308,7 @@ async function generateMomentsPostJsonV2(body = {}) {
           role: "user",
           content: [
             "上一版不合格：太短、太干或缺少专业判断。请重写。",
-            `硬性要求：${wordCount.min}-${wordCount.max} 中文字符，允许在范围内自然浮动；使用 4-8 个短段落，必须讲清宣传对象、具体价值、适用人群和温和下一步；不得编造事实。`,
+            `硬性要求：${wordCount.min}-${wordCount.max} 中文字符，允许在范围内自然浮动；${momentsWordCountRule(wordCount)}不得编造事实。`,
             addEmoji ? "表情硬性要求：只在语义需要时少量添加，最多 3 个。" : "表情硬性要求：正文不要出现 emoji 或颜文字。",
             "引用硬性要求：必须把引用素材真正写进 post 正文，并在 reference_used 填写实际使用的那句；不能只在 JSON 字段里写，正文里也必须出现。",
             "语气策略：",
