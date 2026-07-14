@@ -4003,6 +4003,7 @@ function normalizeMomentsResult(raw = {}, fallback = {}) {
     reference_style: String(raw.reference_style || raw.referenceStyle || fallback.referenceStyle || "").trim(),
     add_emoji: fallback.addEmoji === true,
     word_count_target: Number(fallback.wordCount?.target || 0) || 0,
+    word_count_warning: String(raw.word_count_warning || raw.wordCountWarning || fallback.wordCountWarning || "").trim(),
     main_character: String(fallback.mainCharacter || "").trim().slice(0, 300),
     persona_used: String(raw.persona_used || fallback.persona || "").trim().slice(0, 1000),
     notes: Array.isArray(raw.notes) ? raw.notes.map((item) => String(item).trim()).filter(Boolean).slice(0, 6) : [],
@@ -4342,10 +4343,44 @@ async function generateMomentsPostJsonV2(body = {}) {
     post = String(copyData.post || post).trim();
   }
   post = addEmoji ? post : stripMomentsEmoji(post);
-  const finalPostLength = rewriteCharacterCount(post);
+  let finalPostLength = rewriteCharacterCount(post);
   if (finalPostLength < wordCount.min || finalPostLength > wordCount.max) {
-    throw new Error(`生成文案为 ${finalPostLength} 字，未落在建议范围 ${wordCount.min}-${wordCount.max} 字内，请重试。`);
+    const compressed = await generateStructuredJson({
+      providerId,
+      temperature: 0.2,
+      requestName: "朋友圈文案字数校准",
+      maxTokens: 2400,
+      messages: [
+        { role: "system", content: "你是朋友圈文案字数校准器。只输出严格 JSON，不要解释。" },
+        {
+          role: "user",
+          content: [
+            `请把下面的朋友圈正文压缩或补充到 ${wordCount.min}-${wordCount.max} 个中文字符，${momentsWordCountRule(wordCount)}`,
+            addEmoji ? "可以保留 0-3 个与语义相关的表情。" : "不得添加 emoji 或颜文字。",
+            `必须保留并自然写入 ${referenceStyle} 引用素材，同时 reference_used 填写正文实际使用的内容。`,
+            "只保留原文事实，不新增案例、数据、效果承诺或宣传信息。",
+            "正文要像真人发朋友圈，不要标题、编号、Markdown、解释和多余段落。",
+            "当前正文：",
+            post,
+            "返回 JSON：",
+            JSON.stringify({
+              post: "校准后的朋友圈正文",
+              core_judgment: "保留的核心判断",
+              reference_style: referenceStyle,
+              reference_used: "正文中实际使用的引用素材",
+            }, null, 2),
+          ].join("\n\n"),
+        },
+      ],
+    });
+    copyData = compressed.data && typeof compressed.data === "object" ? compressed.data : copyData;
+    post = String(copyData.post || post).trim();
+    post = addEmoji ? post : stripMomentsEmoji(post);
+    finalPostLength = rewriteCharacterCount(post);
   }
+  const wordCountWarning = finalPostLength < wordCount.min || finalPostLength > wordCount.max
+    ? `建议 ${wordCount.min}-${wordCount.max} 字，实际 ${finalPostLength} 字；已保留完整表达。`
+    : "";
   if (!momentsReferenceIsUsed(post, copyData.reference_used, referenceStyle)) {
     throw new Error(`本次生成未能加入“${referenceStyle}”引用素材，请重试或指定其他引用类别。`);
   }
@@ -4402,12 +4437,14 @@ async function generateMomentsPostJsonV2(body = {}) {
           JSON.stringify({
             image_count: fixedImageCount || "1-3",
             theme: "统一图文主题",
-            series_style: "xiaohei 或 realistic，整组图片只能选一个",
+            visual_style: visualStyle,
+            visual_style_label: visualStyleSkill.label,
+            series_style: imageStyle,
             notes: ["可选注意事项"],
             images: [
               {
                 title: "配图标题",
-                style: "xiaohei 或 realistic",
+                style: visualStyle,
                 image_role: "封面冲击图 / 误区图 / 方法图 / 结果状态图",
                 visual_hook: "这张图的视觉锤，一句话说明",
                 composition_type: "前后对比 / 角色状态 / 概念隐喻 / 方法分层 / 小漫画分镜 / 真实现场",
@@ -4437,6 +4474,7 @@ async function generateMomentsPostJsonV2(body = {}) {
     reference_style: referenceStyle,
     reference_used: copyData.reference_used || "",
     add_emoji: addEmoji,
+    word_count_warning: wordCountWarning,
     notes: [
       ...(Array.isArray(copyData.notes) ? copyData.notes : []),
       ...(Array.isArray(imageRun.data?.notes) ? imageRun.data.notes : []),
@@ -4455,6 +4493,7 @@ async function generateMomentsPostJsonV2(body = {}) {
       persona,
       mainCharacter,
       wordCount,
+      wordCountWarning,
       addEmoji,
       referenceStyle,
       theme: copyData.theme || "朋友圈图文",
