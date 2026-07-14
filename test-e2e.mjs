@@ -171,11 +171,16 @@ test("Kinetic text production line", async () => {
     || !page.includes('data-target="kinetic-text"')
     || !page.includes('id="kineticPreviewCanvas"')
     || !page.includes('id="kineticTimeline"')
+    || !page.includes('<span class="nav-index">09</span><span>动态大字视频</span>')
+    || !page.includes('<span class="nav-index">10</span><span>素材管理</span>')
+    || !page.includes('<span class="nav-index">11</span><span>系统设置</span>')
     || !page.includes('id="kineticGenerateMaterials"')
     || !page.includes('id="kineticRenderFinal"')
     || !moduleSource.includes("PREF_KEY")
     || !moduleSource.includes("receiveTts")
     || !moduleSource.includes("pollJob")
+    || !moduleSource.includes('data-field="lineBreaks"')
+    || !moduleSource.includes("countInRow")
     || !legacySource.includes('targets.includes("kinetic-text")')
     || !packageJson.dependencies?.["@motion-canvas/core"]
     || !packageJson.dependencies?.["@motion-canvas/2d"]) {
