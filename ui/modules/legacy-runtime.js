@@ -3697,8 +3697,8 @@ async function sendTtsPayloadToTargets(payload, targets = []) {
   if (targets.includes("kinetic-text")) {
     saveTtsAudioHandoff("kinetic-text", payload);
     markProductionTargetReceived("kinetic-text", payload);
-    await window.kineticTextProduction?.receiveTts?.(payload);
-    window.dispatchEvent(new CustomEvent("kinetic-text-handoff", { detail: payload }));
+    if (window.kineticTextProduction?.receiveTts) await window.kineticTextProduction.receiveTts(payload);
+    else window.dispatchEvent(new CustomEvent("kinetic-text-handoff", { detail: payload }));
     sent.push("动态大字视频");
   }
   for (const target of targets) {
