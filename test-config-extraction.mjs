@@ -15,6 +15,7 @@ assert.equal(REWRITE_STYLES.includes("痞里带刺"), true);
 assert.equal(REWRITE_VERSION_DEFS.length, Object.keys(REWRITE_VERSION_DEFAULTS).length);
 assert.equal(AUTO_MODEL_VALUE, "__auto_latest__");
 assert.deepEqual(Object.keys(REWRITE_PROVIDER_PRESETS), REWRITE_PROVIDER_ORDER);
+assert.equal(REWRITE_PROVIDER_PRESETS.minimax.baseUrl, "https://api.minimaxi.com/v1");
 assert.equal(ROUTE_A_DEFAULT_STYLE_ID, "black_gold_knowledge");
 assert.equal(Boolean(ROUTE_A_STYLE_PRESETS[ROUTE_A_DEFAULT_STYLE_ID]), true);
 
