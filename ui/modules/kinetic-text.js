@@ -112,6 +112,7 @@ function renderTimeline() {
         <input data-field="end" type="number" min="0" step="0.01" value="${Number(segment.end).toFixed(2)}" />
         <textarea data-field="text" rows="2">${escapeHtml(segment.text)}</textarea>
         <input data-field="keywords" type="text" value="${escapeHtml((segment.keywords || []).join("、"))}" placeholder="重点词" />
+        <input data-field="lineBreaks" type="text" value="${escapeHtml((segment.lineBreaks || []).join(","))}" placeholder="如 6,12" title="按字符序号设置换行位置" />
         <div class="kinetic-position-inputs"><input data-field="x" type="number" min="5" max="95" value="${x}" /><input data-field="y" type="number" min="5" max="95" value="${y}" /></div>
         <input data-field="primaryColor" type="color" value="${color}" />
       </div>
@@ -168,9 +169,25 @@ function drawCover(ctx, media, width, height) {
 
 function tokenRows(segment, effectNumber) {
   const source = String(segment.text || "").trim();
-  if ([6, 12].includes(effectNumber)) return source.match(/.{1,7}/g) || [source];
-  if (source.length <= 12) return [...source].filter((item) => item.trim());
-  return source.match(/.{1,4}/g) || [source];
+  const breaks = [...new Set((segment.lineBreaks || [])
+    .map(Number)
+    .filter((value) => Number.isInteger(value) && value > 0 && value < source.length))]
+    .sort((a, b) => a - b);
+  const lines = [];
+  let start = 0;
+  for (const end of [...breaks, source.length]) {
+    const line = source.slice(start, end).trim();
+    if (line) lines.push(line);
+    start = end;
+  }
+  const displayLines = lines.length ? lines : [source];
+  return displayLines.flatMap((line, row) => {
+    let values;
+    if ([6, 12].includes(effectNumber)) values = line.match(/.{1,7}/g) || [line];
+    else if ([8, 13].includes(effectNumber)) values = line.match(/.{1,4}/g) || [line];
+    else values = [...line].filter((item) => item.trim());
+    return values.map((text, indexInRow) => ({ text, row, rowCount: displayLines.length, indexInRow, countInRow: values.length }));
+  });
 }
 
 function easeOutBack(value) {
@@ -212,18 +229,20 @@ function drawToken(ctx, token, x, y, options) {
   ctx.restore();
 }
 
-function tokenPosition(effectNumber, index, count, centerX, centerY) {
+function tokenPosition(effectNumber, index, count, centerX, centerY, layout = {}) {
   const centered = index - (count - 1) / 2;
-  if (effectNumber === 1) return [centerX + centered * 66, centerY + Math.abs(centered) * 28];
-  if (effectNumber === 2) return [centerX + centered * 67, centerY + centered * 31];
-  if (effectNumber === 6) return [centerX + [-210, -60, 165, -175, 80, 225][index % 6], centerY + [-125, -35, -95, 95, 80, 135][index % 6]];
-  if (effectNumber === 8) return [centerX + (index % 2 ? 95 : -95), centerY + centered * 54];
-  if (effectNumber === 9) return [centerX + centered * 62, centerY + (index % 2 ? 58 : -38)];
-  if (effectNumber === 10) return [centerX + centered * 78, centerY + (index % 2 ? 48 : -30)];
-  if (effectNumber === 11) return [centerX + centered * 82, centerY + (index % 3 - 1) * 68];
-  if (effectNumber === 12) return [Math.max(140, centerX - 215), centerY - 105 + index * 52];
-  if (effectNumber === 13) return [centerX + (index % 2 ? 100 : -90), centerY + centered * 47];
-  return [centerX + centered * 67, centerY];
+  const rowOffset = (Number(layout.row || 0) - (Number(layout.rowCount || 1) - 1) / 2) * 95;
+  const horizontalStep = Math.min(66, 750 / Math.max(1, count - 1));
+  if (effectNumber === 1) return [centerX + centered * horizontalStep, centerY + rowOffset + Math.abs(centered) * Math.min(28, 165 / Math.max(1, (count - 1) / 2))];
+  if (effectNumber === 2) return [centerX + centered * horizontalStep, centerY + rowOffset + centered * Math.min(31, 250 / Math.max(1, count - 1))];
+  if (effectNumber === 6) return [centerX + [-210, -60, 165, -175, 80, 225][index % 6], centerY + rowOffset + [-125, -35, -95, 95, 80, 135][index % 6]];
+  if (effectNumber === 8) return [centerX + (index % 2 ? 95 : -95), centerY + rowOffset + centered * Math.min(54, 260 / Math.max(1, count - 1))];
+  if (effectNumber === 9) return [centerX + centered * horizontalStep, centerY + rowOffset + (index % 2 ? 58 : -38)];
+  if (effectNumber === 10) return [centerX + centered * horizontalStep, centerY + rowOffset + (index % 2 ? 48 : -30)];
+  if (effectNumber === 11) return [centerX + centered * horizontalStep, centerY + rowOffset + (index % 3 - 1) * 68];
+  if (effectNumber === 12) return [Math.max(140, centerX - 215), centerY + rowOffset - 105 + index * 52];
+  if (effectNumber === 13) return [centerX + (index % 2 ? 100 : -90), centerY + rowOffset + centered * Math.min(47, 250 / Math.max(1, count - 1))];
+  return [centerX + centered * horizontalStep, centerY + rowOffset];
 }
 
 function drawPreview() {
@@ -252,12 +271,13 @@ function drawPreview() {
     const fontSize = Math.max(26, Math.min(110, Number(overrides.fontSize || params.fontSize || 92) / 2));
     const tokens = tokenRows(segment, effectNumber);
     const keywords = segment.keywords || [];
-    tokens.forEach((token, index) => {
+    tokens.forEach((entry, index) => {
+      const token = entry.text;
       const highlighted = keywords.some((keyword) => keyword && (token.includes(keyword) || keyword.includes(token)));
       const color = highlighted || (effectNumber === 8 && index % 2) || (effectNumber === 13 && index % 2)
         ? (overrides.accentColor || params.accentColor || effect?.accent || "#ffe66b")
         : (overrides.primaryColor || params.primaryColor || effect?.primary || "#fff");
-      const [x, y] = tokenPosition(effectNumber, index, tokens.length, centerX, centerY);
+      const [x, y] = tokenPosition(effectNumber, entry.indexInRow, entry.countInRow, centerX, centerY, entry);
       drawToken(ctx, effectNumber === 12 ? `▶ ${token}` : token, x, y, { progress, index, effectNumber, color, fontSize: effectNumber === 6 || effectNumber === 12 ? fontSize * 0.68 : fontSize, fontFamily: params.fontFamily || "Microsoft YaHei" });
     });
     if (state.project.showBottomSubtitles) {
@@ -394,6 +414,7 @@ function applyTimelineInput(input) {
   const segments = state.project.segments.map((segment, segmentIndex) => {
     if (segmentIndex !== index) return segment;
     if (field === "keywords") return { ...segment, keywords: input.value.split(/[、,，]/).map((item) => item.trim()).filter(Boolean) };
+    if (field === "lineBreaks") return { ...segment, lineBreaks: [...new Set(input.value.split(/[,，、\s]+/).map(Number).filter((value) => Number.isInteger(value) && value > 0 && value < String(segment.text || "").length))].sort((a, b) => a - b) };
     if (["x", "y", "primaryColor"].includes(field)) return { ...segment, overrides: { ...(segment.overrides || {}), [field]: ["x", "y"].includes(field) ? Number(input.value) : input.value } };
     if (["start", "end"].includes(field)) return { ...segment, [field]: Number(input.value) };
     return { ...segment, [field]: input.value };

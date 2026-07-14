@@ -9622,7 +9622,7 @@ audio {
 .kinetic-timeline-head,
 .kinetic-timeline-row {
   display: grid;
-  grid-template-columns: 42px 78px 78px minmax(190px, 2fr) minmax(120px, 1fr) 112px 54px;
+  grid-template-columns: 42px 78px 78px minmax(190px, 2fr) minmax(120px, 1fr) 100px 112px 54px;
   gap: 8px;
   align-items: center;
 }
@@ -9733,5 +9733,6 @@ audio {
   .kinetic-timeline-row { grid-template-columns: 42px 1fr 1fr; }
   .kinetic-timeline-row textarea,
   .kinetic-timeline-row input[data-field="keywords"],
+  .kinetic-timeline-row input[data-field="lineBreaks"],
   .kinetic-position-inputs { grid-column: 1 / -1; }
 }
