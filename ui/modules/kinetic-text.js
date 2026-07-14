@@ -310,7 +310,6 @@ function drawPreview() {
   $("#kineticPreviewEmpty").hidden = Boolean(state.project);
   if (!state.project) return;
   const effect = effectById(state.project.effectId);
-  const effectNumber = Number(effect?.number || 1);
   const segment = state.project.segments.find((item) => state.currentTime >= item.start && state.currentTime <= item.end);
   if (segment) {
     const localDuration = Math.max(0.1, Math.min(0.65, segment.end - segment.start));
@@ -320,16 +319,22 @@ function drawPreview() {
     const centerX = width * Number(overrides.x ?? params.x ?? 50) / 100;
     const centerY = height * Number(overrides.y ?? params.y ?? 50) / 100;
     const fontSize = Math.max(26, Math.min(110, Number(overrides.fontSize || params.fontSize || 92) / 2));
-    const tokens = tokenRows(segment, effectNumber);
+    const tokens = tokenRows(segment, effect);
     const keywords = segment.keywords || [];
     tokens.forEach((entry, index) => {
       const token = entry.text;
       const highlighted = keywords.some((keyword) => keyword && (token.includes(keyword) || keyword.includes(token)));
-      const color = highlighted || (effectNumber === 8 && index % 2) || (effectNumber === 13 && index % 2)
+      const alternatingAccent = ["beast-highlight", "keyword-orbit", "lyric-wave", "gaming-stream", "sticker-bounce"].includes(effect?.id) && index % 2;
+      const color = highlighted || alternatingAccent
         ? (overrides.accentColor || params.accentColor || effect?.accent || "#ffe66b")
         : (overrides.primaryColor || params.primaryColor || effect?.primary || "#fff");
-      const [x, y] = tokenPosition(effectNumber, entry.indexInRow, entry.countInRow, centerX, centerY, entry);
-      drawToken(ctx, effectNumber === 12 ? `▶ ${token}` : token, x, y, { progress, index, effectNumber, color, fontSize: effectNumber === 6 || effectNumber === 12 ? fontSize * 0.68 : fontSize, fontFamily: params.fontFamily || "Microsoft YaHei" });
+      const [x, y] = tokenPosition(effect, entry.indexInRow, entry.countInRow, centerX, centerY, entry);
+      const tokenFontSize = ["scatter-assemble", "main-side-notes", "podcast-lower-third", "minimal-subtitle"].includes(effect?.id)
+        ? fontSize * 0.72
+        : ["beat-word-pop", "punch-zoom", "gaming-stream"].includes(effect?.id)
+          ? fontSize * 1.08
+          : fontSize;
+      drawToken(ctx, effect?.id === "podcast-lower-third" ? `• ${token}` : token, x, y, { progress, index, effectId: effect?.id, motion: effect?.motion, color, fontSize: tokenFontSize, fontFamily: params.fontFamily || "Microsoft YaHei" });
     });
     if (state.project.showBottomSubtitles) {
       ctx.save();
