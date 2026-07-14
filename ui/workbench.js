@@ -45,7 +45,7 @@ const workbenchPages = {
   },
   "kinetic-text": {
     title: "动态大字视频",
-    description: "接收已确认的 TTS 音频与字幕时间轴，编辑 13 种动态大字效果并输出素材包和 MP4。",
+    description: "接收已确认的 TTS 音频与字幕时间轴，编辑 24 种短视频文字特效并输出素材包和 MP4。",
   },
   files: {
     title: "素材管理",
