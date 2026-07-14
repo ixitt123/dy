@@ -421,6 +421,7 @@ export function createKineticTextService({
       stage: "接收 TTS",
       progress: 8,
       ttsJobId: Number(tts.id || tts.ttsJobId || 0),
+      videoProjectId: String(input.videoProjectId || tts.videoProjectId || ""),
       audioPath,
       audioUrl: String(tts.audio_url || tts.audioUrl || ""),
       scriptPath: String(tts.script_path || tts.scriptPath || ""),
