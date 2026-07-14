@@ -50,11 +50,23 @@ function normalizeText(value) {
   return String(value || "").replace(/\r/g, "").replace(/[ \t]+/g, " ").trim();
 }
 
+function splitLongSentence(value, maxLength = 24) {
+  const chars = [...normalizeText(value)];
+  if (chars.length <= maxLength) return [chars.join("")].filter(Boolean);
+  const rows = [];
+  for (let index = 0; index < chars.length; index += maxLength) {
+    rows.push(chars.slice(index, index + maxLength).join("").trim());
+  }
+  return rows.filter(Boolean);
+}
+
 function splitScript(text) {
   const source = normalizeText(text);
   if (!source) return [];
   return source
-    .split(/(?<=[。！？!?；;])|\n+/)
+    .split(/\n+/)
+    .flatMap((line) => line.split(/(?<=[。！？!?；;])\s*/u))
+    .flatMap((item) => splitLongSentence(item, 24))
     .map((item) => item.trim())
     .filter(Boolean);
 }
@@ -101,7 +113,7 @@ function normalizeSegments(rawSegments, text, duration = 0) {
 }
 
 function inferKeywords(text) {
-  const clean = normalizeText(text).replace(/[，。！？!?；;、]/g, "");
+  const clean = normalizeText(text).replace(/[，。！？；：、,.!?;:\s]/g, "");
   if (clean.length <= 4) return clean ? [clean] : [];
   const candidates = clean.match(/[A-Za-z0-9%]+|[\u4e00-\u9fff]{2,5}/g) || [];
   return candidates
