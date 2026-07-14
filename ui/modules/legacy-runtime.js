@@ -1808,7 +1808,10 @@ function loadMomentsDraft() {
     if (draft.text && momentsCopyInput && !momentsCopyInput.value.trim()) momentsCopyInput.value = draft.text;
     if (draft.localMaterials && momentsLocalMaterials) momentsLocalMaterials.value = draft.localMaterials;
     if (draft.mainCharacter && momentsMainCharacter) momentsMainCharacter.value = draft.mainCharacter;
-    if (draft.visualStyle && momentsVisualStyle) momentsVisualStyle.value = draft.visualStyle;
+    if (draft.visualStyle && momentsVisualStyle) {
+      const validVisualStyle = [...momentsVisualStyle.options].some((option) => option.value === draft.visualStyle);
+      momentsVisualStyle.value = validVisualStyle ? draft.visualStyle : "ian-xiaohei-illustrations";
+    }
     if (draft.wordCount && momentsWordCount) momentsWordCount.value = draft.wordCount;
     if (draft.wordCountCustom && momentsWordCountCustom) momentsWordCountCustom.value = draft.wordCountCustom;
     if (draft.addEmoji && momentsEmojiMode) momentsEmojiMode.value = draft.addEmoji;
