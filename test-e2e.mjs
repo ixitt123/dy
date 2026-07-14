@@ -1,6 +1,8 @@
 // 端到端 API 测试
 // 运行: 先启动服务器 node ui-server.mjs，然后 node test-e2e.mjs
 
+import { readFile } from "node:fs/promises";
+
 const BASE = "http://127.0.0.1:8787";
 const tests = [];
 
@@ -66,10 +68,11 @@ test("Moments Generation Progress", async () => {
 });
 
 test("Single page title and choice-memory sources", async () => {
-  const [pageResponse, legacyResponse, cloneResponse] = await Promise.all([
+  const [pageResponse, legacyResponse, cloneResponse, server] = await Promise.all([
     fetch(`${BASE}/`),
     fetch(`${BASE}/modules/legacy-runtime.js`),
     fetch(`${BASE}/modules/tts-voice-clone.js`),
+    readFile(new URL("./ui-server.mjs", import.meta.url), "utf8"),
   ]);
   const [page, legacy, clone] = await Promise.all([
     pageResponse.text(),
@@ -84,7 +87,11 @@ test("Single page title and choice-memory sources", async () => {
   }
   if (!legacy.includes('select, input[type="checkbox"], input[type="radio"], input[type="range"]')
     || !legacy.includes("readUiNamedChoice")
-    || !clone.includes("SOURCE_MODE_STORAGE_KEY")) {
+    || !clone.includes("SOURCE_MODE_STORAGE_KEY")
+    || !page.includes('id="analysisProvider" data-no-choice-persist')
+    || !legacy.includes("renderAnalysisProviderControl")
+    || !legacy.includes("provider: analysisProvider?.value")
+    || !server.includes("analyzeTranscriptWithProvider")) {
     throw new Error("Choice preference restoration is incomplete");
   }
 });
