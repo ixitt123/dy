@@ -698,7 +698,11 @@ function escapeHtml(value) {
 }
 
 function renderFiles(files) {
-  allFiles = Array.isArray(files) ? files : [];
+  allFiles = [...(Array.isArray(files) ? files : [])].sort((left, right) => {
+    const leftTime = Date.parse(left?.updatedAt || "") || 0;
+    const rightTime = Date.parse(right?.updatedAt || "") || 0;
+    return rightTime - leftTime;
+  });
   const pageSize = Number(pageSizeSelect.value || 5);
   const totalPages = Math.max(1, Math.ceil(allFiles.length / pageSize));
   currentPage = Math.max(1, Math.min(currentPage, totalPages));
@@ -720,7 +724,7 @@ function renderFiles(files) {
       <div>序号</div>
       <div>动作</div>
       <div>文件名</div>
-      <div>大小 / 时间</div>
+      <div>大小 / 生产时间</div>
       <div></div>
       <div></div>
     </div>
