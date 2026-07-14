@@ -3776,6 +3776,29 @@ function momentsEmojiRule(addEmoji = false) {
     : "表情规则：正文不添加任何 emoji 或颜文字，保持干净自然。";
 }
 
+function normalizeMomentsPostLayout(value = "") {
+  return String(value || "")
+    .replace(/\r\n?/g, "\n")
+    .split("\n")
+    .map((line) => line.replace(/[ \t]+/g, " ").trim())
+    .join("\n")
+    .replace(/[ \t]+([，。！？；：、】【、】【])/g, "$1")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+function momentsCopyPasteReady(value = "") {
+  const text = normalizeMomentsPostLayout(value);
+  if (!text) return false;
+  return !/(?:^|\n)\s*(?:#{1,6}\s+|[-*+]\s+|\d+[.、)]\s+)/m.test(text)
+    && !/```/.test(text)
+    && !/(?:文案如下|生成说明|排版建议)\s*[:：]/.test(text);
+}
+
+function momentsCopyPasteRule() {
+  return "成品排版：post 只能输出可直接复制发布的正文；不加标题、编号、Markdown、代码块、生成说明或排版建议。按篇幅自然分成 2-6 个短段，每段一个意思，段落间留一个空行；使用自然中文标点，清理多余空格、连续空行和重复句末符号，不要把每一句都强行换行。";
+}
+
 function resolveMomentsReferenceStyle(value = "") {
   const requested = String(value || "").trim();
   if (MOMENTS_REFERENCE_TYPES.includes(requested)) return requested;
@@ -4212,12 +4235,18 @@ async function generateMomentsPostJsonV2(body = {}) {
   ].join("\n");
   const rewriteEducationSkill = readSkill("rewrite-douyin-education").trim();
   const humanizerSkill = readSkill("humanizer-zh").trim();
+  const copyEditingSkill = readSkill("copy-editing").trim();
+  const momentsCopyEmojiSkill = readSkill("wechat-moments-copy-emoji").trim();
   const rewriteEducationSkillLoaded = Boolean(rewriteEducationSkill);
   const humanizerSkillLoaded = Boolean(humanizerSkill);
+  const copyEditingSkillLoaded = Boolean(copyEditingSkill);
+  const momentsCopyEmojiSkillLoaded = Boolean(momentsCopyEmojiSkill);
   const projectCopySkillRules = [
-    `项目文案 Skill：rewrite-douyin-education（${rewriteEducationSkillLoaded ? "已加载" : "未找到，使用内置规则"}）+ humanizer-zh（${humanizerSkillLoaded ? "已加载" : "未找到，使用内置规则"}）。`,
+    `项目文案 Skill：rewrite-douyin-education（${rewriteEducationSkillLoaded ? "已加载" : "未找到，使用内置规则"}）+ humanizer-zh（${humanizerSkillLoaded ? "已加载" : "未找到，使用内置规则"}）+ copy-editing（${copyEditingSkillLoaded ? "已加载" : "未找到，跳过终稿编辑"}）+ wechat-moments-copy-emoji（${momentsCopyEmojiSkillLoaded ? "已加载" : "未找到，使用内置规则"}）。`,
     rewriteEducationSkill ? `rewrite-douyin-education 实际规则：\n${rewriteEducationSkill}` : "rewrite-douyin-education 实际规则不可用，使用下面的内置兼容规则。",
     humanizerSkill ? `humanizer-zh 实际规则：\n${humanizerSkill}` : "humanizer-zh 实际规则不可用，使用下面的内置兼容规则。",
+    copyEditingSkill ? `copy-editing 实际规则：\n${copyEditingSkill}` : "copy-editing 实际规则不可用，不执行独立终稿编辑。",
+    momentsCopyEmojiSkill ? `wechat-moments-copy-emoji 实际规则：\n${momentsCopyEmojiSkill}` : "wechat-moments-copy-emoji 实际规则不可用，使用下面的内置排版与表情规则。",
     "继承规则：先提炼 hook、痛点/处境、情绪、反转、解决方案和 CTA，再按朋友圈用途重组；保留原文事实，不编造案例、数据或承诺。",
     "人性化规则：短句、节奏不完全整齐、使用具体生活场景，去掉官方腔、AI 套话、空泛口号和机械三段式。",
     "本页面覆盖规则：只输出一条朋友圈正文 JSON；Skill 中原本的“五版本输出”要求在本页面改为单条朋友圈输出，但其事实保真、结构提炼和去 AI 味规则继续生效。",
@@ -4229,6 +4258,7 @@ async function generateMomentsPostJsonV2(body = {}) {
     "推荐结构：真实场景或观察 -> 温和判断 -> 宣传对象解决的问题 -> 适用人群或体验细节 -> 低压力行动邀请 -> 自然收尾。",
     momentsWordCountRule(wordCount),
     momentsEmojiRule(addEmoji),
+    momentsCopyPasteRule(),
     `视觉风格方向：${styleRule}`,
     `引用规则：${referenceStyle}；必须把实际引用写进 post 正文，并在 reference_used 填写同一句或清晰转述。`,
     "禁止：虚假案例、夸大效果、绝对化承诺、制造焦虑、密集价格口号、硬广式“马上购买/名额有限”或与原文无关的信息。",
@@ -4337,6 +4367,8 @@ async function generateMomentsPostJsonV2(body = {}) {
             "本页面输出约束：",
             `正文长度必须在 ${wordCount.min}-${wordCount.max} 字之间，${momentsWordCountRule(wordCount)}`,
             momentsEmojiRule(addEmoji),
+            momentsCopyPasteRule(),
+            momentsCopyEmojiSkill ? `朋友圈文案与表情 Skill：\n${momentsCopyEmojiSkill}` : "",
             `引用素材必须是“${referenceStyle}”，并且实际写入 post 正文，reference_used 填写正文实际使用的内容。`,
             "保留原文事实，不新增案例、数据、人物、价格、效果承诺或宣传信息。",
             "宣传语气要温和、自然、像真人分享，不要官方公告感、AI 套话、空泛口号或连续硬广。",
@@ -4369,12 +4401,70 @@ async function generateMomentsPostJsonV2(body = {}) {
       };
     }
   }
-  let post = String(copyData.post || "").trim();
+  if (copyEditingSkill) {
+    const editedRun = await generateStructuredJson({
+      providerId,
+      temperature: 0.38,
+      requestName: "朋友圈文案 copy-editing 终稿质检",
+      maxTokens: 5200,
+      messages: [
+        {
+          role: "system",
+          content: [
+            "你是 copy-editing 终稿编辑器。",
+            "必须执行注入的 copy-editing 和微信朋友圈文案 Skill，只输出严格 JSON。",
+            "编辑目标是让文案更清楚、自然、可信、易复制发布；不改变原文事实、宣传对象和核心意图。",
+          ].join("\n"),
+        },
+        {
+          role: "user",
+          content: [
+            "copy-editing 实际 Skill：",
+            copyEditingSkill,
+            "",
+            "微信朋友圈文案与表情实际 Skill：",
+            momentsCopyEmojiSkill || "使用下方内置规则。",
+            "",
+            "本页面覆盖规则：对单条朋友圈做编辑，不输出多轮分析、评分、问题清单或多个版本。若缺少事实依据，删除或弱化说法，绝不编造证明、数据、案例、承诺或紧迫感。",
+            `正文长度必须在 ${wordCount.min}-${wordCount.max} 字之间。`,
+            momentsEmojiRule(addEmoji),
+            momentsCopyPasteRule(),
+            `引用素材必须是“${referenceStyle}”，并且实际写入 post 正文，reference_used 填写正文实际使用的内容。`,
+            "待编辑文案 JSON：",
+            JSON.stringify(copyData, null, 2),
+            "返回 JSON：",
+            JSON.stringify({
+              post: "可直接复制发布的朋友圈正文",
+              theme: "保留原主题",
+              angle: "保留原切入角度",
+              core_judgment: "保留核心判断",
+              visual_anchor: "保留视觉母题",
+              reference_style: referenceStyle,
+              reference_used: "正文中实际使用的引用素材",
+              persona_used: "人设摘要",
+            }, null, 2),
+          ].join("\n\n"),
+        },
+      ],
+    });
+    if (editedRun.data && typeof editedRun.data === "object") {
+      const editedData = editedRun.data;
+      copyData = {
+        ...copyData,
+        ...editedData,
+        post: normalizeMomentsPostLayout(editedData.post || copyData.post || ""),
+        reference_style: referenceStyle,
+        reference_used: String(editedData.reference_used || copyData.reference_used || "").trim(),
+      };
+    }
+  }
+  let post = normalizeMomentsPostLayout(copyData.post || "");
   if (
     rewriteCharacterCount(post) < wordCount.min
     || rewriteCharacterCount(post) > wordCount.max
     || !String(copyData.core_judgment || "").trim()
     || !momentsEmojiIsValid(post, addEmoji)
+    || !momentsCopyPasteReady(post)
     || !momentsReferenceIsUsed(post, copyData.reference_used, referenceStyle)
   ) {
     const repaired = await generateStructuredJson({
