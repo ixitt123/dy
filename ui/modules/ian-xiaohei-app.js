@@ -232,12 +232,11 @@ function renderSavedApiDetail() {
 function renderIntegrationStatus(integrations) {
   if (!els.integrationStatus) return;
   const items = [
-    `图片：${integrations.imageProviderConfigured ? "已配置" : "未配置"}${integrations.imageProvider ? ` · ${integrations.imageProvider}` : ""}`,
     `剪映草稿目录：${integrations.jianyingDraftDir ? "已配置" : "未配置"}`,
     `输出目录：${integrations.outputDir ? "正常" : "异常"}`,
   ];
   els.integrationStatus.textContent = items.join(" ｜ ");
-  els.integrationStatus.className = `integration-status ${integrations.imageProviderConfigured && integrations.jianyingDraftDir ? "success" : "warning"}`;
+  els.integrationStatus.className = `integration-status ${integrations.jianyingDraftDir && integrations.outputDir ? "success" : "warning"}`;
 }
 
 function renderMusicPresets(music, referenceAudio = {}) {

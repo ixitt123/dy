@@ -938,6 +938,9 @@ export function createIanXiaoheiRoutes({
     }
 
     if (req.method === "POST" && route === "generate-shot") {
+      sendJson(res, 410, { ok: false, message: "小黑页面已移除 AI 生图，请上传本地图片素材。" });
+      return true;
+      /*
       try {
         const body = await readJsonBody(req, { maxBytes: 512 * 1024 });
         const plan = body.plan && typeof body.plan === "object" ? body.plan : null;
@@ -989,6 +992,7 @@ export function createIanXiaoheiRoutes({
         });
       }
       return true;
+      */
     }
 
     if (req.method === "POST" && route === "upload-shot-image") {
@@ -1059,6 +1063,9 @@ export function createIanXiaoheiRoutes({
     }
 
     if (req.method === "POST" && route === "generate") {
+      sendJson(res, 410, { ok: false, message: "小黑页面已移除 AI 生图，请上传本地图片素材。" });
+      return true;
+      /*
       try {
         const body = await readJsonBody(req, { maxBytes: 256 * 1024 });
         const plan = await buildXiaoheiPlan(body, modelRouter);
@@ -1124,6 +1131,7 @@ export function createIanXiaoheiRoutes({
         });
       }
       return true;
+      */
     }
 
     sendJson(res, 404, { ok: false, message: "Unknown Ian Xiaohei API" });
