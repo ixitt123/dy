@@ -1504,7 +1504,16 @@
               <h2>已归档素材</h2>
               <p>管理已下载或生成的视频、音频、字幕和项目素材，并发送到当前成片项目。</p>
             </div>
-            <button class="ghost small" id="refreshProjectAssets" type="button">刷新素材</button>
+            <div class="project-asset-tools">
+              <label for="projectAssetPageSize">每页</label>
+              <select id="projectAssetPageSize" aria-label="已归档素材每页数量">
+                <option value="10" selected>10</option>
+                <option value="20">20</option>
+                <option value="50">50</option>
+                <option value="100">100</option>
+              </select>
+              <button class="ghost small" id="refreshProjectAssets" type="button">刷新素材</button>
+            </div>
           </div>
           <div class="project-asset-type-tabs" id="projectAssetTypeTabs" role="tablist" aria-label="已归档素材类别">
             <button class="project-asset-type-tab active" type="button" data-project-asset-type="image" role="tab" aria-selected="true">图片</button>
@@ -1532,6 +1541,11 @@
                 <tr><td class="empty" colspan="8">正在读取已归档素材。</td></tr>
               </tbody>
             </table>
+          </div>
+          <div class="project-asset-pager" id="projectAssetPager">
+            <button class="ghost small" id="projectAssetPrevPage" type="button">上一页</button>
+            <span id="projectAssetPageInfo">第 1 / 1 页</span>
+            <button class="ghost small" id="projectAssetNextPage" type="button">下一页</button>
           </div>
           <div class="project-asset-detail-modal" id="projectAssetDetailModal" hidden>
             <div class="project-asset-detail-backdrop" data-project-asset-detail-close></div>
