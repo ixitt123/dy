@@ -1594,41 +1594,22 @@
       </section>
 
       <section class="workbench-page" data-page="settings" id="settingsPage">
-        <section class="topbar">
-          <div>
-            <h1>全局配置</h1>
-            <p id="savePath">下载位置: 加载中...</p>
-          </div>
-          <div class="download-settings">
-            <input id="downloadDirInput" type="text" placeholder="下载位置" style="width:300px" />
-            <button class="ghost" id="chooseDownloadDir" type="button">选择文件夹</button>
-            <button class="ghost" id="saveDownloadDir" type="button">保存位置</button>
-            <button class="ghost" id="openFolder" type="button">打开下载文件夹</button>
-          </div>
-        </section>
+        <div class="legacy-download-settings" hidden aria-hidden="true">
+          <span id="savePath"></span>
+          <input id="downloadDirInput" type="text" />
+          <button id="chooseDownloadDir" type="button"></button>
+          <button id="saveDownloadDir" type="button"></button>
+          <button id="openFolder" type="button"></button>
+        </div>
 
-        <div class="api-panel settings-hub" id="unifiedSettingsPanel">
-          <div class="settings-hub-head">
-            <div>
-              <span class="section-eyebrow">API Center</span>
-              <h2>API 与模型设置</h2>
-              <p>保存一次，全局读取；每个功能会按下方分配使用对应 API。</p>
-            </div>
-            <button class="ghost small" id="v2RefreshSettings" type="button">刷新状态</button>
-          </div>
-          <div class="settings-summary" id="v2SettingsSummary"></div>
-          <div class="settings-category-grid" aria-label="设置分区">
-            <span>AI 文本模型</span><span>语音识别模型</span><span>TTS 配音模型</span>
-            <span>视频生成模型</span><span>下载设置</span>
-            <span>输出设置</span><span>剪映模板设置</span><span>系统状态检测</span>
-          </div>
-          <section class="settings-card provider-card">
+        <div class="settings-hub" id="unifiedSettingsPanel">
+          <details class="settings-card provider-card" id="apiServiceCenter">
             <div class="settings-card-head"><div>
               <h3>API 服务中心</h3>
               <p class="text-secondary">API Key 只保存在本机 settings.json；页面只显示脱敏状态。</p>
             </div></div>
             <div id="v2ProviderList" class="provider-grid"></div>
-          </section>
+          </details>
           <details class="settings-card task-card">
             <summary class="settings-card-head"><div>
               <h3>功能使用说明</h3>
