@@ -417,17 +417,29 @@ function buildAss(project, options = {}) {
       const token = entry.text;
       const highlighted = [...keywords].some((keyword) => keyword && (token.includes(keyword) || keyword.includes(token)));
       const [x, y] = tokenPosition(normalized.effectId, entry.indexInRow, entry.countInRow, baseX, baseY, entry);
-      const color = highlighted || (normalized.effectId === "blue-yellow-stairs" && index % 2) || (normalized.effectId === "green-white-offset" && index % 2) ? accent : primary;
-      const outline = normalized.effectId === "neon-outline-letters" ? 4 : normalized.effectId === "outline-footer-pop" ? 3 : 1.2;
-      const blur = normalized.effectId === "neon-outline-letters" ? "\\blur0.8" : "";
-      const prefix = normalized.effectId === "guide-list-focus" ? "▶ " : "";
+      const alternatingAccent = ["beast-highlight", "keyword-orbit", "lyric-wave", "gaming-stream", "sticker-bounce"].includes(normalized.effectId) && index % 2;
+      const color = highlighted || alternatingAccent ? accent : primary;
+      const outline = ["neon-pulse", "gaming-stream", "outline-trace"].includes(normalized.effectId)
+        ? 4.6
+        : ["beast-highlight", "punch-zoom", "question-pop", "sticker-bounce"].includes(normalized.effectId)
+          ? 3
+          : normalized.effectId === "minimal-subtitle"
+            ? 2.4
+            : 1.2;
+      const blur = ["neon-pulse", "gaming-stream", "soft-ai-glass"].includes(normalized.effectId) ? "\\blur0.8" : "";
+      const prefix = normalized.effectId === "podcast-lower-third" ? "• " : "";
+      const tokenFontSize = ["scatter-assemble", "main-side-notes", "podcast-lower-third", "minimal-subtitle"].includes(normalized.effectId)
+        ? Math.round(fontSize * 0.72)
+        : ["beat-word-pop", "punch-zoom", "gaming-stream"].includes(normalized.effectId)
+          ? Math.round(fontSize * 1.08)
+          : fontSize;
       const tags = [
         "\\an5",
         `\\pos(${Math.round(x)},${Math.round(y)})`,
         `\\fn${font}`,
-        `\\fs${normalized.effectId === "scatter-copy-reveal" || normalized.effectId === "guide-list-focus" ? Math.round(fontSize * 0.68) : fontSize}`,
+        `\\fs${tokenFontSize}`,
         `\\1c${color}`,
-        `\\3c${assColor(normalized.effectId === "neon-outline-letters" ? "#a65268" : "#111111")}`,
+        `\\3c${assColor(["neon-pulse", "gaming-stream"].includes(normalized.effectId) ? effect.accent : "#111111")}`,
         `\\bord${outline}`,
         "\\shad0",
         blur,
