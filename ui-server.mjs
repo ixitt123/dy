@@ -4210,13 +4210,17 @@ async function generateMomentsPostJsonV2(body = {}) {
       ? `主角描述：${mainCharacter}。主角在每张图中保持同一外形、服装和识别特征，并且参与核心动作。`
       : "未提供主角描述时，使用所选 Skill 的默认主角，并在整组图片中保持形体和识别特征一致。",
   ].join("\n");
-  const rewriteEducationSkillLoaded = Boolean(readSkill("rewrite-douyin-education").trim());
-  const humanizerSkillLoaded = Boolean(readSkill("humanizer-zh").trim());
+  const rewriteEducationSkill = readSkill("rewrite-douyin-education").trim();
+  const humanizerSkill = readSkill("humanizer-zh").trim();
+  const rewriteEducationSkillLoaded = Boolean(rewriteEducationSkill);
+  const humanizerSkillLoaded = Boolean(humanizerSkill);
   const projectCopySkillRules = [
     `项目文案 Skill：rewrite-douyin-education（${rewriteEducationSkillLoaded ? "已加载" : "未找到，使用内置规则"}）+ humanizer-zh（${humanizerSkillLoaded ? "已加载" : "未找到，使用内置规则"}）。`,
+    rewriteEducationSkill ? `rewrite-douyin-education 实际规则：\n${rewriteEducationSkill}` : "rewrite-douyin-education 实际规则不可用，使用下面的内置兼容规则。",
+    humanizerSkill ? `humanizer-zh 实际规则：\n${humanizerSkill}` : "humanizer-zh 实际规则不可用，使用下面的内置兼容规则。",
     "继承规则：先提炼 hook、痛点/处境、情绪、反转、解决方案和 CTA，再按朋友圈用途重组；保留原文事实，不编造案例、数据或承诺。",
     "人性化规则：短句、节奏不完全整齐、使用具体生活场景，去掉官方腔、AI 套话、空泛口号和机械三段式。",
-    "本页面覆盖规则：只输出一条朋友圈正文 JSON，不执行 rewrite-douyin-education 原本的“五版本输出”要求。",
+    "本页面覆盖规则：只输出一条朋友圈正文 JSON；Skill 中原本的“五版本输出”要求在本页面改为单条朋友圈输出，但其事实保真、结构提炼和去 AI 味规则继续生效。",
   ].join("\n");
   const copySkill = [
     projectCopySkillRules,
@@ -4224,7 +4228,7 @@ async function generateMomentsPostJsonV2(body = {}) {
     "主要目标：让读者自然看懂宣传对象、适合人群、具体价值和下一步，但读起来像真人分享，不像广告稿。",
     "推荐结构：真实场景或观察 -> 温和判断 -> 宣传对象解决的问题 -> 适用人群或体验细节 -> 低压力行动邀请 -> 自然收尾。",
     momentsWordCountRule(wordCount),
-    addEmoji ? "表情规则：只在语义确实需要时添加少量、常见且不喧宾夺主的表情，最多 3 个；不要为了装饰强行添加。" : "表情规则：正文不添加 emoji 或颜文字，保持干净自然。",
+    momentsEmojiRule(addEmoji),
     `视觉风格方向：${styleRule}`,
     `引用规则：${referenceStyle}；必须把实际引用写进 post 正文，并在 reference_used 填写同一句或清晰转述。`,
     "禁止：虚假案例、夸大效果、绝对化承诺、制造焦虑、密集价格口号、硬广式“马上购买/名额有限”或与原文无关的信息。",
@@ -4267,7 +4271,7 @@ async function generateMomentsPostJsonV2(body = {}) {
           `语气：${tone}`,
           `用途：${intent}`,
           `建议字数：${wordCount.label}（允许 ${wordCount.min}-${wordCount.max} 字自然浮动）`,
-          `添加表情：${addEmoji ? "是，仅在语义需要时少量添加" : "否，不添加 emoji"}`,
+          `添加表情：${addEmoji ? "是，必须添加 2-3 个与语义匹配的 emoji" : "否，不添加 emoji"}`,
           `视觉风格类别：${visualStyle}`,
           `引用素材：${referenceStyle}`,
           "",
@@ -4309,11 +4313,68 @@ async function generateMomentsPostJsonV2(body = {}) {
   });
 
   let copyData = copyRun.data && typeof copyRun.data === "object" ? copyRun.data : {};
+  if (humanizerSkill) {
+    const humanizedRun = await generateStructuredJson({
+      providerId,
+      temperature: 0.45,
+      requestName: "朋友圈文案 humanizer 二次处理",
+      maxTokens: 5200,
+      messages: [
+        {
+          role: "system",
+          content: [
+            "你是 humanizer-zh 中文去 AI 味二次处理器。",
+            "必须执行下面注入的 Skill 规则，只处理朋友圈正文，不改变原文事实、宣传对象和核心意图。",
+            "只输出严格 JSON，不要 Markdown，不要解释。",
+          ].join("\n"),
+        },
+        {
+          role: "user",
+          content: [
+            "humanizer-zh 实际 Skill：",
+            humanizerSkill,
+            "",
+            "本页面输出约束：",
+            `正文长度必须在 ${wordCount.min}-${wordCount.max} 字之间，${momentsWordCountRule(wordCount)}`,
+            momentsEmojiRule(addEmoji),
+            `引用素材必须是“${referenceStyle}”，并且实际写入 post 正文，reference_used 填写正文实际使用的内容。`,
+            "保留原文事实，不新增案例、数据、人物、价格、效果承诺或宣传信息。",
+            "宣传语气要温和、自然、像真人分享，不要官方公告感、AI 套话、空泛口号或连续硬广。",
+            "只返回一条朋友圈正文，不生成五个版本。",
+            "上一版文案 JSON：",
+            JSON.stringify(copyData, null, 2),
+            "返回 JSON：",
+            JSON.stringify({
+              post: "去 AI 味后的朋友圈正文",
+              theme: "保留原主题",
+              angle: "保留原切入角度",
+              core_judgment: "保留核心判断",
+              visual_anchor: "保留视觉母题",
+              reference_style: referenceStyle,
+              reference_used: "正文中实际使用的引用素材",
+              persona_used: "人设摘要",
+            }, null, 2),
+          ].join("\n\n"),
+        },
+      ],
+    });
+    if (humanizedRun.data && typeof humanizedRun.data === "object") {
+      const humanizedData = humanizedRun.data;
+      copyData = {
+        ...copyData,
+        ...humanizedData,
+        post: String(humanizedData.post || copyData.post || "").trim(),
+        reference_style: referenceStyle,
+        reference_used: String(humanizedData.reference_used || copyData.reference_used || "").trim(),
+      };
+    }
+  }
   let post = String(copyData.post || "").trim();
   if (
     rewriteCharacterCount(post) < wordCount.min
     || rewriteCharacterCount(post) > wordCount.max
     || !String(copyData.core_judgment || "").trim()
+    || !momentsEmojiIsValid(post, addEmoji)
     || !momentsReferenceIsUsed(post, copyData.reference_used, referenceStyle)
   ) {
     const repaired = await generateStructuredJson({
@@ -4328,7 +4389,7 @@ async function generateMomentsPostJsonV2(body = {}) {
           content: [
             "上一版不合格：太短、太干或缺少专业判断。请重写。",
             `硬性要求：${wordCount.min}-${wordCount.max} 中文字符，允许在范围内自然浮动；${momentsWordCountRule(wordCount)}不得编造事实。`,
-            addEmoji ? "表情硬性要求：只在语义需要时少量添加，最多 3 个。" : "表情硬性要求：正文不要出现 emoji 或颜文字。",
+            `表情硬性要求：${momentsEmojiRule(addEmoji)}`,
             "引用硬性要求：必须把引用素材真正写进 post 正文，并在 reference_used 填写实际使用的那句；不能只在 JSON 字段里写，正文里也必须出现。",
             "语气策略：",
             toneStrategy,
@@ -4374,7 +4435,7 @@ async function generateMomentsPostJsonV2(body = {}) {
           role: "user",
           content: [
             `请把下面的朋友圈正文压缩或补充到 ${wordCount.min}-${wordCount.max} 个中文字符，${momentsWordCountRule(wordCount)}`,
-            addEmoji ? "可以保留 0-3 个与语义相关的表情。" : "不得添加 emoji 或颜文字。",
+            momentsEmojiRule(addEmoji),
             `必须保留并自然写入 ${referenceStyle} 引用素材，同时 reference_used 填写正文实际使用的内容。`,
             "只保留原文事实，不新增案例、数据、效果承诺或宣传信息。",
             "正文要像真人发朋友圈，不要标题、编号、Markdown、解释和多余段落。",
@@ -4401,6 +4462,11 @@ async function generateMomentsPostJsonV2(body = {}) {
     : "";
   if (!momentsReferenceIsUsed(post, copyData.reference_used, referenceStyle)) {
     throw new Error(`本次生成未能加入“${referenceStyle}”引用素材，请重试或指定其他引用类别。`);
+  }
+  if (!momentsEmojiIsValid(post, addEmoji)) {
+    throw new Error(addEmoji
+      ? "本次生成未能添加 2-3 个匹配语义的表情，请重试。"
+      : "本次生成结果包含表情，已拒绝返回，请重试。");
   }
 
   const imageRun = await generateStructuredJson({
