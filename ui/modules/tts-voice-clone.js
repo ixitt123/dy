@@ -261,6 +261,7 @@
     state.sampleObjectUrl = "";
     state.sampleFile = null;
     state.audioQuality = null;
+    if (nodes.fileInput) nodes.fileInput.value = "";
     nodes.sourceAudio.removeAttribute("src");
     nodes.sourceAudio.hidden = true;
     nodes.sampleMeta.textContent = "尚未选择参考音频。";
@@ -353,26 +354,28 @@
     try {
       state.recorderStream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const mimeType = ["audio/webm;codecs=opus", "audio/webm"].find((type) => MediaRecorder.isTypeSupported?.(type)) || "";
-      state.recorder = new MediaRecorder(state.recorderStream, mimeType ? { mimeType } : undefined);
+      const recorder = new MediaRecorder(state.recorderStream, mimeType ? { mimeType } : undefined);
+      state.recorder = recorder;
       state.recorderChunks = [];
-      state.recorder.ondataavailable = (event) => { if (event.data?.size) state.recorderChunks.push(event.data); };
-      state.recorder.onstop = async () => {
+      recorder.ondataavailable = (event) => { if (event.data?.size) state.recorderChunks.push(event.data); };
+      recorder.onstop = async () => {
         setRecorderTimer(false);
         stopRecorderStream();
         nodes.recordButton.disabled = true;
         setStatus("正在整理录音并分析质量……");
         try {
-          const blob = new Blob(state.recorderChunks, { type: state.recorder.mimeType || "audio/webm" });
+          const blob = new Blob(state.recorderChunks, { type: recorder.mimeType || "audio/webm" });
           const wav = await blobToWav(blob);
           await setSampleFile(new File([wav], "microphone-reference.wav", { type: "audio/wav" }));
           setStatus("录音已转换为 WAV，请确认音频和文字校正结果。", "success");
         } catch (error) {
           setStatus(error instanceof Error ? error.message : String(error), "error");
         } finally {
+          if (state.recorder === recorder) state.recorder = null;
           nodes.recordButton.disabled = false;
         }
       };
-      state.recorder.start();
+      recorder.start();
       setRecorderTimer(true);
       nodes.recordButton.textContent = "停止录音";
       nodes.recordButton.classList.add("recording");
@@ -538,7 +541,10 @@
       else startRecording();
     });
     nodes.rerecordButton.addEventListener("click", () => {
-      if (state.recorder) stopRecording();
+      if (state.recorder?.state === "recording") {
+        setStatus("请先停止当前录音，录音整理完成后再重新录制。", "error");
+        return;
+      }
       clearSample();
       startRecording();
     });

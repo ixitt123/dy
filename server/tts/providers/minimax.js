@@ -354,6 +354,7 @@ export class MinimaxProvider extends TtsProviderAdapter {
     audioPath,
     consentConfirmed,
     targetModel = DEFAULT_MODEL,
+    transcript = "",
   }) {
     const apiKey = String(this.config.api_key || "").trim();
     const model = String(targetModel || this.config.model || DEFAULT_MODEL).trim() || DEFAULT_MODEL;
@@ -384,7 +385,7 @@ export class MinimaxProvider extends TtsProviderAdapter {
         body: JSON.stringify({
           file_id: fileId,
           voice_id: voiceId,
-          text: PREVIEW_TEXT,
+          text: String(transcript || "").trim() || PREVIEW_TEXT,
           model,
           language_boost: "Chinese",
           need_noise_reduction: true,

@@ -527,11 +527,13 @@ export function createVoiceAssetService({ baseDir, taskStore, ttsService, getSet
     const draftId = uniqueId("clone-draft");
     const sourcePath = path.resolve(String(input.sample_path || ""));
     const previewPath = path.join(cloneDraftsDir, `${draftId}-preview.mp3`);
+    const sampleDataMime = String(input.sample_data || "").trim().match(/^data:([^;,]+)/i)?.[1] || "";
+    const sampleMimeHint = String(input.sample_mime || sampleDataMime || "").toLowerCase();
     const sampleExtension = String(input.sample_data || "").trim()
-      ? ({ "audio/wav": ".wav", "audio/x-wav": ".wav", "audio/mpeg": ".mp3", "audio/mp3": ".mp3", "audio/mp4": ".m4a", "audio/x-m4a": ".m4a" }[String(input.sample_mime || "").toLowerCase()] || ".wav")
+      ? ({ "audio/wav": ".wav", "audio/x-wav": ".wav", "audio/mpeg": ".mp3", "audio/mp3": ".mp3", "audio/mp4": ".m4a", "audio/x-m4a": ".m4a" }[sampleMimeHint] || ".wav")
       : path.extname(sourcePath).toLowerCase() || ".wav";
     const samplePath = path.join(cloneDraftsDir, `${draftId}-${safeFileSegment(voiceName)}${sampleExtension}`);
-    let sampleMime = String(input.sample_mime || "audio/wav").toLowerCase();
+    let sampleMime = sampleMimeHint || "audio/wav";
     if (String(input.sample_data || "").trim()) {
       try {
         const audio = decodeAudio(input.sample_data, sampleMime);
