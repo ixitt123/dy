@@ -1,7 +1,6 @@
 const ROUTE_ALIASES = {
   analysis: "transcript",
   files: "assets",
-  "image-studio": "assets",
   vfo: "dashboard",
 };
 
