@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "type": "ian_xiaohei_video_material_package",
+  "batch_id": "20260710-103638-ian-xiaohei-video-03db78aa",
+  "project_id": "xiaohei-1783590011879",
+  "title": "暑假最怕“假努力”",
+  "source_text": "暑假补课最怕的，不是孩子暂时没听懂。\n\n而是孩子每天都在上课、每天都在写作业，看起来特别忙，最后一检查，原来的问题一个都没解决。\n\n为什么？\n\n因为很多孩子暑假学习，做的是统一的内容。\n\n基础好的觉得太简单，基础弱的又跟不上。\n\n老师讲了很多，孩子也记了很多笔记，但是没人先弄清楚：\n\n他到底是知识不会，方法不对，计算容易错，还是根本没有形成学习习惯？\n\n暑期时间很短，最忌讳的就是所有孩子用同一套办法。\n\n真正有效的第一步，不是马上开始补课，而是先找到孩子目前最影响成绩的几个问题。\n\n我们给孩子上体验课之前，会先通过试卷、错题和现场练习，看清楚孩子问题到底在哪里。\n\n仪征的家长，可以带孩子来做一次学习情况分析。\n\n先看清问题，再决定暑假应该怎么学。",
+  "tts_job_id": 29,
+  "director_project_id": 25,
+  "audio_duration": 55.512,
+  "scene_count": 14,
+  "files": {
+    "audio": "C:\\Users\\Admin\\Desktop\\短视频\\douyin-video-tool-source-code\\douyin-mcp-local\\.data\\tts\\audio\\tts-29.mp3",
+    "timeline": "timeline.json",
+    "mapping": "segment-image-map.json",
+    "subtitles": "subtitles.srt",
+    "prompts": "prompts.md",
+    "images": [
+      "C:\\Users\\Admin\\Desktop\\短视频\\douyin-video-tool-source-code\\douyin-mcp-local\\image-assets\\generated\\20260710-图片生成-Generate one stand-0015df\\local_1783652611168_0015dfc6.png",
+      "C:\\Users\\Admin\\Desktop\\短视频\\douyin-video-tool-source-code\\douyin-mcp-local\\image-assets\\generated\\20260710-图片生成-Generate one stand-e85949\\local_1783652608434_e859496b.png",
+      "C:\\Users\\Admin\\Desktop\\短视频\\douyin-video-tool-source-code\\douyin-mcp-local\\image-assets\\generated\\20260710-图片生成-Generate one stand-861830\\local_1783652605763_8618306a.png",
+      "C:\\Users\\Admin\\Desktop\\短视频\\douyin-video-tool-source-code\\douyin-mcp-local\\image-assets\\generated\\20260710-图片生成-Generate one stand-2d9e39\\local_1783652602230_2d9e3976.png",
+      "C:\\Users\\Admin\\Desktop\\短视频\\douyin-video-tool-source-code\\douyin-mcp-local\\image-assets\\generated\\20260710-图片生成-Generate one stand-d38efa\\local_1783652599383_d38efa5f.png",
+      "C:\\Users\\Admin\\Desktop\\短视频\\douyin-video-tool-source-code\\douyin-mcp-local\\image-assets\\generated\\20260710-图片生成-Generate one stand-168d0a\\local_1783652596141_168d0ada.png",
+      "C:\\Users\\Admin\\Desktop\\短视频\\douyin-video-tool-source-code\\douyin-mcp-local\\image-assets\\generated\\20260710-图片生成-Generate one stand-d66222\\local_1783652593843_d6622279.png",
+      "C:\\Users\\Admin\\Desktop\\短视频\\douyin-video-tool-source-code\\douyin-mcp-local\\image-assets\\generated\\20260710-图片生成-Generate one stand-a9fdc7\\local_1783652590935_a9fdc753.png",
+      "C:\\Users\\Admin\\Desktop\\短视频\\douyin-video-tool-source-code\\douyin-mcp-local\\image-assets\\generated\\20260710-图片生成-Generate one stand-770277\\local_1783652587976_7702774c.png",
+      "C:\\Users\\Admin\\Desktop\\短视频\\douyin-video-tool-source-code\\douyin-mcp-local\\image-assets\\generated\\20260710-图片生成-Generate one stand-65c61f\\local_1783652585202_65c61f2a.png",
+      "C:\\Users\\Admin\\Desktop\\短视频\\douyin-video-tool-source-code\\douyin-mcp-local\\image-assets\\generated\\20260710-图片生成-Generate one stand-7d49ae\\local_1783652582218_7d49aebb.png",
+      "C:\\Users\\Admin\\Desktop\\短视频\\douyin-video-tool-source-code\\douyin-mcp-local\\image-assets\\generated\\20260710-图片生成-Generate one stand-b2bf3d\\local_1783652579799_b2bf3da6.png",
+      "C:\\Users\\Admin\\Desktop\\短视频\\douyin-video-tool-source-code\\douyin-mcp-local\\image-assets\\generated\\20260710-图片生成-Generate one stand-6337a7\\local_1783652576984_6337a7a6.png",
+      "C:\\Users\\Admin\\Desktop\\短视频\\douyin-video-tool-source-code\\douyin-mcp-local\\image-assets\\generated\\20260710-图片生成-Generate one stand-d6ec3f\\local_1783652574153_d6ec3f4a.png"
+    ]
+  },
+  "created_at": "2026-07-10T03:03:36.538Z"
+}

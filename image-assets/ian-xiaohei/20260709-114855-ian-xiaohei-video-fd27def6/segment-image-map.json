@@ -1,0 +1,74 @@
+[
+  {
+    "segment_id": "seg-001",
+    "scene_index": 1,
+    "text": "学了好几年英语，孩子还是开不了口？别怪他懒！",
+    "start_time": 0,
+    "end_time": 4.353,
+    "image_asset_id": "8001270e-495b-4313-9603-86ffc058ce88",
+    "image_path": "C:\\Users\\Admin\\Desktop\\短视频\\douyin-video-tool-source-code\\douyin-mcp-local\\image-assets\\ian-xiaohei\\20260709-114855-ian-xiaohei-video-fd27def6\\img_3ec1d5_0_1783568950582.png"
+  },
+  {
+    "segment_id": "seg-002",
+    "scene_index": 2,
+    "text": "真相是——不是他不行，是您教的方法从一开始就错了。",
+    "start_time": 4.353,
+    "end_time": 8.623,
+    "image_asset_id": "5c8e6cab-1b3d-4d53-86c7-bb6ae24db160",
+    "image_path": "C:\\Users\\Admin\\Desktop\\短视频\\douyin-video-tool-source-code\\douyin-mcp-local\\image-assets\\ian-xiaohei\\20260709-114855-ian-xiaohei-video-fd27def6\\img_da333e_0_1783568987165.png"
+  },
+  {
+    "segment_id": "seg-003",
+    "scene_index": 3,
+    "text": "天天背单词、抠语法，跟实际说话八竿子打不着。",
+    "start_time": 8.623,
+    "end_time": 12.565,
+    "image_asset_id": "97c588b0-9813-4194-9fac-3ce6ad59ecb5",
+    "image_path": "C:\\Users\\Admin\\Desktop\\短视频\\douyin-video-tool-source-code\\douyin-mcp-local\\image-assets\\ian-xiaohei\\20260709-114855-ian-xiaohei-video-fd27def6\\img_cee788_0_1783569026767.png"
+  },
+  {
+    "segment_id": "seg-004",
+    "scene_index": 4,
+    "text": "比如，孩子背了1000个单词，却连点餐、问路都说不顺，因为没练过真实场景。",
+    "start_time": 12.565,
+    "end_time": 19.464,
+    "image_asset_id": "f895788a-9ee2-4d80-b9fa-5d7505499446",
+    "image_path": "C:\\Users\\Admin\\Desktop\\短视频\\douyin-video-tool-source-code\\douyin-mcp-local\\image-assets\\ian-xiaohei\\20260709-114855-ian-xiaohei-video-fd27def6\\img_351c35_0_1783569056780.png"
+  },
+  {
+    "segment_id": "seg-005",
+    "scene_index": 5,
+    "text": "从今天起，他忘掉学生身份，把自己当语言使用者！",
+    "start_time": 19.464,
+    "end_time": 23.981,
+    "image_asset_id": "6f96f6e1-e15f-4066-94b1-9b19eb645e71",
+    "image_path": "C:\\Users\\Admin\\Desktop\\短视频\\douyin-video-tool-source-code\\douyin-mcp-local\\image-assets\\ian-xiaohei\\20260709-114855-ian-xiaohei-video-fd27def6\\img_119af1_0_1783569093154.png"
+  },
+  {
+    "segment_id": "seg-006",
+    "scene_index": 6,
+    "text": "。",
+    "start_time": 23.981,
+    "end_time": 24.391,
+    "image_asset_id": "21947e98-f491-41a3-98c7-cf5c699ea4ed",
+    "image_path": "C:\\Users\\Admin\\Desktop\\短视频\\douyin-video-tool-source-code\\douyin-mcp-local\\image-assets\\ian-xiaohei\\20260709-114855-ian-xiaohei-video-fd27def6\\img_f9bab6_0_1783569126870.png"
+  },
+  {
+    "segment_id": "seg-007",
+    "scene_index": 7,
+    "text": "每天花10分钟模拟对话，半年后，流利开口！",
+    "start_time": 24.391,
+    "end_time": 28.58,
+    "image_asset_id": "234a56d4-0728-443f-aba4-b37b80e181f0",
+    "image_path": "C:\\Users\\Admin\\Desktop\\短视频\\douyin-video-tool-source-code\\douyin-mcp-local\\image-assets\\ian-xiaohei\\20260709-114855-ian-xiaohei-video-fd27def6\\img_201b4c_0_1783569158666.png"
+  },
+  {
+    "segment_id": "seg-008",
+    "scene_index": 8,
+    "text": "试试就知道了。",
+    "start_time": 28.58,
+    "end_time": 29.976,
+    "image_asset_id": "62127266-1fa0-425f-8301-3476d7c9cfd8",
+    "image_path": "C:\\Users\\Admin\\Desktop\\短视频\\douyin-video-tool-source-code\\douyin-mcp-local\\image-assets\\ian-xiaohei\\20260709-114855-ian-xiaohei-video-fd27def6\\img_bd36c7_0_1783569195659.png"
+  }
+]

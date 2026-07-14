@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "type": "ian_xiaohei_video_material_package",
+  "batch_id": "20260709-114855-ian-xiaohei-video-fd27def6",
+  "title": "学了好几年英语，孩子还是开不了口",
+  "source_text": "学了好几年英语，孩子还是开不了口？别怪他懒！真相是——不是他不行，是您教的方法从一开始就错了。天天背单词、抠语法，跟实际说话八竿子打不着。比如，孩子背了1000个单词，却连点餐、问路都说不顺，因为没练过真实场景。从今天起，他忘掉学生身份，把自己当语言使用者！。每天花10分钟模拟对话，半年后，流利开口！试试就知道了。",
+  "tts_job_id": 21,
+  "director_project_id": 23,
+  "audio_duration": 29.976,
+  "scene_count": 8,
+  "files": {
+    "audio": "C:\\Users\\Admin\\Desktop\\短视频\\douyin-video-tool-source-code\\douyin-mcp-local\\.data\\tts\\audio\\tts-21.mp3",
+    "timeline": "timeline.json",
+    "mapping": "segment-image-map.json",
+    "subtitles": "subtitles.srt",
+    "prompts": "prompts.md",
+    "images": [
+      "C:\\Users\\Admin\\Desktop\\短视频\\douyin-video-tool-source-code\\douyin-mcp-local\\image-assets\\ian-xiaohei\\20260709-114855-ian-xiaohei-video-fd27def6\\img_3ec1d5_0_1783568950582.png",
+      "C:\\Users\\Admin\\Desktop\\短视频\\douyin-video-tool-source-code\\douyin-mcp-local\\image-assets\\ian-xiaohei\\20260709-114855-ian-xiaohei-video-fd27def6\\img_da333e_0_1783568987165.png",
+      "C:\\Users\\Admin\\Desktop\\短视频\\douyin-video-tool-source-code\\douyin-mcp-local\\image-assets\\ian-xiaohei\\20260709-114855-ian-xiaohei-video-fd27def6\\img_cee788_0_1783569026767.png",
+      "C:\\Users\\Admin\\Desktop\\短视频\\douyin-video-tool-source-code\\douyin-mcp-local\\image-assets\\ian-xiaohei\\20260709-114855-ian-xiaohei-video-fd27def6\\img_351c35_0_1783569056780.png",
+      "C:\\Users\\Admin\\Desktop\\短视频\\douyin-video-tool-source-code\\douyin-mcp-local\\image-assets\\ian-xiaohei\\20260709-114855-ian-xiaohei-video-fd27def6\\img_119af1_0_1783569093154.png",
+      "C:\\Users\\Admin\\Desktop\\短视频\\douyin-video-tool-source-code\\douyin-mcp-local\\image-assets\\ian-xiaohei\\20260709-114855-ian-xiaohei-video-fd27def6\\img_f9bab6_0_1783569126870.png",
+      "C:\\Users\\Admin\\Desktop\\短视频\\douyin-video-tool-source-code\\douyin-mcp-local\\image-assets\\ian-xiaohei\\20260709-114855-ian-xiaohei-video-fd27def6\\img_201b4c_0_1783569158666.png",
+      "C:\\Users\\Admin\\Desktop\\短视频\\douyin-video-tool-source-code\\douyin-mcp-local\\image-assets\\ian-xiaohei\\20260709-114855-ian-xiaohei-video-fd27def6\\img_bd36c7_0_1783569195659.png"
+    ]
+  },
+  "created_at": "2026-07-09T03:53:48.917Z"
+}

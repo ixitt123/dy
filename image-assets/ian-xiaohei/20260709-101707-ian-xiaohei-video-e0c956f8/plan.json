@@ -1,0 +1,150 @@
+{
+  "batchId": "20260709-101707-ian-xiaohei-video-e0c956f8",
+  "title": "从学生到语言使用者",
+  "sourceText": "几乎所有人都可以半年内说流利的英文。好了，行动篇今天来了。所以从今天开始，请你忘掉英文学生的身份，把自己当做语言的使用者。",
+  "aspectRatio": "16:9",
+  "purpose": "article",
+  "purposeLabel": "文章正文配图",
+  "requestedCount": "auto",
+  "semanticUnitCount": 4,
+  "analysisMode": "ai_timed_semantic",
+  "analysisNote": "已按 13.06 秒真实音频生成 4 个连续语义镜头，每段约 3-5 秒。",
+  "timingSource": "tts_audio_duration_weighted",
+  "audioDuration": 13.056,
+  "ttsJobId": 18,
+  "shots": [
+    {
+      "index": 1,
+      "topic": "半年流利英文",
+      "purpose": "文章正文配图 #1",
+      "role": "钩子判断",
+      "roleId": "hook",
+      "sourceText": "几乎所有人都可以半年内说流利的英文。",
+      "sourceIndex": 0,
+      "visualSubject": "半年说流利英文",
+      "xiaoheiAction": "站在沙漏旁，用一根细棍指着沙漏底部的小山，另一只手摊开，表示“看，就是这样”。",
+      "visualMetaphor": "沙漏代表半年时间，沙子代表学习进度，字母气泡代表流利输出，所有小黑都做到了，说明普遍性。",
+      "structureType": "概念隐喻",
+      "coreIdea": "几乎所有人都能做到半年内说流利英文，这是一个大胆的断言，需要视觉化其普遍性和时间性。",
+      "composition": "核心隐喻是“沙漏代表半年时间，沙子代表学习进度，字母气泡代表流利输出，所有小黑都做到了，说明普遍性。”。小黑正在站在沙漏旁，用一根细棍指着沙漏底部的小山，另一只手摊开，表示“看，就是这样”。。 画面只翻译当前原文“几乎所有人都可以半年内说流利的英文。”，不扩写成全文主题；围绕“半年说流利英文”选择具体物件，可参考单词纸片、对话门、开口按钮、身份标签，但不允许用通用图标替代原文动作。保持第 1/4 张与其他张的主物件和小黑动作不同。",
+      "elements": [
+        "巨大沙漏",
+        "流沙",
+        "多个小黑",
+        "字母气泡",
+        "手摇广播机",
+        "核心纸条"
+      ],
+      "labels": [
+        "时间",
+        "普遍性",
+        "流利"
+      ],
+      "prompt": "Generate one standalone 16:9 horizontal Chinese article illustration.\n\nVisual DNA:\nPure white background. Minimalist black hand-drawn line art. Slightly wobbly pen lines. Lots of empty white space. Sparse red/orange/blue handwritten Chinese annotations. Clean absurd product-sketch feeling. No gradients, no shadows, no paper texture, no complex background, no commercial vector style, no PPT infographic look, no cute mascot poster, no children's illustration, no realistic UI.\n\nRecurring IP character required:\n小黑, one small solid-black absurd creature with exactly two white dot eyes, exactly two tiny thin legs, at most two thin arms, no duplicated face or limbs, blank serious expression, slightly uneven hand-drawn body shape. 小黑 must perform the core conceptual action, not decorate the scene. Make 小黑 serious, deadpan, and slightly bizarre, not cute. Never draw extra eyes, extra legs, extra arms, layered faces, smiling, confident, excited, or expressive facial features.\n\nTheme: 半年流利英文\nSeries role: 1/4 钩子判断. This image belongs to a multi-image set, so it must use a clearly different metaphor, object set, and composition from the other images in the same set.\nExact source paragraph this image must explain: 几乎所有人都可以半年内说流利的英文。\nStructure type: 概念隐喻\nCore idea: 几乎所有人都能做到半年内说流利英文，这是一个大胆的断言，需要视觉化其普遍性和时间性。\nVisual subject: 半年说流利英文\nXiaohei core action: 站在沙漏旁，用一根细棍指着沙漏底部的小山，另一只手摊开，表示“看，就是这样”。\nFresh metaphor for this paragraph: 沙漏代表半年时间，沙子代表学习进度，字母气泡代表流利输出，所有小黑都做到了，说明普遍性。\nComposition: 核心隐喻是“沙漏代表半年时间，沙子代表学习进度，字母气泡代表流利输出，所有小黑都做到了，说明普遍性。”。小黑正在站在沙漏旁，用一根细棍指着沙漏底部的小山，另一只手摊开，表示“看，就是这样”。。 画面只翻译当前原文“几乎所有人都可以半年内说流利的英文。”，不扩写成全文主题；围绕“半年说流利英文”选择具体物件，可参考单词纸片、对话门、开口按钮、身份标签，但不允许用通用图标替代原文动作。保持第 1/4 张与其他张的主物件和小黑动作不同。\nSuggested elements: 巨大沙漏 / 流沙 / 多个小黑 / 字母气泡 / 手摇广播机 / 核心纸条\nChinese handwritten labels: 时间 / 普遍性 / 流利\n\nColor use:\nBlack for main line art and 小黑. Orange for main flow/path/arrows. Red only for key warnings/problems/results. Blue only for secondary notes or feedback/system state.\n\nConstraints:\nThe picture must explain the exact source paragraph above, not merely the article's broad topic. Preserve its subject, action, direction, contrast, and result. Do not substitute a generic learning, workplace, AI, or business scene. Draw only one Xiaohei character unless the composition explicitly requires a before/after comparison; even then, each Xiaohei must have exactly two eyes and two legs. One image explains only one core structure. Keep the main subject around 40%-60% of the canvas. Preserve at least 35% blank white space. Use at most 5-8 short handwritten Chinese labels, and derive labels only from this source paragraph. Do not write a title in the top-left corner. Do not write the structure type on the image. Do not make it a formal diagram, course slide, or dense explainer. Do not repeat the same machine, route, door, funnel, card, or character pose across the image set. Do not copy prior examples or reuse known case compositions unless explicitly requested; invent a fresh visual metaphor for this specific paragraph. It should be clear but not instructional, interesting but not childish, strange but clean.",
+      "segmentId": "seg-001",
+      "startTime": 0,
+      "endTime": 3.637,
+      "duration": 3.637
+    },
+    {
+      "index": 2,
+      "topic": "行动篇启动",
+      "purpose": "文章正文配图 #2",
+      "role": "路径推进",
+      "roleId": "path",
+      "sourceText": "好了，行动篇今天来了。",
+      "sourceIndex": 1,
+      "visualSubject": "行动正式开始",
+      "xiaoheiAction": "双手抓住一个巨大的发条钥匙，用力旋转，表情严肃专注。",
+      "visualMetaphor": "钟表代表篇章切换，发条代表启动行动，翻开的表盘代表新阶段的开始。",
+      "structureType": "Workflow",
+      "coreIdea": "这是一个转折点，从理论进入实践，需要视觉化“启动”和“新篇章”的感觉。",
+      "composition": "核心隐喻是“钟表代表篇章切换，发条代表启动行动，翻开的表盘代表新阶段的开始。”。小黑正在双手抓住一个巨大的发条钥匙，用力旋转，表情严肃专注。。 画面只翻译当前原文“好了，行动篇今天来了。”，不扩写成全文主题；围绕“行动正式开始”选择具体物件，可参考单词纸片、对话门、开口按钮、身份标签，但不允许用通用图标替代原文动作。保持第 2/4 张与其他张的主物件和小黑动作不同。",
+      "elements": [
+        "老式钟表",
+        "发条钥匙",
+        "表盘翻转",
+        "文字“理论篇”“行动篇”",
+        "橙色路线",
+        "线轴"
+      ],
+      "labels": [
+        "启动",
+        "转折",
+        "新阶段"
+      ],
+      "prompt": "Generate one standalone 16:9 horizontal Chinese article illustration.\n\nVisual DNA:\nPure white background. Minimalist black hand-drawn line art. Slightly wobbly pen lines. Lots of empty white space. Sparse red/orange/blue handwritten Chinese annotations. Clean absurd product-sketch feeling. No gradients, no shadows, no paper texture, no complex background, no commercial vector style, no PPT infographic look, no cute mascot poster, no children's illustration, no realistic UI.\n\nRecurring IP character required:\n小黑, one small solid-black absurd creature with exactly two white dot eyes, exactly two tiny thin legs, at most two thin arms, no duplicated face or limbs, blank serious expression, slightly uneven hand-drawn body shape. 小黑 must perform the core conceptual action, not decorate the scene. Make 小黑 serious, deadpan, and slightly bizarre, not cute. Never draw extra eyes, extra legs, extra arms, layered faces, smiling, confident, excited, or expressive facial features.\n\nTheme: 行动篇启动\nSeries role: 2/4 路径推进. This image belongs to a multi-image set, so it must use a clearly different metaphor, object set, and composition from the other images in the same set.\nExact source paragraph this image must explain: 好了，行动篇今天来了。\nStructure type: Workflow\nCore idea: 这是一个转折点，从理论进入实践，需要视觉化“启动”和“新篇章”的感觉。\nVisual subject: 行动正式开始\nXiaohei core action: 双手抓住一个巨大的发条钥匙，用力旋转，表情严肃专注。\nFresh metaphor for this paragraph: 钟表代表篇章切换，发条代表启动行动，翻开的表盘代表新阶段的开始。\nComposition: 核心隐喻是“钟表代表篇章切换，发条代表启动行动，翻开的表盘代表新阶段的开始。”。小黑正在双手抓住一个巨大的发条钥匙，用力旋转，表情严肃专注。。 画面只翻译当前原文“好了，行动篇今天来了。”，不扩写成全文主题；围绕“行动正式开始”选择具体物件，可参考单词纸片、对话门、开口按钮、身份标签，但不允许用通用图标替代原文动作。保持第 2/4 张与其他张的主物件和小黑动作不同。\nSuggested elements: 老式钟表 / 发条钥匙 / 表盘翻转 / 文字“理论篇”“行动篇” / 橙色路线 / 线轴\nChinese handwritten labels: 启动 / 转折 / 新阶段\n\nColor use:\nBlack for main line art and 小黑. Orange for main flow/path/arrows. Red only for key warnings/problems/results. Blue only for secondary notes or feedback/system state.\n\nConstraints:\nThe picture must explain the exact source paragraph above, not merely the article's broad topic. Preserve its subject, action, direction, contrast, and result. Do not substitute a generic learning, workplace, AI, or business scene. Draw only one Xiaohei character unless the composition explicitly requires a before/after comparison; even then, each Xiaohei must have exactly two eyes and two legs. One image explains only one core structure. Keep the main subject around 40%-60% of the canvas. Preserve at least 35% blank white space. Use at most 5-8 short handwritten Chinese labels, and derive labels only from this source paragraph. Do not write a title in the top-left corner. Do not write the structure type on the image. Do not make it a formal diagram, course slide, or dense explainer. Do not repeat the same machine, route, door, funnel, card, or character pose across the image set. Do not copy prior examples or reuse known case compositions unless explicitly requested; invent a fresh visual metaphor for this specific paragraph. It should be clear but not instructional, interesting but not childish, strange but clean.",
+      "segmentId": "seg-002",
+      "startTime": 3.637,
+      "endTime": 6.248,
+      "duration": 2.611
+    },
+    {
+      "index": 3,
+      "topic": "忘掉学生身份",
+      "purpose": "文章正文配图 #3",
+      "role": "身份切换",
+      "roleId": "switch",
+      "sourceText": "所以从今天开始，请你忘掉英文学生的身份，",
+      "sourceIndex": 2,
+      "visualSubject": "放下英文学生身份",
+      "xiaoheiAction": "一只手拿着“学生”帽子，另一只手做出“扔掉”的动作，眼睛看着垃圾桶，表情果断。",
+      "visualMetaphor": "帽子代表身份，垃圾桶代表抛弃，叉掉的简笔画强化“忘掉”的指令。",
+      "structureType": "角色状态",
+      "coreIdea": "要求用户主动抛弃旧身份，需要视觉化“忘记”和“抛弃”的动作。",
+      "composition": "核心隐喻是“帽子代表身份，垃圾桶代表抛弃，叉掉的简笔画强化“忘掉”的指令。”。小黑正在一只手拿着“学生”帽子，另一只手做出“扔掉”的动作，眼睛看着垃圾桶，表情果断。。 画面只翻译当前原文“所以从今天开始，请你忘掉英文学生的身份，”，不扩写成全文主题；围绕“放下英文学生身份”选择具体物件，可参考单词纸片、对话门、开口按钮、身份标签，但不允许用通用图标替代原文动作。保持第 3/4 张与其他张的主物件和小黑动作不同。",
+      "elements": [
+        "小黑",
+        "垃圾桶",
+        "写着“学生”的帽子",
+        "叉掉的简笔画",
+        "旧身份衣架",
+        "新角色门"
+      ],
+      "labels": [
+        "抛弃",
+        "身份转换",
+        "指令"
+      ],
+      "prompt": "Generate one standalone 16:9 horizontal Chinese article illustration.\n\nVisual DNA:\nPure white background. Minimalist black hand-drawn line art. Slightly wobbly pen lines. Lots of empty white space. Sparse red/orange/blue handwritten Chinese annotations. Clean absurd product-sketch feeling. No gradients, no shadows, no paper texture, no complex background, no commercial vector style, no PPT infographic look, no cute mascot poster, no children's illustration, no realistic UI.\n\nRecurring IP character required:\n小黑, one small solid-black absurd creature with exactly two white dot eyes, exactly two tiny thin legs, at most two thin arms, no duplicated face or limbs, blank serious expression, slightly uneven hand-drawn body shape. 小黑 must perform the core conceptual action, not decorate the scene. Make 小黑 serious, deadpan, and slightly bizarre, not cute. Never draw extra eyes, extra legs, extra arms, layered faces, smiling, confident, excited, or expressive facial features.\n\nTheme: 忘掉学生身份\nSeries role: 3/4 身份切换. This image belongs to a multi-image set, so it must use a clearly different metaphor, object set, and composition from the other images in the same set.\nExact source paragraph this image must explain: 所以从今天开始，请你忘掉英文学生的身份，\nStructure type: 角色状态\nCore idea: 要求用户主动抛弃旧身份，需要视觉化“忘记”和“抛弃”的动作。\nVisual subject: 放下英文学生身份\nXiaohei core action: 一只手拿着“学生”帽子，另一只手做出“扔掉”的动作，眼睛看着垃圾桶，表情果断。\nFresh metaphor for this paragraph: 帽子代表身份，垃圾桶代表抛弃，叉掉的简笔画强化“忘掉”的指令。\nComposition: 核心隐喻是“帽子代表身份，垃圾桶代表抛弃，叉掉的简笔画强化“忘掉”的指令。”。小黑正在一只手拿着“学生”帽子，另一只手做出“扔掉”的动作，眼睛看着垃圾桶，表情果断。。 画面只翻译当前原文“所以从今天开始，请你忘掉英文学生的身份，”，不扩写成全文主题；围绕“放下英文学生身份”选择具体物件，可参考单词纸片、对话门、开口按钮、身份标签，但不允许用通用图标替代原文动作。保持第 3/4 张与其他张的主物件和小黑动作不同。\nSuggested elements: 小黑 / 垃圾桶 / 写着“学生”的帽子 / 叉掉的简笔画 / 旧身份衣架 / 新角色门\nChinese handwritten labels: 抛弃 / 身份转换 / 指令\n\nColor use:\nBlack for main line art and 小黑. Orange for main flow/path/arrows. Red only for key warnings/problems/results. Blue only for secondary notes or feedback/system state.\n\nConstraints:\nThe picture must explain the exact source paragraph above, not merely the article's broad topic. Preserve its subject, action, direction, contrast, and result. Do not substitute a generic learning, workplace, AI, or business scene. Draw only one Xiaohei character unless the composition explicitly requires a before/after comparison; even then, each Xiaohei must have exactly two eyes and two legs. One image explains only one core structure. Keep the main subject around 40%-60% of the canvas. Preserve at least 35% blank white space. Use at most 5-8 short handwritten Chinese labels, and derive labels only from this source paragraph. Do not write a title in the top-left corner. Do not write the structure type on the image. Do not make it a formal diagram, course slide, or dense explainer. Do not repeat the same machine, route, door, funnel, card, or character pose across the image set. Do not copy prior examples or reuse known case compositions unless explicitly requested; invent a fresh visual metaphor for this specific paragraph. It should be clear but not instructional, interesting but not childish, strange but clean.",
+      "segmentId": "seg-003",
+      "startTime": 6.248,
+      "endTime": 10.538,
+      "duration": 4.29
+    },
+    {
+      "index": 4,
+      "topic": "成为语言使用者",
+      "purpose": "文章正文配图 #4",
+      "role": "身份切换",
+      "roleId": "switch",
+      "sourceText": "把自己当做语言的使用者。",
+      "sourceIndex": 3,
+      "visualSubject": "成为语言使用者",
+      "xiaoheiAction": "弯下腰，从工具箱里拿起一个扳手，直起身，走向一个巨大的字母螺丝，准备拧它。",
+      "visualMetaphor": "工具箱代表语言工具集，扳手代表使用语言的能力，字母螺丝代表需要被“修理”或“组装”的语言问题。",
+      "structureType": "概念隐喻",
+      "coreIdea": "新身份是“语言使用者”，需要视觉化“使用”和“主动操作”的概念。",
+      "composition": "核心隐喻是“工具箱代表语言工具集，扳手代表使用语言的能力，字母螺丝代表需要被“修理”或“组装”的语言问题。”。小黑正在弯下腰，从工具箱里拿起一个扳手，直起身，走向一个巨大的字母螺丝，准备拧它。。 画面只翻译当前原文“把自己当做语言的使用者。”，不扩写成全文主题；围绕“成为语言使用者”选择具体物件，可参考单词纸片、对话门、开口按钮、身份标签，但不允许用通用图标替代原文动作。保持第 4/4 张与其他张的主物件和小黑动作不同。",
+      "elements": [
+        "小黑",
+        "工具箱",
+        "扳手、螺丝刀、锤子",
+        "字母螺丝",
+        "旧身份衣架",
+        "新角色门"
+      ],
+      "labels": [
+        "新身份",
+        "使用",
+        "主动"
+      ],
+      "prompt": "Generate one standalone 16:9 horizontal Chinese article illustration.\n\nVisual DNA:\nPure white background. Minimalist black hand-drawn line art. Slightly wobbly pen lines. Lots of empty white space. Sparse red/orange/blue handwritten Chinese annotations. Clean absurd product-sketch feeling. No gradients, no shadows, no paper texture, no complex background, no commercial vector style, no PPT infographic look, no cute mascot poster, no children's illustration, no realistic UI.\n\nRecurring IP character required:\n小黑, one small solid-black absurd creature with exactly two white dot eyes, exactly two tiny thin legs, at most two thin arms, no duplicated face or limbs, blank serious expression, slightly uneven hand-drawn body shape. 小黑 must perform the core conceptual action, not decorate the scene. Make 小黑 serious, deadpan, and slightly bizarre, not cute. Never draw extra eyes, extra legs, extra arms, layered faces, smiling, confident, excited, or expressive facial features.\n\nTheme: 成为语言使用者\nSeries role: 4/4 身份切换. This image belongs to a multi-image set, so it must use a clearly different metaphor, object set, and composition from the other images in the same set.\nExact source paragraph this image must explain: 把自己当做语言的使用者。\nStructure type: 概念隐喻\nCore idea: 新身份是“语言使用者”，需要视觉化“使用”和“主动操作”的概念。\nVisual subject: 成为语言使用者\nXiaohei core action: 弯下腰，从工具箱里拿起一个扳手，直起身，走向一个巨大的字母螺丝，准备拧它。\nFresh metaphor for this paragraph: 工具箱代表语言工具集，扳手代表使用语言的能力，字母螺丝代表需要被“修理”或“组装”的语言问题。\nComposition: 核心隐喻是“工具箱代表语言工具集，扳手代表使用语言的能力，字母螺丝代表需要被“修理”或“组装”的语言问题。”。小黑正在弯下腰，从工具箱里拿起一个扳手，直起身，走向一个巨大的字母螺丝，准备拧它。。 画面只翻译当前原文“把自己当做语言的使用者。”，不扩写成全文主题；围绕“成为语言使用者”选择具体物件，可参考单词纸片、对话门、开口按钮、身份标签，但不允许用通用图标替代原文动作。保持第 4/4 张与其他张的主物件和小黑动作不同。\nSuggested elements: 小黑 / 工具箱 / 扳手、螺丝刀、锤子 / 字母螺丝 / 旧身份衣架 / 新角色门\nChinese handwritten labels: 新身份 / 使用 / 主动\n\nColor use:\nBlack for main line art and 小黑. Orange for main flow/path/arrows. Red only for key warnings/problems/results. Blue only for secondary notes or feedback/system state.\n\nConstraints:\nThe picture must explain the exact source paragraph above, not merely the article's broad topic. Preserve its subject, action, direction, contrast, and result. Do not substitute a generic learning, workplace, AI, or business scene. Draw only one Xiaohei character unless the composition explicitly requires a before/after comparison; even then, each Xiaohei must have exactly two eyes and two legs. One image explains only one core structure. Keep the main subject around 40%-60% of the canvas. Preserve at least 35% blank white space. Use at most 5-8 short handwritten Chinese labels, and derive labels only from this source paragraph. Do not write a title in the top-left corner. Do not write the structure type on the image. Do not make it a formal diagram, course slide, or dense explainer. Do not repeat the same machine, route, door, funnel, card, or character pose across the image set. Do not copy prior examples or reuse known case compositions unless explicitly requested; invent a fresh visual metaphor for this specific paragraph. It should be clear but not instructional, interesting but not childish, strange but clean.",
+      "segmentId": "seg-004",
+      "startTime": 10.538,
+      "endTime": 13.056,
+      "duration": 2.518
+    }
+  ],
+  "directorProjectId": 20
+}

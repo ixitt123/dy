@@ -1,0 +1,38 @@
+[
+  {
+    "segment_id": "seg-001",
+    "scene_index": 1,
+    "text": "几乎所有人都可以半年内说流利的英文。",
+    "start_time": 0,
+    "end_time": 3.637,
+    "image_asset_id": "d6c7517a-fd02-4240-8f6d-4efd66131939",
+    "image_path": "C:\\Users\\Admin\\Desktop\\短视频\\douyin-video-tool-source-code\\douyin-mcp-local\\image-assets\\ian-xiaohei\\20260709-095719-ian-xiaohei-video-32421251\\img_77e825_0_1783562297548.png"
+  },
+  {
+    "segment_id": "seg-002",
+    "scene_index": 2,
+    "text": "好了，行动篇今天来了。",
+    "start_time": 3.637,
+    "end_time": 6.248,
+    "image_asset_id": "3bd0676a-aae6-4470-86eb-356df4308bef",
+    "image_path": "C:\\Users\\Admin\\Desktop\\短视频\\douyin-video-tool-source-code\\douyin-mcp-local\\image-assets\\ian-xiaohei\\20260709-095719-ian-xiaohei-video-32421251\\img_44e679_0_1783562338962.png"
+  },
+  {
+    "segment_id": "seg-003",
+    "scene_index": 3,
+    "text": "所以从今天开始，请你忘掉英文学生的身份，",
+    "start_time": 6.248,
+    "end_time": 10.538,
+    "image_asset_id": "dda706cb-2dff-4c04-9325-f4a8c8adc56b",
+    "image_path": "C:\\Users\\Admin\\Desktop\\短视频\\douyin-video-tool-source-code\\douyin-mcp-local\\image-assets\\ian-xiaohei\\20260709-095719-ian-xiaohei-video-32421251\\img_dc00f3_0_1783562393069.png"
+  },
+  {
+    "segment_id": "seg-004",
+    "scene_index": 4,
+    "text": "把自己当做语言的使用者。",
+    "start_time": 10.538,
+    "end_time": 13.056,
+    "image_asset_id": "6bdf119a-45b8-4b7d-a62f-7705459aebea",
+    "image_path": "C:\\Users\\Admin\\Desktop\\短视频\\douyin-video-tool-source-code\\douyin-mcp-local\\image-assets\\ian-xiaohei\\20260709-095719-ian-xiaohei-video-32421251\\img_b61848_0_1783562435661.png"
+  }
+]
