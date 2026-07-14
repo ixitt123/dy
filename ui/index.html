@@ -1506,44 +1506,57 @@
             </div>
             <button class="ghost small" id="refreshProjectAssets" type="button">刷新素材</button>
           </div>
-          <div class="project-asset-filters">
-            <select id="projectAssetTypeFilter" aria-label="素材类型">
-              <option value="all">全部类型</option>
-              <option value="image">图片</option>
-              <option value="video">视频</option>
-              <option value="bgm">BGM</option>
-              <option value="sfx">音效</option>
-              <option value="subtitle">字幕</option>
-              <option value="cover">封面</option>
-            </select>
-            <select id="projectAssetUseCaseFilter" aria-label="素材用途">
-              <option value="all">全部用途</option>
-              <option>宣传</option>
-              <option>学习技巧</option>
-              <option>招生</option>
-              <option>科普</option>
-              <option>课程介绍</option>
-            </select>
-            <select id="projectAssetStyleFilter" aria-label="素材风格">
-              <option value="all">全部风格</option>
-              <option>商业</option>
-              <option>校园</option>
-              <option>黑金</option>
-              <option>极简</option>
-              <option>真实拍摄</option>
-              <option>知识卡片</option>
-            </select>
-            <select id="projectAssetProjectFilter" aria-label="所属项目">
-              <option value="all">全部项目</option>
-            </select>
+          <div class="project-asset-type-tabs" id="projectAssetTypeTabs" role="tablist" aria-label="已归档素材类别">
+            <button class="project-asset-type-tab active" type="button" data-project-asset-type="image" role="tab" aria-selected="true">图片</button>
+            <button class="project-asset-type-tab" type="button" data-project-asset-type="video" role="tab" aria-selected="false">视频</button>
+            <button class="project-asset-type-tab" type="button" data-project-asset-type="bgm" role="tab" aria-selected="false">BGM</button>
+            <button class="project-asset-type-tab" type="button" data-project-asset-type="sfx" role="tab" aria-selected="false">音效</button>
+            <button class="project-asset-type-tab" type="button" data-project-asset-type="subtitle" role="tab" aria-selected="false">字幕</button>
+            <button class="project-asset-type-tab" type="button" data-project-asset-type="cover" role="tab" aria-selected="false">封面</button>
           </div>
-          <div class="project-asset-grid" id="projectAssetGrid">
-            <div class="empty">当前项目还没有素材。</div>
+          <div class="project-asset-table-wrap">
+            <table class="project-asset-details-table">
+              <thead>
+                <tr>
+                  <th scope="col">名称</th>
+                  <th scope="col">类型</th>
+                  <th scope="col">用途</th>
+                  <th scope="col">风格</th>
+                  <th scope="col">所属项目</th>
+                  <th scope="col">来源</th>
+                  <th scope="col">生产时间</th>
+                  <th scope="col">状态</th>
+                </tr>
+              </thead>
+              <tbody id="projectAssetGrid">
+                <tr><td class="empty" colspan="8">正在读取已归档素材。</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="project-asset-detail-modal" id="projectAssetDetailModal" hidden>
+            <div class="project-asset-detail-backdrop" data-project-asset-detail-close></div>
+            <section class="project-asset-detail-dialog" role="dialog" aria-modal="true" aria-labelledby="projectAssetDetailTitle">
+              <div class="project-asset-detail-head">
+                <div>
+                  <span id="projectAssetDetailType">素材详情</span>
+                  <h3 id="projectAssetDetailTitle">已归档素材</h3>
+                </div>
+                <button class="ghost small" type="button" data-project-asset-detail-close>关闭</button>
+              </div>
+              <dl class="project-asset-detail-list" id="projectAssetDetailBody"></dl>
+              <p class="project-asset-detail-notice" id="projectAssetDetailNotice" aria-live="polite"></p>
+              <div class="project-asset-detail-actions">
+                <button class="ghost" id="projectAssetDetailUse" type="button">加入当前项目</button>
+              </div>
+            </section>
           </div>
         </section>
 
         <div class="result-head">
-          <h2>已下载</h2>
+          <div>
+            <h2>已下载</h2>
+            <p class="files-sort-note">按生产时间排序，最新在前</p>
+          </div>
           <div class="files-tools">
             <label for="pageSize">每页</label>
             <select id="pageSize">

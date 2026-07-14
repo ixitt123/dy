@@ -65,8 +65,18 @@ let videoProjectsState = [];
 let activeVideoProject = null;
 let projectReadinessState = null;
 let projectAssetsState = [];
+let activeProjectAssetType = "image";
 
 const COLLECTOR_TAB_KEY = "short-video-collector-tab";
+const PROJECT_ASSET_TYPE_KEY = "short-video-project-asset-type";
+const PROJECT_ASSET_TYPES = [
+  ["image", "图片"],
+  ["video", "视频"],
+  ["bgm", "BGM"],
+  ["sfx", "音效"],
+  ["subtitle", "字幕"],
+  ["cover", "封面"],
+];
 const RAIL_TASK_RUNNING_STATUSES = new Set(["下载中", "提取中", "running", "processing"]);
 const RAIL_TASK_FINISHED_STATUSES = new Set(["完成", "失败", "completed", "failed", "success", "error"]);
 const VIDEO_PROJECT_STEPS = [
