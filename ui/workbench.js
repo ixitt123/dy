@@ -66,9 +66,13 @@ let activeVideoProject = null;
 let projectReadinessState = null;
 let projectAssetsState = [];
 let activeProjectAssetType = "image";
+let projectAssetPage = 1;
+let projectAssetPageSize = 10;
 
 const COLLECTOR_TAB_KEY = "short-video-collector-tab";
 const PROJECT_ASSET_TYPE_KEY = "short-video-project-asset-type";
+const PROJECT_ASSET_PAGE_SIZE_KEY = "short-video-project-asset-page-size";
+const PROJECT_ASSET_PAGE_SIZES = [10, 20, 50, 100];
 const PROJECT_ASSET_TYPES = [
   ["image", "图片"],
   ["video", "视频"],
@@ -385,6 +389,29 @@ function projectAssetDetailsRow(asset) {
   `;
 }
 
+function renderProjectAssetPage() {
+  const container = document.querySelector("#projectAssetGrid");
+  const pageSizeSelect = document.querySelector("#projectAssetPageSize");
+  const pageInfo = document.querySelector("#projectAssetPageInfo");
+  const previousButton = document.querySelector("#projectAssetPrevPage");
+  const nextButton = document.querySelector("#projectAssetNextPage");
+  if (!container) return;
+
+  const total = projectAssetsState.length;
+  const totalPages = Math.max(1, Math.ceil(total / projectAssetPageSize));
+  projectAssetPage = Math.max(1, Math.min(projectAssetPage, totalPages));
+  const start = (projectAssetPage - 1) * projectAssetPageSize;
+  const pageAssets = projectAssetsState.slice(start, start + projectAssetPageSize);
+  container.innerHTML = pageAssets.length
+    ? pageAssets.map(projectAssetDetailsRow).join("")
+    : `<tr><td class="empty" colspan="8">暂无${escapeHtml(projectAssetTypeLabel(activeProjectAssetType))}归档素材。</td></tr>`;
+
+  if (pageSizeSelect) pageSizeSelect.value = String(projectAssetPageSize);
+  if (pageInfo) pageInfo.textContent = `第 ${projectAssetPage} / ${totalPages} 页 · 共 ${total} 条`;
+  if (previousButton) previousButton.disabled = projectAssetPage <= 1;
+  if (nextButton) nextButton.disabled = projectAssetPage >= totalPages;
+}
+
 function closeProjectAssetDetail() {
   const modal = document.querySelector("#projectAssetDetailModal");
   if (!modal) return;
@@ -467,12 +494,11 @@ async function refreshProjectAssets() {
     const assets = (Array.isArray(data.assets) ? data.assets : [])
       .sort((left, right) => projectAssetTimestamp(right) - projectAssetTimestamp(left));
     projectAssetsState = assets;
-    container.innerHTML = assets.length
-      ? assets.map(projectAssetDetailsRow).join("")
-      : `<tr><td class="empty" colspan="8">暂无${escapeHtml(projectAssetTypeLabel(activeProjectAssetType))}归档素材。</td></tr>`;
+    renderProjectAssetPage();
     return assets;
   } catch (error) {
     projectAssetsState = [];
+    renderProjectAssetPage();
     container.innerHTML = `<tr><td class="empty" colspan="8">归档素材读取失败：${escapeHtml(error.message || "请稍后重试")}</td></tr>`;
     throw error;
   }
@@ -481,11 +507,14 @@ async function refreshProjectAssets() {
 function restoreProjectAssetTypePreference() {
   const storedType = localStorage.getItem(PROJECT_ASSET_TYPE_KEY);
   if (PROJECT_ASSET_TYPES.some(([type]) => type === storedType)) activeProjectAssetType = storedType;
+  const storedPageSize = Number(localStorage.getItem(PROJECT_ASSET_PAGE_SIZE_KEY));
+  if (PROJECT_ASSET_PAGE_SIZES.includes(storedPageSize)) projectAssetPageSize = storedPageSize;
 }
 
 function selectProjectAssetType(type) {
   if (!PROJECT_ASSET_TYPES.some(([value]) => value === type)) return Promise.resolve([]);
   activeProjectAssetType = type;
+  projectAssetPage = 1;
   localStorage.setItem(PROJECT_ASSET_TYPE_KEY, activeProjectAssetType);
   renderProjectAssetTypeTabs();
   return refreshProjectAssets();
@@ -567,6 +596,25 @@ function setupProjectWorkbench() {
   document.querySelector("#projectAssetTypeTabs")?.addEventListener("click", (event) => {
     const button = event.target.closest("[data-project-asset-type]");
     if (button) selectProjectAssetType(button.dataset.projectAssetType).catch(() => {});
+  });
+  document.querySelector("#projectAssetPageSize")?.addEventListener("change", (event) => {
+    const pageSize = Number(event.currentTarget.value);
+    if (!PROJECT_ASSET_PAGE_SIZES.includes(pageSize)) return;
+    projectAssetPageSize = pageSize;
+    projectAssetPage = 1;
+    localStorage.setItem(PROJECT_ASSET_PAGE_SIZE_KEY, String(projectAssetPageSize));
+    renderProjectAssetPage();
+  });
+  document.querySelector("#projectAssetPrevPage")?.addEventListener("click", () => {
+    if (projectAssetPage <= 1) return;
+    projectAssetPage -= 1;
+    renderProjectAssetPage();
+  });
+  document.querySelector("#projectAssetNextPage")?.addEventListener("click", () => {
+    const totalPages = Math.max(1, Math.ceil(projectAssetsState.length / projectAssetPageSize));
+    if (projectAssetPage >= totalPages) return;
+    projectAssetPage += 1;
+    renderProjectAssetPage();
   });
   document.querySelector("#refreshProjectAssets")?.addEventListener("click", () => refreshProjectAssets());
   document.querySelector("#projectAssetGrid")?.addEventListener("click", (event) => {

@@ -8165,6 +8165,28 @@ audio {
   padding-bottom: 18px;
 }
 
+.project-asset-tools {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.project-asset-tools label,
+.project-asset-tools select {
+  margin: 0;
+}
+
+.project-asset-tools label {
+  color: #8591a2;
+  font-size: 12px;
+}
+
+.project-asset-tools select {
+  width: 76px;
+  min-height: 32px;
+}
+
 .project-asset-type-tabs {
   display: flex;
   flex-wrap: wrap;
@@ -8201,6 +8223,26 @@ audio {
   border: 1px solid #2b3340;
   border-radius: 7px;
   background: #0d121a;
+}
+
+.project-asset-pager {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  border: 1px solid #2b3340;
+  border-top: 0;
+  border-radius: 0 0 7px 7px;
+  padding: 11px 12px;
+  background: #111722;
+}
+
+.project-asset-pager span {
+  min-width: 118px;
+  color: #a8b4c5;
+  font-size: 12px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
 }
 
 .project-asset-details-table {
@@ -8884,6 +8926,12 @@ audio {
 }
 
 @media (max-width: 760px) {
+  .project-asset-tools,
+  .project-asset-pager {
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+
   .project-asset-detail-list {
     grid-template-columns: 1fr;
   }
