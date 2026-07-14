@@ -1442,6 +1442,22 @@ async function sendRewriteTextToTarget(target, text, meta = {}) {
     const detail = document.querySelector("#moneyPrinterDetail");
     if (status) status.textContent = "已接收文案";
     if (detail) detail.textContent = "脚本已填入 MoneyPrinter，可补主题和素材参数后生成。";
+  } else if (target === "kinetic-text") {
+    const handoff = {
+      title: meta.title || "文案定制成品",
+      text: cleanText,
+      source: meta.source || "rewrite",
+      versionKey: meta.versionKey || "",
+      taskId: Number(rewriteTaskId.value || 0),
+      videoProjectId: window.videoProjects?.current?.()?.id || localStorage.getItem("active-video-project-id") || "",
+      sentAt: new Date().toISOString(),
+    };
+    try {
+      localStorage.setItem("dy:handoff:kinetic-text:text", JSON.stringify(handoff));
+    } catch {}
+    markProductionTargetReceived("kinetic-text", { id: "text" });
+    if (window.kineticTextProduction?.receiveText) await window.kineticTextProduction.receiveText(handoff);
+    else window.dispatchEvent(new CustomEvent("kinetic-text-text-handoff", { detail: handoff }));
   }
   rewriteStatus.textContent = `已发送到${label}。`;
 }

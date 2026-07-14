@@ -1,5 +1,6 @@
 const PREF_KEY = "dy:kinetic-text:preferences";
 const HANDOFF_KEY = "dy:handoff:kinetic-text:audio";
+const TEXT_HANDOFF_KEY = "dy:handoff:kinetic-text:text";
 
 const state = {
   page: null,
@@ -478,6 +479,24 @@ async function receiveTts(payload) {
   return state.project;
 }
 
+async function receiveText(payload = {}) {
+  const text = String(payload.text || "").trim();
+  if (!text) throw new Error("没有可用的文案。");
+  const preferences = readPreferences();
+  const data = await postJson("/api/kinetic-text/create", {
+    title: payload.title || "文案动态大字视频",
+    text,
+    source: payload.source || "rewrite",
+    effectId: preferences.effectId,
+    videoProjectId: payload.videoProjectId || window.videoProjects?.current?.()?.id || localStorage.getItem("active-video-project-id") || "",
+  });
+  state.project = data.project;
+  await refreshProjects(state.project.id);
+  if (payload.sentAt) localStorage.setItem("dy:kinetic-text:last-text-handoff", String(payload.sentAt));
+  window.workbenchNavigate?.("kinetic-text");
+  return state.project;
+}
+
 function bindEvents() {
   $("#kineticTextRefresh").addEventListener("click", () => refreshProjects().catch((error) => setProgress(0, error.message)));
   $("#kineticTextProjectSelect").addEventListener("change", (event) => {
@@ -555,6 +574,7 @@ function bindEvents() {
     pollJob(data.job.id).catch((error) => setProgress(0, error.message));
   });
   window.addEventListener("kinetic-text-handoff", (event) => receiveTts(event.detail).catch((error) => setProgress(0, error.message)));
+  window.addEventListener("kinetic-text-text-handoff", (event) => receiveText(event.detail).catch((error) => setProgress(0, error.message)));
 }
 
 export async function initKineticTextModule() {
@@ -571,10 +591,17 @@ export async function initKineticTextModule() {
   if ([...providerSelect.options].some((option) => option.value === preferences.provider)) providerSelect.value = preferences.provider;
   providerSelect.addEventListener("change", () => savePreferences({ provider: providerSelect.value }));
   bindEvents();
-  window.kineticTextProduction = { receiveTts, refresh: refreshProjects };
+  window.kineticTextProduction = { receiveTts, receiveText, refresh: refreshProjects };
   await refreshProjects();
   try {
     const payload = JSON.parse(localStorage.getItem(HANDOFF_KEY) || "null");
     if (payload?.id && !state.projects.some((project) => String(project.ttsJobId) === String(payload.id))) await receiveTts(payload);
+  } catch {}
+  try {
+    const payload = JSON.parse(localStorage.getItem(TEXT_HANDOFF_KEY) || "null");
+    if (payload?.text && String(payload.sentAt || "") !== localStorage.getItem("dy:kinetic-text:last-text-handoff")) {
+      await receiveText(payload);
+      if (payload.sentAt) localStorage.setItem("dy:kinetic-text:last-text-handoff", String(payload.sentAt));
+    }
   } catch {}
 }
