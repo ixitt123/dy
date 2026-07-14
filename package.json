@@ -26,6 +26,7 @@
     "@motion-canvas/2d": "3.17.2",
     "@motion-canvas/core": "3.17.2",
     "@yc-w-cn/douyin-mcp-server": "1.0.4",
+    "archiver": "7.0.1",
     "ffmpeg-static": "^5.2.0",
     "ffprobe-static": "^3.1.0",
     "gsap": "3.14.2",
