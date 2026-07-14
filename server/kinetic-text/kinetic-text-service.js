@@ -585,9 +585,9 @@ export function createKineticTextService({
       let project = get(projectId);
       if (!project) throw new Error("动态大字项目不存在。");
       if (!project.segments.length) throw new Error("没有可渲染的字幕片段。");
-      const targetRoot = path.join(projectDir(projectId), "materials");
+      const runId = safeFileName(jobId || `materials-${Date.now()}`, "materials");
+      const targetRoot = path.join(projectDir(projectId), "materials", runId);
       const clipsDir = path.join(targetRoot, "segments");
-      fs.rmSync(targetRoot, { recursive: true, force: true });
       fs.mkdirSync(clipsDir, { recursive: true });
       updateJob(jobId, { status: "running", progress: 8, stage: "分析排版" });
 
