@@ -1884,7 +1884,6 @@ function setupV2Settings() {
     { key: "director", label: "生产线分镜", hint: "故事弧、分镜、镜头计划" },
     { key: "storyboard", label: "分镜生成", hint: "镜头拆解和画面描述" },
     { key: "image_prompt", label: "图片提示词", hint: "画面提示词和风格描述" },
-    { key: "image", label: "图片生成", hint: "生成图片资产" },
     { key: "tts", label: "TTS 语音", hint: "配音和声音复刻" },
   ];
 
@@ -2018,9 +2017,7 @@ function setupV2Settings() {
             <div class="provider-actions">
               <button class="primary small" type="button" data-save-provider="${html(provider.id)}">保存</button>
               ${provider.group === "文本模型" || provider.group === "TTS 语音" ? `<button class="ghost small" type="button" data-default-provider="${html(provider.id)}">设为默认</button>` : ""}
-              ${provider.group === "图片生成" ? `<button class="ghost small" type="button" data-default-provider="${html(provider.id)}">设为默认</button>` : ""}
               <button class="ghost small" type="button" data-test-provider="${html(provider.id)}">检查</button>
-              ${provider.group === "图片生成" ? `<button class="ghost small" type="button" data-test-provider-sample="${html(provider.id)}">测试生成图片</button>` : ""}
               ${provider.id === "fish_audio" ? `<button class="ghost small" type="button" data-test-provider-sample="${html(provider.id)}">测试生成语音</button>` : ""}
               ${provider.applyUrl ? `<button class="ghost small" type="button" data-open-url="${html(provider.applyUrl)}">申请入口</button>` : ""}
               ${provider.balanceUrl ? `<button class="ghost small" type="button" data-open-url="${html(provider.balanceUrl)}">余额</button>` : ""}
@@ -2033,13 +2030,6 @@ function setupV2Settings() {
   }
 
   function optionsForTask(taskKey) {
-    if (taskKey === "image") {
-      return state.providers
-        .filter((provider) => provider.group === "图片生成")
-        .flatMap((provider) => (provider.models?.length ? provider.models : [provider.model || ""])
-          .filter(Boolean)
-          .map((model) => ({ provider: provider.id, model, label: `${provider.label} / ${model}` })));
-    }
     if (taskKey === "tts") {
       return state.providers
         .filter((provider) => provider.group === "TTS 语音")
