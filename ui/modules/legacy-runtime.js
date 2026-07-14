@@ -28,7 +28,7 @@ if (typeof window.fetch !== "function") {
 }
 
 const UI_CHOICE_STORAGE_KEY = "dy.ui.choicePreferences.v1";
-const UI_CHOICE_SELECTOR = 'select[id], input[id][type="checkbox"], input[id][type="radio"]';
+const UI_CHOICE_SELECTOR = 'select, input[type="checkbox"], input[type="radio"], input[type="range"]';
 let uiChoiceRestoreTimer = 0;
 
 function readUiChoicePreferences() {
@@ -48,16 +48,34 @@ function writeUiChoicePreferences(preferences) {
 }
 
 function isPersistableChoiceControl(control) {
-  if (!control?.id || control.closest("[hidden]") || control.closest("[data-no-choice-persist]")) return false;
-  const text = `${control.id || ""} ${control.name || ""}`.toLowerCase();
-  if (/(api|key|secret|token|cookie|auth|password|credential)/i.test(text)) return false;
+  if (!control || control.closest("[data-no-choice-persist]")) return false;
+  if (control.matches(".file-select, .file-select-row")) return false;
   const type = String(control.type || "").toLowerCase();
-  return control.tagName === "SELECT" || type === "checkbox" || type === "radio";
+  return control.tagName === "SELECT" || ["checkbox", "radio", "range"].includes(type);
+}
+
+function choicePreferenceBaseKey(control) {
+  const type = String(control.type || "").toLowerCase();
+  if (control.id) return `#${control.id}`;
+  if (type === "radio" && control.name) return `radio:${control.name}`;
+  const pageId = control.closest("[data-page]")?.dataset.page || "global";
+  const dataIdentity = ["choiceKey", "task", "provider", "field", "target"]
+    .map((key) => control.dataset?.[key] ? `${key}=${control.dataset[key]}` : "")
+    .filter(Boolean)
+    .join(";");
+  const classIdentity = [...control.classList]
+    .filter((name) => !["active", "selected"].includes(name))
+    .sort()
+    .join(".");
+  return `${pageId}:${control.tagName.toLowerCase()}:${type || "select"}:${dataIdentity || classIdentity || "unnamed"}`;
 }
 
 function choicePreferenceKey(control) {
-  const type = String(control.type || "").toLowerCase();
-  return type === "radio" ? `radio:${control.name || control.id}` : `#${control.id}`;
+  const baseKey = choicePreferenceBaseKey(control);
+  if (control.id || String(control.type || "").toLowerCase() === "radio" && control.name) return baseKey;
+  const peers = [...document.querySelectorAll(UI_CHOICE_SELECTOR)]
+    .filter((candidate) => isPersistableChoiceControl(candidate) && choicePreferenceBaseKey(candidate) === baseKey);
+  return `${baseKey}:${Math.max(0, peers.indexOf(control))}`;
 }
 
 function choicePreferenceValue(control) {
@@ -67,6 +85,7 @@ function choicePreferenceValue(control) {
   }
   if (type === "checkbox") return Boolean(control.checked);
   if (type === "radio") return control.checked ? control.value : null;
+  if (type === "range") return control.value;
   return null;
 }
 
@@ -100,6 +119,9 @@ function restoreChoiceControl(control, preferences, { dispatch = false } = {}) {
   } else if (type === "radio" && control.checked !== (control.value === String(stored))) {
     control.checked = control.value === String(stored);
     changed = true;
+  } else if (type === "range" && control.value !== String(stored)) {
+    control.value = String(stored);
+    changed = true;
   }
 
   if (changed && dispatch) control.dispatchEvent(new Event("change", { bubbles: true }));
@@ -114,10 +136,10 @@ function restoreUiChoicePreferences(options = {}) {
 
 function scheduleUiChoicePreferenceRestore() {
   window.clearTimeout(uiChoiceRestoreTimer);
-  uiChoiceRestoreTimer = window.setTimeout(() => restoreUiChoicePreferences(), 80);
+  uiChoiceRestoreTimer = window.setTimeout(() => restoreUiChoicePreferences({ dispatch: true }), 80);
 }
 
-document.addEventListener("change", (event) => {
+function saveUiChoicePreference(event) {
   const control = event.target?.closest?.(UI_CHOICE_SELECTOR);
   if (!isPersistableChoiceControl(control)) return;
   const value = choicePreferenceValue(control);
@@ -125,7 +147,10 @@ document.addEventListener("change", (event) => {
   const preferences = readUiChoicePreferences();
   preferences[choicePreferenceKey(control)] = value;
   writeUiChoicePreferences(preferences);
-}, true);
+}
+
+document.addEventListener("change", saveUiChoicePreference, true);
+document.addEventListener("input", saveUiChoicePreference, true);
 
 new MutationObserver(scheduleUiChoicePreferenceRestore).observe(document.body, {
   childList: true,
