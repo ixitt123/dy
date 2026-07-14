@@ -4138,11 +4138,14 @@ async function generateMomentsPostJsonV2(body = {}) {
   if (!sourceText) throw new Error("请先填写朋友圈文案输入区。");
   if (!persona) throw new Error("请先选择或填写人设。");
   const fixedImageCount = clampMomentsImageCount(body.imageCount);
-  const visualStyle = normalizeMomentsStyle(body.visualStyle);
+  const visualStyle = normalizeMomentsStyleCategory(body.visualStyle);
+  const imageStyle = resolveMomentsImageStyle(visualStyle);
+  const wordCount = normalizeMomentsWordCount(body.wordCount, body.wordCountCustom);
+  const addEmoji = String(body.addEmoji || "no").trim().toLowerCase() === "yes";
   const localMaterials = String(body.localMaterials || "").trim();
   const tone = String(body.tone || "普通朋友聊天式分享").trim();
-  const intent = String(body.intent || "不强销售的自然分享").trim();
-  const referenceStyle = String(body.referenceStyle || "自动引用").trim();
+  const intent = String(body.intent || "auto-promo").trim();
+  const referenceStyle = resolveMomentsReferenceStyle(body.referenceStyle);
   const toneStrategy = momentsToneStrategy(tone);
   const intentStrategy = momentsIntentStrategy(intent);
   const referenceStrategy = momentsReferenceStrategy(referenceStyle);
@@ -4150,19 +4153,20 @@ async function generateMomentsPostJsonV2(body = {}) {
   const imageCountRule = fixedImageCount
     ? `必须生成 ${fixedImageCount} 张配图。`
     : "根据成品文案判断生成 1-3 张配图：短内容 1 张；有误区+方法 2 张；有误区+方法+结果状态 3 张。";
-  const styleRule = {
-    auto: "可以自动选择小黑漫画解释类或真实生活/产品场景类；同一条朋友圈的多张图必须统一主题和视觉方向。",
-    xiaohei: "必须使用小黑漫画解释类：白底、黑色手绘线稿、少量红橙蓝短批注、大量留白，小黑承担核心动作；必须有视觉锤，禁止跑步、日历、道路、箭头、书本堆这种直译弱图。",
-    realistic: "必须使用真实生活/产品场景类：像工作现场/学习现场/咨询现场的关键瞬间；必须有鲜明主物件和情绪现场，不要广告海报和普通资料摆拍。",
-  }[visualStyle];
+  const styleRule = momentsStyleCategoryStrategy(visualStyle);
+  const imageStyleRule = imageStyle === "xiaohei"
+    ? "图片执行风格：小黑漫画解释类，白底、黑色手绘线稿、少量红橙蓝批注、大量留白，用动作解释宣传对象的价值。"
+    : "图片执行风格：真实生活/产品场景类，像真实工作、学习、咨询、到店或使用现场，有明确主物件和人物关系，不做普通广告海报。";
   const copySkill = [
-    "朋友圈文案 Skill v3：私域自然分享，但必须有强反差、急转弯、落差画面和视觉冲击。",
-    "目标：让读者感觉这是一个专业规划老师刚从真实工作里提炼出的观察，有人味、有判断、有具体动作，同时第一眼就有钩子。",
-    "推荐结构：强反差开场 -> 急转弯判断 -> 落差画面 -> 专业解释 -> 可执行动作 -> 自然收尾。",
-    "硬性质量：4-8 个短段落；110-280 个中文字符；必须有一个能记住的观点句、一个纠偏点、一个具体动作建议、一个可被画出来的视觉锚点。",
-    "禁止：两句总结、鸡汤口号、硬广 CTA、制造焦虑、凭空编学生案例/成绩/机构名/具体数字。",
-    "不合格信号：像标语、像课程广告、只有提醒没有方法、只有观点没有场景、没有反差、没有转折、没有画面感、和原文关系弱。",
-    "开头不要平铺直叙，不要从“最近发现/今天聊聊/家长要注意”这种弱句开始。",
+    "朋友圈宣传文案 Skill v4：以真实分享为外壳，以产品、课程、服务、门店、活动或个人品牌价值为核心。",
+    "主要目标：让读者自然看懂宣传对象、适合人群、具体价值和下一步，但读起来像真人分享，不像广告稿。",
+    "推荐结构：真实场景或观察 -> 温和判断 -> 宣传对象解决的问题 -> 适用人群或体验细节 -> 低压力行动邀请 -> 自然收尾。",
+    momentsWordCountRule(wordCount),
+    addEmoji ? "表情规则：只在语义确实需要时添加少量、常见且不喧宾夺主的表情，最多 3 个；不要为了装饰强行添加。" : "表情规则：正文不添加 emoji 或颜文字，保持干净自然。",
+    `视觉风格方向：${styleRule}`,
+    `引用规则：${referenceStyle}；必须把实际引用写进 post 正文，并在 reference_used 填写同一句或清晰转述。`,
+    "禁止：虚假案例、夸大效果、绝对化承诺、制造焦虑、密集价格口号、硬广式“马上购买/名额有限”或与原文无关的信息。",
+    "避免：两句总结、鸡汤口号、连续销售话术、官方公告感和 AI 套话；宣传信息要清楚，但语气要温和、克制、有生活感。",
   ].join("\n");
   const imageSkill = [
     "图片提示词 Skill v3：先做视觉冲击策略，再写生图提示词。",
@@ -4202,6 +4206,9 @@ async function generateMomentsPostJsonV2(body = {}) {
           "",
           `语气：${tone}`,
           `用途：${intent}`,
+          `建议字数：${wordCount.label}（允许 ${wordCount.min}-${wordCount.max} 字自然浮动）`,
+          `添加表情：${addEmoji ? "是，仅在语义需要时少量添加" : "否，不添加 emoji"}`,
+          `视觉风格类别：${visualStyle}`,
           `引用素材：${referenceStyle}`,
           "",
           "语气策略：",
@@ -4223,7 +4230,8 @@ async function generateMomentsPostJsonV2(body = {}) {
             angle: "内容切入角度",
             core_judgment: "最有力度的专业判断句",
             visual_anchor: "后续图片应围绕的视觉母题",
-            reference_used: "实际使用的引用/热梗/金句/古诗；没有则为空",
+            reference_style: referenceStyle,
+            reference_used: "实际使用的引用/热梗/金句/古诗；必须填写并在正文中出现",
             persona_used: "人设摘要",
             quality_gate: {
               post_has_contrast_hook: true,
@@ -4243,7 +4251,8 @@ async function generateMomentsPostJsonV2(body = {}) {
   let copyData = copyRun.data && typeof copyRun.data === "object" ? copyRun.data : {};
   let post = String(copyData.post || "").trim();
   if (
-    rewriteCharacterCount(post) < 110
+    rewriteCharacterCount(post) < wordCount.min
+    || rewriteCharacterCount(post) > wordCount.max
     || !String(copyData.core_judgment || "").trim()
     || !momentsReferenceIsUsed(post, copyData.reference_used, referenceStyle)
   ) {
@@ -4258,10 +4267,9 @@ async function generateMomentsPostJsonV2(body = {}) {
           role: "user",
           content: [
             "上一版不合格：太短、太干或缺少专业判断。请重写。",
-            "硬性要求：110-280 中文字符，4-8 个短段落；必须有强反差开场、急转弯判断、落差画面、专业判断、具体动作建议；不得编造事实。",
-            momentsReferenceRequired(referenceStyle)
-              ? "引用硬性要求：必须把引用素材真正写进 post 正文，并在 reference_used 填写实际使用的那句；不能只在 JSON 字段里写，正文里也必须出现。"
-              : "引用硬性要求：用户选择不用引用，正文不要出现名言、热梗、古诗或显眼金句。",
+            `硬性要求：${wordCount.min}-${wordCount.max} 中文字符，允许在范围内自然浮动；使用 4-8 个短段落，必须讲清宣传对象、具体价值、适用人群和温和下一步；不得编造事实。`,
+            addEmoji ? "表情硬性要求：只在语义需要时少量添加，最多 3 个。" : "表情硬性要求：正文不要出现 emoji 或颜文字。",
+            "引用硬性要求：必须把引用素材真正写进 post 正文，并在 reference_used 填写实际使用的那句；不能只在 JSON 字段里写，正文里也必须出现。",
             "语气策略：",
             toneStrategy,
             "生成方式策略：",
@@ -4281,7 +4289,8 @@ async function generateMomentsPostJsonV2(body = {}) {
               angle: "内容切入角度",
               core_judgment: "专业判断句",
               visual_anchor: "视觉母题",
-              reference_used: "实际使用的引用/热梗/金句/古诗；没有则为空",
+              reference_style: referenceStyle,
+              reference_used: "实际使用的引用/热梗/金句/古诗；必须填写并在正文中出现",
               persona_used: "人设摘要",
             }, null, 2),
           ].join("\n\n"),
