@@ -3976,6 +3976,7 @@ function normalizeMomentsResult(raw = {}, fallback = {}) {
     reference_used: String(raw.reference_used || raw.referenceUsed || "").trim().slice(0, 220),
     reference_style: String(raw.reference_style || raw.referenceStyle || fallback.referenceStyle || "").trim(),
     add_emoji: fallback.addEmoji === true,
+    word_count_target: Number(fallback.wordCount?.target || 0) || 0,
     persona_used: String(raw.persona_used || fallback.persona || "").trim().slice(0, 1000),
     notes: Array.isArray(raw.notes) ? raw.notes.map((item) => String(item).trim()).filter(Boolean).slice(0, 6) : [],
     images,
@@ -4300,6 +4301,14 @@ async function generateMomentsPostJsonV2(body = {}) {
     copyData = repaired.data && typeof repaired.data === "object" ? repaired.data : copyData;
     post = String(copyData.post || post).trim();
   }
+  post = addEmoji ? post : stripMomentsEmoji(post);
+  const finalPostLength = rewriteCharacterCount(post);
+  if (finalPostLength < wordCount.min || finalPostLength > wordCount.max) {
+    throw new Error(`生成文案为 ${finalPostLength} 字，未落在建议范围 ${wordCount.min}-${wordCount.max} 字内，请重试。`);
+  }
+  if (!momentsReferenceIsUsed(post, copyData.reference_used, referenceStyle)) {
+    throw new Error(`本次生成未能加入“${referenceStyle}”引用素材，请重试或指定其他引用类别。`);
+  }
 
   const imageRun = await generateStructuredJson({
     providerId,
@@ -4322,6 +4331,7 @@ async function generateMomentsPostJsonV2(body = {}) {
           "",
           "视觉方向：",
           styleRule,
+          imageStyleRule,
           "",
           "配图数量规则：",
           imageCountRule,
@@ -4343,6 +4353,7 @@ async function generateMomentsPostJsonV2(body = {}) {
           "",
           "引用策略：",
           referenceStrategy,
+          `引用类别：${referenceStyle}；图片提示词要围绕正文实际引用形成的主题锚点，不要额外编造引用。`,
           "",
           "本地图片素材说明：",
           localMaterials || "用户没有提供本地素材；不要在最终提示词里写“无本地素材”。",
@@ -4383,6 +4394,9 @@ async function generateMomentsPostJsonV2(body = {}) {
     post,
     theme: imageRun.data?.theme || copyData.theme || "朋友圈图文",
     persona_used: copyData.persona_used || persona,
+    reference_style: referenceStyle,
+    reference_used: copyData.reference_used || "",
+    add_emoji: addEmoji,
     notes: [
       ...(Array.isArray(copyData.notes) ? copyData.notes : []),
       ...(Array.isArray(imageRun.data?.notes) ? imageRun.data.notes : []),
@@ -4396,8 +4410,12 @@ async function generateMomentsPostJsonV2(body = {}) {
     result: normalizeMomentsResult(merged, {
       imageCount: fixedImageCount,
       visualStyle,
+      imageStyle,
       localMaterials,
       persona,
+      wordCount,
+      addEmoji,
+      referenceStyle,
       theme: copyData.theme || "朋友圈图文",
     }),
   };
