@@ -1176,6 +1176,7 @@ function normalizeSettings(settings) {
   next.modelMap = { ...DEFAULT_MODEL_MAPPING, ...modelMapping };
   delete next.modelMap.image;
   next.modelMapping = next.modelMap;
+  delete migrations.imageDefaultVolcengineArk;
   next.migrations = migrations;
   return next;
 }
@@ -1874,10 +1875,6 @@ function providerConfigStatus(settings, providerId, options = {}) {
 async function testUnifiedProvider(settings, providerId) {
   const provider = publicUnifiedProviders(settings).find((item) => item.id === providerId);
   if (!provider) return { ok: false, status: "failed", message: "未知 API 服务" };
-  if (provider.group === "图片生成") {
-    const result = await imageService.testProviderConnection(providerId);
-    return { ok: result.ok, status: result.status, message: result.message };
-  }
   if (providerId === "fish_audio") {
     const config = settings.tts?.fish_audio || {};
     const apiKey = String(config.api_key || "").trim();
