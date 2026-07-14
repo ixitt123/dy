@@ -94,18 +94,44 @@ function formatClock(seconds = 0, separator = ".") {
   return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(secs).padStart(2, "0")}${separator}${String(ms).padStart(3, "0")}`;
 }
 
-function timestampNumber(value) {
+function parseClockTime(value) {
+  const match = String(value || "").trim().match(/(?:(\d+):)?(\d{1,2}):(\d{1,2})(?:[,.](\d{1,3}))?/);
+  if (!match) return null;
+  const hours = Number(match[1] || 0);
+  const minutes = Number(match[2] || 0);
+  const seconds = Number(match[3] || 0);
+  const ms = Number(String(match[4] || "0").padEnd(3, "0").slice(0, 3));
+  const total = hours * 3600 + minutes * 60 + seconds + ms / 1000;
+  return Number.isFinite(total) && total >= 0 ? total : null;
+}
+
+function timestampNumber(value, key = "") {
+  if (typeof value === "string" && value.includes(":")) {
+    const clock = parseClockTime(value);
+    if (clock !== null) return clock;
+  }
   const number = Number(value);
   if (!Number.isFinite(number) || number < 0) return null;
-  return number > 1000 ? number / 1000 : number;
+  return /(?:^|[_-])ms$|milliseconds?|_ms$|Ms$/i.test(String(key || "")) || number > 1000
+    ? number / 1000
+    : number;
 }
 
 function pickTimestamp(item, keys = []) {
   for (const key of keys) {
     if (item?.[key] !== undefined) {
-      const value = timestampNumber(item[key]);
+      const value = timestampNumber(item[key], key);
       if (value !== null) return value;
     }
+  }
+  return null;
+}
+
+function pickDurationEnd(item, start = 0) {
+  for (const key of ["duration", "duration_ms", "durationMs", "length", "length_ms"]) {
+    if (item?.[key] === undefined) continue;
+    const value = timestampNumber(item[key], key);
+    if (value !== null) return Math.max(start, start + value);
   }
   return null;
 }
@@ -122,20 +148,95 @@ function subtitleText(item) {
   ).trim();
 }
 
+function parseTimedSubtitleString(content = "") {
+  const rows = [];
+  const source = String(content || "").replace(/\r/g, "");
+  const srtBlocks = source.split(/\n{2,}/);
+  for (const block of srtBlocks) {
+    const lines = block.split("\n").map((line) => line.trim()).filter(Boolean);
+    const timeLineIndex = lines.findIndex((line) => line.includes("-->"));
+    if (timeLineIndex < 0) continue;
+    const [startRaw, endRaw] = lines[timeLineIndex].split("-->").map((item) => item.trim());
+    const start = parseClockTime(startRaw);
+    const end = parseClockTime(endRaw);
+    const text = lines.slice(timeLineIndex + 1).join("").trim();
+    if (text && start !== null && end !== null && end > start) rows.push({ text, start, end });
+  }
+  if (rows.length) return rows;
+  const pattern = /\[([^\]]+?)\s*-->\s*([^\]]+?)\]\s*([^\n]+)/g;
+  let match;
+  while ((match = pattern.exec(source))) {
+    const start = parseClockTime(match[1]);
+    const end = parseClockTime(match[2]);
+    const text = String(match[3] || "").trim();
+    if (text && start !== null && end !== null && end > start) rows.push({ text, start, end });
+  }
+  return rows;
+}
+
 function subtitleEntries(raw) {
-  const value = typeof raw === "string" ? safeJson(raw, []) : raw;
+  if (typeof raw === "string") {
+    const parsed = safeJson(raw, null);
+    return parsed !== null ? subtitleEntries(parsed) : parseTimedSubtitleString(raw);
+  }
+  const value = raw;
   const list = Array.isArray(value)
     ? value
-    : Array.isArray(value?.subtitles)
-      ? value.subtitles
-      : Array.isArray(value?.words)
-        ? value.words
-        : [];
+    : [
+        value?.subtitle_timeline,
+        value?.subtitleTimeline,
+        value?.subtitles,
+        value?.subtitle,
+        value?.words,
+        value?.word_timestamps,
+        value?.wordTimestamps,
+        value?.sentences,
+        value?.segments,
+        value?.chunks,
+        value?.items,
+        value?.data?.subtitle,
+        value?.data?.subtitles,
+        value?.data?.words,
+      ].find(Array.isArray) || [];
   return list
     .map((item) => {
       const text = subtitleText(item);
-      const start = pickTimestamp(item, ["start", "start_time", "startTime", "begin", "begin_time", "beginTime", "time_begin", "offset", "offset_ms"]);
-      const end = pickTimestamp(item, ["end", "end_time", "endTime", "stop", "stop_time", "time_end", "duration_end"]);
+      const start = pickTimestamp(item, [
+        "start",
+        "start_time",
+        "startTime",
+        "start_ms",
+        "startMs",
+        "begin",
+        "begin_time",
+        "beginTime",
+        "begin_ms",
+        "beginMs",
+        "time_begin",
+        "offset",
+        "offset_ms",
+        "offsetStart",
+        "offset_start",
+        "offset_start_ms",
+        "from",
+      ]);
+      const end = pickTimestamp(item, [
+        "end",
+        "end_time",
+        "endTime",
+        "end_ms",
+        "endMs",
+        "stop",
+        "stop_time",
+        "finish",
+        "finish_time",
+        "time_end",
+        "duration_end",
+        "offsetEnd",
+        "offset_end",
+        "offset_end_ms",
+        "to",
+      ]) ?? (start !== null ? pickDurationEnd(item, start) : null);
       return text && start !== null ? { text, start, end: end ?? start } : null;
     })
     .filter(Boolean)
@@ -173,6 +274,38 @@ function collapseSubtitleEntries(entries = []) {
   }));
 }
 
+function normalizeProviderTimeline(metadata = {}) {
+  const directTimeline = subtitleEntries(metadata.subtitle_timeline || metadata.subtitleTimeline);
+  if (directTimeline.length) {
+    return directTimeline.map((row, index) => ({
+      index: index + 1,
+      start: Math.max(0, row.start),
+      end: Math.max(row.start + 0.25, row.end),
+      text: row.text.trim(),
+    }));
+  }
+  const providerEntries = subtitleEntries(
+    metadata.subtitles
+      || metadata.subtitle
+      || metadata.words
+      || metadata.word_timestamps
+      || metadata.wordTimestamps
+      || metadata.sentences
+      || metadata.segments
+  );
+  if (!providerEntries.length) return [];
+  const looksSegmented = providerEntries.some((entry) => /[。！？!?；;]/.test(entry.text) || entry.text.length >= 4);
+  if (looksSegmented) {
+    return providerEntries.map((row, index) => ({
+      index: index + 1,
+      start: Math.max(0, row.start),
+      end: Math.max(row.start + 0.25, row.end),
+      text: row.text.trim(),
+    }));
+  }
+  return collapseSubtitleEntries(providerEntries);
+}
+
 function estimatedSubtitleTimeline(text = "", duration = 0) {
   const segments = splitSentences(text).length ? splitSentences(text) : [String(text || "").trim()].filter(Boolean);
   if (!segments.length) return [];
@@ -192,11 +325,16 @@ function estimatedSubtitleTimeline(text = "", duration = 0) {
   });
 }
 
-function writeTimedTextFiles({ directory, job, preparedText, result, fileBaseName, title = "" }) {
-  const providerTimeline = collapseSubtitleEntries(subtitleEntries(result.metadata?.subtitles || result.metadata?.subtitle));
-  const duration = Number(result.duration || result.metadata?.duration || 0)
-    || (Number(result.metadata?.audio_length_ms || 0) / 1000)
+function resultDuration(result = {}) {
+  return Number(result.duration || result.metadata?.duration || result.metadata?.audio_duration || 0)
+    || (Number(result.metadata?.audio_length_ms || result.metadata?.duration_ms || result.metadata?.music_duration_ms || 0) / 1000)
+    || Number(result.probedDuration || 0)
     || 0;
+}
+
+function writeTimedTextFiles({ directory, job, preparedText, result, fileBaseName, title = "" }) {
+  const providerTimeline = normalizeProviderTimeline(result.metadata || {});
+  const duration = resultDuration(result);
   const timeline = providerTimeline.length ? providerTimeline : estimatedSubtitleTimeline(preparedText, duration);
   if (!timeline.length) return {};
   fs.mkdirSync(directory, { recursive: true });
@@ -222,7 +360,8 @@ function writeTimedTextFiles({ directory, job, preparedText, result, fileBaseNam
     subtitle_path: srtPath,
     timestamped_text_path: textPath,
     subtitle_timeline: timeline,
-    subtitle_source: providerTimeline.length ? "provider" : "estimated",
+    subtitle_source: providerTimeline.length ? "provider" : (duration > 0 ? "estimated_audio_duration" : "estimated"),
+    audio_duration: duration,
   };
 }
 
@@ -334,7 +473,7 @@ function curatedPresetVoices(providerId, voices = []) {
   return [...regular.slice(0, CURATED_REGULAR_LIMIT), ...special];
 }
 
-export function createTtsService({ baseDir, taskStore, getSettings, ffmpegPath, onJobCompleted = () => {} }) {
+export function createTtsService({ baseDir, taskStore, getSettings, ffmpegPath, ffprobePath = "", onJobCompleted = () => {} }) {
   const outputDir = path.join(baseDir, ".data", "tts", "audio");
   const subtitleDir = path.join(baseDir, ".data", "tts", "subtitles");
   const promptsDir = path.join(baseDir, "prompts");
@@ -393,6 +532,23 @@ export function createTtsService({ baseDir, taskStore, getSettings, ffmpegPath, 
       config: providerConfig(settings, providerId),
       ffmpegPath,
     });
+  }
+
+  function probeAudioDurationSync(filePath = "") {
+    const target = path.resolve(String(filePath || ""));
+    if (!ffprobePath || !fs.existsSync(ffprobePath) || !target || !fs.existsSync(target)) return 0;
+    const result = spawnSync(ffprobePath, [
+      "-v",
+      "error",
+      "-show_entries",
+      "format=duration",
+      "-of",
+      "default=nw=1:nk=1",
+      target,
+    ], { encoding: "utf8", windowsHide: true });
+    if (result.error || result.status !== 0) return 0;
+    const duration = Number(String(result.stdout || "").trim());
+    return Number.isFinite(duration) && duration > 0 ? duration : 0;
   }
 
   function visibleError(job, metadata = safeJson(job?.metadata_json, {})) {
