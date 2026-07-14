@@ -3520,11 +3520,13 @@ function saveRewriteForTask(task, rewrite, format = "txt") {
   });
 }
 
-async function getRewriteProvider(providerId) {
+async function getRewriteProvider(providerId, { refreshAutoModel = true, persistAutoModel = true } = {}) {
   const settings = readSettings();
   const requested = String(providerId || settings.rewrite.defaultProvider || "dashscope");
   const id = settings.rewriteProviders[requested] ? requested : "dashscope";
-  const provider = await refreshProviderModel(settings, id);
+  const provider = refreshAutoModel
+    ? await refreshProviderModel(settings, id)
+    : settings.rewriteProviders[id];
   if (!provider) throw new Error("未知改写模型");
   if (!String(provider.apiKey || "").trim()) {
     throw new Error(`请先保存 ${provider.label} API Key`);
@@ -3535,7 +3537,7 @@ async function getRewriteProvider(providerId) {
   if (!String(provider.model || "").trim()) {
     throw new Error(`请先填写 ${provider.label} model`);
   }
-  if (provider.autoModel !== false) writeSettings(settings);
+  if (refreshAutoModel && persistAutoModel && provider.autoModel !== false) writeSettings(settings);
   return { id, ...provider };
 }
 
@@ -6481,7 +6483,10 @@ const server = http.createServer(async (req, res) => {
       }
       let provider;
       try {
-        provider = await getRewriteProvider(String(body.provider || "dashscope"));
+        provider = await getRewriteProvider(String(body.provider || "dashscope"), {
+          refreshAutoModel: false,
+          persistAutoModel: false,
+        });
       } catch (error) {
         sendJson(res, 400, { ok: false, message: error instanceof Error ? error.message : String(error) });
         return;

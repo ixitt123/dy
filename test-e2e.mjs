@@ -91,7 +91,8 @@ test("Single page title and choice-memory sources", async () => {
     || !page.includes('id="analysisProvider" data-no-choice-persist')
     || !legacy.includes("renderAnalysisProviderControl")
     || !legacy.includes("provider: analysisProvider?.value")
-    || !server.includes("analyzeTranscriptWithProvider")) {
+    || !server.includes("analyzeTranscriptWithProvider")
+    || !server.includes("persistAutoModel: false")) {
     throw new Error("Choice preference restoration is incomplete");
   }
 });
