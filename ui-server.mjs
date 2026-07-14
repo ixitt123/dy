@@ -3787,9 +3787,14 @@ const MOMENTS_DEFAULT_EMOJIS = ["🌿", "✨", "🙂", "📌", "✅", "💛", "�
 
 function momentsEmojiCandidates(value = "") {
   const text = String(value || "");
-  const matched = MOMENTS_EMOJI_LIBRARY
-    .filter((group) => group.pattern.test(text))
-    .flatMap((group) => group.emojis);
+  const matchedGroups = MOMENTS_EMOJI_LIBRARY.filter((group) => group.pattern.test(text));
+  const matched = [];
+  const maxGroupSize = Math.max(0, ...matchedGroups.map((group) => group.emojis.length));
+  for (let emojiIndex = 0; emojiIndex < maxGroupSize; emojiIndex += 1) {
+    for (const group of matchedGroups) {
+      if (group.emojis[emojiIndex]) matched.push(group.emojis[emojiIndex]);
+    }
+  }
   return [...new Set([...matched, ...MOMENTS_DEFAULT_EMOJIS])];
 }
 
@@ -3822,7 +3827,7 @@ function ensureMomentsEmojiMinimum(value = "", minimum = 2) {
     return normalizeMomentsPostLayout(paragraphs.join("\n\n"));
   }
 
-  const sentences = text.match(/[^。！？!?]+[。！？!?]?/gu) || [text];
+  const sentences = text.match(/[^，；：。！？!?]+[，；：。！？!?]?/gu) || [text];
   const preferredIndexes = [0, sentences.length - 1, Math.floor(sentences.length / 2)];
   for (let index = 0; index < additions.length; index += 1) {
     const sentenceIndex = preferredIndexes[index % preferredIndexes.length];
