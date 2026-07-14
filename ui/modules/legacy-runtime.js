@@ -336,6 +336,9 @@ const ttsAudioHandoffStatus = document.querySelector("#ttsAudioHandoffStatus");
 const ttsHistory = document.querySelector("#ttsHistory");
 const momentsCopyInput = document.querySelector("#momentsCopyInput");
 const momentsCopyStatus = document.querySelector("#momentsCopyStatus");
+const momentsProvider = document.querySelector("#momentsProvider");
+const momentsFallbackProvider = document.querySelector("#momentsFallbackProvider");
+const momentsProviderStatus = document.querySelector("#momentsProviderStatus");
 const momentsPersonaSelect = document.querySelector("#momentsPersonaSelect");
 const addMomentsPersonaBtn = document.querySelector("#addMomentsPersona");
 const momentsPersonaEditor = document.querySelector("#momentsPersonaEditor");
@@ -412,6 +415,8 @@ let currentRewriteSpecs = [];
 const MOMENTS_PERSONAS_KEY = "video-factory:moments-personas-v1";
 const MOMENTS_ACTIVE_PERSONA_KEY = "video-factory:moments-active-persona-v1";
 const MOMENTS_DRAFT_KEY = "video-factory:moments-draft-v1";
+const MOMENTS_PROVIDER_KEY = "video-factory:moments-provider-v1";
+const MOMENTS_FALLBACK_PROVIDER_KEY = "video-factory:moments-fallback-provider-v1";
 const defaultMomentsPersona = {
   id: "academic-planner",
   name: "学业规划老师",
@@ -1647,23 +1652,23 @@ function stopMomentsProgress(label = "", percent = 100) {
   if (label) setMomentsProgress(percent, label);
 }
 
-function startMomentsProgress() {
+async function refreshMomentsProgress(progressId) {
+  if (!progressId) return;
+  try {
+    const data = await fetchJson(`/api/moments/progress?id=${encodeURIComponent(progressId)}`, { cache: "no-store" });
+    setMomentsProgress(data.progress, data.label);
+    if (data.status !== "running") stopMomentsProgress(data.label, data.progress);
+  } catch {
+    // 请求刚发出时服务端尚未登记进度任务，下一轮轮询会继续读取。
+  }
+}
+
+function startMomentsProgress(progressId) {
   if (momentsProgressTimer) clearInterval(momentsProgressTimer);
-  const startedAt = Date.now();
-  const stages = [
-    [0, 6, "正在提交生成任务"],
-    [900, 18, "正在生成朋友圈文案"],
-    [2800, 38, "正在加入引用素材和金句"],
-    [5200, 58, "正在做反差和落差质检"],
-    [8200, 76, "正在生成图片提示词"],
-    [12000, 88, "正在整理结果"],
-  ];
-  setMomentsProgress(3, stages[0][2]);
+  setMomentsProgress(3, "正在提交生成任务");
+  void refreshMomentsProgress(progressId);
   momentsProgressTimer = setInterval(() => {
-    const elapsed = Date.now() - startedAt;
-    const current = [...stages].reverse().find(([time]) => elapsed >= time) || stages[0];
-    const drift = Math.min(4, Math.floor(elapsed / 7000));
-    setMomentsProgress(Math.min(92, current[1] + drift), current[2]);
+    void refreshMomentsProgress(progressId);
   }, 700);
 }
 
@@ -1779,6 +1784,8 @@ function collectMomentsPayload() {
     tone: momentsTone?.value || "强反差急转弯",
     intent: momentsIntent?.value || "冲突反转",
     referenceStyle: momentsReferenceStyle?.value || "自动引用",
+    provider: momentsProvider?.value || "",
+    fallbackProvider: momentsFallbackProvider?.value || "",
   };
 }
 
@@ -1977,7 +1984,9 @@ async function generateMomentsPost() {
     return;
   }
   setMomentsStatus("正在生成朋友圈文案和配图提示词...");
-  startMomentsProgress();
+  const progressId = `moments-${pageSessionId}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  payload.progressId = progressId;
+  startMomentsProgress(progressId);
   if (generateMomentsPostBtn) generateMomentsPostBtn.disabled = true;
   try {
     const data = await fetchJson("/api/moments/generate", {
@@ -1990,7 +1999,8 @@ async function generateMomentsPost() {
     renderMomentsResult(currentMomentsResult);
     saveMomentsDraft();
     stopMomentsProgress("朋友圈文案和图片提示词生成完成", 100);
-    setMomentsStatus(`已生成：${currentMomentsResult.image_count || currentMomentsResult.images?.length || 0} 张配图提示词，可继续修改。`, "success");
+    const fallbackNotice = data.fallbackUsed ? "本次已自动切换到备用 API。" : "";
+    setMomentsStatus(`已生成：${currentMomentsResult.image_count || currentMomentsResult.images?.length || 0} 张配图提示词，可继续修改。${fallbackNotice}`, "success");
   } catch (error) {
     stopMomentsProgress("生成失败", 100);
     setMomentsStatus(error instanceof Error ? error.message : String(error), "error");

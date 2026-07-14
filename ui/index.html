@@ -588,6 +588,17 @@
             <h2>朋友圈文案定制</h2>
             <p>先选择人设，再围绕原始文案生成自然分享式朋友圈图文，支持复制提示词并上传本地配图。</p>
           </div>
+          <div class="moments-api-controls" aria-label="本页 API 设置">
+            <label>
+              本页主 API
+              <select id="momentsProvider"></select>
+            </label>
+            <label>
+              备用 API
+              <select id="momentsFallbackProvider"></select>
+            </label>
+            <p id="momentsProviderStatus">仅当前页生效；主 API 超时、限流或 5xx 时自动切换。</p>
+          </div>
         </section>
         <section class="moments-workbench">
           <div class="moments-input-column">
