@@ -610,7 +610,13 @@ export function createKineticTextService({
     const timeline = payloadTimeline.length ? payloadTimeline : fileTimeline;
     const hasTimedTimeline = timeline.length > 0;
     const hasAudio = Boolean(audioPath || tts.audio_url || tts.audioUrl);
-    const duration = safeNumber(tts.duration, 0, 0) || await probeDuration(audioPath);
+    const duration = safeNumber(tts.duration || tts.audio_duration || tts.metadata?.audio_duration, 0, 0) || await probeDuration(audioPath);
+    const subtitleSource = String(
+      tts.subtitle_source
+      || tts.subtitleSource
+      || tts.metadata?.subtitle_source
+      || (hasTimedTimeline ? "estimated" : "estimated")
+    );
     const effectId = normalizeEffectId(input.effectId);
     return save({
       id,
@@ -627,7 +633,7 @@ export function createKineticTextService({
       timestampedTextPath,
       text: String(tts.text || input.text || ""),
       duration,
-      subtitleSource: String(tts.subtitle_source || tts.subtitleSource || (hasTimedTimeline ? "provider" : "estimated")),
+      subtitleSource,
       segments: normalizeSegments(timeline, tts.text || input.text, duration),
       effectId,
       effectParams: defaultEffectParams(effectId),

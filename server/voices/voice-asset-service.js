@@ -735,6 +735,7 @@ export function createVoiceAssetService({ baseDir, taskStore, ttsService, getSet
       return {
         success: true,
         audio_path: outputPath,
+        duration: Number(data?.extra_info?.music_duration || 0) / 1000,
         metadata: {
           model: body.model,
           provider: "minimax",
@@ -797,6 +798,10 @@ export function createVoiceAssetService({ baseDir, taskStore, ttsService, getSet
       cached: false,
       preview_url: `/api/voice-assets/audio?id=${assetId}&kind=preview`,
       audio_path: filePath,
+      duration: Number(result.duration || result.metadata?.duration || 0)
+        || (Number(result.metadata?.duration_ms || result.metadata?.music_duration_ms || result.metadata?.audio_length_ms || 0) / 1000)
+        || 0,
+      metadata: result.metadata || {},
     };
   }
 

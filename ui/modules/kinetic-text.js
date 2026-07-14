@@ -437,7 +437,12 @@ function renderProject() {
   $("#kineticTtsVolumeValue").value = `${project.audioMix?.ttsVolume ?? 100}%`;
   $("#kineticBgVolumeValue").value = `${project.audioMix?.backgroundVolume ?? 18}%`;
   $("#kineticBottomSubtitles").checked = project.showBottomSubtitles === true;
-  $("#kineticSubtitleSource").textContent = project.subtitleSource === "provider" ? "精确时间轴" : "估算时间轴，可在下方校正";
+  const sourceLabels = {
+    provider: "Provider 原生时间轴",
+    estimated_audio_duration: "按音频时长估算，可在下方校正",
+    estimated: "估算时间轴，可在下方校正",
+  };
+  $("#kineticSubtitleSource").textContent = sourceLabels[project.subtitleSource] || "估算时间轴，可在下方校正";
   $("#kineticEffectName").textContent = effectById(project.effectId)?.name || "动态大字";
   setProgress(project.progress || 0, project.stage || "编辑中");
   renderOutputs();

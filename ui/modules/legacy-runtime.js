@@ -3558,6 +3558,10 @@ function confirmedTtsAudioPayload(job = activeTtsRailJob) {
     timestamped_text_url: job.timestamped_text_url || timedSubtitleUrl,
     timestamped_text_path: job.timestamped_text_path || timedSubtitlePath,
     subtitle_timeline: Array.isArray(job.subtitle_timeline) ? job.subtitle_timeline : Array.isArray(job.metadata?.subtitle_timeline) ? job.metadata.subtitle_timeline : [],
+    subtitle_source: job.subtitle_source || job.subtitleSource || job.metadata?.subtitle_source || "",
+    subtitleSource: job.subtitle_source || job.subtitleSource || job.metadata?.subtitle_source || "",
+    duration: Number(job.duration || job.audio_duration || job.metadata?.audio_duration || job.metadata?.duration || 0),
+    audio_duration: Number(job.audio_duration || job.duration || job.metadata?.audio_duration || 0),
     provider: job.provider || ttsProvider?.value || "",
     voice_id: job.voice_id || "",
     voice_name: job.voice_name || "",
@@ -3614,6 +3618,10 @@ function ttsConsumerJob(payload = {}) {
     subtitle_path: payload.subtitle_path || payload.timed_subtitle_path || "",
     timestamped_text_url: payload.timestamped_text_url || payload.timed_subtitle_url || "",
     timestamped_text_path: payload.timestamped_text_path || payload.timed_subtitle_path || "",
+    subtitle_timeline: Array.isArray(payload.subtitle_timeline) ? payload.subtitle_timeline : [],
+    subtitle_source: payload.subtitle_source || payload.subtitleSource || "",
+    duration: Number(payload.duration || payload.audio_duration || 0),
+    audio_duration: Number(payload.audio_duration || payload.duration || 0),
   };
 }
 
@@ -4416,7 +4424,7 @@ generateTts = async function generateTtsUnified() {
           asset_kind: voiceAsset?.metadata?.asset_kind || "minimax_music_preset",
           format: "mp3",
           audio_path: data.audio_path || "",
-          duration: data.duration || data.metadata?.duration || 0,
+          duration: data.duration || data.metadata?.duration || (Number(data.metadata?.duration_ms || data.metadata?.music_duration_ms || 0) / 1000) || 0,
           metadata: data.metadata || {},
         }),
       });
