@@ -7966,10 +7966,11 @@ audio {
 @media (max-width: 680px) {
   .moments-page-toolbar {
     align-items: stretch;
-    justify-content: stretch;
+    justify-content: flex-start;
   }
 
   .moments-api-controls {
+    width: 100%;
     grid-template-columns: 1fr;
   }
 
