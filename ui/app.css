@@ -9400,6 +9400,31 @@ audio {
   min-width: 260px;
 }
 
+.kinetic-project-switcher {
+  justify-self: end;
+  width: min(430px, 100%);
+  color: var(--muted, #8d9ab0);
+  font-size: 12px;
+}
+
+.kinetic-project-switcher summary {
+  width: fit-content;
+  margin-left: auto;
+  cursor: pointer;
+  user-select: none;
+}
+
+.kinetic-project-switcher[open] {
+  border: 1px solid var(--line, #293244);
+  border-radius: 7px;
+  padding: 6px;
+  background: rgba(8, 12, 18, .72);
+}
+
+.kinetic-project-switcher[open] summary {
+  margin-bottom: 6px;
+}
+
 .kinetic-project-strip {
   justify-content: flex-end;
   padding: 0 0 2px;

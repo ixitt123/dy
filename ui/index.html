@@ -1508,12 +1508,15 @@
 
       <section class="workbench-page" data-page="kinetic-text" id="kineticTextPage">
         <section class="kinetic-text-maker">
-          <div class="kinetic-project-strip">
-            <select id="kineticTextProjectSelect" aria-label="动态大字项目">
-              <option value="">等待 TTS 发送</option>
-            </select>
-            <button id="kineticTextRefresh" class="ghost" type="button">刷新</button>
-          </div>
+          <details class="kinetic-project-switcher">
+            <summary>历史项目</summary>
+            <div class="kinetic-project-strip">
+              <select id="kineticTextProjectSelect" aria-label="动态大字项目">
+                <option value="">等待 TTS 发送</option>
+              </select>
+              <button id="kineticTextRefresh" class="ghost" type="button">刷新</button>
+            </div>
+          </details>
 
           <div class="kinetic-text-layout">
             <aside class="kinetic-text-controls">
