@@ -3754,6 +3754,28 @@ function stripMomentsEmoji(value = "") {
     .trim();
 }
 
+function countMomentsEmoji(value = "") {
+  const text = String(value || "");
+  if (!text) return 0;
+  if (typeof Intl?.Segmenter === "function") {
+    const segmenter = new Intl.Segmenter("zh", { granularity: "grapheme" });
+    const emojiPattern = /[\u{1F1E6}-\u{1F1FF}\u{1F300}-\u{1FAFF}\u{2300}-\u{23FF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}]/u;
+    return Array.from(segmenter.segment(text)).filter(({ segment }) => emojiPattern.test(segment)).length;
+  }
+  return (text.match(/[\u{1F1E6}-\u{1F1FF}\u{1F300}-\u{1FAFF}\u{2300}-\u{23FF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}]/gu) || []).length;
+}
+
+function momentsEmojiIsValid(value = "", addEmoji = false) {
+  const count = countMomentsEmoji(value);
+  return addEmoji ? count >= 2 && count <= 3 : count === 0;
+}
+
+function momentsEmojiRule(addEmoji = false) {
+  return addEmoji
+    ? "表情规则：正文必须添加 2-3 个与具体语义匹配的常见 emoji，分散放在自然停顿或重点处；不能堆在开头，不能使用无关或夸张表情。"
+    : "表情规则：正文不添加任何 emoji 或颜文字，保持干净自然。";
+}
+
 function resolveMomentsReferenceStyle(value = "") {
   const requested = String(value || "").trim();
   if (MOMENTS_REFERENCE_TYPES.includes(requested)) return requested;
