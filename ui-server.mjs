@@ -3652,6 +3652,98 @@ function normalizeMomentsStyle(value = "") {
   return ["auto", "xiaohei", "realistic"].includes(style) ? style : "auto";
 }
 
+const MOMENTS_STYLE_CATEGORIES = new Set([
+  "auto",
+  "product-service",
+  "store-event",
+  "knowledge-growth",
+  "daily-life",
+  "personal-brand",
+]);
+const MOMENTS_REFERENCE_TYPES = ["名人名言", "网络热梗", "金句名句", "古诗经典"];
+
+function normalizeMomentsStyleCategory(value = "") {
+  const category = String(value || "auto").trim();
+  return MOMENTS_STYLE_CATEGORIES.has(category) ? category : "auto";
+}
+
+function resolveMomentsImageStyle(category = "") {
+  switch (normalizeMomentsStyleCategory(category)) {
+    case "knowledge-growth":
+      return "xiaohei";
+    case "daily-life":
+    case "product-service":
+    case "store-event":
+    case "personal-brand":
+      return "realistic";
+    default:
+      return "realistic";
+  }
+}
+
+function momentsStyleCategoryStrategy(category = "auto") {
+  return ({
+    auto: [
+      "视觉风格类别：自动判断（宣传导向）。先识别原文真正要宣传的产品、课程、服务、门店、活动或个人品牌，再选择最贴近真实使用场景的画面。",
+      "整体要像温和、自然的朋友圈分享，不要做成硬广海报；宣传信息要清楚，但画面和表达都保留生活感。",
+    ],
+    "product-service": [
+      "视觉风格类别：产品/课程/服务宣传。围绕使用前后的真实场景、适用人群和可感知价值展开，突出体验与解决的问题，不堆 Logo、价格和口号。",
+      "画面要有真实人物、产品或服务动作，体现可信度和温度，避免夸张承诺。",
+    ],
+    "store-event": [
+      "视觉风格类别：门店/活动/节日宣传。围绕到店、参与、体验和现场氛围组织内容，让读者自然理解活动适合谁、什么时候参与、能获得什么。",
+      "画面要有真实场景和可识别的活动细节，不做千篇一律的促销海报。",
+    ],
+    "knowledge-growth": [
+      "视觉风格类别：知识/成长/职场分享。先给一个真实观察，再提炼方法和价值，宣传内容只能作为自然解决方案出现，不要把正文写成课程广告。",
+      "画面优先使用清晰的解释、对比和真实工作/学习细节，保持专业但不端着。",
+    ],
+    "daily-life": [
+      "视觉风格类别：日常/生活/情绪记录。用一个轻量生活场景承载宣传信息，让产品或服务自然出现在真实使用时刻，不要强行植入。",
+      "语言要松弛、有人情味，避免口号、夸张效果和连续销售话术。",
+    ],
+    "personal-brand": [
+      "视觉风格类别：个人品牌/专业人设。突出真实工作状态、专业判断和长期可信度，让读者先认识这个人，再理解其提供的产品或服务。",
+      "表达要稳定、克制、有记忆点，不要包装成官方公告或自夸式广告。",
+    ],
+  }[normalizeMomentsStyleCategory(category)] || []).join("\n");
+}
+
+function normalizeMomentsWordCount(value = "100", customValue = "100") {
+  const requested = String(value || "100").trim();
+  const raw = requested === "custom" ? customValue : requested;
+  const parsed = Number(raw);
+  const target = [100, 200, 300].includes(parsed)
+    ? parsed
+    : requested === "custom" && Number.isFinite(parsed) && parsed > 0
+      ? Math.min(600, Math.max(50, Math.round(parsed)))
+      : 100;
+  return {
+    target,
+    min: Math.max(50, Math.round(target * 0.8)),
+    max: Math.min(720, Math.round(target * 1.2)),
+    label: `${target}字左右`,
+  };
+}
+
+function momentsWordCountRule(spec = normalizeMomentsWordCount()) {
+  return `建议正文约 ${spec.target} 字，允许根据表达自然浮动在 ${spec.min}-${spec.max} 字；不要为了凑字数重复观点，也不要为了缩短删掉宣传对象、适用人群、核心价值和温和行动建议。`;
+}
+
+function stripMomentsEmoji(value = "") {
+  return String(value || "")
+    .replace(/[\u{1F1E6}-\u{1F1FF}\u{1F300}-\u{1FAFF}\u{2300}-\u{23FF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}\uFE0F\u200D]/gu, "")
+    .replace(/[ \t]{2,}/g, " ")
+    .trim();
+}
+
+function resolveMomentsReferenceStyle(value = "") {
+  const requested = String(value || "").trim();
+  if (MOMENTS_REFERENCE_TYPES.includes(requested)) return requested;
+  return MOMENTS_REFERENCE_TYPES[Math.floor(Math.random() * MOMENTS_REFERENCE_TYPES.length)];
+}
+
 function momentsToneStrategy(tone = "") {
   const value = String(tone || "").trim();
   return ({
@@ -3728,9 +3820,33 @@ function momentsIntentStrategy(intent = "") {
       "生成方式：观点表达。",
       "结构是：先亮观点 -> 解释观点为什么成立 -> 给一个具体动作；观点要鲜明但不攻击读者。",
     ],
+    "auto-promo": [
+      "生成方式：自动判断宣传方式。先识别宣传对象、适用人群和最真实的使用场景，再用分享口吻自然带出价值。",
+      "结构是：真实场景/观察 -> 温和判断 -> 产品或服务解决的问题 -> 适合谁 -> 不强迫的下一步。",
+    ],
+    "product-value": [
+      "生成方式：产品/课程价值介绍。重点讲清楚解决什么问题、适合什么人、为什么值得了解，不堆功能清单和夸张承诺。",
+      "结构是：常见困扰 -> 具体价值 -> 使用或体验场景 -> 适合人群 -> 温和行动邀请。",
+    ],
+    "event-promo": [
+      "生成方式：门店/活动转化。让读者清楚活动内容、适合谁和参与理由，保持生活化表达，不写成促销通知。",
+      "结构是：现场或生活场景 -> 活动亮点 -> 参与收益 -> 时间/方式（仅使用原文提供的信息） -> 轻收尾。",
+    ],
+    "experience-share": [
+      "生成方式：案例/体验分享。只使用原文真实信息，讲清过程、感受和可验证的价值，不编造成果和具体数据。",
+      "结构是：真实体验 -> 关键变化 -> 专业解释 -> 适合人群 -> 温和建议。",
+    ],
+    "knowledge-lead": [
+      "生成方式：专业知识引导。先提供一个有用判断，再自然说明相关产品、课程或服务如何帮助读者，避免先卖后讲。",
+      "结构是：常见误区 -> 专业解释 -> 可执行方法 -> 解决方案出现 -> 轻收尾。",
+    ],
+    "soft-cta": [
+      "生成方式：温和行动邀请。正文以分享和帮助为主，结尾只保留一个清楚、低压力的下一步，不制造焦虑。",
+      "结构是：真实观察 -> 价值判断 -> 具体场景 -> 适合人群 -> 自然邀请了解或咨询。",
+    ],
   }[value] || [
-    "生成方式：不强销售的自然分享。",
-    "结构自然，但必须有场景、判断、方法和轻收尾，不能写成两句提醒。",
+    "生成方式：自然宣传分享。",
+    "结构自然，但必须讲清宣传对象、具体价值和适合人群，不能写成硬广或两句空泛提醒。",
   ]).join("\n");
 }
 
@@ -3777,7 +3893,7 @@ function momentsReferenceStrategy(referenceStyle = "") {
 }
 
 function momentsReferenceRequired(referenceStyle = "") {
-  return String(referenceStyle || "").trim() !== "不用引用";
+  return true;
 }
 
 function compactReferenceText(value = "") {
@@ -3813,7 +3929,7 @@ function ensureMomentsSeriesPrompt(prompt = "", style = "xiaohei", theme = "") {
 }
 
 function normalizeMomentsSeriesStyle(raw = {}, fallback = {}) {
-  const requested = normalizeMomentsStyle(fallback.visualStyle);
+  const requested = normalizeMomentsStyle(fallback.imageStyle || fallback.visualStyle);
   if (requested !== "auto") return requested;
   const explicit = normalizeMomentsStyle(raw.series_style || raw.seriesStyle || raw.visual_style || raw.visualStyle);
   if (explicit !== "auto") return explicit;
@@ -3826,7 +3942,8 @@ function normalizeMomentsResult(raw = {}, fallback = {}) {
   const imageCount = clampMomentsImageCount(raw.image_count || raw.imageCount)
     || clampMomentsImageCount(fallback.imageCount)
     || 1;
-  const post = String(raw.post || raw.copy || raw.text || "").trim();
+  const rawPost = String(raw.post || raw.copy || raw.text || "").trim();
+  const post = fallback.addEmoji === true ? rawPost : stripMomentsEmoji(rawPost);
   if (!post) throw new Error("朋友圈生成结果缺少文案。");
   const theme = String(raw.theme || fallback.theme || "朋友圈图文").trim().slice(0, 120);
   const seriesStyle = normalizeMomentsSeriesStyle(raw, fallback);
@@ -3857,6 +3974,8 @@ function normalizeMomentsResult(raw = {}, fallback = {}) {
     theme,
     series_style: seriesStyle,
     reference_used: String(raw.reference_used || raw.referenceUsed || "").trim().slice(0, 220),
+    reference_style: String(raw.reference_style || raw.referenceStyle || fallback.referenceStyle || "").trim(),
+    add_emoji: fallback.addEmoji === true,
     persona_used: String(raw.persona_used || fallback.persona || "").trim().slice(0, 1000),
     notes: Array.isArray(raw.notes) ? raw.notes.map((item) => String(item).trim()).filter(Boolean).slice(0, 6) : [],
     images,
