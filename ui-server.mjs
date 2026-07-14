@@ -3776,6 +3776,66 @@ function momentsEmojiRule(addEmoji = false) {
     : "表情规则：正文不添加任何 emoji 或颜文字，保持干净自然。";
 }
 
+const MOMENTS_EMOJI_LIBRARY = [
+  { pattern: /学习|课程|课堂|老师|学生|孩子|家长|作业|考试|成绩|规划|知识|阅读|英语|数学|语文|培训/u, emojis: ["📚", "✍️", "📝", "🎯", "💡", "🌱"] },
+  { pattern: /工作|职场|项目|团队|客户|效率|复盘|方案|运营|创业|老板|门店/u, emojis: ["💼", "📊", "✅", "📌", "🤝", "💡"] },
+  { pattern: /产品|服务|体验|功能|品质|使用|购买|优惠|新品|种草/u, emojis: ["✨", "✅", "👍", "🎁", "🛍️", "💛"] },
+  { pattern: /活动|报名|现场|到店|时间|地址|开业|节日|聚会/u, emojis: ["🎉", "📍", "📅", "👋", "🎁", "✨"] },
+  { pattern: /家庭|家人|父母|妈妈|爸爸|亲子|陪伴|成长/u, emojis: ["👨‍👩‍👧‍👦", "❤️", "🌱", "🤝", "😊", "💛"] },
+  { pattern: /情绪|治愈|放松|开心|快乐|温暖|生活|日常|今天|周末|感受/u, emojis: ["🌿", "☀️", "😊", "✨", "💛", "🙂"] },
+  { pattern: /建议|方法|提醒|注意|行动|开始|坚持|改变|计划|目标/u, emojis: ["📌", "✅", "💡", "🎯", "💪", "📝"] },
+  { pattern: /咨询|联系|私信|留言|了解|需要|欢迎/u, emojis: ["📩", "💬", "👋", "🤝"] },
+  { pattern: /AI|人工智能|软件|系统|工具|视频|互联网|技术/iu, emojis: ["💻", "🤖", "⚙️", "✨", "💡", "📱"] },
+  { pattern: /旅行|旅游|出发|风景|美食|餐厅|咖啡|打卡/u, emojis: ["✈️", "🧳", "📸", "🍜", "☕", "😋"] },
+];
+const MOMENTS_DEFAULT_EMOJIS = ["🌿", "✨", "🙂", "📌", "✅", "💛", "😊", "👍"];
+
+function momentsEmojiCandidates(value = "") {
+  const text = String(value || "");
+  const matched = MOMENTS_EMOJI_LIBRARY
+    .filter((group) => group.pattern.test(text))
+    .flatMap((group) => group.emojis);
+  return [...new Set([...matched, ...MOMENTS_DEFAULT_EMOJIS])];
+}
+
+function appendMomentsEmoji(value = "", emoji = "") {
+  const text = String(value || "").trim();
+  return text && emoji ? `${text}${emoji}` : text;
+}
+
+function ensureMomentsEmojiMinimum(value = "", minimum = 2) {
+  let text = normalizeMomentsPostLayout(value);
+  const currentCount = countMomentsEmoji(text);
+  if (!text || currentCount >= minimum) return text;
+
+  const candidates = momentsEmojiCandidates(text).filter((emoji) => !text.includes(emoji));
+  const missing = Math.max(0, minimum - currentCount);
+  const additions = candidates.slice(0, missing);
+  if (!additions.length) return text;
+
+  const paragraphs = text.split(/\n{2,}/).map((item) => item.trim()).filter(Boolean);
+  if (paragraphs.length > 1) {
+    const preferredIndexes = [0, paragraphs.length - 1, Math.floor(paragraphs.length / 2)];
+    for (let index = 0; index < additions.length; index += 1) {
+      let paragraphIndex = preferredIndexes[index % preferredIndexes.length];
+      if (countMomentsEmoji(paragraphs[paragraphIndex]) > 0) {
+        const alternative = paragraphs.findIndex((paragraph) => countMomentsEmoji(paragraph) === 0);
+        if (alternative >= 0) paragraphIndex = alternative;
+      }
+      paragraphs[paragraphIndex] = appendMomentsEmoji(paragraphs[paragraphIndex], additions[index]);
+    }
+    return normalizeMomentsPostLayout(paragraphs.join("\n\n"));
+  }
+
+  const sentences = text.match(/[^。！？!?]+[。！？!?]?/gu) || [text];
+  const preferredIndexes = [0, sentences.length - 1, Math.floor(sentences.length / 2)];
+  for (let index = 0; index < additions.length; index += 1) {
+    const sentenceIndex = preferredIndexes[index % preferredIndexes.length];
+    sentences[sentenceIndex] = appendMomentsEmoji(sentences[sentenceIndex], additions[index]);
+  }
+  return normalizeMomentsPostLayout(sentences.join(""));
+}
+
 function normalizeMomentsPostLayout(value = "") {
   return String(value || "")
     .replace(/\r\n?/g, "\n")
@@ -4467,7 +4527,6 @@ async function generateMomentsPostJsonV2(body = {}) {
     rewriteCharacterCount(post) < wordCount.min
     || rewriteCharacterCount(post) > wordCount.max
     || !String(copyData.core_judgment || "").trim()
-    || !momentsEmojiIsValid(post, addEmoji)
     || !momentsCopyPasteReady(post)
     || !momentsReferenceIsUsed(post, copyData.reference_used, referenceStyle)
   ) {
@@ -4555,16 +4614,15 @@ async function generateMomentsPostJsonV2(body = {}) {
     post = addEmoji ? post : normalizeMomentsPostLayout(stripMomentsEmoji(post));
     finalPostLength = rewriteCharacterCount(post);
   }
+  post = addEmoji
+    ? ensureMomentsEmojiMinimum(post, 2)
+    : normalizeMomentsPostLayout(stripMomentsEmoji(post));
+  finalPostLength = rewriteCharacterCount(post);
   const wordCountWarning = finalPostLength < wordCount.min || finalPostLength > wordCount.max
     ? `建议 ${wordCount.min}-${wordCount.max} 字，实际 ${finalPostLength} 字；已保留完整表达。`
     : "";
   if (!momentsReferenceIsUsed(post, copyData.reference_used, referenceStyle)) {
     throw new Error(`本次生成未能加入“${referenceStyle}”引用素材，请重试或指定其他引用类别。`);
-  }
-  if (!momentsEmojiIsValid(post, addEmoji)) {
-    throw new Error(addEmoji
-      ? "本次生成未能添加至少 2 个匹配语义的表情，请重试。"
-      : "本次生成结果包含表情，已拒绝返回，请重试。");
   }
   if (!momentsCopyPasteReady(post)) {
     throw new Error("本次生成的文案排版不适合直接复制发布，请重试。");
