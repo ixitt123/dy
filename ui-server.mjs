@@ -3782,7 +3782,7 @@ function normalizeMomentsPostLayout(value = "") {
     .split("\n")
     .map((line) => line.replace(/[ \t]+/g, " ").trim())
     .join("\n")
-    .replace(/[ \t]+([，。！？；：、】【、】【])/g, "$1")
+    .replace(/[ \t]+([，。！？；：、）】])/g, "$1")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
 }
