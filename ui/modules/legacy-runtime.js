@@ -1402,6 +1402,10 @@ async function sendRewriteTextToTarget(target, text, meta = {}) {
     localStorage.setItem(`video-factory-handoff:${target}`, JSON.stringify(payload));
     localStorage.setItem("video-factory-last-handoff", JSON.stringify(payload));
   } catch {}
+  markProductionTargetReceived(target, {
+    handoffType: "文案",
+    id: payload.taskId || "",
+  });
 
   if (target === "moments-copy") {
     setTextareaValue(momentsCopyInput, cleanText);
@@ -1455,7 +1459,6 @@ async function sendRewriteTextToTarget(target, text, meta = {}) {
     try {
       localStorage.setItem("dy:handoff:kinetic-text:text", JSON.stringify(handoff));
     } catch {}
-    markProductionTargetReceived("kinetic-text", { id: "text" });
     if (window.kineticTextProduction?.receiveText) await window.kineticTextProduction.receiveText(handoff);
     else window.dispatchEvent(new CustomEvent("kinetic-text-text-handoff", { detail: handoff }));
   }
@@ -3632,8 +3635,12 @@ async function ensureVideoProjectForTts(payload = {}) {
 function markProductionTargetReceived(target, payload = {}) {
   const button = document.querySelector(`.nav-item[data-nav="${target}"]`);
   if (!button) return;
+  const kind = payload.handoffType || (payload.audio_path || payload.audio_url ? "音频" : "");
+  const marker = payload.display_number || payload.sequence_number || payload.id || "";
   button.classList.add("handoff-ready");
-  button.dataset.handoffLabel = `已接收 #${payload.display_number || payload.sequence_number || payload.id || ""}`.trim();
+  button.dataset.handoffLabel = marker
+    ? `已收${kind || ""} #${marker}`
+    : (kind ? `已收${kind}` : "已接收");
 }
 
 function applyTtsToCs1(payload = {}) {
