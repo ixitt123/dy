@@ -610,8 +610,9 @@ export function createKineticTextService({
 
       updateJob(jobId, { progress: 82, stage: "生成素材包" });
       const zipPath = path.join(projectDir(projectId), `${safeFileName(project.title, project.id)}-素材包.zip`);
-      await zipDirectory(targetRoot, zipPath);
-      project = update(projectId, { outputs: { materialDir: targetRoot, materialZip: zipPath, assPath: path.join(targetRoot, "effects.ass"), srtPath: path.join(targetRoot, "subtitles.srt") } });
+      const uniqueZipPath = path.join(projectDir(projectId), `${safeFileName(project.title, project.id)}-${runId}.zip`);
+      await zipDirectory(targetRoot, uniqueZipPath);
+      project = update(projectId, { outputs: { materialDir: targetRoot, materialZip: uniqueZipPath, assPath: path.join(targetRoot, "effects.ass"), srtPath: path.join(targetRoot, "subtitles.srt") } });
       updateJob(jobId, { status: "completed", progress: 100, stage: "素材包完成", result: { materialZip: zipPath, project } });
       return project;
     } catch (error) {
