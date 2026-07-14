@@ -3649,6 +3649,13 @@ async function generateStructuredJson({
   let retriesRemaining = Math.max(0, Number(maxAttempts || 3) - 1);
   let fallbackAttempted = startingProviderId === configuredFallbackId;
   let lastError = null;
+  const resolveProvider = async (id) => {
+    const cached = providerState?.providers?.get?.(id);
+    if (cached) return cached;
+    const resolved = await getRewriteProvider(id);
+    providerState?.providers?.set?.(id, resolved);
+    return resolved;
+  };
   while (attempts.length) {
     const attempt = attempts.shift();
     let provider = null;
@@ -3663,7 +3670,7 @@ async function generateStructuredJson({
       ].join("\n"),
     };
     try {
-      provider = await getRewriteProvider(attempt.providerId);
+      provider = await resolveProvider(attempt.providerId);
       const content = await chatCompletion(
         provider,
         attempt.retryAttempt === 0 ? messages : [...messages, retryInstruction],
@@ -3690,7 +3697,7 @@ async function generateStructuredJson({
       if (canFallback) {
         fallbackAttempted = true;
         try {
-          const fallbackProvider = await getRewriteProvider(configuredFallbackId);
+          const fallbackProvider = await resolveProvider(configuredFallbackId);
           if (providerState) {
             providerState.activeProviderId = configuredFallbackId;
             providerState.fallbackUsed = true;
@@ -4435,6 +4442,7 @@ async function generateMomentsPostJsonV2(body = {}, { onProgress = () => {} } = 
     activeProviderId: primaryProviderId,
     fallbackProviderId,
     fallbackUsed: false,
+    providers: new Map(),
   };
   let currentProgress = 5;
   const reportProgress = (progress, label) => {
