@@ -9379,11 +9379,12 @@ audio {
 /* Dynamic kinetic-text production line */
 .kinetic-text-maker {
   display: grid;
-  gap: 10px;
+  gap: 8px;
 }
 
 .kinetic-text-head,
 .kinetic-text-head-actions,
+.kinetic-project-strip,
 .kinetic-card-head,
 .kinetic-preview-toolbar,
 .kinetic-preview-buttons,
@@ -9397,6 +9398,21 @@ audio {
 
 .kinetic-text-head-actions select {
   min-width: 260px;
+}
+
+.kinetic-project-strip {
+  justify-content: flex-end;
+  padding: 0 0 2px;
+}
+
+.kinetic-project-strip select {
+  width: min(360px, 52vw);
+  min-height: 32px;
+  margin: 0;
+}
+
+.kinetic-project-strip button {
+  min-height: 32px;
 }
 
 .kinetic-text-layout {
