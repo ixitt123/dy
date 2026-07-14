@@ -515,7 +515,9 @@ export function createKineticTextService({
         : Array.isArray(input.segments)
           ? input.segments
           : [];
-    const fileTimeline = payloadTimeline.length ? [] : (timelineFromFile(timestampedTextPath) || timelineFromFile(subtitlePath));
+    const timestampedTimeline = payloadTimeline.length ? [] : timelineFromFile(timestampedTextPath);
+    const subtitleFileTimeline = payloadTimeline.length || timestampedTimeline.length ? [] : timelineFromFile(subtitlePath);
+    const fileTimeline = timestampedTimeline.length ? timestampedTimeline : subtitleFileTimeline;
     const timeline = payloadTimeline.length ? payloadTimeline : fileTimeline;
     const hasTimedTimeline = timeline.length > 0;
     const hasAudio = Boolean(audioPath || tts.audio_url || tts.audioUrl);
