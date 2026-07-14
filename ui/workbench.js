@@ -2093,6 +2093,7 @@ function setupV2Settings() {
   }
 
   function renderSummary() {
+    if (!summaryEl) return;
     const configured = state.providers.filter((provider) => provider.configured).length;
     const enabled = state.providers.filter((provider) => provider.enabled).length;
     const textDefault = state.providers.find((provider) => provider.activeDefault && provider.group === "文本模型");
@@ -2182,7 +2183,7 @@ function setupV2Settings() {
   function renderProviders() {
     const groups = groupedProviders();
     providerList.innerHTML = Object.entries(groups).map(([group, providers]) => `
-      <details class="provider-group" ${providers.some((provider) => provider.configured) ? "open" : ""}>
+      <details class="provider-group">
         <summary class="provider-group-title">
           <strong>${html(group)}</strong>
           <span>${providers.filter((provider) => provider.configured).length}/${providers.length} 已配置</span>

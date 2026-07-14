@@ -133,6 +133,23 @@ test("Archived assets details view", async () => {
   }
 });
 
+test("Settings keeps API services collapsed by default", async () => {
+  const [pageResponse, workbenchResponse] = await Promise.all([
+    fetch(`${BASE}/`),
+    fetch(`${BASE}/workbench.js`),
+  ]);
+  const [page, workbench] = await Promise.all([pageResponse.text(), workbenchResponse.text()]);
+  if (!page.includes('class="legacy-download-settings" hidden')
+    || page.includes('id="v2SettingsSummary"')
+    || page.includes('id="v2RefreshSettings"')
+    || page.includes('class="settings-category-grid"')
+    || !page.includes('<details class="settings-card provider-card" id="apiServiceCenter">')
+    || !workbench.includes("if (!summaryEl) return;")
+    || !workbench.includes('<details class="provider-group">')) {
+    throw new Error("Settings overview removal or API collapse default is incomplete");
+  }
+});
+
 // Run all
 let passed = 0;
 let failed = 0;
