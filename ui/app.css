@@ -9379,7 +9379,7 @@ audio {
 /* Dynamic kinetic-text production line */
 .kinetic-text-maker {
   display: grid;
-  gap: 16px;
+  gap: 10px;
 }
 
 .kinetic-text-head,
@@ -9392,7 +9392,7 @@ audio {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: 8px;
 }
 
 .kinetic-text-head-actions select {
@@ -9401,27 +9401,27 @@ audio {
 
 .kinetic-text-layout {
   display: grid;
-  grid-template-columns: minmax(260px, 320px) minmax(0, 1fr);
-  gap: 16px;
+  grid-template-columns: minmax(240px, 300px) minmax(0, 1fr);
+  gap: 12px;
   align-items: start;
 }
 
 .kinetic-text-controls,
 .kinetic-text-workspace {
   display: grid;
-  gap: 14px;
+  gap: 10px;
 }
 
 .kinetic-card,
 .kinetic-preview-card {
   border: 1px solid var(--line, #293244);
-  border-radius: 12px;
+  border-radius: 8px;
   background: var(--panel, #10151f);
-  padding: 14px;
+  padding: 10px;
 }
 
 .kinetic-card-head {
-  margin-bottom: 12px;
+  margin-bottom: 8px;
 }
 
 .kinetic-card-head span,
