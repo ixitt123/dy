@@ -196,31 +196,61 @@ function effectTags(effectId, introMs, index, highlighted) {
   return `${tags[effectId] || tags["center-stair-flip"]}${accent}`;
 }
 
-function splitDisplayTokens(segment, effectId) {
+function splitTextLines(segment) {
   const source = normalizeText(segment.text);
-  if (["guide-list-focus", "scatter-copy-reveal"].includes(effectId)) {
-    return source.match(/.{1,7}/g) || [source];
+  const breaks = [...new Set((segment.lineBreaks || [])
+    .map(Number)
+    .filter((value) => Number.isInteger(value) && value > 0 && value < source.length))]
+    .sort((a, b) => a - b);
+  if (!breaks.length) return [source];
+  const lines = [];
+  let start = 0;
+  for (const end of [...breaks, source.length]) {
+    const line = source.slice(start, end).trim();
+    if (line) lines.push(line);
+    start = end;
   }
-  if (source.length <= 12) return [...source].filter((item) => item.trim());
-  return source.match(/.{1,4}/g) || [source];
+  return lines.length ? lines : [source];
 }
 
-function tokenPosition(effectId, index, count, baseX, baseY) {
+function splitDisplayTokens(segment, effectId) {
+  const lines = splitTextLines(segment);
+  return lines.flatMap((line, row) => {
+    let values;
+    if (["guide-list-focus", "scatter-copy-reveal"].includes(effectId)) values = line.match(/.{1,7}/g) || [line];
+    else if (["blue-yellow-stairs", "green-white-offset"].includes(effectId)) values = line.match(/.{1,4}/g) || [line];
+    else values = [...line].filter((item) => item.trim());
+    return values.map((text, indexInRow) => ({
+      text,
+      row,
+      rowCount: lines.length,
+      indexInRow,
+      countInRow: values.length,
+    }));
+  });
+}
+
+function tokenPosition(effectId, index, count, baseX, baseY, layout = {}) {
   const centered = (index - (count - 1) / 2);
-  if (effectId === "center-stair-flip") return [baseX + centered * 130, baseY + Math.abs(centered) * 52];
-  if (effectId === "diagonal-scatter-flip") return [baseX + centered * 125, baseY + centered * 58];
+  const rowOffset = (Number(layout.row || 0) - (Number(layout.rowCount || 1) - 1) / 2) * 190;
+  const horizontalStep = Math.min(130, 1500 / Math.max(1, count - 1));
+  if (effectId === "center-stair-flip") {
+    const verticalStep = Math.min(52, 330 / Math.max(1, (count - 1) / 2));
+    return [baseX + centered * horizontalStep, baseY + rowOffset + Math.abs(centered) * verticalStep];
+  }
+  if (effectId === "diagonal-scatter-flip") return [baseX + centered * horizontalStep, baseY + rowOffset + centered * Math.min(58, 500 / Math.max(1, count - 1))];
   if (effectId === "scatter-copy-reveal") {
     const points = [[-420, -250], [-120, -75], [330, -190], [-350, 190], [160, 160], [420, 270]];
     const point = points[index % points.length];
-    return [baseX + point[0], baseY + point[1]];
+    return [baseX + point[0], baseY + rowOffset + point[1]];
   }
-  if (effectId === "blue-yellow-stairs") return [baseX + (index % 2 ? 180 : -180), baseY + centered * 100];
-  if (effectId === "grayscale-depth-focus") return [baseX + centered * 115, baseY + (index % 2 ? 100 : -70)];
-  if (effectId === "handwritten-callout") return [baseX + centered * 145, baseY + (index % 2 ? 90 : -45)];
-  if (effectId === "scatter-keyword-close") return [baseX + centered * 150, baseY + (index % 3 - 1) * 125];
-  if (effectId === "guide-list-focus") return [Math.max(260, baseX - 430), baseY - 190 + index * 95];
-  if (effectId === "green-white-offset") return [baseX + (index % 2 ? 190 : -170), baseY + centered * 86];
-  return [baseX + centered * 125, baseY];
+  if (effectId === "blue-yellow-stairs") return [baseX + (index % 2 ? 180 : -180), baseY + rowOffset + centered * Math.min(100, 520 / Math.max(1, count - 1))];
+  if (effectId === "grayscale-depth-focus") return [baseX + centered * horizontalStep, baseY + rowOffset + (index % 2 ? 100 : -70)];
+  if (effectId === "handwritten-callout") return [baseX + centered * horizontalStep, baseY + rowOffset + (index % 2 ? 90 : -45)];
+  if (effectId === "scatter-keyword-close") return [baseX + centered * horizontalStep, baseY + rowOffset + (index % 3 - 1) * 125];
+  if (effectId === "guide-list-focus") return [Math.max(260, baseX - 430), baseY + rowOffset - 190 + index * 95];
+  if (effectId === "green-white-offset") return [baseX + (index % 2 ? 190 : -170), baseY + rowOffset + centered * Math.min(86, 500 / Math.max(1, count - 1))];
+  return [baseX + centered * horizontalStep, baseY + rowOffset];
 }
 
 function buildAss(project, options = {}) {
@@ -245,9 +275,10 @@ function buildAss(project, options = {}) {
     const introMs = Math.min(durationMs - 40, Math.round(safeNumber(params.introDuration, 0.42, 0.12, 1.5) * 1000));
     const tokens = splitDisplayTokens(segment, normalized.effectId);
     const keywords = new Set((segment.keywords || []).map((item) => String(item)));
-    tokens.forEach((token, index) => {
+    tokens.forEach((entry, index) => {
+      const token = entry.text;
       const highlighted = [...keywords].some((keyword) => keyword && (token.includes(keyword) || keyword.includes(token)));
-      const [x, y] = tokenPosition(normalized.effectId, index, tokens.length, baseX, baseY);
+      const [x, y] = tokenPosition(normalized.effectId, entry.indexInRow, entry.countInRow, baseX, baseY, entry);
       const color = highlighted || (normalized.effectId === "blue-yellow-stairs" && index % 2) || (normalized.effectId === "green-white-offset" && index % 2) ? accent : primary;
       const outline = normalized.effectId === "neon-outline-letters" ? 4 : normalized.effectId === "outline-footer-pop" ? 3 : 1.2;
       const blur = normalized.effectId === "neon-outline-letters" ? "\\blur0.8" : "";
