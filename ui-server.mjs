@@ -6264,8 +6264,12 @@ async function handleTtsJobCompleted(job) {
     const audioDuration = await probeAudioDuration(job.audio_path);
     const linked = projectCenter.linkAsset(project.id, "tts", job.id, job.voice_name || `配音 #${job.id}`, {
       ...job,
+      ...metadata,
       text: job.text || project.selectedRewriteText || project.transcriptText || "",
       audioDuration,
+      audio_duration: metadata.audio_duration || audioDuration,
+      subtitle_source: metadata.subtitle_source || "",
+      subtitle_timeline: Array.isArray(metadata.subtitle_timeline) ? metadata.subtitle_timeline : [],
       source: "ai_generated",
       status: "ready",
     }).project;
