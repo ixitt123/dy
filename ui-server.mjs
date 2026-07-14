@@ -3765,14 +3765,9 @@ function countMomentsEmoji(value = "") {
   return (text.match(/[\u{1F1E6}-\u{1F1FF}\u{1F300}-\u{1FAFF}\u{2300}-\u{23FF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}]/gu) || []).length;
 }
 
-function momentsEmojiIsValid(value = "", addEmoji = false) {
-  const count = countMomentsEmoji(value);
-  return addEmoji ? count >= 2 : count === 0;
-}
-
 function momentsEmojiRule(addEmoji = false) {
   return addEmoji
-    ? "表情规则：以自然阅读效果为优先。普通篇幅至少使用 2 个、通常 2-3 个与具体语义匹配的 emoji；长文、多个场景或情绪转折较多时可以自然增加。表情分散放在恰当停顿或重点处，不能连续堆叠、每句都加、无关装饰或夸张营销。"
+    ? "表情规则：不要在 post 中临时生成或自创 emoji；只需把正文写成适合自然插入表情的节奏和段落。生成完成后，系统会清除模型表情，并从代码预制表情库按主题、篇幅和语义统一插入。"
     : "表情规则：正文不添加任何 emoji 或颜文字，保持干净自然。";
 }
 
@@ -3834,6 +3829,22 @@ function ensureMomentsEmojiMinimum(value = "", minimum = 2) {
     sentences[sentenceIndex] = appendMomentsEmoji(sentences[sentenceIndex], additions[index]);
   }
   return normalizeMomentsPostLayout(sentences.join(""));
+}
+
+function momentsEmojiTargetCount(value = "") {
+  const text = normalizeMomentsPostLayout(stripMomentsEmoji(value));
+  const length = Array.from(text.replace(/\s/g, "")).length;
+  const paragraphCount = text.split(/\n{2,}/).filter((item) => item.trim()).length;
+  if (length >= 520 || paragraphCount >= 7) return 6;
+  if (length >= 420 || paragraphCount >= 6) return 5;
+  if (length >= 260 || paragraphCount >= 5) return 4;
+  if (length >= 140 || paragraphCount >= 3) return 3;
+  return 2;
+}
+
+function applyPresetMomentsEmojis(value = "") {
+  const cleanPost = normalizeMomentsPostLayout(stripMomentsEmoji(value));
+  return ensureMomentsEmojiMinimum(cleanPost, momentsEmojiTargetCount(cleanPost));
 }
 
 function normalizeMomentsPostLayout(value = "") {
@@ -4615,7 +4626,7 @@ async function generateMomentsPostJsonV2(body = {}) {
     finalPostLength = rewriteCharacterCount(post);
   }
   post = addEmoji
-    ? ensureMomentsEmojiMinimum(post, 2)
+    ? applyPresetMomentsEmojis(post)
     : normalizeMomentsPostLayout(stripMomentsEmoji(post));
   finalPostLength = rewriteCharacterCount(post);
   const wordCountWarning = finalPostLength < wordCount.min || finalPostLength > wordCount.max
