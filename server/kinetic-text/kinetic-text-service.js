@@ -614,6 +614,7 @@ export function createKineticTextService({
       await zipDirectory(targetRoot, uniqueZipPath);
       project = update(projectId, { outputs: { materialDir: targetRoot, materialZip: uniqueZipPath, assPath: path.join(targetRoot, "effects.ass"), srtPath: path.join(targetRoot, "subtitles.srt") } });
       updateJob(jobId, { status: "completed", progress: 100, stage: "素材包完成", result: { materialZip: zipPath, project } });
+      updateJob(jobId, { result: { materialZip: uniqueZipPath, project } });
       return project;
     } catch (error) {
       updateJob(jobId, { status: "failed", stage: "素材包生成失败", error: error instanceof Error ? error.message : String(error) });
