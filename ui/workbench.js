@@ -178,21 +178,12 @@ function projectStatusLabel(status) {
 
 function renderActiveProjectSelector() {
   const selector = document.querySelector("#activeVideoProjectSelect");
-  const assetFilter = document.querySelector("#projectAssetProjectFilter");
   const options = videoProjectsState.map((project) => (
     `<option value="${escapeHtml(project.id)}">${escapeHtml(project.title)} · ${escapeHtml(projectStatusLabel(project.status))}</option>`
   ));
   if (selector) {
     selector.innerHTML = options.length ? options.join("") : '<option value="">请先新建项目</option>';
     selector.value = activeVideoProject?.id || "";
-  }
-  if (assetFilter) {
-    const current = assetFilter.value;
-    assetFilter.innerHTML = [
-      '<option value="all">全部项目</option>',
-      ...videoProjectsState.map((project) => `<option value="${escapeHtml(project.id)}">${escapeHtml(project.title)}</option>`),
-    ].join("");
-    assetFilter.value = [...assetFilter.options].some((item) => item.value === current) ? current : "all";
   }
 }
 
