@@ -5600,6 +5600,17 @@ body[data-active-module="xiaohei-video"] .floating-workflow-guide [data-nav="xia
   background: rgba(35, 49, 75, 0.18);
 }
 
+.tts-clone-requirement-title {
+  color: #c7d0de;
+  font-weight: 600;
+}
+
+.tts-clone-requirement-list {
+  display: grid;
+  gap: 2px;
+  margin-top: 4px;
+}
+
 .tts-clone-source-tabs {
   margin-bottom: 10px;
 }
@@ -5661,7 +5672,8 @@ body[data-active-module="xiaohei-video"] .floating-workflow-guide [data-nav="xia
   font-size: 11px;
 }
 
-.tts-clone-audio {
+.tts-clone-audio,
+.tts-clone-source-audio {
   width: 100%;
   margin-top: 9px;
 }
@@ -5707,7 +5719,9 @@ body[data-active-module="xiaohei-video"] .floating-workflow-guide [data-nav="xia
   font-size: 10px;
 }
 
-.tts-clone-auth-notice {
+.tts-clone-auth-notice,
+.tts-clone-consent-notice {
+  display: block;
   margin: 10px 0 0;
   padding: 8px 9px;
   border-left: 2px solid #6f5bca;
@@ -5720,7 +5734,9 @@ body[data-active-module="xiaohei-video"] .floating-workflow-guide [data-nav="xia
 }
 
 .tts-clone-actions [data-clone-action="analyze"],
-.tts-clone-actions [data-clone-action="save"] {
+.tts-clone-actions [data-clone-action="save"],
+.tts-clone-actions [data-clone-analyze],
+.tts-clone-actions [data-clone-save] {
   min-width: 132px;
 }
 
