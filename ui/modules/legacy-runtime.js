@@ -1941,11 +1941,12 @@ function renderMomentsResult(result) {
     return;
   }
   momentsImagePromptList.className = "moments-prompt-list";
+  const visualStyleLabel = result.visual_style_label || "已选图片 Skill";
   momentsImagePromptList.innerHTML = images.map((item, index) => `
     <article class="moments-prompt-card" data-moments-prompt="${index}">
       <div class="moments-prompt-head">
         <div>
-          <span class="section-eyebrow">${escapeHtml(item.style === "realistic" ? "Realistic" : item.style === "xiaohei" ? "Xiaohei" : "Auto")}</span>
+          <span class="section-eyebrow">${escapeHtml(visualStyleLabel)}</span>
           <h3>#${index + 1} ${escapeHtml(item.title || "配图")}</h3>
           <p>${escapeHtml([item.image_role, item.composition_type, item.visual_hook || item.purpose].filter(Boolean).join(" · "))}</p>
         </div>
