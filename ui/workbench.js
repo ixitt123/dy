@@ -478,6 +478,19 @@ async function refreshProjectAssets() {
   }
 }
 
+function restoreProjectAssetTypePreference() {
+  const storedType = localStorage.getItem(PROJECT_ASSET_TYPE_KEY);
+  if (PROJECT_ASSET_TYPES.some(([type]) => type === storedType)) activeProjectAssetType = storedType;
+}
+
+function selectProjectAssetType(type) {
+  if (!PROJECT_ASSET_TYPES.some(([value]) => value === type)) return Promise.resolve([]);
+  activeProjectAssetType = type;
+  localStorage.setItem(PROJECT_ASSET_TYPE_KEY, activeProjectAssetType);
+  renderProjectAssetTypeTabs();
+  return refreshProjectAssets();
+}
+
 function renderProjectReadiness(readiness, qualityCheck) {
   projectReadinessState = readiness || null;
   const container = document.querySelector("#videoProjectReadiness");
@@ -525,6 +538,8 @@ async function refreshProjectReadiness() {
 
 function setupProjectWorkbench() {
   const form = document.querySelector("#videoProjectCreateForm");
+  restoreProjectAssetTypePreference();
+  renderProjectAssetTypeTabs();
   document.querySelector("#newVideoProject")?.addEventListener("click", () => {
     form.hidden = false;
     document.querySelector("#videoProjectTitle")?.focus();
@@ -549,26 +564,33 @@ function setupProjectWorkbench() {
     const card = event.target.closest("[data-project-id]");
     if (card) selectVideoProject(card.dataset.projectId);
   });
-  ["projectAssetTypeFilter", "projectAssetUseCaseFilter", "projectAssetStyleFilter", "projectAssetProjectFilter"].forEach((id) => {
-    document.querySelector(`#${id}`)?.addEventListener("change", () => refreshProjectAssets());
+  document.querySelector("#projectAssetTypeTabs")?.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-project-asset-type]");
+    if (button) selectProjectAssetType(button.dataset.projectAssetType).catch(() => {});
   });
   document.querySelector("#refreshProjectAssets")?.addEventListener("click", () => refreshProjectAssets());
-  document.querySelector("#projectAssetGrid")?.addEventListener("click", async (event) => {
-    const card = event.target.closest("[data-project-asset-id]");
-    if (!card || !event.target.closest(".send-project-asset")) return;
-    const asset = projectAssetsState.find((item) => item.id === card.dataset.projectAssetId);
-    if (asset && asset.projectId !== currentVideoProjectId()) {
-      await linkCurrentProjectAsset(asset.assetType, asset.assetId, asset.name, {
-        ...asset.metadata,
-        useCase: asset.useCase,
-        style: asset.style,
-        ratio: asset.ratio,
-        source: asset.source,
-        usedCount: Number(asset.usedCount || 0) + 1,
-        status: asset.status,
-      });
-    }
-    navigateWorkbench("assets");
+  document.querySelector("#projectAssetGrid")?.addEventListener("click", (event) => {
+    const row = event.target.closest("[data-project-asset-id]");
+    const asset = row && projectAssetsState.find((item) => item.id === row.dataset.projectAssetId);
+    if (asset) openProjectAssetDetail(asset);
+  });
+  document.querySelector("#projectAssetGrid")?.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter" && event.key !== " ") return;
+    const row = event.target.closest("[data-project-asset-id]");
+    const asset = row && projectAssetsState.find((item) => item.id === row.dataset.projectAssetId);
+    if (!asset) return;
+    event.preventDefault();
+    openProjectAssetDetail(asset);
+  });
+  document.querySelector("#projectAssetDetailModal")?.addEventListener("click", (event) => {
+    if (event.target.closest("[data-project-asset-detail-close]")) closeProjectAssetDetail();
+  });
+  document.querySelector("#projectAssetDetailUse")?.addEventListener("click", (event) => {
+    const asset = projectAssetsState.find((item) => item.id === event.currentTarget.dataset.projectAssetId);
+    addProjectAssetToCurrentProject(asset);
+  });
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && !document.querySelector("#projectAssetDetailModal")?.hidden) closeProjectAssetDetail();
   });
   document.querySelector("#refreshVideoProjectReadiness")?.addEventListener("click", () => refreshProjectReadiness());
 
