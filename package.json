@@ -12,6 +12,7 @@
     "test:pipeline": "node test-pipeline.mjs",
     "test:pipeline:fail-policy": "node test-pipeline-runner-fail-policy.mjs",
     "test:task-duration": "node test-task-center-duration.mjs",
+    "test:yt-dlp": "node test-yt-dlp-service.mjs",
     "test:provider-registry": "node test-provider-registry.mjs",
     "test:http-body": "node test-read-json-body.mjs",
     "test:config": "node test-config-extraction.mjs",

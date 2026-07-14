@@ -4,6 +4,7 @@ import { spawn } from "node:child_process";
 import { once } from "node:events";
 
 const YT_DLP_RELEASE_API = "https://api.github.com/repos/yt-dlp/yt-dlp/releases/latest";
+const YT_DLP_RELEASE_DOWNLOAD_BASE = "https://github.com/yt-dlp/yt-dlp/releases/latest/download";
 const VIDEO_EXTENSIONS = new Set([".mp4", ".mkv", ".webm", ".mov", ".m4v"]);
 const SUBTITLE_EXTENSIONS = [".srt", ".vtt", ".ass", ".json3"];
 const AUDIO_FORMATS = new Set(["mp3", "wav", "m4a"]);
@@ -33,9 +34,32 @@ function executableName() {
   return process.platform === "win32" ? "yt-dlp.exe" : "yt-dlp";
 }
 
-async function downloadFile(url, filePath) {
+function githubHeaders() {
+  const token = String(process.env.GITHUB_TOKEN || process.env.GH_TOKEN || "").trim();
+  return {
+    "User-Agent": "dy-local-workbench",
+    Accept: "application/vnd.github+json",
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  };
+}
+
+function findInstalledYtDlp(baseDir) {
+  const explicitPath = String(process.env.YT_DLP_PATH || "").trim();
+  const candidates = [
+    explicitPath,
+    path.join(baseDir, ".data", "bin", executableName()),
+    ...String(process.env.PATH || "")
+      .split(path.delimiter)
+      .map((dir) => dir.replace(/^"|"$/g, "").trim())
+      .filter(Boolean)
+      .map((dir) => path.join(dir, executableName())),
+  ];
+  return candidates.find(fileExists) || "";
+}
+
+async function downloadFile(url, filePath, headers = {}) {
   const response = await fetch(url, {
-    headers: { "User-Agent": "dy-local-workbench" },
+    headers: { "User-Agent": "dy-local-workbench", ...headers },
   });
   if (!response.ok || !response.body) {
     throw new Error(`yt-dlp 下载失败：HTTP ${response.status}`);
@@ -60,26 +84,35 @@ async function downloadFile(url, filePath) {
 }
 
 async function ensureYtDlpBinary(baseDir) {
+  const installedPath = findInstalledYtDlp(baseDir);
+  if (installedPath) return installedPath;
+
   const binDir = ensureDir(path.join(baseDir, ".data", "bin"));
   const binPath = path.join(binDir, executableName());
-  if (fileExists(binPath)) return binPath;
-
-  const response = await fetch(YT_DLP_RELEASE_API, {
-    headers: { "User-Agent": "dy-local-workbench" },
-  });
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    throw new Error(data.message || `读取 yt-dlp 最新版本失败：HTTP ${response.status}`);
-  }
   const assetName = executableName();
-  const asset = Array.isArray(data.assets)
-    ? data.assets.find((item) => item.name === assetName)
-    : null;
-  if (!asset?.browser_download_url) {
-    throw new Error(`yt-dlp 最新版本没有找到 ${assetName} 下载资源`);
+  const directUrl = `${YT_DLP_RELEASE_DOWNLOAD_BASE}/${assetName}`;
+
+  try {
+    // GitHub 的 latest/download 直链不消耗 REST API 的匿名限额。
+    await downloadFile(directUrl, binPath);
+    return binPath;
+  } catch (directError) {
+    // 仅在直链不可用时查询 API；若用户配置了 GH_TOKEN/GITHUB_TOKEN，自动认证。
+    const response = await fetch(YT_DLP_RELEASE_API, { headers: githubHeaders() });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      const directMessage = directError instanceof Error ? directError.message : String(directError);
+      throw new Error(`准备 yt-dlp 失败：${directMessage}；GitHub API：${data.message || `HTTP ${response.status}`}`);
+    }
+    const asset = Array.isArray(data.assets)
+      ? data.assets.find((item) => item.name === assetName)
+      : null;
+    if (!asset?.browser_download_url) {
+      throw new Error(`yt-dlp 最新版本没有找到 ${assetName} 下载资源`);
+    }
+    await downloadFile(asset.browser_download_url, binPath, githubHeaders());
+    return binPath;
   }
-  await downloadFile(asset.browser_download_url, binPath);
-  return binPath;
 }
 
 function runProcess(command, args, {
