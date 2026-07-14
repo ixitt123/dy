@@ -32,7 +32,7 @@ import { createMoneyPrinterRoutes } from "./server/routes/money-printer-routes.j
 import { createYtDlpService } from "./server/core/yt-dlp-service.js";
 import { HttpBodyError, readBody, readJsonBody } from "./server/utils/http-body.js";
 import { DEFAULT_REWRITE_REFERENCE, REWRITE_DIRECTIONS, REWRITE_STYLES, REWRITE_VERSION_DEFS, REWRITE_VERSION_DEFAULTS } from "./server/config/rewrite-presets.js";
-import { DEFAULT_MODEL_MAPPING, DEFAULT_VOLCENGINE_ARK_IMAGE_MODEL, SETTINGS_TASKS } from "./server/config/model-defaults.js";
+import { DEFAULT_MODEL_MAPPING, SETTINGS_TASKS } from "./server/config/model-defaults.js";
 import { AUTO_MODEL_VALUE, REWRITE_PROVIDER_ORDER, REWRITE_PROVIDER_PRESETS } from "./server/config/provider-presets.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -1180,18 +1180,6 @@ function normalizeSettings(settings) {
   return next;
 }
 
-function normalizeVolcengineArkImageModel(model) {
-  const value = String(model || "").trim();
-  const lower = value.toLowerCase().replace(/_/g, "-");
-  if (!lower || ["doubao-seedream-5.0-lite", "doubao-seedream-5-0-lite", "doubao-seedream-5.0-lite-260128", DEFAULT_VOLCENGINE_ARK_IMAGE_MODEL].includes(lower)) {
-    return DEFAULT_VOLCENGINE_ARK_IMAGE_MODEL;
-  }
-  if (["doubao-seedream-5.0", "doubao-seedream-5-0", "doubao-seedream-5.0-260128", "doubao-seedream-5-0-260128"].includes(lower)) {
-    return "doubao-seedream-5-0-260128";
-  }
-  return value;
-}
-
 function maskApiKey(apiKey) {
   if (!apiKey) return "";
   if (apiKey.length <= 10) return "已保存";
@@ -1967,27 +1955,6 @@ async function validateAndSaveRequiredProvider(body = {}) {
 async function testProviderSample(providerId) {
   const provider = publicUnifiedProviders(readSettings()).find((item) => item.id === providerId);
   if (!provider) return { ok: false, message: "未知 API 服务" };
-  if (provider.group === "图片生成") {
-    const result = await imageService.generateImage({
-      provider: providerId,
-      prompt: "短视频教育场景测试图：明亮教室里，一位英语老师在黑板前讲解单词，竖版构图，干净真实，适合招生短视频封面。",
-      aspectRatio: "9:16",
-      count: 1,
-      sourceType: "provider-test",
-      sourceId: providerId,
-    });
-    const first = (result.results || []).find((item) => item.success);
-    if (!first) {
-      const error = (result.results || []).find((item) => !item.success)?.error || "测试生成图片失败。";
-      return { ok: false, status: "failed", message: error, result };
-    }
-    return {
-      ok: true,
-      status: "success",
-      message: `测试生成图片成功，已保存到图片资产库：${first.filename || first.assetId}`,
-      result,
-    };
-  }
   if (providerId === "fish_audio") {
     const settings = readSettings();
     const config = settings.tts?.fish_audio || {};
