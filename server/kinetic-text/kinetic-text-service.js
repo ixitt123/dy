@@ -18,6 +18,8 @@ const DEFAULT_FONT = "Microsoft YaHei";
 const VIDEO_EXTENSIONS = new Set([".mp4", ".mov", ".mkv", ".webm", ".avi", ".m4v"]);
 const IMAGE_EXTENSIONS = new Set([".png", ".jpg", ".jpeg", ".webp", ".bmp"]);
 const AUDIO_EXTENSIONS = new Set([".mp3", ".wav", ".m4a", ".aac", ".flac", ".ogg"]);
+const TIMELINE_SKILL_IDS = ["subtitle-timeline", "audio-subtitle-align"];
+const TIMELINE_GAP_TOLERANCE = 0.35;
 
 function nowIso() {
   return new Date().toISOString();
@@ -121,6 +123,46 @@ function timelineFromFile(filePath) {
   }
 }
 
+function loadTimelineSkillRules(baseDir) {
+  return TIMELINE_SKILL_IDS.map((id) => {
+    const filePath = path.join(baseDir, "skills", id, "SKILL.md");
+    if (!fs.existsSync(filePath)) return `# ${id}\n- Skill file missing.`;
+    return fs.readFileSync(filePath, "utf8").trim();
+  }).join("\n\n");
+}
+
+function textLength(value) {
+  return [...normalizeText(value).replace(/\s/g, "")].length;
+}
+
+function validateTimelineRules(segments, audioDuration = 0) {
+  const warnings = [];
+  const rows = (Array.isArray(segments) ? segments : []).slice().sort((a, b) => Number(a.start || 0) - Number(b.start || 0));
+  if (!rows.length) {
+    return { ok: false, skillRules: TIMELINE_SKILL_IDS, warnings: ["没有可用字幕时间轴。"] };
+  }
+  const firstStart = safeNumber(rows[0].start, 0, 0);
+  if (firstStart > 0.25) warnings.push("第一条字幕没有从 0 秒附近开始。");
+  for (let index = 0; index < rows.length; index += 1) {
+    const row = rows[index];
+    const start = safeNumber(row.start, 0, 0);
+    const end = safeNumber(row.end, 0, 0);
+    if (end <= start) warnings.push(`第 ${index + 1} 条结束时间不大于开始时间。`);
+    if (index > 0) {
+      const previousEnd = safeNumber(rows[index - 1].end, 0, 0);
+      if (start < previousEnd - 0.02) warnings.push(`第 ${index + 1} 条与上一条字幕时间重叠。`);
+      if (start - previousEnd > TIMELINE_GAP_TOLERANCE) warnings.push(`第 ${index + 1} 条与上一条间隔偏长。`);
+    }
+    const length = textLength(row.text);
+    if (length > 24) warnings.push(`第 ${index + 1} 条字幕偏长，建议按语义拆短。`);
+    if (Array.isArray(row.keywords) && row.keywords.length > 3) warnings.push(`第 ${index + 1} 条重点词超过 3 个。`);
+  }
+  const lastEnd = safeNumber(rows[rows.length - 1].end, 0, 0);
+  const duration = safeNumber(audioDuration, 0, 0);
+  if (duration > 0 && lastEnd > duration + 0.35) warnings.push("最后一条字幕明显超过音频时长。");
+  return { ok: warnings.length === 0, skillRules: TIMELINE_SKILL_IDS, warnings: warnings.slice(0, 8) };
+}
+
 function normalizeSegments(rawSegments, text, duration = 0) {
   const rows = Array.isArray(rawSegments) ? rawSegments : [];
   const parsed = rows.map((item, index) => {
@@ -176,6 +218,7 @@ function normalizeProject(project) {
   const duration = safeNumber(project.duration, 0, 0);
   const segments = normalizeSegments(project.segments, project.text, duration);
   const computedDuration = Math.max(duration, ...segments.map((item) => item.end), 0);
+  const timelineValidation = validateTimelineRules(segments, duration);
   const background = project.background && typeof project.background === "object" ? project.background : {};
   const audioMix = project.audioMix && typeof project.audioMix === "object" ? project.audioMix : {};
   return {
@@ -187,6 +230,8 @@ function normalizeProject(project) {
     duration: computedDuration,
     segments,
     subtitleSource: String(project.subtitleSource || "estimated"),
+    timelineSkillRules: TIMELINE_SKILL_IDS,
+    timelineValidation,
     showBottomSubtitles: project.showBottomSubtitles === true,
     background: {
       mode: ["black", "image", "video"].includes(background.mode) ? background.mode : "black",
@@ -462,6 +507,7 @@ export function createKineticTextService({
   const rootDir = path.join(baseDir, ".data", "kinetic-text");
   const projectsDir = path.join(rootDir, "projects");
   const jobs = new Map();
+  const timelineSkillRules = loadTimelineSkillRules(baseDir);
   fs.mkdirSync(projectsDir, { recursive: true });
 
   function projectDir(id) {
