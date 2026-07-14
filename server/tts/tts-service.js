@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { spawnSync } from "node:child_process";
 import { generateSeoTitlePackage } from "../core/title-generator.js";
 import { createTtsProvider } from "./providers/index.js";
 import { redactSecrets } from "./provider-adapter.js";
