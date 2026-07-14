@@ -7528,38 +7528,12 @@ const server = http.createServer(async (req, res) => {
       const route = url.pathname.replace("/api/image/", "");
 
       if (req.method === "POST" && route === "generate") {
-        const body = await readJsonBody(req);
-        try {
-          const input = {
-            provider: body.provider || "",
-            prompt: body.prompt || "",
-            aspectRatio: body.aspectRatio || "1:1",
-            count: Math.min(Math.max(Number(body.count) || 1, 1), 9),
-            sourceType: body.sourceType || "manual",
-            sourceId: body.sourceId || "",
-          };
-          const result = body.async === true ? imageService.generateImageAsync(input) : await imageService.generateImage(input);
-          sendJson(res, body.async === true ? 202 : 200, { ok: true, ...result });
-        } catch (e) {
-          sendJson(res, 400, { ok: false, error: e.message });
-        }
+        sendJson(res, 410, { ok: false, message: "AI 图片生产中心已移除，请使用本地素材管理。" });
         return;
       }
 
       if (req.method === "POST" && route === "generate-storyboard") {
-        const body = await readJsonBody(req);
-        try {
-          const input = {
-            provider: body.provider || "",
-            projectId: Number(body.projectId || body.directorProjectId || 0),
-            aspectRatio: body.aspectRatio || "9:16",
-            countPerScene: Math.min(Math.max(Number(body.countPerScene) || 1, 1), 4),
-          };
-          const result = body.async === true ? imageService.generateStoryboardImagesAsync(input) : await imageService.generateStoryboardImages(input);
-          sendJson(res, body.async === true ? 202 : 200, { ok: true, ...result });
-        } catch (e) {
-          sendJson(res, 400, { ok: false, error: e.message });
-        }
+        sendJson(res, 410, { ok: false, message: "AI 图片生产中心已移除，请使用本地素材管理。" });
         return;
       }
 
