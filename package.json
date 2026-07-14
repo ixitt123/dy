@@ -23,6 +23,8 @@
     "postinstall": "node patch-mcp-output.mjs"
   },
   "dependencies": {
+    "@motion-canvas/2d": "3.17.2",
+    "@motion-canvas/core": "3.17.2",
     "@yc-w-cn/douyin-mcp-server": "1.0.4",
     "ffmpeg-static": "^5.2.0",
     "ffprobe-static": "^3.1.0",
