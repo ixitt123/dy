@@ -46,6 +46,8 @@
             </button>
             <button class="nav-item" type="button" data-nav="money-printer">08<span class="nav-index">09</span><span>MoneyPrinter</span>
             </button>
+            <button class="nav-item" type="button" data-nav="kinetic-text">09<span class="nav-index">10</span><span>动态大字视频</span>
+            </button>
           </div>
           <div class="nav-group">
             <span class="nav-group-label">资源管理</span>
@@ -945,6 +947,7 @@
 <label><input class="tts-audio-handoff-choice" type="checkbox" data-target="cs1-video" />CS1生成器</label>
                 <label><input class="tts-audio-handoff-choice" type="checkbox" data-target="xiaohei-video" />小黑视频风格生成</label>
                 <label><input class="tts-audio-handoff-choice" type="checkbox" data-target="money-printer" />MoneyPrinter</label>
+                <label><input class="tts-audio-handoff-choice" type="checkbox" data-target="kinetic-text" />动态大字视频</label>
               </div>
               <button class="primary" id="sendConfirmedTtsAudio" type="button">发送所选</button>
               <span id="ttsAudioHandoffStatus">生成并试听后再发送。</span>
@@ -1493,6 +1496,121 @@
               </details>
             </aside>
           </section>
+        </section>
+      </section>
+
+      <section class="workbench-page" data-page="kinetic-text" id="kineticTextPage">
+        <section class="kinetic-text-maker">
+          <div class="result-head kinetic-text-head">
+            <div>
+              <span class="section-eyebrow">PRODUCTION LINE 04 · MOTION CANVAS</span>
+              <h2>动态大字视频</h2>
+              <p>接收已确认的 TTS 音频、文案和时间戳字幕，编辑 13 种动态文字效果，先生成素材包，再确认输出 1920×1080 MP4。</p>
+            </div>
+            <div class="kinetic-text-head-actions">
+              <select id="kineticTextProjectSelect" aria-label="动态大字项目">
+                <option value="">等待 TTS 发送</option>
+              </select>
+              <button id="kineticTextRefresh" class="ghost" type="button">刷新</button>
+            </div>
+          </div>
+
+          <div class="kinetic-text-layout">
+            <aside class="kinetic-text-controls">
+              <section class="kinetic-card">
+                <div class="kinetic-card-head">
+                  <strong>输入与排版</strong>
+                  <span id="kineticSubtitleSource">尚未接收字幕</span>
+                </div>
+                <label>
+                  <span>项目标题</span>
+                  <input id="kineticTextTitle" type="text" placeholder="动态大字视频" />
+                </label>
+                <label>
+                  <span>排版分析主 API</span>
+                  <select id="kineticTextProvider"><option value="">自动选择</option></select>
+                </label>
+                <button id="kineticAnalyze" type="button">自动分析重点词和换行</button>
+              </section>
+
+              <section class="kinetic-card">
+                <div class="kinetic-card-head"><strong>背景画面</strong></div>
+                <label>
+                  <span>背景模式</span>
+                  <select id="kineticBackgroundMode">
+                    <option value="black">纯黑背景</option>
+                    <option value="image">本地图片</option>
+                    <option value="video">本地视频</option>
+                  </select>
+                </label>
+                <input id="kineticBackgroundFile" type="file" accept="image/*,video/*" hidden />
+                <button id="kineticChooseBackground" class="ghost" type="button">选择背景图片或视频</button>
+                <small id="kineticBackgroundName">当前：纯黑背景</small>
+              </section>
+
+              <section class="kinetic-card">
+                <div class="kinetic-card-head"><strong>声音与字幕</strong></div>
+                <label>
+                  <span>背景声音</span>
+                  <select id="kineticAudioSource">
+                    <option value="none">关闭，只保留 TTS</option>
+                    <option value="video">使用背景视频原声</option>
+                    <option value="local">上传本地背景音乐</option>
+                  </select>
+                </label>
+                <input id="kineticBgmFile" type="file" accept="audio/*" hidden />
+                <button id="kineticChooseBgm" class="ghost" type="button">上传本地背景音乐</button>
+                <small id="kineticBgmName">未上传背景音乐</small>
+                <label class="kinetic-range-row"><span>TTS 音量</span><input id="kineticTtsVolume" type="range" min="0" max="200" value="100" /><output id="kineticTtsVolumeValue">100%</output></label>
+                <label class="kinetic-range-row"><span>背景音量</span><input id="kineticBgVolume" type="range" min="0" max="100" value="18" /><output id="kineticBgVolumeValue">18%</output></label>
+                <label class="kinetic-check"><input id="kineticBottomSubtitles" type="checkbox" /><span>显示底部常规字幕</span></label>
+              </section>
+            </aside>
+
+            <main class="kinetic-text-workspace">
+              <section class="kinetic-preview-card">
+                <div class="kinetic-preview-toolbar">
+                  <div><strong id="kineticEffectName">中心阶梯翻入</strong><span>1920×1080 · 30fps</span></div>
+                  <div class="kinetic-preview-buttons">
+                    <button id="kineticPreviewPlay" class="ghost" type="button">播放预览</button>
+                    <button id="kineticPreviewRestart" class="ghost" type="button">从头播放</button>
+                  </div>
+                </div>
+                <div class="kinetic-canvas-wrap">
+                  <canvas id="kineticPreviewCanvas" width="960" height="540"></canvas>
+                  <div id="kineticPreviewEmpty">从 TTS 页面发送已确认的音频后开始制作</div>
+                </div>
+                <input id="kineticPreviewSeek" type="range" min="0" max="1000" value="0" />
+                <div class="kinetic-preview-time"><span id="kineticCurrentTime">00:00.000</span><span id="kineticDuration">00:00.000</span></div>
+              </section>
+
+              <section class="kinetic-card kinetic-effects-card">
+                <div class="kinetic-card-head"><strong>13 种动态文字效果</strong><span>整条视频统一使用一种，自动记住上次选择</span></div>
+                <div id="kineticEffectGrid" class="kinetic-effect-grid"></div>
+              </section>
+
+              <section class="kinetic-card kinetic-timeline-card">
+                <div class="kinetic-card-head">
+                  <strong>字幕时间轴</strong>
+                  <span>文字、时间、重点词、位置和颜色修改后自动保存</span>
+                </div>
+                <div class="kinetic-timeline-head">
+                  <span>序号</span><span>开始</span><span>结束</span><span>字幕文字</span><span>重点词</span><span>位置 X/Y</span><span>颜色</span>
+                </div>
+                <div id="kineticTimeline" class="kinetic-timeline"></div>
+              </section>
+
+              <section class="kinetic-card kinetic-output-card">
+                <div class="kinetic-output-actions">
+                  <button id="kineticGenerateMaterials" type="button">生成可编辑素材包</button>
+                  <button id="kineticRenderFinal" class="primary" type="button">确认并生成成片 MP4</button>
+                </div>
+                <div class="kinetic-progress"><i id="kineticProgressFill"></i></div>
+                <div class="kinetic-progress-meta"><strong id="kineticProgressStage">等待开始</strong><span id="kineticProgressPercent">0%</span></div>
+                <div id="kineticOutputs" class="kinetic-outputs"></div>
+              </section>
+            </main>
+          </div>
         </section>
       </section>
 
