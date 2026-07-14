@@ -6721,6 +6721,30 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
+    if (req.method === "GET" && url.pathname === "/api/voice-assets/clone-requirements") {
+      sendJson(res, 200, {
+        ok: true,
+        requirements: voiceAssetService.cloneProviderRequirements(url.searchParams.get("provider") || "aliyun_bailian"),
+      });
+      return;
+    }
+
+    if (req.method === "GET" && url.pathname === "/api/voice-assets/clone-draft/audio") {
+      const filePath = voiceAssetService.resolveCloneDraftPreviewPath(url.searchParams.get("id") || "");
+      if (!filePath) {
+        sendJson(res, 404, { ok: false, message: "克隆试听文件不存在。" });
+        return;
+      }
+      const stat = fs.statSync(filePath);
+      res.writeHead(200, {
+        "content-type": "audio/mpeg",
+        "content-length": stat.size,
+        "cache-control": "no-store",
+      });
+      fs.createReadStream(filePath).pipe(res);
+      return;
+    }
+
     if (req.method === "POST" && url.pathname === "/api/voice-assets/preview") {
       const body = await readJsonBody(req, { maxBytes: 64 * 1024 });
       const result = await voiceAssetService.generatePreview(Number(body.id || body.voice_asset_id || 0), body);
@@ -6729,6 +6753,46 @@ const server = http.createServer(async (req, res) => {
         return;
       }
       sendJson(res, result.cached ? 200 : 201, { ok: true, ...result });
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/voice-assets/clone-draft") {
+      const body = await readJsonBody(req, { maxBytes: 30 * 1024 * 1024 });
+      const result = await voiceAssetService.createCloneDraft(body);
+      if (result.error) {
+        sendJson(res, 400, { ok: false, message: result.error });
+        return;
+      }
+      sendJson(res, 201, {
+        ok: true,
+        draft: {
+          ...result.draft,
+          preview_url: `/api/voice-assets/clone-draft/audio?id=${encodeURIComponent(result.draft.id)}`,
+        },
+        message: "声音提取成功，请试听并确认名称。",
+      });
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/voice-assets/clone-draft/confirm") {
+      const body = await readJsonBody(req, { maxBytes: 256 * 1024 });
+      const result = await voiceAssetService.confirmCloneDraft(String(body.id || ""), body);
+      if (result.error) {
+        sendJson(res, 400, { ok: false, message: result.error });
+        return;
+      }
+      sendJson(res, 201, { ok: true, asset: result.asset, message: "已添加到音色库。" });
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/voice-assets/clone-draft/discard") {
+      const body = await readJsonBody(req, { maxBytes: 64 * 1024 });
+      const result = await voiceAssetService.discardCloneDraft(String(body.id || ""));
+      if (result.error) {
+        sendJson(res, 400, { ok: false, message: result.error });
+        return;
+      }
+      sendJson(res, 200, { ok: true, ...result });
       return;
     }
 

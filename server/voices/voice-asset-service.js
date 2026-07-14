@@ -18,6 +18,51 @@ const MIME_EXTENSIONS = {
 
 const VISIBLE_TTS_PROVIDER_IDS = ["aliyun_bailian", "minimax"];
 const DEFAULT_VOICE_PREVIEW_TEXT = "你好，这是当前音色试听。表达自然，节奏清楚，重点明确。";
+const CLONE_PROVIDER_REQUIREMENTS = {
+  aliyun_bailian: {
+    provider: "aliyun_bailian",
+    label: "阿里云百炼 CosyVoice / Qwen-TTS",
+    formats: ["wav", "mp3", "m4a"],
+    min_duration_seconds: 10,
+    max_duration_seconds: 60,
+    recommended_duration: "10–20 秒",
+    max_file_bytes: 7 * 1024 * 1024,
+    max_file_label: "原文件建议不超过 7 MB（Base64 请求体需小于 10 MB）",
+    min_sample_rate: 24000,
+    channels: 1,
+    text_required: true,
+    models: [
+      { value: "qwen3-tts-vc-2026-01-22", label: "Qwen3-TTS VC（质量优先）" },
+      { value: "qwen3-tts-vc-realtime-2026-01-15", label: "Qwen3-TTS VC Realtime（速度优先）" },
+    ],
+  },
+  minimax: {
+    provider: "minimax",
+    label: "MiniMax Speech",
+    formats: ["wav", "mp3", "m4a"],
+    min_duration_seconds: 10,
+    max_duration_seconds: 300,
+    recommended_duration: "10 秒以上，建议使用清晰连续朗读",
+    max_file_bytes: MAX_SAMPLE_BYTES,
+    max_file_label: "不超过 20 MB",
+    min_sample_rate: 0,
+    channels: 0,
+    text_required: true,
+    models: [
+      { value: "speech-2.6-hd", label: "MiniMax speech-2.6-hd（质量优先）" },
+      { value: "speech-2.6-turbo", label: "MiniMax speech-2.6-turbo（速度优先）" },
+    ],
+  },
+};
+
+function cloneProviderRequirements(providerId = "aliyun_bailian") {
+  const source = CLONE_PROVIDER_REQUIREMENTS[String(providerId || "").trim()] || CLONE_PROVIDER_REQUIREMENTS.aliyun_bailian;
+  return {
+    ...source,
+    formats: [...source.formats],
+    models: source.models.map((model) => ({ ...model })),
+  };
+}
 
 function minimaxEndpoint(baseUrl, pathname) {
   const base = String(baseUrl || "https://api.minimaxi.com").replace(/\/+$/, "");
@@ -475,34 +520,51 @@ export function createVoiceAssetService({ baseDir, taskStore, ttsService, getSet
   }
 
   async function createCloneDraft(input) {
-    const rawVoiceName = String(input.voice_name || "").trim();
-    const sourcePath = path.resolve(String(input.sample_path || ""));
+    const rawVoiceName = String(input.voice_name || "待命名音色").trim() || "待命名音色";
     const provider = String(input.provider || "minimax").trim() || "minimax";
-    if (!rawVoiceName) return { error: "请填写准备保存的克隆音色名称。" };
-    if (!input.consent_confirmed) return { error: "必须确认拥有声音的长期克隆与生成授权。" };
-    if (!sourcePath || !fs.existsSync(sourcePath)) return { error: "没有找到自动提取的人声样本。请重新分析参考音频。" };
-    if (fs.statSync(sourcePath).size > MAX_SAMPLE_BYTES) return { error: "自动提取的人声样本超过 20MB，请改用更短、更清晰的参考音频。" };
-
+    const requirements = cloneProviderRequirements(provider);
     const voiceName = sanitizeName(rawVoiceName);
     const draftId = uniqueId("clone-draft");
-    const extension = path.extname(sourcePath).toLowerCase() || ".wav";
-    const samplePath = path.join(cloneDraftsDir, `${draftId}-${safeFileSegment(voiceName)}${extension}`);
+    const sourcePath = path.resolve(String(input.sample_path || ""));
     const previewPath = path.join(cloneDraftsDir, `${draftId}-preview.mp3`);
-    fs.copyFileSync(sourcePath, samplePath);
+    const sampleExtension = String(input.sample_data || "").trim()
+      ? ({ "audio/wav": ".wav", "audio/x-wav": ".wav", "audio/mpeg": ".mp3", "audio/mp3": ".mp3", "audio/mp4": ".m4a", "audio/x-m4a": ".m4a" }[String(input.sample_mime || "").toLowerCase()] || ".wav")
+      : path.extname(sourcePath).toLowerCase() || ".wav";
+    const samplePath = path.join(cloneDraftsDir, `${draftId}-${safeFileSegment(voiceName)}${sampleExtension}`);
+    let sampleMime = String(input.sample_mime || "audio/wav").toLowerCase();
+    if (String(input.sample_data || "").trim()) {
+      try {
+        const audio = decodeAudio(input.sample_data, sampleMime);
+        if (audio.buffer.length > Number(requirements.max_file_bytes || MAX_SAMPLE_BYTES)) {
+          return { error: `${requirements.label}：${requirements.max_file_label}。` };
+        }
+        fs.writeFileSync(samplePath, audio.buffer);
+        sampleMime = audio.mimeType;
+      } catch (error) {
+        return { error: error instanceof Error ? error.message : String(error) };
+      }
+    } else {
+      if (!sourcePath || !fs.existsSync(sourcePath)) return { error: "没有找到自动提取的人声样本。请重新分析参考音频。" };
+      if (fs.statSync(sourcePath).size > Number(requirements.max_file_bytes || MAX_SAMPLE_BYTES)) {
+        return { error: `${requirements.label}：${requirements.max_file_label}。` };
+      }
+      fs.copyFileSync(sourcePath, samplePath);
+    }
 
-    const targetModel = String(input.target_model || "speech-2.6-hd").trim() || "speech-2.6-hd";
+    const targetModel = String(input.target_model || requirements.models[0]?.value || "speech-2.6-hd").trim()
+      || requirements.models[0]?.value || "speech-2.6-hd";
     const cloned = await cloneSample({
       providerId: provider,
       name: String(input.preferred_name || voiceName),
       samplePath,
-      mimeType: String(input.sample_mime || "audio/wav"),
+      mimeType: sampleMime,
       targetModel,
       transcript: String(input.sample_transcript || ""),
       consentConfirmed: true,
     });
     if (!cloned?.success || !cloned.voice_id) {
       removeCloneDraftFiles({ id: draftId, sample_path: samplePath, preview_path: previewPath });
-      return { error: cloned?.error || cloned?.detail || "声音克隆失败。请确认 MiniMax 已开通声音克隆能力。" };
+      return { error: cloned?.error || cloned?.detail || `${requirements.label}：声音克隆失败。` };
     }
 
     const providerAdapter = providerFor(provider);
@@ -531,8 +593,8 @@ export function createVoiceAssetService({ baseDir, taskStore, ttsService, getSet
       voice_name: voiceName,
       sample_path: samplePath,
       preview_path: previewPath,
-      sample_mime: String(input.sample_mime || "audio/wav"),
-      sample_transcript: String(input.sample_transcript || "自动从授权参考音频中提取"),
+      sample_mime: sampleMime,
+      sample_transcript: String(input.sample_transcript || ""),
       style_profile: normalizeStyleProfile(input.style_profile),
       metadata: cloned.metadata || {},
       status: "preview_ready",
@@ -549,9 +611,10 @@ export function createVoiceAssetService({ baseDir, taskStore, ttsService, getSet
       return { error: "克隆试听文件不存在，请重新创建。" };
     }
 
+    const finalVoiceName = sanitizeName(input.voice_name || draft.voice_name || "克隆音色");
     const sampleExtension = path.extname(draft.sample_path).toLowerCase() || ".wav";
-    const savedSamplePath = path.join(samplesDir, `${Date.now()}-${safeFileSegment(draft.voice_name)}-${randomUUID().slice(0, 8)}${sampleExtension}`);
-    const savedPreviewPath = path.join(previewsDir, `${Date.now()}-${safeFileSegment(draft.voice_name)}-${randomUUID().slice(0, 8)}.mp3`);
+    const savedSamplePath = path.join(samplesDir, `${Date.now()}-${safeFileSegment(finalVoiceName)}-${randomUUID().slice(0, 8)}${sampleExtension}`);
+    const savedPreviewPath = path.join(previewsDir, `${Date.now()}-${safeFileSegment(finalVoiceName)}-${randomUUID().slice(0, 8)}.mp3`);
     fs.renameSync(draft.sample_path, savedSamplePath);
     fs.renameSync(draft.preview_path, savedPreviewPath);
 
@@ -568,7 +631,7 @@ export function createVoiceAssetService({ baseDir, taskStore, ttsService, getSet
     const asset = taskStore.createVoiceAsset({
       provider: draft.provider,
       voice_id: draft.voice_id,
-      voice_name: draft.voice_name,
+      voice_name: finalVoiceName,
       voice_type: "clone",
       description: String(input.description || "授权参考音频创建的克隆音色").trim(),
       tags_json: JSON.stringify(parseTags(input.tags?.length ? input.tags : ["授权克隆", "小黑视频", "口播"])),
@@ -1003,6 +1066,7 @@ export function createVoiceAssetService({ baseDir, taskStore, ttsService, getSet
     confirmCloneDraft,
     discardCloneDraft,
     resolveCloneDraftPreviewPath,
+    cloneProviderRequirements,
     listStylePresets,
     getStylePreset,
     setDefaultStylePreset,

@@ -2741,7 +2741,7 @@ function ttsVoiceRowsForSource() {
   if (source === "singing") return rows.filter((asset) => voiceAssetBucket(asset) === "singing");
   if (source === "quirky") return rows.filter((asset) => voiceAssetBucket(asset) === "quirky");
   if (source === "special") return rows.filter((asset) => voiceAssetBucket(asset) === "special");
-  if (source === "clone") return rows.filter((asset) => asset.voice_type === "clone");
+  if (source === "clone" || source === "cloned") return rows.filter((asset) => asset.voice_type === "clone");
   if (source === "recent") {
     return rows.filter((asset) => asset.use_count > 0)
       .sort((a, b) => String(b.last_used_at).localeCompare(String(a.last_used_at)));
@@ -2976,7 +2976,7 @@ updateTtsProviderFields = function updateTtsProviderFieldsUnified() {
 function selectedTtsVoice() {
   const voiceId = ttsVoiceSource.value === "manual" ? ttsManualVoice.value.trim() : ttsPresetVoice.value;
   if (!voiceId) return null;
-  if (ttsVoiceSource.value === "cloned") {
+  if (ttsVoiceSource.value === "cloned" || ttsVoiceSource.value === "clone") {
     const asset = voiceAssets.find((item) =>
       item.provider === ttsProvider.value && item.voice_id === voiceId && item.voice_type === "clone" && !item.archived
     );
@@ -3006,7 +3006,7 @@ function syncTtsModelToSelectedVoice() {
 }
 
 function renderTtsVoices() {
-  const cloned = ttsVoiceSource.value === "cloned";
+  const cloned = ttsVoiceSource.value === "cloned" || ttsVoiceSource.value === "clone";
   const sourceVoices = cloned
     ? voiceAssets
         .filter((asset) => asset.voice_type === "clone" && asset.provider === ttsProvider.value && asset.status === "active")
