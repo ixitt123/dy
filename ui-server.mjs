@@ -1637,7 +1637,7 @@ function saveUnifiedProvider(settings, body) {
   if (scope !== "tts" && settings.rewriteProviders?.[id]) {
     const provider = settings.rewriteProviders[id];
     if (apiKey) provider.apiKey = apiKey;
-    if (body.baseUrl !== undefined) provider.baseUrl = baseUrl;
+    if (body.baseUrl !== undefined) provider.baseUrl = id === "minimax" ? normalizeMiniMaxTextBaseUrl(baseUrl) : baseUrl;
     if (body.model !== undefined) {
       provider.model = model || provider.model || "";
       provider.autoModel = !model && !provider.custom;
@@ -1652,7 +1652,7 @@ function saveUnifiedProvider(settings, body) {
     if (id === "minimax") {
       if (!settings.tts.minimax) settings.tts.minimax = {};
       if (apiKey) settings.tts.minimax.api_key = apiKey;
-      if (body.baseUrl !== undefined) settings.tts.minimax.base_url = baseUrl || "https://api.minimaxi.com";
+      if (body.baseUrl !== undefined) settings.tts.minimax.base_url = normalizeMiniMaxTtsBaseUrl(baseUrl) || MINIMAX_TTS_BASE_URL;
       if (!settings.tts.minimax.model || /^MiniMax-/i.test(settings.tts.minimax.model)) {
         settings.tts.minimax.model = "speech-2.6-hd";
       }
@@ -1684,7 +1684,7 @@ function saveUnifiedProvider(settings, body) {
   if (["minimax", "fish_audio", "elevenlabs"].includes(id)) {
     if (!settings.tts[id]) settings.tts[id] = {};
     if (apiKey) settings.tts[id].api_key = apiKey;
-    if (body.baseUrl !== undefined) settings.tts[id].base_url = baseUrl;
+    if (body.baseUrl !== undefined) settings.tts[id].base_url = id === "minimax" ? normalizeMiniMaxTtsBaseUrl(baseUrl) || MINIMAX_TTS_BASE_URL : baseUrl;
     if (body.model !== undefined) {
       if (id === "minimax") {
         if (/^speech-/i.test(model)) settings.tts[id].model = model;
