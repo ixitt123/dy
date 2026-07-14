@@ -1329,7 +1329,9 @@ function publicRewriteSettings(settings = readSettings()) {
 
 function publicModelMapping(settings = readSettings()) {
   const mapping = settings.modelMap || settings.modelMapping || {};
-  return { ...DEFAULT_MODEL_MAPPING, ...mapping };
+  const result = { ...DEFAULT_MODEL_MAPPING, ...mapping };
+  delete result.image;
+  return result;
 }
 
 function rewriteProviderIdFromMapping(providerId) {
@@ -1788,6 +1790,7 @@ function applyLocalProviderConfig(settings, providerId) {
 
 function applyModelMapping(settings, mapping) {
   const normalized = { ...DEFAULT_MODEL_MAPPING, ...(mapping || {}) };
+  delete normalized.image;
   settings.modelMap = normalized;
   settings.modelMapping = normalized;
 

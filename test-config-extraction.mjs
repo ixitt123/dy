@@ -5,7 +5,9 @@ import { AUTO_MODEL_VALUE, REWRITE_PROVIDER_ORDER, REWRITE_PROVIDER_PRESETS } fr
 import { DEFAULT_REWRITE_REFERENCE, REWRITE_DIRECTIONS, REWRITE_STYLES, REWRITE_VERSION_DEFS, REWRITE_VERSION_DEFAULTS } from "./server/config/rewrite-presets.js";
 import { ROUTE_A_DEFAULT_STYLE_ID, ROUTE_A_STYLE_PRESETS } from "./server/config/video-style-presets.js";
 
-assert.equal(DEFAULT_MODEL_MAPPING.image.model, DEFAULT_VOLCENGINE_ARK_IMAGE_MODEL);
+assert.equal(DEFAULT_MODEL_MAPPING.image, undefined);
+assert.equal(DEFAULT_VOLCENGINE_ARK_IMAGE_MODEL, "doubao-seedream-5-0-lite-260128");
+assert.equal(SETTINGS_TASKS.image, undefined);
 assert.equal(Object.keys(SETTINGS_TASKS).length > 0, true);
 assert.equal(DEFAULT_REWRITE_REFERENCE.length > 20, true);
 assert.equal(REWRITE_DIRECTIONS.includes("招生引流"), true);
