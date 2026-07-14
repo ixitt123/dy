@@ -320,46 +320,162 @@ async function linkCurrentProjectAsset(assetType, assetId, name = "", metadata =
   return data;
 }
 
-function projectAssetCard(asset) {
-  const typeLabels = { image: "图片", video: "视频", bgm: "BGM", sfx: "音效", subtitle: "字幕", cover: "封面", tts: "配音", director: "生产线分镜" };
-  const imagePath = asset.assetType === "image" ? String(asset.metadata?.path || asset.metadata?.file_path || "") : "";
-  const thumbnail = imagePath ? `/api/image/thumbnail?width=320&path=${encodeURIComponent(imagePath)}` : "";
-  const original = imagePath ? `/api/image/file?path=${encodeURIComponent(imagePath)}` : "";
+function projectAssetTypeLabel(type) {
+  return PROJECT_ASSET_TYPES.find(([value]) => value === type)?.[1] || String(type || "素材");
+}
+
+function projectAssetSourceLabel(source) {
+  return {
+    ai_generated: "AI 生成",
+    downloaded: "已下载",
+    local_upload: "本地上传",
+  }[source] || "本地素材";
+}
+
+function projectAssetStatusLabel(status) {
+  return {
+    ready: "可用",
+    pending: "处理中",
+    error: "异常",
+  }[status] || "待确认";
+}
+
+function projectAssetTimestamp(asset) {
+  const value = String(asset?.createdAt || asset?.updatedAt || "").trim();
+  if (!value) return 0;
+  const parsed = Date.parse(value.includes("T") ? value : value.replace(" ", "T"));
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function projectAssetProductionTime(asset) {
+  const value = String(asset?.createdAt || asset?.updatedAt || "").trim();
+  const timestamp = projectAssetTimestamp(asset);
+  if (!timestamp) return value || "—";
+  return new Date(timestamp).toLocaleString("zh-CN", { hour12: false });
+}
+
+function projectAssetProjectLabel(asset) {
+  const title = String(asset?.metadata?.projectTitle || asset?.metadata?.project_title || "").trim();
+  if (title) return title;
+  const project = videoProjectsState.find((item) => item.id === asset?.projectId);
+  return project?.title || String(asset?.projectId || "未归属项目");
+}
+
+function renderProjectAssetTypeTabs() {
+  document.querySelectorAll("[data-project-asset-type]").forEach((button) => {
+    const active = button.dataset.projectAssetType === activeProjectAssetType;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-selected", active ? "true" : "false");
+  });
+}
+
+function projectAssetDetailsRow(asset) {
+  const name = asset.name || asset.assetId || "未命名素材";
   return `
-    <article class="project-asset-card" data-project-asset-id="${escapeHtml(asset.id)}">
-      <div class="project-asset-card-top">
-        <span>${escapeHtml(typeLabels[asset.assetType] || asset.assetType || "素材")}</span>
-        <strong class="asset-status-${escapeHtml(asset.status)}">${asset.status === "ready" ? "可用" : asset.status === "pending" ? "处理中" : "异常"}</strong>
-      </div>
-      ${thumbnail ? `<button class="project-asset-thumb" type="button" onclick="window.open('${original}')"><img src="${thumbnail}" alt="图片素材缩略图" loading="lazy" /></button>` : ""}
-      <h3>${escapeHtml(asset.name || asset.assetId || "未命名素材")}</h3>
-      <div class="asset-tag-list">
-        ${[asset.useCase, asset.style, asset.ratio, asset.source === "ai_generated" ? "AI 生成" : asset.source === "downloaded" ? "已下载" : "本地上传"].filter(Boolean).map((tag) => `<span>${escapeHtml(tag)}</span>`).join("")}
-      </div>
-      <div class="project-asset-card-foot">
-        <small>已使用 ${Number(asset.usedCount || 0)} 次</small>
-        <button class="ghost small send-project-asset" type="button">加入素材库</button>
-      </div>
-    </article>
+    <tr class="project-asset-details-row" data-project-asset-id="${escapeHtml(asset.id)}" tabindex="0" role="button" aria-label="打开 ${escapeHtml(name)} 的详情">
+      <td class="project-asset-name" title="${escapeHtml(name)}">${escapeHtml(name)}</td>
+      <td>${escapeHtml(projectAssetTypeLabel(asset.assetType))}</td>
+      <td>${escapeHtml(asset.useCase || "—")}</td>
+      <td>${escapeHtml(asset.style || "—")}</td>
+      <td title="${escapeHtml(projectAssetProjectLabel(asset))}">${escapeHtml(projectAssetProjectLabel(asset))}</td>
+      <td>${escapeHtml(projectAssetSourceLabel(asset.source))}</td>
+      <td class="project-asset-time">${escapeHtml(projectAssetProductionTime(asset))}</td>
+      <td><span class="project-asset-status ${escapeHtml(asset.status || "unknown")}">${escapeHtml(projectAssetStatusLabel(asset.status))}</span></td>
+    </tr>
   `;
+}
+
+function closeProjectAssetDetail() {
+  const modal = document.querySelector("#projectAssetDetailModal");
+  if (!modal) return;
+  modal.hidden = true;
+  delete modal.dataset.projectAssetId;
+}
+
+function openProjectAssetDetail(asset) {
+  const modal = document.querySelector("#projectAssetDetailModal");
+  const title = document.querySelector("#projectAssetDetailTitle");
+  const type = document.querySelector("#projectAssetDetailType");
+  const body = document.querySelector("#projectAssetDetailBody");
+  const notice = document.querySelector("#projectAssetDetailNotice");
+  const useButton = document.querySelector("#projectAssetDetailUse");
+  if (!modal || !title || !type || !body || !useButton) return;
+
+  const metadataPath = String(asset.metadata?.path || asset.metadata?.file_path || "").trim();
+  const detailItems = [
+    ["类型", projectAssetTypeLabel(asset.assetType)],
+    ["用途", asset.useCase || "—"],
+    ["风格", asset.style || "—"],
+    ["比例", asset.ratio || "—"],
+    ["所属项目", projectAssetProjectLabel(asset)],
+    ["来源", projectAssetSourceLabel(asset.source)],
+    ["生产时间", projectAssetProductionTime(asset)],
+    ["状态", projectAssetStatusLabel(asset.status)],
+    ["使用次数", `${Number(asset.usedCount || 0)} 次`],
+    ["归档编号", asset.assetId || asset.id || "—"],
+    ...(metadataPath ? [["文件位置", metadataPath]] : []),
+  ];
+
+  title.textContent = asset.name || asset.assetId || "未命名素材";
+  type.textContent = projectAssetTypeLabel(asset.assetType);
+  body.innerHTML = detailItems.map(([label, value]) => `
+    <div><dt>${escapeHtml(label)}</dt><dd title="${escapeHtml(String(value))}">${escapeHtml(String(value))}</dd></div>
+  `).join("");
+  if (notice) notice.textContent = "";
+
+  const currentProjectId = currentVideoProjectId();
+  useButton.dataset.projectAssetId = asset.id;
+  useButton.disabled = !currentProjectId || asset.projectId === currentProjectId;
+  useButton.textContent = !currentProjectId ? "请先选择项目" : asset.projectId === currentProjectId ? "已在当前项目" : "加入当前项目";
+  modal.dataset.projectAssetId = asset.id;
+  modal.hidden = false;
+}
+
+async function addProjectAssetToCurrentProject(asset) {
+  const notice = document.querySelector("#projectAssetDetailNotice");
+  const useButton = document.querySelector("#projectAssetDetailUse");
+  if (!asset || !currentVideoProjectId()) return;
+  if (asset.projectId === currentVideoProjectId()) return;
+
+  if (notice) notice.textContent = "正在加入当前项目…";
+  if (useButton) useButton.disabled = true;
+  try {
+    await linkCurrentProjectAsset(asset.assetType, asset.assetId, asset.name, {
+      ...asset.metadata,
+      useCase: asset.useCase,
+      style: asset.style,
+      ratio: asset.ratio,
+      source: asset.source,
+      usedCount: Number(asset.usedCount || 0) + 1,
+      status: asset.status,
+    });
+    closeProjectAssetDetail();
+    await refreshProjectAssets();
+  } catch (error) {
+    if (notice) notice.textContent = `加入失败：${error.message || "请稍后重试"}`;
+    if (useButton) useButton.disabled = false;
+  }
 }
 
 async function refreshProjectAssets() {
   const container = document.querySelector("#projectAssetGrid");
   if (!container) return [];
-  const params = new URLSearchParams();
-  const filters = {
-    assetType: document.querySelector("#projectAssetTypeFilter")?.value || "all",
-    useCase: document.querySelector("#projectAssetUseCaseFilter")?.value || "all",
-    style: document.querySelector("#projectAssetStyleFilter")?.value || "all",
-    projectId: document.querySelector("#projectAssetProjectFilter")?.value || "all",
-  };
-  Object.entries(filters).forEach(([key, value]) => { if (value && value !== "all") params.set(key, value); });
-  const data = await projectApi(`/api/projects/assets?${params.toString()}`);
-  const assets = Array.isArray(data.assets) ? data.assets : [];
-  projectAssetsState = assets;
-  container.innerHTML = assets.length ? assets.map(projectAssetCard).join("") : '<div class="empty">没有符合筛选条件的素材。完成文案、配音、导演或导入素材后会自动归档到这里。</div>';
-  return assets;
+  renderProjectAssetTypeTabs();
+  const params = new URLSearchParams({ assetType: activeProjectAssetType });
+  try {
+    const data = await projectApi(`/api/projects/assets?${params.toString()}`);
+    const assets = (Array.isArray(data.assets) ? data.assets : [])
+      .sort((left, right) => projectAssetTimestamp(right) - projectAssetTimestamp(left));
+    projectAssetsState = assets;
+    container.innerHTML = assets.length
+      ? assets.map(projectAssetDetailsRow).join("")
+      : `<tr><td class="empty" colspan="8">暂无${escapeHtml(projectAssetTypeLabel(activeProjectAssetType))}归档素材。</td></tr>`;
+    return assets;
+  } catch (error) {
+    projectAssetsState = [];
+    container.innerHTML = `<tr><td class="empty" colspan="8">归档素材读取失败：${escapeHtml(error.message || "请稍后重试")}</td></tr>`;
+    throw error;
+  }
 }
 
 function renderProjectReadiness(readiness, qualityCheck) {
