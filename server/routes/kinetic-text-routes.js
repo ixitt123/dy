@@ -18,6 +18,7 @@ function contentType(filePath) {
   if (extension === ".m4a") return "audio/mp4";
   if (extension === ".zip") return "application/zip";
   if (extension === ".srt") return "application/x-subrip; charset=utf-8";
+  if (extension === ".txt") return "text/plain; charset=utf-8";
   return "application/octet-stream";
 }
 

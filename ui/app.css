@@ -9720,6 +9720,140 @@ audio {
   color: white;
 }
 
+.kinetic-received-files {
+  display: grid;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.kinetic-file-pill {
+  display: grid;
+  grid-template-columns: 68px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  min-height: 30px;
+  border: 1px solid #2b3548;
+  border-radius: 6px;
+  padding: 5px 7px;
+  color: #718095;
+  background: #090e15;
+  font-size: 12px;
+  text-decoration: none;
+}
+
+.kinetic-file-pill.ready {
+  color: #b6d7ff;
+  border-color: rgba(102, 80, 232, .46);
+  background: rgba(102, 80, 232, .1);
+}
+
+.kinetic-file-pill strong {
+  min-width: 0;
+  overflow: hidden;
+  color: inherit;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kinetic-text-maker {
+  gap: 10px;
+}
+
+.kinetic-text-layout {
+  grid-template-columns: minmax(240px, 300px) minmax(0, 1fr);
+  gap: 12px;
+}
+
+.kinetic-text-controls,
+.kinetic-text-workspace {
+  gap: 10px;
+}
+
+.kinetic-card,
+.kinetic-preview-card {
+  border-radius: 8px;
+  padding: 10px;
+}
+
+.kinetic-card-head {
+  margin-bottom: 8px;
+}
+
+.kinetic-text-controls label {
+  gap: 5px;
+  margin-top: 8px;
+}
+
+.kinetic-preview-toolbar {
+  padding: 8px 10px;
+}
+
+.kinetic-effect-grid {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.kinetic-effect-card {
+  grid-template-rows: 54px auto auto;
+  gap: 4px;
+  min-height: 106px;
+  padding: 7px;
+  border-radius: 8px;
+}
+
+.kinetic-effect-demo i,
+.kinetic-effect-demo b {
+  font-size: 17px;
+}
+
+.kinetic-effect-card strong {
+  font-size: 12px;
+}
+
+.kinetic-effect-card small {
+  font-size: 11px;
+  line-height: 1.25;
+}
+
+.kinetic-timeline {
+  gap: 5px;
+  max-height: 360px;
+}
+
+.kinetic-timeline-head,
+.kinetic-timeline-row {
+  grid-template-columns: 34px 70px 70px minmax(160px, 2fr) minmax(96px, 1fr) 90px 90px 44px;
+  gap: 6px;
+}
+
+.kinetic-timeline-head {
+  padding: 0 6px 5px;
+}
+
+.kinetic-timeline-row {
+  padding: 6px;
+  border-radius: 7px;
+}
+
+.kinetic-timeline-row input,
+.kinetic-timeline-row textarea {
+  border-radius: 6px;
+  padding: 6px 8px;
+  font-size: 13px;
+}
+
+.kinetic-timeline-row textarea {
+  height: 46px;
+  min-height: 46px;
+  max-height: 76px;
+  line-height: 1.35;
+}
+
+.kinetic-timeline-row input[type="color"] {
+  height: 32px;
+}
+
 @media (max-width: 1180px) {
   .kinetic-text-layout { grid-template-columns: 1fr; }
   .kinetic-text-controls { grid-template-columns: repeat(3, minmax(0, 1fr)); }

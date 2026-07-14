@@ -59,6 +59,11 @@ function escapeHtml(value) {
   return String(value || "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char]);
 }
 
+function shortFileName(value) {
+  const text = String(value || "");
+  return text.split(/[\\/]/).pop() || text;
+}
+
 function effectById(id) {
   return state.effects.find((item) => item.id === id) || state.effects[0] || null;
 }
@@ -131,8 +136,9 @@ function syncAudio() {
     state.audio.src = "";
   }
   state.audio = null;
-  if (!state.project?.audioUrl) return;
-  state.audio = new Audio(state.project.audioUrl);
+  const source = state.project?.audioUrl || (state.project?.audioPath ? mediaUrl("tts") : "");
+  if (!source) return;
+  state.audio = new Audio(source);
   state.audio.preload = "metadata";
   state.audio.addEventListener("ended", () => { state.playing = false; cancelAnimationFrame(state.raf); drawPreview(); });
 }
@@ -348,6 +354,23 @@ function renderOutputs() {
   ].filter(Boolean).join("");
 }
 
+function renderReceivedFiles() {
+  const container = $("#kineticReceivedFiles");
+  if (!container || !state.project) return;
+  const rows = [
+    { label: "音频", path: state.project.audioPath, url: state.project.audioUrl || mediaUrl("tts"), kind: "tts" },
+    { label: "文案", path: state.project.scriptPath, url: mediaUrl("script"), kind: "script" },
+    { label: "时间戳字幕", path: state.project.timestampedTextPath || state.project.subtitlePath, url: state.project.timestampedTextPath ? mediaUrl("timestamped") : mediaUrl("subtitle"), kind: "timestamped" },
+  ];
+  container.innerHTML = rows.map((item) => {
+    const ready = Boolean(item.path || item.url);
+    const name = ready ? shortFileName(item.path || item.url) : "未接收";
+    return ready
+      ? `<a class="kinetic-file-pill ready" href="${escapeHtml(item.url)}" target="_blank" title="${escapeHtml(item.path || item.url)}"><span>${escapeHtml(item.label)}</span><strong>${escapeHtml(name)}</strong></a>`
+      : `<span class="kinetic-file-pill"><span>${escapeHtml(item.label)}</span><strong>未接收</strong></span>`;
+  }).join("");
+}
+
 function renderProject() {
   const project = state.project;
   renderProjects();
@@ -368,6 +391,7 @@ function renderProject() {
   $("#kineticEffectName").textContent = effectById(project.effectId)?.name || "动态大字";
   setProgress(project.progress || 0, project.stage || "编辑中");
   renderOutputs();
+  renderReceivedFiles();
   syncAudio();
   syncBackgroundMedia();
   drawPreview();

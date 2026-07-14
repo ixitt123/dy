@@ -768,6 +768,9 @@ export function createKineticTextService({
       background: project.background?.path,
       bgm: project.audioMix?.localPath,
       tts: project.audioPath,
+      script: project.scriptPath,
+      subtitle: project.subtitlePath,
+      timestamped: project.timestampedTextPath,
     };
     const filePath = allowed[key];
     if (!filePath || !fs.existsSync(filePath)) return null;
