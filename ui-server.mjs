@@ -29,6 +29,7 @@ import { createVfoService } from "./server/vfo/vfo-service.js";
 import { createCs1VideoRoutes } from "./server/routes/cs1-video-routes.js";
 import { createIanXiaoheiRoutes } from "./server/routes/ian-xiaohei-routes.js";
 import { createMoneyPrinterRoutes } from "./server/routes/money-printer-routes.js";
+import { createKineticTextRoutes } from "./server/routes/kinetic-text-routes.js";
 import { createYtDlpService } from "./server/core/yt-dlp-service.js";
 import { HttpBodyError, readBody, readJsonBody } from "./server/utils/http-body.js";
 import { DEFAULT_REWRITE_REFERENCE, REWRITE_DIRECTIONS, REWRITE_STYLES, REWRITE_VERSION_DEFS, REWRITE_VERSION_DEFAULTS } from "./server/config/rewrite-presets.js";
@@ -175,6 +176,15 @@ const handleIanXiaoheiRoutes = createIanXiaoheiRoutes({
   ffmpegPath,
   ffprobePath,
   transcribeLocalMedia: transcribeLocalMediaWithDashScope,
+});
+const handleKineticTextRoutes = createKineticTextRoutes({
+  baseDir: __dirname,
+  downloadsDir,
+  sendJson,
+  modelRouter,
+  ffmpegPath,
+  ffprobePath,
+  projectCenter,
 });
 
 // ModelRouter 统一模型路由
@@ -8195,6 +8205,7 @@ const server = http.createServer(async (req, res) => {
     if (await handleCs1VideoRoutes(req, res, url)) return;
     if (await handleMoneyPrinterRoutes(req, res, url)) return;
     if (await handleIanXiaoheiRoutes(req, res, url)) return;
+    if (await handleKineticTextRoutes(req, res, url)) return;
 
     // ===== Image Studio API =====
     if (url.pathname.startsWith("/api/image/")) {
