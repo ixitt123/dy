@@ -9790,79 +9790,109 @@ audio {
 }
 
 .kinetic-effect-grid {
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 8px;
-}
-
-.kinetic-effect-card {
-  grid-template-rows: 54px auto auto;
-  gap: 4px;
-  min-height: 106px;
-  padding: 7px;
-  border-radius: 8px;
-}
-
-.kinetic-effect-demo i,
-.kinetic-effect-demo b {
-  font-size: 17px;
-}
-
-.kinetic-effect-card strong {
-  font-size: 12px;
-}
-
-.kinetic-effect-card small {
-  font-size: 11px;
-  line-height: 1.25;
-}
-
-.kinetic-timeline {
-  gap: 5px;
-  max-height: 360px;
-}
-
-.kinetic-timeline-head,
-.kinetic-timeline-row {
-  grid-template-columns: 34px 70px 70px minmax(160px, 2fr) minmax(96px, 1fr) 90px 90px 44px;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 6px;
 }
 
-.kinetic-timeline-head {
-  padding: 0 6px 5px;
-}
-
-.kinetic-timeline-row {
+.kinetic-effect-card {
+  grid-template-rows: 42px auto auto;
+  gap: 3px;
+  min-height: 84px;
   padding: 6px;
   border-radius: 7px;
 }
 
+.kinetic-effect-demo i,
+.kinetic-effect-demo b {
+  font-size: 14px;
+}
+
+.kinetic-effect-card strong {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 11px;
+  line-height: 1.15;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kinetic-effect-card small {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  font-size: 10px;
+  line-height: 1.15;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kinetic-timeline {
+  gap: 4px;
+  max-height: 300px;
+}
+
+.kinetic-timeline-head,
+.kinetic-timeline-row {
+  grid-template-columns: 28px 60px 60px minmax(150px, 2fr) minmax(112px, 1fr) 76px 72px 34px;
+  gap: 4px;
+}
+
+.kinetic-timeline-head {
+  padding: 0 5px 4px;
+  font-size: 10px;
+}
+
+.kinetic-timeline-row {
+  padding: 4px;
+  border-radius: 6px;
+}
+
+.kinetic-segment-index {
+  font-size: 12px;
+}
+
 .kinetic-timeline-row input,
 .kinetic-timeline-row textarea {
+  min-height: 30px;
   border-radius: 6px;
-  padding: 6px 8px;
-  font-size: 13px;
+  padding: 4px 6px;
+  font-size: 12px;
 }
 
 .kinetic-timeline-row textarea {
-  height: 46px;
-  min-height: 46px;
-  max-height: 76px;
-  line-height: 1.35;
+  height: 34px;
+  min-height: 34px;
+  max-height: 54px;
+  line-height: 1.25;
 }
 
 .kinetic-timeline-row input[type="color"] {
-  height: 32px;
+  height: 30px;
+  padding: 2px;
+}
+
+.kinetic-effect-card.active::after {
+  right: 5px;
+  top: 5px;
+  padding: 2px 5px;
+  font-size: 9px;
+}
+
+.kinetic-effect-number {
+  top: 6px;
+  left: 6px;
+  font-size: 9px;
 }
 
 @media (max-width: 1180px) {
   .kinetic-text-layout { grid-template-columns: 1fr; }
   .kinetic-text-controls { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  .kinetic-effect-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .kinetic-effect-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); }
 }
 
 @media (max-width: 820px) {
   .kinetic-text-controls { grid-template-columns: 1fr; }
-  .kinetic-effect-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .kinetic-effect-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .kinetic-timeline-head { display: none; }
   .kinetic-timeline-row { grid-template-columns: 42px 1fr 1fr; }
   .kinetic-timeline-row textarea,
