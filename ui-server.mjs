@@ -3652,62 +3652,73 @@ function normalizeMomentsStyle(value = "") {
   return ["auto", "xiaohei", "realistic"].includes(style) ? style : "auto";
 }
 
-const MOMENTS_STYLE_CATEGORIES = new Set([
-  "auto",
-  "product-service",
-  "store-event",
-  "knowledge-growth",
-  "daily-life",
-  "personal-brand",
-]);
+const MOMENTS_VISUAL_STYLE_SKILLS = {
+  "ian-xiaohei-illustrations": {
+    label: "小黑 Skill · 纯白手绘解释图",
+    baseStyle: "xiaohei",
+    rule: "纯白 #FFFFFF 背景，黑色略带手绘感的线稿，小黑作为核心动作主体，少量红橙蓝中文短批注，大量留白；把抽象观点转成一个清楚、轻、怪但有用的视觉隐喻。",
+  },
+  "ian-xiaohei-scenes": {
+    label: "helloianneo/ian-xiaohei-scenes · 小黑实物场景",
+    baseStyle: "realistic",
+    rule: "16:9 纯白摄影棚式背景，一个真实物件小现场，一个核心物理动作，小黑必须参与动作，2-4 个短中文标签，少量蓝/粉/黄/绿/红点缀；不要做 PPT、流程图或商业海报。",
+  },
+  "visual-ip-illustrations": {
+    label: "yangchuansheng/visual-ip-illustrations · 视觉 IP",
+    baseStyle: "xiaohei",
+    rule: "16:9 横版手绘正文配图，把正文中的一个判断、结构、状态或隐喻变成清爽、奇怪、可读的动作场景；IP 主体承担唯一核心认知动作，保持统一线稿、留白和短标签，不堆信息。",
+  },
+  "5km-littlebox-illustrations": {
+    label: "okooo5km/5km-littlebox-illustrations · 小盒",
+    baseStyle: "xiaohei",
+    rule: "16:9 横版，纯白或浅色背景，合盖白色纸盒小人，粗糙中等粗度马克笔线条，顶部琥珀色锯齿胶带，少量珊瑚色点缀；小盒必须承担收集、包装、分类、递交、阻挡或修复等核心动作。",
+  },
+  "stick-figure-illustrations": {
+    label: "ZekerTop/stick-figure-illustrations · 火柴人",
+    baseStyle: "xiaohei",
+    rule: "中性匿名火柴人为主体，圆头、黑色线稿、白底或透明白底、大量留白、一个克制点缀色；用选择、整理、递交、修复、搭建、观察或穿过障碍的动作表达一个核心意思，并配少量短标注。",
+  },
+  "handdrawn-tech-illustrations": {
+    label: "ningzimu/handdrawn-tech-illustrations · 手绘技术",
+    baseStyle: "realistic",
+    rule: "接近白色的温暖纸面，圆润铅笔/墨线手绘质感，浅蓝、鼠尾草绿、浅桃、浅紫和浅黄标记色，中文标注清晰，信息密度适中；画面元素必须来自正文，不要固定套用道具。",
+  },
+  "ian-handdrawn-ppt": {
+    label: "helloianneo/ian-handdrawn-ppt · 手绘技术页面",
+    baseStyle: "realistic",
+    rule: "16:9 中文手绘技术解释页面，先理解内容并提炼叙事结构，再选择语义版式；统一手绘视觉 DNA，页面完整但不堆大段文字，不做传统模板 PPT，不输出可编辑模块。",
+  },
+  "capybara-illustrations": {
+    label: "ZekerTop/capybara-illustrations · 松弛水豚",
+    baseStyle: "xiaohei",
+    rule: "主体必须是卡皮巴拉（水豚）：低矮圆润身体、小圆耳、宽钝鼻口部、短爪；16:9 白底或透明白底，黑色线稿，柔和暖棕色主体和一个克制点缀色，表情松弛、稳定、带一点幽默，但动作仍要表达核心观点。",
+  },
+};
 const MOMENTS_REFERENCE_TYPES = ["名人名言", "网络热梗", "金句名句", "古诗经典"];
 
-function normalizeMomentsStyleCategory(value = "") {
-  const category = String(value || "auto").trim();
-  return MOMENTS_STYLE_CATEGORIES.has(category) ? category : "auto";
+function normalizeMomentsVisualStyle(value = "") {
+  const requested = String(value || "ian-xiaohei-illustrations").trim();
+  if (requested === "auto" || requested === "xiaohei" || requested === "realistic") return "ian-xiaohei-illustrations";
+  return Object.prototype.hasOwnProperty.call(MOMENTS_VISUAL_STYLE_SKILLS, requested)
+    ? requested
+    : "ian-xiaohei-illustrations";
 }
 
-function resolveMomentsImageStyle(category = "") {
-  switch (normalizeMomentsStyleCategory(category)) {
-    case "knowledge-growth":
-      return "xiaohei";
-    case "daily-life":
-    case "product-service":
-    case "store-event":
-    case "personal-brand":
-      return "realistic";
-    default:
-      return "realistic";
-  }
+function getMomentsVisualStyleSkill(style = "") {
+  return MOMENTS_VISUAL_STYLE_SKILLS[normalizeMomentsVisualStyle(style)] || MOMENTS_VISUAL_STYLE_SKILLS["ian-xiaohei-illustrations"];
 }
 
-function momentsStyleCategoryStrategy(category = "auto") {
-  return ({
-    auto: [
-      "视觉风格类别：自动判断（宣传导向）。先识别原文真正要宣传的产品、课程、服务、门店、活动或个人品牌，再选择最贴近真实使用场景的画面。",
-      "整体要像温和、自然的朋友圈分享，不要做成硬广海报；宣传信息要清楚，但画面和表达都保留生活感。",
-    ],
-    "product-service": [
-      "视觉风格类别：产品/课程/服务宣传。围绕使用前后的真实场景、适用人群和可感知价值展开，突出体验与解决的问题，不堆 Logo、价格和口号。",
-      "画面要有真实人物、产品或服务动作，体现可信度和温度，避免夸张承诺。",
-    ],
-    "store-event": [
-      "视觉风格类别：门店/活动/节日宣传。围绕到店、参与、体验和现场氛围组织内容，让读者自然理解活动适合谁、什么时候参与、能获得什么。",
-      "画面要有真实场景和可识别的活动细节，不做千篇一律的促销海报。",
-    ],
-    "knowledge-growth": [
-      "视觉风格类别：知识/成长/职场分享。先给一个真实观察，再提炼方法和价值，宣传内容只能作为自然解决方案出现，不要把正文写成课程广告。",
-      "画面优先使用清晰的解释、对比和真实工作/学习细节，保持专业但不端着。",
-    ],
-    "daily-life": [
-      "视觉风格类别：日常/生活/情绪记录。用一个轻量生活场景承载宣传信息，让产品或服务自然出现在真实使用时刻，不要强行植入。",
-      "语言要松弛、有人情味，避免口号、夸张效果和连续销售话术。",
-    ],
-    "personal-brand": [
-      "视觉风格类别：个人品牌/专业人设。突出真实工作状态、专业判断和长期可信度，让读者先认识这个人，再理解其提供的产品或服务。",
-      "表达要稳定、克制、有记忆点，不要包装成官方公告或自夸式广告。",
-    ],
-  }[normalizeMomentsStyleCategory(category)] || []).join("\n");
+function momentsVisualStyleStrategy(style = "", mainCharacter = "") {
+  const skill = getMomentsVisualStyleSkill(style);
+  const characterRule = String(mainCharacter || "").trim()
+    ? `主角描述（必须保持一致）：${String(mainCharacter).trim().slice(0, 300)}。主角不能只站着装饰，必须参与当前图片的核心动作。`
+    : "没有额外主角描述时，严格使用所选 Skill 的默认主角；所有图片保持同一主角形体、线稿和识别特征。";
+  return [
+    `图片 Skill：${skill.label}`,
+    skill.rule,
+    characterRule,
+    "每张图只表达一个核心意思，先从正文提炼认知锚点，再把锚点转成可见动作；不要把整段文案、名词清单或宣传信息堆进画面。",
+  ].join("\n");
 }
 
 function normalizeMomentsWordCount(value = "100", customValue = "100") {
@@ -4139,8 +4150,10 @@ async function generateMomentsPostJsonV2(body = {}) {
   if (!sourceText) throw new Error("请先填写朋友圈文案输入区。");
   if (!persona) throw new Error("请先选择或填写人设。");
   const fixedImageCount = clampMomentsImageCount(body.imageCount);
-  const visualStyle = normalizeMomentsStyleCategory(body.visualStyle);
-  const imageStyle = resolveMomentsImageStyle(visualStyle);
+  const visualStyle = normalizeMomentsVisualStyle(body.visualStyle);
+  const visualStyleSkill = getMomentsVisualStyleSkill(visualStyle);
+  const imageStyle = visualStyleSkill.baseStyle;
+  const mainCharacter = String(body.mainCharacter || "").trim().slice(0, 300);
   const wordCount = normalizeMomentsWordCount(body.wordCount, body.wordCountCustom);
   const addEmoji = String(body.addEmoji || "no").trim().toLowerCase() === "yes";
   const localMaterials = String(body.localMaterials || "").trim();
@@ -4154,7 +4167,7 @@ async function generateMomentsPostJsonV2(body = {}) {
   const imageCountRule = fixedImageCount
     ? `必须生成 ${fixedImageCount} 张配图。`
     : "根据成品文案判断生成 1-3 张配图：短内容 1 张；有误区+方法 2 张；有误区+方法+结果状态 3 张。";
-  const styleRule = momentsStyleCategoryStrategy(visualStyle);
+  const styleRule = momentsVisualStyleStrategy(visualStyle, mainCharacter);
   const imageStyleRule = imageStyle === "xiaohei"
     ? "图片执行风格：小黑漫画解释类，白底、黑色手绘线稿、少量红橙蓝批注、大量留白，用动作解释宣传对象的价值。"
     : "图片执行风格：真实生活/产品场景类，像真实工作、学习、咨询、到店或使用现场，有明确主物件和人物关系，不做普通广告海报。";
