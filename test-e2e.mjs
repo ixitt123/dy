@@ -48,6 +48,23 @@ test("Task Center Stats", async () => {
   if (d.total === undefined) throw new Error("No task stats");
 });
 
+test("Moments Generation Progress", async () => {
+  const progressId = `e2e-moments-${Date.now()}`;
+  const generate = await fetch(`${BASE}/api/moments/generate`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ progressId }),
+  });
+  const failure = await generate.json();
+  if (generate.status !== 400 || failure.ok !== false) throw new Error("Invalid moments generation request was not rejected");
+
+  const progressResponse = await fetch(`${BASE}/api/moments/progress?id=${encodeURIComponent(progressId)}`);
+  const progress = await progressResponse.json();
+  if (!progressResponse.ok || progress.status !== "failed" || progress.progress !== 100) {
+    throw new Error("Failed moments request did not expose terminal progress");
+  }
+});
+
 // Run all
 let passed = 0;
 let failed = 0;
