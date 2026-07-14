@@ -71,6 +71,56 @@ function splitScript(text) {
     .filter(Boolean);
 }
 
+function parseClockTime(value) {
+  const match = String(value || "").trim().match(/(?:(\d+):)?(\d{1,2}):(\d{1,2})(?:[,.](\d{1,3}))?/);
+  if (!match) return 0;
+  const hours = Number(match[1] || 0);
+  const minutes = Number(match[2] || 0);
+  const seconds = Number(match[3] || 0);
+  const ms = Number(String(match[4] || "0").padEnd(3, "0").slice(0, 3));
+  return hours * 3600 + minutes * 60 + seconds + ms / 1000;
+}
+
+function parseSrtTimeline(content) {
+  const blocks = String(content || "").replace(/\r/g, "").split(/\n{2,}/);
+  return blocks.map((block, index) => {
+    const lines = block.split("\n").map((line) => line.trim()).filter(Boolean);
+    const timeLineIndex = lines.findIndex((line) => line.includes("-->"));
+    if (timeLineIndex < 0) return null;
+    const [startRaw, endRaw] = lines[timeLineIndex].split("-->").map((item) => item.trim());
+    const text = lines.slice(timeLineIndex + 1).join("");
+    const start = parseClockTime(startRaw);
+    const end = parseClockTime(endRaw);
+    if (!text || end <= start) return null;
+    return { id: `segment-${index + 1}`, index: index + 1, start, end, text };
+  }).filter(Boolean);
+}
+
+function parseTimestampedTextTimeline(content) {
+  const rows = [];
+  const pattern = /\[([^\]]+?)\s*-->\s*([^\]]+?)\]\s*([^\n]+)/g;
+  let match;
+  while ((match = pattern.exec(String(content || "")))) {
+    const start = parseClockTime(match[1]);
+    const end = parseClockTime(match[2]);
+    const text = normalizeText(match[3]);
+    if (text && end > start) rows.push({ id: `segment-${rows.length + 1}`, index: rows.length + 1, start, end, text });
+  }
+  return rows;
+}
+
+function timelineFromFile(filePath) {
+  try {
+    if (!filePath || !fs.existsSync(filePath)) return [];
+    const content = fs.readFileSync(filePath, "utf8");
+    return /\.srt$/i.test(filePath)
+      ? parseSrtTimeline(content)
+      : parseTimestampedTextTimeline(content);
+  } catch {
+    return [];
+  }
+}
+
 function normalizeSegments(rawSegments, text, duration = 0) {
   const rows = Array.isArray(rawSegments) ? rawSegments : [];
   const parsed = rows.map((item, index) => {
@@ -455,6 +505,19 @@ export function createKineticTextService({
     const id = `kinetic-${Date.now()}-${randomUUID().slice(0, 6)}`;
     const tts = input.tts && typeof input.tts === "object" ? input.tts : input;
     const audioPath = String(tts.audio_path || tts.audioPath || "");
+    const scriptPath = String(tts.script_path || tts.scriptPath || "");
+    const subtitlePath = String(tts.subtitle_path || tts.timed_subtitle_path || "");
+    const timestampedTextPath = String(tts.timestamped_text_path || tts.timestampedTextPath || tts.timed_subtitle_path || "");
+    const payloadTimeline = Array.isArray(tts.subtitle_timeline)
+      ? tts.subtitle_timeline
+      : Array.isArray(tts.subtitleTimeline)
+        ? tts.subtitleTimeline
+        : Array.isArray(input.segments)
+          ? input.segments
+          : [];
+    const fileTimeline = payloadTimeline.length ? [] : (timelineFromFile(timestampedTextPath) || timelineFromFile(subtitlePath));
+    const timeline = payloadTimeline.length ? payloadTimeline : fileTimeline;
+    const hasTimedTimeline = timeline.length > 0;
     const hasAudio = Boolean(audioPath || tts.audio_url || tts.audioUrl);
     const duration = safeNumber(tts.duration, 0, 0) || await probeDuration(audioPath);
     const effectId = normalizeEffectId(input.effectId);
@@ -468,12 +531,13 @@ export function createKineticTextService({
       videoProjectId: String(input.videoProjectId || tts.videoProjectId || ""),
       audioPath,
       audioUrl: String(tts.audio_url || tts.audioUrl || ""),
-      scriptPath: String(tts.script_path || tts.scriptPath || ""),
-      subtitlePath: String(tts.subtitle_path || tts.timed_subtitle_path || ""),
+      scriptPath,
+      subtitlePath,
+      timestampedTextPath,
       text: String(tts.text || input.text || ""),
       duration,
-      subtitleSource: String(tts.subtitle_source || tts.subtitleSource || (Array.isArray(tts.subtitle_timeline) && tts.subtitle_timeline.length ? "provider" : "estimated")),
-      segments: normalizeSegments(tts.subtitle_timeline || tts.subtitleTimeline || input.segments, tts.text || input.text, duration),
+      subtitleSource: String(tts.subtitle_source || tts.subtitleSource || (hasTimedTimeline ? "provider" : "estimated")),
+      segments: normalizeSegments(timeline, tts.text || input.text, duration),
       effectId,
       effectParams: defaultEffectParams(effectId),
       showBottomSubtitles: false,
