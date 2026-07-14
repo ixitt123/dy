@@ -416,7 +416,6 @@ const MOMENTS_PERSONAS_KEY = "video-factory:moments-personas-v1";
 const MOMENTS_ACTIVE_PERSONA_KEY = "video-factory:moments-active-persona-v1";
 const MOMENTS_DRAFT_KEY = "video-factory:moments-draft-v1";
 const MOMENTS_PROVIDER_KEY = "video-factory:moments-provider-v1";
-const MOMENTS_FALLBACK_PROVIDER_KEY = "video-factory:moments-fallback-provider-v1";
 const defaultMomentsPersona = {
   id: "academic-planner",
   name: "学业规划老师",
@@ -2543,6 +2542,52 @@ function renderProviderOptions(select, providers, selected = "dashscope", { disa
   if (disableUnconfigured) {
     const firstConfigured = Object.entries(providers).find(([, provider]) => provider.apiKeyConfigured);
     if (firstConfigured) select.value = firstConfigured[0];
+  }
+}
+
+function renderMomentsProviderControls(providers = {}, defaultProvider = "dashscope") {
+  if (!momentsProvider || !momentsFallbackProvider) return;
+  const configured = Object.entries(providers).filter(([, provider]) => provider.apiKeyConfigured);
+  if (!configured.length) {
+    momentsProvider.innerHTML = '<option value="">请先配置文本 API</option>';
+    momentsProvider.disabled = true;
+    momentsFallbackProvider.innerHTML = '<option value="">请先配置 DeepSeek</option>';
+    momentsFallbackProvider.disabled = true;
+    if (momentsProviderStatus) momentsProviderStatus.textContent = "本页尚无可用文本 API，请先在系统设置中完成配置。";
+    return;
+  }
+
+  momentsProvider.disabled = false;
+  const configuredIds = new Set(configured.map(([id]) => id));
+  let savedProvider = "";
+  try {
+    savedProvider = localStorage.getItem(MOMENTS_PROVIDER_KEY) || "";
+  } catch {}
+  const selectedProvider = configuredIds.has(savedProvider)
+    ? savedProvider
+    : configuredIds.has(defaultProvider)
+      ? defaultProvider
+      : configured[0][0];
+  momentsProvider.innerHTML = configured
+    .map(([id, provider]) => `<option value="${escapeHtml(id)}">${escapeHtml(`${provider.label || id} · ${provider.model || "默认模型"}`)}</option>`)
+    .join("");
+  momentsProvider.value = selectedProvider;
+
+  const deepseek = providers.deepseek;
+  const fallbackAvailable = selectedProvider !== "deepseek" && Boolean(deepseek?.apiKeyConfigured);
+  momentsFallbackProvider.innerHTML = fallbackAvailable
+    ? `<option value="deepseek">${escapeHtml(`${deepseek.label || "DeepSeek"} · ${deepseek.model || "deepseek-chat"}`)}</option>`
+    : '<option value="">无备用 API</option>';
+  momentsFallbackProvider.value = fallbackAvailable ? "deepseek" : "";
+  momentsFallbackProvider.disabled = true;
+
+  try {
+    localStorage.setItem(MOMENTS_PROVIDER_KEY, selectedProvider);
+  } catch {}
+  if (momentsProviderStatus) {
+    const primaryLabel = providers[selectedProvider]?.label || selectedProvider;
+    const fallbackLabel = fallbackAvailable ? deepseek.label || "DeepSeek" : "无";
+    momentsProviderStatus.textContent = `仅当前页生效：主 API 为 ${primaryLabel}；备用 API 为 ${fallbackLabel}。超时、429 或 5xx 时自动切换。`;
   }
 }
 
@@ -5368,6 +5413,7 @@ async function loadSettings() {
     const selectedProvider = rewrite.defaults?.defaultProvider || "deepseek";
     renderProviderOptions(rewriteProvider, providers, selectedProvider, { disableUnconfigured: true });
     renderProviderOptions(rewriteSettingsProvider, providers, selectedProvider);
+    renderMomentsProviderControls(providers, selectedProvider);
     rewriteDirection.value = rewriteDirectionOptions.includes(rewrite.defaults?.defaultDirection)
       ? rewrite.defaults.defaultDirection
       : "短视频口播";
@@ -6757,14 +6803,22 @@ document.querySelector("#openRewriteFile").addEventListener("click", () => {
   openRewriteFileLocation();
 });
 
-document.querySelector("#closeRewrite").addEventListener("click", () => {
-  rewritePanel.hidden = true;
-});
+  document.querySelector("#closeRewrite").addEventListener("click", () => {
+    rewritePanel.hidden = true;
+  });
 
-momentsPersonaSelect?.addEventListener("change", () => {
-  applyMomentsPersona(currentMomentsPersona());
-  setMomentsPersonaStatus("已切换人设。");
-});
+  momentsProvider?.addEventListener("change", () => {
+    try {
+      localStorage.setItem(MOMENTS_PROVIDER_KEY, momentsProvider.value);
+    } catch {}
+    renderMomentsProviderControls(rewriteProviderConfigs, momentsProvider.value);
+    saveMomentsDraft();
+  });
+
+  momentsPersonaSelect?.addEventListener("change", () => {
+    applyMomentsPersona(currentMomentsPersona());
+    setMomentsPersonaStatus("已切换人设。");
+  });
 
 addMomentsPersonaBtn?.addEventListener("click", () => {
   if (momentsPersonaName) momentsPersonaName.value = "";
