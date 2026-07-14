@@ -1932,7 +1932,8 @@ function renderMomentsResult(result) {
     const target = result.word_count_target ? ` · 建议 ${result.word_count_target} 字` : "";
     const emoji = result.add_emoji ? " · 已按语义添加表情" : " · 不添加表情";
     const visualStyle = result.visual_style_label ? ` · ${result.visual_style_label}` : "";
-    momentsResultMeta.textContent = `${result.theme || "朋友圈图文"} · ${images.length} 张配图提示词 · ${momentsCharacterCount(momentsPostOutput?.value || result.post)} 字${target}${emoji}${visualStyle}${reference}`;
+    const wordCountWarning = result.word_count_warning ? ` · ${result.word_count_warning}` : "";
+    momentsResultMeta.textContent = `${result.theme || "朋友圈图文"} · ${images.length} 张配图提示词 · ${momentsCharacterCount(momentsPostOutput?.value || result.post)} 字${target}${emoji}${visualStyle}${wordCountWarning}${reference}`;
   }
   if (!momentsImagePromptList) return;
   if (!images.length) {
