@@ -629,16 +629,22 @@
                 文案输入区
                 <textarea id="momentsCopyInput" rows="11" placeholder="从文案定制改写发送来的原文案或成品文案会填到这里，也可以直接粘贴。"></textarea>
               </label>
+              <label class="moments-copy-receiver" for="momentsMainCharacter">
+                主角描述（可选）
+                <textarea id="momentsMainCharacter" rows="3" maxlength="300" placeholder="例如：一位穿深色衬衫、戴圆框眼镜的学业规划老师，表情克制，动作认真。留空则使用所选 Skill 的默认主角。"></textarea>
+              </label>
               <div class="moments-form-grid">
                 <label>
-                  视觉风格
+                  图片视觉风格 / Skill
                   <select id="momentsVisualStyle">
-                    <option value="auto" selected>自动判断（宣传导向）</option>
-                    <option value="product-service">产品/课程/服务宣传</option>
-                    <option value="store-event">门店/活动/节日宣传</option>
-                    <option value="knowledge-growth">知识/成长/职场分享</option>
-                    <option value="daily-life">日常/生活/情绪记录</option>
-                    <option value="personal-brand">个人品牌/专业人设</option>
+                    <option value="ian-xiaohei-illustrations" selected>小黑 Skill · 纯白手绘解释图</option>
+                    <option value="ian-xiaohei-scenes">helloianneo/ian-xiaohei-scenes · 小黑实物场景</option>
+                    <option value="visual-ip-illustrations">yangchuansheng/visual-ip-illustrations · 视觉 IP</option>
+                    <option value="5km-littlebox-illustrations">okooo5km/5km-littlebox-illustrations · 小盒</option>
+                    <option value="stick-figure-illustrations">ZekerTop/stick-figure-illustrations · 火柴人</option>
+                    <option value="handdrawn-tech-illustrations">ningzimu/handdrawn-tech-illustrations · 手绘技术</option>
+                    <option value="ian-handdrawn-ppt">helloianneo/ian-handdrawn-ppt · 手绘技术页面</option>
+                    <option value="capybara-illustrations">ZekerTop/capybara-illustrations · 松弛水豚</option>
                   </select>
                 </label>
                 <label>

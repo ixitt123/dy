@@ -343,6 +343,7 @@ const momentsPersonaName = document.querySelector("#momentsPersonaName");
 const momentsPersonaText = document.querySelector("#momentsPersonaText");
 const momentsPersonaStatus = document.querySelector("#momentsPersonaStatus");
 const momentsLocalMaterials = document.querySelector("#momentsLocalMaterials");
+const momentsMainCharacter = document.querySelector("#momentsMainCharacter");
 const momentsVisualStyle = document.querySelector("#momentsVisualStyle");
 const momentsWordCount = document.querySelector("#momentsWordCount");
 const momentsWordCountCustom = document.querySelector("#momentsWordCountCustom");
@@ -1769,6 +1770,7 @@ function collectMomentsPayload() {
     persona: momentsPersonaText?.value.trim() || persona?.description || "",
     personaName: momentsPersonaName?.value.trim() || persona?.name || "",
     localMaterials: momentsLocalMaterials?.value.trim() || "",
+    mainCharacter: momentsMainCharacter?.value.trim() || "",
     visualStyle: momentsVisualStyle?.value || "auto",
     wordCount: momentsWordCount?.value || "100",
     wordCountCustom: momentsWordCountCustom?.value || "100",
@@ -1785,6 +1787,7 @@ function saveMomentsDraft() {
     localStorage.setItem(MOMENTS_DRAFT_KEY, JSON.stringify({
       text: momentsCopyInput?.value || "",
       localMaterials: momentsLocalMaterials?.value || "",
+      mainCharacter: momentsMainCharacter?.value || "",
       visualStyle: momentsVisualStyle?.value || "auto",
       wordCount: momentsWordCount?.value || "100",
       wordCountCustom: momentsWordCountCustom?.value || "100",
@@ -1804,6 +1807,7 @@ function loadMomentsDraft() {
     const draft = JSON.parse(localStorage.getItem(MOMENTS_DRAFT_KEY) || "{}");
     if (draft.text && momentsCopyInput && !momentsCopyInput.value.trim()) momentsCopyInput.value = draft.text;
     if (draft.localMaterials && momentsLocalMaterials) momentsLocalMaterials.value = draft.localMaterials;
+    if (draft.mainCharacter && momentsMainCharacter) momentsMainCharacter.value = draft.mainCharacter;
     if (draft.visualStyle && momentsVisualStyle) momentsVisualStyle.value = draft.visualStyle;
     if (draft.wordCount && momentsWordCount) momentsWordCount.value = draft.wordCount;
     if (draft.wordCountCustom && momentsWordCountCustom) momentsWordCountCustom.value = draft.wordCountCustom;
@@ -6805,6 +6809,7 @@ momentsImagePromptList?.addEventListener("change", (event) => {
 [
   momentsCopyInput,
   momentsLocalMaterials,
+  momentsMainCharacter,
   momentsVisualStyle,
   momentsWordCount,
   momentsWordCountCustom,
