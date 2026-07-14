@@ -3767,12 +3767,12 @@ function countMomentsEmoji(value = "") {
 
 function momentsEmojiIsValid(value = "", addEmoji = false) {
   const count = countMomentsEmoji(value);
-  return addEmoji ? count >= 2 && count <= 3 : count === 0;
+  return addEmoji ? count >= 2 : count === 0;
 }
 
 function momentsEmojiRule(addEmoji = false) {
   return addEmoji
-    ? "表情规则：正文必须添加 2-3 个与具体语义匹配的常见 emoji，分散放在自然停顿或重点处；不能堆在开头，不能使用无关或夸张表情。"
+    ? "表情规则：以自然阅读效果为优先。普通篇幅至少使用 2 个、通常 2-3 个与具体语义匹配的 emoji；长文、多个场景或情绪转折较多时可以自然增加。表情分散放在恰当停顿或重点处，不能连续堆叠、每句都加、无关装饰或夸张营销。"
     : "表情规则：正文不添加任何 emoji 或颜文字，保持干净自然。";
 }
 
