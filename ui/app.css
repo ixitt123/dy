@@ -1144,6 +1144,21 @@ button:disabled {
   gap: 8px;
 }
 
+.analysis-provider-control {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.analysis-provider-control select {
+  width: min(220px, 42vw);
+  min-height: 32px;
+}
+
 #statusText {
   color: var(--muted);
   font-size: 14px;

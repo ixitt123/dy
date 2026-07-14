@@ -220,6 +220,7 @@ const taskPageInfo = document.querySelector("#taskPageInfo");
 const transcriptList = document.querySelector("#transcriptList");
 const analysisPanel = document.querySelector("#analysisPanel");
 const analysisTaskId = document.querySelector("#analysisTaskId");
+const analysisProvider = document.querySelector("#analysisProvider");
 const analysisTranscript = document.querySelector("#analysisTranscript");
 const analysisHook = document.querySelector("#analysisHook");
 const analysisEmotion = document.querySelector("#analysisEmotion");
@@ -452,6 +453,7 @@ const MOMENTS_PERSONAS_KEY = "video-factory:moments-personas-v1";
 const MOMENTS_ACTIVE_PERSONA_KEY = "video-factory:moments-active-persona-v1";
 const MOMENTS_DRAFT_KEY = "video-factory:moments-draft-v1";
 const MOMENTS_PROVIDER_KEY = "video-factory:moments-provider-v1";
+const ANALYSIS_PROVIDER_KEY = "video-factory:analysis-provider-v1";
 const defaultMomentsPersona = {
   id: "academic-planner",
   name: "学业规划老师",
@@ -1318,7 +1320,7 @@ async function runRewriteInlineAnalysis() {
     const data = await fetchJson("/api/tasks/analyze", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ id, text }),
+      body: JSON.stringify({ id, text, provider: rewriteProvider?.value || "" }),
     });
     rewriteAnalysisView.textContent = formatAnalysisForRewrite(data.analysis || {});
     if (rewriteAnalysisStatus) rewriteAnalysisStatus.textContent = "AI 分析已生成。";
@@ -2629,6 +2631,35 @@ function renderMomentsProviderControls(providers = {}, defaultProvider = "dashsc
     const fallbackLabel = fallbackAvailable ? deepseek.label || "DeepSeek" : "无";
     momentsProviderStatus.textContent = `仅当前页生效：主 API 为 ${primaryLabel}；备用 API 为 ${fallbackLabel}。超时、429 或 5xx 时自动切换。`;
   }
+}
+
+function renderAnalysisProviderControl(providers = {}, defaultProvider = "dashscope") {
+  if (!analysisProvider) return;
+  const configured = Object.entries(providers).filter(([, provider]) => provider.apiKeyConfigured);
+  if (!configured.length) {
+    analysisProvider.innerHTML = '<option value="">请先配置文本 API</option>';
+    analysisProvider.disabled = true;
+    return;
+  }
+
+  const configuredIds = new Set(configured.map(([id]) => id));
+  let savedProvider = "";
+  try {
+    savedProvider = localStorage.getItem(ANALYSIS_PROVIDER_KEY) || "";
+  } catch {}
+  const selectedProvider = configuredIds.has(savedProvider)
+    ? savedProvider
+    : configuredIds.has(defaultProvider)
+      ? defaultProvider
+      : configured[0][0];
+  analysisProvider.innerHTML = configured
+    .map(([id, provider]) => `<option value="${escapeHtml(id)}">${escapeHtml(`${provider.label || id} · ${provider.model || "默认模型"}`)}</option>`)
+    .join("");
+  analysisProvider.value = selectedProvider;
+  analysisProvider.disabled = false;
+  try {
+    localStorage.setItem(ANALYSIS_PROVIDER_KEY, selectedProvider);
+  } catch {}
 }
 
 function updateRewriteModelOptions(provider = {}) {
@@ -5454,6 +5485,7 @@ async function loadSettings() {
     renderProviderOptions(rewriteProvider, providers, selectedProvider, { disableUnconfigured: true });
     renderProviderOptions(rewriteSettingsProvider, providers, selectedProvider);
     renderMomentsProviderControls(providers, selectedProvider);
+    renderAnalysisProviderControl(providers, selectedProvider);
     rewriteDirection.value = rewriteDirectionOptions.includes(rewrite.defaults?.defaultDirection)
       ? rewrite.defaults.defaultDirection
       : "短视频口播";
@@ -6855,6 +6887,12 @@ document.querySelector("#openRewriteFile").addEventListener("click", () => {
     saveMomentsDraft();
   });
 
+  analysisProvider?.addEventListener("change", () => {
+    try {
+      localStorage.setItem(ANALYSIS_PROVIDER_KEY, analysisProvider.value);
+    } catch {}
+  });
+
   momentsPersonaSelect?.addEventListener("change", () => {
     applyMomentsPersona(currentMomentsPersona());
     setMomentsPersonaStatus("已切换人设。");
@@ -7116,7 +7154,7 @@ document.querySelector("#runAnalysis").addEventListener("click", async () => {
     const data = await fetchJson("/api/tasks/analyze", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ id, text: analysisTranscript.value }),
+      body: JSON.stringify({ id, text: analysisTranscript.value, provider: analysisProvider?.value || "" }),
     });
     fillAnalysisFields(data.analysis || {});
     renderTranscripts(data.transcripts);
