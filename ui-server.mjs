@@ -3550,39 +3550,85 @@ async function getRewriteProvider(providerId) {
   return { id, ...provider };
 }
 
+function createModelRequestError(message, { code = "MODEL_REQUEST_FAILED", status = 0 } = {}) {
+  const error = new Error(message);
+  error.code = code;
+  if (status) error.status = status;
+  return error;
+}
+
+function isRetryableModelError(error) {
+  const status = Number(error?.status || 0);
+  return error?.code === "MODEL_REQUEST_TIMEOUT" || status === 429 || (status >= 500 && status < 600);
+}
+
 async function chatCompletion(provider, messages, signal, {
   temperature = 0.78,
   requestName = "AI 改写",
   maxTokens = 0,
   jsonMode = false,
+  timeoutMs = 0,
 } = {}) {
   const baseUrl = String(provider.baseUrl || "").replace(/\/+$/, "");
-  const response = await fetch(`${baseUrl}/chat/completions`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${provider.apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model: provider.model,
-      temperature,
-      messages,
-      ...(maxTokens > 0 ? { max_tokens: maxTokens } : {}),
-      ...(jsonMode ? { response_format: { type: "json_object" } } : {}),
-    }),
-    signal,
-  });
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    const rawMessage = data.message || data.error?.message || data.error || `HTTP ${response.status}`;
-    const message = String(rawMessage);
-    const balancePattern = /余额|额度|欠费|充值|quota|credit|billing|insufficient|exceeded|payment|balance/i;
-    const balanceTip = balancePattern.test(message)
-      ? `\n可能是 ${provider.label} 余额/额度不足，请去后台查看：${provider.balanceUrl || provider.applyUrl || "平台控制台"}`
-      : "";
-    throw new Error(`${requestName}请求失败：${message}${balanceTip}`);
+  const controller = new AbortController();
+  let timedOut = false;
+  let timeoutTimer = null;
+  let removeSignalListener = null;
+  if (signal) {
+    const abortFromCaller = () => controller.abort(signal.reason);
+    if (signal.aborted) abortFromCaller();
+    else {
+      signal.addEventListener("abort", abortFromCaller, { once: true });
+      removeSignalListener = () => signal.removeEventListener("abort", abortFromCaller);
+    }
   }
-  return data.choices?.[0]?.message?.content || "";
+  if (Number(timeoutMs) > 0) {
+    timeoutTimer = setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+    }, Number(timeoutMs));
+  }
+
+  try {
+    const response = await fetch(`${baseUrl}/chat/completions`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${provider.apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: provider.model,
+        temperature,
+        messages,
+        ...(maxTokens > 0 ? { max_tokens: maxTokens } : {}),
+        ...(jsonMode ? { response_format: { type: "json_object" } } : {}),
+      }),
+      signal: controller.signal,
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      const rawMessage = data.message || data.error?.message || data.error || `HTTP ${response.status}`;
+      const message = String(rawMessage);
+      const balancePattern = /余额|额度|欠费|充值|quota|credit|billing|insufficient|exceeded|payment|balance/i;
+      const balanceTip = balancePattern.test(message)
+        ? `\n可能是 ${provider.label} 余额/额度不足，请去后台查看：${provider.balanceUrl || provider.applyUrl || "平台控制台"}`
+        : "";
+      throw createModelRequestError(`${requestName}请求失败：${message}${balanceTip}`, {
+        code: "MODEL_REQUEST_HTTP_ERROR",
+        status: response.status,
+      });
+    }
+    return data.choices?.[0]?.message?.content || "";
+  } catch (error) {
+    if (timedOut) {
+      const seconds = Math.max(1, Math.round(Number(timeoutMs) / 1000));
+      throw createModelRequestError(`${requestName}请求超时（超过 ${seconds} 秒）。`, { code: "MODEL_REQUEST_TIMEOUT" });
+    }
+    throw error;
+  } finally {
+    if (timeoutTimer) clearTimeout(timeoutTimer);
+    removeSignalListener?.();
+  }
 }
 
 async function generateStructuredJson({
@@ -3591,14 +3637,25 @@ async function generateStructuredJson({
   temperature,
   requestName = "结构化 AI",
   maxTokens = 12000,
+  fallbackProviderId = "",
+  providerState = null,
+  maxAttempts = 3,
+  requestTimeoutMs = 0,
+  onFallback = null,
 }) {
-  const provider = await getRewriteProvider(providerId);
+  const startingProviderId = String(providerState?.activeProviderId || providerId || "").trim();
+  const configuredFallbackId = String(fallbackProviderId || "").trim();
+  const attempts = [{ providerId: startingProviderId, retryAttempt: 0 }];
+  let retriesRemaining = Math.max(0, Number(maxAttempts || 3) - 1);
+  let fallbackAttempted = startingProviderId === configuredFallbackId;
   let lastError = null;
-  for (let attempt = 0; attempt < 3; attempt += 1) {
+  while (attempts.length) {
+    const attempt = attempts.shift();
+    let provider = null;
     const retryInstruction = {
       role: "user",
       content: [
-        attempt === 1
+        attempt.retryAttempt === 1
           ? "请直接返回严格 JSON。不要依赖平台 JSON Mode。"
           : "上一轮返回格式无法解析。请从头重新生成。",
         "只输出一个完整 JSON 对象，不要 Markdown、代码围栏、注释或解释。",
@@ -3606,15 +3663,17 @@ async function generateStructuredJson({
       ].join("\n"),
     };
     try {
+      provider = await getRewriteProvider(attempt.providerId);
       const content = await chatCompletion(
         provider,
-        attempt === 0 ? messages : [...messages, retryInstruction],
+        attempt.retryAttempt === 0 ? messages : [...messages, retryInstruction],
         undefined,
         {
-          temperature: attempt === 0 ? temperature : 0.1,
+          temperature: attempt.retryAttempt === 0 ? temperature : 0.1,
           requestName: `${requestName}（${provider.label} / ${provider.model}）`,
           maxTokens,
-          jsonMode: attempt !== 1,
+          jsonMode: attempt.retryAttempt !== 1,
+          timeoutMs: requestTimeoutMs,
         },
       );
       return {
@@ -3624,12 +3683,37 @@ async function generateStructuredJson({
       };
     } catch (error) {
       lastError = error;
+      const canFallback = isRetryableModelError(error)
+        && configuredFallbackId
+        && configuredFallbackId !== attempt.providerId
+        && !fallbackAttempted;
+      if (canFallback) {
+        fallbackAttempted = true;
+        try {
+          const fallbackProvider = await getRewriteProvider(configuredFallbackId);
+          if (providerState) {
+            providerState.activeProviderId = configuredFallbackId;
+            providerState.fallbackUsed = true;
+          }
+          onFallback?.({ fromProvider: provider, toProvider: fallbackProvider, error });
+          attempts.unshift({ providerId: configuredFallbackId, retryAttempt: 0 });
+          continue;
+        } catch (fallbackError) {
+          const sourceLabel = provider?.label || attempt.providerId;
+          lastError = new Error(`${sourceLabel} 调用失败，且备用 API 不可用：${fallbackError instanceof Error ? fallbackError.message : String(fallbackError)}`);
+          break;
+        }
+      }
+      if (retriesRemaining > 0) {
+        retriesRemaining -= 1;
+        attempts.push({ providerId: attempt.providerId, retryAttempt: attempt.retryAttempt + 1 });
+      }
     }
   }
   throw new Error(
     lastError instanceof Error
       ? lastError.message
-      : `${requestName}（${provider.label} / ${provider.model}）连续三次生成失败。`,
+      : `${requestName}连续生成失败。`,
   );
 }
 
@@ -4278,7 +4362,53 @@ async function generateMomentsPostJson(body = {}) {
   };
 }
 
-async function generateMomentsPostJsonV2(body = {}) {
+const MOMENTS_MODEL_REQUEST_TIMEOUT_MS = 60_000;
+const MOMENTS_PROGRESS_TTL_MS = 15 * 60_000;
+const momentsProgressJobs = new Map();
+
+function normalizeMomentsProgressId(value) {
+  return String(value || "").replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 180);
+}
+
+function pruneMomentsProgressJobs(now = Date.now()) {
+  for (const [id, job] of momentsProgressJobs) {
+    if (now - job.updatedAt > MOMENTS_PROGRESS_TTL_MS) momentsProgressJobs.delete(id);
+  }
+}
+
+function createMomentsProgressJob(progressId) {
+  const id = normalizeMomentsProgressId(progressId);
+  if (!id) return "";
+  pruneMomentsProgressJobs();
+  momentsProgressJobs.set(id, {
+    id,
+    status: "running",
+    progress: 3,
+    label: "正在提交生成任务",
+    startedAt: Date.now(),
+    updatedAt: Date.now(),
+  });
+  return id;
+}
+
+function updateMomentsProgressJob(progressId, progress, label, status = "running") {
+  const id = normalizeMomentsProgressId(progressId);
+  const job = id ? momentsProgressJobs.get(id) : null;
+  if (!job) return;
+  job.progress = Math.max(0, Math.min(100, Math.round(Number(progress) || 0)));
+  job.label = String(label || job.label || "正在生成");
+  job.status = status;
+  job.updatedAt = Date.now();
+}
+
+function getMomentsProgressJob(progressId) {
+  pruneMomentsProgressJobs();
+  const id = normalizeMomentsProgressId(progressId);
+  const job = id ? momentsProgressJobs.get(id) : null;
+  return job ? { ...job } : null;
+}
+
+async function generateMomentsPostJsonV2(body = {}, { onProgress = () => {} } = {}) {
   const sourceText = String(body.text || "").trim();
   const persona = String(body.persona || "").trim();
   if (!sourceText) throw new Error("请先填写朋友圈文案输入区。");
@@ -4297,7 +4427,39 @@ async function generateMomentsPostJsonV2(body = {}) {
   const toneStrategy = momentsToneStrategy(tone);
   const intentStrategy = momentsIntentStrategy(intent);
   const referenceStrategy = momentsReferenceStrategy(referenceStyle);
-  const providerId = String(body.provider || readSettings().rewrite?.defaultProvider || "").trim();
+  const primaryProviderId = String(body.provider || readSettings().rewrite?.defaultProvider || "").trim();
+  const fallbackProviderId = body.fallbackProvider === undefined
+    ? "deepseek"
+    : String(body.fallbackProvider || "").trim();
+  const providerState = {
+    activeProviderId: primaryProviderId,
+    fallbackProviderId,
+    fallbackUsed: false,
+  };
+  let currentProgress = 5;
+  const reportProgress = (progress, label) => {
+    currentProgress = Math.max(currentProgress, Math.round(Number(progress) || 0));
+    onProgress(currentProgress, label);
+  };
+  const runMomentsStage = async (progress, label, options) => {
+    reportProgress(progress, label);
+    return generateStructuredJson({
+      ...options,
+      providerId: providerState.activeProviderId,
+      fallbackProviderId: providerState.fallbackProviderId,
+      providerState,
+      maxAttempts: 1,
+      requestTimeoutMs: MOMENTS_MODEL_REQUEST_TIMEOUT_MS,
+      onFallback: ({ fromProvider, toProvider, error }) => {
+        const reason = error?.code === "MODEL_REQUEST_TIMEOUT"
+          ? "超时"
+          : Number(error?.status) === 429
+            ? "限流"
+            : `HTTP ${error?.status || "5xx"}`;
+        reportProgress(progress, `${label}：${fromProvider?.label || "主 API"}${reason}，已切换到 ${toProvider?.label || "备用 API"}`);
+      },
+    });
+  };
   const imageCountRule = fixedImageCount
     ? `必须生成 ${fixedImageCount} 张配图。`
     : "根据成品文案判断生成 1-3 张配图：短内容 1 张；有误区+方法 2 张；有误区+方法+结果状态 3 张。";
