@@ -9465,6 +9465,12 @@ audio {
   margin-bottom: 8px;
 }
 
+.kinetic-card-head strong {
+  min-width: 0;
+  font-size: 14px;
+  line-height: 1.2;
+}
+
 .kinetic-card-head span,
 .kinetic-card small,
 .kinetic-preview-toolbar span {
@@ -9492,6 +9498,109 @@ audio {
   padding: 9px 10px;
 }
 
+.kinetic-text-controls {
+  gap: 8px;
+}
+
+.kinetic-text-controls .kinetic-card {
+  position: relative;
+  overflow: hidden;
+  border-color: rgba(57, 69, 92, .92);
+  background:
+    linear-gradient(180deg, rgba(20, 25, 37, .98), rgba(13, 18, 27, .98));
+  padding: 9px;
+}
+
+.kinetic-text-controls .kinetic-card::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(135, 116, 255, .55), transparent);
+  opacity: .65;
+}
+
+.kinetic-text-controls .kinetic-card-head {
+  min-height: 24px;
+  align-items: start;
+  margin-bottom: 7px;
+  border-bottom: 1px solid rgba(51, 64, 88, .65);
+  padding-bottom: 6px;
+}
+
+.kinetic-text-controls .kinetic-card-head span {
+  max-width: 118px;
+  overflow: hidden;
+  border: 1px solid rgba(102, 80, 232, .28);
+  border-radius: 999px;
+  padding: 2px 6px;
+  color: #a9cfff;
+  background: rgba(102, 80, 232, .08);
+  font-size: 10px;
+  line-height: 1.25;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kinetic-text-controls label {
+  gap: 4px;
+  margin: 0 0 8px;
+  color: #8fa0ba;
+  font-size: 12px;
+}
+
+.kinetic-text-controls label > span {
+  line-height: 1.2;
+}
+
+.kinetic-text-controls input[type="text"],
+.kinetic-text-controls select {
+  min-height: 34px;
+  margin: 0;
+  border-radius: 7px;
+  padding: 0 10px;
+  font-size: 13px;
+}
+
+.kinetic-text-controls input[type="text"] {
+  overflow: hidden;
+  font-weight: 700;
+  text-overflow: ellipsis;
+}
+
+.kinetic-text-controls button {
+  min-height: 34px;
+  border-radius: 7px;
+  padding: 0 11px;
+  font-size: 13px;
+}
+
+#kineticAnalyze {
+  width: 100%;
+}
+
+#kineticChooseBackground,
+#kineticChooseBgm {
+  width: 100%;
+}
+
+#kineticBackgroundName,
+#kineticBgmName {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  margin-top: 6px;
+  border: 1px solid rgba(51, 64, 88, .55);
+  border-radius: 6px;
+  padding: 5px 7px;
+  background: rgba(8, 12, 18, .48);
+  font-size: 11px;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .kinetic-range-row {
   grid-template-columns: 78px 1fr 48px !important;
   align-items: center;
@@ -9505,6 +9614,28 @@ audio {
 .kinetic-check {
   grid-template-columns: auto 1fr !important;
   align-items: center;
+}
+
+.kinetic-text-controls .kinetic-range-row,
+.kinetic-text-controls .kinetic-check {
+  min-height: 32px;
+  margin: 7px 0 0;
+  border: 1px solid rgba(51, 64, 88, .55);
+  border-radius: 6px;
+  padding: 5px 7px;
+  background: rgba(8, 12, 18, .32);
+}
+
+.kinetic-text-controls .kinetic-range-row input[type="range"] {
+  min-height: 18px;
+  padding: 0;
+}
+
+.kinetic-text-controls .kinetic-check input {
+  width: 14px;
+  min-height: 14px;
+  height: 14px;
+  padding: 0;
 }
 
 .kinetic-preview-card {
@@ -9798,7 +9929,7 @@ audio {
 }
 
 .kinetic-text-maker {
-  gap: 10px;
+  gap: 8px;
 }
 
 .kinetic-text-layout {
@@ -9806,7 +9937,10 @@ audio {
   gap: 12px;
 }
 
-.kinetic-text-controls,
+.kinetic-text-controls {
+  gap: 8px;
+}
+
 .kinetic-text-workspace {
   gap: 10px;
 }
@@ -9822,8 +9956,8 @@ audio {
 }
 
 .kinetic-text-controls label {
-  gap: 5px;
-  margin-top: 8px;
+  gap: 4px;
+  margin: 0 0 8px;
 }
 
 .kinetic-preview-toolbar {
