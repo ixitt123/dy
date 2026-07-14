@@ -206,10 +206,6 @@ export function createIanXiaoheiRoutes({
         outputDir: outputRoot,
         savedApis: savedApiSummaries(settings),
         integrations: {
-          imageProvider: "火山方舟 Seedream",
-          imageProviderId: "volcengine_ark",
-          imageProviderConfigured: Boolean(settings.imageProviders?.volcengine_ark?.apiKey),
-          imageModel: String(settings.imageProviders?.volcengine_ark?.model || ""),
           jianyingDraftDir: String(settings.jianyingDraftDir || settings.jianying?.draftDir || ""),
           outputDir: outputRoot,
         },
@@ -1725,24 +1721,6 @@ function savedApiSummaries(settings = {}) {
       model: provider?.model,
       baseUrl: provider?.baseUrl,
       activeDefault: rewriteDefault === id,
-      testable: true,
-    });
-  }
-
-  const imageProviders = settings.imageProviders || {};
-  const imageDefault = settings.modelMap?.image?.provider || settings.modelMapping?.image?.provider || "volcengine_ark";
-  const imageLabels = { volcengine_ark: "火山方舟 Seedream", jimeng: "即梦 AI" };
-  for (const [id, provider] of Object.entries(imageProviders)) {
-    push({
-      id,
-      label: provider?.label || imageLabels[id] || id,
-      group: "图片生成",
-      feature: "分镜配图、本地图片资产",
-      configured: Boolean(provider?.apiKey),
-      apiKey: provider?.apiKey,
-      model: provider?.model,
-      baseUrl: provider?.baseUrl,
-      activeDefault: imageDefault === id,
       testable: true,
     });
   }
