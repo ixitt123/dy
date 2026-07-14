@@ -8,6 +8,14 @@ const MAX_UPLOAD_BYTES = 320 * 1024 * 1024;
 function contentType(filePath) {
   const extension = path.extname(filePath).toLowerCase();
   if (extension === ".mp4") return "video/mp4";
+  if (extension === ".webm") return "video/webm";
+  if (extension === ".mov") return "video/quicktime";
+  if ([".jpg", ".jpeg"].includes(extension)) return "image/jpeg";
+  if (extension === ".png") return "image/png";
+  if (extension === ".webp") return "image/webp";
+  if (extension === ".mp3") return "audio/mpeg";
+  if (extension === ".wav") return "audio/wav";
+  if (extension === ".m4a") return "audio/mp4";
   if (extension === ".zip") return "application/zip";
   if (extension === ".srt") return "application/x-subrip; charset=utf-8";
   return "application/octet-stream";

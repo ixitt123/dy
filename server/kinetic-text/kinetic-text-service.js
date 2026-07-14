@@ -653,6 +653,9 @@ export function createKineticTextService({
       video: project.outputs?.finalVideo,
       package: project.outputs?.materialZip,
       srt: project.outputs?.srtPath,
+      background: project.background?.path,
+      bgm: project.audioMix?.localPath,
+      tts: project.audioPath,
     };
     const filePath = allowed[key];
     if (!filePath || !fs.existsSync(filePath)) return null;
