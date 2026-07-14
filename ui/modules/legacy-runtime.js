@@ -344,6 +344,9 @@ const momentsPersonaText = document.querySelector("#momentsPersonaText");
 const momentsPersonaStatus = document.querySelector("#momentsPersonaStatus");
 const momentsLocalMaterials = document.querySelector("#momentsLocalMaterials");
 const momentsVisualStyle = document.querySelector("#momentsVisualStyle");
+const momentsWordCount = document.querySelector("#momentsWordCount");
+const momentsWordCountCustom = document.querySelector("#momentsWordCountCustom");
+const momentsEmojiMode = document.querySelector("#momentsEmojiMode");
 const momentsImageCount = document.querySelector("#momentsImageCount");
 const momentsTone = document.querySelector("#momentsTone");
 const momentsIntent = document.querySelector("#momentsIntent");
@@ -1767,6 +1770,9 @@ function collectMomentsPayload() {
     personaName: momentsPersonaName?.value.trim() || persona?.name || "",
     localMaterials: momentsLocalMaterials?.value.trim() || "",
     visualStyle: momentsVisualStyle?.value || "auto",
+    wordCount: momentsWordCount?.value || "100",
+    wordCountCustom: momentsWordCountCustom?.value || "100",
+    addEmoji: momentsEmojiMode?.value || "no",
     imageCount: momentsImageCount?.value === "auto" ? 0 : Number(momentsImageCount?.value || 0),
     tone: momentsTone?.value || "强反差急转弯",
     intent: momentsIntent?.value || "冲突反转",
@@ -1780,6 +1786,9 @@ function saveMomentsDraft() {
       text: momentsCopyInput?.value || "",
       localMaterials: momentsLocalMaterials?.value || "",
       visualStyle: momentsVisualStyle?.value || "auto",
+      wordCount: momentsWordCount?.value || "100",
+      wordCountCustom: momentsWordCountCustom?.value || "100",
+      addEmoji: momentsEmojiMode?.value || "no",
       imageCount: momentsImageCount?.value || "auto",
       tone: momentsTone?.value || "强反差急转弯",
       intent: momentsIntent?.value || "冲突反转",
@@ -1796,6 +1805,9 @@ function loadMomentsDraft() {
     if (draft.text && momentsCopyInput && !momentsCopyInput.value.trim()) momentsCopyInput.value = draft.text;
     if (draft.localMaterials && momentsLocalMaterials) momentsLocalMaterials.value = draft.localMaterials;
     if (draft.visualStyle && momentsVisualStyle) momentsVisualStyle.value = draft.visualStyle;
+    if (draft.wordCount && momentsWordCount) momentsWordCount.value = draft.wordCount;
+    if (draft.wordCountCustom && momentsWordCountCustom) momentsWordCountCustom.value = draft.wordCountCustom;
+    if (draft.addEmoji && momentsEmojiMode) momentsEmojiMode.value = draft.addEmoji;
     if (draft.imageCount && momentsImageCount) momentsImageCount.value = draft.imageCount;
     if (draft.tone && momentsTone) momentsTone.value = draft.tone;
     if (draft.intent && momentsIntent) momentsIntent.value = draft.intent;
@@ -1806,6 +1818,13 @@ function loadMomentsDraft() {
       renderMomentsResult(currentMomentsResult);
     }
   } catch {}
+}
+
+function syncMomentsWordCountCustom() {
+  if (!momentsWordCountCustom) return;
+  const isCustom = momentsWordCount?.value === "custom";
+  momentsWordCountCustom.hidden = !isCustom;
+  if (isCustom) momentsWordCountCustom.focus();
 }
 
 function momentsPromptText(item) {
@@ -6765,6 +6784,12 @@ momentsImagePromptList?.addEventListener("click", (event) => {
   }
 });
 
+momentsWordCount?.addEventListener("change", () => {
+  syncMomentsWordCountCustom();
+  saveMomentsDraft();
+});
+syncMomentsWordCountCustom();
+
 momentsImagePromptList?.addEventListener("change", (event) => {
   const input = event.target.closest("[data-moments-material-file]");
   if (!input) return;
@@ -6779,6 +6804,9 @@ momentsImagePromptList?.addEventListener("change", (event) => {
   momentsCopyInput,
   momentsLocalMaterials,
   momentsVisualStyle,
+  momentsWordCount,
+  momentsWordCountCustom,
+  momentsEmojiMode,
   momentsImageCount,
   momentsTone,
   momentsIntent,

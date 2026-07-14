@@ -633,9 +633,30 @@
                 <label>
                   视觉风格
                   <select id="momentsVisualStyle">
-                    <option value="auto" selected>自动判断</option>
-                    <option value="xiaohei">小黑漫画解释类</option>
-                    <option value="realistic">真实生活/产品场景类</option>
+                    <option value="auto" selected>自动判断（宣传导向）</option>
+                    <option value="product-service">产品/课程/服务宣传</option>
+                    <option value="store-event">门店/活动/节日宣传</option>
+                    <option value="knowledge-growth">知识/成长/职场分享</option>
+                    <option value="daily-life">日常/生活/情绪记录</option>
+                    <option value="personal-brand">个人品牌/专业人设</option>
+                  </select>
+                </label>
+                <label>
+                  建议字数
+                  <select id="momentsWordCount">
+                    <option value="100" selected>100字左右（默认）</option>
+                    <option value="200">200字左右</option>
+                    <option value="300">300字左右</option>
+                    <option value="custom">自定义</option>
+                  </select>
+                  <input id="momentsWordCountCustom" class="moments-custom-input" type="number" min="50" max="600" step="10" value="100" placeholder="输入建议字数" hidden />
+                  <small>按建议字数上下浮动，保证表达自然。</small>
+                </label>
+                <label>
+                  添加表情
+                  <select id="momentsEmojiMode">
+                    <option value="no" selected>否</option>
+                    <option value="yes">是（按文案适量添加）</option>
                   </select>
                 </label>
                 <label>
@@ -662,13 +683,12 @@
                 <label>
                   生成方式
                   <select id="momentsIntent">
-                    <option value="冲突反转" selected>冲突反转</option>
-                    <option value="落差案例">落差案例</option>
-                    <option value="视觉锤图文">视觉锤图文</option>
-                    <option value="不强销售的自然分享">不强销售的自然分享</option>
-                    <option value="经验分享">经验分享</option>
-                    <option value="案例启发">案例启发</option>
-                    <option value="观点表达">观点表达</option>
+                    <option value="auto-promo" selected>自动判断宣传方式</option>
+                    <option value="product-value">产品/课程价值介绍</option>
+                    <option value="event-promo">门店/活动转化</option>
+                    <option value="experience-share">案例/体验分享</option>
+                    <option value="knowledge-lead">专业知识引导</option>
+                    <option value="soft-cta">温和行动邀请</option>
                   </select>
                 </label>
                 <label>
@@ -679,7 +699,6 @@
                     <option value="网络热梗">网络热梗</option>
                     <option value="金句名句">金句名句</option>
                     <option value="古诗经典">古诗经典</option>
-                    <option value="不用引用">不用引用</option>
                   </select>
                 </label>
               </div>
