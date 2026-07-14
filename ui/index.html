@@ -720,7 +720,6 @@
               </div>
               <div class="moments-actions compact">
                 <button id="copyMomentsPrompts" class="ghost small" type="button">复制提示词</button>
-                <button id="generateMomentsImages" class="primary small" type="button">调用图片 API 生成图片</button>
               </div>
             </div>
             <div class="moments-assets-grid">
@@ -730,13 +729,6 @@
                   <h3 class="moments-subtitle">配图提示词</h3>
                 </div>
                 <div id="momentsImagePromptList" class="moments-prompt-list empty">生成后会显示 1-3 张配图提示词，点击“复制提示词”会一次复制全部。</div>
-              </div>
-              <div>
-                <div>
-                  <span class="section-eyebrow">Generated</span>
-                  <h3 class="moments-subtitle">生成图片预览</h3>
-                </div>
-                <div id="momentsGeneratedImages" class="moments-image-grid"></div>
               </div>
             </div>
           </section>
@@ -1537,79 +1529,6 @@
         </div>
       </section>
 
-      <section class="image-studio-page" id="imageStudioPanel">
-        <div class="image-studio-header">
-          <h2>AI 图片生产中心</h2>
-          <p class="text-secondary">输入 Prompt，调用系统设置里的图片生成 API。</p>
-        </div>
-        <div class="image-studio-body">
-          <div class="image-studio-input">
-            <div class="image-config-status" id="imageConfigStatus">
-              <span>正在读取图片 API 配置...</span>
-              <button class="ghost small" id="openImageSettings" type="button">去系统设置</button>
-            </div>
-            <div class="image-import-panel" id="imageDirectorImportPanel" hidden>
-              <label for="imageDirectorPromptSelect">已导入生产线分镜</label>
-              <div class="image-import-row">
-                <select id="imageDirectorPromptSelect"></select>
-                <button class="ghost small" id="useDirectorPrompt" type="button">使用当前镜头</button>
-                <button class="ghost small" id="generateDirectorPromptImage" type="button">生成当前镜头</button>
-                <button class="ghost small" id="generateDirectorPromptSet" type="button">一键生成整套分镜图</button>
-                <button class="ghost small" id="exportDirectorPromptChatGptSet" type="button">导出ChatGPT生图词</button>
-                <button class="ghost small" id="clearDirectorPrompts" type="button">清空导入</button>
-              </div>
-            </div>
-            <label for="imageProviderSelect">图片 Provider</label>
-            <select id="imageProviderSelect" class="input-select"></select>
-            <label for="imagePrompt">图片描述（Prompt）</label>
-            <textarea id="imagePrompt" rows="4" placeholder="描述你想生成的图片内容，例如：一个阳光明媚的教室，老师在黑板上写英语单词，学生们认真听讲"></textarea>
-            <div class="image-studio-controls">
-              <div class="control-row">
-                <label>生成数量</label>
-                <div class="btn-group" id="imageCountGroup">
-                  <button class="btn-count active" data-count="1">1张</button>
-                  <button class="btn-count" data-count="4">4张</button>
-                  <button class="btn-count" data-count="9">9张</button>
-                </div>
-              </div>
-              <div class="control-row">
-                <label>画面比例</label>
-                <select id="imageAspectRatio" class="input-select">
-                  <option value="9:16">9:16 竖版｜抖音、快手、视频号、小红书短视频</option>
-                  <option value="16:9">16:9 横版｜B站、西瓜、课程、访谈、横屏封面</option>
-                  <option value="1:1" selected>1:1 正方形｜朋友圈、小红书图文、商品图、头像海报</option>
-                </select>
-              </div>
-            </div>
-            <button class="primary" id="imageGenerateBtn" type="button">生成图片</button>
-            <div class="image-progress" id="imageProgress" hidden>
-              <div class="rewrite-progress-line">
-                <span id="imageProgressLabel">等待生成</span>
-                <strong id="imageProgressPercent">0%</strong>
-              </div>
-              <div class="progress-track" aria-hidden="true">
-                <div class="progress-bar" id="imageProgressBar"></div>
-              </div>
-            </div>
-            <div id="imageGenerateStatus" class="status-text"></div>
-          </div>
-          <div class="image-studio-results">
-            <div class="results-head">
-              <h3>生成结果</h3>
-              <div class="results-tabs">
-                <button class="tab-link active" data-tab="latest">最新</button>
-                <button class="tab-link" data-tab="assets">资产库</button>
-              </div>
-            </div>
-            <div class="results-grid" id="imageResultsGrid">
-              <div class="empty-state">输入 Prompt 后点击生成</div>
-            </div>
-            <div class="assets-grid" id="imageAssetsGrid" style="display:none">
-              <div class="empty-state">暂无保存的图片资产</div>
-            </div>
-          </div>
-        </div>
-      </section>
       </section>
 
       <section class="workbench-page" data-page="settings" id="settingsPage">
@@ -1638,7 +1557,7 @@
           <div class="settings-summary" id="v2SettingsSummary"></div>
           <div class="settings-category-grid" aria-label="设置分区">
             <span>AI 文本模型</span><span>语音识别模型</span><span>TTS 配音模型</span>
-            <span>图片生成模型</span><span>视频生成模型</span><span>下载设置</span>
+            <span>视频生成模型</span><span>下载设置</span>
             <span>输出设置</span><span>剪映模板设置</span><span>系统状态检测</span>
           </div>
           <section class="settings-card provider-card">
