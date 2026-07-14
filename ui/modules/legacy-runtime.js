@@ -1928,7 +1928,8 @@ function renderMomentsResult(result) {
     const reference = result.reference_used ? ` · ${result.reference_style || "已引用"}：${result.reference_used}` : "";
     const target = result.word_count_target ? ` · 建议 ${result.word_count_target} 字` : "";
     const emoji = result.add_emoji ? " · 已按语义添加表情" : " · 不添加表情";
-    momentsResultMeta.textContent = `${result.theme || "朋友圈图文"} · ${images.length} 张配图提示词 · ${momentsCharacterCount(momentsPostOutput?.value || result.post)} 字${target}${emoji}${reference}`;
+    const visualStyle = result.visual_style_label ? ` · ${result.visual_style_label}` : "";
+    momentsResultMeta.textContent = `${result.theme || "朋友圈图文"} · ${images.length} 张配图提示词 · ${momentsCharacterCount(momentsPostOutput?.value || result.post)} 字${target}${emoji}${visualStyle}${reference}`;
   }
   if (!momentsImagePromptList) return;
   if (!images.length) {

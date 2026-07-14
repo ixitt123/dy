@@ -3923,17 +3923,24 @@ function momentsReferenceIsUsed(post = "", referenceUsed = "", referenceStyle = 
   return compactPost.includes(compactRef.slice(0, probeLength));
 }
 
-function momentsSeriesStyleLock(style = "xiaohei", theme = "") {
+function momentsSeriesStyleLock(style = "xiaohei", theme = "", stylePreset = "", mainCharacter = "") {
   const themeText = String(theme || "本条朋友圈主题").trim();
+  if (stylePreset) {
+    const skill = getMomentsVisualStyleSkill(stylePreset);
+    const characterRule = String(mainCharacter || "").trim()
+      ? `主角保持一致：${String(mainCharacter).trim().slice(0, 300)}，并且每张图都参与核心动作。`
+      : "主角沿用所选 Skill 默认设定，并在整组图片中保持一致。";
+    return `统一系列风格：${skill.label}。统一主题为「${themeText}」。${skill.rule}${characterRule}整组图片禁止混入其他 Skill、PPT、商业海报、3D 或不相关画风。`;
+  }
   if (style === "realistic") {
     return `统一系列风格：本组所有图片必须是真实生活/产品场景类，统一主题为「${themeText}」。保持同一套真实工作/学习现场质感、同一色调、同一镜头语言、同一主物件系统；禁止混入小黑漫画、海报、PPT、卡通插画或不同画风。`;
   }
   return `统一系列风格：本组所有图片必须是小黑漫画解释类，统一主题为「${themeText}」。保持 16:9 白底、黑色手绘线稿、小黑角色、少量红橙蓝手写批注、大量留白；禁止混入真实摄影、商业海报、PPT、3D、复杂插画或不同画风。`;
 }
 
-function ensureMomentsSeriesPrompt(prompt = "", style = "xiaohei", theme = "") {
+function ensureMomentsSeriesPrompt(prompt = "", style = "xiaohei", theme = "", stylePreset = "", mainCharacter = "") {
   const text = String(prompt || "").trim();
-  const lock = momentsSeriesStyleLock(style, theme);
+  const lock = momentsSeriesStyleLock(style, theme, stylePreset, mainCharacter);
   if (!text) return lock;
   if (/统一系列风格/.test(text)) return text;
   return `${lock}\n\n${text}`;
@@ -3958,10 +3965,11 @@ function normalizeMomentsResult(raw = {}, fallback = {}) {
   if (!post) throw new Error("朋友圈生成结果缺少文案。");
   const theme = String(raw.theme || fallback.theme || "朋友圈图文").trim().slice(0, 120);
   const seriesStyle = normalizeMomentsSeriesStyle(raw, fallback);
+  const stylePreset = normalizeMomentsVisualStyle(fallback.visualStyle);
   const images = (Array.isArray(raw.images) ? raw.images : [])
     .slice(0, imageCount)
     .map((item, index) => {
-      const prompt = ensureMomentsSeriesPrompt(item.prompt || "", seriesStyle, theme);
+      const prompt = ensureMomentsSeriesPrompt(item.prompt || "", seriesStyle, theme, stylePreset, fallback.mainCharacter);
       const materialHint = String(item.local_material_hint || item.localMaterialHint || fallback.localMaterials || "").trim();
       const cleanMaterialHint = /无本地素材|暂无本地素材/i.test(materialHint) ? "" : materialHint;
       return {
@@ -3984,10 +3992,13 @@ function normalizeMomentsResult(raw = {}, fallback = {}) {
     image_count: Math.min(imageCount, images.length),
     theme,
     series_style: seriesStyle,
+    visual_style: stylePreset,
+    visual_style_label: getMomentsVisualStyleSkill(stylePreset).label,
     reference_used: String(raw.reference_used || raw.referenceUsed || "").trim().slice(0, 220),
     reference_style: String(raw.reference_style || raw.referenceStyle || fallback.referenceStyle || "").trim(),
     add_emoji: fallback.addEmoji === true,
     word_count_target: Number(fallback.wordCount?.target || 0) || 0,
+    main_character: String(fallback.mainCharacter || "").trim().slice(0, 300),
     persona_used: String(raw.persona_used || fallback.persona || "").trim().slice(0, 1000),
     notes: Array.isArray(raw.notes) ? raw.notes.map((item) => String(item).trim()).filter(Boolean).slice(0, 6) : [],
     images,
@@ -4428,6 +4439,7 @@ async function generateMomentsPostJsonV2(body = {}) {
       imageStyle,
       localMaterials,
       persona,
+      mainCharacter,
       wordCount,
       addEmoji,
       referenceStyle,
