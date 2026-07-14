@@ -1132,7 +1132,7 @@ function renderPlan(plan) {
         <div class="prompt-actions">
           <button type="button" data-prompt-action="choose-image" data-index="${shot.index}">${image ? "替换本地图片" : "添加本地图片素材"}</button>
           <input hidden type="file" accept=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp" data-shot-upload="${shot.index}" />
-          ${image ? `<span class="binding-ok">已绑定 ${escapeHtml(image.source === "local_upload" ? "本地图片" : "AI 图片")}</span>` : ""}
+          ${image ? `<span class="binding-ok">已绑定本地图片</span>` : ""}
         </div>
         ${image ? `
           <div class="shot-image-state">
@@ -1161,7 +1161,7 @@ function renderImages(images, errors = []) {
   els.imageCount.textContent = String(images.length);
   if (!images.length && !errors.length) {
     els.imageResults.className = "image-list empty";
-    els.imageResults.textContent = "生成或上传后的图片会显示在这里。";
+    els.imageResults.textContent = "上传并确认后的图片会显示在这里。";
     return;
   }
   els.imageResults.className = "image-list";
