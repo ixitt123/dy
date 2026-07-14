@@ -9831,6 +9831,23 @@ audio {
   max-height: 300px;
 }
 
+.kinetic-rule-status {
+  margin: -2px 0 6px;
+  border: 1px solid rgba(116, 92, 255, .35);
+  border-radius: 6px;
+  padding: 5px 7px;
+  color: #b9d7ff;
+  background: rgba(116, 92, 255, .08);
+  font-size: 11px;
+  line-height: 1.25;
+}
+
+.kinetic-rule-status.warn {
+  border-color: rgba(240, 207, 99, .42);
+  color: #f4d879;
+  background: rgba(240, 207, 99, .08);
+}
+
 .kinetic-timeline-head,
 .kinetic-timeline-row {
   grid-template-columns: 28px 60px 60px minmax(150px, 2fr) minmax(112px, 1fr) 76px 72px 34px;

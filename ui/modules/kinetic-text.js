@@ -126,6 +126,24 @@ function renderTimeline() {
   }).join("");
 }
 
+function renderTimelineRuleStatus() {
+  const container = $("#kineticTimelineRuleStatus");
+  if (!container) return;
+  const validation = state.project?.timelineValidation;
+  if (!state.project || !validation) {
+    container.hidden = true;
+    container.textContent = "";
+    return;
+  }
+  const warnings = Array.isArray(validation.warnings) ? validation.warnings : [];
+  container.hidden = false;
+  container.classList.toggle("warn", warnings.length > 0);
+  container.classList.toggle("ok", warnings.length === 0);
+  container.textContent = warnings.length
+    ? `时间轴规则提醒：${warnings.slice(0, 2).join("；")}${warnings.length > 2 ? ` 等 ${warnings.length} 项` : ""}`
+    : "时间轴规则已应用：音频、文案、时间戳字幕按同一项目绑定。";
+}
+
 function mediaUrl(kind) {
   return state.project ? `/api/kinetic-text/file?id=${encodeURIComponent(state.project.id)}&kind=${encodeURIComponent(kind)}&v=${encodeURIComponent(state.project.updatedAt || Date.now())}` : "";
 }
@@ -267,7 +285,7 @@ function drawPreview() {
   if (!state.project) return;
   const effect = effectById(state.project.effectId);
   const effectNumber = Number(effect?.number || 1);
-  const segment = state.project.segments.find((item) => state.currentTime >= item.start && state.currentTime <= item.end) || state.project.segments[0];
+  const segment = state.project.segments.find((item) => state.currentTime >= item.start && state.currentTime <= item.end);
   if (segment) {
     const localDuration = Math.max(0.1, Math.min(0.65, segment.end - segment.start));
     const progress = Math.max(0, Math.min(1, (state.currentTime - segment.start) / localDuration));
@@ -376,6 +394,7 @@ function renderProject() {
   renderProjects();
   renderEffects();
   renderTimeline();
+  renderTimelineRuleStatus();
   if (!project) { drawPreview(); return; }
   $("#kineticTextTitle").value = project.title || "";
   $("#kineticBackgroundMode").value = project.background?.mode || "black";
@@ -425,6 +444,7 @@ function scheduleSave(changes = {}) {
       const index = state.projects.findIndex((item) => item.id === state.project.id);
       if (index >= 0) state.projects[index] = state.project;
       renderProjects();
+      renderTimelineRuleStatus();
     } catch (error) {
       setProgress(state.project.progress || 0, `自动保存失败：${error.message}`);
     }

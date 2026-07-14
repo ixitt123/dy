@@ -635,9 +635,17 @@ export function createKineticTextService({
     let usedProvider = "local";
     const available = typeof modelRouter?.listProviders === "function" ? modelRouter.listProviders().map((item) => item.id) : [];
     const candidates = [...new Set([providerId, "deepseek", "mimo"].filter((item) => item && available.includes(item)))];
+    const systemPrompt = [
+      "你负责中文动态大字字幕排版。只返回 JSON 数组。",
+      "每一项必须包含 id、keywords（1-3 个重点词）和 lineBreaks（建议换行的字符索引数组）。",
+      "不得改写字幕原文，不得改变字幕时间戳。",
+      "必须遵守下面的项目 skill 规则：",
+      timelineSkillRules,
+    ].join("\n\n");
     for (const candidate of candidates) {
       try {
         const response = await modelRouter.generateWithProvider(candidate, [
+          { role: "system", content: systemPrompt },
           { role: "system", content: "你负责中文动态字幕排版。只返回 JSON 数组，每项包含 id、keywords（1-2个重点词）和 lineBreaks（建议换行的字符索引数组）。不要解释。" },
           { role: "user", content: JSON.stringify(project.segments.map(({ id, text }) => ({ id, text }))) },
         ], { temperature: 0.2, maxTokens: 1800 });
