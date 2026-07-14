@@ -6686,6 +6686,30 @@ body[data-active-module="xiaohei-video"] .floating-workflow-guide [data-nav="xia
   padding: 4px 0 8px;
 }
 
+summary.provider-group-title,
+summary.settings-card-head {
+  cursor: pointer;
+  list-style: none;
+}
+
+summary.provider-group-title::-webkit-details-marker,
+summary.settings-card-head::-webkit-details-marker {
+  display: none;
+}
+
+summary.provider-group-title::after,
+summary.settings-card-head::after {
+  content: "⌄";
+  color: #7d8798;
+  font-size: 14px;
+  transition: transform 160ms ease;
+}
+
+details[open] > summary.provider-group-title::after,
+details[open] > summary.settings-card-head::after {
+  transform: rotate(180deg);
+}
+
 .provider-group-title strong {
   color: #eef2f8;
   font-size: 13px;
@@ -6761,6 +6785,7 @@ body[data-active-module="xiaohei-video"] .floating-workflow-guide [data-nav="xia
 }
 
 .provider-fields input,
+.provider-fields select,
 .model-map-row select {
   margin-top: 5px;
   border-color: #303846;

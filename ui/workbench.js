@@ -1949,7 +1949,7 @@ function setupV2Settings() {
   }
 
   function providerInputTemplate(provider) {
-    const datalistId = `models-${provider.id}`;
+    const models = [...new Set([...(provider.models || []), provider.model].filter(Boolean))];
     return `
       <label>
         API Key
@@ -1973,10 +1973,9 @@ function setupV2Settings() {
       ${provider.supportsModel ? `
         <label>
           默认模型
-          <input class="provider-input" data-field="model" data-provider="${html(provider.id)}" type="text" value="${html(provider.model || "")}" placeholder="模型名" list="${datalistId}" />
-          <datalist id="${datalistId}">
-            ${(provider.models || []).map((model) => `<option value="${html(model)}"></option>`).join("")}
-          </datalist>
+          <select class="provider-input" data-field="model" data-provider="${html(provider.id)}">
+            ${models.map((model) => `<option value="${html(model)}" ${String(provider.model || "") === String(model) ? "selected" : ""}>${html(model)}</option>`).join("")}
+          </select>
         </label>
       ` : ""}
       ${provider.supportsFormat ? `
@@ -1993,11 +1992,11 @@ function setupV2Settings() {
   function renderProviders() {
     const groups = groupedProviders();
     providerList.innerHTML = Object.entries(groups).map(([group, providers]) => `
-      <section class="provider-group">
-        <div class="provider-group-title">
+      <details class="provider-group" ${providers.some((provider) => provider.configured) ? "open" : ""}>
+        <summary class="provider-group-title">
           <strong>${html(group)}</strong>
           <span>${providers.filter((provider) => provider.configured).length}/${providers.length} 已配置</span>
-        </div>
+        </summary>
         ${providers.map((provider) => `
           <article class="provider-row" data-provider-row="${html(provider.id)}">
             <div class="provider-main">
@@ -2029,7 +2028,7 @@ function setupV2Settings() {
             <p class="provider-row-status" data-status-for="${html(provider.id)}"></p>
           </article>
         `).join("")}
-      </section>
+      </details>
     `).join("");
   }
 
