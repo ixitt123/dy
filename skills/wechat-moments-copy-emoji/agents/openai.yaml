@@ -1,3 +1,4 @@
 interface:
-  display_name: "Wechat Moments Copy Emoji"
-  short_description: "Help with Wechat Moments Copy Emoji tasks"
+  display_name: "微信朋友圈文案表情"
+  short_description: "生成自然朋友圈文案并按语义使用表情"
+  default_prompt: "Use $wechat-moments-copy-emoji to generate a natural Chinese WeChat Moments post from this source text."

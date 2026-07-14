@@ -1,85 +1,31 @@
 ---
 name: wechat-moments-copy-emoji
-description: [TODO: Complete and informative explanation of what the skill does and when to use it. Include WHEN to use this skill - specific scenarios, file types, or tasks that trigger it.]
+description: Generate or refine natural Chinese WeChat Moments copy with context-aware emoji placement. Use for 朋友圈文案、私域分享、产品或课程宣传文案，以及需要控制“是否添加表情”的中文社交内容。
 ---
 
-# Wechat Moments Copy Emoji
+# 微信朋友圈文案与表情
 
-## Overview
+生成像真人分享的朋友圈文案：事实真实、语气温和、宣传信息清楚但不硬广。表情服务阅读节奏、场景和情绪，不是装饰品。
 
-[TODO: 1-2 sentences explaining what this skill enables]
+## 工作流
 
-## Structuring This Skill
+1. 保留原文中的事实、对象、活动信息和承诺边界；没有依据时不补案例、数据、效果或紧迫感。
+2. 用“场景或观察 → 自然判断 → 具体价值 → 低压力行动邀请”组织正文。短句、自然换行，避免公告腔、AI 套话和强推销。
+3. 根据表情模式处理正文：
+   - `no`：不使用 emoji、颜文字或表情包符号。
+   - `yes`：普通篇幅至少放入 2 个自然表情落点，通常 2–3 个；长文、多个场景或情绪转折较多时，可以增加。只在表情能强化语义、停顿、轻松感或行动提示时使用。
+4. 逐段检查表情效果：不要连续堆叠、不要每句都加、不要用无关或过度兴奋的表情。删除任何删掉后文意不受影响、只是在凑数的表情。
+5. 输出前确认：正文读起来仍像一个人在说话；表情与上下文匹配；引用素材和行动建议都自然融入正文。
 
-[TODO: Choose the structure that best fits this skill's purpose. Common patterns:
+## 表情选择原则
 
-**1. Workflow-Based** (best for sequential processes)
-- Works well when there are clear step-by-step procedures
-- Example: DOCX skill with "Workflow Decision Tree" -> "Reading" -> "Creating" -> "Editing"
-- Structure: ## Overview -> ## Workflow Decision Tree -> ## Step 1 -> ## Step 2...
+- 生活观察或轻松提醒：可用 `🙂`、`👌`、`✨`，但先看语境。
+- 经验、认可或收获：可用 `✅`、`📌`、`🌿`，避免连续使用同类符号。
+- 行动邀请或信息提示：可用 `📝`、`📩`、`👋`，不制造稀缺和焦虑。
+- 避免 `🔥🚀💥` 等夸张营销感表情，除非原文语气本来就强烈且确有必要。
 
-**2. Task-Based** (best for tool collections)
-- Works well when the skill offers different operations/capabilities
-- Example: PDF skill with "Quick Start" -> "Merge PDFs" -> "Split PDFs" -> "Extract Text"
-- Structure: ## Overview -> ## Quick Start -> ## Task Category 1 -> ## Task Category 2...
+## 质量底线
 
-**3. Reference/Guidelines** (best for standards or specifications)
-- Works well for brand guidelines, coding standards, or requirements
-- Example: Brand styling with "Brand Guidelines" -> "Colors" -> "Typography" -> "Features"
-- Structure: ## Overview -> ## Guidelines -> ## Specifications -> ## Usage...
-
-**4. Capabilities-Based** (best for integrated systems)
-- Works well when the skill provides multiple interrelated features
-- Example: Product Management with "Core Capabilities" -> numbered capability list
-- Structure: ## Overview -> ## Core Capabilities -> ### 1. Feature -> ### 2. Feature...
-
-Patterns can be mixed and matched as needed. Most skills combine patterns (e.g., start with task-based, add workflow for complex operations).
-
-Delete this entire "Structuring This Skill" section when done - it's just guidance.]
-
-## [TODO: Replace with the first main section based on chosen structure]
-
-[TODO: Add content here. See examples in existing skills:
-- Code samples for technical skills
-- Decision trees for complex workflows
-- Concrete examples with realistic user requests
-- References to scripts/templates/references as needed]
-
-## Resources (optional)
-
-Create only the resource directories this skill actually needs. Delete this section if no resources are required.
-
-### scripts/
-Executable code (Python/Bash/etc.) that can be run directly to perform specific operations.
-
-**Examples from other skills:**
-- PDF skill: `fill_fillable_fields.py`, `extract_form_field_info.py` - utilities for PDF manipulation
-- DOCX skill: `document.py`, `utilities.py` - Python modules for document processing
-
-**Appropriate for:** Python scripts, shell scripts, or any executable code that performs automation, data processing, or specific operations.
-
-**Note:** Scripts may be executed without loading into context, but can still be read by Codex for patching or environment adjustments.
-
-### references/
-Documentation and reference material intended to be loaded into context to inform Codex's process and thinking.
-
-**Examples from other skills:**
-- Product management: `communication.md`, `context_building.md` - detailed workflow guides
-- BigQuery: API reference documentation and query examples
-- Finance: Schema documentation, company policies
-
-**Appropriate for:** In-depth documentation, API references, database schemas, comprehensive guides, or any detailed information that Codex should reference while working.
-
-### assets/
-Files not intended to be loaded into context, but rather used within the output Codex produces.
-
-**Examples from other skills:**
-- Brand styling: PowerPoint template files (.pptx), logo files
-- Frontend builder: HTML/React boilerplate project directories
-- Typography: Font files (.ttf, .woff2)
-
-**Appropriate for:** Templates, boilerplate code, document templates, images, icons, fonts, or any files meant to be copied or used in the final output.
-
----
-
-**Not every skill requires all three types of resources.**
+- 不因为表情而改变事实或夸大价值。
+- 不把表情放在标题、每段开头或句末成串。
+- 表情可以多于 3 个，但必须随篇幅和内容自然增长；宁可少而准，不要为了数字堆砌。
