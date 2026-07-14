@@ -1097,6 +1097,7 @@ function rewriteHandoffChoicesMarkup() {
     ["cs1-video", "CS1生成器"],
     ["xiaohei-video", "小黑视频风格生成"],
     ["money-printer", "MoneyPrinter"],
+    ["kinetic-text", "动态大字视频"],
   ].map(([target, label]) => `<label><input class="rewrite-handoff-choice" type="checkbox" data-target="${target}" />${label}</label>`).join("");
 }
 
@@ -1369,6 +1370,7 @@ function handoffTargetLabel(target) {
     "cs1-video": "CS1生成器",
     "xiaohei-video": "小黑视频风格生成",
     "money-printer": "MoneyPrinter",
+    "kinetic-text": "动态大字视频",
   }[target] || target || "目标模块";
 }
 
@@ -3439,6 +3441,7 @@ function renderTtsJobsEnhanced(jobs = []) {
       ["cs1-video", "CS1生成器", false],
       ["xiaohei-video", "小黑视频风格生成", false],
       ["money-printer", "MoneyPrinter", false],
+      ["kinetic-text", "动态大字视频", false],
     ].map(([target, label, checked]) => `
       <label>
         <input class="tts-job-handoff-choice" type="checkbox" data-target="${target}" ${checked ? "checked" : ""} />
@@ -3690,6 +3693,13 @@ async function sendTtsPayloadToTargets(payload, targets = []) {
     saveTtsAudioHandoff("money-printer", payload);
     markProductionTargetReceived("money-printer", payload);
     sent.push("MoneyPrinter");
+  }
+  if (targets.includes("kinetic-text")) {
+    saveTtsAudioHandoff("kinetic-text", payload);
+    markProductionTargetReceived("kinetic-text", payload);
+    await window.kineticTextProduction?.receiveTts?.(payload);
+    window.dispatchEvent(new CustomEvent("kinetic-text-handoff", { detail: payload }));
+    sent.push("动态大字视频");
   }
   for (const target of targets) {
     saveTtsAudioHandoff(target, payload);

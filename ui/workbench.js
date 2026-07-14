@@ -43,6 +43,10 @@ const workbenchPages = {
     title: "MoneyPrinterTurbo",
     description: "免费素材混剪生产线：启动本地 API，按主题或脚本生成 MP4。",
   },
+  "kinetic-text": {
+    title: "动态大字视频",
+    description: "接收已确认的 TTS 音频与字幕时间轴，编辑 13 种动态大字效果并输出素材包和 MP4。",
+  },
   files: {
     title: "素材管理",
     description: "按类型、用途、风格和项目管理成片素材。",
