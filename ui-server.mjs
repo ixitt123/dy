@@ -131,6 +131,7 @@ const ttsService = createTtsService({
   taskStore,
   getSettings: readSettings,
   ffmpegPath,
+  ffprobePath,
   onJobCompleted: handleTtsJobCompleted,
 });
 const voiceAssetService = createVoiceAssetService({

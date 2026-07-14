@@ -591,6 +591,12 @@ export function createTtsService({ baseDir, taskStore, getSettings, ffmpegPath, 
       subtitle_path: String(metadata.subtitle_path || ""),
       timestamped_text_path: String(metadata.timestamped_text_path || ""),
       subtitle_timeline: Array.isArray(metadata.subtitle_timeline) ? metadata.subtitle_timeline : [],
+      subtitle_source: String(metadata.subtitle_source || metadata.subtitleSource || ""),
+      subtitleSource: String(metadata.subtitle_source || metadata.subtitleSource || ""),
+      duration: Number(metadata.audio_duration || metadata.duration || 0)
+        || (Number(metadata.audio_length_ms || metadata.duration_ms || metadata.music_duration_ms || 0) / 1000)
+        || 0,
+      audio_duration: Number(metadata.audio_duration || 0),
       metadata,
     };
   }
@@ -674,11 +680,21 @@ export function createTtsService({ baseDir, taskStore, getSettings, ffmpegPath, 
       return;
     }
 
+    const probedDuration = probeAudioDurationSync(result.audio_path || outputPath);
+    const audioDuration = result.duration || probedDuration || resultDuration(result);
     const timedText = writeTimedTextFiles({
       directory: subtitleDir,
       job,
       preparedText: prepared.text,
-      result,
+      result: {
+        ...result,
+        duration: audioDuration,
+        probedDuration,
+        metadata: {
+          ...(result.metadata || {}),
+          audio_duration: audioDuration,
+        },
+      },
       fileBaseName,
       title: titleMetadata.title,
     });
@@ -813,6 +829,12 @@ export function createTtsService({ baseDir, taskStore, getSettings, ffmpegPath, 
     const format = input.format === "wav" || sourceExtension === ".wav" ? "wav" : "mp3";
     const targetPath = path.join(outputDir, `${fileBaseName}.${format}`);
     if (path.resolve(sourcePath) !== path.resolve(targetPath)) fs.copyFileSync(sourcePath, targetPath);
+    const inputMetadata = input.metadata && typeof input.metadata === "object" ? input.metadata : {};
+    const probedDuration = probeAudioDurationSync(targetPath);
+    const declaredDuration = Number(input.duration || inputMetadata.duration || 0)
+      || (Number(inputMetadata.duration_ms || inputMetadata.music_duration_ms || inputMetadata.audio_length_ms || 0) / 1000)
+      || 0;
+    const audioDuration = probedDuration || declaredDuration;
 
     const prepared = prepareScript(text);
     const provider = String(input.provider || "minimax");
@@ -833,6 +855,7 @@ export function createTtsService({ baseDir, taskStore, getSettings, ffmpegPath, 
       asset_kind: String(input.asset_kind || ""),
       selected_for_project: false,
       workflow_auto_director: input.workflow_auto_director !== false,
+      audio_duration: audioDuration,
       ...prepared.metadata,
     };
     const job = taskStore.createTtsJob({
@@ -859,8 +882,12 @@ export function createTtsService({ baseDir, taskStore, getSettings, ffmpegPath, 
       job,
       preparedText: prepared.text,
       result: {
-        duration: Number(input.duration || 0),
-        metadata: input.metadata && typeof input.metadata === "object" ? input.metadata : {},
+        duration: audioDuration,
+        probedDuration,
+        metadata: {
+          ...inputMetadata,
+          audio_duration: audioDuration,
+        },
       },
       fileBaseName,
       title: titleMetadata.title,
@@ -950,6 +977,52 @@ export function createTtsService({ baseDir, taskStore, getSettings, ffmpegPath, 
     return { deleted, skipped: taskStore.listTtsJobs({ limit: 500 }).filter((job) => ["waiting", "processing"].includes(job.status)).length };
   }
 
+  function repairEstimatedTimelines() {
+    for (const job of taskStore.listTtsJobs({ limit: 500 })) {
+      if (job.status !== "completed" || !job.audio_path || !fs.existsSync(job.audio_path)) continue;
+      const metadata = ttsJobMetadata(job);
+      const audioDuration = probeAudioDurationSync(job.audio_path)
+        || Number(metadata.audio_duration || metadata.duration || 0)
+        || (Number(metadata.audio_length_ms || metadata.duration_ms || metadata.music_duration_ms || 0) / 1000)
+        || 0;
+      if (audioDuration <= 0) continue;
+      const timeline = Array.isArray(metadata.subtitle_timeline) ? metadata.subtitle_timeline : [];
+      const lastEnd = Number(timeline.at(-1)?.end || 0);
+      const source = String(metadata.subtitle_source || "");
+      if (source === "provider" && Number(metadata.audio_duration || 0) > 0) continue;
+      if (source !== "provider" && Math.abs(lastEnd - audioDuration) <= 0.35 && Number(metadata.audio_duration || 0) > 0) continue;
+
+      const repairMetadata = { ...metadata, audio_duration: audioDuration };
+      delete repairMetadata.subtitle_timeline;
+      delete repairMetadata.subtitle_source;
+      delete repairMetadata.script_path;
+      delete repairMetadata.subtitle_path;
+      delete repairMetadata.timestamped_text_path;
+      const sequenceNumber = ttsSequenceNumber(job) || Number(metadata.sequence_number || job.id || 0);
+      const fileBaseName = String(metadata.file_base_name || "").trim() || ttsFileBaseName(sequenceNumber);
+      const prepared = prepareScript(job.text);
+      const timedText = writeTimedTextFiles({
+        directory: subtitleDir,
+        job,
+        preparedText: prepared.text,
+        result: {
+          duration: audioDuration,
+          metadata: repairMetadata,
+        },
+        fileBaseName,
+        title: metadata.title || metadata.seo_title || "",
+      });
+      taskStore.updateTtsJob(job.id, {
+        metadata_json: JSON.stringify({
+          ...metadata,
+          ...timedText,
+          audio_duration: audioDuration,
+          subtitle_source: timedText.subtitle_source || "estimated_audio_duration",
+        }),
+      });
+    }
+  }
+
   function listVoices(providerId) {
     if (!CURATED_TTS_PROVIDER_IDS.has(providerId)) return [];
     const provider = getProvider(providerId);
@@ -1007,6 +1080,7 @@ export function createTtsService({ baseDir, taskStore, getSettings, ffmpegPath, 
   }
 
   ensureSequenceNumbers();
+  repairEstimatedTimelines();
   for (const job of taskStore.listTtsJobs({ limit: 500 })) {
     if (!["waiting", "processing"].includes(job.status)) continue;
     taskStore.updateTtsJob(job.id, { status: "waiting", error: "" });
