@@ -192,7 +192,20 @@ function drawCover(ctx, media, width, height) {
   ctx.drawImage(media, (width - drawWidth) / 2, (height - drawHeight) / 2, drawWidth, drawHeight);
 }
 
-function tokenRows(segment, effectNumber) {
+function splitPreviewByMode(line, tokenMode = "char") {
+  const source = String(line || "").trim();
+  if (!source) return [];
+  if (tokenMode === "line") return [source];
+  if (tokenMode === "phrase") return source.match(/.{1,6}/g) || [source];
+  if (tokenMode === "word") {
+    const spaced = source.split(/\s+/).filter(Boolean);
+    if (spaced.length > 1) return spaced;
+    return source.match(/[A-Za-z0-9%]+|[\u4e00-\u9fff]{1,3}|[^\s]/g) || [source];
+  }
+  return [...source].filter((item) => item.trim());
+}
+
+function tokenRows(segment, effect = {}) {
   const source = String(segment.text || "").trim();
   const breaks = [...new Set((segment.lineBreaks || [])
     .map(Number)
@@ -207,10 +220,7 @@ function tokenRows(segment, effectNumber) {
   }
   const displayLines = lines.length ? lines : [source];
   return displayLines.flatMap((line, row) => {
-    let values;
-    if ([6, 12].includes(effectNumber)) values = line.match(/.{1,7}/g) || [line];
-    else if ([8, 13].includes(effectNumber)) values = line.match(/.{1,4}/g) || [line];
-    else values = [...line].filter((item) => item.trim());
+    const values = splitPreviewByMode(line, effect.tokenMode || "char");
     return values.map((text, indexInRow) => ({ text, row, rowCount: displayLines.length, indexInRow, countInRow: values.length }));
   });
 }
@@ -222,7 +232,7 @@ function easeOutBack(value) {
 }
 
 function drawToken(ctx, token, x, y, options) {
-  const { progress, index, effectNumber, color, fontSize, fontFamily } = options;
+  const { progress, index, effectId, motion, color, fontSize, fontFamily } = options;
   const delayed = Math.max(0, Math.min(1, (progress - index * 0.07) / Math.max(0.15, 1 - index * 0.04)));
   const eased = easeOutBack(delayed);
   ctx.save();
@@ -233,12 +243,16 @@ function drawToken(ctx, token, x, y, options) {
   let rotation = 0;
   let offsetX = 0;
   let offsetY = 0;
-  if ([1, 3, 13].includes(effectNumber)) scaleX = Math.max(0.05, Math.cos((1 - delayed) * Math.PI / 2));
-  if (effectNumber === 2) { rotation = (1 - delayed) * -0.5; offsetX = (1 - delayed) * (index % 2 ? 90 : -90); offsetY = (1 - delayed) * 70; }
-  if (effectNumber === 4 || effectNumber === 9) { scaleX = scaleY = 1 + (1 - delayed) * 1.1; ctx.filter = `blur(${(1 - delayed) * 9}px)`; }
-  if ([5, 8, 10].includes(effectNumber)) { scaleX = scaleY = Math.max(0.2, eased); offsetY = (1 - delayed) * 75; }
-  if (effectNumber === 7) { scaleX = Math.max(0.05, Math.cos((1 - delayed) * Math.PI / 2)); ctx.shadowColor = color; ctx.shadowBlur = 14; }
-  if ([6, 11].includes(effectNumber)) ctx.filter = `blur(${(1 - delayed) * 5}px)`;
+  if (["mask-rise", "wipe", "outline"].includes(motion)) scaleX = Math.max(0.05, Math.cos((1 - delayed) * Math.PI / 2));
+  if (motion === "slide") { rotation = (1 - delayed) * -0.45; offsetX = (1 - delayed) * (index % 2 ? 84 : -84); offsetY = (1 - delayed) * 52; }
+  if (["focus", "soft-blur"].includes(motion)) { scaleX = scaleY = 1 + (1 - delayed) * 1.08; ctx.filter = `blur(${(1 - delayed) * 8}px)`; }
+  if (["slam", "block", "pop", "karaoke"].includes(motion)) { scaleX = scaleY = Math.max(0.2, eased); offsetY = (1 - delayed) * 58; }
+  if (["neon", "gaming-stream"].includes(motion) || ["neon-pulse", "gaming-stream"].includes(effectId)) { scaleX = Math.max(0.05, Math.cos((1 - delayed) * Math.PI / 2)); ctx.shadowColor = color; ctx.shadowBlur = 16; }
+  if (motion === "glitch") { ctx.filter = `blur(${(1 - delayed) * 4}px)`; rotation = (Math.sin(index * 5 + delayed * 12) * 0.08) * (1 - delayed); offsetX = Math.sin(index * 9) * 10 * (1 - delayed); }
+  if (motion === "wave") { offsetY = Math.sin(index * 0.9 + delayed * Math.PI) * 30 * (1 - delayed); }
+  if (motion === "assemble") ctx.filter = `blur(${(1 - delayed) * 5}px)`;
+  if (motion === "typewriter") scaleX = scaleY = 1;
+  if (motion === "elastic") { scaleX = scaleY = 0.75 + eased * 0.28; rotation = (1 - delayed) * -0.18; }
   ctx.translate(offsetX, offsetY);
   ctx.rotate(rotation);
   ctx.scale(scaleX, scaleY);
@@ -246,27 +260,39 @@ function drawToken(ctx, token, x, y, options) {
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   ctx.lineJoin = "round";
-  ctx.strokeStyle = effectNumber === 7 ? "#985467" : "rgba(0,0,0,.72)";
-  ctx.lineWidth = effectNumber === 7 ? 4 : 2;
+  ctx.strokeStyle = ["neon-pulse", "gaming-stream"].includes(effectId) ? color : "rgba(0,0,0,.72)";
+  ctx.lineWidth = ["neon-pulse", "gaming-stream", "outline-trace"].includes(effectId) ? 4 : 2;
   ctx.fillStyle = color;
   ctx.strokeText(token, 0, 0);
   ctx.fillText(token, 0, 0);
   ctx.restore();
 }
 
-function tokenPosition(effectNumber, index, count, centerX, centerY, layout = {}) {
+function tokenPosition(effect = {}, index, count, centerX, centerY, layout = {}) {
+  const layoutId = effect.layout || "center";
   const centered = index - (count - 1) / 2;
   const rowOffset = (Number(layout.row || 0) - (Number(layout.rowCount || 1) - 1) / 2) * 95;
   const horizontalStep = Math.min(66, 750 / Math.max(1, count - 1));
-  if (effectNumber === 1) return [centerX + centered * horizontalStep, centerY + rowOffset + Math.abs(centered) * Math.min(28, 165 / Math.max(1, (count - 1) / 2))];
-  if (effectNumber === 2) return [centerX + centered * horizontalStep, centerY + rowOffset + centered * Math.min(31, 250 / Math.max(1, count - 1))];
-  if (effectNumber === 6) return [centerX + [-210, -60, 165, -175, 80, 225][index % 6], centerY + rowOffset + [-125, -35, -95, 95, 80, 135][index % 6]];
-  if (effectNumber === 8) return [centerX + (index % 2 ? 95 : -95), centerY + rowOffset + centered * Math.min(54, 260 / Math.max(1, count - 1))];
-  if (effectNumber === 9) return [centerX + centered * horizontalStep, centerY + rowOffset + (index % 2 ? 58 : -38)];
-  if (effectNumber === 10) return [centerX + centered * horizontalStep, centerY + rowOffset + (index % 2 ? 48 : -30)];
-  if (effectNumber === 11) return [centerX + centered * horizontalStep, centerY + rowOffset + (index % 3 - 1) * 68];
-  if (effectNumber === 12) return [Math.max(140, centerX - 215), centerY + rowOffset - 105 + index * 52];
-  if (effectNumber === 13) return [centerX + (index % 2 ? 100 : -90), centerY + rowOffset + centered * Math.min(47, 250 / Math.max(1, count - 1))];
+  if (layoutId === "lower-third") return [centerX + centered * Math.min(56, horizontalStep), 422 + rowOffset * 0.22];
+  if (layoutId === "impact") return [centerX + centered * Math.min(78, horizontalStep), centerY + rowOffset + (index % 2 ? 28 : -20)];
+  if (layoutId === "diagonal") return [centerX + centered * horizontalStep, centerY + rowOffset + centered * Math.min(31, 250 / Math.max(1, count - 1))];
+  if (layoutId === "stack") return [centerX + centered * Math.min(62, horizontalStep), centerY + rowOffset + (index % 2 ? 38 : -24)];
+  if (layoutId === "stairs") return [centerX - 220 + index * Math.min(72, horizontalStep), centerY + rowOffset - 66 + index * 30];
+  if (layoutId === "side-notes") {
+    if (index === Math.floor((count - 1) / 2)) return [centerX, centerY + rowOffset];
+    return [centerX + (index % 2 ? 220 : -220), centerY + rowOffset + (index - count / 2) * 28];
+  }
+  if (layoutId === "scatter") return [centerX + [-235, -90, 180, -190, 75, 215, -20, 130][index % 8], centerY + rowOffset + [-120, -45, -105, 95, 75, 128, 130, 15][index % 8]];
+  if (layoutId === "vertical") return [centerX + Number(layout.row || 0) * 70, centerY + (index - (count - 1) / 2) * 58];
+  if (layoutId === "wave") return [centerX + centered * Math.min(54, horizontalStep), centerY + rowOffset + Math.sin(index * 0.95) * 42];
+  if (layoutId === "line-left") return [Math.max(110, centerX - 195) + index * Math.min(48, horizontalStep), centerY + rowOffset];
+  if (layoutId === "question-card") return [centerX + centered * Math.min(56, horizontalStep), centerY + rowOffset - 20];
+  if (layoutId === "sticker") return [centerX + centered * Math.min(70, horizontalStep), centerY + rowOffset + (index % 2 ? 34 : -22)];
+  if (layoutId === "orbit") {
+    if (index === 0) return [centerX, centerY + rowOffset];
+    const angle = ((index - 1) / Math.max(1, count - 1)) * Math.PI * 2 - Math.PI / 2;
+    return [centerX + Math.cos(angle) * 215, centerY + rowOffset + Math.sin(angle) * 105];
+  }
   return [centerX + centered * horizontalStep, centerY + rowOffset];
 }
 
