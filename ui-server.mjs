@@ -4006,8 +4006,8 @@ function normalizeMomentsResult(raw = {}, fallback = {}) {
   const imageCount = clampMomentsImageCount(raw.image_count || raw.imageCount)
     || clampMomentsImageCount(fallback.imageCount)
     || 1;
-  const rawPost = String(raw.post || raw.copy || raw.text || "").trim();
-  const post = fallback.addEmoji === true ? rawPost : stripMomentsEmoji(rawPost);
+  const rawPost = normalizeMomentsPostLayout(raw.post || raw.copy || raw.text || "");
+  const post = fallback.addEmoji === true ? rawPost : normalizeMomentsPostLayout(stripMomentsEmoji(rawPost));
   if (!post) throw new Error("朋友圈生成结果缺少文案。");
   const theme = String(raw.theme || fallback.theme || "朋友圈图文").trim().slice(0, 120);
   const seriesStyle = normalizeMomentsSeriesStyle(raw, fallback);
@@ -4236,6 +4236,7 @@ async function generateMomentsPostJsonV2(body = {}) {
   const rewriteEducationSkill = readSkill("rewrite-douyin-education").trim();
   const humanizerSkill = readSkill("humanizer-zh").trim();
   const copyEditingSkill = readSkill("copy-editing").trim();
+  const copyEditingChecklist = readTextFileSafe(path.join(skillsDir, "copy-editing", "references", "checklist.md")).trim();
   const momentsCopyEmojiSkill = readSkill("wechat-moments-copy-emoji").trim();
   const rewriteEducationSkillLoaded = Boolean(rewriteEducationSkill);
   const humanizerSkillLoaded = Boolean(humanizerSkill);
@@ -4245,7 +4246,7 @@ async function generateMomentsPostJsonV2(body = {}) {
     `项目文案 Skill：rewrite-douyin-education（${rewriteEducationSkillLoaded ? "已加载" : "未找到，使用内置规则"}）+ humanizer-zh（${humanizerSkillLoaded ? "已加载" : "未找到，使用内置规则"}）+ copy-editing（${copyEditingSkillLoaded ? "已加载" : "未找到，跳过终稿编辑"}）+ wechat-moments-copy-emoji（${momentsCopyEmojiSkillLoaded ? "已加载" : "未找到，使用内置规则"}）。`,
     rewriteEducationSkill ? `rewrite-douyin-education 实际规则：\n${rewriteEducationSkill}` : "rewrite-douyin-education 实际规则不可用，使用下面的内置兼容规则。",
     humanizerSkill ? `humanizer-zh 实际规则：\n${humanizerSkill}` : "humanizer-zh 实际规则不可用，使用下面的内置兼容规则。",
-    copyEditingSkill ? `copy-editing 实际规则：\n${copyEditingSkill}` : "copy-editing 实际规则不可用，不执行独立终稿编辑。",
+    copyEditingSkill ? "copy-editing 已加载：初稿完成后必须执行独立终稿编辑，不把它当作初稿生成规则。" : "copy-editing 实际规则不可用，不执行独立终稿编辑。",
     momentsCopyEmojiSkill ? `wechat-moments-copy-emoji 实际规则：\n${momentsCopyEmojiSkill}` : "wechat-moments-copy-emoji 实际规则不可用，使用下面的内置排版与表情规则。",
     "继承规则：先提炼 hook、痛点/处境、情绪、反转、解决方案和 CTA，再按朋友圈用途重组；保留原文事实，不编造案例、数据或承诺。",
     "人性化规则：短句、节奏不完全整齐、使用具体生活场景，去掉官方腔、AI 套话、空泛口号和机械三段式。",
@@ -4301,7 +4302,7 @@ async function generateMomentsPostJsonV2(body = {}) {
           `语气：${tone}`,
           `用途：${intent}`,
           `建议字数：${wordCount.label}（允许 ${wordCount.min}-${wordCount.max} 字自然浮动）`,
-          `添加表情：${addEmoji ? "是，必须添加 2-3 个与语义匹配的 emoji" : "否，不添加 emoji"}`,
+          `添加表情：${addEmoji ? "是，普通篇幅至少 2 个，通常 2-3 个；长文可按语义自然增加" : "否，不添加 emoji"}`,
           `视觉风格类别：${visualStyle}`,
           `引用素材：${referenceStyle}`,
           "",
@@ -4422,6 +4423,9 @@ async function generateMomentsPostJsonV2(body = {}) {
             "copy-editing 实际 Skill：",
             copyEditingSkill,
             "",
+            "copy-editing 终稿检查清单：",
+            copyEditingChecklist || "逐项检查清晰度、语气、读者价值、事实支撑、具体性、情绪和行动阻力。",
+            "",
             "微信朋友圈文案与表情实际 Skill：",
             momentsCopyEmojiSkill || "使用下方内置规则。",
             "",
@@ -4480,6 +4484,9 @@ async function generateMomentsPostJsonV2(body = {}) {
             "上一版不合格：太短、太干或缺少专业判断。请重写。",
             `硬性要求：${wordCount.min}-${wordCount.max} 中文字符，允许在范围内自然浮动；${momentsWordCountRule(wordCount)}不得编造事实。`,
             `表情硬性要求：${momentsEmojiRule(addEmoji)}`,
+            momentsCopyPasteRule(),
+            momentsCopyEmojiSkill ? `微信朋友圈文案与表情 Skill：\n${momentsCopyEmojiSkill}` : "",
+            copyEditingSkill ? "copy-editing 已在本轮前执行；修复时继续保持清晰、自然、可信和可直接发布的终稿标准。" : "",
             "引用硬性要求：必须把引用素材真正写进 post 正文，并在 reference_used 填写实际使用的那句；不能只在 JSON 字段里写，正文里也必须出现。",
             "语气策略：",
             toneStrategy,
@@ -4509,9 +4516,9 @@ async function generateMomentsPostJsonV2(body = {}) {
       ],
     });
     copyData = repaired.data && typeof repaired.data === "object" ? repaired.data : copyData;
-    post = String(copyData.post || post).trim();
+    post = normalizeMomentsPostLayout(copyData.post || post);
   }
-  post = addEmoji ? post : stripMomentsEmoji(post);
+  post = addEmoji ? post : normalizeMomentsPostLayout(stripMomentsEmoji(post));
   let finalPostLength = rewriteCharacterCount(post);
   if (finalPostLength < wordCount.min || finalPostLength > wordCount.max) {
     const compressed = await generateStructuredJson({
@@ -4526,6 +4533,7 @@ async function generateMomentsPostJsonV2(body = {}) {
           content: [
             `请把下面的朋友圈正文压缩或补充到 ${wordCount.min}-${wordCount.max} 个中文字符，${momentsWordCountRule(wordCount)}`,
             momentsEmojiRule(addEmoji),
+            momentsCopyPasteRule(),
             `必须保留并自然写入 ${referenceStyle} 引用素材，同时 reference_used 填写正文实际使用的内容。`,
             "只保留原文事实，不新增案例、数据、效果承诺或宣传信息。",
             "正文要像真人发朋友圈，不要标题、编号、Markdown、解释和多余段落。",
@@ -4543,8 +4551,8 @@ async function generateMomentsPostJsonV2(body = {}) {
       ],
     });
     copyData = compressed.data && typeof compressed.data === "object" ? compressed.data : copyData;
-    post = String(copyData.post || post).trim();
-    post = addEmoji ? post : stripMomentsEmoji(post);
+    post = normalizeMomentsPostLayout(copyData.post || post);
+    post = addEmoji ? post : normalizeMomentsPostLayout(stripMomentsEmoji(post));
     finalPostLength = rewriteCharacterCount(post);
   }
   const wordCountWarning = finalPostLength < wordCount.min || finalPostLength > wordCount.max
@@ -4555,8 +4563,11 @@ async function generateMomentsPostJsonV2(body = {}) {
   }
   if (!momentsEmojiIsValid(post, addEmoji)) {
     throw new Error(addEmoji
-      ? "本次生成未能添加 2-3 个匹配语义的表情，请重试。"
+      ? "本次生成未能添加至少 2 个匹配语义的表情，请重试。"
       : "本次生成结果包含表情，已拒绝返回，请重试。");
+  }
+  if (!momentsCopyPasteReady(post)) {
+    throw new Error("本次生成的文案排版不适合直接复制发布，请重试。");
   }
 
   const imageRun = await generateStructuredJson({
