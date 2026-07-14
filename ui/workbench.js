@@ -55,18 +55,12 @@ const workbenchPages = {
     title: "系统设置",
     description: "API Key、模型映射和系统配置。",
   },
-  "image-studio": {
-    title: "图片生成",
-    description: "输入 Prompt 生成图片，管理图片资产。",
-  },
 };
 
 let activeWorkbenchPage = "dashboard";
 let activeRailTaskId = 0;
 let dashboardAudioJobs = [];
 let workbenchOverviewTimer = 0;
-let importedDirectorImagePrompts = [];
-let activeDirectorImageImport = null;
 let videoProjectsState = [];
 let activeVideoProject = null;
 let projectReadinessState = null;
@@ -763,12 +757,11 @@ function buildWorkbenchInformationArchitecture() {
   setupDirectorStudio();
   setupProjectWorkbench();
   setupVfoFutureStep();
-  setupImageStudio();
   setupV2Settings();
 }
 
 function navigateWorkbench(pageId, options = {}) {
-  const aliases = { analysis: "collector", transcript: "collector", director: "dashboard", files: "assets", "image-studio": "assets", vfo: "dashboard" };
+  const aliases = { analysis: "collector", transcript: "collector", director: "dashboard", files: "assets", vfo: "dashboard" };
   const normalized = aliases[pageId] || pageId;
   const target = workbenchPages[normalized] ? normalized : "dashboard";
   const collectorTab = options.collectorTab || ((pageId === "analysis" || pageId === "transcript") ? "copybank" : "");

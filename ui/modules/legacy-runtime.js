@@ -354,7 +354,6 @@ const momentsProgressLabel = document.querySelector("#momentsProgressLabel");
 const momentsProgressPercent = document.querySelector("#momentsProgressPercent");
 const momentsProgressBar = document.querySelector("#momentsProgressBar");
 const copyMomentsPromptsBtn = document.querySelector("#copyMomentsPrompts");
-const generateMomentsImagesBtn = document.querySelector("#generateMomentsImages");
 const publishMomentsWechatBtn = document.querySelector("#publishMomentsWechat");
 const momentsPublishStatus = document.querySelector("#momentsPublishStatus");
 const momentsPostOutput = document.querySelector("#momentsPostOutput");
@@ -423,7 +422,6 @@ let directorProjectsState = [];
 let activeDirectorProject = null;
 let activeDirectorRailProject = null;
 let activeDirectorRailSignature = "";
-const autoImportedDirectorImageProjectIds = new Set();
 let activeDirectorTab = "shot-list";
 let directorSourceContext = { taskId: 0, rewriteId: 0, sourceKey: "", sourceType: "manual" };
 let directorPollTimer = 0;
@@ -1921,9 +1919,6 @@ function renderMomentsResult(result) {
           <span class="section-eyebrow">${escapeHtml(item.style === "realistic" ? "Realistic" : item.style === "xiaohei" ? "Xiaohei" : "Auto")}</span>
           <h3>#${index + 1} ${escapeHtml(item.title || "配图")}</h3>
           <p>${escapeHtml([item.image_role, item.composition_type, item.visual_hook || item.purpose].filter(Boolean).join(" · "))}</p>
-        </div>
-        <div class="moments-actions compact">
-          <button class="primary small" type="button" data-moments-action="generate-image" data-index="${index}">生成图片</button>
         </div>
       </div>
       <textarea class="moments-prompt-text" rows="7">${escapeHtml(momentsPromptText(item))}</textarea>
@@ -4733,7 +4728,6 @@ function directorPromptMarkup(result) {
       <div>
         <strong>Visual Prompt</strong>
         <p>${escapeHtml(scene.image_prompt)}</p>
-        <button class="ghost small director-send-scene-image" type="button" data-director-scene="${escapeHtml(scene.scene)}">送到图片生成</button>
       </div>
       <div>
         <strong>Motion Prompt</strong>
@@ -4817,12 +4811,7 @@ function renderDirectorProject(project) {
   ].filter(Boolean).join(" · ");
   directorStatus.textContent = `分镜 #${project.id} 已完成并保存。`;
   renderDirectorResultView();
-  if (!autoImportedDirectorImageProjectIds.has(Number(project.id))) {
-    autoImportedDirectorImageProjectIds.add(Number(project.id));
-    sendDirectorProjectToImage();
-  } else {
-    directorResult.scrollIntoView({ behavior: "smooth", block: "start" });
-  }
+  directorResult.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
 async function openDirectorProject(id) {
@@ -6899,10 +6888,6 @@ copyMomentsPromptsBtn?.addEventListener("click", () => {
   });
 });
 
-generateMomentsImagesBtn?.addEventListener("click", () => {
-  generateAllMomentsImages();
-});
-
 publishMomentsWechatBtn?.addEventListener("click", () => {
   publishMomentsToWechat();
 });
@@ -6914,9 +6899,6 @@ momentsImagePromptList?.addEventListener("click", (event) => {
   const action = button.dataset.momentsAction || "";
   if (action === "choose-material") {
     button.closest(".moments-prompt-card")?.querySelector(`[data-moments-material-file="${index}"]`)?.click();
-  }
-  if (action === "generate-image") {
-    generateMomentsImage(index);
   }
 });
 
@@ -7007,12 +6989,6 @@ directorResultTabs?.addEventListener("click", (event) => {
   renderDirectorResultView();
 });
 
-directorResultView?.addEventListener("click", (event) => {
-  const button = event.target.closest(".director-send-scene-image");
-  if (!button) return;
-  sendDirectorProjectToImage(button.dataset.directorScene || "");
-});
-
 document.querySelector("#copyDirectorResult")?.addEventListener("click", () => {
   copyDirectorResult();
 });
@@ -7035,10 +7011,6 @@ document.querySelector("#exportDirectorChatGptPrompts")?.addEventListener("click
 
 document.querySelector("#sendDirectorToVfo")?.addEventListener("click", () => {
   sendDirectorProjectToVfo();
-});
-
-document.querySelector("#sendDirectorToImage")?.addEventListener("click", () => {
-  sendDirectorProjectToImage();
 });
 
 document.querySelector("#openDirectorFile")?.addEventListener("click", () => {
