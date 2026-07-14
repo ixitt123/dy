@@ -1,4 +1,5 @@
 (() => {
+  const SOURCE_MODE_STORAGE_KEY = "dy.ttsVoiceClone.sourceMode.v1";
   const FALLBACK_REQUIREMENTS = {
     aliyun_bailian: {
       provider: "aliyun_bailian",
@@ -39,7 +40,7 @@
   const state = {
     provider: "aliyun_bailian",
     requirements: FALLBACK_REQUIREMENTS.aliyun_bailian,
-    sourceMode: "file",
+    sourceMode: readStoredSourceMode(),
     sampleFile: null,
     sampleObjectUrl: "",
     audioQuality: null,
@@ -53,6 +54,23 @@
   };
 
   let nodes = {};
+
+  function readStoredSourceMode() {
+    try {
+      const mode = window.localStorage?.getItem(SOURCE_MODE_STORAGE_KEY);
+      return ["file", "mic"].includes(mode) ? mode : "file";
+    } catch {
+      return "file";
+    }
+  }
+
+  function saveSourceMode(mode) {
+    try {
+      window.localStorage?.setItem(SOURCE_MODE_STORAGE_KEY, mode);
+    } catch {
+      // Local persistence is optional and must not block voice cloning.
+    }
+  }
 
   function escapeHtml(value) {
     return String(value ?? "")
@@ -394,10 +412,11 @@
   }
 
   function setSourceMode(mode) {
-    state.sourceMode = mode;
-    nodes.fileMode.hidden = mode !== "file";
-    nodes.micMode.hidden = mode !== "mic";
-    nodes.sourceButtons.forEach((button) => button.classList.toggle("active", button.dataset.cloneSource === mode));
+    state.sourceMode = ["file", "mic"].includes(mode) ? mode : "file";
+    saveSourceMode(state.sourceMode);
+    nodes.fileMode.hidden = state.sourceMode !== "file";
+    nodes.micMode.hidden = state.sourceMode !== "mic";
+    nodes.sourceButtons.forEach((button) => button.classList.toggle("active", button.dataset.cloneSource === state.sourceMode));
     clearSample();
   }
 
@@ -678,6 +697,7 @@
     };
     state.provider = document.querySelector("#ttsProvider")?.value || "aliyun_bailian";
     nodes.provider.value = state.provider;
+    setSourceMode(state.sourceMode);
     bind();
     renderTextChecks();
     loadRequirements(state.provider);

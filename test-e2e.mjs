@@ -65,6 +65,30 @@ test("Moments Generation Progress", async () => {
   }
 });
 
+test("Single page title and choice-memory sources", async () => {
+  const [pageResponse, legacyResponse, cloneResponse] = await Promise.all([
+    fetch(`${BASE}/`),
+    fetch(`${BASE}/modules/legacy-runtime.js`),
+    fetch(`${BASE}/modules/tts-voice-clone.js`),
+  ]);
+  const [page, legacy, clone] = await Promise.all([
+    pageResponse.text(),
+    legacyResponse.text(),
+    cloneResponse.text(),
+  ]);
+  const start = page.indexOf('<section class="workbench-page" data-page="moments-copy"');
+  const end = page.indexOf('<section class="workbench-page" data-page="tts"', start);
+  const momentsPage = start >= 0 && end > start ? page.slice(start, end) : "";
+  if (!momentsPage.includes('class="moments-page-toolbar"') || /<h2>朋友圈文案定制<\/h2>/.test(momentsPage)) {
+    throw new Error("Moments page has a duplicate page title");
+  }
+  if (!legacy.includes('select, input[type="checkbox"], input[type="radio"], input[type="range"]')
+    || !legacy.includes("readUiNamedChoice")
+    || !clone.includes("SOURCE_MODE_STORAGE_KEY")) {
+    throw new Error("Choice preference restoration is incomplete");
+  }
+});
+
 // Run all
 let passed = 0;
 let failed = 0;

@@ -47,6 +47,17 @@ function writeUiChoicePreferences(preferences) {
   }
 }
 
+function readUiNamedChoice(key, allowedValues, fallback) {
+  const stored = readUiChoicePreferences()[`named:${key}`];
+  return allowedValues.includes(stored) ? stored : fallback;
+}
+
+function writeUiNamedChoice(key, value) {
+  const preferences = readUiChoicePreferences();
+  preferences[`named:${key}`] = value;
+  writeUiChoicePreferences(preferences);
+}
+
 function isPersistableChoiceControl(control) {
   if (!control || control.closest("[data-no-choice-persist]")) return false;
   if (control.matches(".file-select, .file-select-row")) return false;
@@ -455,14 +466,18 @@ let directorProjectsState = [];
 let activeDirectorProject = null;
 let activeDirectorRailProject = null;
 let activeDirectorRailSignature = "";
-let activeDirectorTab = "shot-list";
+let activeDirectorTab = readUiNamedChoice(
+  "director-result-tab",
+  ["shot-list", "storyboard-json", "subtitle", "visual", "bgm", "review"],
+  "shot-list",
+);
 let directorSourceContext = { taskId: 0, rewriteId: 0, sourceKey: "", sourceType: "manual" };
 let directorPollTimer = 0;
 let vfoConfig = null;
 let vfoSources = [];
 let vfoProjectsState = [];
 let activeVfoProject = null;
-let activeVfoTab = "overview";
+let activeVfoTab = readUiNamedChoice("vfo-result-tab", ["overview", "assets", "render", "qa", "json"], "overview");
 let vfoPollTimer = 0;
 let ttsProviderConfigs = [];
 let ttsPresetVoices = [];
@@ -6979,6 +6994,7 @@ directorResultTabs?.addEventListener("click", (event) => {
   const button = event.target.closest("button[data-director-tab]");
   if (!button) return;
   activeDirectorTab = button.dataset.directorTab;
+  writeUiNamedChoice("director-result-tab", activeDirectorTab);
   renderDirectorResultView();
 });
 
@@ -7066,6 +7082,7 @@ vfoResultTabs?.addEventListener("click", (event) => {
   const button = event.target.closest("button[data-vfo-tab]");
   if (!button) return;
   activeVfoTab = button.dataset.vfoTab;
+  writeUiNamedChoice("vfo-result-tab", activeVfoTab);
   renderVfoResultView();
 });
 
