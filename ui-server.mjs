@@ -94,6 +94,16 @@ function localConfigValue(keys = []) {
   }
   return "";
 }
+const MINIMAX_TEXT_BASE_URL = "https://api.minimaxi.com/v1";
+const MINIMAX_TTS_BASE_URL = "https://api.minimaxi.com";
+const MINIMAX_TEXT_BASE_ALIASES = new Set([
+  "https://api.minimaxi.com",
+  "https://api.minimaxi.com/v1",
+  "https://api.minimax.io",
+  "https://api.minimax.io/v1",
+  "https://api.minimax.chat",
+  "https://api.minimax.chat/v1",
+]);
 const autoClose = process.argv.includes("--auto-close");
 const pageSessions = new Map();
 const activeChildProcesses = new Set();
@@ -1040,17 +1050,6 @@ function clampDecimal(value, min, max, fallback) {
   if (!Number.isFinite(number)) return fallback;
   return Math.max(min, Math.min(max, number));
 }
-
-const MINIMAX_TEXT_BASE_URL = "https://api.minimaxi.com/v1";
-const MINIMAX_TTS_BASE_URL = "https://api.minimaxi.com";
-const MINIMAX_TEXT_BASE_ALIASES = new Set([
-  "https://api.minimaxi.com",
-  "https://api.minimaxi.com/v1",
-  "https://api.minimax.io",
-  "https://api.minimax.io/v1",
-  "https://api.minimax.chat",
-  "https://api.minimax.chat/v1",
-]);
 
 function normalizeMiniMaxTextBaseUrl(value) {
   const raw = String(value || "").trim().replace(/\/+$/, "");
