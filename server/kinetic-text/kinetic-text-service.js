@@ -280,27 +280,47 @@ function escapeAss(value) {
     .replace(/\r?\n/g, "\\N");
 }
 
+function splitByMode(line, tokenMode = "char") {
+  const source = normalizeText(line);
+  if (!source) return [];
+  if (tokenMode === "line") return [source];
+  if (tokenMode === "phrase") return source.match(/.{1,6}/g) || [source];
+  if (tokenMode === "word") {
+    const spaced = source.split(/\s+/).filter(Boolean);
+    if (spaced.length > 1) return spaced;
+    return source.match(/[A-Za-z0-9%]+|[\u4e00-\u9fff]{1,3}|[^\s]/g) || [source];
+  }
+  return [...source].filter((item) => item.trim());
+}
+
 function effectTags(effectId, introMs, index, highlighted) {
+  const effect = effectById(effectId);
+  const motion = effect.motion || "pop";
   const delay = Math.round(index * 55);
   const start = Math.min(delay, Math.max(0, introMs - 80));
   const end = Math.max(start + 100, introMs);
-  const accent = highlighted ? "\\b1" : "";
+  const accent = highlighted ? "\\b1\\fscx112\\fscy112" : "";
   const tags = {
-    "center-stair-flip": `\\fry90\\fscx20\\alpha&HFF&\\t(${start},${end},\\fry0\\fscx100\\alpha&H00&)`,
-    "diagonal-scatter-flip": `\\frz-28\\fscx35\\fscy35\\alpha&HFF&\\t(${start},${end},\\frz0\\fscx100\\fscy100\\alpha&H00&)`,
-    "vertical-3d-flip": `\\frx88\\fscy15\\blur3\\alpha&HCC&\\t(${start},${end},\\frx0\\fscy100\\blur0\\alpha&H00&)`,
-    "perspective-focus-flip": `\\fscx220\\fscy220\\blur10\\alpha&HFF&\\t(${start},${end},\\fscx100\\fscy100\\blur0\\alpha&H00&)`,
-    "outline-footer-pop": `\\fscx60\\fscy60\\alpha&HFF&\\t(${start},${end},\\fscx100\\fscy100\\alpha&H00&)`,
-    "scatter-copy-reveal": `\\blur4\\alpha&HFF&\\t(${start},${end},\\blur0\\alpha&H00&)`,
-    "neon-outline-letters": `\\fry75\\blur6\\alpha&HFF&\\t(${start},${end},\\fry0\\blur0.6\\alpha&H00&)`,
-    "blue-yellow-stairs": `\\fscx35\\fscy35\\alpha&HFF&\\t(${start},${end},\\fscx100\\fscy100\\alpha&H00&)`,
-    "grayscale-depth-focus": `\\fscx175\\fscy175\\blur12\\alpha&HEE&\\t(${start},${end},\\fscx100\\fscy100\\blur0\\alpha&H00&)`,
-    "handwritten-callout": `\\frz-12\\fscx65\\fscy65\\alpha&HFF&\\t(${start},${end},\\frz0\\fscx100\\fscy100\\alpha&H00&)`,
-    "scatter-keyword-close": `\\fscx55\\fscy55\\blur5\\alpha&HFF&\\t(${start},${end},\\fscx100\\fscy100\\blur0\\alpha&H00&)`,
-    "guide-list-focus": `\\fscx82\\fscy82\\alpha&HDD&\\t(${start},${end},\\fscx100\\fscy100\\alpha&H00&)`,
-    "green-white-offset": `\\frz90\\fry65\\fscx25\\alpha&HFF&\\t(${start},${end},\\frz0\\fry0\\fscx100\\alpha&H00&)`,
+    pop: `\\fscx35\\fscy35\\alpha&HFF&\\t(${start},${end},\\fscx100\\fscy100\\alpha&H00&)`,
+    karaoke: `\\fscx92\\fscy92\\alpha&H55&\\t(${start},${end},\\fscx100\\fscy100\\alpha&H00&)`,
+    "mask-rise": `\\fscy20\\alpha&HFF&\\t(${start},${end},\\fscy100\\alpha&H00&)`,
+    focus: `\\fscx185\\fscy185\\blur12\\alpha&HEE&\\t(${start},${end},\\fscx100\\fscy100\\blur0\\alpha&H00&)`,
+    slam: `\\fscx230\\fscy230\\blur3\\alpha&HFF&\\t(${start},${end},\\fscx100\\fscy100\\blur0\\alpha&H00&)`,
+    glitch: `\\frz-5\\fax0.12\\blur1.4\\alpha&HFF&\\t(${start},${end},\\frz0\\fax0\\blur0\\alpha&H00&)\\t(${end},${end + 80},\\frz3\\fax-0.08)\\t(${end + 80},${end + 150},\\frz0\\fax0)`,
+    neon: `\\fry75\\blur6\\alpha&HFF&\\t(${start},${end},\\fry0\\blur0.5\\alpha&H00&)`,
+    block: `\\fscx50\\fscy50\\alpha&HFF&\\t(${start},${end},\\fscx100\\fscy100\\alpha&H00&)`,
+    slide: `\\frz-18\\fscx70\\fscy70\\alpha&HFF&\\t(${start},${end},\\frz0\\fscx100\\fscy100\\alpha&H00&)`,
+    typewriter: `\\alpha&HFF&\\t(${start},${Math.max(start + 70, end - 60)},\\alpha&H00&)`,
+    wipe: `\\fscx12\\alpha&HFF&\\t(${start},${end},\\fscx100\\alpha&H00&)`,
+    "soft-blur": `\\blur10\\alpha&HDD&\\t(${start},${end},\\blur0\\alpha&H00&)`,
+    wave: `\\frz-8\\fscx70\\fscy70\\alpha&HFF&\\t(${start},${end},\\frz0\\fscx100\\fscy100\\alpha&H00&)`,
+    assemble: `\\fscx40\\fscy40\\blur5\\alpha&HFF&\\t(${start},${end},\\fscx100\\fscy100\\blur0\\alpha&H00&)`,
+    outline: `\\bord5\\blur1.2\\alpha&HDD&\\t(${start},${end},\\bord1.4\\blur0\\alpha&H00&)`,
+    elastic: `\\fscx20\\fscy20\\frz-10\\alpha&HFF&\\t(${start},${end},\\fscx108\\fscy108\\frz0\\alpha&H00&)\\t(${end},${end + 120},\\fscx100\\fscy100)`,
+    fade: `\\alpha&HDD&\\t(${start},${end},\\alpha&H00&)`,
+    orbit: `\\fscx55\\fscy55\\frz18\\alpha&HFF&\\t(${start},${end},\\fscx100\\fscy100\\frz0\\alpha&H00&)`,
   };
-  return `${tags[effectId] || tags["center-stair-flip"]}${accent}`;
+  return `${tags[motion] || tags.pop}${accent}`;
 }
 
 function splitTextLines(segment) {
@@ -321,12 +341,10 @@ function splitTextLines(segment) {
 }
 
 function splitDisplayTokens(segment, effectId) {
+  const effect = effectById(effectId);
   const lines = splitTextLines(segment);
   return lines.flatMap((line, row) => {
-    let values;
-    if (["guide-list-focus", "scatter-copy-reveal"].includes(effectId)) values = line.match(/.{1,7}/g) || [line];
-    else if (["blue-yellow-stairs", "green-white-offset"].includes(effectId)) values = line.match(/.{1,4}/g) || [line];
-    else values = [...line].filter((item) => item.trim());
+    const values = splitByMode(line, effect.tokenMode);
     return values.map((text, indexInRow) => ({
       text,
       row,
@@ -338,25 +356,38 @@ function splitDisplayTokens(segment, effectId) {
 }
 
 function tokenPosition(effectId, index, count, baseX, baseY, layout = {}) {
+  const effect = effectById(effectId);
+  const layoutId = effect.layout || "center";
   const centered = (index - (count - 1) / 2);
   const rowOffset = (Number(layout.row || 0) - (Number(layout.rowCount || 1) - 1) / 2) * 190;
   const horizontalStep = Math.min(130, 1500 / Math.max(1, count - 1));
-  if (effectId === "center-stair-flip") {
-    const verticalStep = Math.min(52, 330 / Math.max(1, (count - 1) / 2));
-    return [baseX + centered * horizontalStep, baseY + rowOffset + Math.abs(centered) * verticalStep];
+  if (layoutId === "lower-third") return [baseX + centered * Math.min(110, horizontalStep), Math.round(HEIGHT * 0.78) + rowOffset * 0.22];
+  if (layoutId === "impact") return [baseX + centered * Math.min(150, horizontalStep), baseY + rowOffset + (index % 2 ? 42 : -28)];
+  if (layoutId === "diagonal") return [baseX + centered * horizontalStep, baseY + rowOffset + centered * Math.min(58, 500 / Math.max(1, count - 1))];
+  if (layoutId === "stack") return [baseX + centered * Math.min(120, horizontalStep), baseY + rowOffset + (index % 2 ? 70 : -38)];
+  if (layoutId === "stairs") return [baseX - 420 + index * Math.min(145, horizontalStep), baseY + rowOffset - 120 + index * 54];
+  if (layoutId === "side-notes") {
+    if (index === Math.floor((count - 1) / 2)) return [baseX, baseY + rowOffset];
+    return [baseX + (index % 2 ? 430 : -430), baseY + rowOffset + (index - count / 2) * 54];
   }
-  if (effectId === "diagonal-scatter-flip") return [baseX + centered * horizontalStep, baseY + rowOffset + centered * Math.min(58, 500 / Math.max(1, count - 1))];
-  if (effectId === "scatter-copy-reveal") {
-    const points = [[-420, -250], [-120, -75], [330, -190], [-350, 190], [160, 160], [420, 270]];
+  if (layoutId === "scatter") {
+    const points = [[-470, -240], [-180, -90], [360, -210], [-380, 190], [150, 150], [430, 255], [-40, 260], [255, 30]];
     const point = points[index % points.length];
     return [baseX + point[0], baseY + rowOffset + point[1]];
   }
-  if (effectId === "blue-yellow-stairs") return [baseX + (index % 2 ? 180 : -180), baseY + rowOffset + centered * Math.min(100, 520 / Math.max(1, count - 1))];
-  if (effectId === "grayscale-depth-focus") return [baseX + centered * horizontalStep, baseY + rowOffset + (index % 2 ? 100 : -70)];
-  if (effectId === "handwritten-callout") return [baseX + centered * horizontalStep, baseY + rowOffset + (index % 2 ? 90 : -45)];
-  if (effectId === "scatter-keyword-close") return [baseX + centered * horizontalStep, baseY + rowOffset + (index % 3 - 1) * 125];
-  if (effectId === "guide-list-focus") return [Math.max(260, baseX - 430), baseY + rowOffset - 190 + index * 95];
-  if (effectId === "green-white-offset") return [baseX + (index % 2 ? 190 : -170), baseY + rowOffset + centered * Math.min(86, 500 / Math.max(1, count - 1))];
+  if (layoutId === "vertical") return [baseX + Number(layout.row || 0) * 130, baseY + (index - (count - 1) / 2) * 116];
+  if (layoutId === "wave") return [baseX + centered * Math.min(108, horizontalStep), baseY + rowOffset + Math.sin(index * 0.95) * 85];
+  if (layoutId === "line-left") return [Math.max(220, baseX - 390) + index * Math.min(96, horizontalStep), baseY + rowOffset];
+  if (layoutId === "question-card") return [baseX + centered * Math.min(112, horizontalStep), baseY + rowOffset - 38];
+  if (layoutId === "title-card") return [baseX + centered * Math.min(118, horizontalStep), baseY + rowOffset];
+  if (layoutId === "sticker") return [baseX + centered * Math.min(138, horizontalStep), baseY + rowOffset + (index % 2 ? 58 : -42)];
+  if (layoutId === "orbit") {
+    if (index === 0) return [baseX, baseY + rowOffset];
+    const angle = ((index - 1) / Math.max(1, count - 1)) * Math.PI * 2 - Math.PI / 2;
+    const radiusX = 430;
+    const radiusY = 210;
+    return [baseX + Math.cos(angle) * radiusX, baseY + rowOffset + Math.sin(angle) * radiusY];
+  }
   return [baseX + centered * horizontalStep, baseY + rowOffset];
 }
 
