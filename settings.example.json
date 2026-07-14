@@ -60,20 +60,6 @@
     "default_speed": 1,
     "default_format": "mp3"
   },
-  "imageProviders": {
-    "volcengine_ark": {
-      "label": "火山方舟 Seedream",
-      "baseUrl": "https://ark.cn-beijing.volces.com/api/v3",
-      "apiKey": "",
-      "model": "doubao-seedream-5-0-lite-260128"
-    },
-    "jimeng": {
-      "label": "即梦 AI",
-      "baseUrl": "https://api.jimeng.io/v1",
-      "apiKey": "",
-      "model": "flux-dev"
-    }
-  },
   "bgmProviders": {
     "hifive": {
       "label": "HIFIVE 音加加 / 曲多多",
@@ -130,7 +116,6 @@
     }
   },
   "modelMap": {
-    "image": { "provider": "volcengine_ark", "model": "doubao-seedream-5-0-lite-260128" },
     "tts": { "provider": "aliyun_bailian", "model": "cosyvoice-v2" }
   },
   "downloadsDir": ""

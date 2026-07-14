@@ -3,7 +3,6 @@
     "rewrite": { "provider": "deepseek", "model": "deepseek-chat" },
     "director": { "provider": "deepseek", "model": "deepseek-chat" },
     "storyboard": { "provider": "deepseek", "model": "deepseek-chat" },
-    "image": { "provider": "volcengine_ark", "model": "doubao-seedream-5-0-lite-260128" },
     "video": { "provider": "kling", "model": "" },
     "tts": { "provider": "aliyun_bailian", "model": "cosyvoice-v2" }
   },
@@ -16,8 +15,6 @@
     "siliconflow": { "apiKey": "", "baseUrl": "https://api.siliconflow.cn/v1" },
     "volcengine": { "apiKey": "", "baseUrl": "https://ark.cn-beijing.volces.com/api/v3" },
     "minimax": { "apiKey": "", "baseUrl": "https://api.minimax.chat/v1" },
-    "volcengine_ark": { "apiKey": "", "baseUrl": "https://ark.cn-beijing.volces.com/api/v3", "model": "doubao-seedream-5-0-lite-260128" },
-    "jimeng": { "apiKey": "" },
     "kling": { "apiKey": "" }
   },
   "tts": {
