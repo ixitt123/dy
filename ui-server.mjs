@@ -4514,8 +4514,7 @@ async function generateMomentsPostJsonV2(body = {}, { onProgress = () => {} } = 
     "没有真实素材时，不要写本地素材占位；用户上传素材后由系统追加。",
   ].join("\n");
 
-  const copyRun = await generateStructuredJson({
-    providerId,
+  const copyRun = await runMomentsStage(15, "正在生成朋友圈初稿", {
     temperature: 0.82,
     requestName: "朋友圈文案生成",
     maxTokens: 5200,
@@ -4582,9 +4581,8 @@ async function generateMomentsPostJsonV2(body = {}, { onProgress = () => {} } = 
   });
 
   let copyData = copyRun.data && typeof copyRun.data === "object" ? copyRun.data : {};
-  if (humanizerSkill) {
-    const humanizedRun = await generateStructuredJson({
-      providerId,
+  if (humanizerSkill && !copyEditingSkill) {
+    const humanizedRun = await runMomentsStage(42, "正在去除 AI 味", {
       temperature: 0.45,
       requestName: "朋友圈文案 humanizer 二次处理",
       maxTokens: 5200,
@@ -4641,8 +4639,7 @@ async function generateMomentsPostJsonV2(body = {}, { onProgress = () => {} } = 
     }
   }
   if (copyEditingSkill) {
-    const editedRun = await generateStructuredJson({
-      providerId,
+    const editedRun = await runMomentsStage(55, "正在去除 AI 味并校对终稿", {
       temperature: 0.38,
       requestName: "朋友圈文案 copy-editing 终稿质检",
       maxTokens: 5200,
@@ -4650,7 +4647,7 @@ async function generateMomentsPostJsonV2(body = {}, { onProgress = () => {} } = 
         {
           role: "system",
           content: [
-            "你是 copy-editing 终稿编辑器。",
+            "你是 copy-editing 终稿编辑器，负责在一次处理内完成去 AI 味和终稿校对。",
             "必须执行注入的 copy-editing 和微信朋友圈文案 Skill，只输出严格 JSON。",
             "编辑目标是让文案更清楚、自然、可信、易复制发布；不改变原文事实、宣传对象和核心意图。",
           ].join("\n"),
@@ -4660,6 +4657,9 @@ async function generateMomentsPostJsonV2(body = {}, { onProgress = () => {} } = 
           content: [
             "copy-editing 实际 Skill：",
             copyEditingSkill,
+            "",
+            humanizerSkill ? `humanizer-zh 实际 Skill：\n${humanizerSkill}` : "",
+            humanizerSkill ? "先按 humanizer-zh 规则去掉模板感和 AI 味，再按 copy-editing 清单完成终稿校对。" : "",
             "",
             "copy-editing 终稿检查清单：",
             copyEditingChecklist || "逐项检查清晰度、语气、读者价值、事实支撑、具体性、情绪和行动阻力。",
@@ -4708,8 +4708,7 @@ async function generateMomentsPostJsonV2(body = {}, { onProgress = () => {} } = 
     || !momentsCopyPasteReady(post)
     || !momentsReferenceIsUsed(post, copyData.reference_used, referenceStyle)
   ) {
-    const repaired = await generateStructuredJson({
-      providerId,
+    const repaired = await runMomentsStage(70, "正在修复文案质量", {
       temperature: 0.55,
       requestName: "朋友圈文案质检修复",
       maxTokens: 5200,
@@ -4758,8 +4757,7 @@ async function generateMomentsPostJsonV2(body = {}, { onProgress = () => {} } = 
   post = addEmoji ? post : normalizeMomentsPostLayout(stripMomentsEmoji(post));
   let finalPostLength = rewriteCharacterCount(post);
   if (finalPostLength < wordCount.min || finalPostLength > wordCount.max) {
-    const compressed = await generateStructuredJson({
-      providerId,
+    const compressed = await runMomentsStage(80, "正在校准文案字数", {
       temperature: 0.2,
       requestName: "朋友圈文案字数校准",
       maxTokens: 2400,
@@ -4806,8 +4804,7 @@ async function generateMomentsPostJsonV2(body = {}, { onProgress = () => {} } = 
     throw new Error("本次生成的文案排版不适合直接复制发布，请重试。");
   }
 
-  const imageRun = await generateStructuredJson({
-    providerId,
+  const imageRun = await runMomentsStage(90, "正在生成图片提示词", {
     temperature: 0.72,
     requestName: "朋友圈图片提示词生成",
     maxTokens: 7200,
@@ -4887,6 +4884,7 @@ async function generateMomentsPostJsonV2(body = {}, { onProgress = () => {} } = 
     ],
   });
 
+  reportProgress(96, "正在整理生成结果");
   const merged = {
     ...imageRun.data,
     post,
@@ -4906,6 +4904,9 @@ async function generateMomentsPostJsonV2(body = {}, { onProgress = () => {} } = 
     ok: true,
     provider: imageRun.provider || copyRun.provider,
     model: imageRun.model || copyRun.model,
+    requestedProvider: primaryProviderId,
+    fallbackProvider: providerState.fallbackProviderId,
+    fallbackUsed: providerState.fallbackUsed,
     result: normalizeMomentsResult(merged, {
       imageCount: fixedImageCount,
       visualStyle,
@@ -6585,13 +6586,36 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
+    if (req.method === "GET" && url.pathname === "/api/moments/progress") {
+      const job = getMomentsProgressJob(url.searchParams.get("id"));
+      if (!job) {
+        sendJson(res, 404, { ok: false, message: "朋友圈生成进度任务不存在或已过期。" });
+        return;
+      }
+      sendJson(res, 200, { ok: true, ...job });
+      return;
+    }
+
     if (req.method === "POST" && url.pathname === "/api/moments/generate") {
+      let progressId = "";
       try {
         const body = await readJsonBody(req, { maxBytes: 512 * 1024 });
-        const result = await generateMomentsPostJsonV2(body);
+        progressId = createMomentsProgressJob(body.progressId);
+        const reportProgress = (progress, label) => updateMomentsProgressJob(progressId, progress, label);
+        const result = await generateMomentsPostJsonV2(body, { onProgress: reportProgress });
+        updateMomentsProgressJob(progressId, 100, "朋友圈文案和图片提示词生成完成", "completed");
         sendJson(res, 200, result);
       } catch (error) {
-        sendJson(res, 400, { ok: false, message: error instanceof Error ? error.message : String(error) });
+        const message = error instanceof Error ? error.message : String(error);
+        updateMomentsProgressJob(progressId, 100, `生成失败：${message}`, "failed");
+        const status = error?.code === "MODEL_REQUEST_TIMEOUT"
+          ? 504
+          : Number(error?.status) === 429
+            ? 429
+            : Number(error?.status) >= 500
+              ? 502
+              : 400;
+        sendJson(res, status, { ok: false, message });
       }
       return;
     }
