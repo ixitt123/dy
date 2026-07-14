@@ -3229,52 +3229,41 @@ function parseJsonFromModelText(text) {
   }
 }
 
-async function analyzeTranscriptWithDashScope(apiKey, transcriptText, videoInfo, signal) {
+async function analyzeTranscriptWithProvider(provider, transcriptText, videoInfo, signal) {
   throwIfPaused(signal);
-  const model = getBatchSettings().aiModel || "qwen-plus";
-  const response = await fetch("https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model,
+  try {
+    const content = await chatCompletion(provider, [
+      {
+        role: "system",
+        content: [
+          "你是短视频内容分析师。请只输出 JSON，不要 Markdown。",
+          "字段必须包含：hook, emotionPoints, painPoints, callToAction, tags, category, summary。",
+          "tags 必须是中文数组，自动分类要贴合内容，例如：高考、单招、学习方法、英语、家长教育、AI。",
+        ].join("\n"),
+      },
+      {
+        role: "user",
+        content: [
+          `标题：${videoInfo.title || ""}`,
+          "文案：",
+          String(transcriptText || "").slice(0, 12000),
+        ].join("\n"),
+      },
+    ], signal, {
       temperature: 0.2,
-      messages: [
-        {
-          role: "system",
-          content: [
-            "你是短视频内容分析师。请只输出 JSON，不要 Markdown。",
-            "字段必须包含：hook, emotionPoints, painPoints, callToAction, tags, category, summary。",
-            "tags 必须是中文数组，自动分类要贴合内容，例如：高考、单招、学习方法、英语、家长教育、AI。",
-          ].join("\n"),
-        },
-        {
-          role: "user",
-          content: [
-            `标题：${videoInfo.title || ""}`,
-            "文案：",
-            String(transcriptText || "").slice(0, 12000),
-          ].join("\n"),
-        },
-      ],
-    }),
-    signal,
-  });
-
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    const message = data.message || data.error?.message || `AI 分析请求失败：HTTP ${response.status}`;
+      requestName: "AI 分析",
+      maxTokens: 2000,
+      timeoutMs: 60_000,
+    });
+    const parsed = parseJsonFromModelText(content);
+    return normalizeAnalysis({ ...parsed, source: provider.model || provider.label || provider.id }, transcriptText);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
     if (isModelContentInspectionError(message)) {
       return normalizeAnalysis({ ...analyzeTranscriptText(transcriptText), source: "local-rules" }, transcriptText);
     }
-    throw new Error(message);
+    throw error;
   }
-
-  const content = data.choices?.[0]?.message?.content || "";
-  const parsed = parseJsonFromModelText(content);
-  return normalizeAnalysis({ ...parsed, source: model }, transcriptText);
 }
 
 function cleanModelText(value) {
@@ -6490,9 +6479,11 @@ const server = http.createServer(async (req, res) => {
         sendJson(res, 404, { ok: false, message: "没有找到可分析的文案" });
         return;
       }
-      const apiKey = getActiveProviderApiKey();
-      if (!apiKey) {
-        sendJson(res, 400, { ok: false, message: "请先保存 DashScope API Key" });
+      let provider;
+      try {
+        provider = await getRewriteProvider(String(body.provider || "dashscope"));
+      } catch (error) {
+        sendJson(res, 400, { ok: false, message: error instanceof Error ? error.message : String(error) });
         return;
       }
       const transcriptText = String(body.text || fs.readFileSync(task.txt_path, "utf8")).trim();
@@ -6501,7 +6492,7 @@ const server = http.createServer(async (req, res) => {
         return;
       }
       fs.writeFileSync(task.txt_path, `${transcriptText}\n`, "utf8");
-      const analysis = await analyzeTranscriptWithDashScope(apiKey, transcriptText, {
+      const analysis = await analyzeTranscriptWithProvider(provider, transcriptText, {
         title: task.title,
         videoId: task.video_id,
       });
@@ -6509,6 +6500,7 @@ const server = http.createServer(async (req, res) => {
       sendJson(res, 200, {
         ok: true,
         analysis,
+        provider: { id: provider.id, label: provider.label, model: provider.model },
         task: updatedTask,
         transcripts: transcriptRows(),
       });
