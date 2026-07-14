@@ -443,13 +443,14 @@ export function createKineticTextService({
     const id = `kinetic-${Date.now()}-${randomUUID().slice(0, 6)}`;
     const tts = input.tts && typeof input.tts === "object" ? input.tts : input;
     const audioPath = String(tts.audio_path || tts.audioPath || "");
+    const hasAudio = Boolean(audioPath || tts.audio_url || tts.audioUrl);
     const duration = safeNumber(tts.duration, 0, 0) || await probeDuration(audioPath);
     const effectId = normalizeEffectId(input.effectId);
     return save({
       id,
       title: input.title || tts.title || `动态大字视频 ${new Date().toLocaleString("zh-CN", { hour12: false })}`,
       status: "editing",
-      stage: "接收 TTS",
+      stage: hasAudio ? "接收 TTS" : "接收文案",
       progress: 8,
       ttsJobId: Number(tts.id || tts.ttsJobId || 0),
       videoProjectId: String(input.videoProjectId || tts.videoProjectId || ""),
@@ -611,13 +612,13 @@ export function createKineticTextService({
     try {
       let project = get(projectId);
       if (!project) throw new Error("动态大字项目不存在。");
-      if (!project.audioPath || !fs.existsSync(project.audioPath)) throw new Error("TTS 音频文件不存在，请重新从 TTS 发送。");
       if (!project.outputs?.materialZip || !fs.existsSync(project.outputs.materialZip)) {
         const nested = createJob(projectId, "materials");
         await buildMaterials(projectId, nested.id);
         project = get(projectId);
       }
-      const duration = Math.max(project.duration, await probeDuration(project.audioPath), 0.5);
+      const hasTtsAudio = Boolean(project.audioPath && fs.existsSync(project.audioPath));
+      const duration = Math.max(project.duration, hasTtsAudio ? await probeDuration(project.audioPath) : 0, 0.5);
       const outputDir = path.join(downloadsDir, "kinetic-text", project.id);
       fs.mkdirSync(outputDir, { recursive: true });
       const assPath = project.outputs.assPath;
@@ -627,7 +628,8 @@ export function createKineticTextService({
       if (bg.mode === "image" && bg.path && fs.existsSync(bg.path)) args.push("-loop", "1", "-i", bg.path);
       else if (bg.mode === "video" && bg.path && fs.existsSync(bg.path)) args.push("-stream_loop", "-1", "-i", bg.path);
       else args.push("-f", "lavfi", "-i", `color=c=black:s=${WIDTH}x${HEIGHT}:r=${FPS}:d=${duration.toFixed(3)}`);
-      args.push("-i", project.audioPath);
+      if (hasTtsAudio) args.push("-i", project.audioPath);
+      else args.push("-f", "lavfi", "-t", duration.toFixed(3), "-i", "anullsrc=channel_layout=stereo:sample_rate=44100");
       let backgroundAudioIndex = -1;
       if (project.audioMix.source === "local" && project.audioMix.localPath && fs.existsSync(project.audioMix.localPath)) {
         backgroundAudioIndex = 2;
