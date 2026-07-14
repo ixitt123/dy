@@ -1985,65 +1985,6 @@ async function copyAllMomentsPrompts() {
   setMomentsStatus(`已复制 ${prompts.length} 条图片提示词。`, "success");
 }
 
-async function generateMomentsImage(index) {
-  const prompts = collectRenderedMomentsPrompts();
-  const target = prompts.find((item) => item.index === Number(index));
-  if (!target?.text) {
-    setMomentsStatus("当前配图没有提示词。", "warning");
-    return;
-  }
-  const status = document.querySelector(`[data-moments-prompt-status="${index}"]`);
-  if (status) status.textContent = "正在调用图片 API...";
-  try {
-    const data = await fetchJson("/api/image/generate", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        prompt: target.text,
-        aspectRatio: "16:9",
-        count: 1,
-        sourceType: "moments-copy",
-        sourceId: `moments-${Date.now()}-${Number(index) + 1}`,
-      }),
-    });
-    const first = (data.results || []).find((item) => item.success);
-    if (!first) throw new Error((data.results || []).find((item) => item.error)?.error || "图片生成失败。");
-    currentMomentsResult = currentMomentsResult || { images: [] };
-    const generated = {
-      index: Number(index) + 1,
-      title: currentMomentsResult.images?.[index]?.title || `配图 ${Number(index) + 1}`,
-      imagePath: first.imagePath,
-      thumbnailUrl: first.thumbnailUrl,
-      imageUrl: first.imagePath ? `/api/image/file?path=${encodeURIComponent(first.imagePath)}` : first.thumbnailUrl,
-    };
-    currentMomentsResult.generatedImages = [
-      ...(currentMomentsResult.generatedImages || []).filter((item) => Number(item.index) !== Number(index) + 1),
-      generated,
-    ].sort((a, b) => Number(a.index) - Number(b.index));
-    renderMomentsImages(currentMomentsResult.generatedImages);
-    saveMomentsDraft();
-    if (status) status.textContent = `已生成：${first.imagePath || first.filename || ""}`;
-    setMomentsStatus("图片已生成并保存到图片资产库。", "success");
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    if (status) status.textContent = message;
-    setMomentsStatus(message, "error");
-  }
-}
-
-async function generateAllMomentsImages() {
-  const prompts = collectRenderedMomentsPrompts();
-  if (!prompts.length) {
-    setMomentsStatus("还没有可生成图片的提示词。", "warning");
-    return;
-  }
-  if (generateMomentsImagesBtn) generateMomentsImagesBtn.disabled = true;
-  for (const item of prompts) {
-    await generateMomentsImage(item.index);
-  }
-  if (generateMomentsImagesBtn) generateMomentsImagesBtn.disabled = false;
-}
-
 function addMomentsPublishPath(paths, value) {
   const text = String(value || "").trim();
   if (!text) return;
