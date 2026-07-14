@@ -150,6 +150,39 @@ test("Settings keeps API services collapsed by default", async () => {
   }
 });
 
+test("Kinetic text production line", async () => {
+  const [effectsResponse, pageResponse, moduleResponse, legacyResponse, packageSource] = await Promise.all([
+    fetch(`${BASE}/api/kinetic-text/effects`),
+    fetch(`${BASE}/`),
+    fetch(`${BASE}/modules/kinetic-text.js`),
+    fetch(`${BASE}/modules/legacy-runtime.js`),
+    readFile(new URL("./package.json", import.meta.url), "utf8"),
+  ]);
+  const [effects, page, moduleSource, legacySource] = await Promise.all([
+    effectsResponse.json(),
+    pageResponse.text(),
+    moduleResponse.text(),
+    legacyResponse.text(),
+  ]);
+  const packageJson = JSON.parse(packageSource);
+  if (!effectsResponse.ok || effects.effects?.length !== 13
+    || !page.includes('data-nav="kinetic-text"')
+    || !page.includes('data-page="kinetic-text"')
+    || !page.includes('data-target="kinetic-text"')
+    || !page.includes('id="kineticPreviewCanvas"')
+    || !page.includes('id="kineticTimeline"')
+    || !page.includes('id="kineticGenerateMaterials"')
+    || !page.includes('id="kineticRenderFinal"')
+    || !moduleSource.includes("PREF_KEY")
+    || !moduleSource.includes("receiveTts")
+    || !moduleSource.includes("pollJob")
+    || !legacySource.includes('targets.includes("kinetic-text")')
+    || !packageJson.dependencies?.["@motion-canvas/core"]
+    || !packageJson.dependencies?.["@motion-canvas/2d"]) {
+    throw new Error("Kinetic text production line is incomplete");
+  }
+});
+
 // Run all
 let passed = 0;
 let failed = 0;
