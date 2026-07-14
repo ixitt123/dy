@@ -1050,7 +1050,6 @@ function normalizeSettings(settings) {
   const legacyKey = next.dashscopeApiKey || "";
   const batch = next.batch && typeof next.batch === "object" ? { ...next.batch } : {};
   const tts = next.tts && typeof next.tts === "object" ? { ...next.tts } : {};
-  const imageProviders = next.imageProviders && typeof next.imageProviders === "object" ? { ...next.imageProviders } : {};
   const bgmProviders = next.bgmProviders && typeof next.bgmProviders === "object" ? { ...next.bgmProviders } : {};
   const jianying = next.jianying && typeof next.jianying === "object" ? { ...next.jianying } : {};
   const modelMapping = next.modelMap && typeof next.modelMap === "object"
@@ -1172,35 +1171,10 @@ function normalizeSettings(settings) {
     default_speed: clampDecimal(tts.default_speed, 0.5, 2, 1),
     default_format: tts.default_format === "wav" ? "wav" : "mp3",
   };
-  next.imageProviders = {
-    volcengine_ark: {
-      label: "火山方舟 Seedream",
-      baseUrl: String(imageProviders.volcengine_ark?.baseUrl || "https://ark.cn-beijing.volces.com/api/v3").trim(),
-      apiKey: String(imageProviders.volcengine_ark?.apiKey || "").trim(),
-      model: normalizeVolcengineArkImageModel(imageProviders.volcengine_ark?.model),
-    },
-    jimeng: {
-      label: "即梦 AI",
-      baseUrl: String(imageProviders.jimeng?.baseUrl || "https://api.jimeng.io/v1").trim(),
-      apiKey: String(imageProviders.jimeng?.apiKey || "").trim(),
-      model: String(imageProviders.jimeng?.model || "flux-dev").trim() || "flux-dev",
-    },
-  };
+  delete next.imageProviders;
   next.bgmProviders = normalizeBgmProviders(bgmProviders);
   next.modelMap = { ...DEFAULT_MODEL_MAPPING, ...modelMapping };
-  if (next.modelMap.image?.provider === "volcengine_ark") {
-    next.modelMap.image = {
-      ...next.modelMap.image,
-      model: normalizeVolcengineArkImageModel(next.modelMap.image.model),
-    };
-  }
-  if (!migrations.imageDefaultVolcengineArk && (!modelMapping.image || (modelMapping.image.provider === "jimeng" && modelMapping.image.model === "flux-dev"))) {
-    next.modelMap.image = {
-      provider: "volcengine_ark",
-      model: next.imageProviders.volcengine_ark.model || DEFAULT_VOLCENGINE_ARK_IMAGE_MODEL,
-    };
-    migrations.imageDefaultVolcengineArk = true;
-  }
+  delete next.modelMap.image;
   next.modelMapping = next.modelMap;
   next.migrations = migrations;
   return next;
@@ -1504,55 +1478,6 @@ function publicUnifiedProviders(settings = readSettings()) {
     });
   }
 
-  const imageProviderDefs = [
-    {
-      id: "volcengine_ark",
-      label: "火山方舟 Seedream",
-      description: "主力图片生成 Provider，调用火山方舟 Seedream 图片生成接口生成本地图片资产。",
-      baseUrl: "https://ark.cn-beijing.volces.com/api/v3",
-      model: DEFAULT_VOLCENGINE_ARK_IMAGE_MODEL,
-      models: [
-        DEFAULT_VOLCENGINE_ARK_IMAGE_MODEL,
-        "doubao-seedream-5-0-260128",
-        "doubao-seedream-4-5-251128",
-        "doubao-seedream-4-0-250828",
-      ],
-      applyUrl: "https://console.volcengine.com/ark/region:ark+cn-beijing/apiKey",
-      balanceUrl: "https://console.volcengine.com/finance",
-    },
-    {
-      id: "jimeng",
-      label: "即梦 AI",
-      description: "保留现有图片生成 Provider，可作为备用。",
-      baseUrl: "https://api.jimeng.io/v1",
-      model: "flux-dev",
-      models: ["flux-dev", "flux-pro", "sdxl"],
-      applyUrl: "",
-      balanceUrl: "",
-    },
-  ];
-  for (const def of imageProviderDefs) {
-    const config = settings.imageProviders?.[def.id] || {};
-    providers.push({
-      id: def.id,
-      label: config.label || def.label,
-      group: "图片生成",
-      feature: "图片生成",
-      description: def.description,
-      configured: Boolean(config.apiKey),
-      apiKeyMask: maskApiKey(config.apiKey || ""),
-      baseUrl: config.baseUrl || def.baseUrl,
-      model: config.model || def.model,
-      models: def.models,
-      applyUrl: def.applyUrl,
-      balanceUrl: def.balanceUrl,
-      activeDefault: publicModelMapping(settings).image?.provider === def.id,
-      supportsBaseUrl: true,
-      supportsModel: true,
-      enabled: true,
-    });
-  }
-
   const tts = settings.tts || {};
   const ttsProviders = [
     {
@@ -1704,27 +1629,6 @@ function saveUnifiedProvider(settings, body) {
       }
     }
     if (body.setDefault === true) settings.rewrite.defaultProvider = id;
-    return;
-  }
-
-  if (["jimeng", "volcengine_ark"].includes(id)) {
-    if (!settings.imageProviders) settings.imageProviders = {};
-    settings.imageProviders[id] = {
-      ...(settings.imageProviders[id] || {}),
-      label: id === "volcengine_ark" ? "火山方舟 Seedream" : "即梦 AI",
-      ...(apiKey ? { apiKey } : {}),
-      ...(body.baseUrl !== undefined ? { baseUrl } : {}),
-      ...(body.model !== undefined ? { model } : {}),
-    };
-    if (body.setDefault === true) {
-      settings.modelMap.image = {
-        provider: id,
-        model: id === "volcengine_ark"
-          ? normalizeVolcengineArkImageModel(model || settings.imageProviders[id].model)
-          : model || settings.imageProviders[id].model || "flux-dev",
-      };
-      settings.modelMapping = settings.modelMap;
-    }
     return;
   }
 
