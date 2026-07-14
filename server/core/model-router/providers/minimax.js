@@ -10,7 +10,7 @@ export class MiniMaxProvider extends OpenAICompatibleProvider {
     super({
       providerId: "minimax",
       label: "MiniMax",
-      baseUrl: config.baseUrl || "https://api.minimaxi.com",
+      baseUrl: config.baseUrl || "https://api.minimaxi.com/v1",
       apiKey: config.apiKey || "",
       model: config.model || "MiniMax-M2.5",
     });

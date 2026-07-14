@@ -1041,6 +1041,32 @@ function clampDecimal(value, min, max, fallback) {
   return Math.max(min, Math.min(max, number));
 }
 
+const MINIMAX_TEXT_BASE_URL = "https://api.minimaxi.com/v1";
+const MINIMAX_TTS_BASE_URL = "https://api.minimaxi.com";
+const MINIMAX_TEXT_BASE_ALIASES = new Set([
+  "https://api.minimaxi.com",
+  "https://api.minimaxi.com/v1",
+  "https://api.minimax.io",
+  "https://api.minimax.io/v1",
+  "https://api.minimax.chat",
+  "https://api.minimax.chat/v1",
+]);
+
+function normalizeMiniMaxTextBaseUrl(value) {
+  const raw = String(value || "").trim().replace(/\/+$/, "");
+  if (!raw || MINIMAX_TEXT_BASE_ALIASES.has(raw)) return MINIMAX_TEXT_BASE_URL;
+  if (/^https:\/\/api\.minimaxi\.com\/?$/i.test(raw)) return MINIMAX_TEXT_BASE_URL;
+  if (/^https:\/\/api\.minimax\.io\/?$/i.test(raw)) return MINIMAX_TEXT_BASE_URL;
+  return raw;
+}
+
+function normalizeMiniMaxTtsBaseUrl(value) {
+  const raw = String(value || "").trim().replace(/\/+$/, "");
+  if (!raw) return "";
+  if (MINIMAX_TEXT_BASE_ALIASES.has(raw)) return MINIMAX_TTS_BASE_URL;
+  return raw.replace(/\/v1$/i, "");
+}
+
 function setDownloadsDir(value) {
   const input = String(value || "").trim();
   const resolved = path.resolve(input || defaultDownloadsDir);
@@ -1079,9 +1105,10 @@ function normalizeSettings(settings) {
   for (const id of REWRITE_PROVIDER_ORDER) {
     const preset = REWRITE_PROVIDER_PRESETS[id];
     const current = rewriteProviders[id] && typeof rewriteProviders[id] === "object" ? rewriteProviders[id] : {};
+    const rawBaseUrl = String(current.baseUrl || preset.baseUrl || "").trim();
     rewriteProviders[id] = {
       label: preset.label,
-      baseUrl: String(current.baseUrl || preset.baseUrl || "").trim(),
+      baseUrl: id === "minimax" ? normalizeMiniMaxTextBaseUrl(rawBaseUrl) : rawBaseUrl,
       model: String(current.model || (id === "dashscope" ? batch.aiModel : "") || preset.model || "").trim(),
       apiKey: String(current.apiKey || (id === "dashscope" ? providers.dashscope.apiKey : "") || "").trim(),
       applyUrl: preset.applyUrl || current.applyUrl || "",
@@ -1122,6 +1149,9 @@ function normalizeSettings(settings) {
     aiModel: String(batch.aiModel || "qwen-plus").trim() || "qwen-plus",
   };
   const unifiedMiniMax = rewriteProviders.minimax || {};
+  const minimaxTtsBaseUrl = normalizeMiniMaxTtsBaseUrl(tts.minimax?.base_url)
+    || normalizeMiniMaxTtsBaseUrl(unifiedMiniMax.baseUrl)
+    || MINIMAX_TTS_BASE_URL;
   next.tts = {
     aliyun_bailian: {
       api_key: String(tts.aliyun_bailian?.api_key || "").trim(),
@@ -1150,9 +1180,7 @@ function normalizeSettings(settings) {
       voice: String(tts.custom_tts?.voice || "").trim(),
     },
     minimax: {
-      base_url: ["", "https://api.minimax.io/v1"].includes(String(tts.minimax?.base_url || unifiedMiniMax.baseUrl || "").trim())
-        ? "https://api.minimaxi.com"
-        : String(tts.minimax?.base_url || unifiedMiniMax.baseUrl || "").trim(),
+      base_url: minimaxTtsBaseUrl,
       api_key: String(tts.minimax?.api_key || unifiedMiniMax.apiKey || "").trim(),
       model: ["", "minimax-speech"].includes(String(tts.minimax?.model || "").trim()) || /^MiniMax-/i.test(String(tts.minimax?.model || "").trim())
         ? "speech-2.6-hd"

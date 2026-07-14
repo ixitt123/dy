@@ -89,7 +89,7 @@ export const REWRITE_PROVIDER_PRESETS = {
   },
   minimax: {
     label: "MiniMax",
-    baseUrl: "https://api.minimaxi.com",
+    baseUrl: "https://api.minimaxi.com/v1",
     model: "MiniMax-M2.5",
     models: ["MiniMax-M2.5", "MiniMax-M2", "MiniMax-Text-01"],
     applyUrl: "https://platform.minimaxi.com/",

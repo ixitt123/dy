@@ -14,7 +14,7 @@
     "qwen": { "apiKey": "", "baseUrl": "https://dashscope.aliyuncs.com/compatible-mode/v1" },
     "siliconflow": { "apiKey": "", "baseUrl": "https://api.siliconflow.cn/v1" },
     "volcengine": { "apiKey": "", "baseUrl": "https://ark.cn-beijing.volces.com/api/v3" },
-    "minimax": { "apiKey": "", "baseUrl": "https://api.minimax.chat/v1" },
+    "minimax": { "apiKey": "", "baseUrl": "https://api.minimaxi.com/v1" },
     "kling": { "apiKey": "" }
   },
   "tts": {
