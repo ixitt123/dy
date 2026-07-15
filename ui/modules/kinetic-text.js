@@ -732,6 +732,9 @@ function renderProject() {
   renderTimelineRuleStatus();
   if (!project) { drawPreview(); return; }
   $("#kineticTextTitle").value = project.title || "";
+  $("#kineticAspectRatio").value = project.aspectRatio || "9:16";
+  const previewSpec = previewOutputSize(project.aspectRatio || "9:16");
+  $("#kineticPreviewSpec").textContent = `${previewSpec.outputWidth}×${previewSpec.outputHeight} · 30fps`;
   $("#kineticBackgroundMode").value = project.background?.mode || "black";
   $("#kineticBackgroundName").textContent = project.background?.name ? `当前：${project.background.name}` : "当前：纯黑背景";
   $("#kineticAudioSource").value = project.audioMix?.source || "none";
@@ -741,6 +744,19 @@ function renderProject() {
   $("#kineticTtsVolumeValue").value = `${project.audioMix?.ttsVolume ?? 100}%`;
   $("#kineticBgVolumeValue").value = `${project.audioMix?.backgroundVolume ?? 18}%`;
   $("#kineticBottomSubtitles").checked = project.showBottomSubtitles === true;
+  const params = project.effectParams || {};
+  $("#kineticFontFamily").value = params.fontFamily || "Microsoft YaHei";
+  $("#kineticFontSize").value = String(params.fontSize ?? 88);
+  $("#kineticFontSizeValue").value = String(params.fontSize ?? 88);
+  $("#kineticPrimaryColor").value = params.primaryColor || "#ffffff";
+  $("#kineticAccentColor").value = params.accentColor || "#ffd84d";
+  $("#kineticMaxLines").value = String(params.maxLines ?? 2);
+  $("#kineticAnimationSpeed").value = String(Math.round(Number(params.animationSpeed ?? 1) * 100));
+  $("#kineticAnimationSpeedValue").value = `${Number(params.animationSpeed ?? 1).toFixed(2)}×`;
+  $("#kineticBackgroundOpacity").value = String(params.backgroundOpacity ?? 72);
+  $("#kineticBackgroundOpacityValue").value = `${params.backgroundOpacity ?? 72}%`;
+  $("#kineticOutlineEnabled").checked = params.outlineEnabled !== false;
+  $("#kineticShadowEnabled").checked = params.shadowEnabled !== false;
   const sourceLabels = {
     provider: "Provider 原生时间轴",
     estimated_audio_duration: "按音频时长估算，可在下方校正",
