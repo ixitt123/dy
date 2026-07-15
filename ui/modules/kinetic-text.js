@@ -738,8 +738,9 @@ function renderProject() {
   if (!project) { drawPreview(); return; }
   $("#kineticTextTitle").value = project.title || "";
   $("#kineticAspectRatio").value = project.aspectRatio || "9:16";
+  $("#kineticFrameRate").value = String(Number(project.frameRate) === 60 ? 60 : 30);
   const previewSpec = previewOutputSize(project.aspectRatio || "9:16");
-  $("#kineticPreviewSpec").textContent = `${previewSpec.outputWidth}×${previewSpec.outputHeight} · 30fps`;
+  $("#kineticPreviewSpec").textContent = `${previewSpec.outputWidth}×${previewSpec.outputHeight} · ${Number(project.frameRate) === 60 ? 60 : 30}fps`;
   $("#kineticBackgroundMode").value = project.background?.mode || "black";
   $("#kineticBackgroundName").textContent = project.background?.name ? `当前：${project.background.name}` : "当前：纯黑背景";
   $("#kineticAudioSource").value = project.audioMix?.source || "none";
@@ -877,6 +878,7 @@ async function receiveTts(payload) {
     tts: payload,
     effectId: preferences.effectId,
     aspectRatio: preferences.aspectRatio || "9:16",
+    frameRate: Number(preferences.frameRate) === 60 ? 60 : 30,
     videoProjectId: window.videoProjects?.current?.()?.id || localStorage.getItem("active-video-project-id") || "",
   });
   state.project = data.project;
@@ -895,6 +897,7 @@ async function receiveText(payload = {}) {
     source: payload.source || "rewrite",
     effectId: preferences.effectId,
     aspectRatio: preferences.aspectRatio || "9:16",
+    frameRate: Number(preferences.frameRate) === 60 ? 60 : 30,
     videoProjectId: payload.videoProjectId || window.videoProjects?.current?.()?.id || localStorage.getItem("active-video-project-id") || "",
   });
   state.project = data.project;
@@ -943,8 +946,16 @@ function bindEvents() {
     savePreferences({ aspectRatio: event.target.value });
     scheduleSave({ aspectRatio: event.target.value });
     const spec = previewOutputSize(event.target.value);
-    $("#kineticPreviewSpec").textContent = `${spec.outputWidth}×${spec.outputHeight} · 30fps`;
+    const frameRate = Number($("#kineticFrameRate").value) === 60 ? 60 : 30;
+    $("#kineticPreviewSpec").textContent = `${spec.outputWidth}×${spec.outputHeight} · ${frameRate}fps`;
     drawPreview();
+  });
+  $("#kineticFrameRate").addEventListener("change", (event) => {
+    const frameRate = Number(event.target.value) === 60 ? 60 : 30;
+    savePreferences({ frameRate });
+    scheduleSave({ frameRate });
+    const spec = previewOutputSize($("#kineticAspectRatio").value || state.project?.aspectRatio || "9:16");
+    $("#kineticPreviewSpec").textContent = `${spec.outputWidth}×${spec.outputHeight} · ${frameRate}fps`;
   });
   $("#kineticFontFamily").addEventListener("input", (event) => scheduleSave({ effectParams: { fontFamily: event.target.value } }));
   $("#kineticFontSize").addEventListener("input", (event) => {

@@ -23,11 +23,11 @@ async function waitFor(jobId) {
   throw new Error(`render timeout: ${jobId}`);
 }
 
-for (const [effectId, aspectRatio, expected] of [
-  ["word-highlight", "9:16", "1080x1920"],
-  ["caption-card", "16:9", "1920x1080"],
+for (const [effectId, aspectRatio, expected, expectedFrameRate] of [
+  ["word-highlight", "9:16", "1080x1920", 30],
+  ["caption-card", "16:9", "1920x1080", 60],
 ]) {
-  const project = await service.create({ effectId, aspectRatio, text: segment.text, segments: [segment], tts: { alignment_status: "confirmed", final_text: segment.text, duration: 1.25, sentence_timeline: [segment], word_timeline: words } });
+  const project = await service.create({ effectId, aspectRatio, frameRate: expectedFrameRate, text: segment.text, segments: [segment], tts: { alignment_status: "confirmed", final_text: segment.text, duration: 1.25, sentence_timeline: [segment], word_timeline: words } });
   const job = service.startRender(project.id);
   const finished = await waitFor(job.id);
   const videoPath = finished.result?.videoPath;
@@ -35,8 +35,8 @@ for (const [effectId, aspectRatio, expected] of [
   const probe = spawnSync(ffprobeStatic.path, ["-v", "error", "-select_streams", "v:0", "-show_entries", "stream=width,height,r_frame_rate", "-of", "default=nw=1", videoPath], { encoding: "utf8", windowsHide: true });
   assert.equal(probe.status, 0, probe.stderr);
   assert.match(probe.stdout, new RegExp(`width=${expected.split("x")[0]}[\\s\\S]*height=${expected.split("x")[1]}`));
-  assert.match(probe.stdout, /r_frame_rate=30\/1/);
+  assert.match(probe.stdout, new RegExp(`r_frame_rate=${expectedFrameRate}\\/1`));
 }
 
 fs.rmSync(root, { recursive: true, force: true });
-console.log("subtitle formal render ok: 9:16 word timing + 16:9 card, 30fps MP4");
+console.log("subtitle formal render ok: 9:16 word timing at 30fps + 16:9 card at 60fps");
