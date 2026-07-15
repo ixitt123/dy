@@ -760,9 +760,12 @@ export function createTtsService({
       alignment_attempts: Number(metadata.alignment_attempts || 0),
       alignment_max_attempts: Number(metadata.alignment_max_attempts || 0),
       alignment_failure_action: String(metadata.alignment_failure_action || ""),
+      alignment_confirmation_mode: String(metadata.alignment_confirmation_mode || ""),
+      alignment_fallback_reason: String(metadata.alignment_fallback_reason || ""),
       estimated_count: Number(metadata.estimated_count || 0),
       low_confidence_count: Number(metadata.low_confidence_count || 0),
       match_ratio: Number(metadata.match_ratio || 0),
+      recognition_match_ratio: Number(metadata.recognition_match_ratio || metadata.alignment_best_asr_match_ratio || 0),
       progress: Math.max(0, Math.min(100, Number(metadata.progress || (job.status === "completed" ? 100 : 0)))),
       stage: String(metadata.stage || (job.status === "completed" ? "生成完成" : "")),
       duration: Number(metadata.audio_duration || metadata.duration || 0)
@@ -1031,11 +1034,20 @@ export function createTtsService({
       const revision = Number(latestMetadata.alignment_revision || 0) + 1;
       const autoApproved = aligned.matchRatio >= ALIGNMENT_AUTO_APPROVE_RATIO;
       const completedAt = new Date().toISOString();
-      const completedAttempts = autoApproved ? bestAttempt : attemptsMade;
-      const failedMessage = `已自动重新识别 ${completedAttempts}/${maxAttempts} 次，最佳匹配率 ${(aligned.matchRatio * 100).toFixed(1)}%，仍低于 ${(ALIGNMENT_AUTO_APPROVE_RATIO * 100).toFixed(0)}%。请换文案重新生成音频。`;
-      const completed = setJobProgress(numericId, 100, autoApproved
-        ? `字幕匹配率 ${(aligned.matchRatio * 100).toFixed(1)}%，可以发送`
-        : failedMessage, {
+      const completedAttempts = autoApproved ? (attemptsMade || bestAttempt) : attemptsMade;
+      const recognitionMatchRatio = Number(best.recognitionMatchRatio ?? aligned.matchRatio ?? 0);
+      const confirmationMode = best.singingAudioLyricsFallback
+        ? "automatic_singing_audio_lyrics"
+        : best.scriptLockedFallback
+          ? "automatic_script_locked_fallback"
+          : "automatic_match_threshold";
+      const completedMessage = best.singingAudioLyricsFallback
+        ? "唱歌音频已按实际识别歌词同步，可以发送"
+        : best.scriptLockedFallback
+          ? "字幕已按可用歌词/文案生成兜底时间轴，可以发送"
+          : `字幕匹配率 ${(aligned.matchRatio * 100).toFixed(1)}%，可以发送`;
+      const failedMessage = `已自动重新识别 ${completedAttempts}/${maxAttempts} 次，仍无法得到可用歌词时间轴。请换文案重新生成音频。`;
+      const completed = setJobProgress(numericId, 100, autoApproved ? completedMessage : failedMessage, {
         ...files,
         original_text: initialMetadata.original_text || initial.text,
         tts_prepared_text: initialMetadata.tts_prepared_text || initialMetadata.prepared_text || initial.text,
@@ -1050,15 +1062,18 @@ export function createTtsService({
         estimated_count: aligned.estimatedCount,
         low_confidence_count: aligned.lowConfidenceCount,
         match_ratio: aligned.matchRatio,
+        recognition_match_ratio: recognitionMatchRatio,
         alignment_validation: validation,
         alignment_status: autoApproved ? "confirmed" : "failed",
         alignment_confirmed_at: autoApproved ? completedAt : "",
-        alignment_confirmation_mode: autoApproved ? "automatic_match_threshold" : "",
+        alignment_confirmation_mode: autoApproved ? confirmationMode : "",
         alignment_auto_approve_ratio: ALIGNMENT_AUTO_APPROVE_RATIO,
         alignment_attempts: completedAttempts,
         alignment_max_attempts: maxAttempts,
         alignment_best_attempt: bestAttempt,
         alignment_best_match_ratio: aligned.matchRatio,
+        alignment_best_asr_match_ratio: recognitionMatchRatio,
+        alignment_fallback_reason: best.fallbackReason || "",
         alignment_policy_version: ALIGNMENT_POLICY_VERSION,
         alignment_failure_action: autoApproved ? "" : "rewrite_script_required",
         alignment_error: autoApproved ? "" : failedMessage,

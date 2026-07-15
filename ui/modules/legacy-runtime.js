@@ -3977,6 +3977,13 @@ function renderTtsAlignmentEditor(job = activeTtsRailJob) {
   const rewriteRequired = ttsAlignmentRewriteRequired(job);
   const matchInfo = ttsAlignmentMatchInfo(job);
   const matchText = matchInfo.percent === null ? "" : `匹配率 ${matchInfo.percent}%`;
+  const confirmationMode = String(job.alignment_confirmation_mode || job.metadata?.alignment_confirmation_mode || "");
+  const recognitionRatio = Number(job.recognition_match_ratio || job.metadata?.recognition_match_ratio || job.metadata?.alignment_best_asr_match_ratio || NaN);
+  const recognitionText = Number.isFinite(recognitionRatio) && recognitionRatio > 0
+    ? `原始文案参考匹配率 ${(recognitionRatio * 100).toFixed(1)}%`
+    : "";
+  const syncedBySingingLyrics = confirmationMode === "automatic_singing_audio_lyrics";
+  const syncedByScriptFallback = confirmationMode === "automatic_script_locked_fallback";
   const approvedText = matchText
     ? `${matchText}，已达到 ${matchInfo.thresholdPercent}%`
     : "检查已完成";
@@ -3994,7 +4001,11 @@ function renderTtsAlignmentEditor(job = activeTtsRailJob) {
       : [];
   if (ttsAlignmentSummary) {
     ttsAlignmentSummary.textContent = status === "confirmed"
-      ? `${approvedText}，可以直接发送。`
+      ? syncedBySingingLyrics
+        ? `已按音频里实际识别到的歌词生成同步字幕，可以直接发送。${recognitionText ? ` ${recognitionText}。` : ""}`
+        : syncedByScriptFallback
+          ? `已按可用歌词/文案生成兜底时间轴，可以直接发送。${recognitionText ? ` ${recognitionText}。` : ""}`
+          : `${approvedText}，可以直接发送。`
       : status === "review_required"
         ? `${matchText || "检查未通过"}，系统会自动重新识别，不需要人工审核。`
         : status === "failed"
@@ -4003,7 +4014,12 @@ function renderTtsAlignmentEditor(job = activeTtsRailJob) {
   }
   if (ttsAlignmentBadges) {
     const badges = status === "confirmed"
-      ? ['<span class="ok">检查通过 · 可以发送</span>']
+      ? [
+          '<span class="ok">检查通过 · 可以发送</span>',
+          syncedBySingingLyrics ? '<span>按实际歌词同步</span>' : "",
+          syncedByScriptFallback ? '<span class="warning">兜底时间轴</span>' : "",
+          recognitionText ? `<span>${escapeHtml(recognitionText)}</span>` : "",
+        ].filter(Boolean)
       : [
           `<span>${escapeHtml(ttsAlignmentStatusLabel(status))}</span>`,
           Number(job.estimated_count || 0) > 0
@@ -4060,7 +4076,11 @@ function renderTtsAlignmentEditor(job = activeTtsRailJob) {
       : status === "failed"
       ? `校准失败：${ttsAlignmentFailureMessage(job)}`
       : status === "confirmed"
-        ? `检查通过，可以发送。${matchText ? `${matchText}。` : ""}`
+        ? syncedBySingingLyrics
+          ? `检查通过：字幕已按音频里的实际歌词同步。${recognitionText ? `${recognitionText}。` : ""}`
+          : syncedByScriptFallback
+            ? `检查通过：已生成兜底字幕时间轴。${recognitionText ? `${recognitionText}。` : ""}`
+            : `检查通过，可以发送。${matchText ? `${matchText}。` : ""}`
         : status === "review_required"
           ? "匹配率低于门槛，系统会自动重新识别；不再人工确认放行。"
           : `${job.stage || "正在处理最终音频"}，完成前不能发送。`;
