@@ -285,11 +285,12 @@ export function alignTranscriptToAudio({
   estimateMissingRuns(rows, total);
   const wordTimeline = normalizeWordTimeline(rows, total);
   const sentenceTimeline = sentenceTimelineFromWords(finalText, wordTimeline, total);
-  const estimatedCount = wordTimeline.filter((item) => item.estimated).length;
-  const lowConfidenceCount = wordTimeline.filter((item) => Number.isFinite(item.confidence) && item.confidence < 0.75).length;
+  const semanticWords = wordTimeline.filter((item) => isSemanticToken(item.text));
+  const estimatedCount = semanticWords.filter((item) => item.estimated).length;
+  const lowConfidenceCount = semanticWords.filter((item) => Number.isFinite(item.confidence) && item.confidence < 0.75).length;
   const source = estimatedCount === 0
     ? "audio_asr_aligned"
-    : estimatedCount === wordTimeline.length
+    : estimatedCount === semanticWords.length
       ? "estimated_audio_duration"
       : "mixed_audio_estimated";
   return {

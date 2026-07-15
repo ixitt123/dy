@@ -11,6 +11,15 @@ function preciseWords(text, duration = 2) {
   }));
 }
 
+function preciseTokenWords(tokens, duration = 2) {
+  return tokens.map((token, index) => ({
+    text: token,
+    start: duration * (index / tokens.length),
+    end: duration * ((index + 1) / tokens.length),
+    source: "audio_asr",
+  }));
+}
+
 const exact = alignTranscriptToAudio({
   text: "你好世界。",
   recognizedText: "你好世界。",
@@ -41,7 +50,7 @@ const appended = alignTranscriptToAudio({
   duration: 2,
 });
 assert.equal(appended.sentenceTimeline.length, 2);
-assert.ok(appended.estimatedCount >= 3);
+assert.ok(appended.estimatedCount >= 2);
 assert.equal(validateAlignment({ text: appended.finalText, ...appended, duration: 2 }).valid, true);
 
 const sentenceFallback = alignTranscriptToAudio({
@@ -65,5 +74,14 @@ const missingConfidence = alignTranscriptToAudio({
 });
 assert.equal(missingConfidence.lowConfidenceCount, 0);
 assert.equal(missingConfidence.wordTimeline[0].confidence, null);
+
+const semanticMatch = alignTranscriptToAudio({
+  text: "英语顺序搞反了？HTML，直接转换。",
+  recognizedText: "英语顺序搞反了HTML直接转换",
+  recognizedWords: preciseTokenWords(["英", "语", "顺", "序", "搞", "反", "了", "HTML", "直", "接", "转", "换"], 3),
+  duration: 3,
+});
+assert.equal(semanticMatch.matchRatio, 1);
+assert.equal(validateAlignment({ text: semanticMatch.finalText, ...semanticMatch, duration: 3 }).valid, true);
 
 console.log("TTS alignment tests passed");

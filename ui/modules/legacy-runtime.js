@@ -3255,7 +3255,7 @@ function ttsAlignmentStatusLabel(status = "") {
   return {
     waiting: "等待字幕校准",
     processing: "字幕校准中",
-    review_required: "匹配率偏低，待选择",
+    review_required: "匹配率偏低，自动重试",
     confirmed: "字幕校验通过",
     failed: "字幕校准失败",
     not_required: "无需字幕校准",
@@ -3633,6 +3633,7 @@ function renderTtsJobsEnhanced(jobs = []) {
           <button class="ghost small tts-job-minimize" type="button" ${["waiting", "processing"].includes(job.status) ? "disabled" : ""}>最小化</button>
         </div>
       `;
+    maybeAlertTtsAlignmentFailure(job);
     return `
       <div class="tts-history-row" data-tts-job-id="${job.id}">
         <div class="tts-history-summary">
