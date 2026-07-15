@@ -3943,7 +3943,7 @@ function renderTtsAlignmentEditor(job = activeTtsRailJob) {
   const matchInfo = ttsAlignmentMatchInfo(job);
   const matchText = matchInfo.percent === null ? "" : `匹配率 ${matchInfo.percent}%`;
   const approvedText = matchText
-    ? `${matchText}，已达到 ${matchInfo.thresholdPercent}%` 
+    ? `${matchText}，已达到 ${matchInfo.thresholdPercent}%`
     : "检查已完成";
   const finalText = String(job.final_text || job.recognized_text || job.text || "");
   if (ttsOriginalTranscript) ttsOriginalTranscript.value = job.original_text || job.text || "";
