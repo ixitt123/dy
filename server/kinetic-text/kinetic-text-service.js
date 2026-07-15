@@ -807,50 +807,6 @@ export function buildAss(project, options = {}) {
         const text = escapeAssText(wrapSubtitleText(row.text, maxChars, current ? 2 : 1));
         events.push(assEvent(current ? 3 : 1, start, end, current ? "Modern" : "Muted", `\\an5\\move(${x},${rowY + Math.round(lineGap * 0.18)},${x},${rowY},0,${enterMs})\\fs${rowSize}\\1c${rowColor}${alpha}\\fad(${enterMs},90)`, `${marker}${text}`));
       });
-    } else if (template.renderMode === "word-highlight") {
-      events.push(assEvent(2, start, end, "Karaoke", `\\an5\\pos(${x},${y})\\fs${fontSize}\\fad(70,70)`, karaokeText(words, segment.text, "k")));
-    } else if (template.renderMode === "karaoke-sweep") {
-      events.push(assEvent(2, start, end, "Karaoke", `\\an5\\pos(${x},${y})\\fs${fontSize}\\fad(70,70)`, karaokeText(words, segment.text, "kf")));
-    } else if (template.renderMode === "center-statement") {
-      const statement = keywordStyledText(wrappedText, keywords, accent, primary);
-      events.push(assEvent(2, start, end, "Modern", `\\an5\\pos(${x},${y})\\fs${fontSize}\\fscx96\\fscy96\\blur2\\fad(${enterMs},${Math.min(180, durationMs / 4)})\\t(0,${enterMs},\\fscx100\\fscy100\\blur0)`, statement));
-    } else if (template.renderMode === "keyword-emphasis") {
-      const statement = keywordStyledText(wrappedText, keywords, accent, primary);
-      events.push(assEvent(1, start, end, "Modern", `\\an5\\pos(${x},${y})\\fs${fontSize}\\fad(${enterMs},90)`, statement));
-      words.filter((word) => keywordMatch(word.text, keywords)).slice(0, 3).forEach((word) => {
-        events.push(assEvent(3, word.start, Math.min(end, word.end + 0.12), "Modern", `\\an5\\pos(${x},${Math.min(height * 0.88, y + fontSize * 1.05)})\\fs${Math.round(fontSize * 1.15)}\\1c${accent}\\fscx88\\fscy88\\fad(45,70)\\t(0,110,\\fscx100\\fscy100)`, escapeAssText(word.text)));
-      });
-    } else if (template.renderMode === "phrase-pop") {
-      const groups = groupTimedWords(words, segment.text);
-      groups.forEach((group, groupIndex) => {
-        const groupStart = Math.max(start, group.start);
-        const nextStart = groups[groupIndex + 1]?.start;
-        const groupEnd = Math.min(end, Math.max(groupStart + 0.22, nextStart || group.end));
-        const groupKeywords = keywords.filter((keyword) => group.text.includes(keyword));
-        const groupText = keywordStyledText(wrapSubtitleText(group.text, maxChars, 2), groupKeywords, accent, primary);
-        events.push(assEvent(2, groupStart, groupEnd, "Modern", `\\an5\\pos(${x},${y})\\fs${fontSize}\\fscx90\\fscy90\\fad(55,55)\\t(0,${enterMs},\\fscx100\\fscy100)`, groupText));
-      });
-    } else if (template.renderMode === "dialogue-two-line") {
-      const speaker = escapeAssText(segment.speaker || `讲述 ${segmentIndex + 1}`);
-      const labelY = Math.max(fontSize, y - Math.round(fontSize * 1.08));
-      events.push(assEvent(3, start, end, "Label", `\\an1\\pos(${Math.max(50, x - width * 0.38)},${labelY})\\fs${Math.round(fontSize * 0.45)}\\1c${accent}\\fad(${enterMs},90)`, speaker));
-      events.push(assEvent(2, start, end, "DialogueBody", `\\an2\\pos(${x},${y})\\fs${fontSize}\\fad(${enterMs},90)`, escapeAssText(wrappedText)));
-    } else if (template.renderMode === "documentary-minimal") {
-      events.push(assEvent(2, start, end, "Minimal", `\\an2\\pos(${x},${y})\\fs${fontSize}\\fad(180,160)`, escapeAssText(wrappedText)));
-    } else if (template.renderMode === "caption-card") {
-      const cardText = keywordStyledText(wrappedText, keywords, accent, primary);
-      events.push(assEvent(2, start, end, "Card", `\\an5\\pos(${x},${y})\\fs${fontSize}\\fscx96\\fscy96\\fad(${enterMs},100)\\t(0,${enterMs},\\fscx100\\fscy100)`, cardText));
-    } else if (template.renderMode === "keyword-tags") {
-      const baseY = y - Math.round(fontSize * 0.35);
-      events.push(assEvent(1, start, end, "Modern", `\\an5\\pos(${x},${baseY})\\fs${fontSize}\\fad(${enterMs},90)`, escapeAssText(wrappedText)));
-      const tags = keywords.length ? keywords : inferKeywords(segment.text);
-      tags.slice(0, 3).forEach((keyword, tagIndex) => {
-        const matchingWord = words.find((word) => keywordMatch(word.text, [keyword]));
-        const tagStart = Math.max(start, matchingWord?.start || start + tagIndex * 0.08);
-        const spread = Math.min(width * 0.24, fontSize * 2.2);
-        const tagX = x + (tagIndex - (Math.min(tags.length, 3) - 1) / 2) * spread;
-        events.push(assEvent(3, tagStart, end, "Tag", `\\an5\\pos(${Math.round(tagX)},${Math.round(y + fontSize * 1.05)})\\fs${Math.round(fontSize * 0.48)}\\1c${outline}\\fad(70,80)`, escapeAssText(keyword)));
-      });
     }
 
     if (normalized.showBottomSubtitles) {
@@ -870,13 +826,7 @@ export function buildAss(project, options = {}) {
     "[V4+ Styles]",
     "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding",
     `Style: Modern,${font},${fontSize},${primary},${primary},${outline},&H00000000,-1,0,0,0,100,100,0,0,1,${outlineWidth},${shadow},5,70,70,70,1`,
-    `Style: Karaoke,${font},${fontSize},${accent},${primary},${outline},&H00000000,-1,0,0,0,100,100,0,0,1,${outlineWidth},${shadow},5,70,70,70,1`,
     `Style: Muted,${font},${Math.round(fontSize * 0.64)},${muted},${muted},${outline},&H00000000,-1,0,0,0,100,100,0,0,1,1.2,0,5,70,70,70,1`,
-    `Style: DialogueBody,${font},${fontSize},${primary},${primary},${cardBack},${cardBack},-1,0,0,0,100,100,0,0,3,18,0,2,90,90,90,1`,
-    `Style: Label,${font},${Math.round(fontSize * 0.45)},${accent},${accent},${outline},&H00000000,-1,0,0,0,100,100,0,0,1,0,0,1,90,90,90,1`,
-    `Style: Minimal,${font},${fontSize},${primary},${primary},${outline},&H00000000,0,0,0,0,100,100,1.2,0,1,${Math.min(1.4, outlineWidth)},${Math.min(1, shadow)},2,90,90,90,1`,
-    `Style: Card,${font},${fontSize},${primary},${primary},${cardBack},${cardBack},-1,0,0,0,100,100,0,0,3,22,0,5,90,90,90,1`,
-    `Style: Tag,${font},${Math.round(fontSize * 0.48)},${outline},${outline},${accent},${accent},-1,0,0,0,100,100,0,0,3,14,0,5,60,60,60,1`,
     `Style: Bottom,${font},${Math.max(34, Math.round(fontSize * 0.48))},&H00FFFFFF,&H00FFFFFF,${outline},&H00000000,-1,0,0,0,100,100,0,0,1,2.4,0,2,80,80,48,1`,
     "",
     "[Events]",
