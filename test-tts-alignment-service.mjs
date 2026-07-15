@@ -214,6 +214,15 @@ const audioLyrics = "你问我 AI 怎么拍成片 我用一段旋律唱给你听
     emotion: "music",
     source: "minimax_music",
   });
+  assert.ok(result.error, JSON.stringify({
+    alignment_status: result.job?.alignment_status,
+    confirmation_mode: result.job?.alignment_confirmation_mode,
+    final_text: result.job?.final_text,
+    source: result.job?.metadata?.source,
+    lyrics: result.job?.metadata?.lyrics,
+    generated_lyrics: result.job?.metadata?.generated_lyrics,
+    subtitle_text: result.job?.metadata?.subtitle_text,
+  }));
   assert.match(result.error, /唱歌音频没有识别到实际歌词/);
   assert.equal(calls(), 3);
   assert.equal(result.job.alignment_status, "failed");
