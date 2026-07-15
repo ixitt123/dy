@@ -28,7 +28,6 @@ const state = {
   currentTime: 0,
   playing: false,
   seeking: false,
-  resumeAfterSeek: false,
   startedAt: 0,
   startTime: 0,
   raf: 0,
@@ -1065,7 +1064,6 @@ function startPreviewPlayback() {
   if (!state.project) return;
   state.playing = true;
   state.seeking = false;
-  state.resumeAfterSeek = false;
   $("#kineticPreviewPlay").textContent = "暂停预览";
   state.startedAt = performance.now();
   state.startTime = state.currentTime;
@@ -1091,7 +1089,6 @@ function playPreview() {
 function beginPreviewSeek() {
   if (!state.project || state.seeking) return;
   state.seeking = true;
-  state.resumeAfterSeek = state.playing;
   if (!state.playing) return;
   state.playing = false;
   state.audio?.pause();
@@ -1112,11 +1109,8 @@ function seekPreviewTo(sliderValue) {
 
 function finishPreviewSeek() {
   if (!state.seeking) return;
-  const shouldResume = state.resumeAfterSeek;
   state.seeking = false;
-  state.resumeAfterSeek = false;
-  if (shouldResume) startPreviewPlayback();
-  else $("#kineticPreviewPlay").textContent = "播放预览";
+  startPreviewPlayback();
 }
 
 function renderOutputs() {
@@ -1525,7 +1519,6 @@ function bindEvents() {
     seekPreviewTo(event.target.value);
   });
   $("#kineticPreviewSeek").addEventListener("change", finishPreviewSeek);
-  $("#kineticPreviewSeek").addEventListener("pointerup", finishPreviewSeek);
   $("#kineticPreviewSeek").addEventListener("pointercancel", finishPreviewSeek);
   $("#kineticPreviewSeek").addEventListener("blur", finishPreviewSeek);
   $("#kineticGenerateMaterials").addEventListener("click", async () => {
