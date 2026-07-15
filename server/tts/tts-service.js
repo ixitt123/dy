@@ -1164,6 +1164,8 @@ export function createTtsService({
       workflow_auto_director: input.workflow_auto_director !== false,
       audio_duration: audioDuration,
       ...prepared.metadata,
+      original_text: text,
+      tts_prepared_text: prepared.text,
     };
     const job = taskStore.createTtsJob({
       task_id: input.task_id,
@@ -1199,13 +1201,20 @@ export function createTtsService({
       fileBaseName,
       title: titleMetadata.title,
     });
-    taskStore.updateTtsJob(job.id, {
+    const imported = taskStore.updateTtsJob(job.id, {
       metadata_json: JSON.stringify({
         ...metadata,
         ...timedText,
+        alignment_status: requiresAlignment(job, metadata) ? "waiting" : "not_required",
+        progress: requiresAlignment(job, metadata) ? 10 : 100,
+        stage: requiresAlignment(job, metadata) ? "读取最终音频信息" : "生成完成",
       }),
     });
     if (voiceAssetId > 0) taskStore.recordVoiceUse(voiceAssetId);
+    if (requiresAlignment(imported, metadata)) {
+      await processAlignment(job.id, { reuseRecognition: false });
+      return { job: getJob(job.id) };
+    }
     Promise.resolve(onJobCompleted(taskStore.getTtsJob(job.id))).catch(() => {});
     return { job: getJob(job.id) };
   }
@@ -1224,6 +1233,9 @@ export function createTtsService({
       return { error: "只能选择已完成且音频文件存在的语音。" };
     }
     const targetMetadata = safeJson(target.metadata_json, {});
+    if (requiresAlignment(target, targetMetadata) && targetMetadata.alignment_status !== "confirmed") {
+      return { error: "请先在 TTS 页面完成字幕校准并确认，再发送到生产线。" };
+    }
     if (String(targetMetadata.project_id || "") !== cleanProjectId) {
       return { error: "该音频不属于当前项目。" };
     }
@@ -1264,7 +1276,7 @@ export function createTtsService({
     }
     if (deleteFile) {
       const root = path.resolve(subtitleDir);
-      for (const filePath of [metadata.script_path, metadata.subtitle_path, metadata.timestamped_text_path]) {
+      for (const filePath of [metadata.script_path, metadata.subtitle_path, metadata.timestamped_text_path, metadata.word_timeline_path]) {
         const target = filePath ? path.resolve(filePath) : "";
         if (target && target !== root && target.startsWith(`${root}${path.sep}`) && fs.existsSync(target)) {
           fs.rmSync(target, { force: true });
@@ -1388,17 +1400,39 @@ export function createTtsService({
 
   ensureSequenceNumbers();
   repairEstimatedTimelines();
+  const resumeAlignmentIds = [];
   for (const job of taskStore.listTtsJobs({ limit: 500 })) {
     if (!["waiting", "processing"].includes(job.status)) continue;
+    const metadata = ttsJobMetadata(job);
+    if (job.audio_path && fs.existsSync(job.audio_path) && requiresAlignment(job, metadata)) {
+      taskStore.updateTtsJob(job.id, {
+        status: "completed",
+        error: "",
+        metadata_json: JSON.stringify({
+          ...metadata,
+          alignment_status: "failed",
+          alignment_error: "服务重启后需要恢复字幕校准。",
+          stage: "等待恢复字幕校准",
+        }),
+      });
+      resumeAlignmentIds.push(job.id);
+      continue;
+    }
     taskStore.updateTtsJob(job.id, { status: "waiting", error: "" });
     pending.push(job.id);
   }
   if (pending.length) setTimeout(() => drain().catch(() => {}), 0);
+  if (resumeAlignmentIds.length) setTimeout(() => {
+    for (const id of resumeAlignmentIds) retryAlignment(id);
+  }, 0);
 
   return {
     enqueue,
     importGenerated,
     retryJob,
+    retryAlignment,
+    realignJob,
+    confirmAlignment,
     getJob,
     listJobs,
     listProjectJobs,

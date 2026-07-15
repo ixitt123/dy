@@ -132,6 +132,11 @@ const ttsService = createTtsService({
   getSettings: readSettings,
   ffmpegPath,
   ffprobePath,
+  transcribeFinalAudio: (mediaPath, onProgress, signal) => {
+    const apiKey = getDashScopeAsrApiKey();
+    if (!apiKey) throw new Error("未配置 DashScope 语音识别 API Key，无法校准最终音频字幕。");
+    return transcribeLocalMediaWithDashScope(apiKey, mediaPath, onProgress, signal, { detailed: true });
+  },
   onJobCompleted: handleTtsJobCompleted,
 });
 const voiceAssetService = createVoiceAssetService({
@@ -5678,6 +5683,16 @@ function getActiveProviderApiKey() {
   ).trim();
 }
 
+function getDashScopeAsrApiKey() {
+  const settings = readSettings();
+  return String(
+    settings.providers?.dashscope?.apiKey
+    || settings.rewriteProviders?.dashscope?.apiKey
+    || settings.tts?.aliyun_bailian?.api_key
+    || ""
+  ).trim();
+}
+
 function queueState(extra = {}) {
   return {
     ...extra,
@@ -6303,6 +6318,7 @@ async function handleTtsJobCompleted(job) {
   const metadata = safeJsonParse(job.metadata_json);
   const projectId = String(metadata.project_id || metadata.projectId || "").trim();
   if (!projectId || metadata.workflow_auto_director === false) return;
+  if (metadata.alignment_status !== "confirmed") return;
   const project = projectCenter.getById(projectId);
   if (!project) return;
 
@@ -6311,11 +6327,19 @@ async function handleTtsJobCompleted(job) {
     const linked = projectCenter.linkAsset(project.id, "tts", job.id, job.voice_name || `配音 #${job.id}`, {
       ...job,
       ...metadata,
-      text: job.text || project.selectedRewriteText || project.transcriptText || "",
+      text: metadata.final_text || metadata.recognized_text || job.text || project.selectedRewriteText || project.transcriptText || "",
       audioDuration,
       audio_duration: metadata.audio_duration || audioDuration,
       subtitle_source: metadata.subtitle_source || "",
-      subtitle_timeline: Array.isArray(metadata.subtitle_timeline) ? metadata.subtitle_timeline : [],
+      word_timeline: Array.isArray(metadata.word_timeline) ? metadata.word_timeline : [],
+      sentence_timeline: Array.isArray(metadata.sentence_timeline) ? metadata.sentence_timeline : [],
+      subtitle_timeline: Array.isArray(metadata.sentence_timeline)
+        ? metadata.sentence_timeline
+        : Array.isArray(metadata.subtitle_timeline)
+          ? metadata.subtitle_timeline
+          : [],
+      alignment_status: metadata.alignment_status,
+      alignment_confirmed_at: metadata.alignment_confirmed_at || "",
       source: "ai_generated",
       status: "ready",
     }).project;
@@ -6329,7 +6353,7 @@ async function handleTtsJobCompleted(job) {
 
     const latest = projectCenter.getById(project.id);
     if (latest?.directorScript?.id || latest?.lastDirectorProjectId) return;
-    const sourceText = String(latest?.selectedRewriteText || job.text || latest?.transcriptText || "").trim();
+    const sourceText = String(metadata.final_text || metadata.recognized_text || job.text || latest?.selectedRewriteText || latest?.transcriptText || "").trim();
     if (!sourceText || !directorService) return;
     const result = directorService.enqueue({
       project_id: latest.id,
