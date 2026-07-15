@@ -5130,10 +5130,10 @@ body[data-active-module="xiaohei-video"] .floating-workflow-guide [data-nav="xia
 .production-line-frame {
   display: block;
   width: 100%;
-  min-height: calc(100vh - 250px);
+  min-height: calc(100vh - 170px);
   border: 1px solid #2d3542;
   border-radius: 8px;
-  background: #f4f6fa;
+  background: #05080d;
 }
 
 .money-printer-maker {
