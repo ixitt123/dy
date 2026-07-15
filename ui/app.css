@@ -9817,12 +9817,18 @@ audio {
 }
 
 .kinetic-preview-toolbar {
+  display: grid;
+  gap: 8px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--line, #293244);
+}
+
+.kinetic-preview-toolbar-main {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  padding: 12px 14px;
-  border-bottom: 1px solid var(--line, #293244);
+  min-width: 0;
 }
 
 .kinetic-preview-title {
@@ -10105,6 +10111,11 @@ audio {
 .kinetic-preview-buttons {
   flex: 0 0 auto;
   flex-wrap: nowrap;
+}
+
+.kinetic-preview-progress {
+  display: grid;
+  gap: 4px;
 }
 
 .kinetic-outputs {
