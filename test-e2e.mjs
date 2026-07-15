@@ -151,23 +151,30 @@ test("Settings keeps API services collapsed by default", async () => {
 });
 
 test("TTS final-audio transcript alignment", async () => {
-  const [pageResponse, legacyResponse, ttsServiceSource, alignmentSource, kineticSource, xiaoheiSource] = await Promise.all([
+  const [pageResponse, legacyResponse, workbenchResponse, ttsServiceSource, alignmentSource, kineticSource, xiaoheiSource] = await Promise.all([
     fetch(`${BASE}/`),
     fetch(`${BASE}/modules/legacy-runtime.js`),
+    fetch(`${BASE}/workbench.js`),
     readFile(new URL("./server/tts/tts-service.js", import.meta.url), "utf8"),
     readFile(new URL("./server/tts/alignment.js", import.meta.url), "utf8"),
     readFile(new URL("./server/kinetic-text/kinetic-text-service.js", import.meta.url), "utf8"),
     readFile(new URL("./server/routes/ian-xiaohei-routes.js", import.meta.url), "utf8"),
   ]);
-  const [page, legacy] = await Promise.all([pageResponse.text(), legacyResponse.text()]);
+  const [page, legacy, workbench] = await Promise.all([pageResponse.text(), legacyResponse.text(), workbenchResponse.text()]);
   if (!page.includes('id="ttsAlignmentEditor"')
     || !page.includes('id="ttsFinalTranscript"')
     || !page.includes('id="confirmTtsAlignment"')
     || !legacy.includes('/api/tts/alignment/realign')
     || !legacy.includes('/api/tts/alignment/confirm')
     || !legacy.includes('job.alignment_status !== "confirmed"')
+    || !legacy.includes('tts-job-confirm-anyway')
+    || !legacy.includes('tts-job-regenerate')
+    || !workbench.includes('resultLane.appendChild(alignmentEditor)')
+    || !workbench.includes('resultLane.appendChild(audioHandoff)')
     || !ttsServiceSource.includes("transcribeFinalAudio")
-    || !ttsServiceSource.includes('alignment_status: "review_required"')
+    || !ttsServiceSource.includes("ALIGNMENT_AUTO_APPROVE_RATIO = 0.8")
+    || !ttsServiceSource.includes("preferredAlignmentText")
+    || !ttsServiceSource.includes('alignment_status: autoApproved ? "confirmed" : "review_required"')
     || !ttsServiceSource.includes('stage: "等待处理"')
     || !alignmentSource.includes("estimated_manual_edit")
     || !alignmentSource.includes("validateAlignment")
