@@ -19,8 +19,14 @@ for (const token of forbidden) {
 
 assert.match(
   source,
-  /function downloadOutputDir\(\)\s*\{[\s\S]*?return downloadsDir;\s*\}/,
+  /function downloadOutputDir\(\)\s*\{\s*assertDownloadRuntimeCurrent\(\);[\s\S]*?return downloadsDir;\s*\}/,
   "下载输出必须直接使用用户选择的目录",
+);
+
+assert.match(
+  source,
+  /function assertDownloadRuntimeCurrent\(\)[\s\S]*?currentMtimeMs !== runtimeSourceMtimeMs[\s\S]*?请重启软件后再下载/,
+  "下载代码更新后，旧后台必须拒绝继续写入下载目录",
 );
 
 console.log("Download directory safety: OK");

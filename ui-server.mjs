@@ -36,7 +36,9 @@ import { DEFAULT_REWRITE_REFERENCE, REWRITE_DIRECTIONS, REWRITE_STYLES, REWRITE_
 import { DEFAULT_MODEL_MAPPING, SETTINGS_TASKS } from "./server/config/model-defaults.js";
 import { AUTO_MODEL_VALUE, REWRITE_PROVIDER_ORDER, REWRITE_PROVIDER_PRESETS } from "./server/config/provider-presets.js";
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const runtimeSourcePath = fileURLToPath(import.meta.url);
+const runtimeSourceMtimeMs = fs.statSync(runtimeSourcePath).mtimeMs;
+const __dirname = path.dirname(runtimeSourcePath);
 const uiDir = path.join(__dirname, "ui");
 const skillsDir = path.join(__dirname, "skills");
 const promptsDir = path.join(__dirname, "prompts");
@@ -2187,7 +2189,15 @@ function sanitizeFileName(value) {
     .trim();
 }
 
+function assertDownloadRuntimeCurrent() {
+  const currentMtimeMs = fs.statSync(runtimeSourcePath).mtimeMs;
+  if (currentMtimeMs !== runtimeSourceMtimeMs) {
+    throw new Error("下载后台代码已更新。为保护下载目录，请重启软件后再下载。");
+  }
+}
+
 function downloadOutputDir() {
+  assertDownloadRuntimeCurrent();
   // The selected directory is only an output destination. Never inspect or
   // reorganize files that were already present there.
   fs.mkdirSync(downloadsDir, { recursive: true });
