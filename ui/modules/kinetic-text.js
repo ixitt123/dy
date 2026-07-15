@@ -125,6 +125,7 @@ function previewClockTime(timestamp) {
   if (state.seekCommitUntil && now < state.seekCommitUntil) {
     return state.startTime + (now - state.startedAt) / 1000;
   }
+  if (state.seekCommitUntil && now >= state.seekCommitUntil) state.seekCommitUntil = 0;
   if (state.audio && Number.isFinite(Number(state.audio.currentTime))) {
     return state.audio.currentTime;
   }
@@ -1114,8 +1115,7 @@ function drawPreview() {
 function previewTick(timestamp) {
   if (!state.playing || !state.project) return;
   const duration = previewDuration();
-  if (state.audio && Number.isFinite(Number(state.audio.currentTime))) state.currentTime = state.audio.currentTime;
-  else state.currentTime = state.startTime + (timestamp - state.startedAt) / 1000;
+  state.currentTime = previewClockTime(timestamp);
   if (state.backgroundMedia instanceof HTMLVideoElement) {
     const video = state.backgroundMedia;
     if (video.readyState >= 2 && Math.abs(video.currentTime - state.currentTime % Math.max(video.duration || 1, 1)) > 0.25) video.currentTime = state.currentTime % Math.max(video.duration || 1, 1);
@@ -1141,8 +1141,7 @@ function startPreviewPlayback() {
   state.playing = true;
   state.seeking = false;
   $("#kineticPreviewPlay").textContent = "暂停预览";
-  state.startedAt = performance.now();
-  state.startTime = state.currentTime;
+  anchorPreviewClock(state.currentTime, state.seekCommitUntil ? Math.max(0, state.seekCommitUntil - performance.now()) : 0);
   if (state.audio) {
     const audio = state.audio;
     audio.currentTime = state.currentTime;
@@ -1175,6 +1174,7 @@ function playPreview() {
 
 function beginPreviewSeek() {
   if (!state.project || state.seeking) return;
+  state.seekResumePlaying = state.playing;
   state.seeking = true;
   if (!state.playing) return;
   state.playing = false;
@@ -1185,21 +1185,21 @@ function beginPreviewSeek() {
 
 function seekPreviewTo(sliderValue) {
   if (!state.project) return;
-  const duration = previewDuration();
-  state.currentTime = Math.max(0, Math.min(duration, (Number(sliderValue || 0) / previewSeekMaximum()) * duration));
-  if (state.audio) state.audio.currentTime = state.currentTime;
-  if (state.backgroundMedia instanceof HTMLVideoElement) {
-    state.backgroundMedia.currentTime = state.currentTime % Math.max(state.backgroundMedia.duration || 1, 1);
-  }
+  const targetTime = seekValueToTime(sliderValue);
+  anchorPreviewClock(targetTime, state.seeking ? 650 : 0);
+  syncPreviewMediaTime(targetTime);
   drawPreview();
+  return targetTime;
 }
 
 function finishPreviewSeek(event) {
   if (!state.project || !state.seeking) return;
   const slider = event?.currentTarget || $("#kineticPreviewSeek");
   seekPreviewTo(slider?.value);
+  const shouldResume = state.seekResumePlaying;
   state.seeking = false;
-  startPreviewPlayback();
+  state.seekResumePlaying = false;
+  if (shouldResume) startPreviewPlayback();
 }
 
 function renderOutputs() {
