@@ -646,7 +646,7 @@ function assEvent(layer, start, end, style, tags, text) {
   return `Dialogue: ${layer},${formatAssTime(start)},${formatAssTime(end)},${style},,0,0,0,,{${tags}}${text}`;
 }
 
-function buildAss(project, options = {}) {
+export function buildAss(project, options = {}) {
   const normalized = normalizeProject(project);
   const template = effectById(normalized.effectId);
   const params = { ...template.defaultParams, ...normalized.effectParams };
