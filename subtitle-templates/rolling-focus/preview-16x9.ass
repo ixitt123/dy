@@ -9,13 +9,7 @@ WrapStyle: 2
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
 Style: Modern,Microsoft YaHei,87,&H00FCFAF8,&H00FCFAF8,&H00161210,&H00000000,-1,0,0,0,100,100,0,0,1,3,2,5,70,70,70,1
-Style: Karaoke,Microsoft YaHei,87,&H005AFFB7,&H00FCFAF8,&H00161210,&H00000000,-1,0,0,0,100,100,0,0,1,3,2,5,70,70,70,1
 Style: Muted,Microsoft YaHei,56,&H0093847B,&H0093847B,&H00161210,&H00000000,-1,0,0,0,100,100,0,0,1,1.2,0,5,70,70,70,1
-Style: DialogueBody,Microsoft YaHei,87,&H00FCFAF8,&H00FCFAF8,&H47161210,&H47161210,-1,0,0,0,100,100,0,0,3,18,0,2,90,90,90,1
-Style: Label,Microsoft YaHei,39,&H005AFFB7,&H005AFFB7,&H00161210,&H00000000,-1,0,0,0,100,100,0,0,1,0,0,1,90,90,90,1
-Style: Minimal,Microsoft YaHei,87,&H00FCFAF8,&H00FCFAF8,&H00161210,&H00000000,0,0,0,0,100,100,1.2,0,1,1.4,1,2,90,90,90,1
-Style: Card,Microsoft YaHei,87,&H00FCFAF8,&H00FCFAF8,&H47161210,&H47161210,-1,0,0,0,100,100,0,0,3,22,0,5,90,90,90,1
-Style: Tag,Microsoft YaHei,42,&H00161210,&H00161210,&H005AFFB7,&H005AFFB7,-1,0,0,0,100,100,0,0,3,14,0,5,60,60,60,1
 Style: Bottom,Microsoft YaHei,42,&H00FFFFFF,&H00FFFFFF,&H00161210,&H00000000,-1,0,0,0,100,100,0,0,1,2.4,0,2,80,80,48,1
 
 [Events]
