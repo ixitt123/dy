@@ -255,8 +255,7 @@ function mediaUrl(kind, { download = false } = {}) {
 }
 
 function kineticDownloadDirectory() {
-  const base = String(state.downloadsDir || "").replace(/[\\/]+$/, "");
-  return base && state.project ? `${base}\\kinetic-text\\${state.project.id}` : base;
+  return String(state.downloadsDir || "").replace(/[\\/]+$/, "");
 }
 
 function renderDownloadDirectory() {
@@ -294,21 +293,11 @@ async function chooseKineticDownloadDirectory() {
   }
 }
 
-function triggerVideoDownload() {
-  const link = document.createElement("a");
-  link.href = mediaUrl("video", { download: true });
-  link.download = `${state.project?.title || "字幕视频"}.mp4`;
-  link.hidden = true;
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-}
-
 function setRenderButtonBusy(busy) {
   const button = $("#kineticRenderFinal");
   if (!button) return;
   button.disabled = busy;
-  button.textContent = busy ? "正在生成视频…" : "编辑并下载视频";
+  button.textContent = busy ? "正在生成…" : "下载视频";
 }
 
 function syncAudio() {
@@ -665,6 +654,102 @@ function canvasLines(ctx, text, maxWidth, maxLines = 2) {
   return lines.slice(0, maxLines);
 }
 
+const KEYWORD_EMPHASIS_PALETTE = ["#FFD84D", "#69E7FF", "#B7FF5A", "#C59CFF"];
+const KEYWORD_EMPHASIS_MODES = ["color", "scale", "box", "underline"];
+
+function stableKeywordHash(value) {
+  let hash = 2166136261;
+  for (const character of String(value || "")) {
+    hash ^= character.codePointAt(0);
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
+}
+
+function keywordEmphasisSpec(seed, keyword) {
+  const hash = stableKeywordHash(`${seed}:${keyword}`);
+  return {
+    mode: KEYWORD_EMPHASIS_MODES[hash % KEYWORD_EMPHASIS_MODES.length],
+    color: KEYWORD_EMPHASIS_PALETTE[(hash >>> 8) % KEYWORD_EMPHASIS_PALETTE.length],
+  };
+}
+
+function keywordRuns(text, keywords, seed) {
+  const ordered = [...new Set((keywords || []).map((item) => String(item || "").trim()).filter(Boolean))]
+    .sort((a, b) => b.length - a.length);
+  if (!ordered.length) return [{ text: String(text || ""), emphasis: null }];
+  const pattern = new RegExp(`(${ordered.map((item) => item.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")})`, "g");
+  return String(text || "").split(pattern).filter(Boolean).map((part) => ({
+    text: part,
+    emphasis: ordered.includes(part) ? keywordEmphasisSpec(seed, part) : null,
+  }));
+}
+
+function drawKeywordCaptionText(ctx, text, keywords, x, y, options = {}) {
+  const fontSize = Number(options.fontSize || 44);
+  const fontFamily = options.fontFamily || "Microsoft YaHei";
+  const weight = options.weight || 800;
+  const maxWidth = options.maxWidth || ctx.canvas.width * 0.82;
+  const maxLines = options.maxLines || 2;
+  const lineHeight = fontSize * (options.lineHeight || 1.22);
+  ctx.save();
+  ctx.font = `${weight} ${fontSize}px ${fontFamily}`;
+  ctx.textBaseline = "middle";
+  ctx.lineJoin = "round";
+  ctx.globalAlpha = options.alpha ?? 1;
+  const lines = canvasLines(ctx, text, maxWidth, maxLines);
+  lines.forEach((line, lineIndex) => {
+    const runs = keywordRuns(line, keywords, options.seed || "");
+    const measured = runs.map((run) => {
+      const runSize = run.emphasis?.mode === "scale" ? fontSize * 1.16 : fontSize;
+      ctx.font = `${weight} ${runSize}px ${fontFamily}`;
+      return { ...run, runSize, width: ctx.measureText(run.text).width };
+    });
+    const totalWidth = measured.reduce((sum, run) => sum + run.width, 0);
+    let cursor = options.align === "left" ? x : options.align === "right" ? x - totalWidth : x - totalWidth / 2;
+    const lineY = y + (lineIndex - (lines.length - 1) / 2) * lineHeight;
+    measured.forEach((run) => {
+      ctx.save();
+      ctx.font = `${weight} ${run.runSize}px ${fontFamily}`;
+      ctx.textAlign = "left";
+      if (run.emphasis?.mode === "box") {
+        const padX = Math.max(5, fontSize * 0.11);
+        const padY = Math.max(3, fontSize * 0.08);
+        roundRectPath(ctx, cursor - padX, lineY - run.runSize * 0.56 - padY, run.width + padX * 2, run.runSize * 1.12 + padY * 2, Math.max(5, fontSize * 0.12));
+        ctx.fillStyle = hexToRgba(run.emphasis.color, 0.18);
+        ctx.fill();
+        ctx.strokeStyle = run.emphasis.color;
+        ctx.lineWidth = Math.max(2, fontSize * 0.045);
+        ctx.stroke();
+      }
+      if (options.shadow !== false) {
+        ctx.shadowColor = "rgba(0,0,0,.5)";
+        ctx.shadowBlur = Math.max(2, fontSize * 0.12);
+        ctx.shadowOffsetY = Math.max(1, fontSize * 0.04);
+      }
+      if (options.outline !== false && run.emphasis?.mode !== "box") {
+        ctx.strokeStyle = options.outlineColor || "rgba(10,12,16,.88)";
+        ctx.lineWidth = Math.max(1.5, fontSize * 0.055);
+        ctx.strokeText(run.text, cursor, lineY);
+      }
+      ctx.fillStyle = run.emphasis?.color || options.color || "#fff";
+      ctx.fillText(run.text, cursor, lineY);
+      if (run.emphasis?.mode === "underline") {
+        ctx.strokeStyle = run.emphasis.color;
+        ctx.lineWidth = Math.max(2, fontSize * 0.055);
+        ctx.beginPath();
+        ctx.moveTo(cursor, lineY + run.runSize * 0.56);
+        ctx.lineTo(cursor + run.width, lineY + run.runSize * 0.56);
+        ctx.stroke();
+      }
+      ctx.restore();
+      cursor += run.width;
+    });
+  });
+  ctx.restore();
+  return { lines, height: Math.max(lineHeight, lines.length * lineHeight) };
+}
+
 function drawCaptionText(ctx, text, x, y, options = {}) {
   const fontSize = Number(options.fontSize || 44);
   const fontFamily = options.fontFamily || "Microsoft YaHei";
@@ -875,7 +960,7 @@ function drawPreview() {
             : (template.muted || "#B7B7B7");
           const markerGap = fontSize * 0.62;
           const rowX = current ? x + markerGap * transition : wasCurrent ? x + markerGap * (1 - transition) : x;
-          drawCaptionText(ctx, row.text, rowX, movingY, {
+          const rowOptions = {
             fontSize: rowFontSize,
             fontFamily,
             weight: current || wasCurrent ? 800 : 500,
@@ -886,7 +971,10 @@ function drawPreview() {
             alpha: current ? 1 : Math.max(0.34, 0.7 - Math.abs(delta) * 0.14),
             outline: false,
             shadow: false,
-          });
+            seed: row.sourceSegmentId || row.id,
+          };
+          if (current) drawKeywordCaptionText(ctx, row.text, row.keywords, rowX, movingY, rowOptions);
+          else drawCaptionText(ctx, row.text, rowX, movingY, rowOptions);
           if (current && transition >= 0.98) {
             drawCaptionText(ctx, "▶", x, movingY, {
               fontSize: fontSize * 0.72,
@@ -908,7 +996,9 @@ function drawPreview() {
         if (!row) return;
         const delta = index - segmentIndex;
         const current = delta === 0;
-        drawCaptionText(ctx, `${current ? "▶  " : ""}${row.text}`, x, y + delta * gap + (1 - enter) * gap * 0.18, {
+        const rowText = `${current ? "▶  " : ""}${row.text}`;
+        const rowY = y + delta * gap + (1 - enter) * gap * 0.18;
+        const rowOptions = {
           fontSize: current ? fontSize : fontSize * 0.63,
           fontFamily,
           color: current ? primary : (template.muted || "#7b8493"),
@@ -917,7 +1007,10 @@ function drawPreview() {
           alpha: current ? 1 : 0.48,
           outline: current && params.outlineEnabled !== false,
           shadow: current && params.shadowEnabled !== false,
-        });
+          seed: row.sourceSegmentId || row.id,
+        };
+        if (current) drawKeywordCaptionText(ctx, rowText, row.keywords, x, rowY, rowOptions);
+        else drawCaptionText(ctx, rowText, x, rowY, rowOptions);
       });
     }
 
@@ -977,7 +1070,7 @@ function renderOutputs() {
     outputs.materialZip ? `<a href="${mediaUrl("package")}" target="_blank">打开素材包 ZIP</a>` : "",
     outputs.srtPath ? `<a href="${mediaUrl("srt")}" target="_blank">打开字幕 SRT</a>` : "",
     outputs.finalVideo ? `<a href="${mediaUrl("video")}" target="_blank">播放最终 MP4</a>` : "",
-    outputs.finalVideo ? `<a class="primary-link" href="${mediaUrl("video", { download: true })}" download>再次下载 MP4</a>` : "",
+    outputs.finalVideo ? `<button class="primary" type="button" data-open-kinetic-output>打开视频位置</button>` : "",
   ].filter(Boolean).join("");
 }
 
@@ -1131,21 +1224,21 @@ async function pollJob(jobId, options = {}) {
   setProgress(job.progress, job.stage);
   if (job.status === "completed") {
     await refreshProjects(job.projectId);
-    if (options.downloadOnComplete && job.type === "render") {
-      triggerVideoDownload();
-      setProgress(100, `视频已保存并开始下载：${kineticDownloadDirectory()}`);
+    if (options.renderOnComplete && job.type === "render") {
+      const videoPath = job.result?.videoPath || state.project?.outputs?.finalVideo || kineticDownloadDirectory();
+      setProgress(100, `视频已保存：${videoPath}`);
       setRenderButtonBusy(false);
     }
     return job;
   }
   if (job.status === "failed") {
     setProgress(job.progress || 0, `${job.stage}：${job.error}`);
-    if (options.downloadOnComplete) setRenderButtonBusy(false);
+    if (options.renderOnComplete) setRenderButtonBusy(false);
     return job;
   }
   state.pollTimer = setTimeout(() => pollJob(jobId, options).catch((error) => {
     setProgress(job.progress, error.message);
-    if (options.downloadOnComplete) setRenderButtonBusy(false);
+    if (options.renderOnComplete) setRenderButtonBusy(false);
   }), 1000);
 }
 
@@ -1374,6 +1467,12 @@ function bindEvents() {
   $("#kineticChooseDownloadDir").addEventListener("click", () => {
     chooseKineticDownloadDirectory().catch((error) => setProgress(state.project?.progress || 0, error.message));
   });
+  $("#kineticOutputs").addEventListener("click", (event) => {
+    const button = event.target instanceof Element ? event.target.closest("[data-open-kinetic-output]") : null;
+    const filePath = button ? state.project?.outputs?.finalVideo : "";
+    if (!filePath) return;
+    postJson("/api/open-path", { filePath }).catch((error) => setProgress(state.project?.progress || 0, error.message));
+  });
   $("#kineticRenderFinal").addEventListener("click", async () => {
     if (!state.project) return;
     setRenderButtonBusy(true);
@@ -1381,7 +1480,7 @@ function bindEvents() {
     try {
       await saveProjectImmediately();
       const data = await postJson("/api/kinetic-text/render", { projectId: state.project.id });
-      pollJob(data.job.id, { downloadOnComplete: true }).catch((error) => {
+      pollJob(data.job.id, { renderOnComplete: true }).catch((error) => {
         setRenderButtonBusy(false);
         setProgress(0, error.message);
       });
