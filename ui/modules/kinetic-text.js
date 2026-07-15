@@ -2,6 +2,23 @@ const PREF_KEY = "dy:kinetic-text:preferences";
 const FAVORITES_KEY = "dy:subtitle-template:favorites";
 const HANDOFF_KEY = "dy:handoff:kinetic-text:audio";
 const TEXT_HANDOFF_KEY = "dy:handoff:kinetic-text:text";
+const BOOKEND_MIN_SECONDS = 0.45;
+const BOOKEND_PRESET_TEXT = {
+  intro: {
+    title: () => state.project?.title || "动态大字视频",
+    remember: () => "先记住这句话",
+    core: () => "今天只讲一个重点",
+    method: () => "正确方法只有一个",
+    custom: () => "",
+  },
+  outro: {
+    follow: () => "记得关注，持续分享实用内容",
+    private: () => "需要完整资料，可以私聊我",
+    save: () => "点赞收藏，方便以后再看",
+    next: () => "关注我，下期继续",
+    custom: () => "",
+  },
+};
 
 const state = {
   page: null,
@@ -80,6 +97,67 @@ function shortFileName(value) {
 
 function effectById(id) {
   return state.effects.find((item) => item.id === id) || state.effects[0] || null;
+}
+
+function bookendPresetText(kind, preset) {
+  return BOOKEND_PRESET_TEXT[kind]?.[preset]?.() || "";
+}
+
+function bookendWindowsFor(project = state.project) {
+  const rows = (Array.isArray(project?.segments) ? project.segments : []).slice().sort((a, b) => Number(a.start || 0) - Number(b.start || 0));
+  const duration = Math.max(0, Number(project?.duration || 0));
+  if (!rows.length || duration <= 0) {
+    return {
+      minimumSeconds: BOOKEND_MIN_SECONDS,
+      intro: { start: 0, end: 0, duration: 0, blankSeconds: 0, available: false },
+      outro: { start: duration, end: duration, duration: 0, blankSeconds: 0, available: false },
+    };
+  }
+  const firstStart = Math.max(0, Math.min(duration, Number(rows[0].start || 0)));
+  const lastEnd = Math.max(0, Math.min(duration, Number(rows[rows.length - 1].end || 0)));
+  const introEnd = Math.max(0, firstStart - 0.09);
+  const outroStart = Math.min(duration, lastEnd + 0.08);
+  return {
+    minimumSeconds: BOOKEND_MIN_SECONDS,
+    intro: { start: 0, end: introEnd, duration: introEnd, blankSeconds: firstStart, available: introEnd >= BOOKEND_MIN_SECONDS },
+    outro: { start: outroStart, end: duration, duration: Math.max(0, duration - outroStart), blankSeconds: Math.max(0, duration - lastEnd), available: duration - outroStart >= BOOKEND_MIN_SECONDS },
+  };
+}
+
+function renderBookendAvailability() {
+  if (!state.project) return;
+  const windows = bookendWindowsFor();
+  for (const kind of ["intro", "outro"]) {
+    const label = $(`#kinetic${kind === "intro" ? "Intro" : "Outro"}Availability`);
+    if (!label) continue;
+    const window = windows[kind];
+    label.classList.toggle("ok", window.available);
+    label.classList.toggle("warn", !window.available);
+    label.textContent = window.available
+      ? `检测到 ${window.blankSeconds.toFixed(2)} 秒留白，实际显示 ${window.duration.toFixed(2)} 秒`
+      : `留白仅 ${window.blankSeconds.toFixed(2)} 秒，不足 ${windows.minimumSeconds.toFixed(2)} 秒，成片中自动跳过`;
+  }
+}
+
+function renderBookendSettings() {
+  if (!state.project) return;
+  for (const kind of ["intro", "outro"]) {
+    const prefix = kind === "intro" ? "Intro" : "Outro";
+    const fallbackPreset = kind === "intro" ? "title" : "follow";
+    const item = state.project.bookends?.[kind] || { enabled: false, preset: fallbackPreset, text: bookendPresetText(kind, fallbackPreset) };
+    const enabled = $(`#kinetic${prefix}Enabled`);
+    const preset = $(`#kinetic${prefix}Preset`);
+    const text = $(`#kinetic${prefix}Text`);
+    enabled.checked = item.enabled === true;
+    preset.value = [...preset.options].some((option) => option.value === item.preset) ? item.preset : fallbackPreset;
+    text.value = item.text || bookendPresetText(kind, preset.value);
+  }
+  renderBookendAvailability();
+}
+
+function updateBookend(kind, changes) {
+  const current = state.project?.bookends?.[kind] || {};
+  scheduleSave({ bookends: { [kind]: { ...current, ...changes } } });
 }
 
 function setProgress(progress = 0, stage = "等待开始") {
