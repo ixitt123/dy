@@ -177,6 +177,7 @@ function keywordCandidateScore(candidate, source, wholeClause = false) {
   if (/[A-Za-z0-9%]/.test(candidate)) score += 3;
   if (length >= 2 && length <= 5) score += 2;
   if (/^[的了着过呢吗吧啊呀哦嘛]|[的了着过呢吗吧啊呀哦嘛]$/.test(candidate)) score -= 5;
+  if (/^第[一二三四五六七八九十百千万\d]+$/.test(candidate)) score -= 20;
   if (KEYWORD_STOP_WORDS.has(candidate)) score -= 20;
   return score;
 }
@@ -185,11 +186,11 @@ function inferKeywords(text) {
   const normalized = normalizeText(text);
   const source = normalized.replace(/[\s，。！？；：、,.!?;:“”‘’'"（）()【】\[\]《》<>]/g, "");
   if (!source) return [];
-  if ([...source].length <= 4) return [source];
+  if ([...source].length <= 4 && !/[，。！？；：、,.!?;:]/.test(normalized.slice(0, -1))) return [source];
 
   const candidates = new Map();
   const addCandidate = (value, wholeClause = false) => {
-    const candidate = cleanKeyword(value);
+    const candidate = cleanKeyword(value).replace(wholeClause ? /[的了着过呢吗吧啊呀哦嘛]+$/ : /$^/, "");
     const length = [...candidate].length;
     if (!candidate || length < 2 || length > 12 || KEYWORD_STOP_WORDS.has(candidate)) return;
     const score = keywordCandidateScore(candidate, source, wholeClause);
