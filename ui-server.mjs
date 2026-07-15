@@ -7304,11 +7304,44 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
+    if (req.method === "POST" && url.pathname === "/api/tts/alignment/retry") {
+      const body = await readJsonBody(req);
+      const result = ttsService.retryAlignment(body.id || body.jobId || 0);
+      if (result.error) {
+        sendJson(res, 400, { ok: false, message: result.error });
+        return;
+      }
+      sendJson(res, 202, { ok: true, job: result.job });
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/tts/alignment/realign") {
+      const body = await readJsonBody(req, { maxBytes: 1024 * 1024 });
+      const result = await ttsService.realignJob(body.id || body.jobId || 0, body.text);
+      if (result.error) {
+        sendJson(res, 400, { ok: false, message: result.error, job: result.job || null });
+        return;
+      }
+      sendJson(res, 200, { ok: true, job: result.job });
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/tts/alignment/confirm") {
+      const body = await readJsonBody(req);
+      const result = await ttsService.confirmAlignment(body.id || body.jobId || 0);
+      if (result.error) {
+        sendJson(res, 400, { ok: false, message: result.error });
+        return;
+      }
+      sendJson(res, 200, { ok: true, job: result.job });
+      return;
+    }
+
     if (req.method === "GET" && url.pathname === "/api/tts/audio") {
       const job = taskStore.getTtsJob(Number(url.searchParams.get("id") || 0));
       const audioPath = job?.audio_path ? path.resolve(job.audio_path) : "";
       const allowedRoot = path.resolve(ttsService.outputDir);
-      if (!job || job.status !== "completed" || !audioPath.startsWith(`${allowedRoot}${path.sep}`) || !fs.existsSync(audioPath)) {
+      if (!job || !["processing", "completed"].includes(job.status) || !audioPath.startsWith(`${allowedRoot}${path.sep}`) || !fs.existsSync(audioPath)) {
         sendJson(res, 404, { ok: false, message: "音频文件不存在或尚未生成。" });
         return;
       }

@@ -647,7 +647,7 @@ export function createTtsService({
       seo_keywords: seoKeywords,
       hashtags,
       title_score: metadata.title_score || metadata.titleScore || {},
-      audio_url: job.status === "completed" && job.audio_path ? `/api/tts/audio?id=${job.id}` : "",
+      audio_url: ["processing", "completed"].includes(job.status) && job.audio_path ? `/api/tts/audio?id=${job.id}` : "",
       script_url: job.status === "completed" && metadata.script_path ? `/api/tts/script?id=${job.id}` : "",
       subtitle_url: job.status === "completed" && metadata.subtitle_path ? `/api/tts/subtitle?id=${job.id}` : "",
       timestamped_text_url: job.status === "completed" && metadata.timestamped_text_path ? `/api/tts/timestamped-text?id=${job.id}` : "",
