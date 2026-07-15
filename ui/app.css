@@ -10241,6 +10241,20 @@ audio {
 }
 
 /* 2026 subtitle template library */
+.kinetic-text-workspace,
+.kinetic-effects-card,
+.kinetic-effect-grid {
+  min-width: 0;
+}
+
+.kinetic-effects-card {
+  overflow: hidden;
+}
+
+.kinetic-timeline-card {
+  overflow-x: auto;
+}
+
 .kinetic-canvas-wrap {
   display: grid;
   place-items: center;
