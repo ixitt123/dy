@@ -156,8 +156,10 @@ async function handleParentHandoff(event) {
   }
   state.projectId = String(handoff.projectId || state.projectId);
   localStorage.setItem("ian-xiaohei-project-id", state.projectId);
-  els.titleInput.value = handoff.title || handoff.projectTitle || "小黑配图视频";
-  els.copyInput.value = handoff.text || confirmedTtsText(job);
+  const handoffTitle = handoff.title || handoff.projectTitle || "小黑配图视频";
+  const handoffText = handoff.text || confirmedTtsText(job);
+  els.titleInput.value = handoffTitle;
+  els.copyInput.value = handoffText;
   state.ttsJob = job;
   try {
     const data = await fetchJson("/api/ian-xiaohei/audio-select", {
@@ -166,13 +168,40 @@ async function handleParentHandoff(event) {
     });
     state.selectedTtsJob = data.job;
     state.ttsJob = data.job;
-    showAudio(data.job.audio_url || `/api/tts/audio?id=${data.job.id}`, `已确认使用 · 音频 #${data.job.id}`);
+    syncTtsSource(data.job, { title: handoffTitle, text: handoffText });
     resetVisualWorkflow();
     await loadAudioJobs();
-    setStatus("已接收 TTS 音频", "文案和音频已绑定，可以根据真实时间轴分析分镜配图。", 100, false, "等待分镜分析");
+    setStatus("已接收 TTS 资产", "文案、音频和同步时间戳已绑定，可以根据真实时间轴分析分镜配图。", 100, false, "等待分镜分析");
   } catch (error) {
-    setStatus("音频接收失败", error.payload?.message || error.message || String(error), 100, true);
+    setStatus("TTS 资产接收失败", error.payload?.message || error.message || String(error), 100, true);
   }
+}
+
+function syncTtsSource(job, { title = "", text = "" } = {}) {
+  if (!job) {
+    if (els.ttsSourceTitle) els.ttsSourceTitle.textContent = "还没有绑定 TTS 音频";
+    if (els.ttsSourceMeta) els.ttsSourceMeta.textContent = "请先在 TTS 语音页生成并确认字幕时间轴，然后发送到小黑配图软件。";
+    if (els.ttsSourceText) els.ttsSourceText.textContent = "收到后，这里会显示 TTS 最终文案，不在本页手动输入。";
+    hideAudio();
+    return;
+  }
+  const finalText = String(text || confirmedTtsText(job) || job.text || "").trim();
+  const titleText = String(title || els.titleInput?.value || job.title || job.seo_title || job.voice_name || `TTS 音频 #${job.id}`).trim();
+  if (els.titleInput) els.titleInput.value = titleText;
+  if (els.copyInput) els.copyInput.value = finalText;
+  const timeline = Array.isArray(job.subtitle_timeline) ? job.subtitle_timeline : [];
+  const duration = Number(job.audio_duration || job.metadata?.audio_duration || job.duration || 0);
+  if (els.ttsSourceTitle) els.ttsSourceTitle.textContent = titleText || `TTS 音频 #${job.id}`;
+  if (els.ttsSourceMeta) {
+    els.ttsSourceMeta.textContent = [
+      `音频 #${job.id}`,
+      job.voice_name || job.provider || "",
+      duration > 0 ? `${duration.toFixed(1)} 秒` : "",
+      timeline.length ? `${timeline.length} 段同步字幕` : "已确认同步时间轴",
+    ].filter(Boolean).join(" · ");
+  }
+  if (els.ttsSourceText) els.ttsSourceText.textContent = finalText || "这条 TTS 资产暂时没有最终文案。";
+  showAudio(job.audio_url || `/api/tts/audio?id=${job.id}`, `已绑定 TTS 音频 #${job.id}`);
 }
 
 function bindEvents() {
@@ -840,7 +869,7 @@ async function deleteCurrentVoice() {
 async function createPlan() {
   const payload = formPayload();
   if (!payload.text) {
-    setStatus("缺少文案", "请先输入需要配图的中文文案。", 0, true);
+    setStatus("缺少 TTS 资产", "请先在 TTS 语音页发送已确认的文案、音频和同步时间戳。", 0, true);
     return null;
   }
   if (
@@ -848,11 +877,11 @@ async function createPlan() {
     || !isTtsAlignmentConfirmed(state.selectedTtsJob)
     || normalizeComparableText(confirmedTtsText(state.selectedTtsJob)) !== normalizeComparableText(payload.text)
   ) {
-    setStatus("请先校准并确认音频", "没有确认最终文案和字幕时间轴时不能分析分镜配图。请先到 TTS 页面完成校准确认。", 0, true);
+    setStatus("请先从 TTS 发送", "小黑配图只接收 TTS 语音页确认后的最终文案、音频和字幕时间轴。", 0, true);
     return null;
   }
   setBusy(true);
-  setStatus("正在按音频分析分镜", "正在结合已确认音频时长和文案语义生成分镜提示词。", 35, false, "音频+文案分析");
+  setStatus("正在按 TTS 时间轴分析分镜", "正在结合已确认音频时长、同步字幕和文案语义生成分镜提示词。", 35, false, "TTS 时间轴分析");
   try {
     const data = await fetchJson("/api/ian-xiaohei/timeline-plan", {
       method: "POST",
@@ -907,15 +936,16 @@ async function generateAudioOnly() {
 
 async function confirmCurrentAudio() {
   const job = state.ttsJob;
-  const text = formPayload().text;
   if (!job || job.status !== "completed" || !isTtsAlignmentConfirmed(job)) {
     setStatus("字幕尚未确认", "请先到 TTS 语音页检查并确认最终文案和字幕时间轴。", 0, true);
     return null;
   }
-  if (normalizeComparableText(confirmedTtsText(job)) !== normalizeComparableText(text)) {
-    setStatus("文案不一致", "当前输入与已确认的最终语音文案不一致，请重新校准字幕。", 0, true);
+  const text = confirmedTtsText(job);
+  if (!text) {
+    setStatus("缺少最终文案", "这条 TTS 音频没有最终文案，不能用于小黑配图。", 0, true);
     return null;
   }
+  if (els.copyInput) els.copyInput.value = text;
   try {
     const data = await fetchJson("/api/ian-xiaohei/audio-select", {
       method: "POST",
@@ -925,8 +955,8 @@ async function confirmCurrentAudio() {
     state.ttsJob = data.job;
     resetVisualWorkflow();
     await loadAudioJobs();
-    showAudio(data.job.audio_url, `已确定使用 · 音频 #${data.job.id}`);
-    setStatus("音频已确定", "时间轴和分镜将严格使用这条音频的真实时长。", 100, false, "可以继续生成");
+    syncTtsSource(data.job, { title: els.titleInput?.value || "", text });
+    setStatus("TTS 资产已确定", "文案、音频和字幕时间轴将严格使用这条 TTS 资产。", 100, false, "可以继续生成");
     return data.job;
   } catch (error) {
     setStatus("确认失败", error.payload?.message || error.message || String(error), 100, true);
@@ -937,7 +967,7 @@ async function confirmCurrentAudio() {
 async function generateCompleteWorkflow() {
   const payload = formPayload();
   if (!payload.text) {
-    setStatus("缺少文案", "请先输入需要制作视频的文案。", 0, true);
+    setStatus("缺少 TTS 资产", "请先在 TTS 语音页发送已确认的文案、音频和同步时间戳。", 0, true);
     return;
   }
   if (
@@ -945,11 +975,11 @@ async function generateCompleteWorkflow() {
     || !isTtsAlignmentConfirmed(state.selectedTtsJob)
     || normalizeComparableText(confirmedTtsText(state.selectedTtsJob)) !== normalizeComparableText(payload.text)
   ) {
-    setStatus("请先确认音频和字幕", "当前文案还没有已确认的最终语音时间轴，不能生成素材包。", 0, true);
+    setStatus("请先从 TTS 发送", "当前项目还没有来自 TTS 的最终文案、音频和同步时间戳，不能生成素材包。", 0, true);
     return;
   }
   if (!state.plan?.shots?.length) {
-    setStatus("缺少分镜计划", "请先点击“根据音频分析分镜配图”，再逐段上传确认图片。", 0, true);
+    setStatus("缺少分镜计划", "请先点击“根据 TTS 时间轴分析分镜配图”，再逐段上传确认图片。", 0, true);
     return;
   }
   const missingImages = missingShotImages(state.plan, state.images);
@@ -1059,13 +1089,15 @@ async function loadAudioJobs() {
   state.audioJobs = data.jobs || [];
   state.selectedTtsJob = data.selected || null;
   if (!state.ttsJob && state.selectedTtsJob) state.ttsJob = state.selectedTtsJob;
+  if (state.selectedTtsJob) syncTtsSource(state.selectedTtsJob, { title: els.titleInput?.value || "" });
+  else if (!state.ttsJob) syncTtsSource(null);
   renderAudioJobs();
 }
 
 function renderAudioJobs() {
   if (!state.audioJobs.length) {
     els.audioJobs.className = "audio-job-list empty";
-    els.audioJobs.textContent = "当前项目还没有音频。";
+    els.audioJobs.textContent = "当前项目还没有从 TTS 接收音频。";
     return;
   }
   els.audioJobs.className = "audio-job-list";
@@ -1082,7 +1114,7 @@ function renderAudioJobs() {
     return `
       <article class="audio-job ${selected ? "selected" : ""}">
         <div>
-          <strong>音频 #${job.id} · ${escapeHtml(job.voice_name || job.provider || "配音")} ${selected ? "· 本视频使用" : ""}</strong>
+          <strong>TTS 音频 #${job.id} · ${escapeHtml(job.voice_name || job.provider || "配音")} ${selected ? "· 本视频使用" : ""}</strong>
           <p>${escapeHtml(job.emotion || "自然")} · ${Number(job.speed || 1).toFixed(1)}× · ${escapeHtml(statusLabel(job.status))} · ${escapeHtml(alignmentLabel)}</p>
         </div>
         <div class="audio-job-actions">
@@ -1200,11 +1232,13 @@ async function openOutputDir() {
 }
 
 function formPayload() {
+  const sourceJob = state.selectedTtsJob || state.ttsJob;
+  const sourceText = confirmedTtsText(sourceJob);
   return {
-    title: els.titleInput.value.trim(),
-    text: els.copyInput.value.trim(),
-    purpose: els.purposeSelect.value || "article",
-    aspectRatio: els.aspectRatioSelect.value || "16:9",
+    title: els.titleInput?.value.trim() || sourceJob?.title || sourceJob?.seo_title || "小黑配图视频",
+    text: els.copyInput?.value.trim() || sourceText,
+    purpose: els.purposeSelect?.value || "article",
+    aspectRatio: els.aspectRatioSelect?.value || "16:9",
   };
 }
 
