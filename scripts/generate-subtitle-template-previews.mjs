@@ -77,10 +77,20 @@ for (const template of templates) {
   }
 
   fs.copyFileSync(path.join(sourceDir, "preview-16x9.mp4"), path.join(sourceDir, "preview.mp4"));
-  run(["-y", "-ss", "2.15", "-i", path.join(sourceDir, "preview-16x9.mp4"), "-frames:v", "1", path.join(sourceDir, "preview.png")]);
+  run(["-y", "-ss", "2.15", "-i", path.join(sourceDir, "preview-16x9.mp4"), "-frames:v", "1", "-update", "1", path.join(sourceDir, "preview.png")]);
   for (const name of ["preview.mp4", "preview.png", "preview-16x9.mp4", "preview-9x16.mp4"]) {
     fs.copyFileSync(path.join(sourceDir, name), path.join(publicDir, name));
   }
 }
+
+const contactColumns = 4;
+const contactInputs = KINETIC_TEXT_EFFECTS.flatMap((template) => ["-i", path.join(root, template.id, "preview.png")]);
+const contactFilters = KINETIC_TEXT_EFFECTS.map((_, index) => `[${index}:v]scale=320:180:force_original_aspect_ratio=decrease,pad=320:180:(ow-iw)/2:(oh-ih)/2:black[v${index}]`);
+const contactLayout = KINETIC_TEXT_EFFECTS.map((_, index) => `${(index % contactColumns) * 320}_${Math.floor(index / contactColumns) * 180}`).join("|");
+run([
+  "-y", ...contactInputs,
+  "-filter_complex", `${contactFilters.join(";")};${KINETIC_TEXT_EFFECTS.map((_, index) => `[v${index}]`).join("")}xstack=inputs=${KINETIC_TEXT_EFFECTS.length}:layout=${contactLayout}:fill=black[sheet]`,
+  "-map", "[sheet]", "-frames:v", "1", "-update", "1", path.join(root, "preview-contact-sheet.png"),
+]);
 
 console.log(`Generated ${templates.length} template${templates.length === 1 ? "" : "s"} in 16:9 and 9:16.`);
