@@ -130,6 +130,9 @@ const els = {
   imageCount: document.querySelector("#imageCount"),
   templateGrid: document.querySelector("#xiaoheiTemplateGrid"),
   templateSummary: document.querySelector("#xiaoheiTemplateSummary"),
+  ttsSourceTitle: document.querySelector("#ttsSourceTitle"),
+  ttsSourceMeta: document.querySelector("#ttsSourceMeta"),
+  ttsSourceText: document.querySelector("#ttsSourceText"),
 };
 
 init().catch((error) => setStatus("初始化失败", error.message || String(error), 0, true));
