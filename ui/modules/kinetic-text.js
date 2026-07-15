@@ -1,4 +1,5 @@
 const PREF_KEY = "dy:kinetic-text:preferences";
+const FAVORITES_KEY = "dy:subtitle-template:favorites";
 const HANDOFF_KEY = "dy:handoff:kinetic-text:audio";
 const TEXT_HANDOFF_KEY = "dy:handoff:kinetic-text:text";
 
@@ -30,6 +31,18 @@ function savePreferences(changes = {}) {
   const next = { ...readPreferences(), ...changes };
   localStorage.setItem(PREF_KEY, JSON.stringify(next));
   return next;
+}
+
+function readFavorites() {
+  try { return new Set(JSON.parse(localStorage.getItem(FAVORITES_KEY) || "[]")); } catch { return new Set(); }
+}
+
+function toggleFavorite(templateId) {
+  const favorites = readFavorites();
+  if (favorites.has(templateId)) favorites.delete(templateId);
+  else favorites.add(templateId);
+  localStorage.setItem(FAVORITES_KEY, JSON.stringify([...favorites]));
+  renderEffects();
 }
 
 async function jsonFetch(url, options = {}) {
@@ -87,15 +100,27 @@ function renderProjects() {
 function renderEffects() {
   const grid = $("#kineticEffectGrid");
   if (!grid) return;
+  const favorites = readFavorites();
   grid.innerHTML = state.effects.map((effect) => `
-    <button class="kinetic-effect-card${state.project?.effectId === effect.id ? " active" : ""}" type="button" data-effect-id="${effect.id}">
-      <span class="kinetic-effect-number">${String(effect.number).padStart(2, "0")}</span>
-      <span class="kinetic-effect-demo effect-${effect.number}" style="--effect-primary:${effect.primary};--effect-accent:${effect.accent}">
-        <i>动态</i><b>大字</b>
-      </span>
-      <strong>${escapeHtml(effect.name)}</strong>
-      <small>${escapeHtml(effect.description)}</small>
-    </button>
+    <article class="kinetic-template-card${state.project?.effectId === effect.id ? " active" : ""}" data-effect-id="${effect.id}">
+      <div class="kinetic-template-preview" style="--effect-primary:${effect.primary};--effect-accent:${effect.accent}">
+        <video muted loop playsinline preload="none" poster="${escapeHtml(effect.previewImage || "")}" aria-label="${escapeHtml(effect.name)} 动态预览">
+          <source src="${escapeHtml(effect.previewVideo || "")}" type="video/mp4" />
+        </video>
+        <img src="${escapeHtml(effect.previewImage || "")}" alt="${escapeHtml(effect.name)} 缩略图" loading="lazy" />
+        <span class="kinetic-template-live">动态预览</span>
+        <button class="kinetic-template-favorite${favorites.has(effect.id) ? " active" : ""}" type="button" data-action="favorite" aria-label="${favorites.has(effect.id) ? "取消收藏" : "收藏"}">${favorites.has(effect.id) ? "★" : "☆"}</button>
+      </div>
+      <div class="kinetic-template-copy">
+        <div><strong>${escapeHtml(effect.name)}</strong><span>${escapeHtml(effect.scene || "短视频")}</span></div>
+        <p>${escapeHtml(effect.description)}</p>
+        <div class="kinetic-template-meta">
+          <span>${effect.requiresWordTiming ? "需要逐词时间轴" : "支持句级时间轴"}</span>
+          <span>9:16 / 16:9</span>
+        </div>
+        <button class="kinetic-template-use" type="button" data-action="select">${state.project?.effectId === effect.id ? "正在使用" : "立即使用"}</button>
+      </div>
+    </article>
   `).join("");
 }
 
@@ -296,7 +321,7 @@ function tokenPosition(effect = {}, index, count, centerX, centerY, layout = {})
   return [centerX + centered * horizontalStep, centerY + rowOffset];
 }
 
-function drawPreview() {
+function drawLegacyPreview() {
   const canvas = $("#kineticPreviewCanvas");
   if (!canvas) return;
   const ctx = canvas.getContext("2d");
