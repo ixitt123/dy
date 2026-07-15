@@ -1,0 +1,1 @@
+export default { id: "word-highlight", name: "逐词聚焦", description: "当前朗读词以强调色和轻微缩放聚焦。", previewImage: "/subtitle-templates/word-highlight/preview.png", previewVideo: "/subtitle-templates/word-highlight/preview.mp4", supportedTiming: ["word", "sentence"] as Array<"word" | "sentence">, supportedAspectRatios: ["16:9", "9:16", "1:1"] as Array<"16:9" | "9:16" | "1:1"> };

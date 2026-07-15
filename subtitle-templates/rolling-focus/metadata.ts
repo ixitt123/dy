@@ -1,0 +1,1 @@
+export default { id: "rolling-focus", name: "滚动聚焦", description: "当前句放大提亮，上下文平滑滚动。", previewImage: "/subtitle-templates/rolling-focus/preview.png", previewVideo: "/subtitle-templates/rolling-focus/preview.mp4", supportedTiming: ["sentence"] as Array<"sentence">, supportedAspectRatios: ["16:9", "9:16", "1:1"] as Array<"16:9" | "9:16" | "1:1"> };

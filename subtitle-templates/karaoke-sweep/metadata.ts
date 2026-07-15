@@ -1,0 +1,1 @@
+export default { id: "karaoke-sweep", name: "流光跟读", description: "高亮色按照真实时间连续扫过。", previewImage: "/subtitle-templates/karaoke-sweep/preview.png", previewVideo: "/subtitle-templates/karaoke-sweep/preview.mp4", supportedTiming: ["word"] as Array<"word">, supportedAspectRatios: ["16:9", "9:16", "1:1"] as Array<"16:9" | "9:16" | "1:1"> };

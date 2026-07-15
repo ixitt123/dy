@@ -1,0 +1,1 @@
+export default { id: "keyword-emphasis", name: "重点词冲击", description: "普通词稳定，重点词按时间轴克制放大。", previewImage: "/subtitle-templates/keyword-emphasis/preview.png", previewVideo: "/subtitle-templates/keyword-emphasis/preview.mp4", supportedTiming: ["word", "sentence"] as Array<"word" | "sentence">, supportedAspectRatios: ["16:9", "9:16", "1:1"] as Array<"16:9" | "9:16" | "1:1"> };
