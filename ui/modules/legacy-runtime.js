@@ -3568,7 +3568,7 @@ async function refreshTtsJobs() {
 }
 
 function confirmedTtsAudioPayload(job = activeTtsRailJob) {
-  if (!job?.id || job.status !== "completed") return null;
+  if (!job?.id || job.status !== "completed" || job.alignment_status !== "confirmed") return null;
   const title = ttsJobTitle(job);
   const platformTitles = job.platform_titles || job.metadata?.platform_titles || {};
   const seoKeywords = Array.isArray(job.seo_keywords) ? job.seo_keywords : Array.isArray(job.metadata?.seo_keywords) ? job.metadata.seo_keywords : [];
@@ -3577,7 +3577,7 @@ function confirmedTtsAudioPayload(job = activeTtsRailJob) {
   const timedSubtitlePath = job.timestamped_text_path || job.subtitle_path || "";
   const files = [
     { type: "audio", label: "音频", title, url: job.audio_url || "", path: job.audio_path || "" },
-    { type: "script", label: "文案", title, url: job.script_url || "", path: job.script_path || "" },
+    { type: "script", label: "最终确认文案", title, url: job.script_url || "", path: job.script_path || "" },
     { type: "timed_subtitle", label: "带时间戳字幕", title, url: timedSubtitleUrl, path: timedSubtitlePath },
   ].filter((item) => item.url || item.path);
   return {
@@ -3604,16 +3604,32 @@ function confirmedTtsAudioPayload(job = activeTtsRailJob) {
     timed_subtitle_path: timedSubtitlePath,
     timestamped_text_url: job.timestamped_text_url || timedSubtitleUrl,
     timestamped_text_path: job.timestamped_text_path || timedSubtitlePath,
-    subtitle_timeline: Array.isArray(job.subtitle_timeline) ? job.subtitle_timeline : Array.isArray(job.metadata?.subtitle_timeline) ? job.metadata.subtitle_timeline : [],
+    original_text: job.original_text || job.metadata?.original_text || job.text || "",
+    recognized_text: job.recognized_text || job.metadata?.recognized_text || "",
+    final_text: job.final_text || job.metadata?.final_text || "",
+    word_timeline: Array.isArray(job.word_timeline) ? job.word_timeline : Array.isArray(job.metadata?.word_timeline) ? job.metadata.word_timeline : [],
+    sentence_timeline: Array.isArray(job.sentence_timeline) ? job.sentence_timeline : Array.isArray(job.metadata?.sentence_timeline) ? job.metadata.sentence_timeline : [],
+    subtitle_timeline: Array.isArray(job.sentence_timeline)
+      ? job.sentence_timeline
+      : Array.isArray(job.subtitle_timeline)
+        ? job.subtitle_timeline
+        : Array.isArray(job.metadata?.subtitle_timeline)
+          ? job.metadata.subtitle_timeline
+          : [],
     subtitle_source: job.subtitle_source || job.subtitleSource || job.metadata?.subtitle_source || "",
     subtitleSource: job.subtitle_source || job.subtitleSource || job.metadata?.subtitle_source || "",
     duration: Number(job.duration || job.audio_duration || job.metadata?.audio_duration || job.metadata?.duration || 0),
     audio_duration: Number(job.audio_duration || job.duration || job.metadata?.audio_duration || 0),
+    alignment_status: job.alignment_status,
+    alignment_confirmed_at: job.alignment_confirmed_at || job.metadata?.alignment_confirmed_at || "",
+    alignment_revision: Number(job.alignment_revision || job.metadata?.alignment_revision || 0),
+    estimated_count: Number(job.estimated_count || job.metadata?.estimated_count || 0),
+    low_confidence_count: Number(job.low_confidence_count || job.metadata?.low_confidence_count || 0),
     provider: job.provider || ttsProvider?.value || "",
     voice_id: job.voice_id || "",
     voice_name: job.voice_name || "",
     format: job.format || ttsFormat?.value || "mp3",
-    text: job.text || ttsText?.value.trim() || "",
+    text: job.final_text || job.metadata?.final_text || job.recognized_text || "",
     source: "ai_generated",
     status: "ready",
     created_at: new Date().toISOString(),
@@ -3665,10 +3681,18 @@ function ttsConsumerJob(payload = {}) {
     subtitle_path: payload.subtitle_path || payload.timed_subtitle_path || "",
     timestamped_text_url: payload.timestamped_text_url || payload.timed_subtitle_url || "",
     timestamped_text_path: payload.timestamped_text_path || payload.timed_subtitle_path || "",
+    original_text: payload.original_text || "",
+    recognized_text: payload.recognized_text || "",
+    final_text: payload.final_text || payload.text || "",
+    word_timeline: Array.isArray(payload.word_timeline) ? payload.word_timeline : [],
+    sentence_timeline: Array.isArray(payload.sentence_timeline) ? payload.sentence_timeline : [],
     subtitle_timeline: Array.isArray(payload.subtitle_timeline) ? payload.subtitle_timeline : [],
     subtitle_source: payload.subtitle_source || payload.subtitleSource || "",
     duration: Number(payload.duration || payload.audio_duration || 0),
     audio_duration: Number(payload.audio_duration || payload.duration || 0),
+    alignment_status: payload.alignment_status || "",
+    alignment_confirmed_at: payload.alignment_confirmed_at || "",
+    alignment_revision: Number(payload.alignment_revision || 0),
   };
 }
 
@@ -3788,7 +3812,7 @@ async function sendTtsPayloadToTargets(payload, targets = []) {
 async function sendConfirmedTtsAudio(container = document, job = activeTtsRailJob) {
   const payload = confirmedTtsAudioPayload(job);
   if (!payload) {
-    setTtsHandoffStatus(container, "请先生成并完成一条语音，再发送。");
+    setTtsHandoffStatus(container, "请先完成最终音频字幕校准并点击确认，再发送。");
     return;
   }
   const targets = selectedTtsHandoffTargets(container);
@@ -3796,6 +3820,7 @@ async function sendConfirmedTtsAudio(container = document, job = activeTtsRailJo
     setTtsHandoffStatus(container, "请至少勾选一个要发送的模块。");
     return;
   }
+  await window.videoProjects?.linkCurrent?.("tts", payload.id, ttsHandoffTitle(payload), payload);
   const sent = await sendTtsPayloadToTargets(payload, targets);
   setTtsHandoffStatus(container, `已发送三件套到：${sent.join("、")}。`);
 }
