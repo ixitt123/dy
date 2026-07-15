@@ -491,7 +491,10 @@ function normalizeProject(project) {
   const duration = safeNumber(project.duration, 0, 0);
   const wordTimeline = normalizeWordRows(project.wordTimeline || project.word_timeline);
   const segments = attachWordTiming(normalizeSegments(project.segments, project.text, duration), wordTimeline);
-  const computedDuration = Math.max(duration, ...segments.map((item) => item.end), 0);
+  const hasAudio = Boolean(project.audioPath || project.audioUrl);
+  const computedDuration = hasAudio && duration > 0
+    ? duration
+    : Math.max(duration, ...segments.map((item) => item.end), 0);
   const title = normalizeText(project.title) || "动态大字视频";
   const bookends = normalizeBookends(project.bookends, title);
   const bookendWindows = calculateBookendWindows(segments, computedDuration);
@@ -1351,7 +1354,9 @@ export function createKineticTextService({
     const timeline = payloadTimeline.length ? payloadTimeline : fileTimeline;
     const hasTimedTimeline = timeline.length > 0;
     const hasAudio = Boolean(audioPath || tts.audio_url || tts.audioUrl);
-    const duration = safeNumber(tts.duration || tts.audio_duration || tts.metadata?.audio_duration, 0, 0) || await probeDuration(audioPath);
+    const declaredDuration = safeNumber(tts.duration || tts.audio_duration || tts.metadata?.audio_duration, 0, 0);
+    const probedAudioDuration = await probeDuration(audioPath);
+    const duration = probedAudioDuration || declaredDuration;
     const subtitleSource = String(
       tts.subtitle_source
       || tts.subtitleSource
@@ -1585,7 +1590,8 @@ export function createKineticTextService({
       const hasTtsAudio = Boolean(project.audioPath && fs.existsSync(project.audioPath));
       const { width, height } = resolutionForProject(project);
       const frameRate = frameRateForProject(project);
-      const duration = Math.max(project.duration, hasTtsAudio ? await probeDuration(project.audioPath) : 0, 0.5);
+      const probedAudioDuration = hasTtsAudio ? await probeDuration(project.audioPath) : 0;
+      const duration = Math.max(probedAudioDuration || project.duration, 0.5);
       const outputDir = activeDownloadsDir();
       fs.mkdirSync(outputDir, { recursive: true });
       const outputPath = path.join(outputDir, `${safeFileName(project.title, project.id)}.mp4`);

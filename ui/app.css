@@ -9824,11 +9824,12 @@ audio {
 }
 
 .kinetic-preview-toolbar-main {
-  display: flex;
+  display: grid;
+  grid-template-columns: auto minmax(180px, 1fr) auto auto;
   align-items: center;
-  justify-content: space-between;
   gap: 10px;
   min-width: 0;
+  width: 100%;
 }
 
 .kinetic-preview-title {
@@ -10123,7 +10124,8 @@ audio {
 
 #kineticRenderFinal {
   flex: 0 0 auto;
-  margin-left: auto;
+  justify-self: end;
+  margin-left: 0;
 }
 
 .kinetic-preview-progress {

@@ -246,8 +246,11 @@ test("Kinetic text production line", async () => {
     || !moduleSource.includes("previewWordGroups")
     || !moduleSource.includes('$("#kineticPreviewCanvas").addEventListener("click", playPreview)')
     || !moduleSource.includes('$("#kineticPreviewSeek").addEventListener("pointerdown", beginPreviewSeek)')
+    || !moduleSource.includes('$("#kineticPreviewSeek").addEventListener("pointerup", finishPreviewSeek)')
     || !moduleSource.includes('$("#kineticPreviewSeek").addEventListener("change", finishPreviewSeek)')
-    || !/function finishPreviewSeek\(\)\s*\{[\s\S]*?state\.seeking = false;\s*startPreviewPlayback\(\);/.test(moduleSource)
+    || !moduleSource.includes("function previewDuration()")
+    || !moduleSource.includes("const audioDuration = Number(state.audio?.duration)")
+    || !/function finishPreviewSeek\(event\)\s*\{[\s\S]*?seekPreviewTo\(slider\?\.value\);[\s\S]*?state\.seeking = false;\s*startPreviewPlayback\(\);/.test(moduleSource)
     || !legacySource.includes('targets.includes("kinetic-text")')
     || !packageJson.scripts?.["test:subtitle-templates"]) {
     throw new Error("Kinetic text production line is incomplete");

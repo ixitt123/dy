@@ -87,6 +87,16 @@ function formatTime(value) {
   return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}.${String(ms).padStart(3, "0")}`;
 }
 
+function previewDuration() {
+  const audioDuration = Number(state.audio?.duration);
+  if (Number.isFinite(audioDuration) && audioDuration > 0) return audioDuration;
+  return Math.max(0, Number(state.project?.duration || 0));
+}
+
+function previewSeekMaximum() {
+  return Math.max(1, Number($("#kineticPreviewSeek")?.max || 1000));
+}
+
 function escapeHtml(value) {
   return String(value || "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char]);
 }
@@ -315,9 +325,30 @@ function syncAudio() {
   state.audio = null;
   const source = state.project?.audioUrl || (state.project?.audioPath ? mediaUrl("tts") : "");
   if (!source) return;
-  state.audio = new Audio(source);
-  state.audio.preload = "metadata";
-  state.audio.addEventListener("ended", () => { state.playing = false; cancelAnimationFrame(state.raf); drawPreview(); });
+  const audio = new Audio(source);
+  audio.preload = "metadata";
+  state.audio = audio;
+  audio.addEventListener("loadedmetadata", () => {
+    if (state.audio !== audio || !state.project) return;
+    const duration = Number(audio.duration);
+    if (!Number.isFinite(duration) || duration <= 0) return;
+    state.currentTime = Math.min(state.currentTime, duration);
+    if (Math.abs(Number(state.project.duration || 0) - duration) > 0.05) {
+      // Old projects may contain a stale TTS metadata duration. The decoded audio
+      // is the preview/export clock; only repair the project duration, never cues.
+      scheduleSave({ duration });
+    } else {
+      drawPreview();
+    }
+  });
+  audio.addEventListener("ended", () => {
+    if (state.audio !== audio) return;
+    state.currentTime = previewDuration();
+    state.playing = false;
+    cancelAnimationFrame(state.raf);
+    $("#kineticPreviewPlay").textContent = "播放预览";
+    drawPreview();
+  });
 }
 
 function syncBackgroundMedia() {
@@ -508,8 +539,8 @@ function drawLegacyPreview() {
       ctx.restore();
     }
   }
-  const duration = Math.max(0.01, Number(state.project.duration || 0));
-  $("#kineticPreviewSeek").value = String(Math.round((state.currentTime / duration) * 1000));
+  const duration = Math.max(0.01, previewDuration());
+  $("#kineticPreviewSeek").value = String(Math.round((state.currentTime / duration) * previewSeekMaximum()));
   $("#kineticCurrentTime").textContent = formatTime(state.currentTime);
   $("#kineticDuration").textContent = formatTime(duration);
 }
@@ -1033,22 +1064,23 @@ function drawPreview() {
     const bookend = activeBookendAt(state.project, state.currentTime);
     if (bookend) drawBookendPreview(ctx, bookend, template, params, spec);
   }
-  const duration = Math.max(0.01, Number(state.project.duration || 0));
-  $("#kineticPreviewSeek").value = String(Math.round((state.currentTime / duration) * 1000));
+  const duration = Math.max(0.01, previewDuration());
+  $("#kineticPreviewSeek").value = String(Math.round((state.currentTime / duration) * previewSeekMaximum()));
   $("#kineticCurrentTime").textContent = formatTime(state.currentTime);
   $("#kineticDuration").textContent = formatTime(duration);
 }
 
 function previewTick(timestamp) {
   if (!state.playing || !state.project) return;
-  if (state.audio && !state.audio.paused) state.currentTime = state.audio.currentTime;
+  const duration = previewDuration();
+  if (state.audio && Number.isFinite(Number(state.audio.currentTime))) state.currentTime = state.audio.currentTime;
   else state.currentTime = state.startTime + (timestamp - state.startedAt) / 1000;
   if (state.backgroundMedia instanceof HTMLVideoElement) {
     const video = state.backgroundMedia;
     if (video.readyState >= 2 && Math.abs(video.currentTime - state.currentTime % Math.max(video.duration || 1, 1)) > 0.25) video.currentTime = state.currentTime % Math.max(video.duration || 1, 1);
   }
-  if (state.currentTime >= state.project.duration) {
-    state.currentTime = 0;
+  if (duration <= 0 || state.currentTime >= duration - 0.005) {
+    state.currentTime = duration;
     state.playing = false;
     state.audio?.pause();
     if (state.backgroundMedia instanceof HTMLVideoElement) state.backgroundMedia.pause();
@@ -1062,12 +1094,26 @@ function previewTick(timestamp) {
 
 function startPreviewPlayback() {
   if (!state.project) return;
+  const duration = previewDuration();
+  if (duration <= 0) return;
+  if (state.currentTime >= duration - 0.01) state.currentTime = 0;
   state.playing = true;
   state.seeking = false;
   $("#kineticPreviewPlay").textContent = "暂停预览";
   state.startedAt = performance.now();
   state.startTime = state.currentTime;
-  if (state.audio) { state.audio.currentTime = state.currentTime; state.audio.play().catch(() => {}); }
+  if (state.audio) {
+    const audio = state.audio;
+    audio.currentTime = state.currentTime;
+    audio.play().catch(() => {
+      if (!state.playing || state.audio !== audio) return;
+      state.playing = false;
+      $("#kineticPreviewPlay").textContent = "播放预览";
+      if (state.backgroundMedia instanceof HTMLVideoElement) state.backgroundMedia.pause();
+      cancelAnimationFrame(state.raf);
+      drawPreview();
+    });
+  }
   if (state.backgroundMedia instanceof HTMLVideoElement) { state.backgroundMedia.currentTime = state.currentTime % Math.max(state.backgroundMedia.duration || 1, 1); state.backgroundMedia.play().catch(() => {}); }
   cancelAnimationFrame(state.raf);
   state.raf = requestAnimationFrame(previewTick);
@@ -1098,8 +1144,8 @@ function beginPreviewSeek() {
 
 function seekPreviewTo(sliderValue) {
   if (!state.project) return;
-  const duration = Math.max(0, Number(state.project.duration || 0));
-  state.currentTime = Math.max(0, Math.min(duration, (Number(sliderValue || 0) / 1000) * duration));
+  const duration = previewDuration();
+  state.currentTime = Math.max(0, Math.min(duration, (Number(sliderValue || 0) / previewSeekMaximum()) * duration));
   if (state.audio) state.audio.currentTime = state.currentTime;
   if (state.backgroundMedia instanceof HTMLVideoElement) {
     state.backgroundMedia.currentTime = state.currentTime % Math.max(state.backgroundMedia.duration || 1, 1);
@@ -1107,8 +1153,10 @@ function seekPreviewTo(sliderValue) {
   drawPreview();
 }
 
-function finishPreviewSeek() {
-  if (!state.seeking) return;
+function finishPreviewSeek(event) {
+  if (!state.project || !state.seeking) return;
+  const slider = event?.currentTarget || $("#kineticPreviewSeek");
+  seekPreviewTo(slider?.value);
   state.seeking = false;
   startPreviewPlayback();
 }
@@ -1518,6 +1566,7 @@ function bindEvents() {
     beginPreviewSeek();
     seekPreviewTo(event.target.value);
   });
+  $("#kineticPreviewSeek").addEventListener("pointerup", finishPreviewSeek);
   $("#kineticPreviewSeek").addEventListener("change", finishPreviewSeek);
   $("#kineticPreviewSeek").addEventListener("pointercancel", finishPreviewSeek);
   $("#kineticPreviewSeek").addEventListener("blur", finishPreviewSeek);
