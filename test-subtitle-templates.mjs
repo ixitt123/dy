@@ -21,6 +21,25 @@ const words = segments.flatMap((segment) => [...segment.text].map((text, index, 
   end: segment.start + (segment.end - segment.start) * (index + 1) / list.length,
 })));
 
+const rollingFocusText = "你真的下定决心要学英语了那我就把英语学习的唯一正确顺序告诉你";
+const rollingFocusWords = [...rollingFocusText].map((text, index, list) => ({
+  text,
+  start: 4 * index / list.length,
+  end: 4 * (index + 1) / list.length,
+}));
+const rollingFocusAss = buildAss({
+  id: "rolling-focus-split-test",
+  effectId: "rolling-focus-subtitle",
+  aspectRatio: "16:9",
+  duration: 4,
+  text: rollingFocusText,
+  wordTimeline: rollingFocusWords,
+  segments: [{ id: "focus", start: 0, end: 4, text: rollingFocusText, words: rollingFocusWords }],
+});
+const rollingFocusCurrentRows = rollingFocusAss.split("\n").filter((line) => line.includes("▶ ")).map((line) => line.split("▶ ")[1]);
+assert.equal(rollingFocusCurrentRows.length >= 3, true, "长句必须拆成多个口播节奏短句");
+assert.equal(rollingFocusCurrentRows.every((line) => [...line].length <= 10), true, "每个滚动聚焦短句不得超过 10 个可见字符");
+
 for (const template of KINETIC_TEXT_EFFECTS) {
   for (const aspectRatio of ["9:16", "16:9"]) {
     const ass = buildAss({ id: "test", effectId: template.id, effectParams: template.defaultParams, aspectRatio, duration: 2.6, text: segments.map((item) => item.text).join(""), wordTimeline: words, segments, showBottomSubtitles: false });
