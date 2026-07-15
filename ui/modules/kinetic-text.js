@@ -424,6 +424,42 @@ function previewWordGroups(words, sourceText = "") {
   return groups.map((group) => ({ words: group, text: group.map((word) => word.text).join(separator), start: group[0].start, end: group[group.length - 1].end }));
 }
 
+function rollingFocusPreviewRows(segments = []) {
+  return segments.flatMap((segment) => {
+    const words = previewWords(segment);
+    const groups = [];
+    let current = [];
+    let chars = 0;
+    const flush = () => {
+      if (current.length) groups.push(current);
+      current = [];
+      chars = 0;
+    };
+    words.forEach((word, index) => {
+      const token = String(word.text || "");
+      const punctuation = /^[，。！？；：、,.!?;:]$/u.test(token);
+      const size = punctuation ? 0 : Math.max(1, [...token.replace(/\s/g, "")].length);
+      const previous = current[current.length - 1];
+      const pauseBefore = previous && Number(word.start) - Number(previous.end) >= 0.18;
+      if (pauseBefore || (current.length && chars >= 4 && chars + size > 10)) flush();
+      current.push(word);
+      chars += size;
+      const next = words[index + 1];
+      if ((punctuation && chars >= 3) || chars >= 10 || (next && Number(next.start) - Number(word.end) >= 0.18)) flush();
+    });
+    flush();
+    const separator = String(segment.text || "").includes(" ") ? " " : "";
+    return groups.map((group, index) => ({
+      ...segment,
+      id: `${segment.id}-focus-${index + 1}`,
+      sourceSegmentId: segment.id,
+      text: group.map((word) => word.text).join(separator),
+      start: Math.max(Number(segment.start || 0), Number(group[0].start || 0)),
+      end: Math.min(Number(segment.end || 0), Number(group[group.length - 1].end || segment.end || 0)),
+    }));
+  }).sort((a, b) => a.start - b.start);
+}
+
 function roundRectPath(ctx, x, y, width, height, radius) {
   const r = Math.min(radius, width / 2, height / 2);
   ctx.beginPath();
@@ -535,11 +571,12 @@ function drawPreview() {
   const width = canvas.width;
   const height = canvas.height;
   ctx.clearRect(0, 0, width, height);
-  ctx.fillStyle = "#07090d";
+  const forceBlackBackground = state.project?.effectId === "rolling-focus-subtitle";
+  ctx.fillStyle = forceBlackBackground ? "#000000" : "#07090d";
   ctx.fillRect(0, 0, width, height);
   const media = state.backgroundMedia;
   if (media && ((media instanceof HTMLImageElement && media.complete) || (media instanceof HTMLVideoElement && media.readyState >= 2))) drawCover(ctx, media, width, height);
-  else {
+  else if (!forceBlackBackground) {
     const gradient = ctx.createLinearGradient(0, 0, width, height);
     gradient.addColorStop(0, "#171b23");
     gradient.addColorStop(1, "#07090d");
@@ -568,7 +605,47 @@ function drawPreview() {
     const localProgress = Math.max(0, Math.min(1, (state.currentTime - segment.start) / Math.max(0.1, segment.end - segment.start)));
     const enter = Math.min(1, (state.currentTime - segment.start) / 0.16);
 
-    if (template.renderMode === "rolling-focus") {
+    if (template.renderMode === "rolling-focus-left") {
+      const rows = rollingFocusPreviewRows(state.project.segments);
+      const focusIndex = rows.findIndex((row) => state.currentTime >= row.start - 0.09 && state.currentTime <= row.end);
+      if (focusIndex >= 0) {
+        const focusRow = rows[focusIndex];
+        const previous = rows[focusIndex - 1];
+        const reset = !previous || focusRow.start - previous.end > 1.2;
+        const transition = reset ? 1 : Math.max(0, Math.min(1, (state.currentTime - (focusRow.start - 0.09)) / 0.22));
+        const gap = fontSize * 1.28;
+        const smallSize = fontSize * 0.54;
+        const firstIndex = reset ? focusIndex : Math.max(0, focusIndex - 2);
+        const lastIndex = Math.min(rows.length - 1, focusIndex + 2);
+        for (let rowIndex = firstIndex; rowIndex <= lastIndex; rowIndex += 1) {
+          const row = rows[rowIndex];
+          const delta = rowIndex - focusIndex;
+          const current = delta === 0;
+          const wasCurrent = delta === -1 && !reset;
+          const movingY = y + (delta + (reset ? 0 : 1 - transition)) * gap;
+          const rowFontSize = current
+            ? smallSize + (fontSize - smallSize) * transition
+            : wasCurrent
+              ? fontSize - (fontSize - smallSize) * transition
+              : smallSize;
+          const rowColor = (current && transition >= 0.5) || (wasCurrent && transition < 0.5)
+            ? primary
+            : (template.muted || "#B7B7B7");
+          drawCaptionText(ctx, `${current ? "▶ " : ""}${row.text}`, x, movingY, {
+            fontSize: rowFontSize,
+            fontFamily,
+            weight: current || wasCurrent ? 800 : 500,
+            color: rowColor,
+            align: "left",
+            maxWidth: state.project.aspectRatio === "16:9" ? width * 0.48 : width * 0.86,
+            maxLines: 1,
+            alpha: current ? 1 : Math.max(0.34, 0.7 - Math.abs(delta) * 0.14),
+            outline: false,
+            shadow: false,
+          });
+        }
+      }
+    } else if (template.renderMode === "rolling-focus") {
       const gap = fontSize * 1.5;
       [segmentIndex - 1, segmentIndex, segmentIndex + 1].forEach((index) => {
         const row = state.project.segments[index];
