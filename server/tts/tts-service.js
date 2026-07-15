@@ -951,15 +951,14 @@ export function createTtsService({
           ...safeJson(latestForFallback?.metadata_json, {}),
         };
         const singingJob = isSingingAlignmentJob(latestForFallback, latestMetadataForFallback);
-        const fallbackText = singingJob && best?.recognizedText
-          ? best.recognizedText
-          : scriptLockedFallbackText({
-              job: latestForFallback,
-              metadata: latestMetadataForFallback,
-              targetText,
-              recognizedText: best?.recognizedText || "",
-            });
-        const fallbackAligned = singingJob && best?.recognizedText
+        const audioTranscriptFallback = String(best?.recognizedText || "").trim();
+        const fallbackText = audioTranscriptFallback || scriptLockedFallbackText({
+          job: latestForFallback,
+          metadata: latestMetadataForFallback,
+          targetText,
+          recognizedText: best?.recognizedText || "",
+        });
+        let fallbackAligned = audioTranscriptFallback
           ? alignTranscriptToAudio({
               text: fallbackText,
               recognizedText: best.recognizedText,
@@ -971,6 +970,21 @@ export function createTtsService({
               text: fallbackText,
               duration: audioDuration,
             });
+        if (audioTranscriptFallback && fallbackAligned.matchRatio < ALIGNMENT_AUTO_APPROVE_RATIO) {
+          const sentenceAligned = alignTranscriptToAudio({
+            text: fallbackText,
+            recognizedText: best.recognizedText,
+            recognizedWords: [],
+            recognizedSentences: best.recognizedSentences,
+            duration: audioDuration,
+          });
+          fallbackAligned = sentenceAligned.matchRatio >= ALIGNMENT_AUTO_APPROVE_RATIO
+            ? sentenceAligned
+            : {
+                ...buildScriptLockedAlignment({ text: fallbackText, duration: audioDuration }),
+                source: "audio_transcript_duration_fallback",
+              };
+        }
         const fallbackValidation = validateAlignment({
           text: fallbackAligned.finalText,
           wordTimeline: fallbackAligned.wordTimeline,
@@ -987,14 +1001,19 @@ export function createTtsService({
           aligned: fallbackAligned,
           validation: fallbackValidation,
           recognitionMatchRatio: previousRecognitionRatio,
-          singingAudioLyricsFallback: singingJob && Boolean(best?.recognizedText),
-          scriptLockedFallback: !(singingJob && best?.recognizedText),
-          fallbackReason: best ? (singingJob ? "singing_audio_lyrics" : "low_match_ratio") : (recognitionError || "recognition_unavailable"),
+          singingAudioLyricsFallback: Boolean(audioTranscriptFallback) && singingJob,
+          audioTranscriptFallback: Boolean(audioTranscriptFallback) && !singingJob,
+          scriptLockedFallback: !audioTranscriptFallback,
+          fallbackReason: best
+            ? (audioTranscriptFallback ? (singingJob ? "singing_audio_lyrics" : "audio_transcript_after_low_match") : "low_match_ratio")
+            : (recognitionError || "recognition_unavailable"),
         };
         currentProgress = 76;
         setJobProgress(numericId, 76, best.singingAudioLyricsFallback
           ? "唱歌音频已按实际识别歌词生成同步字幕"
-          : "字幕已按可用歌词/文案生成兜底时间轴", {
+          : best.audioTranscriptFallback
+            ? "字幕已按音频实际识别内容生成同步时间轴"
+            : "字幕已按可用歌词/文案生成兜底时间轴", {
           alignment_status: "processing",
           alignment_attempts: attemptsMade,
           alignment_max_attempts: maxAttempts,
@@ -1046,14 +1065,18 @@ export function createTtsService({
       const recognitionMatchRatio = Number(best.recognitionMatchRatio ?? aligned.matchRatio ?? 0);
       const confirmationMode = best.singingAudioLyricsFallback
         ? "automatic_singing_audio_lyrics"
-        : best.scriptLockedFallback
-          ? "automatic_script_locked_fallback"
-          : "automatic_match_threshold";
+        : best.audioTranscriptFallback
+          ? "automatic_audio_transcript_fallback"
+          : best.scriptLockedFallback
+            ? "automatic_script_locked_fallback"
+            : "automatic_match_threshold";
       const completedMessage = best.singingAudioLyricsFallback
         ? "唱歌音频已按实际识别歌词同步，可以发送"
-        : best.scriptLockedFallback
-          ? "字幕已按可用歌词/文案生成兜底时间轴，可以发送"
-          : `字幕匹配率 ${(aligned.matchRatio * 100).toFixed(1)}%，可以发送`;
+        : best.audioTranscriptFallback
+          ? "字幕已按音频实际识别内容同步，可以发送"
+          : best.scriptLockedFallback
+            ? "字幕已按可用歌词/文案生成兜底时间轴，可以发送"
+            : `字幕匹配率 ${(aligned.matchRatio * 100).toFixed(1)}%，可以发送`;
       const failedMessage = `已自动重新识别 ${completedAttempts}/${maxAttempts} 次，仍无法得到可用歌词时间轴。请换文案重新生成音频。`;
       const completed = setJobProgress(numericId, 100, autoApproved ? completedMessage : failedMessage, {
         ...files,
