@@ -164,76 +164,9 @@ function cleanKeyword(value) {
 
 function keywordTargetCount(text) {
   const length = textLength(text);
-  if (length >= 21) return 3;
-  if (length >= 11) return 2;
+  if (length >= 18) return 3;
+  if (length >= 8) return 2;
   return 1;
-}
-
-const KEYWORD_EDGE_PARTICLES = /^[的了着过呢吗吧啊呀哦嘛也都就还再很更最才又并而与和或把被让给从向往在对为以于]|[的了着过呢吗吧啊呀哦嘛也都就还再很更最才又并而与和或把被让给从向往在对为以于]$/;
-const KEYWORD_ACTION_PREFIXES = new Set(["学", "教", "说", "读", "写", "背", "记", "看", "听", "练", "做", "用", "讲", "问", "答", "选", "找"]);
-
-function keywordTokens(value) {
-  const text = normalizeText(value);
-  if (!text) return [];
-  try {
-    return [...new Intl.Segmenter("zh-CN", { granularity: "word" }).segment(text)]
-      .filter((item) => item.isWordLike)
-      .map((item) => cleanKeyword(item.segment))
-      .filter(Boolean);
-  } catch {
-    return text.match(/[A-Za-z][A-Za-z0-9+.#-]{1,15}|\d+(?:\.\d+)?%?|[\u4e00-\u9fff]+/g) || [];
-  }
-}
-
-function isNaturalKeyword(candidate, sentence) {
-  const clean = cleanKeyword(candidate);
-  const length = [...clean].length;
-  if (!clean || length < 2 || length > 6 || KEYWORD_STOP_WORDS.has(clean)) return false;
-  if (/^[A-Za-z0-9+.#%\-]+$/.test(clean)) return true;
-  if (KEYWORD_EDGE_PARTICLES.test(clean)) return false;
-
-  const sentenceTokens = keywordTokens(sentence);
-  if (sentenceTokens.includes(clean)) return true;
-  const parts = keywordTokens(clean);
-  if (parts.length <= 1) return true;
-  if (parts.every((part) => [...part].length >= 2)) return true;
-  if (parts.length === 2 && [...parts[0]].length === 1 && [...parts[1]].length >= 2) {
-    return KEYWORD_ACTION_PREFIXES.has(parts[0]) || /^(不|没|难)$/.test(parts[0]);
-  }
-  return /^[\u4e00-\u9fff](?:不|没)[\u4e00-\u9fff]{1,2}$/.test(clean);
-}
-
-function highlightedCharacterCount(source, keywords) {
-  const covered = new Set();
-  for (const keyword of keywords) {
-    let fromIndex = 0;
-    while (fromIndex < source.length) {
-      const index = source.indexOf(keyword, fromIndex);
-      if (index < 0) break;
-      for (let offset = 0; offset < keyword.length; offset += 1) covered.add(index + offset);
-      fromIndex = index + Math.max(1, keyword.length);
-    }
-  }
-  return covered.size;
-}
-
-function canAddKeyword(selected, candidate, source) {
-  if (selected.some((item) => item.includes(candidate) || candidate.includes(item))) return false;
-  if (!selected.length) return true;
-  const next = [...selected, candidate];
-  const covered = highlightedCharacterCount(source, next);
-  const sourceLength = [...source].length;
-  return sourceLength - covered >= 3 && covered / Math.max(1, sourceLength) <= 0.55;
-}
-
-function fallbackKeyword(text) {
-  const source = normalizeText(text).replace(/[\s，。！？；：、,.!?;:“”‘’'"（）()【】\[\]《》<>—-]/g, "");
-  const tokens = keywordTokens(text)
-    .filter((token) => source.includes(token) && isNaturalKeyword(token, text))
-    .sort((a, b) => keywordCandidateScore(b, source) - keywordCandidateScore(a, source));
-  if (tokens.length) return tokens[0];
-  const characters = [...source].filter((character) => !/^[的了着过呢吗吧啊呀哦嘛也都就还再]$/.test(character));
-  return characters[0] || [...source][0] || "";
 }
 
 function keywordCandidateScore(candidate, source, wholeClause = false) {
@@ -253,14 +186,14 @@ function inferKeywords(text) {
   const normalized = normalizeText(text);
   const source = normalized.replace(/[\s，。！？；：、,.!?;:“”‘’'"（）()【】\[\]《》<>]/g, "");
   if (!source) return [];
+  if ([...source].length <= 4 && !/[，。！？；：、,.!?;:]/.test(normalized.slice(0, -1))) return [source];
 
   const candidates = new Map();
   const addCandidate = (value, wholeClause = false) => {
     const candidate = cleanKeyword(value).replace(wholeClause ? /[的了着过呢吗吧啊呀哦嘛]+$/ : /$^/, "");
     const length = [...candidate].length;
-    if (!candidate || length < 2 || length > 6 || KEYWORD_STOP_WORDS.has(candidate)) return;
-    if ([...source].length > 2 && candidate === source) return;
-    if (!isNaturalKeyword(candidate, normalized)) return;
+    if (!candidate || length < 2 || length > 12 || KEYWORD_STOP_WORDS.has(candidate)) return;
+    if ([...source].length > 4 && candidate === source) return;
     const score = keywordCandidateScore(candidate, source, wholeClause);
     if (score > (candidates.get(candidate) ?? -Infinity)) candidates.set(candidate, score);
   };
@@ -276,24 +209,27 @@ function inferKeywords(text) {
     const tokens = segmenter
       ? [...segmenter.segment(clause)].filter((item) => item.isWordLike).map((item) => cleanKeyword(item.segment)).filter(Boolean)
       : (clause.match(/[A-Za-z0-9%]+|[\u4e00-\u9fff]/g) || []);
-    for (const token of tokens) addCandidate(token);
-    for (let index = 0; index < tokens.length - 1; index += 1) {
-      if (!KEYWORD_ACTION_PREFIXES.has(tokens[index])) continue;
-      addCandidate(`${tokens[index]}${tokens[index + 1]}`);
+    for (let start = 0; start < tokens.length; start += 1) {
+      let phrase = "";
+      for (let size = 1; size <= 3 && start + size <= tokens.length; size += 1) {
+        const token = tokens[start + size - 1];
+        if (KEYWORD_STOP_WORDS.has(token) || /^[的了着过呢吗吧啊呀哦嘛个]$/.test(token)) break;
+        phrase += token;
+        const phraseLength = [...phrase].length;
+        if (phraseLength >= 2 && phraseLength <= 6) addCandidate(phrase);
+        if (phraseLength > 6) break;
+      }
     }
   }
 
   const targetCount = keywordTargetCount(normalized);
   const selected = [];
   for (const [candidate] of [...candidates.entries()].sort((a, b) => b[1] - a[1])) {
-    if (!canAddKeyword(selected, candidate, source)) continue;
+    if (selected.some((item) => item.includes(candidate) || candidate.includes(item))) continue;
     selected.push(candidate);
     if (selected.length >= targetCount) break;
   }
-  if (!selected.length) {
-    const fallback = fallbackKeyword(normalized);
-    if (fallback) selected.push(fallback);
-  }
+  if (!selected.length) selected.push(source.slice(0, Math.min(6, [...source].length)));
   return selected.slice(0, 3);
 }
 
@@ -303,10 +239,10 @@ function normalizeSegmentKeywords(keywords, text) {
   const selected = [];
   for (const candidate of supplied) {
     const length = [...candidate].length;
-    if (length < 2 || length > 6 || KEYWORD_STOP_WORDS.has(candidate) || !isNaturalKeyword(candidate, text)) continue;
+    if (length < 2 || length > 6 || KEYWORD_STOP_WORDS.has(candidate)) continue;
     if (!source.includes(candidate)) continue;
-    if ([...source].length > 2 && candidate === source) continue;
-    if (!canAddKeyword(selected, candidate, source)) continue;
+    if (source.length > 4 && candidate === source) continue;
+    if (selected.some((item) => item.includes(candidate) || candidate.includes(item))) continue;
     selected.push(candidate);
     if (selected.length >= keywordTargetCount(text)) break;
   }
