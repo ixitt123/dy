@@ -27,6 +27,8 @@ const state = {
   project: null,
   currentTime: 0,
   playing: false,
+  seeking: false,
+  resumeAfterSeek: false,
   startedAt: 0,
   startTime: 0,
   raf: 0,
@@ -1051,6 +1053,7 @@ function previewTick(timestamp) {
     state.playing = false;
     state.audio?.pause();
     if (state.backgroundMedia instanceof HTMLVideoElement) state.backgroundMedia.pause();
+    $("#kineticPreviewPlay").textContent = "播放预览";
     drawPreview();
     return;
   }
@@ -1058,21 +1061,62 @@ function previewTick(timestamp) {
   state.raf = requestAnimationFrame(previewTick);
 }
 
-function playPreview() {
+function startPreviewPlayback() {
   if (!state.project) return;
-  state.playing = !state.playing;
-  $("#kineticPreviewPlay").textContent = state.playing ? "暂停预览" : "播放预览";
-  if (!state.playing) {
+  state.playing = true;
+  state.seeking = false;
+  state.resumeAfterSeek = false;
+  $("#kineticPreviewPlay").textContent = "暂停预览";
+  state.startedAt = performance.now();
+  state.startTime = state.currentTime;
+  if (state.audio) { state.audio.currentTime = state.currentTime; state.audio.play().catch(() => {}); }
+  if (state.backgroundMedia instanceof HTMLVideoElement) { state.backgroundMedia.currentTime = state.currentTime % Math.max(state.backgroundMedia.duration || 1, 1); state.backgroundMedia.play().catch(() => {}); }
+  cancelAnimationFrame(state.raf);
+  state.raf = requestAnimationFrame(previewTick);
+}
+
+function playPreview() {
+  if (!state.project || state.seeking) return;
+  if (state.playing) {
+    state.playing = false;
+    $("#kineticPreviewPlay").textContent = "播放预览";
     state.audio?.pause();
     if (state.backgroundMedia instanceof HTMLVideoElement) state.backgroundMedia.pause();
     cancelAnimationFrame(state.raf);
     return;
   }
-  state.startedAt = performance.now();
-  state.startTime = state.currentTime;
-  if (state.audio) { state.audio.currentTime = state.currentTime; state.audio.play().catch(() => {}); }
-  if (state.backgroundMedia instanceof HTMLVideoElement) { state.backgroundMedia.currentTime = state.currentTime % Math.max(state.backgroundMedia.duration || 1, 1); state.backgroundMedia.play().catch(() => {}); }
-  state.raf = requestAnimationFrame(previewTick);
+  startPreviewPlayback();
+}
+
+function beginPreviewSeek() {
+  if (!state.project || state.seeking) return;
+  state.seeking = true;
+  state.resumeAfterSeek = state.playing;
+  if (!state.playing) return;
+  state.playing = false;
+  state.audio?.pause();
+  if (state.backgroundMedia instanceof HTMLVideoElement) state.backgroundMedia.pause();
+  cancelAnimationFrame(state.raf);
+}
+
+function seekPreviewTo(sliderValue) {
+  if (!state.project) return;
+  const duration = Math.max(0, Number(state.project.duration || 0));
+  state.currentTime = Math.max(0, Math.min(duration, (Number(sliderValue || 0) / 1000) * duration));
+  if (state.audio) state.audio.currentTime = state.currentTime;
+  if (state.backgroundMedia instanceof HTMLVideoElement) {
+    state.backgroundMedia.currentTime = state.currentTime % Math.max(state.backgroundMedia.duration || 1, 1);
+  }
+  drawPreview();
+}
+
+function finishPreviewSeek() {
+  if (!state.seeking) return;
+  const shouldResume = state.resumeAfterSeek;
+  state.seeking = false;
+  state.resumeAfterSeek = false;
+  if (shouldResume) startPreviewPlayback();
+  else $("#kineticPreviewPlay").textContent = "播放预览";
 }
 
 function renderOutputs() {
@@ -1461,17 +1505,29 @@ function bindEvents() {
     }
   });
   $("#kineticPreviewPlay").addEventListener("click", playPreview);
+  $("#kineticPreviewCanvas").addEventListener("click", playPreview);
+  $("#kineticPreviewCanvas").addEventListener("keydown", (event) => {
+    if (!["Enter", " "].includes(event.key)) return;
+    event.preventDefault();
+    playPreview();
+  });
   $("#kineticPreviewRestart").addEventListener("click", () => {
     state.currentTime = 0;
+    state.startTime = 0;
+    state.startedAt = performance.now();
     if (state.audio) state.audio.currentTime = 0;
     if (state.backgroundMedia instanceof HTMLVideoElement) state.backgroundMedia.currentTime = 0;
     drawPreview();
   });
+  $("#kineticPreviewSeek").addEventListener("pointerdown", beginPreviewSeek);
   $("#kineticPreviewSeek").addEventListener("input", (event) => {
-    state.currentTime = (Number(event.target.value) / 1000) * Number(state.project?.duration || 0);
-    if (state.audio) state.audio.currentTime = state.currentTime;
-    drawPreview();
+    beginPreviewSeek();
+    seekPreviewTo(event.target.value);
   });
+  $("#kineticPreviewSeek").addEventListener("change", finishPreviewSeek);
+  $("#kineticPreviewSeek").addEventListener("pointerup", finishPreviewSeek);
+  $("#kineticPreviewSeek").addEventListener("pointercancel", finishPreviewSeek);
+  $("#kineticPreviewSeek").addEventListener("blur", finishPreviewSeek);
   $("#kineticGenerateMaterials").addEventListener("click", async () => {
     if (!state.project) return;
     const data = await postJson("/api/kinetic-text/materials", { projectId: state.project.id });

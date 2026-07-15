@@ -215,6 +215,7 @@ test("Kinetic text production line", async () => {
     || !page.includes('data-page="kinetic-text"')
     || !page.includes('data-target="kinetic-text"')
     || !page.includes('id="kineticPreviewCanvas"')
+    || !page.includes('aria-label="点击画面播放或暂停"')
     || !page.includes('id="kineticTimeline"')
     || !page.includes('id="kineticAnalyze"')
     || !page.includes('id="kineticChooseDownloadDir"')
@@ -243,6 +244,9 @@ test("Kinetic text production line", async () => {
     || !kineticServiceSource.includes("calculateBookendWindows")
     || !moduleSource.includes("FAVORITES_KEY")
     || !moduleSource.includes("previewWordGroups")
+    || !moduleSource.includes('$("#kineticPreviewCanvas").addEventListener("click", playPreview)')
+    || !moduleSource.includes('$("#kineticPreviewSeek").addEventListener("pointerdown", beginPreviewSeek)')
+    || !moduleSource.includes('$("#kineticPreviewSeek").addEventListener("change", finishPreviewSeek)')
     || !legacySource.includes('targets.includes("kinetic-text")')
     || !packageJson.scripts?.["test:subtitle-templates"]) {
     throw new Error("Kinetic text production line is incomplete");
