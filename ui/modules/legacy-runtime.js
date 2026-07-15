@@ -3980,6 +3980,7 @@ async function confirmActiveTtsAlignment() {
 }
 
 function showTtsPreview(job) {
+  activeTtsRailJob = job;
   ttsPreview.hidden = false;
   const isMusicJob = job.source === "minimax_music" || String(job.voice_id || "").startsWith("music:");
   ttsPreviewTitle.textContent = ttsJobTitle(job) || `${isMusicJob ? "音频" : "语音"} #${job.id}`;
@@ -6472,6 +6473,36 @@ ttsText.addEventListener("input", () => {
 
 generateTtsButton.addEventListener("click", () => {
   generateTts();
+});
+
+ttsFinalTranscript?.addEventListener("input", () => {
+  if (!activeTtsRailJob?.id || !activeTtsRailJob.recognized_text) return;
+  if (ttsRealignTimer) clearTimeout(ttsRealignTimer);
+  if (ttsAlignmentStatus) ttsAlignmentStatus.textContent = "文案已修改，稍后自动重新对齐...";
+  if (confirmTtsAlignmentBtn) confirmTtsAlignmentBtn.disabled = true;
+  ttsRealignTimer = setTimeout(() => {
+    realignActiveTtsTranscript({ quiet: true }).catch((error) => {
+      if (ttsAlignmentStatus) ttsAlignmentStatus.textContent = error instanceof Error ? error.message : String(error);
+    });
+  }, 800);
+});
+
+retryTtsAlignmentBtn?.addEventListener("click", () => {
+  retryActiveTtsAlignment().catch((error) => {
+    if (ttsAlignmentStatus) ttsAlignmentStatus.textContent = error instanceof Error ? error.message : String(error);
+  });
+});
+
+realignTtsTranscriptBtn?.addEventListener("click", () => {
+  realignActiveTtsTranscript().catch((error) => {
+    if (ttsAlignmentStatus) ttsAlignmentStatus.textContent = error instanceof Error ? error.message : String(error);
+  });
+});
+
+confirmTtsAlignmentBtn?.addEventListener("click", () => {
+  confirmActiveTtsAlignment().catch((error) => {
+    if (ttsAlignmentStatus) ttsAlignmentStatus.textContent = error instanceof Error ? error.message : String(error);
+  });
 });
 
 sendConfirmedTtsAudioBtn?.addEventListener("click", () => {
