@@ -2092,6 +2092,16 @@ async function copyAllMomentsPrompts() {
   setMomentsStatus(`已复制 ${prompts.length} 条图片提示词。`, "success");
 }
 
+async function copyMomentsPost() {
+  const post = (momentsPostOutput?.value || "").trim();
+  if (!post) {
+    setMomentsStatus("还没有可复制的朋友圈文案。", "warning");
+    return;
+  }
+  await navigator.clipboard.writeText(post);
+  setMomentsStatus("朋友圈文案已复制。", "success");
+}
+
 function addMomentsPublishPath(paths, value) {
   const text = String(value || "").trim();
   if (!text) return;
@@ -2270,19 +2280,6 @@ function handleFinishedResultWorkflow(rows = []) {
       return;
     }
 
-    const filePath = task.audio_path || task.video_path;
-    const shouldPromptOpen = filePath && ["download", "audio"].includes(task.task_action || activeResultAction);
-    if (shouldPromptOpen && !autoOpenedResultTaskIds.has(id)) {
-      autoOpenedResultTaskIds.add(id);
-      setTimeout(() => {
-        if (window.confirm("视频/音频已完成，是否打开本地文件所在位置？")) {
-          openManagedPath(filePath).catch((error) => {
-            resultBox.textContent = error instanceof Error ? error.message : String(error);
-          });
-        }
-      }, 120);
-      return;
-    }
   }
 }
 
@@ -6960,6 +6957,12 @@ document.querySelector("#deleteMomentsPersona")?.addEventListener("click", () =>
 
 generateMomentsPostBtn?.addEventListener("click", () => {
   generateMomentsPost();
+});
+
+copyMomentsPostBtn?.addEventListener("click", () => {
+  copyMomentsPost().catch((error) => {
+    setMomentsStatus(error instanceof Error ? error.message : String(error), "error");
+  });
 });
 
 copyMomentsPromptsBtn?.addEventListener("click", () => {
