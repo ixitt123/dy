@@ -21,7 +21,14 @@ export function sendConfirmedTtsToXiaohei(job, project = activeProject()) {
   if (!job?.id || job.status !== "completed" || String(job.alignment_status || job.metadata?.alignment_status || "") !== "confirmed") {
     throw new Error("请先生成语音，并检查确认最终文案和字幕时间轴。");
   }
-  const finalText = String(job.final_text || job.metadata?.final_text || "").trim();
+  const finalText = String(
+    job.final_text
+    || job.metadata?.final_text
+    || job.tts_prepared_text
+    || job.original_text
+    || job.text
+    || "",
+  ).trim();
   const handoff = {
     projectId: project?.id || "",
     projectTitle: project?.title || "",
@@ -49,7 +56,7 @@ export function initXiaoheiProductionModule() {
   page.innerHTML = `
     <section class="embedded-production-line">
       <div class="production-line-toolbar">
-        <div class="production-line-notice" id="xiaoheiHandoffStatus">可以直接输入文案生成，也可以先在 TTS 语音页确认音频后发送到这里。</div>
+        <div class="production-line-notice" id="xiaoheiHandoffStatus">请先在 TTS 语音页确认文案、音频和同步时间戳，再发送到这里。</div>
         <button class="ghost" id="refreshXiaoheiProduction" type="button">刷新工作台</button>
       </div>
       <iframe
@@ -67,7 +74,7 @@ export function initXiaoheiProductionModule() {
     const handoff = readHandoff();
     status.textContent = handoff
       ? `已接收音频 #${handoff.ttsJob?.id || "-"}：${handoff.title || "未命名项目"}`
-      : "可以直接输入文案生成，也可以先在 TTS 语音页确认音频后发送到这里。";
+      : "请先在 TTS 语音页确认文案、音频和同步时间戳，再发送到这里。";
     postHandoff(frame, handoff);
   };
 

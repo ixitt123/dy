@@ -1526,7 +1526,14 @@ function isTtsAlignmentConfirmed(job) {
 }
 
 function confirmedTtsText(job) {
-  return String(job?.final_text || job?.metadata?.final_text || "").trim();
+  return String(
+    job?.final_text
+    || job?.metadata?.final_text
+    || job?.tts_prepared_text
+    || job?.original_text
+    || job?.text
+    || "",
+  ).trim();
 }
 
 function previewRatioStyle(ratio) {

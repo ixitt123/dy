@@ -151,6 +151,57 @@ h2 {
   line-height: 1.45;
 }
 
+.xiaohei-source-card {
+  align-content: start;
+}
+
+.tts-source-summary {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding: 12px;
+  border: 1px solid #303b51;
+  border-radius: 8px;
+  background: #0b111b;
+}
+
+.source-pill {
+  justify-self: start;
+  padding: 3px 8px;
+  border: 1px solid rgba(113, 215, 255, 0.45);
+  border-radius: 999px;
+  color: #9fe7ff;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.tts-source-summary h2 {
+  margin: 0;
+  color: #f7fbff;
+  font-size: 16px;
+  line-height: 1.35;
+}
+
+.tts-source-summary p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.tts-source-text {
+  max-height: 180px;
+  overflow: auto;
+  padding: 10px;
+  border: 1px solid rgba(113, 215, 255, 0.22);
+  border-radius: 6px;
+  background: #070b12;
+  color: #d8f6eb;
+  font-size: 13px;
+  line-height: 1.65;
+  white-space: pre-wrap;
+}
+
 .provider-setup {
   display: grid;
   grid-template-columns: 1fr;
