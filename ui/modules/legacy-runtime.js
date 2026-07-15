@@ -1439,20 +1439,10 @@ async function sendRewriteTextToTarget(target, text, meta = {}) {
     if (status) status.textContent = "已接收文案";
     if (message) message.textContent = "文案已填入输入区，可直接生成 CS1 视频。";
   } else if (target === "xiaohei-video") {
-    const handoff = {
-      projectId: window.videoProjects?.current?.()?.id || "",
-      projectTitle: window.videoProjects?.current?.()?.title || "",
-      title: "文案定制成品",
-      text: cleanText,
-      source: meta.source || "rewrite",
-      sentAt: new Date().toISOString(),
-    };
-    try {
-      localStorage.setItem("video-factory-xiaohei-handoff", JSON.stringify(handoff));
-    } catch {}
-    document.querySelector("#xiaoheiProductionFrame")?.contentWindow?.postMessage({ type: "video-factory:xiaohei-handoff", handoff }, window.location.origin);
-    const status = document.querySelector("#xiaoheiHandoffStatus");
-    if (status) status.textContent = `已接收文案：${countRewriteCharacters(cleanText)} 字`;
+    setTextareaValue(ttsText, cleanText);
+    if (ttsCharacterCount) ttsCharacterCount.textContent = `${countRewriteCharacters(cleanText)} 字`;
+    if (ttsStatus) ttsStatus.textContent = "小黑配图只接收 TTS 确认后的文案、音频和同步时间戳；请先在这里生成语音再发送到小黑。";
+    window.workbenchNavigate?.("tts", { preserveScroll: true });
   } else if (target === "money-printer") {
     setTextareaValue(document.querySelector("#moneyPrinterScript"), cleanText);
     const subject = document.querySelector("#moneyPrinterSubject");

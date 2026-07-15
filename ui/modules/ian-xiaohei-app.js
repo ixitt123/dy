@@ -130,6 +130,7 @@ const els = {
   imageCount: document.querySelector("#imageCount"),
   templateGrid: document.querySelector("#xiaoheiTemplateGrid"),
   templateSummary: document.querySelector("#xiaoheiTemplateSummary"),
+  ttsSourcePill: document.querySelector("#ttsSourcePill"),
   ttsSourceTitle: document.querySelector("#ttsSourceTitle"),
   ttsSourceMeta: document.querySelector("#ttsSourceMeta"),
   ttsSourceText: document.querySelector("#ttsSourceText"),
@@ -179,6 +180,7 @@ async function handleParentHandoff(event) {
 
 function syncTtsSource(job, { title = "", text = "" } = {}) {
   if (!job) {
+    if (els.ttsSourcePill) els.ttsSourcePill.textContent = "等待 TTS 发送";
     if (els.ttsSourceTitle) els.ttsSourceTitle.textContent = "还没有绑定 TTS 音频";
     if (els.ttsSourceMeta) els.ttsSourceMeta.textContent = "请先在 TTS 语音页生成并确认字幕时间轴，然后发送到小黑配图软件。";
     if (els.ttsSourceText) els.ttsSourceText.textContent = "收到后，这里会显示 TTS 最终文案，不在本页手动输入。";
@@ -191,6 +193,7 @@ function syncTtsSource(job, { title = "", text = "" } = {}) {
   if (els.copyInput) els.copyInput.value = finalText;
   const timeline = Array.isArray(job.subtitle_timeline) ? job.subtitle_timeline : [];
   const duration = Number(job.audio_duration || job.metadata?.audio_duration || job.duration || 0);
+  if (els.ttsSourcePill) els.ttsSourcePill.textContent = "已绑定 TTS";
   if (els.ttsSourceTitle) els.ttsSourceTitle.textContent = titleText || `TTS 音频 #${job.id}`;
   if (els.ttsSourceMeta) {
     els.ttsSourceMeta.textContent = [
