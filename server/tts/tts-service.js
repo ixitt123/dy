@@ -8,7 +8,8 @@ import { alignTranscriptToAudio, validateAlignment } from "./alignment.js";
 
 const PROMPT_FILES = ["tts_script_prepare.md", "tts_emotion_prompt.md", "seo_title_generation.md"];
 const ALIGNMENT_AUTO_APPROVE_RATIO = 0.8;
-const ALIGNMENT_POLICY_VERSION = "original_vs_audio_80";
+const ALIGNMENT_MAX_AUTO_RECOGNITION_ATTEMPTS = 3;
+const ALIGNMENT_POLICY_VERSION = "semantic_tokens_auto_retry_80_v2";
 
 function safeJson(value, fallback = {}) {
   try {

@@ -27,6 +27,10 @@ function normalizedToken(value = "") {
   return String(value || "").normalize("NFKC").toLocaleLowerCase("zh-CN");
 }
 
+function isSemanticToken(value = "") {
+  return /[\p{Script=Han}\p{Letter}\p{Number}]/u.test(String(value || ""));
+}
+
 function splitSubtitleSentences(text = "") {
   const rows = String(text || "")
     .replace(/\r/g, "")
@@ -253,8 +257,20 @@ export function alignTranscriptToAudio({
   let anchors = expandRecognizedWords(recognizedWords, total);
   if (!anchors.length) anchors = estimatedWordsFromSentences(recognizedSentences, total);
   if (!anchors.length) anchors = estimatedWordsFromText(recognizedText || finalText, total);
-  const matches = lcsMatches(finalTokens.map(normalizedToken), anchors.map((item) => normalizedToken(item.text)));
-  const matchByFinalIndex = new Map(matches.map(([finalIndex, sourceIndex]) => [finalIndex, sourceIndex]));
+  const finalMatchTokens = finalTokens
+    .map((text, index) => ({ text, index, normalized: normalizedToken(text) }))
+    .filter((item) => isSemanticToken(item.text));
+  const anchorMatchTokens = anchors
+    .map((item, index) => ({ text: item.text, index, normalized: normalizedToken(item.text) }))
+    .filter((item) => isSemanticToken(item.text));
+  const matches = lcsMatches(
+    finalMatchTokens.map((item) => item.normalized),
+    anchorMatchTokens.map((item) => item.normalized),
+  );
+  const matchByFinalIndex = new Map(matches.map(([finalMatchIndex, sourceMatchIndex]) => [
+    finalMatchTokens[finalMatchIndex].index,
+    anchorMatchTokens[sourceMatchIndex].index,
+  ]));
   const rows = finalTokens.map((token, index) => {
     const sourceIndex = matchByFinalIndex.get(index);
     const anchor = sourceIndex === undefined ? null : anchors[sourceIndex];
@@ -283,7 +299,7 @@ export function alignTranscriptToAudio({
     estimatedCount,
     lowConfidenceCount,
     source,
-    matchRatio: Number((matches.length / Math.max(finalTokens.length, anchors.length, 1)).toFixed(4)),
+    matchRatio: Number((matches.length / Math.max(finalMatchTokens.length, anchorMatchTokens.length, 1)).toFixed(4)),
   };
 }
 
