@@ -20,226 +20,254 @@
         </div>
       </header>
 
-      <section class="composer">
-        <section class="provider-setup">
-          <div>
-            <strong>MiniMax（稀宇）TTS</strong>
-            <span id="minimaxStatus">正在检查配置</span>
-          </div>
-          <label class="field">
-            <span>API Key</span>
-            <input id="minimaxApiKey" type="password" autocomplete="off" placeholder="已配置时留空不会修改" />
-          </label>
-          <label class="field">
-            <span>模型</span>
-            <select id="minimaxModel">
-              <option value="speech-2.6-hd">speech-2.6-hd（支持情感，默认）</option>
-              <option value="speech-2.8-hd">speech-2.8-hd（超自然音质）</option>
-            </select>
-          </label>
-          <label class="field">
-            <span>已保存 API</span>
-            <select id="savedApiSelect"></select>
-          </label>
-          <div class="settings-actions">
-            <button id="saveMinimaxSettings" type="button">保存 MiniMax 配置</button>
-            <button id="testMinimaxSettings" type="button">测试选中 API</button>
-            <button id="deleteMinimaxApi" type="button" class="danger">删除 API</button>
-          </div>
-          <div id="savedApiDetail" class="api-detail">正在读取已保存 API。</div>
-          <div id="integrationStatus" class="integration-status">正在读取剪映目录和输出目录状态。</div>
-        </section>
-        <label class="field field-title">
-          <span>配图标题</span>
-          <input id="titleInput" type="text" placeholder="可选；不填则自动提取文案第一句" />
-        </label>
-        <label class="field field-text">
-          <span>输入文案</span>
-          <textarea id="copyInput" placeholder="把文章段落、短文案或方法论说明粘贴到这里。"></textarea>
-        </label>
-        <div class="control-grid">
-          <label class="field">
-            <span>配音音色</span>
-            <select id="voiceSelect"></select>
-          </label>
-          <label class="field">
-            <span>情感</span>
-            <select id="emotionSelect"></select>
-          </label>
-          <label class="field">
-            <span>语速</span>
-            <select id="speedSelect"></select>
-          </label>
-          <label class="field">
-            <span>视频比例</span>
-            <select id="aspectRatioSelect"></select>
-          </label>
-          <label class="field">
-            <span>图片用途</span>
-            <select id="purposeSelect">
-            </select>
-          </label>
-        </div>
-        <div class="voice-actions">
-          <button id="previewVoice" type="button">试听当前音色</button>
-          <button id="setDefaultVoice" type="button">设为默认</button>
-          <button id="deleteVoice" type="button" class="danger">永久删除音色</button>
-          <span id="voiceDescription">选择音色后可以先试听。</span>
-        </div>
-        <details class="advanced-panel">
-          <summary>备用：导入已有 TTS 音频</summary>
-          <label class="field advanced-single-field">
-            <span>上传已有 TTS</span>
-            <input id="localAudioInput" type="file" accept=".mp3,.wav,.m4a,audio/mpeg,audio/wav,audio/mp4" />
-            <small>仅在已有配音时使用；上传后会识别并核对当前文案，不一致会阻止后续分镜生成。</small>
-          </label>
-        </details>
-        <section class="music-studio">
-          <div class="panel-head">
-            <div>
-              <h2>AI 唱歌 / 搞怪音乐</h2>
-              <p>独立生成 mp3，可作为片头梗歌、搞怪音乐或 BGM 素材；不会替代当前 TTS 配音。</p>
+      <section class="xiaohei-production-layout">
+        <aside class="xiaohei-controls">
+          <section class="composer xiaohei-card xiaohei-script-card">
+            <div class="xiaohei-card-head">
+              <div>
+                <strong>文案与配音参数</strong>
+                <small>先绑定最终文案和音频，再进入分镜与素材包。</small>
+              </div>
             </div>
-            <button id="generateMusic" type="button">生成音乐素材</button>
-          </div>
-          <div class="music-grid">
-            <label class="field">
-              <span>音乐预设</span>
-              <select id="musicPreset"></select>
+            <label class="field field-title">
+              <span>配图标题</span>
+              <input id="titleInput" type="text" placeholder="可选；不填则自动提取文案第一句" />
             </label>
-            <label class="field">
-              <span>风格补充</span>
-              <input id="musicPromptExtra" type="text" placeholder="可选：更燃、更搞笑、更像片头广告歌" />
+            <label class="field field-text">
+              <span>输入文案</span>
+              <textarea id="copyInput" placeholder="把文章段落、短文案或方法论说明粘贴到这里。"></textarea>
             </label>
-          </div>
-          <div class="music-style-row">
-            <label class="field">
-              <span>参考配乐风格</span>
-              <select id="referenceStyleSelect"></select>
-              <small>来自已确认的授权参考音频；生成音乐素材时会使用其 BPM、响度和收尾规则。</small>
-            </label>
-            <div class="audio-actions style-actions">
-              <button id="setDefaultReferenceStyle" type="button">设为默认风格</button>
-              <button id="deleteReferenceStyle" type="button" class="danger">永久删除风格</button>
+            <div class="control-grid">
+              <label class="field">
+                <span>配音音色</span>
+                <select id="voiceSelect"></select>
+              </label>
+              <label class="field">
+                <span>情感</span>
+                <select id="emotionSelect"></select>
+              </label>
+              <label class="field">
+                <span>语速</span>
+                <select id="speedSelect"></select>
+              </label>
+              <label class="field">
+                <span>视频比例</span>
+                <select id="aspectRatioSelect"></select>
+              </label>
+              <label class="field xiaohei-hidden-purpose">
+                <span>当前模板</span>
+                <select id="purposeSelect"></select>
+              </label>
             </div>
-          </div>
-          <label class="field">
-            <span>歌词 / 口号</span>
-            <textarea id="musicLyrics" placeholder="留空时会默认使用上方文案；纯音乐预设可留空。"></textarea>
-          </label>
-          <div id="musicStatus" class="music-status">选择预设后生成，生成结果会保存在本地。</div>
-          <div id="musicPreviewPanel" class="audio-preview" hidden>
-            <strong id="musicPreviewTitle">当前音乐素材</strong>
-            <audio id="musicPreview" controls></audio>
-          </div>
-        </section>
-        <section class="reference-audio-studio">
-          <div class="panel-head">
-            <div>
-              <h2>从授权参考音频创建音色</h2>
-              <p>系统会自动提取 30 至 60 秒清晰人声，分析节奏与混音规则；试听通过后才加入长期音色库和配乐风格库。</p>
+            <div class="voice-actions">
+              <button id="previewVoice" type="button">试听当前音色</button>
+              <button id="setDefaultVoice" type="button">设为默认</button>
+              <button id="deleteVoice" type="button" class="danger">永久删除音色</button>
+              <span id="voiceDescription">选择音色后可以先试听。</span>
             </div>
-            <div class="audio-actions">
-              <button id="analyzeReferenceAudio" type="button">分析参考音频</button>
-            </div>
-          </div>
-          <div class="reference-grid">
-            <label class="field">
-              <span>参考视频 / 音频</span>
-              <input id="referenceAudioInput" type="file" accept=".mp4,.mov,.m4v,.mp3,.wav,.m4a,video/mp4,video/quicktime,audio/mpeg,audio/wav,audio/mp4" />
-              <small>仅可上传拥有长期克隆和生成授权的声音。不会复用参考视频的原 BGM。</small>
-            </label>
-            <label class="field">
-              <span>克隆音色名称</span>
-              <input id="referenceCloneName" type="text" placeholder="例如：老师知识口播" />
-              <small>确认后以这个名称出现在“配音音色”中。</small>
-            </label>
-          </div>
-          <div id="referenceProfile" class="reference-profile empty">还没有分析参考音频。</div>
-          <div id="referenceCloneControls" class="reference-clone-controls" hidden>
-            <label class="consent-row">
-              <input id="referenceCloneConsent" type="checkbox" />
-              <span>我确认拥有该声音的长期克隆与生成授权</span>
-            </label>
-            <button id="createReferenceClone" type="button" class="primary">创建克隆并生成试听</button>
-          </div>
-          <div id="referenceClonePreviewPanel" class="audio-preview" hidden>
-            <strong id="referenceClonePreviewTitle">克隆音色试听</strong>
-            <audio id="referenceClonePreview" controls></audio>
-            <label class="default-choice">
-              <input id="referenceCloneDefault" type="checkbox" />
-              <span>确认加入时设为默认音色</span>
-            </label>
-            <div class="audio-actions">
-              <button id="confirmReferenceClone" type="button" class="primary">确认加入预设音色</button>
-              <button id="discardReferenceClone" type="button" class="danger">放弃并永久删除</button>
-            </div>
-          </div>
-        </section>
-        <section class="audio-studio">
-          <div class="panel-head">
-            <div>
-              <h2>本视频配音</h2>
-              <p>先单独生成和试听，确认后才会开始分镜与配图。</p>
-            </div>
-            <div class="audio-actions">
-              <button id="generateAudio" type="button" class="primary">生成一条音频</button>
-              <button id="confirmAudio" type="button">确定本视频使用</button>
-            </div>
-          </div>
-          <div id="audioPreviewPanel" class="audio-preview" hidden>
-            <strong id="audioPreviewTitle">当前试听音频</strong>
-            <audio id="audioPreview" controls></audio>
-          </div>
-          <div id="audioJobs" class="audio-job-list empty">当前项目还没有音频。</div>
-        </section>
-        <div class="actions">
-          <button id="planPrompts" type="button">根据音频分析分镜配图</button>
-          <button id="copyPrompts" type="button">复制全部提示词</button>
-          <button id="generateImages" type="button" class="primary">一键生成剪映草稿</button>
-        </div>
-      </section>
+            <details class="advanced-panel">
+              <summary>备用：导入已有 TTS 音频</summary>
+              <label class="field advanced-single-field">
+                <span>上传已有 TTS</span>
+                <input id="localAudioInput" type="file" accept=".mp3,.wav,.m4a,audio/mpeg,audio/wav,audio/mp4" />
+                <small>仅在已有配音时使用；上传后会识别并核对当前文案，不一致会阻止后续分镜生成。</small>
+              </label>
+            </details>
+          </section>
 
-      <section class="status-panel" aria-live="polite">
-        <div>
-          <span id="statusLabel">待输入</span>
-          <p id="statusDetail">先生成并确认音频，再按音频时间轴分析分镜；逐段上传确认图片后，一键生成剪映草稿。</p>
-        </div>
-        <div class="progress-box">
-          <div class="progress-meta">
-            <span id="progressStep">等待开始</span>
-            <strong id="progressPercent">0%</strong>
-          </div>
-          <div class="progress-shell"><div id="progressBar"></div></div>
-        </div>
-      </section>
+          <section class="provider-setup xiaohei-card">
+            <div class="xiaohei-card-head">
+              <div>
+                <strong>MiniMax（稀宇）TTS</strong>
+                <small id="minimaxStatus">正在检查配置</small>
+              </div>
+            </div>
+            <label class="field">
+              <span>API Key</span>
+              <input id="minimaxApiKey" type="password" autocomplete="off" placeholder="已配置时留空不会修改" />
+            </label>
+            <label class="field">
+              <span>模型</span>
+              <select id="minimaxModel">
+                <option value="speech-2.6-hd">speech-2.6-hd（支持情感，默认）</option>
+                <option value="speech-2.8-hd">speech-2.8-hd（超自然音质）</option>
+              </select>
+            </label>
+            <label class="field">
+              <span>已保存 API</span>
+              <select id="savedApiSelect"></select>
+            </label>
+            <div class="settings-actions">
+              <button id="saveMinimaxSettings" type="button">保存 MiniMax 配置</button>
+              <button id="testMinimaxSettings" type="button">测试选中 API</button>
+              <button id="deleteMinimaxApi" type="button" class="danger">删除 API</button>
+            </div>
+            <div id="savedApiDetail" class="api-detail">正在读取已保存 API。</div>
+            <div id="integrationStatus" class="integration-status">正在读取剪映目录和输出目录状态。</div>
+          </section>
 
-      <section class="results-grid">
-        <div class="panel">
-          <div class="panel-head">
-            <h2>提示词计划</h2>
-            <span id="planCount">0</span>
-          </div>
-          <div id="promptResults" class="prompt-list empty">还没有生成提示词。</div>
-        </div>
-        <div class="panel">
-          <div class="panel-head">
-            <h2>生成结果</h2>
-            <span id="imageCount">0</span>
-          </div>
-          <div id="imageResults" class="image-list empty">生成后的图片会显示在这里。</div>
-        </div>
-      </section>
+          <section class="music-studio xiaohei-card">
+            <div class="panel-head">
+              <div>
+                <h2>AI 唱歌 / 搞怪音乐</h2>
+                <p>独立生成 mp3，可作为片头梗歌、搞怪音乐或 BGM 素材；不会替代当前 TTS 配音。</p>
+              </div>
+              <button id="generateMusic" type="button">生成音乐素材</button>
+            </div>
+            <div class="music-grid">
+              <label class="field">
+                <span>音乐预设</span>
+                <select id="musicPreset"></select>
+              </label>
+              <label class="field">
+                <span>风格补充</span>
+                <input id="musicPromptExtra" type="text" placeholder="可选：更燃、更搞笑、更像片头广告歌" />
+              </label>
+            </div>
+            <div class="music-style-row">
+              <label class="field">
+                <span>参考配乐风格</span>
+                <select id="referenceStyleSelect"></select>
+                <small>来自已确认的授权参考音频；生成音乐素材时会使用其 BPM、响度和收尾规则。</small>
+              </label>
+              <div class="audio-actions style-actions">
+                <button id="setDefaultReferenceStyle" type="button">设为默认风格</button>
+                <button id="deleteReferenceStyle" type="button" class="danger">永久删除风格</button>
+              </div>
+            </div>
+            <label class="field">
+              <span>歌词 / 口号</span>
+              <textarea id="musicLyrics" placeholder="留空时会默认使用上方文案；纯音乐预设可留空。"></textarea>
+            </label>
+            <div id="musicStatus" class="music-status">选择预设后生成，生成结果会保存在本地。</div>
+            <div id="musicPreviewPanel" class="audio-preview" hidden>
+              <strong id="musicPreviewTitle">当前音乐素材</strong>
+              <audio id="musicPreview" controls></audio>
+            </div>
+          </section>
 
-      <section class="panel output-panel">
-        <div class="panel-head">
-          <h2>历史输出</h2>
-          <span id="outputDirLabel"></span>
-        </div>
-        <details id="outputHistoryPanel" class="history-panel">
-          <summary>展开历史输出 <span id="outputHistoryCount">0</span></summary>
-          <div id="outputHistory" class="history-list empty">暂无历史输出。</div>
-        </details>
+          <section class="reference-audio-studio xiaohei-card">
+            <div class="panel-head">
+              <div>
+                <h2>从授权参考音频创建音色</h2>
+                <p>系统会自动提取 30 至 60 秒清晰人声，分析节奏与混音规则；试听通过后才加入长期音色库和配乐风格库。</p>
+              </div>
+              <div class="audio-actions">
+                <button id="analyzeReferenceAudio" type="button">分析参考音频</button>
+              </div>
+            </div>
+            <div class="reference-grid">
+              <label class="field">
+                <span>参考视频 / 音频</span>
+                <input id="referenceAudioInput" type="file" accept=".mp4,.mov,.m4v,.mp3,.wav,.m4a,video/mp4,video/quicktime,audio/mpeg,audio/wav,audio/mp4" />
+                <small>仅可上传拥有长期克隆和生成授权的声音。不会复用参考视频的原 BGM。</small>
+              </label>
+              <label class="field">
+                <span>克隆音色名称</span>
+                <input id="referenceCloneName" type="text" placeholder="例如：老师知识口播" />
+                <small>确认后以这个名称出现在“配音音色”中。</small>
+              </label>
+            </div>
+            <div id="referenceProfile" class="reference-profile empty">还没有分析参考音频。</div>
+            <div id="referenceCloneControls" class="reference-clone-controls" hidden>
+              <label class="consent-row">
+                <input id="referenceCloneConsent" type="checkbox" />
+                <span>我确认拥有该声音的长期克隆与生成授权</span>
+              </label>
+              <button id="createReferenceClone" type="button" class="primary">创建克隆并生成试听</button>
+            </div>
+            <div id="referenceClonePreviewPanel" class="audio-preview" hidden>
+              <strong id="referenceClonePreviewTitle">克隆音色试听</strong>
+              <audio id="referenceClonePreview" controls></audio>
+              <label class="default-choice">
+                <input id="referenceCloneDefault" type="checkbox" />
+                <span>确认加入时设为默认音色</span>
+              </label>
+              <div class="audio-actions">
+                <button id="confirmReferenceClone" type="button" class="primary">确认加入预设音色</button>
+                <button id="discardReferenceClone" type="button" class="danger">放弃并永久删除</button>
+              </div>
+            </div>
+          </section>
+        </aside>
+
+        <main class="xiaohei-workspace">
+          <section class="status-panel xiaohei-preview-card" aria-live="polite">
+            <div>
+              <span id="statusLabel">待输入</span>
+              <p id="statusDetail">先生成并确认音频，再按音频时间轴分析分镜；逐段上传确认图片后，一键生成剪映草稿。</p>
+            </div>
+            <div class="progress-box">
+              <div class="progress-meta">
+                <span id="progressStep">等待开始</span>
+                <strong id="progressPercent">0%</strong>
+              </div>
+              <div class="progress-shell"><div id="progressBar"></div></div>
+            </div>
+          </section>
+
+          <section class="audio-studio xiaohei-preview-card">
+            <div class="panel-head">
+              <div>
+                <h2>本视频配音</h2>
+                <p>先单独生成和试听，确认后才会开始分镜与配图。</p>
+              </div>
+              <div class="audio-actions">
+                <button id="generateAudio" type="button" class="primary">生成一条音频</button>
+                <button id="confirmAudio" type="button">确定本视频使用</button>
+              </div>
+            </div>
+            <div id="audioPreviewPanel" class="audio-preview" hidden>
+              <strong id="audioPreviewTitle">当前试听音频</strong>
+              <audio id="audioPreview" controls></audio>
+            </div>
+            <div id="audioJobs" class="audio-job-list empty">当前项目还没有音频。</div>
+          </section>
+
+          <section class="xiaohei-template-library xiaohei-preview-card">
+            <div class="xiaohei-card-head">
+              <div>
+                <strong>小黑视觉模板 / Skill</strong>
+                <small id="xiaoheiTemplateSummary">选择一个模板，后台仍调用小黑分镜模块完成提示词、素材包和剪映草稿。</small>
+              </div>
+            </div>
+            <div id="xiaoheiTemplateGrid" class="xiaohei-template-grid"></div>
+          </section>
+
+          <div class="actions xiaohei-actions">
+            <button id="planPrompts" type="button">根据音频分析分镜配图</button>
+            <button id="copyPrompts" type="button">复制全部提示词</button>
+            <button id="generateImages" type="button" class="primary">一键生成剪映草稿</button>
+          </div>
+
+          <section class="results-grid">
+            <div class="panel">
+              <div class="panel-head">
+                <h2>提示词计划</h2>
+                <span id="planCount">0</span>
+              </div>
+              <div id="promptResults" class="prompt-list empty">还没有生成提示词。</div>
+            </div>
+            <div class="panel">
+              <div class="panel-head">
+                <h2>生成结果</h2>
+                <span id="imageCount">0</span>
+              </div>
+              <div id="imageResults" class="image-list empty">生成后的图片会显示在这里。</div>
+            </div>
+          </section>
+
+          <section class="panel output-panel">
+            <div class="panel-head">
+              <h2>历史输出</h2>
+              <span id="outputDirLabel"></span>
+            </div>
+            <details id="outputHistoryPanel" class="history-panel">
+              <summary>展开历史输出 <span id="outputHistoryCount">0</span></summary>
+              <div id="outputHistory" class="history-list empty">暂无历史输出。</div>
+            </details>
+          </section>
+        </main>
       </section>
     </section>
   </main>

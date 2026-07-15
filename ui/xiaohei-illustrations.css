@@ -1,14 +1,15 @@
 :root {
-  color-scheme: light;
-  --ink: #111318;
-  --muted: #687084;
-  --line: #d9deea;
-  --paper: #ffffff;
-  --soft: #f4f6fa;
-  --accent: #111318;
-  --orange: #e98a2a;
-  --red: #de4c3c;
-  --blue: #4d7bd8;
+  color-scheme: dark;
+  --ink: #f4f7fb;
+  --muted: #8f9bb0;
+  --line: #293244;
+  --paper: #10151f;
+  --soft: #0c121c;
+  --accent: #7864ff;
+  --orange: #f0bd69;
+  --red: #ff7068;
+  --blue: #71d7ff;
+  --green: #72d5b7;
 }
 
 * {
@@ -20,7 +21,7 @@ body {
   min-height: 100vh;
   font-family: "Microsoft YaHei", "PingFang SC", Arial, sans-serif;
   color: var(--ink);
-  background: #eef1f6;
+  background: #05080d;
 }
 
 button,
@@ -31,8 +32,8 @@ textarea {
 }
 
 button {
-  border: 1px solid var(--ink);
-  background: var(--paper);
+  border: 1px solid #344057;
+  background: #111827;
   color: var(--ink);
   border-radius: 6px;
   padding: 10px 14px;
@@ -45,17 +46,18 @@ button:disabled {
 }
 
 button.primary {
-  background: var(--ink);
+  border-color: #6d5bff;
+  background: #6d5bff;
   color: #fff;
 }
 
 .app-shell {
   min-height: 100vh;
-  padding: 24px;
+  padding: 12px;
 }
 
 .workspace {
-  max-width: 1280px;
+  max-width: 1500px;
   margin: 0 auto;
 }
 
@@ -64,12 +66,13 @@ button.primary {
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  margin-bottom: 18px;
+  margin-bottom: 12px;
+  padding: 4px 2px;
 }
 
 .eyebrow {
   margin: 0 0 6px;
-  color: var(--blue);
+  color: #9eb8ff;
   font-size: 12px;
   font-weight: 800;
   letter-spacing: 0;
@@ -83,7 +86,7 @@ h2 {
 }
 
 h1 {
-  font-size: 30px;
+  font-size: 22px;
 }
 
 h2 {
