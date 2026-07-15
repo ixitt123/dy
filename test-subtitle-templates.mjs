@@ -76,12 +76,14 @@ const created = await service.create({
     alignment_status: "confirmed",
     final_text: segments.map((segment) => segment.text).join(""),
     duration: 2.6,
-    sentence_timeline: segments,
+    sentence_timeline: segments.map(({ keywords, ...segment }) => segment),
     word_timeline: words,
   },
 });
 assert.equal(created.wordTimeline.length, words.length, "确认后的 TTS wordTimeline 必须原样进入字幕项目");
 assert.equal(created.segments.every((segment) => segment.words.length > 0), true, "逐词时间必须附着到对应句段");
+assert.equal(created.segments.every((segment) => segment.keywords.length >= 1 && segment.keywords.length <= 3), true, "每条真实字幕必须自动生成 1-3 个重点词");
+assert.deepEqual(created.segments.map(({ start, end }) => [start, end]), segments.map(({ start, end }) => [start, end]), "自动识别重点词不得改变字幕时间戳");
 assert.equal(created.aspectRatio, "9:16");
 assert.equal(effectById(created.effectId).id, "rolling-focus-subtitle");
 

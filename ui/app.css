@@ -10255,6 +10255,17 @@ audio {
   overflow-x: auto;
 }
 
+.kinetic-timeline-card .kinetic-card-head > div {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+#kineticAnalyze {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
 .kinetic-canvas-wrap {
   display: grid;
   place-items: center;

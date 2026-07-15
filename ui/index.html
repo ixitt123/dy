@@ -1578,7 +1578,6 @@
                   <span>排版分析主 API</span>
                   <select id="kineticTextProvider"><option value="">自动选择</option></select>
                 </label>
-                <button id="kineticAnalyze" type="button">自动分析重点词和换行</button>
               </section>
 
               <section class="kinetic-card">
@@ -1657,8 +1656,11 @@
 
               <section class="kinetic-card kinetic-timeline-card">
                 <div class="kinetic-card-head">
-                  <strong>字幕时间轴</strong>
-                  <span>文字、时间、重点词、换行、位置和颜色修改后自动保存</span>
+                  <div>
+                    <strong>字幕时间轴</strong>
+                    <span>每句话自动添加 1–3 个重点词，仍可人工修改</span>
+                  </div>
+                  <button id="kineticAnalyze" class="ghost" type="button">重新识别每句关键词</button>
                 </div>
                 <div id="kineticTimelineRuleStatus" class="kinetic-rule-status" hidden></div>
                 <div class="kinetic-timeline-head">

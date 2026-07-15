@@ -1071,13 +1071,23 @@ function bindEvents() {
   $("#kineticBgmFile").addEventListener("change", (event) => uploadFile("bgm", event.target.files?.[0]).catch((error) => setProgress(0, error.message)));
   $("#kineticAnalyze").addEventListener("click", async () => {
     if (!state.project) return;
-    setProgress(5, "分析重点词和换行");
+    const button = $("#kineticAnalyze");
+    button.disabled = true;
+    setProgress(5, "自动识别每句关键词");
     try {
-      const data = await postJson("/api/kinetic-text/analyze", { projectId: state.project.id, provider: $("#kineticTextProvider").value });
+      const data = await postJson("/api/kinetic-text/analyze", {
+        projectId: state.project.id,
+        provider: $("#kineticTextProvider").value,
+        keywordsOnly: true,
+      });
       state.project = data.project;
       renderProject();
-      setProgress(100, data.aiUsed ? `分析完成 · ${data.provider}` : "分析完成 · 本地规则");
-    } catch (error) { setProgress(0, error.message); }
+      setProgress(100, data.aiUsed ? `关键词识别完成 · ${data.provider}` : "关键词识别完成 · 本地规则");
+    } catch (error) {
+      setProgress(0, error.message);
+    } finally {
+      button.disabled = false;
+    }
   });
   $("#kineticPreviewPlay").addEventListener("click", playPreview);
   $("#kineticPreviewRestart").addEventListener("click", () => {

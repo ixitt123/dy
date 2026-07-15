@@ -147,6 +147,97 @@ function textLength(value) {
   return [...normalizeText(value).replace(/\s/g, "")].length;
 }
 
+const KEYWORD_STOP_WORDS = new Set([
+  "一个", "一种", "一些", "一下", "这个", "那个", "这些", "那些",
+  "我们", "你们", "他们", "它们", "就是", "还是", "可以", "需要",
+  "应该", "然后", "最后", "因为", "所以", "如果", "但是", "而且",
+  "已经", "正在", "进行", "出现", "其实", "真的", "非常", "比较",
+  "怎么", "什么", "为什么", "不用", "不要", "没有", "不是",
+]);
+
+function cleanKeyword(value) {
+  return normalizeText(value)
+    .replace(/^[\s，。！？；：、,.!?;:“”‘’'"（）()【】\[\]《》<>]+|[\s，。！？；：、,.!?;:“”‘’'"（）()【】\[\]《》<>]+$/g, "")
+    .replace(/\s+/g, "")
+    .slice(0, 12);
+}
+
+function keywordTargetCount(text) {
+  const length = textLength(text);
+  if (length >= 18) return 3;
+  if (length >= 8) return 2;
+  return 1;
+}
+
+function keywordCandidateScore(candidate, source, wholeClause = false) {
+  const length = [...candidate].length;
+  const position = Math.max(0, source.indexOf(candidate));
+  let score = Math.min(length, 6) * 2 + Math.max(0, 4 - position * 0.15);
+  if (wholeClause) score += 4;
+  if (/[A-Za-z0-9%]/.test(candidate)) score += 3;
+  if (length >= 2 && length <= 5) score += 2;
+  if (/^[的了着过呢吗吧啊呀哦嘛]|[的了着过呢吗吧啊呀哦嘛]$/.test(candidate)) score -= 5;
+  if (KEYWORD_STOP_WORDS.has(candidate)) score -= 20;
+  return score;
+}
+
+function inferKeywords(text) {
+  const normalized = normalizeText(text);
+  const source = normalized.replace(/[\s，。！？；：、,.!?;:“”‘’'"（）()【】\[\]《》<>]/g, "");
+  if (!source) return [];
+  if ([...source].length <= 4) return [source];
+
+  const candidates = new Map();
+  const addCandidate = (value, wholeClause = false) => {
+    const candidate = cleanKeyword(value);
+    const length = [...candidate].length;
+    if (!candidate || length < 2 || length > 12 || KEYWORD_STOP_WORDS.has(candidate)) return;
+    const score = keywordCandidateScore(candidate, source, wholeClause);
+    if (score > (candidates.get(candidate) ?? -Infinity)) candidates.set(candidate, score);
+  };
+
+  for (const token of normalized.match(/[A-Za-z][A-Za-z0-9+.#-]{1,15}|\d+(?:\.\d+)?%?/g) || []) addCandidate(token);
+  const clauses = normalized.split(/[，。！？；：、,.!?;:\s]+/).map(cleanKeyword).filter(Boolean);
+  let segmenter = null;
+  try { segmenter = new Intl.Segmenter("zh-CN", { granularity: "word" }); } catch {}
+
+  for (const clause of clauses) {
+    const clauseLength = [...clause].length;
+    if (clauseLength >= 2 && clauseLength <= 6) addCandidate(clause, true);
+    const tokens = segmenter
+      ? [...segmenter.segment(clause)].filter((item) => item.isWordLike).map((item) => cleanKeyword(item.segment)).filter(Boolean)
+      : (clause.match(/[A-Za-z0-9%]+|[\u4e00-\u9fff]/g) || []);
+    for (let start = 0; start < tokens.length; start += 1) {
+      let phrase = "";
+      for (let size = 1; size <= 3 && start + size <= tokens.length; size += 1) {
+        const token = tokens[start + size - 1];
+        if (KEYWORD_STOP_WORDS.has(token) || /^[的了着过呢吗吧啊呀哦嘛个]$/.test(token)) break;
+        phrase += token;
+        const phraseLength = [...phrase].length;
+        if (phraseLength >= 2 && phraseLength <= 6) addCandidate(phrase);
+        if (phraseLength > 6) break;
+      }
+    }
+  }
+
+  const targetCount = keywordTargetCount(normalized);
+  const selected = [];
+  for (const [candidate] of [...candidates.entries()].sort((a, b) => b[1] - a[1])) {
+    if (selected.some((item) => item.includes(candidate) || candidate.includes(item))) continue;
+    selected.push(candidate);
+    if (selected.length >= targetCount) break;
+  }
+  if (!selected.length) selected.push(source.slice(0, Math.min(6, [...source].length)));
+  return selected.slice(0, 3);
+}
+
+function normalizeSegmentKeywords(keywords, text) {
+  const supplied = Array.isArray(keywords)
+    ? [...new Set(keywords.map(cleanKeyword).filter(Boolean))].slice(0, 3)
+    : [];
+  return supplied.length ? supplied : inferKeywords(text);
+}
+
 function validateTimelineRules(segments, audioDuration = 0) {
   const warnings = [];
   const rows = (Array.isArray(segments) ? segments : []).slice().sort((a, b) => Number(a.start || 0) - Number(b.start || 0));
@@ -167,6 +258,7 @@ function validateTimelineRules(segments, audioDuration = 0) {
     }
     const length = textLength(row.text);
     if (length > 24) warnings.push(`第 ${index + 1} 条字幕偏长，建议按语义拆短。`);
+    if (!Array.isArray(row.keywords) || row.keywords.length < 1) warnings.push(`第 ${index + 1} 条缺少重点词。`);
     if (Array.isArray(row.keywords) && row.keywords.length > 3) warnings.push(`第 ${index + 1} 条重点词超过 3 个。`);
   }
   const lastEnd = safeNumber(rows[rows.length - 1].end, 0, 0);
@@ -206,15 +298,16 @@ function normalizeSegments(rawSegments, text, duration = 0) {
   const parsed = rows.map((item, index) => {
     const start = safeNumber(item.start ?? item.start_time ?? item.begin, 0, 0);
     const end = safeNumber(item.end ?? item.end_time ?? item.finish, start + 0.5, start + 0.1);
+    const segmentText = normalizeText(item.text || item.content || item.subtitle);
     return {
       id: String(item.id || `segment-${index + 1}`),
       index: index + 1,
       start,
       end,
-      text: normalizeText(item.text || item.content || item.subtitle),
+      text: segmentText,
       words: normalizeWordRows(item.words || item.wordTimeline || item.word_timeline),
       speaker: normalizeText(item.speaker || item.speakerName || item.speaker_name),
-      keywords: Array.isArray(item.keywords) ? item.keywords.map(normalizeText).filter(Boolean) : [],
+      keywords: normalizeSegmentKeywords(item.keywords, segmentText),
       lineBreaks: Array.isArray(item.lineBreaks) ? item.lineBreaks.map(Number).filter(Number.isFinite) : [],
       overrides: item.overrides && typeof item.overrides === "object" ? { ...item.overrides } : {},
     };
@@ -244,15 +337,6 @@ function normalizeSegments(rawSegments, text, duration = 0) {
     cursor = row.end;
     return row;
   });
-}
-
-function inferKeywords(text) {
-  const clean = normalizeText(text).replace(/[，。！？；：、,.!?;:\s]/g, "");
-  if (clean.length <= 4) return clean ? [clean] : [];
-  const candidates = clean.match(/[A-Za-z0-9%]+|[\u4e00-\u9fff]{2,5}/g) || [];
-  return candidates
-    .sort((a, b) => b.length - a.length)
-    .slice(0, 2);
 }
 
 function normalizeProject(project) {
@@ -1083,16 +1167,19 @@ export function createKineticTextService({
     return update(projectId, { audioMix: { source: "local", localPath: targetPath, localName: safeFileName(name) } });
   }
 
-  async function analyze(projectId, providerId = "") {
+  async function analyze(projectId, providerId = "", options = {}) {
     const project = get(projectId);
     if (!project) throw new Error("动态大字项目不存在。");
+    const keywordsOnly = options.keywordsOnly === true;
     let analyzed = null;
     let usedProvider = "local";
     const available = typeof modelRouter?.listProviders === "function" ? modelRouter.listProviders().map((item) => item.id) : [];
     const candidates = [...new Set([providerId, "deepseek", "mimo"].filter((item) => item && available.includes(item)))];
     const systemPrompt = [
-      "你负责中文动态大字字幕排版。只返回 JSON 数组。",
-      "每一项必须包含 id、keywords（1-3 个重点词）和 lineBreaks（建议换行的字符索引数组）。",
+      "你负责中文动态大字字幕的重点词识别。只返回 JSON 数组。",
+      keywordsOnly
+        ? "每一项必须包含 id 和 keywords（1-3 个原句中最值得强调的词语）。"
+        : "每一项必须包含 id、keywords（1-3 个重点词）和 lineBreaks（建议换行的字符索引数组）。",
       "不得改写字幕原文，不得改变字幕时间戳。",
       "必须遵守下面的项目 skill 规则：",
       timelineSkillRules,
@@ -1101,7 +1188,9 @@ export function createKineticTextService({
       try {
         const response = await modelRouter.generateWithProvider(candidate, [
           { role: "system", content: systemPrompt },
-          { role: "system", content: "你负责中文动态字幕排版。只返回 JSON 数组，每项包含 id、keywords（1-2个重点词）和 lineBreaks（建议换行的字符索引数组）。不要解释。" },
+          { role: "system", content: keywordsOnly
+            ? "只返回 JSON 数组，每项包含 id 和 keywords（1-3 个原句里的重点词）。不要解释。"
+            : "只返回 JSON 数组，每项包含 id、keywords（1-3 个重点词）和 lineBreaks（建议换行的字符索引数组）。不要解释。" },
           { role: "user", content: JSON.stringify(project.segments.map(({ id, text }) => ({ id, text }))) },
         ], { temperature: 0.2, maxTokens: 1800 });
         const text = String(response.content || "").replace(/^```json\s*/i, "").replace(/```$/i, "").trim();
@@ -1120,8 +1209,10 @@ export function createKineticTextService({
       const item = byId.get(String(segment.id));
       return {
         ...segment,
-        keywords: Array.isArray(item?.keywords) ? item.keywords.map(normalizeText).filter(Boolean).slice(0, 3) : inferKeywords(segment.text),
-        lineBreaks: Array.isArray(item?.lineBreaks) ? item.lineBreaks.map(Number).filter(Number.isFinite) : segment.lineBreaks,
+        keywords: normalizeSegmentKeywords(item?.keywords, segment.text),
+        lineBreaks: keywordsOnly
+          ? segment.lineBreaks
+          : (Array.isArray(item?.lineBreaks) ? item.lineBreaks.map(Number).filter(Number.isFinite) : segment.lineBreaks),
       };
     });
     const updated = update(projectId, { segments, analysisProvider: usedProvider, analysisUpdatedAt: nowIso() });

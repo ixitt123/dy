@@ -134,7 +134,7 @@ export function createKineticTextRoutes({
       }
       if (req.method === "POST" && route === "analyze") {
         const body = await readJsonBody(req, { maxBytes: 256 * 1024 });
-        sendJson(res, 200, { ok: true, ...(await service.analyze(body.projectId, body.provider)) });
+        sendJson(res, 200, { ok: true, ...(await service.analyze(body.projectId, body.provider, { keywordsOnly: body.keywordsOnly === true })) });
         return true;
       }
       if (req.method === "POST" && route === "materials") {
