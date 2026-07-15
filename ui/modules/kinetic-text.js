@@ -871,6 +871,7 @@ async function receiveTts(payload) {
   const data = await postJson("/api/kinetic-text/create", {
     tts: payload,
     effectId: preferences.effectId,
+    aspectRatio: preferences.aspectRatio || "9:16",
     videoProjectId: window.videoProjects?.current?.()?.id || localStorage.getItem("active-video-project-id") || "",
   });
   state.project = data.project;
@@ -888,6 +889,7 @@ async function receiveText(payload = {}) {
     text,
     source: payload.source || "rewrite",
     effectId: preferences.effectId,
+    aspectRatio: preferences.aspectRatio || "9:16",
     videoProjectId: payload.videoProjectId || window.videoProjects?.current?.()?.id || localStorage.getItem("active-video-project-id") || "",
   });
   state.project = data.project;
@@ -908,13 +910,62 @@ function bindEvents() {
   $("#kineticEffectGrid").addEventListener("click", (event) => {
     const card = event.target.closest("[data-effect-id]");
     if (!card || !state.project) return;
+    const action = event.target.closest("[data-action]")?.dataset.action;
+    if (action === "favorite") {
+      toggleFavorite(card.dataset.effectId);
+      return;
+    }
+    if (action !== "select" && !event.target.closest(".kinetic-template-preview")) return;
     const effect = effectById(card.dataset.effectId);
     savePreferences({ effectId: effect.id });
     scheduleSave({ effectId: effect.id, effectParams: { ...effect.defaultParams } });
     $("#kineticEffectName").textContent = effect.name;
   });
+  $("#kineticEffectGrid").addEventListener("pointerover", (event) => {
+    const card = event.target.closest("[data-effect-id]");
+    const video = card?.querySelector("video");
+    if (video && video.readyState !== 0) video.play().catch(() => {});
+    else if (video) { video.load(); video.play().catch(() => {}); }
+  });
+  $("#kineticEffectGrid").addEventListener("pointerout", (event) => {
+    const card = event.target.closest("[data-effect-id]");
+    const video = card?.querySelector("video");
+    if (video) { video.pause(); video.currentTime = 0; }
+  });
   $("#kineticTimeline").addEventListener("input", (event) => { if (event.target.dataset.field) applyTimelineInput(event.target); });
   $("#kineticTextTitle").addEventListener("input", (event) => scheduleSave({ title: event.target.value }));
+  $("#kineticAspectRatio").addEventListener("change", (event) => {
+    savePreferences({ aspectRatio: event.target.value });
+    scheduleSave({ aspectRatio: event.target.value });
+    const spec = previewOutputSize(event.target.value);
+    $("#kineticPreviewSpec").textContent = `${spec.outputWidth}×${spec.outputHeight} · 30fps`;
+    drawPreview();
+  });
+  $("#kineticFontFamily").addEventListener("input", (event) => scheduleSave({ effectParams: { fontFamily: event.target.value } }));
+  $("#kineticFontSize").addEventListener("input", (event) => {
+    $("#kineticFontSizeValue").value = event.target.value;
+    scheduleSave({ effectParams: { fontSize: Number(event.target.value) } });
+  });
+  $("#kineticPrimaryColor").addEventListener("input", (event) => scheduleSave({ effectParams: { primaryColor: event.target.value } }));
+  $("#kineticAccentColor").addEventListener("input", (event) => scheduleSave({ effectParams: { accentColor: event.target.value } }));
+  $("#kineticMaxLines").addEventListener("change", (event) => scheduleSave({ effectParams: { maxLines: Number(event.target.value) } }));
+  $("#kineticAnimationSpeed").addEventListener("input", (event) => {
+    const value = Number(event.target.value) / 100;
+    $("#kineticAnimationSpeedValue").value = `${value.toFixed(2)}×`;
+    scheduleSave({ effectParams: { animationSpeed: value } });
+  });
+  $("#kineticBackgroundOpacity").addEventListener("input", (event) => {
+    $("#kineticBackgroundOpacityValue").value = `${event.target.value}%`;
+    scheduleSave({ effectParams: { backgroundOpacity: Number(event.target.value) } });
+  });
+  $("#kineticOutlineEnabled").addEventListener("change", (event) => scheduleSave({ effectParams: { outlineEnabled: event.target.checked } }));
+  $("#kineticShadowEnabled").addEventListener("change", (event) => scheduleSave({ effectParams: { shadowEnabled: event.target.checked } }));
+  $("#kineticResetTemplate").addEventListener("click", () => {
+    if (!state.project) return;
+    const effect = effectById(state.project.effectId);
+    scheduleSave({ effectParams: { ...effect.defaultParams } });
+    renderProject();
+  });
   $("#kineticBackgroundMode").addEventListener("change", (event) => {
     savePreferences({ backgroundMode: event.target.value });
     scheduleSave({ background: { mode: event.target.value } });

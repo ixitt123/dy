@@ -957,6 +957,7 @@ export function createKineticTextService({
       segments: normalizeSegments(timeline, finalText, duration),
       effectId,
       effectParams: defaultEffectParams(effectId),
+      aspectRatio: Object.hasOwn(OUTPUT_SIZES, input.aspectRatio) ? input.aspectRatio : "9:16",
       showBottomSubtitles: false,
       background: { mode: "black", path: "", name: "" },
       audioMix: { source: "none", localPath: "", localName: "", ttsVolume: 100, backgroundVolume: 18 },
