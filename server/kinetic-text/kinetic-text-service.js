@@ -796,8 +796,11 @@ export function buildAss(project, options = {}) {
         const wasCurrent = delta === -1 && !reset;
         const rowY = y + delta * lineGap;
         const moveStartY = reset ? rowY : rowY + lineGap;
+        const markerGap = Math.round(fontSize * 0.62);
+        const moveStartX = current && !reset ? x : wasCurrent ? x + markerGap : current ? x + markerGap : x;
+        const moveEndX = current ? x + markerGap : x;
         const distanceAlpha = Math.min(0x72, 0x30 + Math.max(0, Math.abs(delta) - 1) * 0x20).toString(16).padStart(2, "0").toUpperCase();
-        let tags = `\\an4\\bord0\\shad0\\q2\\move(${x},${moveStartY},${x},${rowY},0,${transitionMs})`;
+        let tags = `\\an4\\bord0\\shad0\\q2\\move(${moveStartX},${moveStartY},${moveEndX},${rowY},0,${transitionMs})`;
         if (current && !reset) {
           tags += `\\fs${smallSize}\\b0\\1c${muted}\\alpha&H55&\\t(0,${transitionMs},\\fs${fontSize}\\b1\\1c${primary}\\alpha&H00&)`;
         } else if (current) {
@@ -807,8 +810,13 @@ export function buildAss(project, options = {}) {
         } else {
           tags += `\\fs${smallSize}\\b0\\1c${muted}\\alpha&H${distanceAlpha}&`;
         }
-        const marker = current ? "▶ " : "";
-        events.push(assEvent(current ? 4 : 2, focusStart, focusEnd, "Modern", tags, `${marker}${escapeAssText(row.text)}`));
+        events.push(assEvent(current ? 4 : 2, focusStart, focusEnd, "Modern", tags, escapeAssText(row.text)));
+        if (current) {
+          const markerStart = reset ? focusStart : Math.min(focusEnd - 0.04, focusStart + transitionMs / 1000);
+          if (markerStart < focusEnd) {
+            events.push(assEvent(5, markerStart, focusEnd, "Modern", `\\an4\\bord0\\shad0\\pos(${x},${rowY})\\fs${Math.round(fontSize * 0.72)}\\1c${primary}\\fad(40,0)`, "▶"));
+          }
+        }
       }
     } else if (template.renderMode === "rolling-focus") {
       const lineGap = Math.round(fontSize * 1.32);

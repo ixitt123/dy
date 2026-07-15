@@ -36,7 +36,10 @@ const rollingFocusAss = buildAss({
   wordTimeline: rollingFocusWords,
   segments: [{ id: "focus", start: 0, end: 4, text: rollingFocusText, words: rollingFocusWords }],
 });
-const rollingFocusCurrentRows = rollingFocusAss.split("\n").filter((line) => line.includes("▶ ")).map((line) => line.split("▶ ")[1]);
+const rollingFocusCurrentRows = rollingFocusAss.split("\n")
+  .filter((line) => line.startsWith("Dialogue:") && line.includes("}"))
+  .map((line) => line.slice(line.lastIndexOf("}") + 1).trim())
+  .filter((line) => line && line !== "▶");
 assert.equal(rollingFocusCurrentRows.length >= 3, true, "长句必须拆成多个口播节奏短句");
 assert.equal(rollingFocusCurrentRows.every((line) => [...line].length <= 8), true, "每个滚动聚焦短句不得超过 8 个可见字符");
 assert.equal(rollingFocusCurrentRows.every((line) => !/[，。！？；：、,.!?;:]/u.test(line)), true, "滚动聚焦画面不得显示标点符号");

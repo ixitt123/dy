@@ -664,7 +664,9 @@ function drawPreview() {
           const rowColor = (current && transition >= 0.5) || (wasCurrent && transition < 0.5)
             ? primary
             : (template.muted || "#B7B7B7");
-          drawCaptionText(ctx, `${current ? "▶ " : ""}${row.text}`, x, movingY, {
+          const markerGap = fontSize * 0.62;
+          const rowX = current ? x + markerGap * transition : wasCurrent ? x + markerGap * (1 - transition) : x;
+          drawCaptionText(ctx, row.text, rowX, movingY, {
             fontSize: rowFontSize,
             fontFamily,
             weight: current || wasCurrent ? 800 : 500,
@@ -676,6 +678,18 @@ function drawPreview() {
             outline: false,
             shadow: false,
           });
+          if (current && transition >= 0.98) {
+            drawCaptionText(ctx, "▶", x, movingY, {
+              fontSize: fontSize * 0.72,
+              fontFamily,
+              weight: 800,
+              color: primary,
+              align: "left",
+              maxLines: 1,
+              outline: false,
+              shadow: false,
+            });
+          }
         }
       }
     } else if (template.renderMode === "rolling-focus") {
