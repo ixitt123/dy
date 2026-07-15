@@ -550,9 +550,42 @@ export function createTtsService({
     }, jobChanges);
   }
 
+  function explicitLyricsText(metadata = {}) {
+    const candidates = [
+      metadata.final_lyrics,
+      metadata.generated_lyrics,
+      metadata.provider_lyrics,
+      metadata.music_lyrics,
+      metadata.lyrics,
+      metadata.formatted_lyrics,
+      metadata.subtitle_text,
+    ];
+    return candidates.map((value) => String(value || "").trim()).find(Boolean) || "";
+  }
+
+  function isSingingAlignmentJob(job, metadata = safeJson(job?.metadata_json, {})) {
+    const text = [
+      metadata.source,
+      metadata.asset_kind,
+      metadata.provider_kind,
+      metadata.model,
+      metadata.voice_name,
+      metadata.preset_label,
+      metadata.preset_id,
+      job?.voice_id,
+      job?.voice_name,
+      job?.emotion,
+      job?.style_prompt,
+    ].map((value) => String(value || "").toLowerCase()).join(" ");
+    return /music|song|sing|rap|lyric|melody|vocal|唱|歌|小调|说唱|旋律|歌曲|歌词|人声音乐/.test(text);
+  }
+
   function preferredAlignmentText(job, metadata = safeJson(job?.metadata_json, {})) {
+    const lyricText = explicitLyricsText(metadata);
+    if (lyricText) return lyricText;
     const finalText = String(metadata.final_text || "").trim();
     const recognizedText = String(metadata.recognized_text || "").trim();
+    if (isSingingAlignmentJob(job, metadata) && recognizedText) return recognizedText;
     // Preserve an explicit manual correction. Older automatic alignments used
     // the ASR transcript as final copy, so fall back to the original TTS copy
     // when both values are identical.
@@ -565,6 +598,14 @@ export function createTtsService({
       || recognizedText
       || "",
     ).trim();
+  }
+
+  function scriptLockedFallbackText({ job, metadata = {}, targetText = "", recognizedText = "" } = {}) {
+    const lyricText = explicitLyricsText(metadata);
+    if (lyricText) return lyricText;
+    const asrText = String(recognizedText || "").trim();
+    if (isSingingAlignmentJob(job, metadata) && asrText) return asrText;
+    return String(targetText || asrText || preferredAlignmentText(job, metadata) || "").trim();
   }
 
   function hasAlignmentPayload(job, metadata = safeJson(job?.metadata_json, {})) {
@@ -786,6 +827,7 @@ export function createTtsService({
 
       let best = null;
       let attemptsMade = 0;
+      let recognitionError = "";
       for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
         attemptsMade = attempt;
         let recognizedText = reuseRecognition ? String(initialMetadata.recognized_text || "").trim() : "";
@@ -797,25 +839,37 @@ export function createTtsService({
           : [];
 
         if (!recognizedText) {
-          if (typeof transcribeFinalAudio !== "function") throw new Error("最终音频识别服务不可用。");
+          if (typeof transcribeFinalAudio !== "function") {
+            recognitionError = "recognition_unavailable";
+            break;
+          }
           let lastMappedProgress = -1;
-          const transcription = await transcribeFinalAudio(initial.audio_path, (progress = {}) => {
-            const raw = Math.max(0, Math.min(100, Number(progress.percent || 0)));
-            const mapped = Math.max(15, Math.min(40, Math.round(15 + raw * 0.25)));
-            if (mapped === lastMappedProgress) return;
-            lastMappedProgress = mapped;
-            currentProgress = mapped;
-            setJobProgress(numericId, mapped, progress.message || `第 ${attempt}/${maxAttempts} 次识别实际朗读内容`, {
-              alignment_status: "processing",
-              alignment_attempts: attempt,
-              alignment_max_attempts: maxAttempts,
-            }, { status: "processing" });
-          });
+          let transcription = null;
+          try {
+            transcription = await transcribeFinalAudio(initial.audio_path, (progress = {}) => {
+              const raw = Math.max(0, Math.min(100, Number(progress.percent || 0)));
+              const mapped = Math.max(15, Math.min(40, Math.round(15 + raw * 0.25)));
+              if (mapped === lastMappedProgress) return;
+              lastMappedProgress = mapped;
+              currentProgress = mapped;
+              setJobProgress(numericId, mapped, progress.message || `第 ${attempt}/${maxAttempts} 次识别实际音频内容`, {
+                alignment_status: "processing",
+                alignment_attempts: attempt,
+                alignment_max_attempts: maxAttempts,
+              }, { status: "processing" });
+            });
+          } catch (error) {
+            recognitionError = error instanceof Error ? error.message : String(error);
+            continue;
+          }
           recognizedText = String(typeof transcription === "string" ? transcription : transcription?.text || "").trim();
           recognizedWords = Array.isArray(transcription?.words) ? transcription.words : [];
           recognizedSentences = Array.isArray(transcription?.sentences) ? transcription.sentences : [];
         }
-        if (!recognizedText) throw new Error("最终音频没有识别到可用文案。");
+        if (!recognizedText) {
+          recognitionError = "empty_recognition";
+          continue;
+        }
 
         currentProgress = 42;
         setJobProgress(numericId, 42, `第 ${attempt}/${maxAttempts} 次识别完成，正在强制对齐`, {
@@ -841,8 +895,8 @@ export function createTtsService({
         });
         if (!validation.valid) throw new Error(`字幕时间轴检查失败：${validation.errors.join("；")}`);
 
-        if (!best || aligned.matchRatio > best.aligned.matchRatio) {
-          best = { attempt, recognizedText, recognizedWords, recognizedSentences, aligned, validation };
+        if (!best || aligned.matchRatio > best.recognitionMatchRatio) {
+          best = { attempt, recognizedText, recognizedWords, recognizedSentences, aligned, validation, recognitionMatchRatio: aligned.matchRatio };
         }
 
         currentProgress = 70;
@@ -851,6 +905,7 @@ export function createTtsService({
           alignment_attempts: attempt,
           alignment_max_attempts: maxAttempts,
           alignment_best_match_ratio: best.aligned.matchRatio,
+          alignment_best_asr_match_ratio: best.recognitionMatchRatio,
           recognized_text: recognizedText,
           recognized_word_timeline: recognizedWords,
           recognized_sentence_timeline: recognizedSentences,
@@ -871,6 +926,7 @@ export function createTtsService({
           alignment_max_attempts: maxAttempts,
           alignment_retry_reason: "low_match_ratio",
           alignment_best_match_ratio: best.aligned.matchRatio,
+          alignment_best_asr_match_ratio: best.recognitionMatchRatio,
         }, { status: "processing" });
       }
 
