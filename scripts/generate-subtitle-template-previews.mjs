@@ -8,6 +8,12 @@ import { buildAss } from "../server/kinetic-text/kinetic-text-service.js";
 const root = path.resolve("subtitle-templates");
 const uiRoot = path.resolve("ui", "subtitle-templates");
 const duration = 4.8;
+const requestedTemplateId = String(process.argv[2] || "").trim();
+const templates = requestedTemplateId
+  ? KINETIC_TEXT_EFFECTS.filter((template) => template.id === requestedTemplateId)
+  : KINETIC_TEXT_EFFECTS;
+
+if (requestedTemplateId && templates.length === 0) throw new Error(`Unknown subtitle template: ${requestedTemplateId}`);
 
 const rawSegments = [
   { id: "preview-1", start: 0, end: 1.45, text: "真正的效率，不是做得更多。", keywords: ["效率", "更多"], speaker: "主讲人" },
@@ -34,7 +40,7 @@ function run(args) {
   if (result.status !== 0) throw new Error(`ffmpeg failed with exit code ${result.status}`);
 }
 
-for (const template of KINETIC_TEXT_EFFECTS) {
+for (const template of templates) {
   const sourceDir = path.join(root, template.id);
   const publicDir = path.join(uiRoot, template.id);
   fs.mkdirSync(sourceDir, { recursive: true });
@@ -60,9 +66,12 @@ for (const template of KINETIC_TEXT_EFFECTS) {
     const assPath = path.join(sourceDir, `preview-${suffix}.ass`);
     const videoPath = path.join(sourceDir, `preview-${suffix}.mp4`);
     fs.writeFileSync(assPath, buildAss(project), "utf8");
+    const pureBlack = template.id === "rolling-focus-subtitle";
     run([
-      "-y", "-f", "lavfi", "-i", `color=c=0x0b0f17:s=${size}:r=30:d=${duration}`,
-      "-vf", `drawbox=x=0:y=0:w=iw:h=ih:color=0x17202e@0.30:t=fill,subtitles='${escapeFilterPath(assPath)}'`,
+      "-y", "-f", "lavfi", "-i", `color=c=${pureBlack ? "0x000000" : "0x0b0f17"}:s=${size}:r=30:d=${duration}`,
+      "-vf", pureBlack
+        ? `subtitles='${escapeFilterPath(assPath)}'`
+        : `drawbox=x=0:y=0:w=iw:h=ih:color=0x17202e@0.30:t=fill,subtitles='${escapeFilterPath(assPath)}'`,
       "-an", "-r", "30", "-c:v", "libx264", "-preset", "ultrafast", "-crf", "20", "-pix_fmt", "yuv420p", "-movflags", "+faststart", videoPath,
     ]);
   }
@@ -74,4 +83,4 @@ for (const template of KINETIC_TEXT_EFFECTS) {
   }
 }
 
-console.log(`Generated ${KINETIC_TEXT_EFFECTS.length} templates in 16:9 and 9:16.`);
+console.log(`Generated ${templates.length} template${templates.length === 1 ? "" : "s"} in 16:9 and 9:16.`);

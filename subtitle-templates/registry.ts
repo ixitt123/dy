@@ -1,5 +1,6 @@
 import type { SubtitleTemplateDefinition } from "./types";
 import rollingFocus from "./rolling-focus";
+import rollingFocusSubtitle from "./rolling-focus-subtitle";
 import wordHighlight from "./word-highlight";
 import karaokeSweep from "./karaoke-sweep";
 import centerStatement from "./center-statement";
@@ -12,6 +13,7 @@ import keywordTags from "./keyword-tags";
 
 export const subtitleTemplates: Record<string, SubtitleTemplateDefinition> = {
   "rolling-focus": rollingFocus,
+  "rolling-focus-subtitle": rollingFocusSubtitle,
   "word-highlight": wordHighlight,
   "karaoke-sweep": karaokeSweep,
   "center-statement": centerStatement,
