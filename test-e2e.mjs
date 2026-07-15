@@ -201,6 +201,9 @@ test("Kinetic text production line", async () => {
   ]);
   const packageJson = JSON.parse(packageSource);
   const templateIds = new Set((effects.effects || []).map((item) => item.id));
+  const previewToolbarIndex = page.indexOf('class="kinetic-preview-toolbar"');
+  const renderButtonIndex = page.indexOf('id="kineticRenderFinal"');
+  const previewCanvasIndex = page.indexOf('id="kineticPreviewCanvas"');
   if (!effectsResponse.ok || effects.effects?.length !== 2
     || !templateIds.has("rolling-focus")
     || !templateIds.has("rolling-focus-subtitle")
