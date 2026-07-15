@@ -199,12 +199,19 @@ test("Kinetic text production line", async () => {
     legacyResponse.text(),
   ]);
   const packageJson = JSON.parse(packageSource);
-  if (!effectsResponse.ok || effects.effects?.length < 13
+  const templateIds = new Set((effects.effects || []).map((item) => item.id));
+  if (!effectsResponse.ok || effects.effects?.length !== 10
+    || !templateIds.has("word-highlight")
+    || !templateIds.has("karaoke-sweep")
+    || !templateIds.has("dialogue-two-line")
+    || templateIds.has("glitch-jitter")
     || !page.includes('data-nav="kinetic-text"')
     || !page.includes('data-page="kinetic-text"')
     || !page.includes('data-target="kinetic-text"')
     || !page.includes('id="kineticPreviewCanvas"')
     || !page.includes('id="kineticTimeline"')
+    || !page.includes('id="kineticAspectRatio"')
+    || !page.includes("2026 现代字幕模板")
     || !page.includes('<span class="nav-index">09</span><span>动态大字视频</span>')
     || !page.includes('<span class="nav-index">10</span><span>素材管理</span>')
     || !page.includes('<span class="nav-index">11</span><span>系统设置</span>')
@@ -214,10 +221,10 @@ test("Kinetic text production line", async () => {
     || !moduleSource.includes("receiveTts")
     || !moduleSource.includes("pollJob")
     || !moduleSource.includes('data-field="lineBreaks"')
-    || !moduleSource.includes("countInRow")
+    || !moduleSource.includes("FAVORITES_KEY")
+    || !moduleSource.includes("previewWordGroups")
     || !legacySource.includes('targets.includes("kinetic-text")')
-    || !packageJson.dependencies?.["@motion-canvas/core"]
-    || !packageJson.dependencies?.["@motion-canvas/2d"]) {
+    || !packageJson.scripts?.["test:subtitle-templates"]) {
     throw new Error("Kinetic text production line is incomplete");
   }
 });

@@ -20,12 +20,12 @@ Style: Bottom,Microsoft YaHei,53,&H00FFFFFF,&H00FFFFFF,&H00161210,&H00000000,-1,
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
-Dialogue: 2,0:00:00.00,0:00:00.56,Modern,,0,0,0,,{\an5\pos(960,659)\fs110\fscx90\fscy90\fad(55,55)\t(0,143,\fscx100\fscy100)}真正的{\1c&H002BB1FF\b1\fscx108\fscy108}效率{\1c&H00FFFFFF\fscx100\fscy100}
-Dialogue: 2,0:00:00.56,0:00:01.12,Modern,,0,0,0,,{\an5\pos(960,659)\fs110\fscx90\fscy90\fad(55,55)\t(0,143,\fscx100\fscy100)}，不是做得
-Dialogue: 2,0:00:01.12,0:00:01.45,Modern,,0,0,0,,{\an5\pos(960,659)\fs110\fscx90\fscy90\fad(55,55)\t(0,143,\fscx100\fscy100)}{\1c&H002BB1FF\b1\fscx108\fscy108}更多{\1c&H00FFFFFF\fscx100\fscy100}。
-Dialogue: 2,0:00:01.45,0:00:02.10,Modern,,0,0,0,,{\an5\pos(960,659)\fs110\fscx90\fscy90\fad(55,55)\t(0,143,\fscx100\fscy100)}而是{\1c&H002BB1FF\b1\fscx108\fscy108}每一步{\1c&H00FFFFFF\fscx100\fscy100}
-Dialogue: 2,0:00:02.10,0:00:02.76,Modern,,0,0,0,,{\an5\pos(960,659)\fs110\fscx90\fscy90\fad(55,55)\t(0,143,\fscx100\fscy100)}，都更接近
-Dialogue: 2,0:00:02.76,0:00:03.15,Modern,,0,0,0,,{\an5\pos(960,659)\fs110\fscx90\fscy90\fad(55,55)\t(0,143,\fscx100\fscy100)}{\1c&H002BB1FF\b1\fscx108\fscy108}结果{\1c&H00FFFFFF\fscx100\fscy100}。
+Dialogue: 2,0:00:00.00,0:00:00.67,Modern,,0,0,0,,{\an5\pos(960,659)\fs110\fscx90\fscy90\fad(55,55)\t(0,143,\fscx100\fscy100)}真正的{\1c&H002BB1FF\b1\fscx108\fscy108}效率{\1c&H00FFFFFF\fscx100\fscy100}，
+Dialogue: 2,0:00:00.67,0:00:01.23,Modern,,0,0,0,,{\an5\pos(960,659)\fs110\fscx90\fscy90\fad(55,55)\t(0,143,\fscx100\fscy100)}不是做得更
+Dialogue: 2,0:00:01.23,0:00:01.45,Modern,,0,0,0,,{\an5\pos(960,659)\fs110\fscx90\fscy90\fad(55,55)\t(0,143,\fscx100\fscy100)}多。
+Dialogue: 2,0:00:01.45,0:00:02.23,Modern,,0,0,0,,{\an5\pos(960,659)\fs110\fscx90\fscy90\fad(55,55)\t(0,143,\fscx100\fscy100)}而是{\1c&H002BB1FF\b1\fscx108\fscy108}每一步{\1c&H00FFFFFF\fscx100\fscy100}，
+Dialogue: 2,0:00:02.23,0:00:02.89,Modern,,0,0,0,,{\an5\pos(960,659)\fs110\fscx90\fscy90\fad(55,55)\t(0,143,\fscx100\fscy100)}都更接近结
+Dialogue: 2,0:00:02.89,0:00:03.15,Modern,,0,0,0,,{\an5\pos(960,659)\fs110\fscx90\fscy90\fad(55,55)\t(0,143,\fscx100\fscy100)}果。
 Dialogue: 2,0:00:03.15,0:00:03.78,Modern,,0,0,0,,{\an5\pos(960,659)\fs110\fscx90\fscy90\fad(55,55)\t(0,143,\fscx100\fscy100)}把{\1c&H002BB1FF\b1\fscx108\fscy108}注意力{\1c&H00FFFFFF\fscx100\fscy100}，
 Dialogue: 2,0:00:03.78,0:00:04.42,Modern,,0,0,0,,{\an5\pos(960,659)\fs110\fscx90\fscy90\fad(55,55)\t(0,143,\fscx100\fscy100)}留给{\1c&H002BB1FF\b1\fscx108\fscy108}最重要{\1c&H00FFFFFF\fscx100\fscy100}
 Dialogue: 2,0:00:04.42,0:00:04.80,Modern,,0,0,0,,{\an5\pos(960,659)\fs110\fscx90\fscy90\fad(55,55)\t(0,143,\fscx100\fscy100)}的事。
