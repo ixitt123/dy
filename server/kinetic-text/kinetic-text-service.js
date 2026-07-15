@@ -623,6 +623,61 @@ function groupTimedWords(words, sourceText = "") {
   }));
 }
 
+function rollingFocusDisplayRows(segments = []) {
+  return segments.flatMap((segment) => {
+    const words = timedWordsForSegment(segment);
+    if (!words.length) return [{ ...segment, sourceSegmentId: segment.id }];
+    const groups = [];
+    let current = [];
+    let visibleChars = 0;
+    const flush = () => {
+      if (current.length) groups.push(current);
+      current = [];
+      visibleChars = 0;
+    };
+    words.forEach((word, index) => {
+      const token = String(word.text || "");
+      const punctuation = /^[，。！？；：、,.!?;:]$/u.test(token);
+      const tokenSize = punctuation ? 0 : Math.max(1, [...token.replace(/\s/g, "")].length);
+      const previous = current[current.length - 1];
+      const pauseBefore = previous && Number(word.start) - Number(previous.end) >= 0.18;
+      const wouldOverflow = current.length && visibleChars >= 4 && visibleChars + tokenSize > 10;
+      if (pauseBefore || wouldOverflow) flush();
+      current.push(word);
+      visibleChars += tokenSize;
+      const next = words[index + 1];
+      const pauseAfter = next && Number(next.start) - Number(word.end) >= 0.18;
+      if ((punctuation && visibleChars >= 3) || visibleChars >= 10 || pauseAfter) flush();
+    });
+    flush();
+
+    const visibleLength = (group) => group.reduce((sum, word) => (
+      sum + [...String(word.text || "").replace(/[，。！？；：、,.!?;:\s]/gu, "")].length
+    ), 0);
+    if (groups.length > 1 && visibleLength(groups[0]) < 4 && visibleLength(groups[0]) + visibleLength(groups[1]) <= 10) {
+      groups[1] = [...groups[0], ...groups[1]];
+      groups.shift();
+    }
+    if (groups.length > 1) {
+      const last = groups.length - 1;
+      if (visibleLength(groups[last]) < 4 && visibleLength(groups[last - 1]) + visibleLength(groups[last]) <= 10) {
+        groups[last - 1].push(...groups[last]);
+        groups.pop();
+      }
+    }
+
+    return groups.map((group, index) => ({
+      ...segment,
+      id: `${segment.id}-focus-${index + 1}`,
+      sourceSegmentId: segment.id,
+      text: joinTimedWords(group, segment.text),
+      start: Math.max(segment.start, group[0].start),
+      end: Math.min(segment.end, Math.max(group[0].start + 0.1, group[group.length - 1].end)),
+      words: group,
+    }));
+  }).sort((a, b) => a.start - b.start);
+}
+
 function keywordMatch(value, keywords = []) {
   const token = String(value || "").replace(/\s/g, "");
   return keywords.some((keyword) => {
@@ -676,9 +731,12 @@ export function buildAss(project, options = {}) {
   const maxChars = normalized.aspectRatio === "16:9" ? 24 : normalized.aspectRatio === "1:1" ? 16 : 13;
   const maxLines = Math.round(safeNumber(params.maxLines, 2, 1, 3));
   const events = [];
+  const renderSegments = template.renderMode === "rolling-focus-left"
+    ? rollingFocusDisplayRows(normalized.segments)
+    : normalized.segments;
 
-  normalized.segments.forEach((segment, segmentIndex) => {
-    if (limitToId && String(segment.id) !== limitToId) return;
+  renderSegments.forEach((segment, segmentIndex) => {
+    if (limitToId && String(segment.sourceSegmentId || segment.id) !== limitToId) return;
     const start = Math.max(0, segment.start - offset);
     const end = Math.max(start + 0.1, segment.end - offset);
     const durationMs = Math.max(100, Math.round((end - start) * 1000));
@@ -694,12 +752,50 @@ export function buildAss(project, options = {}) {
     const wrappedText = wrapSubtitleText(segment.text, maxChars, maxLines);
     const enterMs = Math.min(220, Math.max(90, Math.round(150 / safeNumber(params.animationSpeed, 1, 0.5, 2))));
 
-    if (template.renderMode === "rolling-focus") {
+    if (template.renderMode === "rolling-focus-left") {
+      const leadSeconds = safeNumber(params.leadMs, 90, 0, 180) / 1000;
+      const transitionMs = Math.round(safeNumber(params.transitionMs, 220, 180, 260) / safeNumber(params.animationSpeed, 1, 0.5, 2));
+      const resetGap = safeNumber(params.resetGapMs, 1200, 500, 3000) / 1000;
+      const contextRows = Math.round(safeNumber(params.contextRows, 5, 3, 5));
+      const beforeRows = Math.floor((contextRows - 1) / 2);
+      const afterRows = contextRows - beforeRows - 1;
+      const previous = renderSegments[segmentIndex - 1];
+      const reset = !previous || segment.start - previous.end > resetGap;
+      const focusStart = Math.max(0, start - leadSeconds);
+      const next = renderSegments[segmentIndex + 1];
+      const nextFocusStart = next ? Math.max(0, next.start - offset - leadSeconds) : end;
+      const focusEnd = Math.max(focusStart + 0.1, Math.min(end, nextFocusStart));
+      const lineGap = Math.round(fontSize * 1.28);
+      const smallSize = Math.round(fontSize * 0.54);
+      const firstIndex = reset ? segmentIndex : Math.max(0, segmentIndex - beforeRows);
+      const lastIndex = Math.min(renderSegments.length - 1, segmentIndex + afterRows);
+      for (let rowIndex = firstIndex; rowIndex <= lastIndex; rowIndex += 1) {
+        const row = renderSegments[rowIndex];
+        const delta = rowIndex - segmentIndex;
+        const current = delta === 0;
+        const wasCurrent = delta === -1 && !reset;
+        const rowY = y + delta * lineGap;
+        const moveStartY = reset ? rowY : rowY + lineGap;
+        const distanceAlpha = Math.min(0x72, 0x30 + Math.max(0, Math.abs(delta) - 1) * 0x20).toString(16).padStart(2, "0").toUpperCase();
+        let tags = `\\an4\\bord0\\shad0\\q2\\move(${x},${moveStartY},${x},${rowY},0,${transitionMs})`;
+        if (current && !reset) {
+          tags += `\\fs${smallSize}\\b0\\1c${muted}\\alpha&H55&\\t(0,${transitionMs},\\fs${fontSize}\\b1\\1c${primary}\\alpha&H00&)`;
+        } else if (current) {
+          tags += `\\fs${fontSize}\\b1\\1c${primary}\\alpha&H00&\\fad(90,0)`;
+        } else if (wasCurrent) {
+          tags += `\\fs${fontSize}\\b1\\1c${primary}\\alpha&H00&\\t(0,${transitionMs},\\fs${smallSize}\\b0\\1c${muted}\\alpha&H${distanceAlpha}&)`;
+        } else {
+          tags += `\\fs${smallSize}\\b0\\1c${muted}\\alpha&H${distanceAlpha}&`;
+        }
+        const marker = current ? "▶ " : "";
+        events.push(assEvent(current ? 4 : 2, focusStart, focusEnd, "Modern", tags, `${marker}${escapeAssText(row.text)}`));
+      }
+    } else if (template.renderMode === "rolling-focus") {
       const lineGap = Math.round(fontSize * 1.32);
       const neighbors = [
-        { row: normalized.segments[segmentIndex - 1], delta: -1 },
+        { row: renderSegments[segmentIndex - 1], delta: -1 },
         { row: segment, delta: 0 },
-        { row: normalized.segments[segmentIndex + 1], delta: 1 },
+        { row: renderSegments[segmentIndex + 1], delta: 1 },
       ].filter((item) => item.row);
       neighbors.forEach(({ row, delta }) => {
         const current = delta === 0;
