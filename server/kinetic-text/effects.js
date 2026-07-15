@@ -251,7 +251,7 @@ export function motionCanvasProjectDescriptor(project = {}) {
     renderer: "ffmpeg-libass-deterministic",
     visualReferenceCutoff: "2022-01-01",
     resolution,
-    frameRate: 30,
+    frameRate: Number(project.frameRate) === 60 ? 60 : 30,
     aspectRatio,
     template: {
       id: template.id,
