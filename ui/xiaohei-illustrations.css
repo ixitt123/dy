@@ -751,6 +751,120 @@ pre {
   font-weight: 800;
 }
 
+.xiaohei-template-library {
+  overflow: hidden;
+}
+
+.xiaohei-template-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.xiaohei-template-card {
+  display: grid;
+  grid-template-rows: 58px auto;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid #2f3b54;
+  border-radius: 8px;
+  background: #0b111b;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.xiaohei-template-card:hover,
+.xiaohei-template-card.active {
+  border-color: #806bff;
+  box-shadow: 0 0 0 1px rgba(128, 107, 255, .32);
+}
+
+.xiaohei-template-visual {
+  position: relative;
+  overflow: hidden;
+  background:
+    linear-gradient(135deg, rgba(255,255,255,.08), transparent 50%),
+    radial-gradient(circle at 72% 28%, var(--template-accent, #f0bd69), transparent 22%),
+    #080d15;
+}
+
+.xiaohei-template-visual::before,
+.xiaohei-template-visual::after {
+  content: "";
+  position: absolute;
+  border-radius: 999px;
+}
+
+.xiaohei-template-visual::before {
+  width: 20px;
+  height: 20px;
+  left: 18px;
+  top: 18px;
+  background: #05080d;
+  box-shadow: 7px 5px 0 -5px #fff, 13px 5px 0 -5px #fff;
+}
+
+.xiaohei-template-visual::after {
+  width: 82px;
+  height: 2px;
+  right: 12px;
+  bottom: 14px;
+  background: var(--template-accent, #f0bd69);
+  box-shadow: -22px -13px 0 var(--template-line, #71d7ff), -8px 10px 0 rgba(255,255,255,.42);
+}
+
+.xiaohei-template-copy {
+  display: grid;
+  gap: 5px;
+  padding: 8px;
+}
+
+.xiaohei-template-copy strong {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 12px;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.xiaohei-template-copy p {
+  min-height: 32px;
+  margin: 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.xiaohei-template-meta {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-wrap: wrap;
+}
+
+.xiaohei-template-meta span {
+  padding: 2px 6px;
+  border: 1px solid #2f3b54;
+  border-radius: 999px;
+  color: #a9b9d4;
+  font-size: 10px;
+}
+
+.xiaohei-template-use {
+  min-height: 28px;
+  padding: 4px 8px;
+  border-color: #523fd2;
+  background: #34266f;
+  font-size: 11px;
+}
+
+.xiaohei-template-card.active .xiaohei-template-use {
+  border-color: rgba(114, 213, 183, .5);
+  background: rgba(114, 213, 183, .16);
+  color: #d8fff3;
+}
+
 @media (max-width: 900px) {
   .app-shell {
     padding: 14px;
@@ -762,12 +876,20 @@ pre {
     display: grid;
   }
 
+  .xiaohei-production-layout {
+    grid-template-columns: 1fr;
+  }
+
   .control-grid,
   .provider-setup,
   .advanced-grid,
   .reference-grid,
   .results-grid {
     grid-template-columns: 1fr;
+  }
+
+  .xiaohei-template-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .music-style-row {
@@ -779,27 +901,29 @@ pre {
     justify-content: flex-start;
   }
 }
-.embedded-production-mode .topbar,
-.embedded-production-mode .provider-setup,
-.embedded-production-mode .music-studio,
-.embedded-production-mode .reference-audio-studio,
-.embedded-production-mode .audio-studio,
-.embedded-production-mode .composer > .control-grid,
-.embedded-production-mode .composer > .voice-actions,
-.embedded-production-mode .composer > .audio-upload {
-  display: none !important;
-}
 
 .embedded-production-mode {
-  background: #f4f6fa;
+  background: #05080d;
 }
 
 .embedded-production-mode .workspace {
   width: 100%;
   max-width: none;
-  padding: 14px;
+  padding: 0;
 }
 
 .embedded-production-mode .composer {
   margin-top: 0;
+}
+
+@media (min-width: 1280px) {
+  .embedded-production-mode .xiaohei-production-layout {
+    grid-template-columns: minmax(300px, 360px) minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 680px) {
+  .xiaohei-template-grid {
+    grid-template-columns: 1fr;
+  }
 }

@@ -20,6 +20,44 @@ const state = {
 const embeddedMode = new URLSearchParams(window.location.search).get("embedded") === "1";
 localStorage.setItem("ian-xiaohei-project-id", state.projectId);
 
+const PURPOSE_TEMPLATE_META = {
+  article: {
+    name: "小黑 Skill · 纯白手绘解释图",
+    description: "白纸、黑色小人、橙色流程线，适合正文拆解。",
+    tags: ["正文", "手绘"],
+    accent: "#f0bd69",
+    line: "#71d7ff",
+  },
+  wechat: {
+    name: "公众号配图 · 图文叙事",
+    description: "更像文章内页配图，留白更稳，适合长文段落。",
+    tags: ["公众号", "图文"],
+    accent: "#72d5b7",
+    line: "#f0bd69",
+  },
+  knowledge: {
+    name: "知识观点 · 认知锚点",
+    description: "突出判断、问题和反差，适合观点类短视频。",
+    tags: ["观点", "解释"],
+    accent: "#806bff",
+    line: "#72d5b7",
+  },
+  workflow: {
+    name: "方法流程 · 系统装置",
+    description: "输入、处理、输出的流程感更强，适合方法论。",
+    tags: ["流程", "系统"],
+    accent: "#71d7ff",
+    line: "#f0bd69",
+  },
+  "cover-reference": {
+    name: "封面参考 · 强钩子画面",
+    description: "更强调第一眼冲突和核心物件，可做封面参考。",
+    tags: ["封面", "钩子"],
+    accent: "#ff7068",
+    line: "#806bff",
+  },
+};
+
 const els = {
   titleInput: document.querySelector("#titleInput"),
   minimaxStatus: document.querySelector("#minimaxStatus"),
@@ -90,6 +128,8 @@ const els = {
   outputDirLabel: document.querySelector("#outputDirLabel"),
   planCount: document.querySelector("#planCount"),
   imageCount: document.querySelector("#imageCount"),
+  templateGrid: document.querySelector("#xiaoheiTemplateGrid"),
+  templateSummary: document.querySelector("#xiaoheiTemplateSummary"),
 };
 
 init().catch((error) => setStatus("初始化失败", error.message || String(error), 0, true));
@@ -156,6 +196,18 @@ function bindEvents() {
   els.voiceSelect.addEventListener("change", () => renderVoiceDescription());
   els.savedApiSelect.addEventListener("change", () => renderSavedApiDetail());
   els.aspectRatioSelect.addEventListener("change", () => resetVisualWorkflow("视频比例已改变，请重新生成分镜计划。"));
+  els.purposeSelect.addEventListener("change", () => {
+    renderPurposeTemplates();
+    resetVisualWorkflow("视觉模板已改变，请重新生成分镜计划。");
+  });
+  els.templateGrid?.addEventListener("click", (event) => {
+    const card = event.target.closest("[data-purpose-template]");
+    if (!card) return;
+    const purpose = card.dataset.purposeTemplate || "";
+    if (!purpose || els.purposeSelect.value === purpose) return;
+    els.purposeSelect.value = purpose;
+    els.purposeSelect.dispatchEvent(new Event("change", { bubbles: true }));
+  });
   els.copyPrompts.addEventListener("click", () => copyAllPrompts());
   els.openOutputDir.addEventListener("click", () => openOutputDir());
   els.refreshOutputs.addEventListener("click", () => loadOutputs());
@@ -173,6 +225,7 @@ async function loadConfig() {
   els.purposeSelect.innerHTML = (data.purposes || [])
     .map((item) => `<option value="${escapeAttr(item.id)}">${escapeHtml(item.label)}</option>`)
     .join("");
+  renderPurposeTemplates();
   els.aspectRatioSelect.innerHTML = (data.aspectRatios || [{ id: "16:9", label: "16:9 横版（默认）" }])
     .map((item) => `<option value="${escapeAttr(item.id)}" ${item.id === "16:9" ? "selected" : ""}>${escapeHtml(item.label)}</option>`)
     .join("");
@@ -237,6 +290,40 @@ function renderIntegrationStatus(integrations) {
   ];
   els.integrationStatus.textContent = items.join(" ｜ ");
   els.integrationStatus.className = `integration-status ${integrations.jianyingDraftDir && integrations.outputDir ? "success" : "warning"}`;
+}
+
+function renderPurposeTemplates() {
+  if (!els.templateGrid || !els.purposeSelect) return;
+  const options = [...els.purposeSelect.options].map((option) => ({
+    id: option.value,
+    label: option.textContent || option.value,
+  })).filter((item) => item.id);
+  if (!options.length) {
+    els.templateGrid.innerHTML = '<div class="empty">正在读取小黑视觉模板。</div>';
+    return;
+  }
+  const current = els.purposeSelect.value || options[0].id;
+  if (els.templateSummary) {
+    const selected = options.find((item) => item.id === current) || options[0];
+    const meta = PURPOSE_TEMPLATE_META[selected.id] || {};
+    els.templateSummary.textContent = `${meta.name || selected.label} · 后台调用小黑分镜、提示词、素材包和剪映草稿模块。`;
+  }
+  els.templateGrid.innerHTML = options.map((item) => {
+    const meta = PURPOSE_TEMPLATE_META[item.id] || {};
+    const active = item.id === current;
+    const tags = meta.tags || [item.label, "Skill"];
+    return `
+      <article class="xiaohei-template-card${active ? " active" : ""}" data-purpose-template="${escapeAttr(item.id)}" style="--template-accent:${escapeAttr(meta.accent || "#f0bd69")};--template-line:${escapeAttr(meta.line || "#71d7ff")}">
+        <div class="xiaohei-template-visual" aria-hidden="true"></div>
+        <div class="xiaohei-template-copy">
+          <strong>${escapeHtml(meta.name || item.label)}</strong>
+          <p>${escapeHtml(meta.description || "调用小黑视频风格生成模块，自动完成分镜和素材包规划。")}</p>
+          <div class="xiaohei-template-meta">${tags.map((tag) => `<span>${escapeHtml(tag)}</span>`).join("")}</div>
+          <button class="xiaohei-template-use" type="button">${active ? "正在使用" : "立即使用"}</button>
+        </div>
+      </article>
+    `;
+  }).join("");
 }
 
 function renderMusicPresets(music, referenceAudio = {}) {
