@@ -716,6 +716,9 @@ export function createTtsService({
       alignment_confirmed_at: String(metadata.alignment_confirmed_at || ""),
       alignment_error: String(metadata.alignment_error || ""),
       alignment_revision: Number(metadata.alignment_revision || 0),
+      alignment_attempts: Number(metadata.alignment_attempts || 0),
+      alignment_max_attempts: Number(metadata.alignment_max_attempts || 0),
+      alignment_failure_action: String(metadata.alignment_failure_action || ""),
       estimated_count: Number(metadata.estimated_count || 0),
       low_confidence_count: Number(metadata.low_confidence_count || 0),
       match_ratio: Number(metadata.match_ratio || 0),
@@ -769,61 +772,108 @@ export function createTtsService({
         || Number(initialMetadata.audio_duration || initialMetadata.duration || 0)
         || 0;
       if (audioDuration <= 0) throw new Error("无法读取最终音频时长，不能生成同步字幕。");
+      const maxAttempts = reuseRecognition ? 1 : ALIGNMENT_MAX_AUTO_RECOGNITION_ATTEMPTS;
+      const targetText = String(finalText || preferredAlignmentText(initial, initialMetadata) || "").trim();
       setJobProgress(numericId, 10, "读取最终音频信息", {
         alignment_status: "processing",
         alignment_error: "",
+        alignment_attempts: 0,
+        alignment_max_attempts: maxAttempts,
+        alignment_failure_action: "",
         audio_duration: audioDuration,
         original_text: initialMetadata.original_text || initial.text,
       }, { status: "processing", error: "" });
 
-      let recognizedText = reuseRecognition ? String(initialMetadata.recognized_text || "").trim() : "";
-      let recognizedWords = reuseRecognition && Array.isArray(initialMetadata.recognized_word_timeline)
-        ? initialMetadata.recognized_word_timeline
-        : [];
-      let recognizedSentences = reuseRecognition && Array.isArray(initialMetadata.recognized_sentence_timeline)
-        ? initialMetadata.recognized_sentence_timeline
-        : [];
-      if (!recognizedText) {
-        if (typeof transcribeFinalAudio !== "function") throw new Error("最终音频识别服务不可用。");
-        let lastMappedProgress = -1;
-        const transcription = await transcribeFinalAudio(initial.audio_path, (progress = {}) => {
-          const raw = Math.max(0, Math.min(100, Number(progress.percent || 0)));
-          const mapped = Math.max(15, Math.min(40, Math.round(15 + raw * 0.25)));
-          if (mapped === lastMappedProgress) return;
-          lastMappedProgress = mapped;
-          currentProgress = mapped;
-          setJobProgress(numericId, mapped, progress.message || "重新识别实际朗读内容", {
-            alignment_status: "processing",
-          }, { status: "processing" });
+      let best = null;
+      for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+        let recognizedText = reuseRecognition ? String(initialMetadata.recognized_text || "").trim() : "";
+        let recognizedWords = reuseRecognition && Array.isArray(initialMetadata.recognized_word_timeline)
+          ? initialMetadata.recognized_word_timeline
+          : [];
+        let recognizedSentences = reuseRecognition && Array.isArray(initialMetadata.recognized_sentence_timeline)
+          ? initialMetadata.recognized_sentence_timeline
+          : [];
+
+        if (!recognizedText) {
+          if (typeof transcribeFinalAudio !== "function") throw new Error("最终音频识别服务不可用。");
+          let lastMappedProgress = -1;
+          const transcription = await transcribeFinalAudio(initial.audio_path, (progress = {}) => {
+            const raw = Math.max(0, Math.min(100, Number(progress.percent || 0)));
+            const mapped = Math.max(15, Math.min(40, Math.round(15 + raw * 0.25)));
+            if (mapped === lastMappedProgress) return;
+            lastMappedProgress = mapped;
+            currentProgress = mapped;
+            setJobProgress(numericId, mapped, progress.message || `第 ${attempt}/${maxAttempts} 次识别实际朗读内容`, {
+              alignment_status: "processing",
+              alignment_attempts: attempt,
+              alignment_max_attempts: maxAttempts,
+            }, { status: "processing" });
+          });
+          recognizedText = String(typeof transcription === "string" ? transcription : transcription?.text || "").trim();
+          recognizedWords = Array.isArray(transcription?.words) ? transcription.words : [];
+          recognizedSentences = Array.isArray(transcription?.sentences) ? transcription.sentences : [];
+        }
+        if (!recognizedText) throw new Error("最终音频没有识别到可用文案。");
+
+        currentProgress = 42;
+        setJobProgress(numericId, 42, `第 ${attempt}/${maxAttempts} 次识别完成，正在强制对齐`, {
+          alignment_status: "processing",
+          alignment_attempts: attempt,
+          alignment_max_attempts: maxAttempts,
+          recognized_text: recognizedText,
+          recognized_word_timeline: recognizedWords,
+          recognized_sentence_timeline: recognizedSentences,
+        }, { status: "processing" });
+        const aligned = alignTranscriptToAudio({
+          text: String(targetText || recognizedText).trim(),
+          recognizedText,
+          recognizedWords,
+          recognizedSentences,
+          duration: audioDuration,
         });
-        recognizedText = String(typeof transcription === "string" ? transcription : transcription?.text || "").trim();
-        recognizedWords = Array.isArray(transcription?.words) ? transcription.words : [];
-        recognizedSentences = Array.isArray(transcription?.sentences) ? transcription.sentences : [];
+        const validation = validateAlignment({
+          text: aligned.finalText,
+          wordTimeline: aligned.wordTimeline,
+          sentenceTimeline: aligned.sentenceTimeline,
+          duration: audioDuration,
+        });
+        if (!validation.valid) throw new Error(`字幕时间轴检查失败：${validation.errors.join("；")}`);
+
+        if (!best || aligned.matchRatio > best.aligned.matchRatio) {
+          best = { attempt, recognizedText, recognizedWords, recognizedSentences, aligned, validation };
+        }
+
+        currentProgress = 70;
+        setJobProgress(numericId, 70, `第 ${attempt}/${maxAttempts} 次匹配率 ${(aligned.matchRatio * 100).toFixed(1)}%`, {
+          alignment_status: "processing",
+          alignment_attempts: attempt,
+          alignment_max_attempts: maxAttempts,
+          alignment_best_match_ratio: best.aligned.matchRatio,
+          recognized_text: recognizedText,
+          recognized_word_timeline: recognizedWords,
+          recognized_sentence_timeline: recognizedSentences,
+          word_timeline: aligned.wordTimeline,
+          sentence_timeline: aligned.sentenceTimeline,
+          subtitle_timeline: aligned.sentenceTimeline,
+          estimated_count: aligned.estimatedCount,
+          low_confidence_count: aligned.lowConfidenceCount,
+          match_ratio: aligned.matchRatio,
+          alignment_validation: validation,
+        }, { status: "processing" });
+
+        if (aligned.matchRatio >= ALIGNMENT_AUTO_APPROVE_RATIO || attempt >= maxAttempts) break;
+        currentProgress = Math.min(88, 70 + attempt * 6);
+        setJobProgress(numericId, currentProgress, `匹配率 ${(aligned.matchRatio * 100).toFixed(1)}%，低于 ${(ALIGNMENT_AUTO_APPROVE_RATIO * 100).toFixed(0)}%，自动重新识别 ${attempt + 1}/${maxAttempts}`, {
+          alignment_status: "processing",
+          alignment_attempts: attempt,
+          alignment_max_attempts: maxAttempts,
+          alignment_retry_reason: "low_match_ratio",
+          alignment_best_match_ratio: best.aligned.matchRatio,
+        }, { status: "processing" });
       }
-      if (!recognizedText) throw new Error("最终音频没有识别到可用文案。");
 
-      currentProgress = 40;
-      setJobProgress(numericId, 40, "语音识别完成，正在强制对齐", {
-        alignment_status: "processing",
-        recognized_text: recognizedText,
-        recognized_word_timeline: recognizedWords,
-        recognized_sentence_timeline: recognizedSentences,
-      }, { status: "processing" });
-      const aligned = alignTranscriptToAudio({
-        text: String(finalText || preferredAlignmentText(initial, initialMetadata) || recognizedText).trim(),
-        recognizedText,
-        recognizedWords,
-        recognizedSentences,
-        duration: audioDuration,
-      });
-
-      currentProgress = 70;
-      setJobProgress(numericId, 70, "逐字/逐词时间轴完成", {
-        word_timeline: aligned.wordTimeline,
-        estimated_count: aligned.estimatedCount,
-        low_confidence_count: aligned.lowConfidenceCount,
-        match_ratio: aligned.matchRatio,
-      }, { status: "processing" });
+      if (!best) throw new Error("字幕自动校准没有得到可用结果。");
+      const { attempt, recognizedText, recognizedWords, recognizedSentences, aligned, validation } = best;
       currentProgress = 82;
       setJobProgress(numericId, 82, "逐句时间轴完成，正在生成 SRT", {
         sentence_timeline: aligned.sentenceTimeline,
@@ -845,14 +895,6 @@ export function createTtsService({
 
       currentProgress = 90;
       setJobProgress(numericId, 90, "正在检查字幕时间戳", files, { status: "processing" });
-      const validation = validateAlignment({
-        text: aligned.finalText,
-        wordTimeline: aligned.wordTimeline,
-        sentenceTimeline: aligned.sentenceTimeline,
-        duration: audioDuration,
-      });
-      if (!validation.valid) throw new Error(`字幕时间轴检查失败：${validation.errors.join("；")}`);
-
       currentProgress = 96;
       setJobProgress(numericId, 96, "字幕检查完成", {
         alignment_validation: validation,
@@ -860,9 +902,10 @@ export function createTtsService({
       const revision = Number(latestMetadata.alignment_revision || 0) + 1;
       const autoApproved = aligned.matchRatio >= ALIGNMENT_AUTO_APPROVE_RATIO;
       const completedAt = new Date().toISOString();
+      const failedMessage = `已自动重新识别 ${attempt}/${maxAttempts} 次，最佳匹配率 ${(aligned.matchRatio * 100).toFixed(1)}%，仍低于 ${(ALIGNMENT_AUTO_APPROVE_RATIO * 100).toFixed(0)}%。请换文案重新生成音频。`;
       const completed = setJobProgress(numericId, 100, autoApproved
         ? `字幕匹配率 ${(aligned.matchRatio * 100).toFixed(1)}%，可以发送`
-        : `字幕匹配率 ${(aligned.matchRatio * 100).toFixed(1)}%，等待选择`, {
+        : failedMessage, {
         ...files,
         original_text: initialMetadata.original_text || initial.text,
         tts_prepared_text: initialMetadata.tts_prepared_text || initialMetadata.prepared_text || initial.text,
@@ -878,12 +921,16 @@ export function createTtsService({
         low_confidence_count: aligned.lowConfidenceCount,
         match_ratio: aligned.matchRatio,
         alignment_validation: validation,
-        alignment_status: autoApproved ? "confirmed" : "review_required",
+        alignment_status: autoApproved ? "confirmed" : "failed",
         alignment_confirmed_at: autoApproved ? completedAt : "",
         alignment_confirmation_mode: autoApproved ? "automatic_match_threshold" : "",
         alignment_auto_approve_ratio: ALIGNMENT_AUTO_APPROVE_RATIO,
+        alignment_attempts: attempt,
+        alignment_max_attempts: maxAttempts,
+        alignment_best_match_ratio: aligned.matchRatio,
         alignment_policy_version: ALIGNMENT_POLICY_VERSION,
-        alignment_error: "",
+        alignment_failure_action: autoApproved ? "" : "rewrite_script_required",
+        alignment_error: autoApproved ? "" : failedMessage,
         alignment_revision: revision,
         alignment_completed_at: completedAt,
         audio_duration: audioDuration,
@@ -894,6 +941,7 @@ export function createTtsService({
       const failed = setJobProgress(numericId, currentProgress, "字幕校准失败", {
         alignment_status: "failed",
         alignment_error: message,
+        alignment_failure_action: "rewrite_script_required",
       }, { status: "completed", error: "", completed_at: new Date().toISOString() });
       return { error: message, job: publicJob(failed) };
     } finally {
