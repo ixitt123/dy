@@ -8484,11 +8484,8 @@ function listen(port) {
 }
 
 async function start() {
-  const movedDownloads = organizeLooseDownloadFiles();
-  syncMovedDownloadTaskPaths(movedDownloads);
-  if (movedDownloads.length) {
-    console.log(`Organized downloads: ${movedDownloads.length} file(s)`);
-  }
+  // The selected download directory belongs to the user. Never scan or move
+  // unrelated loose files when the service starts.
 
   let port = 8787;
   while (port < 8800) {
