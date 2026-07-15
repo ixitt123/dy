@@ -20,11 +20,77 @@ const STRUCTURE_TYPES = [
 
 const PURPOSES = [
   { id: "article", label: "文章正文配图" },
+  { id: "xiaohei-scenes", label: "小黑实物场景" },
+  { id: "visual-ip", label: "视觉 IP 配图" },
+  { id: "littlebox", label: "小盒结构配图" },
+  { id: "stick-figure", label: "火柴人分镜" },
+  { id: "handdrawn-tech", label: "手绘技术页面" },
+  { id: "ian-handdrawn-ppt", label: "Ian 手绘 PPT" },
+  { id: "capybara", label: "松弛水豚配图" },
   { id: "wechat", label: "公众号配图" },
   { id: "knowledge", label: "知识观点配图" },
   { id: "workflow", label: "方法流程配图" },
   { id: "cover-reference", label: "封面参考图" },
 ];
+
+const DEFAULT_VISUAL_DNA = "Pure white background. Minimalist black hand-drawn line art. Slightly wobbly pen lines. Lots of empty white space. Sparse red/orange/blue handwritten Chinese annotations. Clean absurd product-sketch feeling. No gradients, no shadows, no paper texture, no complex background, no commercial vector style, no PPT infographic look, no cute mascot poster, no children's illustration, no realistic UI.";
+const DEFAULT_CHARACTER_RULE = "小黑, one small solid-black absurd creature with exactly two white dot eyes, exactly two tiny thin legs, at most two thin arms, no duplicated face or limbs, blank serious expression, slightly uneven hand-drawn body shape. 小黑 must perform the core conceptual action, not decorate the scene. Make 小黑 serious, deadpan, and slightly bizarre, not cute. Never draw extra eyes, extra legs, extra arms, layered faces, smiling, confident, excited, or expressive facial features.";
+
+const PURPOSE_STYLE_PROFILES = {
+  article: {
+    name: "小黑 Skill · 纯白手绘解释图",
+    intent: "Use the classic Ian Xiaohei whiteboard explainer style for precise paragraph-level reasoning.",
+  },
+  "xiaohei-scenes": {
+    name: "helloianneo/ian-xiaohei-scenes · 小黑实物场景",
+    intent: "Turn the paragraph into a physical tabletop scene. Use concrete props, tiny devices, paper parts, switches, strings, doors, boxes, and hand-operated mechanisms. Keep Xiaohei as the operator.",
+  },
+  "visual-ip": {
+    name: "yangchuansheng/visual-ip-illustrations · 视觉 IP",
+    intent: "Make the image feel like a consistent visual-IP series: one recurring simple character, recognizable gesture language, strong silhouette, and one memorable central object per shot.",
+    characterRule: "Use one simple black recurring IP operator with two white dot eyes, thin limbs, deadpan expression, and no outfit. It can be Xiaohei-like, but must stay consistent across the set and perform the paragraph's key action.",
+  },
+  littlebox: {
+    name: "okooo5km/5km-littlebox-illustrations · 小盒",
+    intent: "Build the metaphor inside small box-like compartments. Use modular frames, small cutaway rooms, stacked boxes, or one open box that contains the paragraph's system.",
+  },
+  "stick-figure": {
+    name: "ZekerTop/stick-figure-Illustrations · 火柴人",
+    intent: "Use a sparse stick-figure storyboard style. Emphasize motion, arrows, conflict, and comic timing with very few objects.",
+    visualDna: "Pure white background. Minimal black stick-figure line art with slightly uneven hand-drawn strokes. Very sparse red/orange/blue marks only for actions and warnings. No gradients, no shadows, no polished vector style, no PPT look, no cute poster.",
+    characterRule: "Use one tiny stick-figure operator with a simple round head, two dot eyes, thin arms and legs, and a blank expression. The figure must perform the exact conceptual action.",
+  },
+  "handdrawn-tech": {
+    name: "ningzimy/handdrawn-tech-illustrations · 手绘技术页面",
+    intent: "Use a hand-drawn technical-page layout: rough UI panels, callout wires, input-output blocks, tiny annotations, and one central mechanism. Keep it sketchy, not a real app screenshot.",
+  },
+  "ian-handdrawn-ppt": {
+    name: "helloianneo/ian-handdrawn-ppt · 手绘技术页面",
+    intent: "Use a hand-drawn slide/page composition. Make one strong technical diagram with a clear hierarchy, a large central sketch, and small supporting notes.",
+  },
+  capybara: {
+    name: "ZekerTop/capybara-illustrations · 松弛水豚",
+    intent: "Use a relaxed capybara-like hand-drawn character to carry the metaphor. The tone is calm and lightly absurd, but still explains the exact source paragraph.",
+    visualDna: "Pure white background. Minimal hand-drawn line art with a calm rounded capybara-like operator, sparse props, open white space, and small red/orange/blue handwritten marks. No gradients, no shadows, no children's book scene, no cute mascot poster, no polished vector style.",
+    characterRule: "Use one calm capybara-like hand-drawn operator with a simple rounded body, tiny dot eyes, blank expression, and minimal limbs. It must perform the paragraph's key action, not sit as decoration.",
+  },
+  wechat: {
+    name: "公众号配图 · 图文叙事",
+    intent: "Make it suitable for a public-account article: more breathing room, editorial pacing, one clear metaphor, and restrained handwritten labels.",
+  },
+  knowledge: {
+    name: "知识观点 · 认知锚点",
+    intent: "Highlight judgment, contrast, misconception, and conclusion. The visual should make the viewpoint easy to remember at a glance.",
+  },
+  workflow: {
+    name: "方法流程 · 系统装置",
+    intent: "Emphasize input, processing, output, loop, and path. Use one low-tech system device rather than a formal flowchart.",
+  },
+  "cover-reference": {
+    name: "封面参考 · 强钩子画面",
+    intent: "Create a stronger first-frame conflict: one large central object, clear tension, high readability, and fewer supporting labels.",
+  },
+};
 
 const MAX_TEXT_LENGTH = 5000;
 const MAX_AUDIO_BYTES = 30 * 1024 * 1024;
@@ -2084,6 +2150,7 @@ function buildShot({ index, total, title, anchor, purpose, aspectRatio = "16:9",
     ? anchor.labels.slice(0, 6)
     : inferLabels(segment, purpose, shotRole);
   const prompt = buildPrompt({
+    purpose,
     topic,
     seriesRole: `${index}/${total} ${shotRole.label}`,
     structureType,
@@ -2118,6 +2185,7 @@ function buildShot({ index, total, title, anchor, purpose, aspectRatio = "16:9",
 }
 
 function buildPrompt({
+  purpose = "article",
   topic,
   seriesRole,
   structureType,
@@ -2131,6 +2199,7 @@ function buildPrompt({
   labels,
   aspectRatio = "16:9",
 }) {
+  const styleProfile = getPurposeStyleProfile(purpose);
   const formatDescription = aspectRatio === "9:16"
     ? "9:16 vertical Chinese short-video illustration"
     : aspectRatio === "1:1"
@@ -2139,11 +2208,14 @@ function buildPrompt({
   return [
     `Generate one standalone ${formatDescription}.`,
     "",
+    "Selected template / Skill:",
+    `${styleProfile.name}. ${styleProfile.intent}`,
+    "",
     "Visual DNA:",
-    "Pure white background. Minimalist black hand-drawn line art. Slightly wobbly pen lines. Lots of empty white space. Sparse red/orange/blue handwritten Chinese annotations. Clean absurd product-sketch feeling. No gradients, no shadows, no paper texture, no complex background, no commercial vector style, no PPT infographic look, no cute mascot poster, no children's illustration, no realistic UI.",
+    styleProfile.visualDna || DEFAULT_VISUAL_DNA,
     "",
     "Recurring IP character required:",
-    "小黑, one small solid-black absurd creature with exactly two white dot eyes, exactly two tiny thin legs, at most two thin arms, no duplicated face or limbs, blank serious expression, slightly uneven hand-drawn body shape. 小黑 must perform the core conceptual action, not decorate the scene. Make 小黑 serious, deadpan, and slightly bizarre, not cute. Never draw extra eyes, extra legs, extra arms, layered faces, smiling, confident, excited, or expressive facial features.",
+    styleProfile.characterRule || DEFAULT_CHARACTER_RULE,
     "",
     `Theme: ${topic}`,
     `Series role: ${seriesRole}. This image belongs to a multi-image set, so it must use a clearly different metaphor, object set, and composition from the other images in the same set.`,
@@ -2163,6 +2235,10 @@ function buildPrompt({
     "Constraints:",
     "The picture must explain the exact source paragraph above, not merely the article's broad topic. Preserve its subject, action, direction, contrast, and result. Do not substitute a generic learning, workplace, AI, or business scene. Draw only one Xiaohei character unless the composition explicitly requires a before/after comparison; even then, each Xiaohei must have exactly two eyes and two legs. One image explains only one core structure. Keep the main subject around 40%-60% of the canvas. Preserve at least 35% blank white space. Use at most 5-8 short handwritten Chinese labels, and derive labels only from this source paragraph. Do not write a title in the top-left corner. Do not write the structure type on the image. Do not make it a formal diagram, course slide, or dense explainer. Do not repeat the same machine, route, door, funnel, card, or character pose across the image set. Do not copy prior examples or reuse known case compositions unless explicitly requested; invent a fresh visual metaphor for this specific paragraph. It should be clear but not instructional, interesting but not childish, strange but clean.",
   ].join("\n");
+}
+
+function getPurposeStyleProfile(purpose) {
+  return PURPOSE_STYLE_PROFILES[purpose] || PURPOSE_STYLE_PROFILES.article;
 }
 
 function buildMetaphor(segment, structureType, { index, total, title, shotRole, anchor = {} }) {

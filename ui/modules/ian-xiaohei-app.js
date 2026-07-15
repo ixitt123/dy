@@ -27,6 +27,63 @@ const PURPOSE_TEMPLATE_META = {
     tags: ["正文", "手绘"],
     accent: "#f0bd69",
     line: "#71d7ff",
+    visual: "xiaohei",
+  },
+  "xiaohei-scenes": {
+    name: "小黑实物场景 · ian-xiaohei-scenes",
+    description: "用纸片、按钮、门和小装置，把歌词段落变成具体场景。",
+    tags: ["实物", "场景"],
+    accent: "#58c4dd",
+    line: "#f0bd69",
+    visual: "scenes",
+  },
+  "visual-ip": {
+    name: "视觉 IP · visual-ip-illustrations",
+    description: "统一角色和手势语言，适合做连续视频里的识别点。",
+    tags: ["IP", "角色"],
+    accent: "#ff8bb3",
+    line: "#72d5b7",
+    visual: "ip",
+  },
+  littlebox: {
+    name: "小盒 · 5km-littlebox",
+    description: "小盒子、格子和局部空间，适合解释结构和关系。",
+    tags: ["小盒", "结构"],
+    accent: "#9dd36a",
+    line: "#71d7ff",
+    visual: "box",
+  },
+  "stick-figure": {
+    name: "火柴人 · stick-figure",
+    description: "线条更轻，动作更直接，适合节奏快的分镜表达。",
+    tags: ["火柴人", "分镜"],
+    accent: "#f6d764",
+    line: "#ff7068",
+    visual: "stick",
+  },
+  "handdrawn-tech": {
+    name: "手绘技术页 · handdrawn-tech",
+    description: "粗线页面、输入输出和标注线，适合工具/AI/流程题材。",
+    tags: ["技术", "页面"],
+    accent: "#71d7ff",
+    line: "#72d5b7",
+    visual: "tech",
+  },
+  "ian-handdrawn-ppt": {
+    name: "Ian 手绘 PPT · handdrawn-ppt",
+    description: "更像手绘演示页，中心图更强，适合方法论拆解。",
+    tags: ["PPT", "手绘"],
+    accent: "#c7a6ff",
+    line: "#f0bd69",
+    visual: "ppt",
+  },
+  capybara: {
+    name: "松弛水豚 · capybara",
+    description: "情绪更松弛，适合温和吐槽、陪伴感和轻反差内容。",
+    tags: ["松弛", "情绪"],
+    accent: "#d5a05f",
+    line: "#72d5b7",
+    visual: "capybara",
   },
   wechat: {
     name: "公众号配图 · 图文叙事",
@@ -34,6 +91,7 @@ const PURPOSE_TEMPLATE_META = {
     tags: ["公众号", "图文"],
     accent: "#72d5b7",
     line: "#f0bd69",
+    visual: "wechat",
   },
   knowledge: {
     name: "知识观点 · 认知锚点",
@@ -41,6 +99,7 @@ const PURPOSE_TEMPLATE_META = {
     tags: ["观点", "解释"],
     accent: "#806bff",
     line: "#72d5b7",
+    visual: "knowledge",
   },
   workflow: {
     name: "方法流程 · 系统装置",
@@ -48,6 +107,7 @@ const PURPOSE_TEMPLATE_META = {
     tags: ["流程", "系统"],
     accent: "#71d7ff",
     line: "#f0bd69",
+    visual: "workflow",
   },
   "cover-reference": {
     name: "封面参考 · 强钩子画面",
@@ -55,6 +115,7 @@ const PURPOSE_TEMPLATE_META = {
     tags: ["封面", "钩子"],
     accent: "#ff7068",
     line: "#806bff",
+    visual: "cover",
   },
 };
 
@@ -349,7 +410,11 @@ function renderPurposeTemplates() {
     const tags = meta.tags || [item.label, "Skill"];
     return `
       <article class="xiaohei-template-card${active ? " active" : ""}" data-purpose-template="${escapeAttr(item.id)}" style="--template-accent:${escapeAttr(meta.accent || "#f0bd69")};--template-line:${escapeAttr(meta.line || "#71d7ff")}">
-        <div class="xiaohei-template-visual" aria-hidden="true"></div>
+        <div class="xiaohei-template-visual" data-template-visual="${escapeAttr(meta.visual || "xiaohei")}" aria-hidden="true">
+          <span class="xiaohei-template-mark"></span>
+          <span class="xiaohei-template-stroke stroke-a"></span>
+          <span class="xiaohei-template-stroke stroke-b"></span>
+        </div>
         <div class="xiaohei-template-copy">
           <strong>${escapeHtml(meta.name || item.label)}</strong>
           <p>${escapeHtml(meta.description || "调用小黑视频风格生成模块，自动完成分镜和素材包规划。")}</p>
