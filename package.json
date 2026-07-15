@@ -20,6 +20,7 @@
     "test:image-normalize": "node test-image-normalize-filter.mjs",
     "test:minimax-tts": "node test-minimax-tts.mjs",
     "test:tts-alignment": "node test-tts-alignment.mjs",
+    "test:subtitle-templates": "node test-subtitle-templates.mjs",
     "patch-output": "node patch-mcp-output.mjs",
     "postinstall": "node patch-mcp-output.mjs"
   },
