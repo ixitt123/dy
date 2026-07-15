@@ -39,7 +39,7 @@ for (const template of KINETIC_TEXT_EFFECTS) {
 }
 
 const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "subtitle-template-test-"));
-const service = createKineticTextService({ baseDir: process.cwd(), downloadsDir: path.join(tempRoot, "downloads"), ffmpegPath, ffprobePath: ffprobeStatic.path, modelRouter: null });
+const service = createKineticTextService({ baseDir: tempRoot, downloadsDir: path.join(tempRoot, "downloads"), ffmpegPath, ffprobePath: ffprobeStatic.path, modelRouter: null });
 const created = await service.create({
   aspectRatio: "9:16",
   effectId: "word-highlight",
@@ -57,4 +57,5 @@ assert.equal(created.segments.every((segment) => segment.words.length > 0), true
 assert.equal(created.aspectRatio, "9:16");
 assert.equal(effectById(created.effectId).id, "word-highlight");
 
+fs.rmSync(tempRoot, { recursive: true, force: true });
 console.log(`subtitle templates ok: ${KINETIC_TEXT_EFFECTS.length} templates, 2 aspect ratios, confirmed word timeline preserved`);
