@@ -4218,6 +4218,7 @@ async function waitForTtsJob(jobId) {
     generateTtsButton.disabled = false;
     ttsStatus.textContent = job.error || "生成失败。";
     updateTtsMainProgressFromJob(job);
+    syncTtsTopIssuePanel(job);
     renderTtsRail(job);
     await refreshTtsJobs();
     return;
