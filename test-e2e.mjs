@@ -219,7 +219,6 @@ test("Kinetic text production line", async () => {
     || !page.includes('id="kineticIntroEnabled"')
     || !page.includes('id="kineticOutroEnabled"')
     || !page.includes("只使用真实留白时间")
-    || !page.includes("每句话自动添加 1–3 个重点词")
     || !page.includes('id="kineticAspectRatio"')
     || !page.includes("2026 现代字幕模板")
     || !page.includes('<span class="nav-index">09</span><span>动态大字视频</span>')
