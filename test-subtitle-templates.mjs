@@ -21,6 +21,23 @@ const words = segments.flatMap((segment) => [...segment.text].map((text, index, 
   end: segment.start + (segment.end - segment.start) * (index + 1) / list.length,
 })));
 
+const keywordProject = {
+  id: "keyword-emphasis-test",
+  effectId: "rolling-focus",
+  aspectRatio: "16:9",
+  duration: 2.6,
+  text: segments.map((item) => item.text).join(""),
+  wordTimeline: words,
+  segments,
+};
+const keywordAss = buildAss(keywordProject);
+for (const keyword of segments.flatMap((segment) => segment.keywords)) {
+  assert.match(keywordAss, new RegExp(`\\{[^}]+\\}${keyword}`), `重点词“${keyword}”必须带有独立视觉强调标签`);
+}
+assert.match(keywordAss, /KeywordBox(?:Gold|Cyan|Lime|Violet)/u, "正式 ASS 必须注册关键词色块样式");
+assert.match(keywordAss, /\\fscx116|\\u1|\\rKeywordBox|\\1c&H/u, "重点词必须使用颜色、放大、色块或下划线强调");
+assert.equal(buildAss(keywordProject), keywordAss, "关键词自动样式必须固定，预览和重复导出不得随机跳变");
+
 const rollingFocusText = "，你真的，下定决心。要学英语了！那我就把英语，学习的唯一正确顺序告诉你。";
 const rollingFocusWords = [...rollingFocusText].map((text, index, list) => ({
   text,
@@ -130,6 +147,28 @@ assert.equal(created.bookends.outro.enabled, false, "旧项目默认不得擅自
 assert.equal(created.bookendWindows.basis, "video-visual-timeline", "片头片尾留白必须按视频画面正文字幕占位判断，不得按语音静音判断");
 assert.equal(created.aspectRatio, "9:16");
 assert.equal(effectById(created.effectId).id, "rolling-focus-subtitle");
+
+const cleanedKeywords = await service.create({
+  effectId: "rolling-focus",
+  text: "那你听好，顺序搞反了，全白搭。",
+  tts: {
+    duration: 1.2,
+    final_text: "那你听好，顺序搞反了，全白搭。",
+    sentence_timeline: [{
+      id: "clean-keywords",
+      start: 0,
+      end: 1.2,
+      text: "那你听好，顺序搞反了，全白搭。",
+      keywords: ["不存在", "顺序", "顺序搞反", "那你听好顺序搞反了全白搭"],
+    }],
+  },
+});
+assert.deepEqual(cleanedKeywords.segments[0].keywords, ["顺序"], "必须删除原文不存在、整句和相互重叠的错误关键词");
+assert.deepEqual(
+  cleanedKeywords.segments.map(({ start, end }) => [start, end]),
+  [[0, 1.2]],
+  "清洗关键词不得改变字幕时间戳",
+);
 
 fs.rmSync(tempRoot, { recursive: true, force: true });
 console.log(`subtitle templates ok: ${KINETIC_TEXT_EFFECTS.length} templates, 2 aspect ratios, confirmed word timeline preserved`);

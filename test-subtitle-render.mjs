@@ -57,7 +57,7 @@ for (const [index, [effectId, aspectRatio, expected, expectedFrameRate]] of [
   const finished = await waitFor(job.id);
   const videoPath = finished.result?.videoPath;
   assert.equal(Boolean(videoPath && fs.existsSync(videoPath)), true, `${effectId} 正式 MP4 未生成`);
-  assert.equal(path.resolve(videoPath).startsWith(`${path.resolve(selectedDownloadsDir)}${path.sep}`), true, `${effectId} 没有使用重新选择的下载目录`);
+  assert.equal(path.dirname(path.resolve(videoPath)), path.resolve(selectedDownloadsDir), `${effectId} 没有直接保存到重新选择的下载目录`);
   const probe = spawnSync(ffprobeStatic.path, ["-v", "error", "-select_streams", "v:0", "-show_entries", "stream=width,height,r_frame_rate", "-of", "default=nw=1", videoPath], { encoding: "utf8", windowsHide: true });
   assert.equal(probe.status, 0, probe.stderr);
   assert.match(probe.stdout, new RegExp(`width=${expected.split("x")[0]}[\\s\\S]*height=${expected.split("x")[1]}`));
