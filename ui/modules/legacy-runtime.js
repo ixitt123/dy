@@ -3248,12 +3248,28 @@ function ttsStatusLabel(status) {
   }[status] || status;
 }
 
+function ttsAlignmentStatusLabel(status = "") {
+  return {
+    waiting: "等待字幕校准",
+    processing: "字幕校准中",
+    review_required: "字幕待确认",
+    confirmed: "字幕已确认",
+    failed: "字幕校准失败",
+    not_required: "无需字幕校准",
+  }[status] || "等待补做字幕校准";
+}
+
+function ttsJobStatusLabel(job = {}) {
+  if (job.status === "completed" && job.alignment_status) return ttsAlignmentStatusLabel(job.alignment_status);
+  return ttsStatusLabel(job.status);
+}
+
 function ttsProgressValue(job = {}) {
+  const reported = Number(job.progress ?? job.metadata?.progress);
+  if (Number.isFinite(reported)) return Math.max(0, Math.min(100, reported));
   if (job.status === "completed") return 100;
-  if (job.status === "processing") return 62;
-  if (job.status === "failed") return Math.max(10, Number(job.progress || 0) || 62);
-  if (job.status === "waiting" || job.status === "pending") return 24;
-  return Number(job.progress || 0) || 8;
+  if (job.status === "failed") return 5;
+  return 0;
 }
 
 function setTtsMainProgress(percent = 0, label = "") {
@@ -3275,13 +3291,13 @@ function hideTtsMainProgress() {
 
 function updateTtsMainProgressFromJob(job = {}) {
   const value = ttsProgressValue(job);
-  const label = job.status === "completed"
-    ? "生成完成"
+  const label = job.stage || job.metadata?.stage || (job.status === "completed"
+    ? ttsAlignmentStatusLabel(job.alignment_status)
     : job.status === "failed"
       ? "生成失败"
       : job.status === "processing"
-        ? "正在生成音频"
-        : "任务排队中";
+        ? "正在处理"
+        : "等待处理");
   setTtsMainProgress(value, label);
 }
 
@@ -3289,7 +3305,7 @@ function renderTtsRail(job = activeTtsRailJob) {
   if (!railCurrentTask || !job) return;
   activeTtsRailJob = job;
   const progress = Math.max(0, Math.min(100, ttsProgressValue(job)));
-  const textPreview = String(job.text || ttsText?.value || "").trim().slice(0, 72);
+  const textPreview = String(job.final_text || job.recognized_text || job.text || ttsText?.value || "").trim().slice(0, 72);
   const title = ttsJobTitle(job);
   const isMusicJob = job.source === "minimax_music" || String(job.voice_id || "").startsWith("music:");
   const mediaLabel = isMusicJob ? "音乐音频" : "TTS 语音";
@@ -3299,11 +3315,11 @@ function renderTtsRail(job = activeTtsRailJob) {
   railCurrentTask.innerHTML = `
     <div class="rail-production-card rail-tts-card">
       <strong>#${job.id || "-"} ${escapeHtml(title || `${mediaLabel}生成`)}</strong>
-      <small>当前步骤：${escapeHtml(job.status === "completed" ? `${mediaLabel}已生成，可以试听` : job.status === "failed" ? `${mediaLabel}生成失败` : job.status === "processing" ? "正在生成音频" : "任务已进入队列")}</small>
+      <small>当前步骤：${escapeHtml(job.stage || job.metadata?.stage || (job.status === "completed" ? `${mediaLabel}已生成` : job.status === "failed" ? `${mediaLabel}生成失败` : job.status === "processing" ? "正在处理" : "等待处理"))}</small>
       <div class="rail-progress"><i style="width:${progress}%"></i></div>
       <div class="rail-task-summary">
         <div><span>进度</span><strong>${progress}%</strong></div>
-        <div><span>状态</span><strong>${escapeHtml(ttsStatusLabel(job.status))}</strong></div>
+        <div><span>状态</span><strong>${escapeHtml(ttsJobStatusLabel(job))}</strong></div>
         <div><span>格式</span><strong>${escapeHtml(String(job.format || ttsFormat?.value || "mp3").toUpperCase())}</strong></div>
       </div>
       <div class="rail-task-group">
@@ -3475,7 +3491,8 @@ function renderTtsJobsEnhanced(jobs = []) {
         ${label}
       </label>
     `).join("");
-    const handoffPanel = job.status === "completed"
+    const alignmentStatus = String(job.alignment_status || "");
+    const handoffPanel = job.status === "completed" && alignmentStatus === "confirmed"
       ? `
         <div class="tts-job-handoff">
           <div class="tts-job-handoff-head">
@@ -3492,6 +3509,24 @@ function renderTtsJobsEnhanced(jobs = []) {
           <small class="tts-job-handoff-status"></small>
         </div>
       `
+      : job.status === "completed" && alignmentStatus !== "not_required"
+        ? `
+          <div class="tts-job-handoff">
+            <div class="tts-job-handoff-head">
+              <strong>${escapeHtml(ttsAlignmentStatusLabel(alignmentStatus))}</strong>
+              <span>${escapeHtml(job.alignment_error || "确认最终文案和时间轴后才能发送到生产线。")}</span>
+            </div>
+            <div class="tts-history-actions">
+              ${alignmentStatus === "review_required"
+                ? '<button class="primary small tts-job-calibrate" type="button">检查并确认字幕</button>'
+                : '<button class="primary small tts-job-alignment-retry" type="button">重新识别并校准</button>'}
+              <button class="ghost small danger-action tts-job-delete" type="button">不满意，删除</button>
+              <button class="ghost small tts-job-hide" type="button">隐藏</button>
+              <button class="ghost small tts-job-minimize" type="button">最小化</button>
+            </div>
+            <small class="tts-job-handoff-status"></small>
+          </div>
+        `
       : `
         <div class="tts-history-actions tts-history-actions-simple">
           <button class="ghost small danger-action tts-job-delete" type="button" ${["waiting", "processing"].includes(job.status) ? "disabled" : ""}>删除</button>
@@ -3506,9 +3541,9 @@ function renderTtsJobsEnhanced(jobs = []) {
             <strong>#${displayNumber || job.id}</strong>
             <span class="tts-history-title-text" title="${escapeHtml(title)}">${escapeHtml(title)}</span>
           </div>
-          <span class="tts-job-status ${escapeHtml(job.status)}">${escapeHtml(ttsStatusLabel(job.status))}</span>
+          <span class="tts-job-status ${escapeHtml(job.status)}">${escapeHtml(ttsJobStatusLabel(job))}</span>
         </div>
-        <div class="tts-history-text" title="${escapeHtml(job.text)}">${escapeHtml(job.text)}</div>
+        <div class="tts-history-text" title="${escapeHtml(job.final_text || job.recognized_text || job.text)}">${escapeHtml(job.final_text || job.recognized_text || job.text)}</div>
         <div class="tts-history-meta">${escapeHtml(job.voice_name || job.voice_id || "-")} · ${escapeHtml(labels[job.provider] || job.provider)} · ${escapeHtml(String(job.format || "mp3").toUpperCase())}</div>
         <div class="tts-history-audio">${audio}</div>
         <span class="tts-history-files">${fileLinks}</span>
@@ -3524,7 +3559,11 @@ async function refreshTtsJobs() {
   renderTtsRailLists(data.jobs || []);
   if (activeTtsRailJob?.id) {
     const latest = (data.jobs || []).find((job) => String(job.id) === String(activeTtsRailJob.id));
-    if (latest) renderTtsRail(latest);
+    if (latest) {
+      activeTtsRailJob = latest;
+      renderTtsRail(latest);
+      renderTtsAlignmentEditor(latest);
+    }
   }
 }
 
