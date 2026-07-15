@@ -209,6 +209,15 @@ function sentenceTimelineFromWords(text, wordTimeline, duration) {
     });
   }
   const total = Math.max(0.25, finiteNumber(duration, rows.at(-1)?.end || 0.25));
+  for (let index = 1; index < rows.length; index += 1) {
+    const previous = rows[index - 1];
+    const current = rows[index];
+    if (current.start < previous.end) {
+      const boundary = clamp((current.start + previous.end) / 2, previous.start + 0.01, current.end - 0.01);
+      previous.end = boundary;
+      current.start = boundary;
+    }
+  }
   let previousEnd = 0;
   return rows.map((row, index) => {
     const start = clamp(Math.max(previousEnd, finiteNumber(row.start)), 0, total);
@@ -290,4 +299,3 @@ export function validateAlignment({ text = "", wordTimeline = [], sentenceTimeli
   });
   return { valid: errors.length === 0, errors, warnings };
 }
-
