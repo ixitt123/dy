@@ -185,12 +185,13 @@ test("TTS final-audio transcript alignment", async () => {
 });
 
 test("Kinetic text production line", async () => {
-  const [effectsResponse, pageResponse, moduleResponse, legacyResponse, packageSource] = await Promise.all([
+  const [effectsResponse, pageResponse, moduleResponse, legacyResponse, packageSource, kineticServiceSource] = await Promise.all([
     fetch(`${BASE}/api/kinetic-text/effects`),
     fetch(`${BASE}/`),
     fetch(`${BASE}/modules/kinetic-text.js`),
     fetch(`${BASE}/modules/legacy-runtime.js`),
     readFile(new URL("./package.json", import.meta.url), "utf8"),
+    readFile(new URL("./server/kinetic-text/kinetic-text-service.js", import.meta.url), "utf8"),
   ]);
   const [effects, page, moduleSource, legacySource] = await Promise.all([
     effectsResponse.json(),
@@ -226,7 +227,7 @@ test("Kinetic text production line", async () => {
     || !moduleSource.includes("pollJob")
     || !moduleSource.includes('data-field="lineBreaks"')
     || !moduleSource.includes("keywordsOnly: true")
-    || !kineticSource.includes("normalizeSegmentKeywords")
+    || !kineticServiceSource.includes("normalizeSegmentKeywords")
     || !moduleSource.includes("FAVORITES_KEY")
     || !moduleSource.includes("previewWordGroups")
     || !legacySource.includes('targets.includes("kinetic-text")')
