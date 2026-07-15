@@ -880,8 +880,11 @@ export function createTtsService({
           recognized_word_timeline: recognizedWords,
           recognized_sentence_timeline: recognizedSentences,
         }, { status: "processing" });
+        const alignmentText = isSingingAlignmentJob(initial, initialMetadata) && !explicitLyricsText(initialMetadata) && recognizedText
+          ? recognizedText
+          : String(targetText || recognizedText).trim();
         const aligned = alignTranscriptToAudio({
-          text: String(targetText || recognizedText).trim(),
+          text: alignmentText,
           recognizedText,
           recognizedWords,
           recognizedSentences,
@@ -930,7 +933,75 @@ export function createTtsService({
         }, { status: "processing" });
       }
 
-      if (!best) throw new Error("字幕自动校准没有得到可用结果。");
+      if (!best || best.recognitionMatchRatio < ALIGNMENT_AUTO_APPROVE_RATIO) {
+        const latestForFallback = taskStore.getTtsJob(numericId) || initial;
+        const latestMetadataForFallback = {
+          ...initialMetadata,
+          ...safeJson(latestForFallback?.metadata_json, {}),
+        };
+        const singingJob = isSingingAlignmentJob(latestForFallback, latestMetadataForFallback);
+        const fallbackText = singingJob && best?.recognizedText
+          ? best.recognizedText
+          : scriptLockedFallbackText({
+              job: latestForFallback,
+              metadata: latestMetadataForFallback,
+              targetText,
+              recognizedText: best?.recognizedText || "",
+            });
+        const fallbackAligned = singingJob && best?.recognizedText
+          ? alignTranscriptToAudio({
+              text: fallbackText,
+              recognizedText: best.recognizedText,
+              recognizedWords: best.recognizedWords,
+              recognizedSentences: best.recognizedSentences,
+              duration: audioDuration,
+            })
+          : buildScriptLockedAlignment({
+              text: fallbackText,
+              duration: audioDuration,
+            });
+        const fallbackValidation = validateAlignment({
+          text: fallbackAligned.finalText,
+          wordTimeline: fallbackAligned.wordTimeline,
+          sentenceTimeline: fallbackAligned.sentenceTimeline,
+          duration: audioDuration,
+        });
+        if (!fallbackValidation.valid) throw new Error(`字幕时间轴检查失败：${fallbackValidation.errors.join("；")}`);
+        const previousRecognitionRatio = best?.recognitionMatchRatio ?? 0;
+        best = {
+          attempt: best?.attempt || attemptsMade || 0,
+          recognizedText: best?.recognizedText || "",
+          recognizedWords: best?.recognizedWords || [],
+          recognizedSentences: best?.recognizedSentences || [],
+          aligned: fallbackAligned,
+          validation: fallbackValidation,
+          recognitionMatchRatio: previousRecognitionRatio,
+          singingAudioLyricsFallback: singingJob && Boolean(best?.recognizedText),
+          scriptLockedFallback: !(singingJob && best?.recognizedText),
+          fallbackReason: best ? (singingJob ? "singing_audio_lyrics" : "low_match_ratio") : (recognitionError || "recognition_unavailable"),
+        };
+        currentProgress = 76;
+        setJobProgress(numericId, 76, best.singingAudioLyricsFallback
+          ? "唱歌音频已按实际识别歌词生成同步字幕"
+          : "字幕已按可用歌词/文案生成兜底时间轴", {
+          alignment_status: "processing",
+          alignment_attempts: attemptsMade,
+          alignment_max_attempts: maxAttempts,
+          alignment_retry_reason: best.fallbackReason,
+          alignment_best_match_ratio: fallbackAligned.matchRatio,
+          alignment_best_asr_match_ratio: previousRecognitionRatio,
+          recognition_match_ratio: previousRecognitionRatio,
+          final_text: fallbackAligned.finalText,
+          word_timeline: fallbackAligned.wordTimeline,
+          sentence_timeline: fallbackAligned.sentenceTimeline,
+          subtitle_timeline: fallbackAligned.sentenceTimeline,
+          subtitle_source: fallbackAligned.source,
+          estimated_count: fallbackAligned.estimatedCount,
+          low_confidence_count: fallbackAligned.lowConfidenceCount,
+          match_ratio: fallbackAligned.matchRatio,
+          alignment_validation: fallbackValidation,
+        }, { status: "processing" });
+      }
       const { attempt: bestAttempt, recognizedText, recognizedWords, recognizedSentences, aligned, validation } = best;
       currentProgress = 82;
       setJobProgress(numericId, 82, "逐句时间轴完成，正在生成 SRT", {
