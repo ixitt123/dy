@@ -785,7 +785,9 @@ export function createTtsService({
       }, { status: "processing", error: "" });
 
       let best = null;
+      let attemptsMade = 0;
       for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+        attemptsMade = attempt;
         let recognizedText = reuseRecognition ? String(initialMetadata.recognized_text || "").trim() : "";
         let recognizedWords = reuseRecognition && Array.isArray(initialMetadata.recognized_word_timeline)
           ? initialMetadata.recognized_word_timeline
@@ -873,7 +875,7 @@ export function createTtsService({
       }
 
       if (!best) throw new Error("字幕自动校准没有得到可用结果。");
-      const { attempt, recognizedText, recognizedWords, recognizedSentences, aligned, validation } = best;
+      const { attempt: bestAttempt, recognizedText, recognizedWords, recognizedSentences, aligned, validation } = best;
       currentProgress = 82;
       setJobProgress(numericId, 82, "逐句时间轴完成，正在生成 SRT", {
         sentence_timeline: aligned.sentenceTimeline,
@@ -902,7 +904,8 @@ export function createTtsService({
       const revision = Number(latestMetadata.alignment_revision || 0) + 1;
       const autoApproved = aligned.matchRatio >= ALIGNMENT_AUTO_APPROVE_RATIO;
       const completedAt = new Date().toISOString();
-      const failedMessage = `已自动重新识别 ${attempt}/${maxAttempts} 次，最佳匹配率 ${(aligned.matchRatio * 100).toFixed(1)}%，仍低于 ${(ALIGNMENT_AUTO_APPROVE_RATIO * 100).toFixed(0)}%。请换文案重新生成音频。`;
+      const completedAttempts = autoApproved ? bestAttempt : attemptsMade;
+      const failedMessage = `已自动重新识别 ${completedAttempts}/${maxAttempts} 次，最佳匹配率 ${(aligned.matchRatio * 100).toFixed(1)}%，仍低于 ${(ALIGNMENT_AUTO_APPROVE_RATIO * 100).toFixed(0)}%。请换文案重新生成音频。`;
       const completed = setJobProgress(numericId, 100, autoApproved
         ? `字幕匹配率 ${(aligned.matchRatio * 100).toFixed(1)}%，可以发送`
         : failedMessage, {
@@ -925,8 +928,9 @@ export function createTtsService({
         alignment_confirmed_at: autoApproved ? completedAt : "",
         alignment_confirmation_mode: autoApproved ? "automatic_match_threshold" : "",
         alignment_auto_approve_ratio: ALIGNMENT_AUTO_APPROVE_RATIO,
-        alignment_attempts: attempt,
+        alignment_attempts: completedAttempts,
         alignment_max_attempts: maxAttempts,
+        alignment_best_attempt: bestAttempt,
         alignment_best_match_ratio: aligned.matchRatio,
         alignment_policy_version: ALIGNMENT_POLICY_VERSION,
         alignment_failure_action: autoApproved ? "" : "rewrite_script_required",
