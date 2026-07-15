@@ -18,18 +18,19 @@ function postHandoff(frame, handoff = readHandoff()) {
 }
 
 export function sendConfirmedTtsToXiaohei(job, project = activeProject()) {
-  if (!job?.id || job.status !== "completed") {
-    throw new Error("请先生成、试听并确认一条 TTS 音频。");
+  if (!job?.id || job.status !== "completed" || String(job.alignment_status || job.metadata?.alignment_status || "") !== "confirmed") {
+    throw new Error("请先生成语音，并检查确认最终文案和字幕时间轴。");
   }
+  const finalText = String(job.final_text || job.metadata?.final_text || "").trim();
   const handoff = {
     projectId: project?.id || "",
     projectTitle: project?.title || "",
     title: project?.title || job.voice_name || "小黑配图视频",
-    text: String(job.text || project?.selectedRewriteText || project?.transcriptText || "").trim(),
+    text: finalText,
     ttsJob: job,
     sentAt: new Date().toISOString(),
   };
-  if (!handoff.text) throw new Error("已确认音频缺少对应文案，无法发送到小黑生产线。");
+  if (!handoff.text) throw new Error("已确认音频缺少最终识别文案，无法发送到小黑生产线。");
   localStorage.setItem(XIAOHEI_HANDOFF_KEY, JSON.stringify(handoff));
   window.appNavigate?.("xiaohei-video");
   postHandoff(document.querySelector("#xiaoheiProductionFrame"), handoff);

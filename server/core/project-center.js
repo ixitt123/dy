@@ -491,16 +491,25 @@ export function createProjectCenter(baseDir) {
     const templateAssets = assets.filter((item) => item.assetType === "template" && item.status === "ready");
     const expectedAssets = Math.max(1, Number(project.directorScript?.sceneCount || project.directorScript?.scene_count || project.directorScript?.result?.storyboard?.length || 1));
     const missingAssets = Math.max(0, expectedAssets - mediaAssets.length);
-    const ttsTimeline = Array.isArray(project.selectedTtsAudio?.subtitle_timeline)
-      ? project.selectedTtsAudio.subtitle_timeline
-      : Array.isArray(project.selectedTtsAudio?.metadata?.subtitle_timeline)
-        ? project.selectedTtsAudio.metadata.subtitle_timeline
+    const ttsTimeline = Array.isArray(project.selectedTtsAudio?.sentence_timeline)
+      ? project.selectedTtsAudio.sentence_timeline
+      : Array.isArray(project.selectedTtsAudio?.subtitle_timeline)
+        ? project.selectedTtsAudio.subtitle_timeline
+        : Array.isArray(project.selectedTtsAudio?.metadata?.sentence_timeline)
+          ? project.selectedTtsAudio.metadata.sentence_timeline
+          : Array.isArray(project.selectedTtsAudio?.metadata?.subtitle_timeline)
+            ? project.selectedTtsAudio.metadata.subtitle_timeline
         : [];
+    const ttsConfirmed = String(
+      project.selectedTtsAudio?.alignment_status
+      || project.selectedTtsAudio?.metadata?.alignment_status
+      || "",
+    ) === "confirmed";
     const outputDir = baseDir;
     const outputReady = true;
     const checks = [
       { id: "script", label: "文案", ok: hasValue(project.selectedRewriteText || project.transcriptText), ready: "已完成", missing: "缺失", page: "rewrite", action: "选择文案", critical: true },
-      { id: "voice", label: "语音", ok: hasValue(project.selectedTtsAudio), ready: "已完成", missing: "缺失", page: "tts", action: "生成语音", critical: true },
+      { id: "voice", label: "语音", ok: hasValue(project.selectedTtsAudio) && ttsConfirmed, ready: "已完成并确认字幕", missing: hasValue(project.selectedTtsAudio) ? "待确认最终字幕" : "缺失", page: "tts", action: "生成并确认语音", critical: true },
       { id: "subtitle", label: "字幕时间轴", ok: hasValue(project.subtitleTimeline) || hasValue(ttsTimeline), ready: "已完成", missing: "生产线内生成", page: "xiaohei-video", action: "生产线生成", critical: false },
       { id: "assets", label: "素材", ok: mediaAssets.length > 0 && missingAssets === 0, ready: `已完成 · ${mediaAssets.length} 个`, missing: "生产线内匹配", page: "assets", action: "补素材", critical: false },
       { id: "bgm", label: "BGM", ok: hasValue(project.bgm), ready: "已选择", missing: "可不选", page: "assets", action: "选择 BGM", critical: false },

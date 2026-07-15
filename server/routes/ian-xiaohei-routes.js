@@ -834,9 +834,13 @@ export function createIanXiaoheiRoutes({
         if (!job || job.status !== "completed" || !job.audio_path || !fs.existsSync(job.audio_path)) {
           throw new Error("TTS 音频尚未生成完成。");
         }
-        const text = normalizeText(body.text || job.text);
-        if (normalizeComparableText(text) !== normalizeComparableText(job.text)) {
-          throw new Error("当前文案与 TTS 文案不一致，请重新生成语音。");
+        if (String(job.alignment_status || job.metadata?.alignment_status || "") !== "confirmed") {
+          throw new Error("请先在 TTS 页面检查并确认最终识别文案和字幕时间轴。");
+        }
+        const confirmedText = normalizeText(job.final_text || job.metadata?.final_text || job.text);
+        const text = normalizeText(body.text || confirmedText);
+        if (normalizeComparableText(text) !== normalizeComparableText(confirmedText)) {
+          throw new Error("当前文案与已确认的最终语音文案不一致，请重新校准字幕。");
         }
         const selectedJob = ttsService?.getSelectedProjectJob?.(projectId);
         if (!selectedJob || Number(selectedJob.id) !== Number(job.id)) {
@@ -892,6 +896,9 @@ export function createIanXiaoheiRoutes({
           || taskStore?.getTtsJob?.(Number(plan.ttsJobId));
         if (!audioJob || audioJob.status !== "completed" || !audioJob.audio_path || !fs.existsSync(audioJob.audio_path)) {
           throw new Error("确认音频文件不存在或尚未生成完成。");
+        }
+        if (String(audioJob.alignment_status || audioJob.metadata?.alignment_status || "") !== "confirmed") {
+          throw new Error("当前音频的最终文案和字幕时间轴尚未确认，不能导出素材包。");
         }
         const missing = (plan.shots || []).filter((shot) => !images.some((image) => Number(image.index) === Number(shot.index) && image.assetId));
         if (missing.length) throw new Error(`缺少配图：${missing.map((shot) => `#${shot.index}`).join("、")}。`);
@@ -1352,8 +1359,36 @@ function buildAudioTimedSegments(text, audioDuration) {
 }
 
 function extractTtsSubtitleSegments(job, fallbackText, audioDuration) {
-  const metadata = parseStoredJsonObject(job?.metadata_json, {});
-  const raw = metadata.subtitles || metadata.subtitle || metadata.words || metadata.word_timestamps || [];
+  const metadata = job?.metadata && typeof job.metadata === "object"
+    ? job.metadata
+    : parseStoredJsonObject(job?.metadata_json, {});
+  const sentenceTimeline = job?.sentence_timeline
+    || job?.subtitle_timeline
+    || metadata.sentence_timeline
+    || metadata.subtitle_timeline
+    || [];
+  const confirmedSentences = normalizeSubtitleTokens(sentenceTimeline, audioDuration)
+    .map((segment) => ({
+      text: normalizeText(segment.text),
+      start: Number(Math.max(0, segment.start).toFixed(3)),
+      end: Number(Math.min(Number(audioDuration || segment.end), Math.max(segment.end, segment.start + 0.1)).toFixed(3)),
+      timing_source: String(segment.timing_source || "confirmed_alignment"),
+      estimated: Boolean(segment.estimated),
+    }))
+    .filter((segment) => segment.text && segment.end > segment.start)
+    .map((segment) => ({
+      ...segment,
+      duration: Number((segment.end - segment.start).toFixed(3)),
+    }));
+  if (confirmedSentences.length) return confirmedSentences;
+
+  const raw = job?.word_timeline
+    || metadata.word_timeline
+    || metadata.subtitles
+    || metadata.subtitle
+    || metadata.words
+    || metadata.word_timestamps
+    || [];
   const tokens = normalizeSubtitleTokens(raw, audioDuration);
   if (!tokens.length) return null;
   const targetCount = clamp(Math.ceil(Math.max(1, Number(audioDuration || 0)) / 4), 1, 30);
@@ -1434,7 +1469,13 @@ function normalizeSubtitleTokens(rawValue, audioDuration) {
         value.end_time ?? value.endTime ?? value.end ?? value.finish_time ?? value.finish ?? value.offset_end,
         audioDuration,
       );
-      return { text, start, end };
+      return {
+        text,
+        start,
+        end,
+        timing_source: String(value.timing_source || value.timingSource || ""),
+        estimated: Boolean(value.estimated || value.is_estimated),
+      };
     })
     .filter((item) => item.text && Number.isFinite(item.start) && Number.isFinite(item.end) && item.end > item.start)
     .sort((a, b) => a.start - b.start);
