@@ -593,11 +593,16 @@ export function createKineticTextService({
   async function create(input = {}) {
     const id = `kinetic-${Date.now()}-${randomUUID().slice(0, 6)}`;
     const tts = input.tts && typeof input.tts === "object" ? input.tts : input;
+    if (tts.id && String(tts.alignment_status || "") !== "confirmed") {
+      throw new Error("TTS 最终文案和字幕时间轴尚未确认，不能进入动态大字生产线。");
+    }
     const audioPath = String(tts.audio_path || tts.audioPath || "");
     const scriptPath = String(tts.script_path || tts.scriptPath || "");
     const subtitlePath = String(tts.subtitle_path || tts.timed_subtitle_path || "");
     const timestampedTextPath = String(tts.timestamped_text_path || tts.timestampedTextPath || tts.timed_subtitle_path || "");
-    const payloadTimeline = Array.isArray(tts.subtitle_timeline)
+    const payloadTimeline = Array.isArray(tts.sentence_timeline) && tts.sentence_timeline.length
+      ? tts.sentence_timeline
+      : Array.isArray(tts.subtitle_timeline)
       ? tts.subtitle_timeline
       : Array.isArray(tts.subtitleTimeline)
         ? tts.subtitleTimeline
@@ -618,6 +623,7 @@ export function createKineticTextService({
       || (hasTimedTimeline ? "estimated" : "estimated")
     );
     const effectId = normalizeEffectId(input.effectId);
+    const finalText = String(tts.final_text || tts.text || input.text || "");
     return save({
       id,
       title: input.title || tts.title || `动态大字视频 ${new Date().toLocaleString("zh-CN", { hour12: false })}`,
@@ -631,10 +637,16 @@ export function createKineticTextService({
       scriptPath,
       subtitlePath,
       timestampedTextPath,
-      text: String(tts.text || input.text || ""),
+      text: finalText,
+      originalText: String(tts.original_text || ""),
+      recognizedText: String(tts.recognized_text || ""),
+      wordTimeline: Array.isArray(tts.word_timeline) ? tts.word_timeline : [],
+      sentenceTimeline: payloadTimeline,
+      alignmentStatus: String(tts.alignment_status || ""),
+      alignmentConfirmedAt: String(tts.alignment_confirmed_at || ""),
       duration,
       subtitleSource,
-      segments: normalizeSegments(timeline, tts.text || input.text, duration),
+      segments: normalizeSegments(timeline, finalText, duration),
       effectId,
       effectParams: defaultEffectParams(effectId),
       showBottomSubtitles: false,
