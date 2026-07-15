@@ -218,8 +218,35 @@ function keywordCoverageTooHigh(source, keywords) {
   return covered / Math.max(1, [...source].length) > 0.55;
 }
 
+function keywordPlainText(value) {
+  return normalizeText(value).replace(/[\s，。！？；：、,.!?;:“”‘’'"（）()【】\[\]《》<>—-]/g, "");
+}
+
+function keywordRange(source, keyword) {
+  const start = source.indexOf(keyword);
+  return start < 0 ? null : { start, end: start + keyword.length };
+}
+
+function keywordsAreAdjacent(text, first, second) {
+  const source = keywordPlainText(text);
+  const firstRange = keywordRange(source, first);
+  const secondRange = keywordRange(source, second);
+  if (!firstRange || !secondRange) return false;
+  if (firstRange.start <= secondRange.start) return firstRange.end >= secondRange.start;
+  return secondRange.end >= firstRange.start;
+}
+
+function canSelectKeyword(text, selected, candidate) {
+  if (!candidate || selected.includes(candidate)) return false;
+  return !selected.some((item) => (
+    item.includes(candidate)
+    || candidate.includes(item)
+    || keywordsAreAdjacent(text, item, candidate)
+  ));
+}
+
 function inferKeywords(text) {
-  const source = normalizeText(text).replace(/[\s，。！？；：、,.!?;:“”‘’'"（）()【】\[\]《》<>—-]/g, "");
+  const source = keywordPlainText(text);
   if (!source) return [];
   const { segments, words, resultPhrases } = keywordCandidateGroups(text);
   const targetCount = keywordTargetCount(text);
@@ -229,9 +256,8 @@ function inferKeywords(text) {
   const selected = [];
   if (words[0]) selected.push(words[0].text);
   if (targetCount > 1) {
-    const result = resultPhrases.find((item) => !selected.includes(item.text));
-    const secondWord = words.find((item) => !selected.includes(item.text));
-    const next = result || secondWord;
+    const next = [...resultPhrases, ...words.slice(1)]
+      .find((item) => canSelectKeyword(text, selected, item.text));
     if (next) selected.push(next.text);
   }
   if (keywordCoverageTooHigh(source, selected)) selected.splice(1);
@@ -244,7 +270,11 @@ function inferKeywords(text) {
     const single = contentSingles[0];
     if (single) selected.push(single);
   }
-  return selected.slice(0, targetCount);
+  if (!selected.length) {
+    const fallbackCharacter = [...source].find((item) => /[\p{L}\p{N}]/u.test(item));
+    if (fallbackCharacter) selected.push(fallbackCharacter);
+  }
+  return selected.slice(0, Math.min(2, targetCount));
 }
 
 function isNaturalSuppliedKeyword(candidate, text, groups) {
@@ -256,7 +286,7 @@ function isNaturalSuppliedKeyword(candidate, text, groups) {
 }
 
 function normalizeSegmentKeywords(keywords, text) {
-  const source = normalizeText(text).replace(/[\s，。！？；：、,.!?;:“”‘’'"（）()【】\[\]《》<>—-]/g, "");
+  const source = keywordPlainText(text);
   const supplied = Array.isArray(keywords) ? keywords.map(cleanKeyword).filter(Boolean) : [];
   const groups = keywordCandidateGroups(text);
   const selected = [];
@@ -265,7 +295,7 @@ function normalizeSegmentKeywords(keywords, text) {
     if (length < 1 || length > 6 || !source.includes(candidate)) continue;
     if ([...source].length > 2 && candidate === source) continue;
     if (!isNaturalSuppliedKeyword(candidate, text, groups)) continue;
-    if (selected.some((item) => item.includes(candidate) || candidate.includes(item))) continue;
+    if (!canSelectKeyword(text, selected, candidate)) continue;
     selected.push(candidate);
     if (selected.length >= keywordTargetCount(text)) break;
   }
@@ -373,7 +403,10 @@ function validateTimelineRules(segments, audioDuration = 0) {
     const length = textLength(row.text);
     if (length > 24) warnings.push(`第 ${index + 1} 条字幕偏长，建议按语义拆短。`);
     if (!Array.isArray(row.keywords) || row.keywords.length < 1) warnings.push(`第 ${index + 1} 条缺少重点词。`);
-    if (Array.isArray(row.keywords) && row.keywords.length > 3) warnings.push(`第 ${index + 1} 条重点词超过 3 个。`);
+    if (Array.isArray(row.keywords) && row.keywords.length > 2) warnings.push(`第 ${index + 1} 条重点词超过 2 个。`);
+    if (Array.isArray(row.keywords) && row.keywords.some((keyword, keywordIndex) => row.keywords.slice(keywordIndex + 1).some((next) => keywordsAreAdjacent(row.text, keyword, next)))) {
+      warnings.push(`第 ${index + 1} 条存在相邻重点词。`);
+    }
   }
   const lastEnd = safeNumber(rows[rows.length - 1].end, 0, 0);
   const duration = safeNumber(audioDuration, 0, 0);
@@ -1041,7 +1074,7 @@ export function buildAss(project, options = {}) {
     const overrides = segment.overrides || {};
     const x = Math.round((safeNumber(overrides.x ?? params.x, 50, 5, 95) / 100) * width);
     const y = Math.round((safeNumber(overrides.y ?? params.y, 64, 8, 92) / 100) * height);
-    const keywords = [...new Set((segment.keywords || []).map(normalizeText).filter(Boolean))].slice(0, 3);
+    const keywords = normalizeSegmentKeywords(segment.keywords, segment.text).slice(0, 2);
     const words = timedWordsForSegment(segment).map((word) => ({
       ...word,
       start: Math.max(start, word.start - offset),
@@ -1423,9 +1456,9 @@ export function createKineticTextService({
     const systemPrompt = [
       "你负责中文动态大字字幕的重点词识别。只返回 JSON 数组。",
       keywordsOnly
-        ? "每一项必须包含 id 和 keywords（每句 1-3 个、每个 2-6 字、必须是原句中连续出现的重点词）。"
-        : "每一项必须包含 id、keywords（每句 1-3 个、每个 2-6 字、必须是原句中连续出现的重点词）和 lineBreaks（建议换行的字符索引数组）。",
-      "关键词优先选择主题、动作、结果、数字、转折或结论；禁止整句当关键词，禁止互相包含或语义重复。",
+        ? "每一项必须包含 id 和 keywords（每句 1-2 个、每个 2-6 字、必须是原句中连续出现的重点词）。"
+        : "每一项必须包含 id、keywords（每句 1-2 个、每个 2-6 字、必须是原句中连续出现的重点词）和 lineBreaks（建议换行的字符索引数组）。",
+      "关键词优先选择主题、动作、结果、数字、转折或结论；禁止整句当关键词，禁止互相包含、语义重复或在原句中彼此相邻。每一段至少保留 1 个关键词。",
       "不得改写字幕原文，不得改变字幕时间戳。",
       "必须遵守下面的项目 skill 规则：",
       timelineSkillRules,
@@ -1435,8 +1468,8 @@ export function createKineticTextService({
         const response = await modelRouter.generateWithProvider(candidate, [
           { role: "system", content: systemPrompt },
           { role: "system", content: keywordsOnly
-            ? "只返回 JSON 数组，每项包含 id 和 keywords（1-3 个原句里的重点词）。不要解释。"
-            : "只返回 JSON 数组，每项包含 id、keywords（1-3 个重点词）和 lineBreaks（建议换行的字符索引数组）。不要解释。" },
+            ? "只返回 JSON 数组，每项包含 id 和 keywords（1-2 个原句里的非相邻重点词）。不要解释。"
+            : "只返回 JSON 数组，每项包含 id、keywords（1-2 个非相邻重点词）和 lineBreaks（建议换行的字符索引数组）。不要解释。" },
           { role: "user", content: JSON.stringify(project.segments.map(({ id, text }) => ({ id, text }))) },
         ], { temperature: 0.2, maxTokens: 1800 });
         const text = String(response.content || "").replace(/^```json\s*/i, "").replace(/```$/i, "").trim();
