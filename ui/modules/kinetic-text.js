@@ -380,6 +380,285 @@ function drawLegacyPreview() {
   $("#kineticDuration").textContent = formatTime(duration);
 }
 
+function previewOutputSize(aspectRatio = "9:16") {
+  if (aspectRatio === "16:9") return { canvasWidth: 960, canvasHeight: 540, outputWidth: 1920, outputHeight: 1080 };
+  if (aspectRatio === "1:1") return { canvasWidth: 640, canvasHeight: 640, outputWidth: 1080, outputHeight: 1080 };
+  return { canvasWidth: 540, canvasHeight: 960, outputWidth: 1080, outputHeight: 1920 };
+}
+
+function previewWords(segment) {
+  const timed = Array.isArray(segment?.words) ? segment.words.filter((word) => word?.text) : [];
+  if (timed.length) return timed;
+  const text = String(segment?.text || "");
+  const tokens = text.includes(" ") ? text.split(/\s+/).filter(Boolean) : (text.match(/[A-Za-z0-9%]+|[\u4e00-\u9fff]|[^\s]/g) || []);
+  const duration = Math.max(0.1, Number(segment?.end || 0) - Number(segment?.start || 0));
+  return tokens.map((token, index) => ({
+    text: token,
+    start: Number(segment.start || 0) + duration * index / Math.max(1, tokens.length),
+    end: Number(segment.start || 0) + duration * (index + 1) / Math.max(1, tokens.length),
+    estimated: true,
+  }));
+}
+
+function previewWordGroups(words, sourceText = "") {
+  const groups = [];
+  let current = [];
+  let chars = 0;
+  words.forEach((word) => {
+    const size = Math.max(1, [...String(word.text || "")].length);
+    if (current.length >= 5 || (current.length >= 2 && chars + size > 8)) {
+      groups.push(current);
+      current = [];
+      chars = 0;
+    }
+    current.push(word);
+    chars += size;
+  });
+  if (current.length) groups.push(current);
+  const separator = String(sourceText).includes(" ") ? " " : "";
+  return groups.map((group) => ({ words: group, text: group.map((word) => word.text).join(separator), start: group[0].start, end: group[group.length - 1].end }));
+}
+
+function roundRectPath(ctx, x, y, width, height, radius) {
+  const r = Math.min(radius, width / 2, height / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + width, y, x + width, y + height, r);
+  ctx.arcTo(x + width, y + height, x, y + height, r);
+  ctx.arcTo(x, y + height, x, y, r);
+  ctx.arcTo(x, y, x + width, y, r);
+  ctx.closePath();
+}
+
+function hexToRgba(hex, alpha = 1) {
+  const match = String(hex || "#101216").match(/^#?([0-9a-f]{6})$/i);
+  const value = match ? match[1] : "101216";
+  return `rgba(${parseInt(value.slice(0, 2), 16)},${parseInt(value.slice(2, 4), 16)},${parseInt(value.slice(4, 6), 16)},${alpha})`;
+}
+
+function canvasLines(ctx, text, maxWidth, maxLines = 2) {
+  const source = String(text || "").trim();
+  if (!source) return [];
+  const units = source.includes(" ") ? source.split(/(\s+)/).filter(Boolean) : [...source];
+  const lines = [];
+  let line = "";
+  for (const unit of units) {
+    const next = line + unit;
+    if (line && ctx.measureText(next).width > maxWidth && lines.length < maxLines - 1) {
+      lines.push(line.trim());
+      line = unit.trimStart();
+    } else line = next;
+  }
+  if (line.trim()) lines.push(line.trim());
+  return lines.slice(0, maxLines);
+}
+
+function drawCaptionText(ctx, text, x, y, options = {}) {
+  const fontSize = Number(options.fontSize || 44);
+  const fontFamily = options.fontFamily || "Microsoft YaHei";
+  const weight = options.weight || 800;
+  const maxWidth = options.maxWidth || ctx.canvas.width * 0.82;
+  const maxLines = options.maxLines || 2;
+  const lineHeight = fontSize * (options.lineHeight || 1.22);
+  ctx.save();
+  ctx.font = `${weight} ${fontSize}px ${fontFamily}`;
+  ctx.textAlign = options.align || "center";
+  ctx.textBaseline = "middle";
+  ctx.lineJoin = "round";
+  ctx.globalAlpha = options.alpha ?? 1;
+  if (options.shadow !== false) {
+    ctx.shadowColor = "rgba(0,0,0,.5)";
+    ctx.shadowBlur = Math.max(2, fontSize * 0.12);
+    ctx.shadowOffsetY = Math.max(1, fontSize * 0.04);
+  }
+  const lines = canvasLines(ctx, text, maxWidth, maxLines);
+  lines.forEach((line, index) => {
+    const lineY = y + (index - (lines.length - 1) / 2) * lineHeight;
+    if (options.outline !== false) {
+      ctx.strokeStyle = options.outlineColor || "rgba(10,12,16,.88)";
+      ctx.lineWidth = Math.max(1.5, fontSize * 0.055);
+      ctx.strokeText(line, x, lineY);
+    }
+    ctx.fillStyle = options.color || "#fff";
+    ctx.fillText(line, x, lineY);
+  });
+  ctx.restore();
+  return { lines, height: Math.max(lineHeight, lines.length * lineHeight) };
+}
+
+function drawWordRun(ctx, words, currentTime, x, y, options = {}) {
+  const fontSize = Number(options.fontSize || 44);
+  const fontFamily = options.fontFamily || "Microsoft YaHei";
+  const separator = options.sourceText?.includes(" ") ? " " : "";
+  ctx.save();
+  ctx.font = `900 ${fontSize}px ${fontFamily}`;
+  ctx.textBaseline = "middle";
+  ctx.textAlign = "left";
+  const widths = words.map((word, index) => ctx.measureText(word.text + (index < words.length - 1 ? separator : "")).width);
+  let cursor = x - widths.reduce((sum, width) => sum + width, 0) / 2;
+  words.forEach((word, index) => {
+    const active = currentTime >= Number(word.start) && currentTime < Number(word.end);
+    const token = word.text + (index < words.length - 1 ? separator : "");
+    ctx.save();
+    if (active) {
+      const progress = Math.max(0, Math.min(1, (currentTime - Number(word.start)) / Math.max(0.04, Number(word.end) - Number(word.start))));
+      const scale = 1 + Math.sin(progress * Math.PI) * 0.1;
+      ctx.translate(cursor + widths[index] / 2, y);
+      ctx.scale(scale, scale);
+      ctx.translate(-(cursor + widths[index] / 2), -y);
+    }
+    ctx.strokeStyle = "rgba(10,12,16,.88)";
+    ctx.lineWidth = Math.max(1.5, fontSize * 0.055);
+    ctx.fillStyle = active ? options.accent : options.primary;
+    ctx.strokeText(token, cursor, y);
+    ctx.fillText(token, cursor, y);
+    ctx.restore();
+    cursor += widths[index];
+  });
+  ctx.restore();
+}
+
+function drawPreview() {
+  const canvas = $("#kineticPreviewCanvas");
+  if (!canvas) return;
+  const spec = previewOutputSize(state.project?.aspectRatio || "9:16");
+  if (canvas.width !== spec.canvasWidth || canvas.height !== spec.canvasHeight) {
+    canvas.width = spec.canvasWidth;
+    canvas.height = spec.canvasHeight;
+  }
+  const ctx = canvas.getContext("2d");
+  const width = canvas.width;
+  const height = canvas.height;
+  ctx.clearRect(0, 0, width, height);
+  ctx.fillStyle = "#07090d";
+  ctx.fillRect(0, 0, width, height);
+  const media = state.backgroundMedia;
+  if (media && ((media instanceof HTMLImageElement && media.complete) || (media instanceof HTMLVideoElement && media.readyState >= 2))) drawCover(ctx, media, width, height);
+  else {
+    const gradient = ctx.createLinearGradient(0, 0, width, height);
+    gradient.addColorStop(0, "#171b23");
+    gradient.addColorStop(1, "#07090d");
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, width, height);
+  }
+  $("#kineticPreviewEmpty").hidden = Boolean(state.project);
+  if (!state.project) return;
+
+  const template = effectById(state.project.effectId);
+  const params = state.project.effectParams || {};
+  const segmentIndex = state.project.segments.findIndex((item) => state.currentTime >= item.start && state.currentTime <= item.end);
+  const segment = state.project.segments[segmentIndex];
+  if (segment && template) {
+    const scale = width / spec.outputWidth;
+    const overrides = segment.overrides || {};
+    const x = width * Number(overrides.x ?? params.x ?? 50) / 100;
+    const y = height * Number(overrides.y ?? params.y ?? 64) / 100;
+    const fontSize = Math.max(20, Number(overrides.fontSize || params.fontSize || 88) * scale);
+    const primary = overrides.primaryColor || params.primaryColor || template.primary || "#fff";
+    const accent = overrides.accentColor || params.accentColor || template.accent || "#ffd84d";
+    const fontFamily = params.fontFamily || "Microsoft YaHei";
+    const maxLines = Number(params.maxLines || 2);
+    const words = previewWords(segment);
+    const groups = previewWordGroups(words, segment.text);
+    const localProgress = Math.max(0, Math.min(1, (state.currentTime - segment.start) / Math.max(0.1, segment.end - segment.start)));
+    const enter = Math.min(1, (state.currentTime - segment.start) / 0.16);
+
+    if (template.renderMode === "rolling-focus") {
+      const gap = fontSize * 1.5;
+      [segmentIndex - 1, segmentIndex, segmentIndex + 1].forEach((index) => {
+        const row = state.project.segments[index];
+        if (!row) return;
+        const delta = index - segmentIndex;
+        const current = delta === 0;
+        drawCaptionText(ctx, `${current ? "▶  " : ""}${row.text}`, x, y + delta * gap + (1 - enter) * gap * 0.18, {
+          fontSize: current ? fontSize : fontSize * 0.63,
+          fontFamily,
+          color: current ? primary : (template.muted || "#7b8493"),
+          maxWidth: width * 0.82,
+          maxLines: current ? 2 : 1,
+          alpha: current ? 1 : 0.48,
+          outline: current && params.outlineEnabled !== false,
+          shadow: current && params.shadowEnabled !== false,
+        });
+      });
+    } else if (template.renderMode === "word-highlight") {
+      const activeGroup = groups.find((group) => state.currentTime >= group.start && state.currentTime <= group.end) || groups[0];
+      drawWordRun(ctx, activeGroup?.words || words, state.currentTime, x, y, { fontSize, fontFamily, primary, accent, sourceText: segment.text });
+    } else if (template.renderMode === "karaoke-sweep") {
+      const text = segment.text;
+      drawCaptionText(ctx, text, x, y, { fontSize, fontFamily, color: primary, maxWidth: width * 0.84, maxLines });
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(width * 0.08, 0, width * 0.84 * localProgress, height);
+      ctx.clip();
+      drawCaptionText(ctx, text, x, y, { fontSize, fontFamily, color: accent, maxWidth: width * 0.84, maxLines });
+      ctx.restore();
+    } else if (template.renderMode === "center-statement") {
+      drawCaptionText(ctx, segment.text, x, y + (1 - enter) * fontSize * 0.25, { fontSize, fontFamily, color: primary, maxWidth: width * 0.78, maxLines, alpha: enter, outline: false, shadow: params.shadowEnabled !== false });
+    } else if (template.renderMode === "keyword-emphasis") {
+      drawCaptionText(ctx, segment.text, x, y, { fontSize, fontFamily, color: primary, maxWidth: width * 0.82, maxLines });
+      const active = words.find((word) => state.currentTime >= word.start && state.currentTime < word.end && (segment.keywords || []).some((keyword) => String(keyword).includes(word.text) || String(word.text).includes(keyword)));
+      if (active) drawCaptionText(ctx, active.text, x, Math.min(height * 0.88, y + fontSize * 1.22), { fontSize: fontSize * 1.16, fontFamily, color: accent, maxLines: 1 });
+    } else if (template.renderMode === "phrase-pop") {
+      const activeGroup = groups.find((group) => state.currentTime >= group.start && state.currentTime <= group.end) || groups[0];
+      const groupText = activeGroup?.text || segment.text;
+      drawCaptionText(ctx, groupText, x, y + (1 - enter) * fontSize * 0.3, { fontSize: fontSize * (0.92 + enter * 0.08), fontFamily, color: (segment.keywords || []).some((keyword) => groupText.includes(keyword)) ? accent : primary, maxWidth: width * 0.84, maxLines: 2 });
+    } else if (template.renderMode === "dialogue-two-line") {
+      ctx.save();
+      ctx.font = `800 ${fontSize}px ${fontFamily}`;
+      const lines = canvasLines(ctx, segment.text, width * 0.72, 2);
+      const cardHeight = Math.max(fontSize * 2.2, lines.length * fontSize * 1.25 + fontSize * 0.8);
+      const cardWidth = width * 0.82;
+      roundRectPath(ctx, x - cardWidth / 2, y - cardHeight / 2, cardWidth, cardHeight, fontSize * 0.28);
+      ctx.fillStyle = hexToRgba("#0d1118", Number(params.backgroundOpacity ?? 78) / 100);
+      ctx.fill();
+      ctx.restore();
+      drawCaptionText(ctx, segment.speaker || `讲述 ${segmentIndex + 1}`, x - width * 0.37, y - cardHeight * 0.68, { fontSize: fontSize * 0.43, fontFamily, color: accent, align: "left", maxLines: 1, outline: false });
+      drawCaptionText(ctx, segment.text, x, y, { fontSize, fontFamily, color: primary, maxWidth: width * 0.72, maxLines: 2, outline: false });
+    } else if (template.renderMode === "documentary-minimal") {
+      drawCaptionText(ctx, segment.text, x, y, { fontSize, fontFamily, weight: 500, color: primary, maxWidth: width * 0.76, maxLines, outline: false, shadow: true, alpha: Math.min(1, enter * 1.2) });
+    } else if (template.renderMode === "caption-card") {
+      ctx.save();
+      ctx.font = `800 ${fontSize}px ${fontFamily}`;
+      const lines = canvasLines(ctx, segment.text, width * 0.68, maxLines);
+      const widest = Math.max(...lines.map((line) => ctx.measureText(line).width), fontSize * 4);
+      const cardWidth = Math.min(width * 0.84, widest + fontSize * 1.05);
+      const cardHeight = lines.length * fontSize * 1.24 + fontSize * 0.72;
+      roundRectPath(ctx, x - cardWidth / 2, y - cardHeight / 2, cardWidth, cardHeight, fontSize * 0.3);
+      ctx.fillStyle = hexToRgba("#101216", Number(params.backgroundOpacity ?? 74) / 100);
+      ctx.fill();
+      ctx.restore();
+      drawCaptionText(ctx, segment.text, x, y, { fontSize, fontFamily, color: primary, maxWidth: width * 0.68, maxLines, outline: false });
+    } else if (template.renderMode === "keyword-tags") {
+      drawCaptionText(ctx, segment.text, x, y - fontSize * 0.38, { fontSize, fontFamily, color: primary, maxWidth: width * 0.82, maxLines });
+      const tags = (segment.keywords || []).slice(0, 3);
+      ctx.save();
+      ctx.font = `800 ${fontSize * 0.45}px ${fontFamily}`;
+      const tagWidths = tags.map((tag) => ctx.measureText(tag).width + fontSize * 0.65);
+      let cursor = x - (tagWidths.reduce((sum, value) => sum + value, 0) + Math.max(0, tags.length - 1) * fontSize * 0.18) / 2;
+      tags.forEach((tag, index) => {
+        const tagWidth = tagWidths[index];
+        const tagHeight = fontSize * 0.72;
+        roundRectPath(ctx, cursor, y + fontSize * 0.72, tagWidth, tagHeight, tagHeight / 2);
+        ctx.fillStyle = accent;
+        ctx.fill();
+        ctx.fillStyle = "#101216";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(tag, cursor + tagWidth / 2, y + fontSize * 1.08);
+        cursor += tagWidth + fontSize * 0.18;
+      });
+      ctx.restore();
+    }
+
+    if (state.project.showBottomSubtitles) drawCaptionText(ctx, segment.text, width / 2, height * 0.94, { fontSize: Math.max(18, fontSize * 0.48), fontFamily, color: "#fff", maxWidth: width * 0.84, maxLines: 2 });
+  }
+  const duration = Math.max(0.01, Number(state.project.duration || 0));
+  $("#kineticPreviewSeek").value = String(Math.round((state.currentTime / duration) * 1000));
+  $("#kineticCurrentTime").textContent = formatTime(state.currentTime);
+  $("#kineticDuration").textContent = formatTime(duration);
+}
+
 function previewTick(timestamp) {
   if (!state.playing || !state.project) return;
   if (state.audio && !state.audio.paused) state.currentTime = state.audio.currentTime;
