@@ -3259,8 +3259,48 @@ function ttsAlignmentStatusLabel(status = "") {
   }[status] || "等待补做字幕校准";
 }
 
+function ttsHasAlignmentPayload(job = {}) {
+  const metadata = job.metadata && typeof job.metadata === "object" ? job.metadata : {};
+  const text = String(
+    job.final_text
+    || job.recognized_text
+    || job.original_text
+    || metadata.final_text
+    || metadata.recognized_text
+    || metadata.original_text
+    || job.text
+    || "",
+  ).trim();
+  if (!text) return false;
+  const hasTimeline = [job.word_timeline, job.sentence_timeline, job.subtitle_timeline, metadata.word_timeline, metadata.sentence_timeline, metadata.subtitle_timeline]
+    .some((timeline) => Array.isArray(timeline) && timeline.length > 0);
+  const hasSubtitleFiles = [job.script_path, job.subtitle_path, job.timestamped_text_path, metadata.script_path, metadata.subtitle_path, metadata.timestamped_text_path]
+    .some((filePath) => String(filePath || "").trim());
+  return hasTimeline || hasSubtitleFiles;
+}
+
+function ttsAlignmentDisplayStatus(job = {}) {
+  const status = String(job.alignment_status || job.metadata?.alignment_status || "");
+  return status === "not_required" && ttsHasAlignmentPayload(job) ? "review_required" : status;
+}
+
+function ttsNeedsAlignment(job = {}) {
+  return ttsAlignmentDisplayStatus(job) !== "not_required";
+}
+
+function ttsIsMusicJob(job = {}) {
+  const metadata = job.metadata && typeof job.metadata === "object" ? job.metadata : {};
+  const source = String(job.source || metadata.source || "").toLowerCase();
+  const assetKind = String(job.asset_kind || metadata.asset_kind || "").toLowerCase();
+  return source === "minimax_music"
+    || assetKind.includes("music")
+    || String(job.voice_id || "").startsWith("music:")
+    || String(job.emotion || "").toLowerCase() === "music";
+}
+
 function ttsJobStatusLabel(job = {}) {
-  if (job.status === "completed" && job.alignment_status) return ttsAlignmentStatusLabel(job.alignment_status);
+  const alignmentStatus = ttsAlignmentDisplayStatus(job);
+  if (job.status === "completed" && alignmentStatus) return ttsAlignmentStatusLabel(alignmentStatus);
   return ttsStatusLabel(job.status);
 }
 
@@ -3292,7 +3332,7 @@ function hideTtsMainProgress() {
 function updateTtsMainProgressFromJob(job = {}) {
   const value = ttsProgressValue(job);
   const label = job.stage || job.metadata?.stage || (job.status === "completed"
-    ? ttsAlignmentStatusLabel(job.alignment_status)
+    ? ttsAlignmentStatusLabel(ttsAlignmentDisplayStatus(job))
     : job.status === "failed"
       ? "生成失败"
       : job.status === "processing"
@@ -3307,7 +3347,7 @@ function renderTtsRail(job = activeTtsRailJob) {
   const progress = Math.max(0, Math.min(100, ttsProgressValue(job)));
   const textPreview = String(job.final_text || job.recognized_text || job.text || ttsText?.value || "").trim().slice(0, 72);
   const title = ttsJobTitle(job);
-  const isMusicJob = job.source === "minimax_music" || String(job.voice_id || "").startsWith("music:");
+  const isMusicJob = ttsIsMusicJob(job);
   const mediaLabel = isMusicJob ? "音乐音频" : "TTS 语音";
   const outputLink = job.audio_url
     ? `<a href="${escapeHtml(job.audio_url)}" target="_blank" rel="noreferrer">${isMusicJob ? "音频文件" : "语音文件"}</a>`
@@ -3491,7 +3531,8 @@ function renderTtsJobsEnhanced(jobs = []) {
         ${label}
       </label>
     `).join("");
-    const alignmentStatus = String(job.alignment_status || "");
+    const rawAlignmentStatus = String(job.alignment_status || job.metadata?.alignment_status || "");
+    const alignmentStatus = ttsAlignmentDisplayStatus(job);
     const handoffPanel = job.status === "completed" && alignmentStatus === "confirmed"
       ? `
         <div class="tts-job-handoff">
@@ -3509,7 +3550,7 @@ function renderTtsJobsEnhanced(jobs = []) {
           <small class="tts-job-handoff-status"></small>
         </div>
       `
-      : job.status === "completed" && alignmentStatus !== "not_required"
+      : job.status === "completed" && ttsNeedsAlignment(job)
         ? `
           <div class="tts-job-handoff">
             <div class="tts-job-handoff-head">
@@ -3517,7 +3558,7 @@ function renderTtsJobsEnhanced(jobs = []) {
               <span>${escapeHtml(job.alignment_error || "确认最终文案和时间轴后才能发送到生产线。")}</span>
             </div>
             <div class="tts-history-actions">
-              ${alignmentStatus === "review_required"
+              ${rawAlignmentStatus === "review_required"
                 ? '<button class="primary small tts-job-calibrate" type="button">检查并确认字幕</button>'
                 : '<button class="primary small tts-job-alignment-retry" type="button">重新识别并校准</button>'}
               <button class="ghost small danger-action tts-job-delete" type="button">不满意，删除</button>
@@ -3864,16 +3905,15 @@ function formatTtsTimelineTime(value = 0) {
 
 function renderTtsAlignmentEditor(job = activeTtsRailJob) {
   if (!ttsAlignmentEditor) return;
-  const isMusicJob = job?.alignment_status === "not_required"
-    || job?.source === "minimax_music"
-    || String(job?.voice_id || "").startsWith("music:");
+  const isMusicJob = ttsIsMusicJob(job) && !ttsNeedsAlignment(job);
   if (!job?.id || isMusicJob) {
     ttsAlignmentEditor.hidden = true;
     return;
   }
   ttsAlignmentEditor.hidden = false;
   ttsAlignmentEditor.dataset.jobId = String(job.id);
-  const status = String(job.alignment_status || "");
+  const rawStatus = String(job.alignment_status || job.metadata?.alignment_status || "");
+  const status = ttsAlignmentDisplayStatus(job);
   const processing = job.status === "processing" || status === "processing" || status === "waiting";
   const finalText = String(job.final_text || job.recognized_text || job.text || "");
   if (ttsOriginalTranscript) ttsOriginalTranscript.value = job.original_text || job.text || "";
@@ -3911,13 +3951,15 @@ function renderTtsAlignmentEditor(job = activeTtsRailJob) {
   }
   if (retryTtsAlignmentBtn) {
     retryTtsAlignmentBtn.disabled = processing;
-    retryTtsAlignmentBtn.textContent = status === "failed" || !status ? "重新识别并校准" : "重新识别音频";
+    retryTtsAlignmentBtn.textContent = rawStatus === "failed" || rawStatus === "not_required" || !rawStatus ? "重新识别并校准" : "重新识别音频";
   }
   if (realignTtsTranscriptBtn) realignTtsTranscriptBtn.disabled = processing || !job.recognized_text;
-  if (confirmTtsAlignmentBtn) confirmTtsAlignmentBtn.disabled = status !== "review_required";
+  if (confirmTtsAlignmentBtn) confirmTtsAlignmentBtn.disabled = rawStatus !== "review_required";
   if (ttsFinalTranscript) ttsFinalTranscript.disabled = processing || !job.recognized_text;
   if (ttsAlignmentStatus) {
-    ttsAlignmentStatus.textContent = status === "failed"
+    ttsAlignmentStatus.textContent = rawStatus === "not_required" && status === "review_required"
+      ? "这条旧记录尚未完成字幕校准，请先点击“重新识别并校准”；确认前不能发送。"
+      : status === "failed"
       ? `校准失败：${job.alignment_error || "请重新识别。"}`
       : status === "confirmed"
         ? `字幕已确认，可发送到所有生产线。确认时间：${job.alignment_confirmed_at || "刚刚"}`
@@ -3982,7 +4024,7 @@ async function confirmActiveTtsAlignment() {
 function showTtsPreview(job) {
   activeTtsRailJob = job;
   ttsPreview.hidden = false;
-  const isMusicJob = job.source === "minimax_music" || String(job.voice_id || "").startsWith("music:");
+  const isMusicJob = ttsIsMusicJob(job);
   ttsPreviewTitle.textContent = ttsJobTitle(job) || `${isMusicJob ? "音频" : "语音"} #${job.id}`;
   ttsPreviewMeta.textContent = isMusicJob
     ? `${job.voice_name || job.voice_id || "MiniMax Music"} · ${String(job.format || "").toUpperCase()}`
@@ -4006,9 +4048,10 @@ async function waitForTtsJob(jobId) {
   updateTtsMainProgressFromJob(job);
   if (job.status === "completed") {
     generateTtsButton.disabled = false;
-    ttsStatus.textContent = job.alignment_status === "confirmed"
+    const alignmentStatus = ttsAlignmentDisplayStatus(job);
+    ttsStatus.textContent = alignmentStatus === "confirmed"
       ? "音频和字幕已确认，可以发送到生产线。"
-      : job.alignment_status === "review_required"
+      : alignmentStatus === "review_required"
         ? "音频与时间轴已生成，请试听、校对并确认字幕。"
         : job.alignment_status === "failed"
           ? `音频已生成，但字幕校准失败：${job.alignment_error || "请重试。"}`

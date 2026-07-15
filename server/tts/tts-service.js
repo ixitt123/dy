@@ -547,7 +547,27 @@ export function createTtsService({
     }, jobChanges);
   }
 
+  function hasAlignmentPayload(job, metadata = safeJson(job?.metadata_json, {})) {
+    const text = String(
+      metadata.final_text
+      || metadata.recognized_text
+      || metadata.original_text
+      || job?.text
+      || "",
+    ).trim();
+    if (!text) return false;
+    const hasTimeline = [metadata.word_timeline, metadata.sentence_timeline, metadata.subtitle_timeline]
+      .some((timeline) => Array.isArray(timeline) && timeline.length > 0);
+    const hasSubtitleFiles = [metadata.script_path, metadata.subtitle_path, metadata.timestamped_text_path]
+      .some((filePath) => String(filePath || "").trim());
+    return hasTimeline || hasSubtitleFiles;
+  }
+
   function requiresAlignment(job, metadata = safeJson(job?.metadata_json, {})) {
+    // Older generated records may be marked as not_required even though they
+    // already contain narration text and subtitle artifacts. Keep those
+    // records behind the same calibration gate as newly generated TTS jobs.
+    if (hasAlignmentPayload(job, metadata)) return true;
     const source = String(metadata.source || "").toLowerCase();
     if (["voice_test", "minimax_music", "generated_preview", "static_preview"].includes(source)) return false;
     if (String(metadata.asset_kind || "").toLowerCase().includes("music")) return false;
