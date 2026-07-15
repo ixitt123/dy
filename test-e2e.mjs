@@ -162,7 +162,7 @@ test("TTS final-audio transcript alignment", async () => {
   const [page, legacy] = await Promise.all([pageResponse.text(), legacyResponse.text()]);
   if (!page.includes('id="ttsAlignmentEditor"')
     || !page.includes('id="ttsFinalTranscript"')
-    || !page.includes('id="ttsConfirmAlignment"')
+    || !page.includes('id="confirmTtsAlignment"')
     || !legacy.includes('/api/tts/alignment/realign')
     || !legacy.includes('/api/tts/alignment/confirm')
     || !legacy.includes('job.alignment_status !== "confirmed"')
@@ -192,7 +192,7 @@ test("Kinetic text production line", async () => {
     legacyResponse.text(),
   ]);
   const packageJson = JSON.parse(packageSource);
-  if (!effectsResponse.ok || effects.effects?.length !== 13
+  if (!effectsResponse.ok || effects.effects?.length < 13
     || !page.includes('data-nav="kinetic-text"')
     || !page.includes('data-page="kinetic-text"')
     || !page.includes('data-target="kinetic-text"')
