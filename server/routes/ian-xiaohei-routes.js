@@ -1252,7 +1252,7 @@ async function buildTimedXiaoheiPlan({
     analysisNote: subtitleSegments?.length
       ? `已按 TTS 返回的字幕时间轴和 ${Number(audioDuration).toFixed(2)} 秒音频生成 ${shots.length} 个连续语义镜头。`
       : `已按 ${Number(audioDuration).toFixed(2)} 秒真实音频生成 ${shots.length} 个连续语义镜头，每段约 3-5 秒。`,
-    timingSource: subtitleSegments?.length ? "tts_provider_subtitle_timeline" : "tts_audio_duration_weighted",
+    timingSource: subtitleSegments?.length ? "tts_confirmed_alignment_timeline" : "tts_audio_duration_weighted",
     audioDuration: Number(audioDuration.toFixed(3)),
     ttsJobId: Number(ttsJobId),
     shots,

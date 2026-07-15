@@ -2928,6 +2928,12 @@ function dashScopeTimestampSeconds(value) {
   return Number.isFinite(milliseconds) && milliseconds >= 0 ? milliseconds / 1000 : null;
 }
 
+function dashScopeConfidence(value) {
+  if (value === null || value === undefined || value === "") return null;
+  const confidence = Number(value);
+  return Number.isFinite(confidence) ? confidence : null;
+}
+
 function normalizeDashScopeSentence(sentence = {}) {
   const text = String(sentence.text || "").trim();
   const start = dashScopeTimestampSeconds(sentence.begin_time ?? sentence.beginTime);
@@ -2943,7 +2949,7 @@ function normalizeDashScopeSentence(sentence = {}) {
         text: wordText,
         start: Number(wordStart.toFixed(3)),
         end: Number(wordEnd.toFixed(3)),
-        confidence: Number.isFinite(Number(word?.confidence)) ? Number(word.confidence) : null,
+        confidence: dashScopeConfidence(word?.confidence),
         source: "audio_asr",
       };
     })
@@ -2952,7 +2958,7 @@ function normalizeDashScopeSentence(sentence = {}) {
     text,
     start: start === null ? (words[0]?.start ?? 0) : Number(start.toFixed(3)),
     end: end === null ? (words.at(-1)?.end ?? words[0]?.end ?? 0) : Number(end.toFixed(3)),
-    confidence: Number.isFinite(Number(sentence.confidence)) ? Number(sentence.confidence) : null,
+    confidence: dashScopeConfidence(sentence.confidence),
     words,
   };
 }
