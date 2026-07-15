@@ -15,6 +15,7 @@ const state = {
   raf: 0,
   saveTimer: 0,
   pollTimer: 0,
+  downloadsDir: "",
   audio: null,
   backgroundMedia: null,
 };
@@ -169,8 +170,67 @@ function renderTimelineRuleStatus() {
     : "时间轴规则已应用：音频、文案、时间戳字幕按同一项目绑定。";
 }
 
-function mediaUrl(kind) {
-  return state.project ? `/api/kinetic-text/file?id=${encodeURIComponent(state.project.id)}&kind=${encodeURIComponent(kind)}&v=${encodeURIComponent(state.project.updatedAt || Date.now())}` : "";
+function mediaUrl(kind, { download = false } = {}) {
+  if (!state.project) return "";
+  const suffix = download ? "&download=1" : "";
+  return `/api/kinetic-text/file?id=${encodeURIComponent(state.project.id)}&kind=${encodeURIComponent(kind)}&v=${encodeURIComponent(state.project.updatedAt || Date.now())}${suffix}`;
+}
+
+function kineticDownloadDirectory() {
+  const base = String(state.downloadsDir || "").replace(/[\\/]+$/, "");
+  return base && state.project ? `${base}\\kinetic-text\\${state.project.id}` : base;
+}
+
+function renderDownloadDirectory() {
+  const container = $("#kineticDownloadPath");
+  if (!container) return;
+  const directory = kineticDownloadDirectory();
+  container.textContent = directory ? `视频保存位置：${directory}` : "尚未设置下载位置";
+  container.title = directory;
+}
+
+function syncGlobalDownloadDirectory(directory) {
+  state.downloadsDir = String(directory || "");
+  const input = document.querySelector("#downloadDirInput");
+  const label = document.querySelector("#savePath");
+  if (input) input.value = state.downloadsDir;
+  if (label) label.textContent = `下载位置：${state.downloadsDir}`;
+  renderDownloadDirectory();
+}
+
+async function chooseKineticDownloadDirectory() {
+  const button = $("#kineticChooseDownloadDir");
+  button.disabled = true;
+  try {
+    const response = await fetch("/api/downloads-dir/choose", { method: "POST" });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.message || "选择下载位置失败");
+    if (!data.ok) {
+      setProgress(state.project?.progress || 0, "已取消选择，下载位置未改变");
+      return;
+    }
+    syncGlobalDownloadDirectory(data.downloadsDir);
+    setProgress(state.project?.progress || 0, "下载位置已更新");
+  } finally {
+    button.disabled = false;
+  }
+}
+
+function triggerVideoDownload() {
+  const link = document.createElement("a");
+  link.href = mediaUrl("video", { download: true });
+  link.download = `${state.project?.title || "字幕视频"}.mp4`;
+  link.hidden = true;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+}
+
+function setRenderButtonBusy(busy) {
+  const button = $("#kineticRenderFinal");
+  if (!button) return;
+  button.disabled = busy;
+  button.textContent = busy ? "正在生成视频…" : "编辑并下载视频";
 }
 
 function syncAudio() {
@@ -764,7 +824,8 @@ function renderOutputs() {
   container.innerHTML = [
     outputs.materialZip ? `<a href="${mediaUrl("package")}" target="_blank">打开素材包 ZIP</a>` : "",
     outputs.srtPath ? `<a href="${mediaUrl("srt")}" target="_blank">打开字幕 SRT</a>` : "",
-    outputs.finalVideo ? `<a class="primary-link" href="${mediaUrl("video")}" target="_blank">播放最终 MP4</a>` : "",
+    outputs.finalVideo ? `<a href="${mediaUrl("video")}" target="_blank">播放最终 MP4</a>` : "",
+    outputs.finalVideo ? `<a class="primary-link" href="${mediaUrl("video", { download: true })}" download>再次下载 MP4</a>` : "",
   ].filter(Boolean).join("");
 }
 
@@ -791,6 +852,7 @@ function renderProject() {
   renderEffects();
   renderTimeline();
   renderTimelineRuleStatus();
+  renderDownloadDirectory();
   if (!project) { drawPreview(); return; }
   $("#kineticTextTitle").value = project.title || "";
   $("#kineticAspectRatio").value = project.aspectRatio || "9:16";
@@ -904,20 +966,39 @@ async function uploadFile(kind, file) {
   renderProject();
 }
 
-async function pollJob(jobId) {
+async function pollJob(jobId, options = {}) {
   clearTimeout(state.pollTimer);
   const data = await jsonFetch(`/api/kinetic-text/job?id=${encodeURIComponent(jobId)}`);
   const job = data.job;
   setProgress(job.progress, job.stage);
   if (job.status === "completed") {
     await refreshProjects(job.projectId);
-    return;
+    if (options.downloadOnComplete && job.type === "render") {
+      triggerVideoDownload();
+      setProgress(100, `视频已保存并开始下载：${kineticDownloadDirectory()}`);
+      setRenderButtonBusy(false);
+    }
+    return job;
   }
   if (job.status === "failed") {
     setProgress(job.progress || 0, `${job.stage}：${job.error}`);
-    return;
+    if (options.downloadOnComplete) setRenderButtonBusy(false);
+    return job;
   }
-  state.pollTimer = setTimeout(() => pollJob(jobId).catch((error) => setProgress(job.progress, error.message)), 1000);
+  state.pollTimer = setTimeout(() => pollJob(jobId, options).catch((error) => {
+    setProgress(job.progress, error.message);
+    if (options.downloadOnComplete) setRenderButtonBusy(false);
+  }), 1000);
+}
+
+async function saveProjectImmediately() {
+  if (!state.project) return null;
+  clearTimeout(state.saveTimer);
+  const data = await postJson("/api/kinetic-text/update", { projectId: state.project.id, changes: state.project });
+  state.project = data.project;
+  const index = state.projects.findIndex((item) => item.id === state.project.id);
+  if (index >= 0) state.projects[index] = state.project;
+  return state.project;
 }
 
 async function receiveTts(payload) {
@@ -1106,10 +1187,24 @@ function bindEvents() {
     const data = await postJson("/api/kinetic-text/materials", { projectId: state.project.id });
     pollJob(data.job.id).catch((error) => setProgress(0, error.message));
   });
+  $("#kineticChooseDownloadDir").addEventListener("click", () => {
+    chooseKineticDownloadDirectory().catch((error) => setProgress(state.project?.progress || 0, error.message));
+  });
   $("#kineticRenderFinal").addEventListener("click", async () => {
     if (!state.project) return;
-    const data = await postJson("/api/kinetic-text/render", { projectId: state.project.id });
-    pollJob(data.job.id).catch((error) => setProgress(0, error.message));
+    setRenderButtonBusy(true);
+    setProgress(3, "保存当前编辑");
+    try {
+      await saveProjectImmediately();
+      const data = await postJson("/api/kinetic-text/render", { projectId: state.project.id });
+      pollJob(data.job.id, { downloadOnComplete: true }).catch((error) => {
+        setRenderButtonBusy(false);
+        setProgress(0, error.message);
+      });
+    } catch (error) {
+      setRenderButtonBusy(false);
+      setProgress(0, error.message);
+    }
   });
   window.addEventListener("kinetic-text-handoff", (event) => receiveTts(event.detail).catch((error) => setProgress(0, error.message)));
   window.addEventListener("kinetic-text-text-handoff", (event) => receiveText(event.detail).catch((error) => setProgress(0, error.message)));
@@ -1118,11 +1213,13 @@ function bindEvents() {
 export async function initKineticTextModule() {
   state.page = document.querySelector("#kineticTextPage");
   if (!state.page) return;
-  const [effectsData, providersData] = await Promise.all([
+  const [effectsData, providersData, statusData] = await Promise.all([
     jsonFetch("/api/kinetic-text/effects"),
     jsonFetch("/api/kinetic-text/providers").catch(() => ({ providers: [] })),
+    jsonFetch("/api/status").catch(() => ({ downloadsDir: "" })),
   ]);
   state.effects = effectsData.effects || [];
+  syncGlobalDownloadDirectory(statusData.downloadsDir || "");
   const providerSelect = $("#kineticTextProvider");
   const preferences = readPreferences();
   providerSelect.innerHTML = '<option value="">自动选择</option>' + (providersData.providers || []).map((item) => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.label || item.id)}</option>`).join("");

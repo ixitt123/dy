@@ -22,12 +22,12 @@ function contentType(filePath) {
   return "application/octet-stream";
 }
 
-function sendFile(res, filePath) {
+function sendFile(res, filePath, { download = false } = {}) {
   const stat = fs.statSync(filePath);
   res.writeHead(200, {
     "Content-Type": contentType(filePath),
     "Content-Length": stat.size,
-    "Content-Disposition": `inline; filename*=UTF-8''${encodeURIComponent(path.basename(filePath))}`,
+    "Content-Disposition": `${download ? "attachment" : "inline"}; filename*=UTF-8''${encodeURIComponent(path.basename(filePath))}`,
     "Cache-Control": "no-store",
   });
   fs.createReadStream(filePath).pipe(res);
@@ -36,6 +36,7 @@ function sendFile(res, filePath) {
 export function createKineticTextRoutes({
   baseDir,
   downloadsDir,
+  getDownloadsDir,
   sendJson,
   modelRouter,
   ffmpegPath,
@@ -45,6 +46,7 @@ export function createKineticTextRoutes({
   const service = createKineticTextService({
     baseDir,
     downloadsDir,
+    getDownloadsDir,
     sendJson,
     modelRouter,
     ffmpegPath,
@@ -114,7 +116,7 @@ export function createKineticTextRoutes({
       if (req.method === "GET" && route === "file") {
         const filePath = service.resolveOutputFile(url.searchParams.get("id"), url.searchParams.get("kind"));
         if (!filePath) sendJson(res, 404, { ok: false, message: "输出文件不存在。" });
-        else sendFile(res, filePath);
+        else sendFile(res, filePath, { download: url.searchParams.get("download") === "1" });
         return true;
       }
       if (req.method === "POST" && route === "create") {

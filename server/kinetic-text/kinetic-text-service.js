@@ -1019,6 +1019,7 @@ function projectPublic(project) {
 export function createKineticTextService({
   baseDir,
   downloadsDir,
+  getDownloadsDir,
   ffmpegPath,
   ffprobePath,
   modelRouter,
@@ -1029,6 +1030,13 @@ export function createKineticTextService({
   const jobs = new Map();
   const timelineSkillRules = loadTimelineSkillRules(baseDir);
   fs.mkdirSync(projectsDir, { recursive: true });
+
+  function activeDownloadsDir() {
+    const configured = typeof getDownloadsDir === "function" ? getDownloadsDir() : downloadsDir;
+    const resolved = path.resolve(String(configured || downloadsDir || path.join(baseDir, "downloads")));
+    fs.mkdirSync(resolved, { recursive: true });
+    return resolved;
+  }
 
   function projectDir(id) {
     return path.join(projectsDir, String(id || ""));
@@ -1304,7 +1312,7 @@ export function createKineticTextService({
       const { width, height } = resolutionForProject(project);
       const frameRate = frameRateForProject(project);
       const duration = Math.max(project.duration, hasTtsAudio ? await probeDuration(project.audioPath) : 0, 0.5);
-      const outputDir = path.join(downloadsDir, "kinetic-text", project.id);
+      const outputDir = path.join(activeDownloadsDir(), "kinetic-text", project.id);
       fs.mkdirSync(outputDir, { recursive: true });
       const assPath = project.outputs.assPath;
       const outputPath = path.join(outputDir, `${safeFileName(project.title, project.id)}.mp4`);

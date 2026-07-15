@@ -196,6 +196,7 @@ const handleIanXiaoheiRoutes = createIanXiaoheiRoutes({
 const handleKineticTextRoutes = createKineticTextRoutes({
   baseDir: __dirname,
   downloadsDir,
+  getDownloadsDir: () => downloadsDir,
   sendJson,
   modelRouter,
   ffmpegPath,

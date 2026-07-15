@@ -10018,6 +10018,31 @@ audio {
   font-size: 12px;
 }
 
+.kinetic-download-location {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 9px;
+  padding: 8px 10px;
+  border: 1px solid #29354a;
+  border-radius: 8px;
+  background: #0c121c;
+}
+
+.kinetic-download-location span {
+  min-width: 0;
+  overflow: hidden;
+  color: #9eabc0;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kinetic-download-location button {
+  flex: 0 0 auto;
+}
+
 .kinetic-outputs {
   display: flex;
   gap: 8px;
