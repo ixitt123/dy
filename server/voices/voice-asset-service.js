@@ -1030,6 +1030,7 @@ export function createVoiceAssetService({ baseDir, taskStore, ttsService, getSet
         volume: 50,
         pitch: 1,
         format: "mp3",
+        source: "voice_test",
       });
       if (queued.error) return { error: queued.error, tests: created };
       created.push(taskStore.createVoiceTest({

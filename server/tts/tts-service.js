@@ -715,6 +715,185 @@ export function createTtsService({
     return "";
   }
 
+  async function processAlignment(jobId, { finalText = "", reuseRecognition = false } = {}) {
+    const numericId = Number(jobId || 0);
+    const initial = taskStore.getTtsJob(numericId);
+    if (!initial) return { error: "没有找到这条语音任务。" };
+    if (!initial.audio_path || !fs.existsSync(initial.audio_path)) return { error: "最终音频文件不存在。" };
+    if (alignmentRunning.has(numericId)) return { job: publicJob(initial), running: true };
+    alignmentRunning.add(numericId);
+    let currentProgress = 15;
+    try {
+      const initialMetadata = safeJson(initial.metadata_json, {});
+      const audioDuration = probeAudioDurationSync(initial.audio_path)
+        || Number(initialMetadata.audio_duration || initialMetadata.duration || 0)
+        || 0;
+      if (audioDuration <= 0) throw new Error("无法读取最终音频时长，不能生成同步字幕。");
+      setJobProgress(numericId, 10, "读取最终音频信息", {
+        alignment_status: "processing",
+        alignment_error: "",
+        audio_duration: audioDuration,
+        original_text: initialMetadata.original_text || initial.text,
+      }, { status: "processing", error: "" });
+
+      let recognizedText = reuseRecognition ? String(initialMetadata.recognized_text || "").trim() : "";
+      let recognizedWords = reuseRecognition && Array.isArray(initialMetadata.recognized_word_timeline)
+        ? initialMetadata.recognized_word_timeline
+        : [];
+      let recognizedSentences = reuseRecognition && Array.isArray(initialMetadata.recognized_sentence_timeline)
+        ? initialMetadata.recognized_sentence_timeline
+        : [];
+      if (!recognizedText) {
+        if (typeof transcribeFinalAudio !== "function") throw new Error("最终音频识别服务不可用。");
+        let lastMappedProgress = -1;
+        const transcription = await transcribeFinalAudio(initial.audio_path, (progress = {}) => {
+          const raw = Math.max(0, Math.min(100, Number(progress.percent || 0)));
+          const mapped = Math.max(15, Math.min(40, Math.round(15 + raw * 0.25)));
+          if (mapped === lastMappedProgress) return;
+          lastMappedProgress = mapped;
+          currentProgress = mapped;
+          setJobProgress(numericId, mapped, progress.message || "重新识别实际朗读内容", {
+            alignment_status: "processing",
+          }, { status: "processing" });
+        });
+        recognizedText = String(typeof transcription === "string" ? transcription : transcription?.text || "").trim();
+        recognizedWords = Array.isArray(transcription?.words) ? transcription.words : [];
+        recognizedSentences = Array.isArray(transcription?.sentences) ? transcription.sentences : [];
+      }
+      if (!recognizedText) throw new Error("最终音频没有识别到可用文案。");
+
+      currentProgress = 40;
+      setJobProgress(numericId, 40, "语音识别完成，正在强制对齐", {
+        alignment_status: "processing",
+        recognized_text: recognizedText,
+        recognized_word_timeline: recognizedWords,
+        recognized_sentence_timeline: recognizedSentences,
+      }, { status: "processing" });
+      const aligned = alignTranscriptToAudio({
+        text: String(finalText || recognizedText).trim(),
+        recognizedText,
+        recognizedWords,
+        recognizedSentences,
+        duration: audioDuration,
+      });
+
+      currentProgress = 70;
+      setJobProgress(numericId, 70, "逐字/逐词时间轴完成", {
+        word_timeline: aligned.wordTimeline,
+        estimated_count: aligned.estimatedCount,
+        low_confidence_count: aligned.lowConfidenceCount,
+        match_ratio: aligned.matchRatio,
+      }, { status: "processing" });
+      currentProgress = 82;
+      setJobProgress(numericId, 82, "逐句时间轴完成，正在生成 SRT", {
+        sentence_timeline: aligned.sentenceTimeline,
+        subtitle_timeline: aligned.sentenceTimeline,
+      }, { status: "processing" });
+      const latest = taskStore.getTtsJob(numericId);
+      const latestMetadata = safeJson(latest?.metadata_json, {});
+      const sequenceNumber = Number(latestMetadata.sequence_number || 0) || ttsSequenceNumber(latest) || numericId;
+      const fileBaseName = String(latestMetadata.file_base_name || "").trim() || ttsFileBaseName(sequenceNumber);
+      const files = writeAlignedTextFiles({
+        directory: subtitleDir,
+        job: latest,
+        finalText: aligned.finalText,
+        sentenceTimeline: aligned.sentenceTimeline,
+        wordTimeline: aligned.wordTimeline,
+        fileBaseName,
+        title: latestMetadata.title || latestMetadata.seo_title || "",
+      });
+
+      currentProgress = 90;
+      setJobProgress(numericId, 90, "正在检查字幕时间戳", files, { status: "processing" });
+      const validation = validateAlignment({
+        text: aligned.finalText,
+        wordTimeline: aligned.wordTimeline,
+        sentenceTimeline: aligned.sentenceTimeline,
+        duration: audioDuration,
+      });
+      if (!validation.valid) throw new Error(`字幕时间轴检查失败：${validation.errors.join("；")}`);
+
+      currentProgress = 96;
+      setJobProgress(numericId, 96, "字幕检查完成", {
+        alignment_validation: validation,
+      }, { status: "processing" });
+      const revision = Number(latestMetadata.alignment_revision || 0) + 1;
+      const completed = setJobProgress(numericId, 100, "等待用户确认字幕", {
+        ...files,
+        original_text: initialMetadata.original_text || initial.text,
+        tts_prepared_text: initialMetadata.tts_prepared_text || initialMetadata.prepared_text || initial.text,
+        recognized_text: recognizedText,
+        recognized_word_timeline: recognizedWords,
+        recognized_sentence_timeline: recognizedSentences,
+        final_text: aligned.finalText,
+        word_timeline: aligned.wordTimeline,
+        sentence_timeline: aligned.sentenceTimeline,
+        subtitle_timeline: aligned.sentenceTimeline,
+        subtitle_source: aligned.source,
+        estimated_count: aligned.estimatedCount,
+        low_confidence_count: aligned.lowConfidenceCount,
+        match_ratio: aligned.matchRatio,
+        alignment_validation: validation,
+        alignment_status: "review_required",
+        alignment_confirmed_at: "",
+        alignment_error: "",
+        alignment_revision: revision,
+        alignment_completed_at: new Date().toISOString(),
+        audio_duration: audioDuration,
+      }, { status: "completed", error: "", completed_at: new Date().toISOString() });
+      return { job: publicJob(completed) };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      const failed = setJobProgress(numericId, currentProgress, "字幕校准失败", {
+        alignment_status: "failed",
+        alignment_error: message,
+      }, { status: "completed", error: "", completed_at: new Date().toISOString() });
+      return { error: message, job: publicJob(failed) };
+    } finally {
+      alignmentRunning.delete(numericId);
+    }
+  }
+
+  function retryAlignment(id) {
+    const job = taskStore.getTtsJob(Number(id || 0));
+    if (!job) return { error: "没有找到这条语音任务。" };
+    if (!job.audio_path || !fs.existsSync(job.audio_path)) return { error: "最终音频文件不存在。" };
+    if (alignmentRunning.has(job.id)) return { job: publicJob(job), running: true };
+    processAlignment(job.id, { reuseRecognition: false }).catch(() => {});
+    return { job: publicJob(taskStore.getTtsJob(job.id)) };
+  }
+
+  async function realignJob(id, text) {
+    const job = taskStore.getTtsJob(Number(id || 0));
+    if (!job) return { error: "没有找到这条语音任务。" };
+    if (!String(text || "").trim()) return { error: "最终文案不能为空。" };
+    return processAlignment(job.id, { finalText: String(text).trim(), reuseRecognition: true });
+  }
+
+  async function confirmAlignment(id) {
+    const job = taskStore.getTtsJob(Number(id || 0));
+    if (!job) return { error: "没有找到这条语音任务。" };
+    const metadata = safeJson(job.metadata_json, {});
+    if (job.status !== "completed" || metadata.alignment_status !== "review_required") {
+      if (metadata.alignment_status === "confirmed") return { job: publicJob(job) };
+      return { error: "字幕尚未完成校准，不能确认发送。" };
+    }
+    const validation = validateAlignment({
+      text: metadata.final_text,
+      wordTimeline: metadata.word_timeline,
+      sentenceTimeline: metadata.sentence_timeline,
+      duration: metadata.audio_duration,
+    });
+    if (!validation.valid) return { error: `字幕时间轴检查失败：${validation.errors.join("；")}` };
+    const confirmed = setJobProgress(job.id, 100, "字幕已确认，可以发送", {
+      alignment_status: "confirmed",
+      alignment_confirmed_at: new Date().toISOString(),
+      alignment_validation: validation,
+    }, { status: "completed", error: "" });
+    await Promise.resolve(onJobCompleted(confirmed));
+    return { job: publicJob(confirmed) };
+  }
+
   async function processJob(jobId) {
     const job = taskStore.getTtsJob(jobId);
     if (!job) return;
@@ -728,13 +907,18 @@ export function createTtsService({
       return;
     }
 
-    taskStore.updateTtsJob(job.id, { status: "processing", error: "" });
     const prepared = prepareScript(job.text);
     const jobMetadata = safeJson(job.metadata_json, {});
     const titleMetadata = ttsTitleMetadata(prepared.text, jobMetadata);
     const sequenceNumber = Number(jobMetadata.sequence_number || 0) || ttsSequenceNumber(job) || Number(job.id || 0);
     const fileBaseName = String(jobMetadata.file_base_name || "").trim() || ttsFileBaseName(sequenceNumber);
     const outputPath = path.join(outputDir, `${fileBaseName}.${job.format === "wav" ? "wav" : "mp3"}`);
+    setJobProgress(job.id, 5, "正在生成最终 TTS 音频", {
+      original_text: job.text,
+      tts_prepared_text: prepared.text,
+      alignment_status: requiresAlignment(job, jobMetadata) ? "waiting" : "not_required",
+      alignment_error: "",
+    }, { status: "processing", error: "" });
     const result = await provider.generateSpeech({
       text: prepared.text,
       voiceId: job.voice_id,
@@ -761,6 +945,10 @@ export function createTtsService({
         metadata_json: JSON.stringify({
           ...jobMetadata,
           ...prepared.metadata,
+          original_text: job.text,
+          tts_prepared_text: prepared.text,
+          progress: 5,
+          stage: "TTS 音频生成失败",
           provider_detail: failureDetail,
         }),
         completed_at: new Date().toISOString(),
@@ -768,8 +956,37 @@ export function createTtsService({
       return;
     }
 
-    const probedDuration = probeAudioDurationSync(result.audio_path || outputPath);
+    const resolvedAudioPath = result.audio_path || outputPath;
+    const probedDuration = probeAudioDurationSync(resolvedAudioPath);
     const audioDuration = result.duration || probedDuration || resultDuration(result);
+    const baseMetadata = {
+      ...jobMetadata,
+      ...prepared.metadata,
+      ...(result.metadata || {}),
+      ...titleMetadata,
+      sequence_number: sequenceNumber,
+      file_base_name: fileBaseName,
+      original_text: job.text,
+      tts_prepared_text: prepared.text,
+      audio_duration: audioDuration,
+    };
+    if (requiresAlignment(job, baseMetadata)) {
+      taskStore.updateTtsJob(job.id, {
+        audio_path: resolvedAudioPath,
+        status: "processing",
+        error: "",
+        metadata_json: JSON.stringify({
+          ...baseMetadata,
+          progress: 10,
+          stage: "读取最终音频信息",
+          alignment_status: "processing",
+          alignment_error: "",
+        }),
+      });
+      await processAlignment(job.id, { reuseRecognition: false });
+      return;
+    }
+
     const timedText = writeTimedTextFiles({
       directory: subtitleDir,
       job,
@@ -788,17 +1005,15 @@ export function createTtsService({
     });
 
     taskStore.updateTtsJob(job.id, {
-      audio_path: result.audio_path,
+      audio_path: resolvedAudioPath,
       status: "completed",
       error: "",
       metadata_json: JSON.stringify({
-        ...jobMetadata,
-        ...prepared.metadata,
-        ...(result.metadata || {}),
-        ...titleMetadata,
-        sequence_number: sequenceNumber,
-        file_base_name: fileBaseName,
+        ...baseMetadata,
         ...timedText,
+        alignment_status: "not_required",
+        progress: 100,
+        stage: "生成完成",
       }),
       completed_at: new Date().toISOString(),
     });
@@ -858,6 +1073,10 @@ export function createTtsService({
         selected_for_project: false,
         workflow_auto_director: input.workflow_auto_director !== false,
         default_voice_fallback: voiceSelection.usedFallback,
+        original_text: String(input.text || "").trim(),
+        progress: 0,
+        stage: "等待处理",
+        alignment_status: "waiting",
       }),
     });
     if (Number(input.voice_asset_id || 0) > 0) taskStore.recordVoiceUse(Number(input.voice_asset_id));
