@@ -102,6 +102,37 @@ function estimatedWordsFromText(text = "", duration = 0) {
   }));
 }
 
+function scriptTokenWeight(token = "") {
+  const value = String(token || "");
+  if (!value.trim()) return 0.2;
+  if (/[\p{Script=Han}]/u.test(value)) return 1;
+  if (/[\p{Letter}]/u.test(value)) return Math.max(1.2, Math.min(4, value.length * 0.55));
+  if (/[\p{Number}]/u.test(value)) return Math.max(1, Math.min(3, value.length * 0.45));
+  return 0.28;
+}
+
+function scriptLockedWordsFromText(text = "", duration = 0) {
+  const tokens = tokenizeAlignmentText(text);
+  if (!tokens.length) return [];
+  const total = Math.max(0.25, finiteNumber(duration, Math.max(0.25, tokens.length * 0.18)));
+  const weights = tokens.map(scriptTokenWeight);
+  const totalWeight = Math.max(1, weights.reduce((sum, value) => sum + value, 0));
+  let cursor = 0;
+  return tokens.map((token, index) => {
+    const start = total * (cursor / totalWeight);
+    cursor += weights[index];
+    const end = total * (cursor / totalWeight);
+    return {
+      text: token,
+      start: roundTime(start),
+      end: roundTime(Math.max(start + 0.01, end)),
+      confidence: null,
+      source: "script_locked_audio_duration",
+      estimated: false,
+    };
+  });
+}
+
 function lcsMatches(left, right) {
   const n = left.length;
   const m = right.length;
@@ -301,6 +332,34 @@ export function alignTranscriptToAudio({
     lowConfidenceCount,
     source,
     matchRatio: Number((matches.length / Math.max(finalMatchTokens.length, anchorMatchTokens.length, 1)).toFixed(4)),
+  };
+}
+
+export function buildScriptLockedAlignment({
+  text = "",
+  duration = 0,
+} = {}) {
+  const finalText = String(text || "").trim();
+  const total = Math.max(0.25, finiteNumber(duration));
+  const finalTokens = tokenizeAlignmentText(finalText);
+  if (!finalTokens.length) throw new Error("Final transcript cannot be empty.");
+  const wordTimeline = normalizeWordTimeline(scriptLockedWordsFromText(finalText, total), total);
+  const sentenceTimeline = sentenceTimelineFromWords(finalText, wordTimeline, total)
+    .map((row) => ({
+      ...row,
+      estimated: false,
+      low_confidence: false,
+      source: "script_locked_audio_duration",
+    }));
+  return {
+    finalText,
+    wordTimeline,
+    sentenceTimeline,
+    estimatedCount: 0,
+    lowConfidenceCount: 0,
+    source: "script_locked_audio_duration",
+    matchRatio: 1,
+    scriptLocked: true,
   };
 }
 

@@ -4,12 +4,12 @@ import { spawnSync } from "node:child_process";
 import { generateSeoTitlePackage } from "../core/title-generator.js";
 import { createTtsProvider } from "./providers/index.js";
 import { redactSecrets } from "./provider-adapter.js";
-import { alignTranscriptToAudio, validateAlignment } from "./alignment.js";
+import { alignTranscriptToAudio, buildScriptLockedAlignment, validateAlignment } from "./alignment.js";
 
 const PROMPT_FILES = ["tts_script_prepare.md", "tts_emotion_prompt.md", "seo_title_generation.md"];
 const ALIGNMENT_AUTO_APPROVE_RATIO = 0.8;
 const ALIGNMENT_MAX_AUTO_RECOGNITION_ATTEMPTS = 3;
-const ALIGNMENT_POLICY_VERSION = "semantic_tokens_auto_retry_80_v2";
+const ALIGNMENT_POLICY_VERSION = "script_locked_auto_confirm_v3";
 
 function safeJson(value, fallback = {}) {
   try {
