@@ -14,27 +14,33 @@ Style: Bottom,Microsoft YaHei,35,&H00FFFFFF,&H00FFFFFF,&H00161210,&H00000000,-1,
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
-Dialogue: 4,0:00:00.00,0:00:00.58,Modern,,0,0,0,,{\an4\bord0\shad0\q2\move(54,960,54,960,0,220)\fs72\b1\1c&H00FFFFFF\alpha&H00&\fad(90,0)}▶ 真正的效率
+Dialogue: 4,0:00:00.00,0:00:00.58,Modern,,0,0,0,,{\an4\bord0\shad0\q2\move(99,960,99,960,0,220)\fs72\b1\1c&H00FFFFFF\alpha&H00&\fad(90,0)}真正的效率
+Dialogue: 5,0:00:00.00,0:00:00.58,Modern,,0,0,0,,{\an4\bord0\shad0\pos(54,960)\fs52\1c&H00FFFFFF\fad(40,0)}▶
 Dialogue: 2,0:00:00.00,0:00:00.58,Modern,,0,0,0,,{\an4\bord0\shad0\q2\move(54,1052,54,1052,0,220)\fs39\b0\1c&H00B7B7B7\alpha&H30&}不是做得更多
 Dialogue: 2,0:00:00.00,0:00:00.58,Modern,,0,0,0,,{\an4\bord0\shad0\q2\move(54,1144,54,1144,0,220)\fs39\b0\1c&H00B7B7B7\alpha&H50&}而是每一步
-Dialogue: 2,0:00:00.58,0:00:01.36,Modern,,0,0,0,,{\an4\bord0\shad0\q2\move(54,960,54,868,0,220)\fs72\b1\1c&H00FFFFFF\alpha&H00&\t(0,220,\fs39\b0\1c&H00B7B7B7\alpha&H30&)}真正的效率
-Dialogue: 4,0:00:00.58,0:00:01.36,Modern,,0,0,0,,{\an4\bord0\shad0\q2\move(54,1052,54,960,0,220)\fs39\b0\1c&H00B7B7B7\alpha&H55&\t(0,220,\fs72\b1\1c&H00FFFFFF\alpha&H00&)}▶ 不是做得更多
+Dialogue: 2,0:00:00.58,0:00:01.36,Modern,,0,0,0,,{\an4\bord0\shad0\q2\move(99,960,54,868,0,220)\fs72\b1\1c&H00FFFFFF\alpha&H00&\t(0,220,\fs39\b0\1c&H00B7B7B7\alpha&H30&)}真正的效率
+Dialogue: 4,0:00:00.58,0:00:01.36,Modern,,0,0,0,,{\an4\bord0\shad0\q2\move(54,1052,99,960,0,220)\fs39\b0\1c&H00B7B7B7\alpha&H55&\t(0,220,\fs72\b1\1c&H00FFFFFF\alpha&H00&)}不是做得更多
+Dialogue: 5,0:00:00.80,0:00:01.36,Modern,,0,0,0,,{\an4\bord0\shad0\pos(54,960)\fs52\1c&H00FFFFFF\fad(40,0)}▶
 Dialogue: 2,0:00:00.58,0:00:01.36,Modern,,0,0,0,,{\an4\bord0\shad0\q2\move(54,1144,54,1052,0,220)\fs39\b0\1c&H00B7B7B7\alpha&H30&}而是每一步
 Dialogue: 2,0:00:00.58,0:00:01.36,Modern,,0,0,0,,{\an4\bord0\shad0\q2\move(54,1236,54,1144,0,220)\fs39\b0\1c&H00B7B7B7\alpha&H50&}都更接近结果
 Dialogue: 2,0:00:01.36,0:00:02.14,Modern,,0,0,0,,{\an4\bord0\shad0\q2\move(54,868,54,776,0,220)\fs39\b0\1c&H00B7B7B7\alpha&H50&}真正的效率
-Dialogue: 2,0:00:01.36,0:00:02.14,Modern,,0,0,0,,{\an4\bord0\shad0\q2\move(54,960,54,868,0,220)\fs72\b1\1c&H00FFFFFF\alpha&H00&\t(0,220,\fs39\b0\1c&H00B7B7B7\alpha&H30&)}不是做得更多
-Dialogue: 4,0:00:01.36,0:00:02.14,Modern,,0,0,0,,{\an4\bord0\shad0\q2\move(54,1052,54,960,0,220)\fs39\b0\1c&H00B7B7B7\alpha&H55&\t(0,220,\fs72\b1\1c&H00FFFFFF\alpha&H00&)}▶ 而是每一步
+Dialogue: 2,0:00:01.36,0:00:02.14,Modern,,0,0,0,,{\an4\bord0\shad0\q2\move(99,960,54,868,0,220)\fs72\b1\1c&H00FFFFFF\alpha&H00&\t(0,220,\fs39\b0\1c&H00B7B7B7\alpha&H30&)}不是做得更多
+Dialogue: 4,0:00:01.36,0:00:02.14,Modern,,0,0,0,,{\an4\bord0\shad0\q2\move(54,1052,99,960,0,220)\fs39\b0\1c&H00B7B7B7\alpha&H55&\t(0,220,\fs72\b1\1c&H00FFFFFF\alpha&H00&)}而是每一步
+Dialogue: 5,0:00:01.58,0:00:02.14,Modern,,0,0,0,,{\an4\bord0\shad0\pos(54,960)\fs52\1c&H00FFFFFF\fad(40,0)}▶
 Dialogue: 2,0:00:01.36,0:00:02.14,Modern,,0,0,0,,{\an4\bord0\shad0\q2\move(54,1144,54,1052,0,220)\fs39\b0\1c&H00B7B7B7\alpha&H30&}都更接近结果
 Dialogue: 2,0:00:01.36,0:00:02.14,Modern,,0,0,0,,{\an4\bord0\shad0\q2\move(54,1236,54,1144,0,220)\fs39\b0\1c&H00B7B7B7\alpha&H50&}把注意力
 Dialogue: 2,0:00:02.14,0:00:03.06,Modern,,0,0,0,,{\an4\bord0\shad0\q2\move(54,868,54,776,0,220)\fs39\b0\1c&H00B7B7B7\alpha&H50&}不是做得更多
-Dialogue: 2,0:00:02.14,0:00:03.06,Modern,,0,0,0,,{\an4\bord0\shad0\q2\move(54,960,54,868,0,220)\fs72\b1\1c&H00FFFFFF\alpha&H00&\t(0,220,\fs39\b0\1c&H00B7B7B7\alpha&H30&)}而是每一步
-Dialogue: 4,0:00:02.14,0:00:03.06,Modern,,0,0,0,,{\an4\bord0\shad0\q2\move(54,1052,54,960,0,220)\fs39\b0\1c&H00B7B7B7\alpha&H55&\t(0,220,\fs72\b1\1c&H00FFFFFF\alpha&H00&)}▶ 都更接近结果
+Dialogue: 2,0:00:02.14,0:00:03.06,Modern,,0,0,0,,{\an4\bord0\shad0\q2\move(99,960,54,868,0,220)\fs72\b1\1c&H00FFFFFF\alpha&H00&\t(0,220,\fs39\b0\1c&H00B7B7B7\alpha&H30&)}而是每一步
+Dialogue: 4,0:00:02.14,0:00:03.06,Modern,,0,0,0,,{\an4\bord0\shad0\q2\move(54,1052,99,960,0,220)\fs39\b0\1c&H00B7B7B7\alpha&H55&\t(0,220,\fs72\b1\1c&H00FFFFFF\alpha&H00&)}都更接近结果
+Dialogue: 5,0:00:02.36,0:00:03.06,Modern,,0,0,0,,{\an4\bord0\shad0\pos(54,960)\fs52\1c&H00FFFFFF\fad(40,0)}▶
 Dialogue: 2,0:00:02.14,0:00:03.06,Modern,,0,0,0,,{\an4\bord0\shad0\q2\move(54,1144,54,1052,0,220)\fs39\b0\1c&H00B7B7B7\alpha&H30&}把注意力
 Dialogue: 2,0:00:02.14,0:00:03.06,Modern,,0,0,0,,{\an4\bord0\shad0\q2\move(54,1236,54,1144,0,220)\fs39\b0\1c&H00B7B7B7\alpha&H50&}留给最重要的事
 Dialogue: 2,0:00:03.06,0:00:03.69,Modern,,0,0,0,,{\an4\bord0\shad0\q2\move(54,868,54,776,0,220)\fs39\b0\1c&H00B7B7B7\alpha&H50&}而是每一步
-Dialogue: 2,0:00:03.06,0:00:03.69,Modern,,0,0,0,,{\an4\bord0\shad0\q2\move(54,960,54,868,0,220)\fs72\b1\1c&H00FFFFFF\alpha&H00&\t(0,220,\fs39\b0\1c&H00B7B7B7\alpha&H30&)}都更接近结果
-Dialogue: 4,0:00:03.06,0:00:03.69,Modern,,0,0,0,,{\an4\bord0\shad0\q2\move(54,1052,54,960,0,220)\fs39\b0\1c&H00B7B7B7\alpha&H55&\t(0,220,\fs72\b1\1c&H00FFFFFF\alpha&H00&)}▶ 把注意力
+Dialogue: 2,0:00:03.06,0:00:03.69,Modern,,0,0,0,,{\an4\bord0\shad0\q2\move(99,960,54,868,0,220)\fs72\b1\1c&H00FFFFFF\alpha&H00&\t(0,220,\fs39\b0\1c&H00B7B7B7\alpha&H30&)}都更接近结果
+Dialogue: 4,0:00:03.06,0:00:03.69,Modern,,0,0,0,,{\an4\bord0\shad0\q2\move(54,1052,99,960,0,220)\fs39\b0\1c&H00B7B7B7\alpha&H55&\t(0,220,\fs72\b1\1c&H00FFFFFF\alpha&H00&)}把注意力
+Dialogue: 5,0:00:03.28,0:00:03.69,Modern,,0,0,0,,{\an4\bord0\shad0\pos(54,960)\fs52\1c&H00FFFFFF\fad(40,0)}▶
 Dialogue: 2,0:00:03.06,0:00:03.69,Modern,,0,0,0,,{\an4\bord0\shad0\q2\move(54,1144,54,1052,0,220)\fs39\b0\1c&H00B7B7B7\alpha&H30&}留给最重要的事
 Dialogue: 2,0:00:03.69,0:00:04.80,Modern,,0,0,0,,{\an4\bord0\shad0\q2\move(54,868,54,776,0,220)\fs39\b0\1c&H00B7B7B7\alpha&H50&}都更接近结果
-Dialogue: 2,0:00:03.69,0:00:04.80,Modern,,0,0,0,,{\an4\bord0\shad0\q2\move(54,960,54,868,0,220)\fs72\b1\1c&H00FFFFFF\alpha&H00&\t(0,220,\fs39\b0\1c&H00B7B7B7\alpha&H30&)}把注意力
-Dialogue: 4,0:00:03.69,0:00:04.80,Modern,,0,0,0,,{\an4\bord0\shad0\q2\move(54,1052,54,960,0,220)\fs39\b0\1c&H00B7B7B7\alpha&H55&\t(0,220,\fs72\b1\1c&H00FFFFFF\alpha&H00&)}▶ 留给最重要的事
+Dialogue: 2,0:00:03.69,0:00:04.80,Modern,,0,0,0,,{\an4\bord0\shad0\q2\move(99,960,54,868,0,220)\fs72\b1\1c&H00FFFFFF\alpha&H00&\t(0,220,\fs39\b0\1c&H00B7B7B7\alpha&H30&)}把注意力
+Dialogue: 4,0:00:03.69,0:00:04.80,Modern,,0,0,0,,{\an4\bord0\shad0\q2\move(54,1052,99,960,0,220)\fs39\b0\1c&H00B7B7B7\alpha&H55&\t(0,220,\fs72\b1\1c&H00FFFFFF\alpha&H00&)}留给最重要的事
+Dialogue: 5,0:00:03.91,0:00:04.80,Modern,,0,0,0,,{\an4\bord0\shad0\pos(54,960)\fs52\1c&H00FFFFFF\fad(40,0)}▶
