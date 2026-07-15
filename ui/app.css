@@ -10296,7 +10296,9 @@ audio {
 }
 
 .kinetic-template-card {
+  position: relative;
   min-width: 0;
+  height: 84px;
   overflow: hidden;
   border: 1px solid #2c3546;
   border-radius: 7px;
@@ -10312,7 +10314,7 @@ audio {
 
 .kinetic-template-preview {
   position: relative;
-  height: 58px;
+  height: 42px;
   overflow: hidden;
   background: radial-gradient(circle at 50% 42%, rgba(255, 255, 255, .08), transparent 38%), #05070a;
 }
@@ -10362,8 +10364,10 @@ audio {
 
 .kinetic-template-copy {
   display: grid;
-  gap: 4px;
-  padding: 6px;
+  grid-template-rows: 12px 20px;
+  gap: 2px;
+  height: 42px;
+  padding: 4px 6px;
 }
 
 .kinetic-template-copy > div:first-child {
@@ -10391,38 +10395,36 @@ audio {
 }
 
 .kinetic-template-copy p {
-  min-height: 0;
-  margin: 0;
-  overflow: hidden;
-  color: #a9b3c4;
-  font-size: 9px;
-  line-height: 1.2;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  display: none;
 }
 
 .kinetic-template-meta {
+  position: absolute;
+  z-index: 3;
+  left: 4px;
+  bottom: 43px;
   display: flex;
   flex-wrap: wrap;
-  gap: 3px;
+  gap: 2px;
 }
 
 .kinetic-template-meta span {
   border: 1px solid #2c374a;
   border-radius: 999px;
-  padding: 2px 4px;
+  padding: 1px 3px;
   color: #91a4bd;
   background: #0b111a;
-  font-size: 8px;
+  font-size: 7px;
 }
 
 .kinetic-template-use {
   width: 100%;
-  min-height: 24px;
+  min-height: 20px;
+  height: 20px;
   border-color: #6650e8;
   background: #4736a6;
   color: #fff;
-  font-size: 10px;
+  font-size: 9px;
 }
 
 .kinetic-template-card.active .kinetic-template-use {
