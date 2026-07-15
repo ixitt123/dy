@@ -239,6 +239,80 @@ function normalizeSegmentKeywords(keywords, text) {
   return supplied.length ? supplied : inferKeywords(text);
 }
 
+const BOOKEND_MIN_SECONDS = 0.45;
+const BOOKEND_PRESETS = Object.freeze({
+  intro: {
+    title: "",
+    remember: "先记住这句话",
+    core: "今天只讲一个重点",
+    method: "正确方法只有一个",
+    custom: "",
+  },
+  outro: {
+    follow: "记得关注，持续分享实用内容",
+    private: "需要完整资料，可以私聊我",
+    save: "点赞收藏，方便以后再看",
+    next: "关注我，下期继续",
+    custom: "",
+  },
+});
+
+function normalizeBookendItem(value, kind, title) {
+  const source = value && typeof value === "object" ? value : {};
+  const presets = BOOKEND_PRESETS[kind];
+  const fallbackPreset = kind === "intro" ? "title" : "follow";
+  const preset = Object.hasOwn(presets, source.preset) ? source.preset : fallbackPreset;
+  const presetText = kind === "intro" && preset === "title" ? title : presets[preset];
+  return {
+    enabled: source.enabled === true,
+    preset,
+    text: (normalizeText(source.text) || normalizeText(presetText)).slice(0, 80),
+  };
+}
+
+function normalizeBookends(value, title) {
+  const source = value && typeof value === "object" ? value : {};
+  return {
+    intro: normalizeBookendItem(source.intro, "intro", title),
+    outro: normalizeBookendItem(source.outro, "outro", title),
+  };
+}
+
+function calculateBookendWindows(segments, duration) {
+  const rows = (Array.isArray(segments) ? segments : []).slice().sort((a, b) => Number(a.start || 0) - Number(b.start || 0));
+  const total = Math.max(0, Number(duration || 0));
+  if (!rows.length || total <= 0) {
+    return {
+      minimumSeconds: BOOKEND_MIN_SECONDS,
+      intro: { start: 0, end: 0, duration: 0, blankSeconds: 0, available: false },
+      outro: { start: total, end: total, duration: 0, blankSeconds: 0, available: false },
+    };
+  }
+  const firstStart = Math.max(0, Math.min(total, Number(rows[0].start || 0)));
+  const lastEnd = Math.max(0, Math.min(total, Number(rows[rows.length - 1].end || 0)));
+  const introEnd = Math.max(0, firstStart - 0.09);
+  const outroStart = Math.min(total, lastEnd + 0.08);
+  const introDuration = Math.max(0, introEnd);
+  const outroDuration = Math.max(0, total - outroStart);
+  return {
+    minimumSeconds: BOOKEND_MIN_SECONDS,
+    intro: {
+      start: 0,
+      end: introEnd,
+      duration: introDuration,
+      blankSeconds: firstStart,
+      available: introDuration >= BOOKEND_MIN_SECONDS,
+    },
+    outro: {
+      start: outroStart,
+      end: total,
+      duration: outroDuration,
+      blankSeconds: Math.max(0, total - lastEnd),
+      available: outroDuration >= BOOKEND_MIN_SECONDS,
+    },
+  };
+}
+
 function validateTimelineRules(segments, audioDuration = 0) {
   const warnings = [];
   const rows = (Array.isArray(segments) ? segments : []).slice().sort((a, b) => Number(a.start || 0) - Number(b.start || 0));
@@ -346,12 +420,15 @@ function normalizeProject(project) {
   const wordTimeline = normalizeWordRows(project.wordTimeline || project.word_timeline);
   const segments = attachWordTiming(normalizeSegments(project.segments, project.text, duration), wordTimeline);
   const computedDuration = Math.max(duration, ...segments.map((item) => item.end), 0);
+  const title = normalizeText(project.title) || "动态大字视频";
+  const bookends = normalizeBookends(project.bookends, title);
+  const bookendWindows = calculateBookendWindows(segments, computedDuration);
   const timelineValidation = validateTimelineRules(segments, duration);
   const background = project.background && typeof project.background === "object" ? project.background : {};
   const audioMix = project.audioMix && typeof project.audioMix === "object" ? project.audioMix : {};
   return {
     ...project,
-    title: normalizeText(project.title) || "动态大字视频",
+    title,
     text: normalizeText(project.text) || segments.map((item) => item.text).join(""),
     effectId,
     effectParams: { ...defaultEffectParams(effectId), ...(project.effectParams || {}) },
@@ -360,6 +437,8 @@ function normalizeProject(project) {
     duration: computedDuration,
     segments,
     wordTimeline,
+    bookends,
+    bookendWindows,
     subtitleSource: String(project.subtitleSource || "estimated"),
     timelineSkillRules: TIMELINE_SKILL_IDS,
     timelineValidation,
@@ -1137,6 +1216,7 @@ export function createKineticTextService({
       aspectRatio: Object.hasOwn(OUTPUT_SIZES, input.aspectRatio) ? input.aspectRatio : "9:16",
       frameRate: Number(input.frameRate) === 60 ? 60 : 30,
       showBottomSubtitles: false,
+      bookends: input.bookends && typeof input.bookends === "object" ? input.bookends : {},
       background: { mode: "black", path: "", name: "" },
       audioMix: { source: "none", localPath: "", localName: "", ttsVolume: 100, backgroundVolume: 18 },
       outputs: {},
@@ -1155,6 +1235,10 @@ export function createKineticTextService({
       background: { ...current.background, ...(changes.background || {}) },
       audioMix: { ...current.audioMix, ...(changes.audioMix || {}) },
       effectParams: { ...current.effectParams, ...(changes.effectParams || {}) },
+      bookends: {
+        intro: { ...current.bookends?.intro, ...(changes.bookends?.intro || {}) },
+        outro: { ...current.bookends?.outro, ...(changes.bookends?.outro || {}) },
+      },
       outputs: { ...current.outputs, ...(changes.outputs || {}) },
     };
     return save(merged);
