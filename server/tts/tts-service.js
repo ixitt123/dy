@@ -657,9 +657,30 @@ export function createTtsService({
       script_path: String(metadata.script_path || ""),
       subtitle_path: String(metadata.subtitle_path || ""),
       timestamped_text_path: String(metadata.timestamped_text_path || ""),
-      subtitle_timeline: Array.isArray(metadata.subtitle_timeline) ? metadata.subtitle_timeline : [],
+      word_timeline_path: String(metadata.word_timeline_path || ""),
+      word_timeline: Array.isArray(metadata.word_timeline) ? metadata.word_timeline : [],
+      sentence_timeline: Array.isArray(metadata.sentence_timeline) ? metadata.sentence_timeline : [],
+      subtitle_timeline: Array.isArray(metadata.sentence_timeline)
+        ? metadata.sentence_timeline
+        : Array.isArray(metadata.subtitle_timeline)
+          ? metadata.subtitle_timeline
+          : [],
       subtitle_source: String(metadata.subtitle_source || metadata.subtitleSource || ""),
       subtitleSource: String(metadata.subtitle_source || metadata.subtitleSource || ""),
+      original_text: String(metadata.original_text || job.text || ""),
+      tts_prepared_text: String(metadata.tts_prepared_text || metadata.prepared_text || job.text || ""),
+      recognized_text: String(metadata.recognized_text || ""),
+      final_text: String(metadata.final_text || metadata.recognized_text || ""),
+      alignment_status: String(metadata.alignment_status || ""),
+      alignment_confirmed: metadata.alignment_status === "confirmed",
+      alignment_confirmed_at: String(metadata.alignment_confirmed_at || ""),
+      alignment_error: String(metadata.alignment_error || ""),
+      alignment_revision: Number(metadata.alignment_revision || 0),
+      estimated_count: Number(metadata.estimated_count || 0),
+      low_confidence_count: Number(metadata.low_confidence_count || 0),
+      match_ratio: Number(metadata.match_ratio || 0),
+      progress: Math.max(0, Math.min(100, Number(metadata.progress || (job.status === "completed" ? 100 : 0)))),
+      stage: String(metadata.stage || (job.status === "completed" ? "生成完成" : "")),
       duration: Number(metadata.audio_duration || metadata.duration || 0)
         || (Number(metadata.audio_length_ms || metadata.duration_ms || metadata.music_duration_ms || 0) / 1000)
         || 0,
