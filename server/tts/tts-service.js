@@ -971,6 +971,9 @@ export function createTtsService({
         };
         const singingJob = isSingingAlignmentJob(latestForFallback, latestMetadataForFallback);
         const audioTranscriptFallback = String(best?.recognizedText || "").trim();
+        if (!audioTranscriptFallback && singingJob && !explicitLyricsText(latestMetadataForFallback)) {
+          throw new Error("唱歌音频没有识别到实际歌词，不能生成可靠同步字幕。请检查语音识别配置或换文案重新生成。");
+        }
         const fallbackText = audioTranscriptFallback || scriptLockedFallbackText({
           job: latestForFallback,
           metadata: latestMetadataForFallback,
@@ -1701,10 +1704,11 @@ export function createTtsService({
     const metadata = ttsJobMetadata(job);
     if (
       job.status === "completed"
-      && ["review_required", "failed"].includes(String(metadata.alignment_status || ""))
+      && ["review_required", "failed", "not_required"].includes(String(metadata.alignment_status || ""))
       && metadata.alignment_policy_version !== ALIGNMENT_POLICY_VERSION
       && job.audio_path
       && fs.existsSync(job.audio_path)
+      && requiresAlignment(job, metadata)
     ) {
       recheckAlignmentJobs.push({ id: job.id, text: preferredAlignmentText(job, metadata) });
       continue;

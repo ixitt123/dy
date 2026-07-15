@@ -197,4 +197,27 @@ const audioLyrics = "你问我 AI 怎么拍成片 我用一段旋律唱给你听
   assert.ok(result.job.subtitle_timeline.at(-1).end <= result.job.audio_duration + 0.05);
 }
 
+{
+  const baseDir = createTempProject();
+  const audioPath = createAudioFile(baseDir, "singing-empty-asr.mp3");
+  const taskStore = new MemoryTaskStore();
+  const { service, calls } = createService({
+    baseDir,
+    taskStore,
+    transcript: "",
+  });
+  const result = await service.importGenerated({
+    audio_path: audioPath,
+    text: originalScript,
+    provider: "minimax",
+    voice_name: "国风记忆小调",
+    emotion: "music",
+    source: "minimax_music",
+  });
+  assert.match(result.error, /唱歌音频没有识别到实际歌词/);
+  assert.equal(calls(), 3);
+  assert.equal(result.job.alignment_status, "failed");
+  assert.equal(result.job.alignment_failure_action, "rewrite_script_required");
+}
+
 console.log("TTS alignment service tests passed");
