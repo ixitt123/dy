@@ -20,6 +20,7 @@
     "test:image-normalize": "node test-image-normalize-filter.mjs",
     "test:minimax-tts": "node test-minimax-tts.mjs",
     "test:tts-alignment": "node test-tts-alignment.mjs",
+    "test:tts-alignment-service": "node test-tts-alignment-service.mjs",
     "test:subtitle-templates": "node test-subtitle-templates.mjs",
     "test:subtitle-render": "node test-subtitle-render.mjs",
     "test:download-safety": "node test-download-safety.mjs",

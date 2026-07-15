@@ -891,7 +891,8 @@ export function createTtsService({
           recognized_word_timeline: recognizedWords,
           recognized_sentence_timeline: recognizedSentences,
         }, { status: "processing" });
-        const alignmentText = isSingingAlignmentJob(initial, initialMetadata) && !explicitLyricsText(initialMetadata) && recognizedText
+        const useRecognizedLyricsAsText = isSingingAlignmentJob(initial, initialMetadata) && !explicitLyricsText(initialMetadata) && recognizedText;
+        const alignmentText = useRecognizedLyricsAsText
           ? recognizedText
           : String(targetText || recognizedText).trim();
         const aligned = alignTranscriptToAudio({
@@ -908,9 +909,27 @@ export function createTtsService({
           duration: audioDuration,
         });
         if (!validation.valid) throw new Error(`字幕时间轴检查失败：${validation.errors.join("；")}`);
+        const referenceAligned = useRecognizedLyricsAsText && targetText
+          ? alignTranscriptToAudio({
+              text: targetText,
+              recognizedText,
+              recognizedWords,
+              recognizedSentences,
+              duration: audioDuration,
+            })
+          : aligned;
 
-        if (!best || aligned.matchRatio > best.recognitionMatchRatio) {
-          best = { attempt, recognizedText, recognizedWords, recognizedSentences, aligned, validation, recognitionMatchRatio: aligned.matchRatio };
+        if (!best || aligned.matchRatio > best.aligned.matchRatio) {
+          best = {
+            attempt,
+            recognizedText,
+            recognizedWords,
+            recognizedSentences,
+            aligned,
+            validation,
+            recognitionMatchRatio: referenceAligned.matchRatio,
+            singingAudioLyricsFallback: Boolean(useRecognizedLyricsAsText),
+          };
         }
 
         currentProgress = 70;
