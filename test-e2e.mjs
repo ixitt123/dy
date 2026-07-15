@@ -150,6 +150,33 @@ test("Settings keeps API services collapsed by default", async () => {
   }
 });
 
+test("TTS final-audio transcript alignment", async () => {
+  const [pageResponse, legacyResponse, ttsServiceSource, alignmentSource, kineticSource, xiaoheiSource] = await Promise.all([
+    fetch(`${BASE}/`),
+    fetch(`${BASE}/modules/legacy-runtime.js`),
+    readFile(new URL("./server/tts/tts-service.js", import.meta.url), "utf8"),
+    readFile(new URL("./server/tts/alignment.js", import.meta.url), "utf8"),
+    readFile(new URL("./server/kinetic-text/kinetic-text-service.js", import.meta.url), "utf8"),
+    readFile(new URL("./server/routes/ian-xiaohei-routes.js", import.meta.url), "utf8"),
+  ]);
+  const [page, legacy] = await Promise.all([pageResponse.text(), legacyResponse.text()]);
+  if (!page.includes('id="ttsAlignmentEditor"')
+    || !page.includes('id="ttsFinalTranscript"')
+    || !page.includes('id="ttsConfirmAlignment"')
+    || !legacy.includes('/api/tts/alignment/realign')
+    || !legacy.includes('/api/tts/alignment/confirm')
+    || !legacy.includes('job.alignment_status !== "confirmed"')
+    || !ttsServiceSource.includes("transcribeFinalAudio")
+    || !ttsServiceSource.includes('alignment_status: "review_required"')
+    || !ttsServiceSource.includes('stage: "等待处理"')
+    || !alignmentSource.includes("estimated_manual_edit")
+    || !alignmentSource.includes("validateAlignment")
+    || !kineticSource.includes('tts.alignment_status || "") !== "confirmed"')
+    || !xiaoheiSource.includes("tts_confirmed_alignment_timeline")) {
+    throw new Error("TTS final-audio alignment or downstream confirmation gate is incomplete");
+  }
+});
+
 test("Kinetic text production line", async () => {
   const [effectsResponse, pageResponse, moduleResponse, legacyResponse, packageSource] = await Promise.all([
     fetch(`${BASE}/api/kinetic-text/effects`),
