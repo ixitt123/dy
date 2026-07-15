@@ -1,0 +1,31 @@
+[Script Info]
+ScriptType: v4.00+
+PlayResX: 1920
+PlayResY: 1080
+ScaledBorderAndShadow: yes
+YCbCr Matrix: TV.709
+WrapStyle: 2
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Modern,Microsoft YaHei,85,&H00FFFFFF,&H00FFFFFF,&H00161210,&H00000000,-1,0,0,0,100,100,0,0,1,2.9,2,5,70,70,70,1
+Style: Karaoke,Microsoft YaHei,85,&H00FFE18C,&H00FFFFFF,&H00161210,&H00000000,-1,0,0,0,100,100,0,0,1,2.9,2,5,70,70,70,1
+Style: Muted,Microsoft YaHei,54,&H00E8DED8,&H00E8DED8,&H00161210,&H00000000,-1,0,0,0,100,100,0,0,1,1.2,0,5,70,70,70,1
+Style: DialogueBody,Microsoft YaHei,85,&H00FFFFFF,&H00FFFFFF,&H1F161210,&H1F161210,-1,0,0,0,100,100,0,0,3,18,0,2,90,90,90,1
+Style: Label,Microsoft YaHei,38,&H00FFE18C,&H00FFE18C,&H00161210,&H00000000,-1,0,0,0,100,100,0,0,1,0,0,1,90,90,90,1
+Style: Minimal,Microsoft YaHei,85,&H00FFFFFF,&H00FFFFFF,&H00161210,&H00000000,0,0,0,0,100,100,1.2,0,1,1.4,1,2,90,90,90,1
+Style: Card,Microsoft YaHei,85,&H00FFFFFF,&H00FFFFFF,&H1F161210,&H1F161210,-1,0,0,0,100,100,0,0,3,22,0,5,90,90,90,1
+Style: Tag,Microsoft YaHei,41,&H00161210,&H00161210,&H00FFE18C,&H00FFE18C,-1,0,0,0,100,100,0,0,3,14,0,5,60,60,60,1
+Style: Bottom,Microsoft YaHei,41,&H00FFFFFF,&H00FFFFFF,&H00161210,&H00000000,-1,0,0,0,100,100,0,0,1,2.4,0,2,80,80,48,1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+Dialogue: 1,0:00:00.00,0:00:01.45,Modern,,0,0,0,,{\an5\pos(960,640)\fs85\fad(150,90)}真正的效率，不是做得更多。
+Dialogue: 3,0:00:00.33,0:00:01.45,Tag,,0,0,0,,{\an5\pos(867,759)\fs41\1c&H00161210\fad(70,80)}效率
+Dialogue: 3,0:00:01.12,0:00:01.45,Tag,,0,0,0,,{\an5\pos(1054,759)\fs41\1c&H00161210\fad(70,80)}更多
+Dialogue: 1,0:00:01.45,0:00:03.15,Modern,,0,0,0,,{\an5\pos(960,640)\fs85\fad(150,90)}而是每一步，都更接近结果。
+Dialogue: 3,0:00:01.71,0:00:03.15,Tag,,0,0,0,,{\an5\pos(867,759)\fs41\1c&H00161210\fad(70,80)}每一步
+Dialogue: 3,0:00:02.76,0:00:03.15,Tag,,0,0,0,,{\an5\pos(1054,759)\fs41\1c&H00161210\fad(70,80)}结果
+Dialogue: 1,0:00:03.15,0:00:04.80,Modern,,0,0,0,,{\an5\pos(960,640)\fs85\fad(150,90)}把注意力，留给最重要的事。
+Dialogue: 3,0:00:03.28,0:00:04.80,Tag,,0,0,0,,{\an5\pos(867,759)\fs41\1c&H00161210\fad(70,80)}注意力
+Dialogue: 3,0:00:04.04,0:00:04.80,Tag,,0,0,0,,{\an5\pos(1054,759)\fs41\1c&H00161210\fad(70,80)}最重要

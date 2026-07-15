@@ -1,0 +1,25 @@
+[Script Info]
+ScriptType: v4.00+
+PlayResX: 1920
+PlayResY: 1080
+ScaledBorderAndShadow: yes
+YCbCr Matrix: TV.709
+WrapStyle: 2
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Modern,Microsoft YaHei,60,&H00F5F7F7,&H00F5F7F7,&H00161210,&H00000000,-1,0,0,0,100,100,0,0,1,0,1,5,70,70,70,1
+Style: Karaoke,Microsoft YaHei,60,&H00F5F7F7,&H00F5F7F7,&H00161210,&H00000000,-1,0,0,0,100,100,0,0,1,0,1,5,70,70,70,1
+Style: Muted,Microsoft YaHei,38,&H00D2D6D6,&H00D2D6D6,&H00161210,&H00000000,-1,0,0,0,100,100,0,0,1,1.2,0,5,70,70,70,1
+Style: DialogueBody,Microsoft YaHei,60,&H00F5F7F7,&H00F5F7F7,&HFF161210,&HFF161210,-1,0,0,0,100,100,0,0,3,18,0,2,90,90,90,1
+Style: Label,Microsoft YaHei,27,&H00F5F7F7,&H00F5F7F7,&H00161210,&H00000000,-1,0,0,0,100,100,0,0,1,0,0,1,90,90,90,1
+Style: Minimal,Microsoft YaHei,60,&H00F5F7F7,&H00F5F7F7,&H00161210,&H00000000,0,0,0,0,100,100,1.2,0,1,0,1,2,90,90,90,1
+Style: Card,Microsoft YaHei,60,&H00F5F7F7,&H00F5F7F7,&HFF161210,&HFF161210,-1,0,0,0,100,100,0,0,3,22,0,5,90,90,90,1
+Style: Tag,Microsoft YaHei,29,&H00161210,&H00161210,&H00F5F7F7,&H00F5F7F7,-1,0,0,0,100,100,0,0,3,14,0,5,60,60,60,1
+Style: Bottom,Microsoft YaHei,34,&H00FFFFFF,&H00FFFFFF,&H00161210,&H00000000,-1,0,0,0,100,100,0,0,1,2.4,0,2,80,80,48,1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+Dialogue: 2,0:00:00.00,0:00:01.45,Minimal,,0,0,0,,{\an2\pos(960,886)\fs60\fad(180,160)}真正的效率，不是做得更多。
+Dialogue: 2,0:00:01.45,0:00:03.15,Minimal,,0,0,0,,{\an2\pos(960,886)\fs60\fad(180,160)}而是每一步，都更接近结果。
+Dialogue: 2,0:00:03.15,0:00:04.80,Minimal,,0,0,0,,{\an2\pos(960,886)\fs60\fad(180,160)}把注意力，留给最重要的事。

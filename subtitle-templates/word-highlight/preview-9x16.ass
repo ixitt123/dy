@@ -1,0 +1,25 @@
+[Script Info]
+ScriptType: v4.00+
+PlayResX: 1080
+PlayResY: 1920
+ScaledBorderAndShadow: yes
+YCbCr Matrix: TV.709
+WrapStyle: 2
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Modern,Microsoft YaHei,94,&H00FFFFFF,&H00FFFFFF,&H00161210,&H00000000,-1,0,0,0,100,100,0,0,1,3.2,2,5,70,70,70,1
+Style: Karaoke,Microsoft YaHei,94,&H004DD8FF,&H00FFFFFF,&H00161210,&H00000000,-1,0,0,0,100,100,0,0,1,3.2,2,5,70,70,70,1
+Style: Muted,Microsoft YaHei,60,&H00E2DBD7,&H00E2DBD7,&H00161210,&H00000000,-1,0,0,0,100,100,0,0,1,1.2,0,5,70,70,70,1
+Style: DialogueBody,Microsoft YaHei,94,&H00FFFFFF,&H00FFFFFF,&H47161210,&H47161210,-1,0,0,0,100,100,0,0,3,18,0,2,90,90,90,1
+Style: Label,Microsoft YaHei,42,&H004DD8FF,&H004DD8FF,&H00161210,&H00000000,-1,0,0,0,100,100,0,0,1,0,0,1,90,90,90,1
+Style: Minimal,Microsoft YaHei,94,&H00FFFFFF,&H00FFFFFF,&H00161210,&H00000000,0,0,0,0,100,100,1.2,0,1,1.4,1,2,90,90,90,1
+Style: Card,Microsoft YaHei,94,&H00FFFFFF,&H00FFFFFF,&H47161210,&H47161210,-1,0,0,0,100,100,0,0,3,22,0,5,90,90,90,1
+Style: Tag,Microsoft YaHei,45,&H00161210,&H00161210,&H004DD8FF,&H004DD8FF,-1,0,0,0,100,100,0,0,3,14,0,5,60,60,60,1
+Style: Bottom,Microsoft YaHei,45,&H00FFFFFF,&H00FFFFFF,&H00161210,&H00000000,-1,0,0,0,100,100,0,0,1,2.4,0,2,80,80,48,1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+Dialogue: 2,0:00:00.00,0:00:01.45,Karaoke,,0,0,0,,{\an5\pos(540,1171)\fs94\fad(70,70)}{\k11}真{\k11}正{\k11}的{\k11}效{\k11}率{\k11}，{\k11}不{\k11}是{\k11}做{\k11}得{\k11}更{\k11}多{\k11}。
+Dialogue: 2,0:00:01.45,0:00:03.15,Karaoke,,0,0,0,,{\an5\pos(540,1171)\fs94\fad(70,70)}{\k13}而{\k13}是{\k13}每{\k13}一{\k13}步{\k13}，{\k13}都{\k13}更{\k13}接{\k13}近{\k13}结{\k13}果{\k13}。
+Dialogue: 2,0:00:03.15,0:00:04.80,Karaoke,,0,0,0,,{\an5\pos(540,1171)\fs94\fad(70,70)}{\k13}把{\k13}注{\k13}意{\k13}力{\k13}，{\k13}留{\k13}给{\k13}最{\k13}重{\k13}要{\k13}的{\k13}事{\k13}。
