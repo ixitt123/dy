@@ -163,6 +163,8 @@ const KEYWORD_RESULT_COMPLEMENTS = new Set([
   "懂", "会", "清", "准", "对", "错", "好", "坏", "完", "到", "住", "开", "掉", "反", "明白", "清楚",
   "不懂", "不会", "不清", "不准", "不对", "不错", "不好", "不完", "不到", "不住", "不开", "不掉",
   "没懂", "没会", "没清", "没准", "没对", "没好", "没完", "没到", "没住", "没开", "没掉",
+  "得懂", "得会", "得清", "得准", "得对", "得好", "得完", "得到", "得住", "得开", "得明白", "得清楚",
+  "起来", "下来", "上来", "上去", "下去", "出来", "进去", "回来", "过去",
 ]);
 
 function cleanKeyword(value) {
@@ -231,6 +233,10 @@ function inferKeywords(text) {
   }
   if (keywordCoverageTooHigh(source, selected)) selected.splice(1);
   if (!selected.length && resultPhrases[0]) selected.push(resultPhrases[0].text);
+  if (!selected.length) {
+    const fallbackWord = segments.map((item) => item.text).find((item) => [...item].length >= 2);
+    if (fallbackWord) selected.push(fallbackWord);
+  }
   if (!selected.length) {
     const single = segments.map((item) => item.text).find((item) => [...item].length === 1 && !KEYWORD_SINGLE_STOP_CHARACTERS.has(item));
     if (single) selected.push(single);
@@ -1395,6 +1401,18 @@ export function createKineticTextService({
     const project = get(projectId);
     if (!project) throw new Error("动态大字项目不存在。");
     const keywordsOnly = options.keywordsOnly === true;
+    if (keywordsOnly) {
+      const segments = project.segments.map((segment) => ({
+        ...segment,
+        keywords: inferKeywords(segment.text),
+      }));
+      const updated = update(projectId, {
+        segments,
+        analysisProvider: "local-intl-segmenter",
+        analysisUpdatedAt: nowIso(),
+      });
+      return { project: updated, provider: "local-intl-segmenter", aiUsed: false };
+    }
     let analyzed = null;
     let usedProvider = "local";
     const available = typeof modelRouter?.listProviders === "function" ? modelRouter.listProviders().map((item) => item.id) : [];

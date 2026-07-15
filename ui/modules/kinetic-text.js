@@ -227,7 +227,7 @@ function renderTimeline() {
         <input data-field="start" type="number" min="0" step="0.01" value="${Number(segment.start).toFixed(2)}" />
         <input data-field="end" type="number" min="0" step="0.01" value="${Number(segment.end).toFixed(2)}" />
         <textarea data-field="text" rows="2">${escapeHtml(segment.text)}</textarea>
-        <input data-field="keywords" type="text" value="${escapeHtml((segment.keywords || []).join("、"))}" placeholder="重点词" />
+        <input data-field="keywords" type="text" value="${escapeHtml((segment.keywords || []).join("、"))}" placeholder="本地重点词（短句1个）" />
         <input data-field="lineBreaks" type="text" value="${escapeHtml((segment.lineBreaks || []).join(","))}" placeholder="如 6,12" title="按字符序号设置换行位置" />
         <div class="kinetic-position-inputs"><input data-field="x" type="number" min="5" max="95" value="${x}" /><input data-field="y" type="number" min="5" max="95" value="${y}" /></div>
         <input data-field="primaryColor" type="color" value="${color}" />
@@ -1444,7 +1444,7 @@ function bindEvents() {
     if (!state.project) return;
     const button = $("#kineticAnalyze");
     button.disabled = true;
-    setProgress(5, "自动识别每句关键词");
+    setProgress(5, "正在本地识别每句关键词（不调用 API）");
     try {
       const data = await postJson("/api/kinetic-text/analyze", {
         projectId: state.project.id,
