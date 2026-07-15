@@ -1,0 +1,26 @@
+import assert from "node:assert/strict";
+import fs from "node:fs";
+
+const source = fs.readFileSync(new URL("./ui-server.mjs", import.meta.url), "utf8");
+
+const forbidden = [
+  "organizeLooseDownloadFiles",
+  "syncMovedDownloadTaskPaths",
+  "downloadDateStamp",
+  "downloadTypeFolders",
+  "classifyDownloadType",
+  "fs.readdirSync(downloadsDir",
+  "fs.renameSync(sourcePath, targetPath)",
+];
+
+for (const token of forbidden) {
+  assert.equal(source.includes(token), false, `危险的下载目录整理逻辑重新出现：${token}`);
+}
+
+assert.match(
+  source,
+  /function downloadOutputDir\(\)\s*\{[\s\S]*?return downloadsDir;\s*\}/,
+  "下载输出必须直接使用用户选择的目录",
+);
+
+console.log("Download directory safety: OK");
