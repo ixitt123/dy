@@ -1112,6 +1112,7 @@ export function createTtsService({
         alignment_completed_at: completedAt,
         audio_duration: audioDuration,
       }, { status: "completed", error: "", completed_at: new Date().toISOString() });
+      if (autoApproved) await Promise.resolve(onJobCompleted(completed));
       return { job: publicJob(completed) };
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
