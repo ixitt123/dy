@@ -1560,6 +1560,14 @@
                   <input id="kineticTextTitle" type="text" placeholder="动态大字视频" />
                 </label>
                 <label>
+                  <span>画面比例</span>
+                  <select id="kineticAspectRatio">
+                    <option value="9:16">9:16 竖屏短视频</option>
+                    <option value="16:9">16:9 横屏视频</option>
+                    <option value="1:1">1:1 方形视频</option>
+                  </select>
+                </label>
+                <label>
                   <span>排版分析主 API</span>
                   <select id="kineticTextProvider"><option value="">自动选择</option></select>
                 </label>
@@ -1599,12 +1607,29 @@
                 <label class="kinetic-range-row"><span>背景音量</span><input id="kineticBgVolume" type="range" min="0" max="100" value="18" /><output id="kineticBgVolumeValue">18%</output></label>
                 <label class="kinetic-check"><input id="kineticBottomSubtitles" type="checkbox" /><span>显示底部常规字幕</span></label>
               </section>
+              <section class="kinetic-card kinetic-template-config">
+                <div class="kinetic-card-head"><strong>字幕常用参数</strong><span>高级参数已隐藏</span></div>
+                <label><span>字体</span><input id="kineticFontFamily" type="text" value="Microsoft YaHei" /></label>
+                <label class="kinetic-range-row"><span>字号</span><input id="kineticFontSize" type="range" min="34" max="160" value="88" /><output id="kineticFontSizeValue">88</output></label>
+                <div class="kinetic-color-row">
+                  <label><span>文字颜色</span><input id="kineticPrimaryColor" type="color" value="#ffffff" /></label>
+                  <label><span>强调色</span><input id="kineticAccentColor" type="color" value="#ffd84d" /></label>
+                </div>
+                <label><span>最大行数</span><select id="kineticMaxLines"><option value="1">1 行</option><option value="2" selected>2 行</option><option value="3">3 行</option></select></label>
+                <label class="kinetic-range-row"><span>动画速度</span><input id="kineticAnimationSpeed" type="range" min="50" max="160" value="100" /><output id="kineticAnimationSpeedValue">1.00×</output></label>
+                <label class="kinetic-range-row"><span>背景透明度</span><input id="kineticBackgroundOpacity" type="range" min="0" max="100" value="72" /><output id="kineticBackgroundOpacityValue">72%</output></label>
+                <div class="kinetic-toggle-row">
+                  <label class="kinetic-check"><input id="kineticOutlineEnabled" type="checkbox" checked /><span>描边</span></label>
+                  <label class="kinetic-check"><input id="kineticShadowEnabled" type="checkbox" checked /><span>阴影</span></label>
+                </div>
+                <button id="kineticResetTemplate" class="ghost" type="button">恢复模板默认参数</button>
+              </section>
             </aside>
 
             <main class="kinetic-text-workspace">
               <section class="kinetic-preview-card">
                 <div class="kinetic-preview-toolbar">
-                  <div><strong id="kineticEffectName">中心阶梯翻入</strong><span>1920×1080 · 30fps</span></div>
+                  <div><strong id="kineticEffectName">现代字幕模板</strong><span id="kineticPreviewSpec">1080×1920 · 30fps</span></div>
                   <div class="kinetic-preview-buttons">
                     <button id="kineticPreviewPlay" class="ghost" type="button">播放预览</button>
                     <button id="kineticPreviewRestart" class="ghost" type="button">从头播放</button>
@@ -1619,7 +1644,7 @@
               </section>
 
               <section class="kinetic-card kinetic-effects-card">
-                <div class="kinetic-card-head"><strong>24 种短视频文字特效</strong><span>整条视频统一使用一种，自动记住上次选择</span></div>
+                <div class="kinetic-card-head"><strong>2026 现代字幕模板</strong><span>仅收录 2022 年以后视觉参考 · 点击立即应用 · 鼠标移入动态预览</span></div>
                 <div id="kineticEffectGrid" class="kinetic-effect-grid"></div>
               </section>
 
