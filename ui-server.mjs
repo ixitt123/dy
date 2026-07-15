@@ -2918,7 +2918,41 @@ function sendDashScopeWsJson(ws, value) {
   ws.send(JSON.stringify(value));
 }
 
-function transcribeWavWithDashScopeRealtime(apiKey, wavPath, onProgress = () => {}, signal) {
+function dashScopeTimestampSeconds(value) {
+  const milliseconds = Number(value);
+  return Number.isFinite(milliseconds) && milliseconds >= 0 ? milliseconds / 1000 : null;
+}
+
+function normalizeDashScopeSentence(sentence = {}) {
+  const text = String(sentence.text || "").trim();
+  const start = dashScopeTimestampSeconds(sentence.begin_time ?? sentence.beginTime);
+  const end = dashScopeTimestampSeconds(sentence.end_time ?? sentence.endTime);
+  const words = (Array.isArray(sentence.words) ? sentence.words : [])
+    .map((word) => {
+      const punctuation = String(word?.punctuation || "");
+      const wordText = `${String(word?.text || "").trim()}${punctuation}`.trim();
+      const wordStart = dashScopeTimestampSeconds(word?.begin_time ?? word?.beginTime);
+      const wordEnd = dashScopeTimestampSeconds(word?.end_time ?? word?.endTime);
+      if (!wordText || wordStart === null || wordEnd === null || wordEnd < wordStart) return null;
+      return {
+        text: wordText,
+        start: Number(wordStart.toFixed(3)),
+        end: Number(wordEnd.toFixed(3)),
+        confidence: Number.isFinite(Number(word?.confidence)) ? Number(word.confidence) : null,
+        source: "audio_asr",
+      };
+    })
+    .filter(Boolean);
+  return {
+    text,
+    start: start === null ? (words[0]?.start ?? 0) : Number(start.toFixed(3)),
+    end: end === null ? (words.at(-1)?.end ?? words[0]?.end ?? 0) : Number(end.toFixed(3)),
+    confidence: Number.isFinite(Number(sentence.confidence)) ? Number(sentence.confidence) : null,
+    words,
+  };
+}
+
+function transcribeWavWithDashScopeRealtime(apiKey, wavPath, onProgress = () => {}, signal, options = {}) {
   return new Promise((resolve, reject) => {
     const taskId = randomUUID().replace(/-/g, "").slice(0, 32);
     const ws = new WebSocket("wss://dashscope.aliyuncs.com/api-ws/v1/inference", {
@@ -2928,6 +2962,8 @@ function transcribeWavWithDashScopeRealtime(apiKey, wavPath, onProgress = () => 
     });
     const stat = fs.statSync(wavPath);
     const parts = [];
+    const sentences = [];
+    const endedSentenceKeys = new Set();
     let latestPartial = "";
     let lastEndedText = "";
     let stream = null;
@@ -3043,8 +3079,12 @@ function transcribeWavWithDashScopeRealtime(apiKey, wavPath, onProgress = () => 
         const text = String(sentence.text || "").trim();
         if (!text) return;
         if (sentence.sentence_end) {
-          if (text !== lastEndedText) {
+          const normalized = normalizeDashScopeSentence(sentence);
+          const sentenceKey = `${normalized.start}:${normalized.end}:${normalized.text}`;
+          if (!endedSentenceKeys.has(sentenceKey)) {
             parts.push(text);
+            sentences.push(normalized);
+            endedSentenceKeys.add(sentenceKey);
             lastEndedText = text;
           }
           latestPartial = "";
@@ -3062,7 +3102,13 @@ function transcribeWavWithDashScopeRealtime(apiKey, wavPath, onProgress = () => 
           return;
         }
         onProgress({ percent: 95, message: "文案识别完成" });
-        finish(resolve, transcript);
+        finish(resolve, options.detailed
+          ? {
+              text: transcript,
+              sentences,
+              words: sentences.flatMap((sentence) => sentence.words || []),
+            }
+          : transcript);
         return;
       }
 
@@ -3078,12 +3124,12 @@ function transcribeWavWithDashScopeRealtime(apiKey, wavPath, onProgress = () => 
   });
 }
 
-async function transcribeLocalMediaWithDashScope(apiKey, mediaPath, onProgress = () => {}, signal) {
+async function transcribeLocalMediaWithDashScope(apiKey, mediaPath, onProgress = () => {}, signal, options = {}) {
   let wavPath = "";
   try {
     onProgress({ percent: 28, message: "正在转换本地音频" });
     wavPath = await convertMediaToAsrWav(mediaPath, signal);
-    return await transcribeWavWithDashScopeRealtime(apiKey, wavPath, onProgress, signal);
+    return await transcribeWavWithDashScopeRealtime(apiKey, wavPath, onProgress, signal, options);
   } finally {
     if (wavPath) {
       try {
