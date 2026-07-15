@@ -1667,11 +1667,17 @@
             <main class="kinetic-text-workspace">
               <section class="kinetic-preview-card">
                 <div class="kinetic-preview-toolbar">
-                  <div><strong id="kineticEffectName">现代字幕模板</strong><span id="kineticPreviewSpec">1080×1920 · 30fps</span></div>
-                  <div class="kinetic-preview-buttons">
-                    <button id="kineticPreviewPlay" class="ghost" type="button">播放预览</button>
-                    <button id="kineticPreviewRestart" class="ghost" type="button">从头播放</button>
-                    <button id="kineticRenderFinal" class="primary" type="button">下载视频</button>
+                  <div class="kinetic-preview-toolbar-main">
+                    <div class="kinetic-preview-title"><strong id="kineticEffectName">现代字幕模板</strong><span id="kineticPreviewSpec">1080×1920 · 30fps</span></div>
+                    <div class="kinetic-preview-buttons">
+                      <button id="kineticPreviewPlay" class="ghost" type="button">播放预览</button>
+                      <button id="kineticPreviewRestart" class="ghost" type="button">从头播放</button>
+                      <button id="kineticRenderFinal" class="primary" type="button">下载视频</button>
+                    </div>
+                  </div>
+                  <div class="kinetic-download-location kinetic-download-location-preview">
+                    <span id="kineticDownloadPath">正在读取下载地址…</span>
+                    <button id="kineticChooseDownloadDir" class="ghost" type="button">选择下载地址</button>
                   </div>
                 </div>
                 <div class="kinetic-canvas-wrap">
@@ -1700,10 +1706,6 @@
               </section>
 
               <section class="kinetic-card kinetic-output-card">
-                <div class="kinetic-download-location">
-                  <span id="kineticDownloadPath">正在读取下载位置…</span>
-                  <button id="kineticChooseDownloadDir" class="ghost" type="button">重新选择下载位置</button>
-                </div>
                 <div class="kinetic-output-actions">
                   <button id="kineticGenerateMaterials" type="button">生成可编辑素材包</button>
                 </div>

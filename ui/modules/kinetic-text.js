@@ -268,7 +268,7 @@ function renderDownloadDirectory() {
   const container = $("#kineticDownloadPath");
   if (!container) return;
   const directory = kineticDownloadDirectory();
-  container.textContent = directory ? `视频保存位置：${directory}` : "尚未设置下载位置";
+  container.textContent = directory ? `下载地址：${directory}` : "尚未选择下载地址";
   container.title = directory;
 }
 
