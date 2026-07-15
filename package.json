@@ -21,6 +21,7 @@
     "test:minimax-tts": "node test-minimax-tts.mjs",
     "test:tts-alignment": "node test-tts-alignment.mjs",
     "test:subtitle-templates": "node test-subtitle-templates.mjs",
+    "test:subtitle-render": "node test-subtitle-render.mjs",
     "patch-output": "node patch-mcp-output.mjs",
     "postinstall": "node patch-mcp-output.mjs"
   },
