@@ -15,6 +15,7 @@ const state = {
   referenceCloneDraft: null,
   referenceStylePresets: [],
   pendingUploads: new Map(),
+  buttonFeedbackTimers: new Map(),
   projectId: localStorage.getItem("ian-xiaohei-project-id") || `xiaohei-${Date.now()}`,
 };
 const embeddedMode = new URLSearchParams(window.location.search).get("embedded") === "1";
@@ -935,9 +936,11 @@ async function deleteCurrentVoice() {
 }
 
 async function createPlan() {
+  setButtonFeedback(els.planPrompts, "loading", "正在分析");
   const payload = formPayload();
   if (!payload.text) {
     setStatus("缺少 TTS 资产", "请先在 TTS 语音页发送已确认的文案、音频和同步时间戳。", 0, true);
+    setButtonFeedback(els.planPrompts, "error", "缺少 TTS 资产");
     return null;
   }
   if (
@@ -946,6 +949,7 @@ async function createPlan() {
     || normalizeComparableText(confirmedTtsText(state.selectedTtsJob)) !== normalizeComparableText(payload.text)
   ) {
     setStatus("请先从 TTS 发送", "小黑配图只接收 TTS 语音页确认后的最终文案、音频和字幕时间轴。", 0, true);
+    setButtonFeedback(els.planPrompts, "error", "请先从 TTS 发送");
     return null;
   }
   setBusy(true);
@@ -965,9 +969,11 @@ async function createPlan() {
     renderPlan(data);
     renderImages([], []);
     setStatus("分镜配图分析完成", data.analysisNote || `已生成 ${data.shots?.length || 0} 个配图方案。`, 100, false, "等待上传图片");
+    setButtonFeedback(els.planPrompts, "success", "已生成分镜");
     return data;
   } catch (error) {
     setStatus("分镜分析失败", error.payload?.message || error.message || String(error), 0, true);
+    setButtonFeedback(els.planPrompts, "error", "分析失败");
     return null;
   } finally {
     setBusy(false);
@@ -1470,10 +1476,20 @@ async function handleOutputHistoryAction(event) {
 }
 
 async function copyAllPrompts() {
+  setButtonFeedback(els.copyPrompts, "loading", "正在复制");
   if (!state.promptsText) await createPlan();
-  if (!state.promptsText) return;
-  await navigator.clipboard.writeText(state.promptsText);
-  setStatus("已复制提示词", "提示词已经复制。", 100);
+  if (!state.promptsText) {
+    setButtonFeedback(els.copyPrompts, "error", "没有可复制内容");
+    return;
+  }
+  try {
+    await navigator.clipboard.writeText(state.promptsText);
+    setStatus("已复制提示词", "提示词已经复制。", 100);
+    setButtonFeedback(els.copyPrompts, "success", "已复制");
+  } catch (error) {
+    setStatus("复制失败", error.message || String(error), 0, true);
+    setButtonFeedback(els.copyPrompts, "error", "复制失败");
+  }
 }
 
 function resetVisualWorkflow(message = "") {
@@ -1540,6 +1556,25 @@ function setStatus(label, detail, progress = 0, isError = false, step = "") {
   els.progressStep.textContent = step || (safeProgress >= 100 ? "完成" : "处理中");
   els.progressPercent.textContent = `${safeProgress}%`;
   els.progressBar.style.width = `${safeProgress}%`;
+}
+
+function setButtonFeedback(button, type, label, duration = 1600) {
+  if (!button) return;
+  if (!button.dataset.defaultLabel) button.dataset.defaultLabel = button.textContent.trim();
+  const timer = state.buttonFeedbackTimers.get(button);
+  if (timer) clearTimeout(timer);
+  button.classList.remove("is-loading", "is-success", "is-error", "action-feedback");
+  button.classList.add("action-feedback", `is-${type}`);
+  button.textContent = label || button.dataset.defaultLabel || "";
+  button.setAttribute("aria-live", "polite");
+  button.setAttribute("aria-busy", type === "loading" ? "true" : "false");
+  if (type === "loading") return;
+  state.buttonFeedbackTimers.set(button, setTimeout(() => {
+    button.classList.remove("is-loading", "is-success", "is-error", "action-feedback");
+    button.textContent = button.dataset.defaultLabel || button.textContent;
+    button.removeAttribute("aria-busy");
+    state.buttonFeedbackTimers.delete(button);
+  }, duration));
 }
 
 async function fetchJson(url, options = {}) {

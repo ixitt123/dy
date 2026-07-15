@@ -100,6 +100,67 @@ h2 {
   flex-wrap: wrap;
 }
 
+.xiaohei-actions button {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-width: 148px;
+  white-space: nowrap;
+  transition: border-color .16s ease, background .16s ease, color .16s ease, transform .16s ease;
+}
+
+.xiaohei-actions button:active {
+  transform: translateY(1px);
+}
+
+.xiaohei-actions button.action-feedback::before {
+  content: "";
+  width: 9px;
+  height: 9px;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: currentColor;
+}
+
+.xiaohei-actions button.action-feedback.is-loading::before {
+  width: 12px;
+  height: 12px;
+  border: 2px solid rgba(255,255,255,.28);
+  border-top-color: #fff;
+  background: transparent;
+  animation: xiaohei-button-spin .72s linear infinite;
+}
+
+.xiaohei-actions button.action-feedback.is-success {
+  border-color: rgba(114, 213, 183, .65);
+  background: rgba(114, 213, 183, .15);
+  color: #d8fff3;
+}
+
+.xiaohei-actions button.action-feedback.is-success::before {
+  background: var(--green);
+  box-shadow: 0 0 0 3px rgba(114, 213, 183, .16);
+}
+
+.xiaohei-actions button.action-feedback.is-error {
+  border-color: rgba(255, 112, 104, .72);
+  background: rgba(255, 112, 104, .12);
+  color: #ffd3d0;
+}
+
+.xiaohei-actions button.action-feedback.is-error::before {
+  background: var(--red);
+  box-shadow: 0 0 0 3px rgba(255, 112, 104, .14);
+}
+
+@keyframes xiaohei-button-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .composer,
 .panel,
 .status-panel,
