@@ -2187,37 +2187,11 @@ function sanitizeFileName(value) {
     .trim();
 }
 
-function downloadDateStamp(date = new Date()) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
-
-const downloadTypeFolders = {
-  video: "视频",
-  audio: "音频",
-  subtitle: "字幕",
-  transcript: "文案",
-  analysis: "AI分析",
-  other: "其他",
-};
-
 function downloadOutputDir() {
   // The selected directory is only an output destination. Never inspect or
   // reorganize files that were already present there.
   fs.mkdirSync(downloadsDir, { recursive: true });
   return downloadsDir;
-}
-
-function classifyDownloadType(fileName) {
-  const lower = String(fileName || "").toLowerCase();
-  if (/\.(mp4|mov|mkv|avi|m4v|webm)$/i.test(lower)) return "video";
-  if (/\.(mp3|wav|m4a|aac|flac)$/i.test(lower)) return "audio";
-  if (/\.(srt|vtt|ass|json3)$/i.test(lower) || lower.includes("字幕")) return "subtitle";
-  if (lower.includes("ai分析")) return "analysis";
-  if (/\.(txt|md)$/i.test(lower) || lower.includes("文案")) return "transcript";
-  return "other";
 }
 
 function uniquePathInDir(dir, baseName, extension) {
