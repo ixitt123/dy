@@ -405,6 +405,11 @@ function previewWordGroups(words, sourceText = "") {
   let current = [];
   let chars = 0;
   words.forEach((word) => {
+    if (/^[，。！？；：、,.!?;:]$/u.test(String(word.text || ""))) {
+      if (current.length) current.push(word);
+      else if (groups.length) groups[groups.length - 1].push(word);
+      return;
+    }
     const size = Math.max(1, [...String(word.text || "")].length);
     if (current.length >= 5 || (current.length >= 2 && chars + size > 8)) {
       groups.push(current);

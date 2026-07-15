@@ -591,6 +591,11 @@ function groupTimedWords(words, sourceText = "") {
   let current = [];
   let charCount = 0;
   for (const word of words) {
+    if (/^[，。！？；：、,.!?;:]$/u.test(String(word.text || ""))) {
+      if (current.length) current.push(word);
+      else if (groups.length) groups[groups.length - 1].push(word);
+      continue;
+    }
     const size = Math.max(1, [...String(word.text || "")].length);
     const shouldFlush = current.length >= 5 || (current.length >= 2 && charCount + size > 8);
     if (shouldFlush) {
