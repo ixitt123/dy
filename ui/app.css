@@ -7753,6 +7753,16 @@ audio {
   justify-content: flex-start;
 }
 
+.moments-heading-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.moments-heading-actions h2 {
+  margin: 0;
+}
+
 .moments-output {
   min-height: 566px;
   padding: 12px;
