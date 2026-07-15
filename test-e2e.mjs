@@ -218,10 +218,12 @@ test("Kinetic text production line", async () => {
     || !page.includes('id="kineticTimeline"')
     || !page.includes('id="kineticAnalyze"')
     || !page.includes('id="kineticChooseDownloadDir"')
-    || !page.includes("编辑并下载视频")
+    || !page.includes('id="kineticRenderFinal" class="primary" type="button">下载视频</button>')
+    || renderButtonIndex <= previewToolbarIndex
+    || renderButtonIndex >= previewCanvasIndex
     || !page.includes('id="kineticIntroEnabled"')
     || !page.includes('id="kineticOutroEnabled"')
-    || !page.includes("只使用真实留白时间")
+    || !moduleSource.includes("video-visual-timeline")
     || !page.includes('id="kineticAspectRatio"')
     || !page.includes("2026 现代字幕模板")
     || !page.includes('<span class="nav-index">09</span><span>动态大字视频</span>')
