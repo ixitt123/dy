@@ -193,6 +193,7 @@ function inferKeywords(text) {
     const candidate = cleanKeyword(value).replace(wholeClause ? /[的了着过呢吗吧啊呀哦嘛]+$/ : /$^/, "");
     const length = [...candidate].length;
     if (!candidate || length < 2 || length > 12 || KEYWORD_STOP_WORDS.has(candidate)) return;
+    if ([...source].length > 4 && candidate === source) return;
     const score = keywordCandidateScore(candidate, source, wholeClause);
     if (score > (candidates.get(candidate) ?? -Infinity)) candidates.set(candidate, score);
   };
@@ -204,7 +205,7 @@ function inferKeywords(text) {
 
   for (const clause of clauses) {
     const clauseLength = [...clause].length;
-    if (clauseLength >= 2 && clauseLength <= 6) addCandidate(clause, true);
+    if (clauseLength >= 2 && clauseLength <= 4) addCandidate(clause, true);
     const tokens = segmenter
       ? [...segmenter.segment(clause)].filter((item) => item.isWordLike).map((item) => cleanKeyword(item.segment)).filter(Boolean)
       : (clause.match(/[A-Za-z0-9%]+|[\u4e00-\u9fff]/g) || []);
@@ -233,10 +234,19 @@ function inferKeywords(text) {
 }
 
 function normalizeSegmentKeywords(keywords, text) {
-  const supplied = Array.isArray(keywords)
-    ? [...new Set(keywords.map(cleanKeyword).filter(Boolean))].slice(0, 3)
-    : [];
-  return supplied.length ? supplied : inferKeywords(text);
+  const source = normalizeText(text).replace(/[\s，。！？；：、,.!?;:“”‘’'"（）()【】\[\]《》<>—-]/g, "");
+  const supplied = Array.isArray(keywords) ? keywords.map(cleanKeyword).filter(Boolean) : [];
+  const selected = [];
+  for (const candidate of supplied) {
+    const length = [...candidate].length;
+    if (length < 2 || length > 6 || KEYWORD_STOP_WORDS.has(candidate)) continue;
+    if (!source.includes(candidate)) continue;
+    if (source.length > 4 && candidate === source) continue;
+    if (selected.some((item) => item.includes(candidate) || candidate.includes(item))) continue;
+    selected.push(candidate);
+    if (selected.length >= keywordTargetCount(text)) break;
+  }
+  return selected.length ? selected.slice(0, 3) : inferKeywords(text);
 }
 
 const BOOKEND_MIN_SECONDS = 0.45;
@@ -870,16 +880,56 @@ function keywordMatch(value, keywords = []) {
   });
 }
 
-function keywordStyledText(value, keywords, accent, primary) {
+const KEYWORD_EMPHASIS_PALETTE = Object.freeze([
+  { style: "KeywordBoxGold", color: "#FFD84D" },
+  { style: "KeywordBoxCyan", color: "#69E7FF" },
+  { style: "KeywordBoxLime", color: "#B7FF5A" },
+  { style: "KeywordBoxViolet", color: "#C59CFF" },
+]);
+const KEYWORD_EMPHASIS_MODES = Object.freeze(["color", "scale", "box", "underline"]);
+
+function stableKeywordHash(value) {
+  let hash = 2166136261;
+  for (const character of String(value || "")) {
+    hash ^= character.codePointAt(0);
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
+}
+
+function keywordEmphasisSpec(seed, keyword) {
+  const hash = stableKeywordHash(`${seed}:${keyword}`);
+  return {
+    mode: KEYWORD_EMPHASIS_MODES[hash % KEYWORD_EMPHASIS_MODES.length],
+    palette: KEYWORD_EMPHASIS_PALETTE[(hash >>> 8) % KEYWORD_EMPHASIS_PALETTE.length],
+  };
+}
+
+function keywordStyledText(value, keywords, primary, options = {}) {
   const source = String(value || "");
   const ordered = [...new Set((keywords || []).map(String).filter(Boolean))].sort((a, b) => b.length - a.length);
   if (!ordered.length) return escapeAssText(source);
   const pattern = new RegExp(`(${ordered.map((item) => item.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")})`, "g");
-  return source.split(pattern).map((part) => (
-    ordered.includes(part)
-      ? `{\\1c${accent}\\b1\\fscx108\\fscy108}${escapeAssText(part)}{\\1c${primary}\\fscx100\\fscy100}`
-      : escapeAssText(part)
-  )).join("");
+  const font = String(options.font || DEFAULT_FONT).replace(/,/g, " ");
+  const fontSize = Math.round(safeNumber(options.fontSize, 82, 24, 240));
+  const outline = options.outline || assColor("#101216");
+  const baseOutline = safeNumber(options.baseOutline, 0, 0, 12);
+  const reset = `\\fn${font}\\fs${fontSize}\\1c${primary}\\3c${outline}\\bord${baseOutline}\\b1\\u0\\fscx100\\fscy100`;
+  return source.split(pattern).map((part) => {
+    if (!ordered.includes(part)) return escapeAssText(part);
+    const { mode, palette } = keywordEmphasisSpec(options.seed || "", part);
+    const color = assColor(palette.color);
+    if (mode === "scale") {
+      return `{\\1c${color}\\b1\\fscx116\\fscy116}${escapeAssText(part)}{${reset}}`;
+    }
+    if (mode === "box") {
+      return `{\\r${palette.style}\\fn${font}\\fs${fontSize}}${escapeAssText(part)}{${reset}}`;
+    }
+    if (mode === "underline") {
+      return `{\\1c${color}\\b1\\u1}${escapeAssText(part)}{${reset}}`;
+    }
+    return `{\\1c${color}\\b1}${escapeAssText(part)}{${reset}}`;
+  }).join("");
 }
 
 function karaokeText(words, sourceText, mode = "k") {
@@ -1008,7 +1058,16 @@ export function buildAss(project, options = {}) {
         } else {
           tags += `\\fs${smallSize}\\b0\\1c${muted}\\alpha&H${distanceAlpha}&`;
         }
-        events.push(assEvent(current ? 4 : 2, focusStart, focusEnd, "Modern", tags, escapeAssText(row.text)));
+        const rowText = current
+          ? keywordStyledText(row.text, row.keywords, primary, {
+            seed: row.sourceSegmentId || row.id,
+            font,
+            fontSize,
+            outline,
+            baseOutline: 0,
+          })
+          : escapeAssText(row.text);
+        events.push(assEvent(current ? 4 : 2, focusStart, focusEnd, "Modern", tags, rowText));
         if (current) {
           const markerStart = reset ? focusStart : Math.min(focusEnd - 0.04, focusStart + transitionMs / 1000);
           if (markerStart < focusEnd) {
@@ -1030,7 +1089,16 @@ export function buildAss(project, options = {}) {
         const rowColor = current ? primary : muted;
         const alpha = current ? "" : "\\alpha&H55&";
         const marker = current ? "▶  " : "";
-        const text = escapeAssText(wrapSubtitleText(row.text, maxChars, current ? 2 : 1));
+        const visibleText = wrapSubtitleText(row.text, maxChars, current ? 2 : 1);
+        const text = current
+          ? keywordStyledText(visibleText, row.keywords, primary, {
+            seed: row.sourceSegmentId || row.id,
+            font,
+            fontSize: rowSize,
+            outline,
+            baseOutline: outlineWidth,
+          })
+          : escapeAssText(visibleText);
         events.push(assEvent(current ? 3 : 1, start, end, current ? "Modern" : "Muted", `\\an5\\move(${x},${rowY + Math.round(lineGap * 0.18)},${x},${rowY},0,${enterMs})\\fs${rowSize}\\1c${rowColor}${alpha}\\fad(${enterMs},90)`, `${marker}${text}`));
       });
     }
@@ -1068,6 +1136,7 @@ export function buildAss(project, options = {}) {
     `Style: Modern,${font},${fontSize},${primary},${primary},${outline},&H00000000,-1,0,0,0,100,100,0,0,1,${outlineWidth},${shadow},5,70,70,70,1`,
     `Style: Muted,${font},${Math.round(fontSize * 0.64)},${muted},${muted},${outline},&H00000000,-1,0,0,0,100,100,0,0,1,1.2,0,5,70,70,70,1`,
     `Style: Bottom,${font},${Math.max(34, Math.round(fontSize * 0.48))},&H00FFFFFF,&H00FFFFFF,${outline},&H00000000,-1,0,0,0,100,100,0,0,1,2.4,0,2,80,80,48,1`,
+    ...KEYWORD_EMPHASIS_PALETTE.map(({ style, color }) => `Style: ${style},${font},${fontSize},&H00101216,&H00101216,${assColor(color)},${assColor(color)},-1,0,0,0,100,100,0,0,3,4,0,5,70,70,70,1`),
     "",
     "[Events]",
     "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text",
@@ -1319,8 +1388,9 @@ export function createKineticTextService({
     const systemPrompt = [
       "你负责中文动态大字字幕的重点词识别。只返回 JSON 数组。",
       keywordsOnly
-        ? "每一项必须包含 id 和 keywords（1-3 个原句中最值得强调的词语）。"
-        : "每一项必须包含 id、keywords（1-3 个重点词）和 lineBreaks（建议换行的字符索引数组）。",
+        ? "每一项必须包含 id 和 keywords（每句 1-3 个、每个 2-6 字、必须是原句中连续出现的重点词）。"
+        : "每一项必须包含 id、keywords（每句 1-3 个、每个 2-6 字、必须是原句中连续出现的重点词）和 lineBreaks（建议换行的字符索引数组）。",
+      "关键词优先选择主题、动作、结果、数字、转折或结论；禁止整句当关键词，禁止互相包含或语义重复。",
       "不得改写字幕原文，不得改变字幕时间戳。",
       "必须遵守下面的项目 skill 规则：",
       timelineSkillRules,
@@ -1435,18 +1505,21 @@ export function createKineticTextService({
     try {
       let project = get(projectId);
       if (!project) throw new Error("动态大字项目不存在。");
-      if (!project.outputs?.materialZip || !fs.existsSync(project.outputs.materialZip)) {
-        const nested = createJob(projectId, "materials");
-        await buildMaterials(projectId, nested.id);
-        project = get(projectId);
-      }
+      if (!project.segments.length) throw new Error("没有可渲染的字幕片段。");
+      updateJob(jobId, { status: "running", progress: 8, stage: "准备最新字幕" });
+      const renderAssetsDir = path.join(projectDir(projectId), "render");
+      const assPath = path.join(renderAssetsDir, "effects.ass");
+      const srtPath = path.join(renderAssetsDir, "subtitles.srt");
+      fs.mkdirSync(renderAssetsDir, { recursive: true });
+      fs.writeFileSync(assPath, buildAss(project), "utf8");
+      fs.writeFileSync(srtPath, buildSrt(project), "utf8");
+      project = update(projectId, { outputs: { assPath, srtPath } });
       const hasTtsAudio = Boolean(project.audioPath && fs.existsSync(project.audioPath));
       const { width, height } = resolutionForProject(project);
       const frameRate = frameRateForProject(project);
       const duration = Math.max(project.duration, hasTtsAudio ? await probeDuration(project.audioPath) : 0, 0.5);
-      const outputDir = path.join(activeDownloadsDir(), "kinetic-text", project.id);
+      const outputDir = activeDownloadsDir();
       fs.mkdirSync(outputDir, { recursive: true });
-      const assPath = project.outputs.assPath;
       const outputPath = path.join(outputDir, `${safeFileName(project.title, project.id)}.mp4`);
       const args = ["-y"];
       const bg = project.background || { mode: "black" };
@@ -1474,7 +1547,7 @@ export function createKineticTextService({
         filters.push("[tts][bgm]amix=inputs=2:duration=first:dropout_transition=0:normalize=0[a]");
       }
       args.push("-filter_complex", filters.join(";"), "-map", "[v]", "-map", backgroundAudioIndex >= 0 ? "[a]" : "[tts]");
-      args.push("-t", duration.toFixed(3), "-r", String(frameRate), "-c:v", "libx264", "-preset", "medium", "-crf", "18", "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart", outputPath);
+      args.push("-t", duration.toFixed(3), "-r", String(frameRate), "-c:v", "libx264", "-preset", "veryfast", "-crf", "19", "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart", outputPath);
       updateJob(jobId, { progress: 42, stage: "渲染动态文字" });
       await spawnLogged(ffmpegPath, args, { onLine: (line) => {
         const match = line.match(/time=(\d+):(\d+):(\d+(?:\.\d+)?)/);
