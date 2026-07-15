@@ -3252,11 +3252,23 @@ function ttsAlignmentStatusLabel(status = "") {
   return {
     waiting: "等待字幕校准",
     processing: "字幕校准中",
-    review_required: "字幕待确认",
-    confirmed: "字幕已确认",
+    review_required: "匹配率偏低，待选择",
+    confirmed: "字幕校验通过",
     failed: "字幕校准失败",
     not_required: "无需字幕校准",
   }[status] || "等待补做字幕校准";
+}
+
+function ttsAlignmentMatchInfo(job = {}) {
+  const metadata = job.metadata && typeof job.metadata === "object" ? job.metadata : {};
+  const hasRatio = Object.prototype.hasOwnProperty.call(metadata, "match_ratio")
+    || (job.match_ratio !== undefined && String(job.recognized_text || metadata.recognized_text || "").trim());
+  const ratio = hasRatio ? Number(job.match_ratio ?? metadata.match_ratio) : Number.NaN;
+  const thresholdRatio = Number(metadata.alignment_auto_approve_ratio ?? 0.8);
+  return {
+    percent: Number.isFinite(ratio) ? Number((ratio * 100).toFixed(1)) : null,
+    thresholdPercent: Number.isFinite(thresholdRatio) ? Number((thresholdRatio * 100).toFixed(1)) : 80,
+  };
 }
 
 function ttsHasAlignmentPayload(job = {}) {
@@ -3533,12 +3545,19 @@ function renderTtsJobsEnhanced(jobs = []) {
     `).join("");
     const rawAlignmentStatus = String(job.alignment_status || job.metadata?.alignment_status || "");
     const alignmentStatus = ttsAlignmentDisplayStatus(job);
+    const matchInfo = ttsAlignmentMatchInfo(job);
+    const matchPassedText = matchInfo.percent === null
+      ? "发送：音频 / 文案 / 带时间戳字幕"
+      : `原文与音频识别匹配率 ${matchInfo.percent}%，已达到 ${matchInfo.thresholdPercent}% 门槛。`;
+    const matchReviewText = matchInfo.percent === null
+      ? (job.alignment_error || "字幕尚未完成可用性检查。")
+      : `原文与音频识别匹配率 ${matchInfo.percent}%，低于 ${matchInfo.thresholdPercent}%。请选择仍然发送或重新生成音频。`;
     const handoffPanel = job.status === "completed" && alignmentStatus === "confirmed"
       ? `
         <div class="tts-job-handoff">
           <div class="tts-job-handoff-head">
             <strong>试听满意后发送</strong>
-            <span>发送：音频 / 文案 / 带时间戳字幕</span>
+            <span>${escapeHtml(matchPassedText)}</span>
           </div>
           <div class="tts-job-handoff-options">${handoffTargets}</div>
           <div class="tts-history-actions">
@@ -3555,11 +3574,15 @@ function renderTtsJobsEnhanced(jobs = []) {
           <div class="tts-job-handoff">
             <div class="tts-job-handoff-head">
               <strong>${escapeHtml(ttsAlignmentStatusLabel(alignmentStatus))}</strong>
-              <span>${escapeHtml(job.alignment_error || "确认最终文案和时间轴后才能发送到生产线。")}</span>
+              <span>${escapeHtml(matchReviewText)}</span>
             </div>
             <div class="tts-history-actions">
               ${rawAlignmentStatus === "review_required"
-                ? '<button class="primary small tts-job-calibrate" type="button">检查并确认字幕</button>'
+                ? `
+                  <button class="primary small tts-job-confirm-anyway" type="button">仍然确认并显示发送</button>
+                  <button class="ghost small tts-job-regenerate" type="button">重新生成音频</button>
+                  <button class="ghost small tts-job-calibrate" type="button">查看字幕详情</button>
+                `
                 : '<button class="primary small tts-job-alignment-retry" type="button">重新识别并校准</button>'}
               <button class="ghost small danger-action tts-job-delete" type="button">不满意，删除</button>
               <button class="ghost small tts-job-hide" type="button">隐藏</button>
@@ -6572,12 +6595,48 @@ ttsHistory?.addEventListener("click", (event) => {
   const sendButton = event.target.closest(".tts-job-send");
   const calibrateButton = event.target.closest(".tts-job-calibrate");
   const alignmentRetryButton = event.target.closest(".tts-job-alignment-retry");
+  const confirmAnywayButton = event.target.closest(".tts-job-confirm-anyway");
+  const regenerateButton = event.target.closest(".tts-job-regenerate");
   const deleteButton = event.target.closest(".tts-job-delete");
   const hideButton = event.target.closest(".tts-job-hide");
   const minimizeButton = event.target.closest(".tts-job-minimize");
   const row = event.target.closest("[data-tts-job-id]");
   if (!row) return;
   const jobId = Number(row.dataset.ttsJobId || 0);
+  if (confirmAnywayButton) {
+    (async () => {
+      const data = await fetchJson("/api/tts/alignment/confirm", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ id: jobId }),
+      });
+      activeTtsRailJob = data.job;
+      renderTtsRail(data.job);
+      showTtsPreview(data.job);
+      await refreshTtsJobs();
+    })().catch((error) => {
+      setTtsHandoffStatus(row, error instanceof Error ? error.message : String(error));
+    });
+    return;
+  }
+  if (regenerateButton) {
+    (async () => {
+      setTtsHandoffStatus(row, "已保留原记录，正在新建一条音频任务...");
+      const data = await fetchJson("/api/tts/retry", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ id: jobId }),
+      });
+      activeTtsRailJob = data.job;
+      renderTtsRail(data.job);
+      updateTtsMainProgressFromJob(data.job);
+      await refreshTtsJobs();
+      await waitForTtsJob(data.job.id);
+    })().catch((error) => {
+      setTtsHandoffStatus(row, error instanceof Error ? error.message : String(error));
+    });
+    return;
+  }
   if (calibrateButton || alignmentRetryButton) {
     (async () => {
       const data = await fetchJson(`/api/tts/job?id=${encodeURIComponent(jobId)}`);
