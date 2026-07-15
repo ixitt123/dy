@@ -10126,6 +10126,7 @@ audio {
   display: flex;
   align-items: center;
   justify-content: flex-end;
+  justify-self: end;
   gap: 10px;
   min-width: 0;
   width: 100%;
