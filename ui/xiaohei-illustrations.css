@@ -102,28 +102,60 @@ h2 {
 
 .composer,
 .panel,
-.status-panel {
+.status-panel,
+.xiaohei-card,
+.xiaohei-preview-card {
   background: var(--paper);
   border: 1px solid var(--line);
   border-radius: 8px;
-  padding: 18px;
+  padding: 12px;
 }
 
 .composer {
   display: grid;
-  gap: 14px;
-  margin-bottom: 14px;
+  gap: 10px;
+}
+
+.xiaohei-production-layout {
+  display: grid;
+  grid-template-columns: minmax(280px, 360px) minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+}
+
+.xiaohei-controls,
+.xiaohei-workspace {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.xiaohei-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.xiaohei-card-head strong {
+  display: block;
+  font-size: 14px;
+}
+
+.xiaohei-card-head small {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
 }
 
 .provider-setup {
   display: grid;
-  grid-template-columns: minmax(180px, 0.8fr) minmax(240px, 1.4fr) minmax(260px, 1fr) auto;
-  align-items: end;
-  gap: 12px;
-  padding: 12px;
-  border: 1px solid #b9c6db;
-  border-radius: 8px;
-  background: #eef4ff;
+  grid-template-columns: 1fr;
+  align-items: stretch;
+  gap: 10px;
 }
 
 .provider-setup > div {
@@ -138,7 +170,7 @@ h2 {
 .provider-setup > div span {
   margin-top: 5px;
   color: var(--muted);
-  font-size: 13px;
+  font-size: 12px;
 }
 
 .field {
@@ -147,30 +179,30 @@ h2 {
 }
 
 .field span {
-  color: #242a36;
+  color: #c7d2e7;
   font-weight: 800;
-  font-size: 14px;
+  font-size: 12px;
 }
 
 input,
 select,
 textarea {
   width: 100%;
-  border: 1px solid #c9d1df;
+  border: 1px solid #303b51;
   border-radius: 6px;
-  background: #fbfcff;
+  background: #0b111b;
   color: var(--ink);
   outline: none;
 }
 
 input,
 select {
-  min-height: 44px;
-  padding: 0 12px;
+  min-height: 38px;
+  padding: 0 10px;
 }
 
 textarea {
-  min-height: 190px;
+  min-height: 148px;
   resize: vertical;
   padding: 12px;
   line-height: 1.7;
@@ -179,14 +211,22 @@ textarea {
 input:focus,
 select:focus,
 textarea:focus {
-  border-color: var(--blue);
-  box-shadow: 0 0 0 3px rgba(77, 123, 216, 0.14);
+  border-color: #806bff;
+  box-shadow: 0 0 0 3px rgba(128, 107, 255, 0.16);
 }
 
 .control-grid {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.xiaohei-hidden-purpose {
+  position: absolute;
+  left: -9999px;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
 }
 
 .voice-actions,
@@ -204,19 +244,19 @@ textarea:focus {
   flex: 1;
   min-width: 220px;
   color: var(--muted);
-  font-size: 13px;
+  font-size: 12px;
 }
 
 button.danger {
-  border-color: #c9473d;
-  color: #b62920;
+  border-color: #75323b;
+  color: #ff9a9a;
 }
 
 .advanced-panel {
-  padding: 12px;
+  padding: 10px;
   border: 1px solid var(--line);
   border-radius: 8px;
-  background: #fff;
+  background: #0b111b;
 }
 
 .advanced-panel > summary {
