@@ -249,7 +249,7 @@ function normalizeSegmentKeywords(keywords, text) {
   return selected.length ? selected.slice(0, 3) : inferKeywords(text);
 }
 
-const BOOKEND_MIN_SECONDS = 0.45;
+const BOOKEND_MIN_SECONDS = 0.18;
 const BOOKEND_PRESETS = Object.freeze({
   intro: {
     title: "",
@@ -301,7 +301,7 @@ function calculateBookendWindows(segments, duration) {
   const firstStart = Math.max(0, Math.min(total, Number(rows[0].start || 0)));
   const lastEnd = Math.max(0, Math.min(total, Number(rows[rows.length - 1].end || 0)));
   const introEnd = Math.max(0, firstStart - 0.09);
-  const outroStart = Math.min(total, lastEnd + 0.08);
+  const outroStart = Math.min(total, lastEnd + 0.03);
   const introDuration = Math.max(0, introEnd);
   const outroDuration = Math.max(0, total - outroStart);
   return {

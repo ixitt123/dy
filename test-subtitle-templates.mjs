@@ -73,6 +73,18 @@ const shortBlankAss = buildAss({
 });
 assert.doesNotMatch(shortBlankAss, /不应出现的片头|不应出现的片尾/u, "留白不足时不得挤占正文强行显示片头片尾");
 
+const compactOutroAss = buildAss({
+  id: "compact-outro-test",
+  effectId: "rolling-focus-subtitle",
+  aspectRatio: "16:9",
+  duration: 3,
+  segments: [{ id: "body", start: 0, end: 2.72, text: "正文内容" }],
+  bookends: {
+    outro: { enabled: true, preset: "custom", text: "关注我，下期继续" },
+  },
+});
+assert.match(compactOutroAss, /关注我，下期继续/u, "结尾留白约 0.28 秒时必须启用短结尾模式");
+
 for (const template of KINETIC_TEXT_EFFECTS) {
   for (const aspectRatio of ["9:16", "16:9"]) {
     const ass = buildAss({ id: "test", effectId: template.id, effectParams: template.defaultParams, aspectRatio, duration: 2.6, text: segments.map((item) => item.text).join(""), wordTimeline: words, segments, showBottomSubtitles: false });

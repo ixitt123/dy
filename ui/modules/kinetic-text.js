@@ -2,7 +2,7 @@ const PREF_KEY = "dy:kinetic-text:preferences";
 const FAVORITES_KEY = "dy:subtitle-template:favorites";
 const HANDOFF_KEY = "dy:handoff:kinetic-text:audio";
 const TEXT_HANDOFF_KEY = "dy:handoff:kinetic-text:text";
-const BOOKEND_MIN_SECONDS = 0.45;
+const BOOKEND_MIN_SECONDS = 0.18;
 const BOOKEND_PRESET_TEXT = {
   intro: {
     title: () => state.project?.title || "动态大字视频",
@@ -116,7 +116,7 @@ function bookendWindowsFor(project = state.project) {
   const firstStart = Math.max(0, Math.min(duration, Number(rows[0].start || 0)));
   const lastEnd = Math.max(0, Math.min(duration, Number(rows[rows.length - 1].end || 0)));
   const introEnd = Math.max(0, firstStart - 0.09);
-  const outroStart = Math.min(duration, lastEnd + 0.08);
+  const outroStart = Math.min(duration, lastEnd + 0.03);
   return {
     minimumSeconds: BOOKEND_MIN_SECONDS,
     intro: { start: 0, end: introEnd, duration: introEnd, blankSeconds: firstStart, available: introEnd >= BOOKEND_MIN_SECONDS },
@@ -134,7 +134,9 @@ function renderBookendAvailability() {
     label.classList.toggle("ok", window.available);
     label.classList.toggle("warn", !window.available);
     label.textContent = window.available
-      ? `检测到 ${window.blankSeconds.toFixed(2)} 秒留白，实际显示 ${window.duration.toFixed(2)} 秒`
+      ? window.duration < 0.45
+        ? `检测到 ${window.blankSeconds.toFixed(2)} 秒留白，启用短${kind === "outro" ? "结尾" : "开头"}模式，显示 ${window.duration.toFixed(2)} 秒`
+        : `检测到 ${window.blankSeconds.toFixed(2)} 秒留白，实际显示 ${window.duration.toFixed(2)} 秒`
       : `留白仅 ${window.blankSeconds.toFixed(2)} 秒，不足 ${windows.minimumSeconds.toFixed(2)} 秒，成片中自动跳过`;
   }
 }
