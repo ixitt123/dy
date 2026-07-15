@@ -1003,7 +1003,12 @@ function bindEvents() {
     if (action !== "select" && !event.target.closest(".kinetic-template-preview")) return;
     const effect = effectById(card.dataset.effectId);
     savePreferences({ effectId: effect.id });
-    scheduleSave({ effectId: effect.id, effectParams: { ...effect.defaultParams } });
+    const changes = { effectId: effect.id, effectParams: { ...effect.defaultParams } };
+    if (effect.id === "rolling-focus-subtitle") {
+      changes.background = { mode: "black", path: "", name: "" };
+    }
+    scheduleSave(changes);
+    if (effect.id === "rolling-focus-subtitle") syncBackgroundMedia();
     $("#kineticEffectName").textContent = effect.name;
   });
   $("#kineticEffectGrid").addEventListener("pointerover", (event) => {

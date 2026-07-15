@@ -7,7 +7,7 @@ import ffprobeStatic from "ffprobe-static";
 import { KINETIC_TEXT_EFFECTS, effectById } from "./server/kinetic-text/effects.js";
 import { buildAss, createKineticTextService } from "./server/kinetic-text/kinetic-text-service.js";
 
-assert.equal(KINETIC_TEXT_EFFECTS.length, 10, "正式注册表必须恰好包含首批 10 套");
+assert.equal(KINETIC_TEXT_EFFECTS.length, 11, "正式注册表必须包含首批 10 套和新增滚动聚焦大字字幕");
 assert.equal(KINETIC_TEXT_EFFECTS.some((item) => item.id === "glitch-jitter"), false, "旧 24 字效不得继续注册");
 
 const segments = [
@@ -29,6 +29,12 @@ for (const template of KINETIC_TEXT_EFFECTS) {
     assert.match(ass, /Dialogue:/, `${template.id} 必须产生正式 ASS event`);
     assert.equal(/NaN|undefined/.test(ass), false, `${template.id} 不得产生无效数值`);
     if (["word-highlight", "karaoke-sweep"].includes(template.id)) assert.match(ass, /\\k(?:f)?\d+/, `${template.id} 必须使用真实 karaoke timing tag`);
+    if (template.id === "rolling-focus-subtitle") {
+      assert.match(ass, /▶/u, "滚动聚焦大字字幕必须包含当前句三角标记");
+      assert.match(ass, /\\an4/u, "滚动聚焦大字字幕必须使用左对齐锚点");
+      assert.match(ass, /\\move\([^)]*,0,220\)/u, "滚动聚焦大字字幕默认切换时长必须为 220ms");
+      assert.match(ass, /\\bord0\\shad0/u, "滚动聚焦大字字幕不得使用描边和阴影");
+    }
   }
 
   const dir = path.join("subtitle-templates", template.id);
