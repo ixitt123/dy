@@ -9,7 +9,7 @@ import { alignTranscriptToAudio, buildScriptLockedAlignment, validateAlignment }
 const PROMPT_FILES = ["tts_script_prepare.md", "tts_emotion_prompt.md", "seo_title_generation.md"];
 const ALIGNMENT_AUTO_APPROVE_RATIO = 0.8;
 const ALIGNMENT_MAX_AUTO_RECOGNITION_ATTEMPTS = 3;
-const ALIGNMENT_POLICY_VERSION = "script_locked_auto_confirm_v3";
+const ALIGNMENT_POLICY_VERSION = "audio_transcript_auto_confirm_v4";
 
 function safeJson(value, fallback = {}) {
   try {
@@ -1681,9 +1681,8 @@ export function createTtsService({
     const metadata = ttsJobMetadata(job);
     if (
       job.status === "completed"
-      && metadata.alignment_status === "review_required"
+      && ["review_required", "failed"].includes(String(metadata.alignment_status || ""))
       && metadata.alignment_policy_version !== ALIGNMENT_POLICY_VERSION
-      && String(metadata.recognized_text || "").trim()
       && job.audio_path
       && fs.existsSync(job.audio_path)
     ) {

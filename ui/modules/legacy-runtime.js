@@ -3564,9 +3564,23 @@ function renderTtsJobsEnhanced(jobs = []) {
     const alignmentStatus = ttsAlignmentDisplayStatus(job);
     const rewriteRequired = ttsAlignmentRewriteRequired(job);
     const matchInfo = ttsAlignmentMatchInfo(job);
+    const confirmationMode = String(job.alignment_confirmation_mode || job.metadata?.alignment_confirmation_mode || "");
+    const recognitionRatio = Number(job.recognition_match_ratio || job.metadata?.recognition_match_ratio || job.metadata?.alignment_best_asr_match_ratio || NaN);
+    const recognitionText = Number.isFinite(recognitionRatio) && recognitionRatio > 0
+      ? `原文参考匹配率 ${(recognitionRatio * 100).toFixed(1)}%`
+      : "";
+    const syncedBySingingLyrics = confirmationMode === "automatic_singing_audio_lyrics";
+    const syncedByAudioTranscript = confirmationMode === "automatic_audio_transcript_fallback";
+    const syncedByScriptFallback = confirmationMode === "automatic_script_locked_fallback";
     const matchPassedText = matchInfo.percent === null
       ? "发送：音频 / 文案 / 带时间戳字幕"
-      : `原文与音频识别匹配率 ${matchInfo.percent}%，已达到 ${matchInfo.thresholdPercent}% 门槛。`;
+      : syncedBySingingLyrics
+        ? `已按音频实际歌词同步字幕，可以发送。${recognitionText ? ` ${recognitionText}。` : ""}`
+        : syncedByAudioTranscript
+          ? `已按音频实际识别内容同步字幕，可以发送。${recognitionText ? ` ${recognitionText}。` : ""}`
+          : syncedByScriptFallback
+            ? `已生成兜底字幕时间轴，可以发送。${recognitionText ? ` ${recognitionText}。` : ""}`
+            : `字幕匹配率 ${matchInfo.percent}%，已达到 ${matchInfo.thresholdPercent}% 门槛。`;
     const matchReviewText = matchInfo.percent === null
       ? (job.alignment_error || "字幕尚未完成可用性检查。")
       : rewriteRequired
@@ -3973,6 +3987,7 @@ function renderTtsAlignmentEditor(job = activeTtsRailJob) {
     ? `原始文案参考匹配率 ${(recognitionRatio * 100).toFixed(1)}%`
     : "";
   const syncedBySingingLyrics = confirmationMode === "automatic_singing_audio_lyrics";
+  const syncedByAudioTranscript = confirmationMode === "automatic_audio_transcript_fallback";
   const syncedByScriptFallback = confirmationMode === "automatic_script_locked_fallback";
   const approvedText = matchText
     ? `${matchText}，已达到 ${matchInfo.thresholdPercent}%`
@@ -3993,9 +4008,11 @@ function renderTtsAlignmentEditor(job = activeTtsRailJob) {
     ttsAlignmentSummary.textContent = status === "confirmed"
       ? syncedBySingingLyrics
         ? `已按音频里实际识别到的歌词生成同步字幕，可以直接发送。${recognitionText ? ` ${recognitionText}。` : ""}`
-        : syncedByScriptFallback
-          ? `已按可用歌词/文案生成兜底时间轴，可以直接发送。${recognitionText ? ` ${recognitionText}。` : ""}`
-          : `${approvedText}，可以直接发送。`
+        : syncedByAudioTranscript
+          ? `已按音频实际识别内容生成同步字幕，可以直接发送。${recognitionText ? ` ${recognitionText}。` : ""}`
+          : syncedByScriptFallback
+            ? `已按可用歌词/文案生成兜底时间轴，可以直接发送。${recognitionText ? ` ${recognitionText}。` : ""}`
+            : `${approvedText}，可以直接发送。`
       : status === "review_required"
         ? `${matchText || "检查未通过"}，系统会自动重新识别，不需要人工审核。`
         : status === "failed"
@@ -4007,6 +4024,7 @@ function renderTtsAlignmentEditor(job = activeTtsRailJob) {
       ? [
           '<span class="ok">检查通过 · 可以发送</span>',
           syncedBySingingLyrics ? '<span>按实际歌词同步</span>' : "",
+          syncedByAudioTranscript ? '<span>按音频识别内容同步</span>' : "",
           syncedByScriptFallback ? '<span class="warning">兜底时间轴</span>' : "",
           recognitionText ? `<span>${escapeHtml(recognitionText)}</span>` : "",
         ].filter(Boolean)
@@ -4030,9 +4048,9 @@ function renderTtsAlignmentEditor(job = activeTtsRailJob) {
   }
   if (ttsAlignmentReviewSummary) {
     ttsAlignmentReviewSummary.textContent = status === "review_required"
-      ? "需要核对：展开查看文案并选择"
+      ? "系统自动处理中：展开查看详情"
       : status === "confirmed"
-        ? "需要查看或修改字幕时展开"
+        ? "查看字幕时间轴"
         : "查看字幕检查详情";
   }
   if (ttsAlignmentTimeline) {
@@ -4068,9 +4086,11 @@ function renderTtsAlignmentEditor(job = activeTtsRailJob) {
       : status === "confirmed"
         ? syncedBySingingLyrics
           ? `检查通过：字幕已按音频里的实际歌词同步。${recognitionText ? `${recognitionText}。` : ""}`
-          : syncedByScriptFallback
-            ? `检查通过：已生成兜底字幕时间轴。${recognitionText ? `${recognitionText}。` : ""}`
-            : `检查通过，可以发送。${matchText ? `${matchText}。` : ""}`
+          : syncedByAudioTranscript
+            ? `检查通过：字幕已按音频实际识别内容同步。${recognitionText ? `${recognitionText}。` : ""}`
+            : syncedByScriptFallback
+              ? `检查通过：已生成兜底字幕时间轴。${recognitionText ? `${recognitionText}。` : ""}`
+              : `检查通过，可以发送。${matchText ? `${matchText}。` : ""}`
         : status === "review_required"
           ? "匹配率低于门槛，系统会自动重新识别；不再人工确认放行。"
           : `${job.stage || "正在处理最终音频"}，完成前不能发送。`;
