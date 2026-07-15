@@ -364,6 +364,7 @@ const ttsMainProgressLabel = ttsMainProgress.querySelector("#ttsMainProgressLabe
 const ttsMainProgressPercent = ttsMainProgress.querySelector("#ttsMainProgressPercent");
 const ttsMainProgressBar = ttsMainProgress.querySelector(".tts-main-progress-bar");
 const ttsMainProgressFill = ttsMainProgress.querySelector(".tts-main-progress-bar i");
+const ttsOutputColumn = document.querySelector(".tts-output-column");
 const ttsPreview = document.querySelector("#ttsPreview");
 const ttsPreviewTitle = document.querySelector("#ttsPreviewTitle");
 const ttsPreviewMeta = document.querySelector("#ttsPreviewMeta");
@@ -382,6 +383,7 @@ const confirmTtsAlignmentBtn = document.querySelector("#confirmTtsAlignment");
 const ttsAlignmentStatus = document.querySelector("#ttsAlignmentStatus");
 const ttsAlignmentTimeline = document.querySelector("#ttsAlignmentTimeline");
 const alertedTtsAlignmentFailures = new Set();
+const ttsAudioHandoff = document.querySelector("#ttsAudioHandoff");
 const sendConfirmedTtsAudioBtn = document.querySelector("#sendConfirmedTtsAudio");
 const ttsAudioHandoffStatus = document.querySelector("#ttsAudioHandoffStatus");
 const ttsHistory = document.querySelector("#ttsHistory");
@@ -3966,8 +3968,29 @@ function formatTtsTimelineTime(value = 0) {
   return `${String(minutes).padStart(2, "0")}:${seconds.toFixed(3).padStart(6, "0")}`;
 }
 
+function ttsTopIssuePanelShouldShow(job = activeTtsRailJob) {
+  if (!job?.id) return false;
+  const alignmentStatus = ttsAlignmentDisplayStatus(job);
+  const hasError = String(job.error || job.alignment_error || job.metadata?.alignment_error || "").trim();
+  return alignmentStatus === "failed"
+    || ttsAlignmentRewriteRequired(job)
+    || (job.status === "completed" && alignmentStatus !== "confirmed" && Boolean(hasError));
+}
+
+function syncTtsTopIssuePanel(job = activeTtsRailJob) {
+  const show = ttsTopIssuePanelShouldShow(job);
+  if (ttsOutputColumn) ttsOutputColumn.hidden = !show;
+  if (ttsAudioHandoff) ttsAudioHandoff.hidden = true;
+  if (!show) {
+    if (ttsPreview) ttsPreview.hidden = true;
+    if (ttsAlignmentEditor) ttsAlignmentEditor.hidden = true;
+  }
+  return show;
+}
+
 function renderTtsAlignmentEditor(job = activeTtsRailJob) {
   if (!ttsAlignmentEditor) return;
+  if (!syncTtsTopIssuePanel(job)) return;
   const isMusicJob = ttsIsMusicJob(job) && !ttsNeedsAlignment(job);
   if (!job?.id || isMusicJob) {
     ttsAlignmentEditor.hidden = true;
@@ -4152,6 +4175,7 @@ async function confirmActiveTtsAlignment() {
 
 function showTtsPreview(job) {
   activeTtsRailJob = job;
+  if (!syncTtsTopIssuePanel(job)) return;
   ttsPreview.hidden = false;
   const isMusicJob = ttsIsMusicJob(job);
   ttsPreviewTitle.textContent = ttsJobTitle(job) || `${isMusicJob ? "音频" : "语音"} #${job.id}`;
