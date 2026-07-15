@@ -107,14 +107,14 @@ async function handleParentHandoff(event) {
   if (event.origin !== window.location.origin || event.data?.type !== "video-factory:xiaohei-handoff") return;
   const handoff = event.data.handoff || {};
   const job = handoff.ttsJob || {};
-  if (!job.id || job.status !== "completed") {
-    setStatus("缺少已确认音频", "请先在 TTS 语音页生成、试听并确认音频。", 0, true);
+  if (!job.id || job.status !== "completed" || !isTtsAlignmentConfirmed(job)) {
+    setStatus("缺少已确认音频", "请先在 TTS 语音页检查并确认最终文案和字幕时间轴。", 0, true);
     return;
   }
   state.projectId = String(handoff.projectId || state.projectId);
   localStorage.setItem("ian-xiaohei-project-id", state.projectId);
   els.titleInput.value = handoff.title || handoff.projectTitle || "小黑配图视频";
-  els.copyInput.value = handoff.text || job.text || "";
+  els.copyInput.value = handoff.text || confirmedTtsText(job);
   state.ttsJob = job;
   try {
     const data = await fetchJson("/api/ian-xiaohei/audio-select", {
@@ -755,9 +755,10 @@ async function createPlan() {
   }
   if (
     !state.selectedTtsJob
-    || normalizeComparableText(state.selectedTtsJob.text) !== normalizeComparableText(payload.text)
+    || !isTtsAlignmentConfirmed(state.selectedTtsJob)
+    || normalizeComparableText(confirmedTtsText(state.selectedTtsJob)) !== normalizeComparableText(payload.text)
   ) {
-    setStatus("请先生成并确认音频", "没有确认音频时不能分析分镜配图。请先生成 TTS、试听，并点击“确定本视频使用”。", 0, true);
+    setStatus("请先校准并确认音频", "没有确认最终文案和字幕时间轴时不能分析分镜配图。请先到 TTS 页面完成校准确认。", 0, true);
     return null;
   }
   setBusy(true);
@@ -800,7 +801,11 @@ async function generateAudioOnly() {
     state.ttsJob = job;
     showAudio(job.audio_url || `/api/tts/audio?id=${job.id}`, `音频 #${job.id} · 待确认`);
     await loadAudioJobs();
-    setStatus("音频生成完成，等待确认", "请试听这条音频；满意后点击“确定本视频使用”。", 100, false, "等待试听确认");
+    if (isTtsAlignmentConfirmed(job)) {
+      setStatus("音频和字幕已确认", "可以试听并点击“确定本视频使用”。", 100, false, "等待试听确认");
+    } else {
+      setStatus("音频生成完成，字幕待校准", "请到 TTS 语音页检查最终识别文案和时间轴，确认后再返回选择。", 100, false, "等待字幕确认");
+    }
     return job;
   } catch (error) {
     setStatus("音频生成失败", error.payload?.message || error.message || String(error), 100, true);
@@ -813,12 +818,12 @@ async function generateAudioOnly() {
 async function confirmCurrentAudio() {
   const job = state.ttsJob;
   const text = formPayload().text;
-  if (!job || job.status !== "completed") {
-    setStatus("没有可确认的音频", "请先生成或试听一条已完成音频。", 0, true);
+  if (!job || job.status !== "completed" || !isTtsAlignmentConfirmed(job)) {
+    setStatus("字幕尚未确认", "请先到 TTS 语音页检查并确认最终文案和字幕时间轴。", 0, true);
     return null;
   }
-  if (normalizeComparableText(job.text) !== normalizeComparableText(text)) {
-    setStatus("文案不一致", "当前试听音频不是由此文案生成，请重新生成音频。", 0, true);
+  if (normalizeComparableText(confirmedTtsText(job)) !== normalizeComparableText(text)) {
+    setStatus("文案不一致", "当前输入与已确认的最终语音文案不一致，请重新校准字幕。", 0, true);
     return null;
   }
   try {
@@ -847,9 +852,10 @@ async function generateCompleteWorkflow() {
   }
   if (
     !state.selectedTtsJob
-    || normalizeComparableText(state.selectedTtsJob.text) !== normalizeComparableText(payload.text)
+    || !isTtsAlignmentConfirmed(state.selectedTtsJob)
+    || normalizeComparableText(confirmedTtsText(state.selectedTtsJob)) !== normalizeComparableText(payload.text)
   ) {
-    setStatus("请先确认音频", "当前文案还没有确认音频，不能生成剪映草稿。请先生成、试听并确认音频。", 0, true);
+    setStatus("请先确认音频和字幕", "当前文案还没有已确认的最终语音时间轴，不能生成素材包。", 0, true);
     return;
   }
   if (!state.plan?.shots?.length) {
@@ -930,7 +936,13 @@ async function pollTtsJob(id, label = "正在生成 TTS") {
     const job = data.job;
     if (job.status === "completed") return job;
     if (job.status === "failed") throw new Error(job.error || "TTS 生成失败。");
-    setStatus(label, job.status === "processing" ? "语音合成中。" : "等待语音任务。", Math.min(90, 10 + attempt / 7), false, "生成配音");
+    setStatus(
+      label,
+      job.stage || (job.status === "processing" ? "语音合成中。" : "等待语音任务。"),
+      Number(job.progress || 0),
+      false,
+      job.stage || "生成配音",
+    );
     await delay(1000);
   }
   throw new Error("TTS 生成超时。");
@@ -969,15 +981,23 @@ function renderAudioJobs() {
   els.audioJobs.className = "audio-job-list";
   els.audioJobs.innerHTML = state.audioJobs.map((job) => {
     const selected = Boolean(job.metadata?.selected_for_project);
+    const alignmentConfirmed = isTtsAlignmentConfirmed(job);
+    const alignmentLabel = alignmentConfirmed
+      ? "字幕已确认"
+      : job.alignment_status === "review_required"
+        ? "字幕待检查"
+        : job.alignment_status === "failed"
+          ? "字幕校准失败"
+          : "字幕处理中";
     return `
       <article class="audio-job ${selected ? "selected" : ""}">
         <div>
           <strong>音频 #${job.id} · ${escapeHtml(job.voice_name || job.provider || "配音")} ${selected ? "· 本视频使用" : ""}</strong>
-          <p>${escapeHtml(job.emotion || "自然")} · ${Number(job.speed || 1).toFixed(1)}× · ${escapeHtml(statusLabel(job.status))}</p>
+          <p>${escapeHtml(job.emotion || "自然")} · ${Number(job.speed || 1).toFixed(1)}× · ${escapeHtml(statusLabel(job.status))} · ${escapeHtml(alignmentLabel)}</p>
         </div>
         <div class="audio-job-actions">
           ${job.status === "completed" ? `<button type="button" data-audio-action="preview" data-id="${job.id}">试听</button>` : ""}
-          ${job.status === "completed" && !selected ? `<button type="button" data-audio-action="select" data-id="${job.id}">使用</button>` : ""}
+          ${job.status === "completed" && alignmentConfirmed && !selected ? `<button type="button" data-audio-action="select" data-id="${job.id}">使用</button>` : ""}
           ${!["waiting", "processing"].includes(job.status) ? `<button type="button" class="danger" data-audio-action="delete" data-id="${job.id}">删除</button>` : ""}
         </div>
       </article>
@@ -1375,6 +1395,14 @@ function statusLabel(value) {
 
 function normalizeComparableText(value) {
   return String(value || "").toLowerCase().replace(/[^\u4e00-\u9fa5a-z0-9]/g, "");
+}
+
+function isTtsAlignmentConfirmed(job) {
+  return String(job?.alignment_status || job?.metadata?.alignment_status || "") === "confirmed";
+}
+
+function confirmedTtsText(job) {
+  return String(job?.final_text || job?.metadata?.final_text || "").trim();
 }
 
 function previewRatioStyle(ratio) {
