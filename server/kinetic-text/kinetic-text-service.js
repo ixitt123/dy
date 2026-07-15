@@ -226,10 +226,6 @@ function inferKeywords(text) {
   const contentSingles = segments
     .map((item) => item.text)
     .filter((item) => [...item].length === 1 && !KEYWORD_SINGLE_STOP_CHARACTERS.has(item));
-  if (targetCount === 1 && words.length === 1 && contentSingles.length === 1 && !resultPhrases.length) {
-    const choices = [words[0].text, contentSingles[0]];
-    return [choices[stableKeywordHash(source) % choices.length]];
-  }
   const selected = [];
   if (words[0]) selected.push(words[0].text);
   if (targetCount > 1) {

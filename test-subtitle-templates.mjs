@@ -207,9 +207,9 @@ const wordPlusCharacter = await service.create({
   segments: [{ id: "word-plus-character", start: 0, end: 1, text: "单词难。" }],
 });
 assert.equal(wordPlusCharacter.segments[0].keywords.length, 1, "一个完整词加一个有效单字时只能突出一个");
-assert.equal(["单词", "难"].includes(wordPlusCharacter.segments[0].keywords[0]), true, "二选一结果必须来自原句中的完整词或有效单字");
+assert.deepEqual(wordPlusCharacter.segments[0].keywords, ["单词"], "一个完整词加一个单字时必须只突出完整词");
 const wordPlusCharacterAgain = await service.analyze(wordPlusCharacter.id, "deepseek", { keywordsOnly: true });
-assert.deepEqual(wordPlusCharacterAgain.project.segments[0].keywords, wordPlusCharacter.segments[0].keywords, "二选一必须稳定，预览与导出不得变化");
+assert.deepEqual(wordPlusCharacterAgain.project.segments[0].keywords, ["单词"], "本地重识别、预览与导出都必须保持只突出完整词");
 
 fs.rmSync(tempRoot, { recursive: true, force: true });
 console.log(`subtitle templates ok: ${KINETIC_TEXT_EFFECTS.length} templates, 2 aspect ratios, confirmed word timeline preserved`);
