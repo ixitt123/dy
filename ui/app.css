@@ -10121,6 +10121,11 @@ audio {
   flex-wrap: nowrap;
 }
 
+#kineticRenderFinal {
+  flex: 0 0 auto;
+  margin-left: auto;
+}
+
 .kinetic-preview-progress {
   display: grid;
   gap: 4px;
