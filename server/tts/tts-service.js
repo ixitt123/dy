@@ -630,9 +630,17 @@ export function createTtsService({
     // records behind the same calibration gate as newly generated TTS jobs.
     if (hasAlignmentPayload(job, metadata)) return true;
     const source = String(metadata.source || "").toLowerCase();
-    if (["voice_test", "minimax_music", "generated_preview", "static_preview"].includes(source)) return false;
-    if (String(metadata.asset_kind || "").toLowerCase().includes("music")) return false;
-    if (String(job?.voice_id || "").startsWith("music:") || String(job?.emotion || "").toLowerCase() === "music") return false;
+    if (["voice_test", "generated_preview", "static_preview"].includes(source)) return false;
+    const musicLike = isSingingAlignmentJob(job, metadata)
+      || source === "minimax_music"
+      || String(metadata.asset_kind || "").toLowerCase().includes("music")
+      || String(job?.voice_id || "").startsWith("music:")
+      || String(job?.emotion || "").toLowerCase() === "music";
+    if (musicLike) {
+      const instrumental = metadata.instrumental === true || String(metadata.instrumental || "").toLowerCase() === "true";
+      const lyricText = explicitLyricsText(metadata) || String(job?.text || metadata.original_text || "").trim();
+      return !instrumental && Boolean(lyricText);
+    }
     return true;
   }
 

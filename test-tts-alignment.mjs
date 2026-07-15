@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { alignTranscriptToAudio, validateAlignment } from "./server/tts/alignment.js";
+import { alignTranscriptToAudio, buildScriptLockedAlignment, validateAlignment } from "./server/tts/alignment.js";
 
 function preciseWords(text, duration = 2) {
   const tokens = [...text];
@@ -83,5 +83,15 @@ const semanticMatch = alignTranscriptToAudio({
 });
 assert.equal(semanticMatch.matchRatio, 1);
 assert.equal(validateAlignment({ text: semanticMatch.finalText, ...semanticMatch, duration: 3 }).valid, true);
+
+const scriptLocked = buildScriptLockedAlignment({
+  text: "AI video flow is messy, sing it back.",
+  duration: 4,
+});
+assert.equal(scriptLocked.matchRatio, 1);
+assert.equal(scriptLocked.source, "script_locked_audio_duration");
+assert.equal(scriptLocked.estimatedCount, 0);
+assert.equal(scriptLocked.sentenceTimeline.at(-1).end <= 4, true);
+assert.equal(validateAlignment({ text: scriptLocked.finalText, ...scriptLocked, duration: 4 }).valid, true);
 
 console.log("TTS alignment tests passed");
