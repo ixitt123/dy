@@ -513,6 +513,273 @@ function buildLegacyAss(project, options = {}) {
   ].join("\n");
 }
 
+function assBackColor(value, opacity = 72, fallback = "#101216") {
+  const match = String(value || fallback).match(/^#?([0-9a-f]{6})$/i);
+  const hex = (match ? match[1] : fallback.replace("#", "")).toUpperCase();
+  const alpha = Math.round(255 - safeNumber(opacity, 72, 0, 100) * 2.55)
+    .toString(16)
+    .padStart(2, "0")
+    .toUpperCase();
+  return `&H${alpha}${hex.slice(4, 6)}${hex.slice(2, 4)}${hex.slice(0, 2)}`;
+}
+
+function escapeAssText(value) {
+  return String(value || "")
+    .replace(/\\/g, "\\\\")
+    .replace(/[{}]/g, "")
+    .replace(/\r?\n/g, "\\N");
+}
+
+function wrapSubtitleText(value, maxChars = 14, maxLines = 2) {
+  const source = normalizeText(value);
+  if (!source || source.length <= maxChars || maxLines <= 1) return source;
+  const chars = [...source];
+  const lines = [];
+  let cursor = 0;
+  while (cursor < chars.length && lines.length < maxLines) {
+    const remaining = chars.length - cursor;
+    if (lines.length === maxLines - 1 || remaining <= maxChars) {
+      lines.push(chars.slice(cursor).join(""));
+      break;
+    }
+    const ideal = Math.min(chars.length, cursor + maxChars);
+    let split = ideal;
+    for (let index = ideal; index > Math.max(cursor + Math.floor(maxChars * 0.62), cursor); index -= 1) {
+      if (/[，。！？；：、,.!?;:\s]/u.test(chars[index - 1] || "")) {
+        split = index;
+        break;
+      }
+    }
+    lines.push(chars.slice(cursor, split).join("").trim());
+    cursor = split;
+  }
+  return lines.filter(Boolean).join("\\N");
+}
+
+function fallbackTimedWords(segment) {
+  const source = normalizeText(segment.text);
+  const tokens = source.includes(" ")
+    ? source.split(/\s+/).filter(Boolean)
+    : source.match(/[A-Za-z0-9%]+|[\u4e00-\u9fff]|[^\s]/g) || [];
+  if (!tokens.length) return [];
+  const duration = Math.max(0.12, segment.end - segment.start);
+  const weights = tokens.map((token) => Math.max(1, [...token].length));
+  const totalWeight = weights.reduce((sum, value) => sum + value, 0);
+  let cursor = segment.start;
+  return tokens.map((text, index) => {
+    const end = index === tokens.length - 1
+      ? segment.end
+      : cursor + duration * (weights[index] / totalWeight);
+    const word = { index: index + 1, text, start: cursor, end: Math.max(cursor + 0.04, end), estimated: true };
+    cursor = word.end;
+    return word;
+  });
+}
+
+function timedWordsForSegment(segment) {
+  const words = normalizeWordRows(segment.words).filter((word) => word.end > segment.start && word.start < segment.end);
+  return words.length ? words : fallbackTimedWords(segment);
+}
+
+function joinTimedWords(words, sourceText = "") {
+  const separator = String(sourceText || "").includes(" ") ? " " : "";
+  return words.map((word) => word.text).join(separator).trim();
+}
+
+function groupTimedWords(words, sourceText = "") {
+  const groups = [];
+  let current = [];
+  let charCount = 0;
+  for (const word of words) {
+    const size = Math.max(1, [...String(word.text || "")].length);
+    const shouldFlush = current.length >= 5 || (current.length >= 2 && charCount + size > 8);
+    if (shouldFlush) {
+      groups.push(current);
+      current = [];
+      charCount = 0;
+    }
+    current.push(word);
+    charCount += size;
+  }
+  if (current.length) groups.push(current);
+  if (groups.length > 1 && groups[groups.length - 1].length === 1) {
+    groups[groups.length - 2].push(...groups.pop());
+  }
+  return groups.map((group) => ({
+    words: group,
+    text: joinTimedWords(group, sourceText),
+    start: group[0].start,
+    end: group[group.length - 1].end,
+  }));
+}
+
+function keywordMatch(value, keywords = []) {
+  const token = String(value || "").replace(/\s/g, "");
+  return keywords.some((keyword) => {
+    const clean = String(keyword || "").replace(/\s/g, "");
+    return clean && (token.includes(clean) || clean.includes(token));
+  });
+}
+
+function keywordStyledText(value, keywords, accent, primary) {
+  const source = String(value || "");
+  const ordered = [...new Set((keywords || []).map(String).filter(Boolean))].sort((a, b) => b.length - a.length);
+  if (!ordered.length) return escapeAssText(source);
+  const pattern = new RegExp(`(${ordered.map((item) => item.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")})`, "g");
+  return source.split(pattern).map((part) => (
+    ordered.includes(part)
+      ? `{\\1c${accent}\\b1\\fscx108\\fscy108}${escapeAssText(part)}{\\1c${primary}\\fscx100\\fscy100}`
+      : escapeAssText(part)
+  )).join("");
+}
+
+function karaokeText(words, sourceText, mode = "k") {
+  const separator = String(sourceText || "").includes(" ") ? " " : "";
+  return words.map((word, index) => {
+    const centiseconds = Math.max(1, Math.round((word.end - word.start) * 100));
+    const suffix = index < words.length - 1 ? separator : "";
+    return `{\\${mode}${centiseconds}}${escapeAssText(word.text + suffix)}`;
+  }).join("");
+}
+
+function assEvent(layer, start, end, style, tags, text) {
+  return `Dialogue: ${layer},${formatAssTime(start)},${formatAssTime(end)},${style},,0,0,0,,{${tags}}${text}`;
+}
+
+function buildAss(project, options = {}) {
+  const normalized = normalizeProject(project);
+  const template = effectById(normalized.effectId);
+  const params = { ...template.defaultParams, ...normalized.effectParams };
+  const { width, height } = resolutionForProject(normalized);
+  const landscapeScale = width > height ? 1.12 : 1;
+  const fontSize = Math.round(safeNumber(params.fontSize, 82, 34, 180) * landscapeScale);
+  const font = String(params.fontFamily || DEFAULT_FONT).replace(/,/g, " ");
+  const primary = assColor(params.primaryColor || template.primary);
+  const accent = assColor(params.accentColor || template.accent);
+  const muted = assColor(template.muted || "#8B94A3");
+  const outline = assColor("#101216");
+  const cardBack = assBackColor(params.backgroundColor || "#101216", params.backgroundOpacity, "#101216");
+  const outlineWidth = params.outlineEnabled === false ? 0 : Math.max(1.2, Math.round(fontSize * 0.034 * 10) / 10);
+  const shadow = params.shadowEnabled === false ? 0 : Math.max(1, Math.round(fontSize * 0.02));
+  const offset = safeNumber(options.offset, 0);
+  const limitToId = options.segmentId ? String(options.segmentId) : "";
+  const maxChars = normalized.aspectRatio === "16:9" ? 24 : normalized.aspectRatio === "1:1" ? 16 : 13;
+  const maxLines = Math.round(safeNumber(params.maxLines, 2, 1, 3));
+  const events = [];
+
+  normalized.segments.forEach((segment, segmentIndex) => {
+    if (limitToId && String(segment.id) !== limitToId) return;
+    const start = Math.max(0, segment.start - offset);
+    const end = Math.max(start + 0.1, segment.end - offset);
+    const durationMs = Math.max(100, Math.round((end - start) * 1000));
+    const overrides = segment.overrides || {};
+    const x = Math.round((safeNumber(overrides.x ?? params.x, 50, 5, 95) / 100) * width);
+    const y = Math.round((safeNumber(overrides.y ?? params.y, 64, 8, 92) / 100) * height);
+    const keywords = [...new Set((segment.keywords || []).map(normalizeText).filter(Boolean))].slice(0, 3);
+    const words = timedWordsForSegment(segment).map((word) => ({
+      ...word,
+      start: Math.max(start, word.start - offset),
+      end: Math.min(end, Math.max(start + 0.01, word.end - offset)),
+    })).filter((word) => word.end > word.start);
+    const wrappedText = wrapSubtitleText(segment.text, maxChars, maxLines);
+    const enterMs = Math.min(220, Math.max(90, Math.round(150 / safeNumber(params.animationSpeed, 1, 0.5, 2))));
+
+    if (template.renderMode === "rolling-focus") {
+      const lineGap = Math.round(fontSize * 1.32);
+      const neighbors = [
+        { row: normalized.segments[segmentIndex - 1], delta: -1 },
+        { row: segment, delta: 0 },
+        { row: normalized.segments[segmentIndex + 1], delta: 1 },
+      ].filter((item) => item.row);
+      neighbors.forEach(({ row, delta }) => {
+        const current = delta === 0;
+        const rowY = y + delta * lineGap;
+        const rowSize = current ? fontSize : Math.round(fontSize * 0.64);
+        const rowColor = current ? primary : muted;
+        const alpha = current ? "" : "\\alpha&H55&";
+        const marker = current ? "▶  " : "";
+        const text = escapeAssText(wrapSubtitleText(row.text, maxChars, current ? 2 : 1));
+        events.push(assEvent(current ? 3 : 1, start, end, current ? "Modern" : "Muted", `\\an5\\move(${x},${rowY + Math.round(lineGap * 0.18)},${x},${rowY},0,${enterMs})\\fs${rowSize}\\1c${rowColor}${alpha}\\fad(${enterMs},90)`, `${marker}${text}`));
+      });
+    } else if (template.renderMode === "word-highlight") {
+      events.push(assEvent(2, start, end, "Karaoke", `\\an5\\pos(${x},${y})\\fs${fontSize}\\fad(70,70)`, karaokeText(words, segment.text, "k")));
+    } else if (template.renderMode === "karaoke-sweep") {
+      events.push(assEvent(2, start, end, "Karaoke", `\\an5\\pos(${x},${y})\\fs${fontSize}\\fad(70,70)`, karaokeText(words, segment.text, "kf")));
+    } else if (template.renderMode === "center-statement") {
+      const statement = keywordStyledText(wrappedText, keywords, accent, primary);
+      events.push(assEvent(2, start, end, "Modern", `\\an5\\pos(${x},${y})\\fs${fontSize}\\fscx96\\fscy96\\blur2\\fad(${enterMs},${Math.min(180, durationMs / 4)})\\t(0,${enterMs},\\fscx100\\fscy100\\blur0)`, statement));
+    } else if (template.renderMode === "keyword-emphasis") {
+      const statement = keywordStyledText(wrappedText, keywords, accent, primary);
+      events.push(assEvent(1, start, end, "Modern", `\\an5\\pos(${x},${y})\\fs${fontSize}\\fad(${enterMs},90)`, statement));
+      words.filter((word) => keywordMatch(word.text, keywords)).slice(0, 3).forEach((word) => {
+        events.push(assEvent(3, word.start, Math.min(end, word.end + 0.12), "Modern", `\\an5\\pos(${x},${Math.min(height * 0.88, y + fontSize * 1.05)})\\fs${Math.round(fontSize * 1.15)}\\1c${accent}\\fscx88\\fscy88\\fad(45,70)\\t(0,110,\\fscx100\\fscy100)`, escapeAssText(word.text)));
+      });
+    } else if (template.renderMode === "phrase-pop") {
+      const groups = groupTimedWords(words, segment.text);
+      groups.forEach((group, groupIndex) => {
+        const groupStart = Math.max(start, group.start);
+        const nextStart = groups[groupIndex + 1]?.start;
+        const groupEnd = Math.min(end, Math.max(groupStart + 0.22, nextStart || group.end));
+        const groupKeywords = keywords.filter((keyword) => group.text.includes(keyword));
+        const groupText = keywordStyledText(wrapSubtitleText(group.text, maxChars, 2), groupKeywords, accent, primary);
+        events.push(assEvent(2, groupStart, groupEnd, "Modern", `\\an5\\pos(${x},${y})\\fs${fontSize}\\fscx90\\fscy90\\fad(55,55)\\t(0,${enterMs},\\fscx100\\fscy100)`, groupText));
+      });
+    } else if (template.renderMode === "dialogue-two-line") {
+      const speaker = escapeAssText(segment.speaker || `讲述 ${segmentIndex + 1}`);
+      const labelY = Math.max(fontSize, y - Math.round(fontSize * 1.08));
+      events.push(assEvent(3, start, end, "Label", `\\an1\\pos(${Math.max(50, x - width * 0.38)},${labelY})\\fs${Math.round(fontSize * 0.45)}\\1c${accent}\\fad(${enterMs},90)`, speaker));
+      events.push(assEvent(2, start, end, "DialogueBody", `\\an2\\pos(${x},${y})\\fs${fontSize}\\fad(${enterMs},90)`, escapeAssText(wrappedText)));
+    } else if (template.renderMode === "documentary-minimal") {
+      events.push(assEvent(2, start, end, "Minimal", `\\an2\\pos(${x},${y})\\fs${fontSize}\\fad(180,160)`, escapeAssText(wrappedText)));
+    } else if (template.renderMode === "caption-card") {
+      const cardText = keywordStyledText(wrappedText, keywords, accent, primary);
+      events.push(assEvent(2, start, end, "Card", `\\an5\\pos(${x},${y})\\fs${fontSize}\\fscx96\\fscy96\\fad(${enterMs},100)\\t(0,${enterMs},\\fscx100\\fscy100)`, cardText));
+    } else if (template.renderMode === "keyword-tags") {
+      const baseY = y - Math.round(fontSize * 0.35);
+      events.push(assEvent(1, start, end, "Modern", `\\an5\\pos(${x},${baseY})\\fs${fontSize}\\fad(${enterMs},90)`, escapeAssText(wrappedText)));
+      const tags = keywords.length ? keywords : inferKeywords(segment.text);
+      tags.slice(0, 3).forEach((keyword, tagIndex) => {
+        const matchingWord = words.find((word) => keywordMatch(word.text, [keyword]));
+        const tagStart = Math.max(start, matchingWord?.start || start + tagIndex * 0.08);
+        const spread = Math.min(width * 0.24, fontSize * 2.2);
+        const tagX = x + (tagIndex - (Math.min(tags.length, 3) - 1) / 2) * spread;
+        events.push(assEvent(3, tagStart, end, "Tag", `\\an5\\pos(${Math.round(tagX)},${Math.round(y + fontSize * 1.05)})\\fs${Math.round(fontSize * 0.48)}\\1c${outline}\\fad(70,80)`, escapeAssText(keyword)));
+      });
+    }
+
+    if (normalized.showBottomSubtitles) {
+      events.push(assEvent(5, start, end, "Bottom", `\\an2\\pos(${Math.round(width / 2)},${Math.round(height * 0.94)})\\fad(100,80)`, escapeAssText(wrappedText)));
+    }
+  });
+
+  return [
+    "[Script Info]",
+    "ScriptType: v4.00+",
+    `PlayResX: ${width}`,
+    `PlayResY: ${height}`,
+    "ScaledBorderAndShadow: yes",
+    "YCbCr Matrix: TV.709",
+    "WrapStyle: 2",
+    "",
+    "[V4+ Styles]",
+    "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding",
+    `Style: Modern,${font},${fontSize},${primary},${primary},${outline},&H00000000,-1,0,0,0,100,100,0,0,1,${outlineWidth},${shadow},5,70,70,70,1`,
+    `Style: Karaoke,${font},${fontSize},${accent},${primary},${outline},&H00000000,-1,0,0,0,100,100,0,0,1,${outlineWidth},${shadow},5,70,70,70,1`,
+    `Style: Muted,${font},${Math.round(fontSize * 0.64)},${muted},${muted},${outline},&H00000000,-1,0,0,0,100,100,0,0,1,1.2,0,5,70,70,70,1`,
+    `Style: DialogueBody,${font},${fontSize},${primary},${primary},${cardBack},${cardBack},-1,0,0,0,100,100,0,0,3,18,0,2,90,90,90,1`,
+    `Style: Label,${font},${Math.round(fontSize * 0.45)},${accent},${accent},${outline},&H00000000,-1,0,0,0,100,100,0,0,1,0,0,1,90,90,90,1`,
+    `Style: Minimal,${font},${fontSize},${primary},${primary},${outline},&H00000000,0,0,0,0,100,100,1.2,0,1,${Math.min(1.4, outlineWidth)},${Math.min(1, shadow)},2,90,90,90,1`,
+    `Style: Card,${font},${fontSize},${primary},${primary},${cardBack},${cardBack},-1,0,0,0,100,100,0,0,3,22,0,5,90,90,90,1`,
+    `Style: Tag,${font},${Math.round(fontSize * 0.48)},${outline},${outline},${accent},${accent},-1,0,0,0,100,100,0,0,3,14,0,5,60,60,60,1`,
+    `Style: Bottom,${font},${Math.max(34, Math.round(fontSize * 0.48))},&H00FFFFFF,&H00FFFFFF,${outline},&H00000000,-1,0,0,0,100,100,0,0,1,2.4,0,2,80,80,48,1`,
+    "",
+    "[Events]",
+    "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text",
+    ...events,
+    "",
+  ].join("\n");
+}
+
 function buildSrt(project) {
   return normalizeProject(project).segments.map((segment, index) => [
     String(index + 1),
