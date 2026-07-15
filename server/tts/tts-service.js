@@ -4,6 +4,7 @@ import { spawnSync } from "node:child_process";
 import { generateSeoTitlePackage } from "../core/title-generator.js";
 import { createTtsProvider } from "./providers/index.js";
 import { redactSecrets } from "./provider-adapter.js";
+import { alignTranscriptToAudio, validateAlignment } from "./alignment.js";
 
 const PROMPT_FILES = ["tts_script_prepare.md", "tts_emotion_prompt.md", "seo_title_generation.md"];
 
@@ -365,6 +366,35 @@ function writeTimedTextFiles({ directory, job, preparedText, result, fileBaseNam
   };
 }
 
+function writeAlignedTextFiles({ directory, job, finalText, sentenceTimeline, wordTimeline, fileBaseName, title = "" }) {
+  fs.mkdirSync(directory, { recursive: true });
+  const safeBaseName = String(fileBaseName || `tts-${job.id}`).replace(/[^a-z0-9_-]+/gi, "_") || `tts-${job.id}`;
+  const scriptPath = path.join(directory, `${safeBaseName}.txt`);
+  const srtPath = path.join(directory, `${safeBaseName}.srt`);
+  const textPath = path.join(directory, `${safeBaseName}-timestamped.txt`);
+  const wordTimelinePath = path.join(directory, `${safeBaseName}-word-timeline.json`);
+  const srt = sentenceTimeline.map((item, index) => [
+    String(index + 1),
+    `${formatClock(item.start, ",")} --> ${formatClock(item.end, ",")}`,
+    item.text,
+  ].join("\n")).join("\n\n") + "\n";
+  const timestampedText = sentenceTimeline
+    .map((item) => `[${formatClock(item.start)} --> ${formatClock(item.end)}] ${item.text}${item.estimated ? "【估算】" : ""}`)
+    .join("\n") + "\n";
+  const cleanTitle = String(title || "").trim();
+  const titlePrefix = cleanTitle ? `标题：${cleanTitle}\n\n` : "";
+  fs.writeFileSync(scriptPath, `${titlePrefix}${String(finalText || "").trim()}\n`, "utf8");
+  fs.writeFileSync(srtPath, srt, "utf8");
+  fs.writeFileSync(textPath, `${titlePrefix}${timestampedText}`, "utf8");
+  fs.writeFileSync(wordTimelinePath, `${JSON.stringify(wordTimeline, null, 2)}\n`, "utf8");
+  return {
+    script_path: scriptPath,
+    subtitle_path: srtPath,
+    timestamped_text_path: textPath,
+    word_timeline_path: wordTimelinePath,
+  };
+}
+
 function ttsJobMetadata(job = {}) {
   return safeJson(job.metadata_json, {});
 }
@@ -473,11 +503,20 @@ function curatedPresetVoices(providerId, voices = []) {
   return [...regular.slice(0, CURATED_REGULAR_LIMIT), ...special];
 }
 
-export function createTtsService({ baseDir, taskStore, getSettings, ffmpegPath, ffprobePath = "", onJobCompleted = () => {} }) {
+export function createTtsService({
+  baseDir,
+  taskStore,
+  getSettings,
+  ffmpegPath,
+  ffprobePath = "",
+  transcribeFinalAudio = null,
+  onJobCompleted = () => {},
+}) {
   const outputDir = path.join(baseDir, ".data", "tts", "audio");
   const subtitleDir = path.join(baseDir, ".data", "tts", "subtitles");
   const promptsDir = path.join(baseDir, "prompts");
   const pending = [];
+  const alignmentRunning = new Set();
   let working = false;
 
   fs.mkdirSync(outputDir, { recursive: true });
@@ -486,6 +525,34 @@ export function createTtsService({ baseDir, taskStore, getSettings, ffmpegPath, 
     if (!fs.existsSync(path.join(promptsDir, file))) {
       throw new Error(`缺少 TTS Prompt：${file}`);
     }
+  }
+
+  function updateJobMetadata(jobId, changes = {}, jobChanges = {}) {
+    const current = taskStore.getTtsJob(Number(jobId || 0));
+    if (!current) return null;
+    const metadata = safeJson(current.metadata_json, {});
+    return taskStore.updateTtsJob(current.id, {
+      ...jobChanges,
+      metadata_json: JSON.stringify({ ...metadata, ...changes }),
+    });
+  }
+
+  function setJobProgress(jobId, progress, stage, changes = {}, jobChanges = {}) {
+    const value = Math.max(0, Math.min(100, Math.round(Number(progress || 0))));
+    return updateJobMetadata(jobId, {
+      ...changes,
+      progress: value,
+      stage: String(stage || ""),
+      progress_updated_at: new Date().toISOString(),
+    }, jobChanges);
+  }
+
+  function requiresAlignment(job, metadata = safeJson(job?.metadata_json, {})) {
+    const source = String(metadata.source || "").toLowerCase();
+    if (["voice_test", "minimax_music", "generated_preview", "static_preview"].includes(source)) return false;
+    if (String(metadata.asset_kind || "").toLowerCase().includes("music")) return false;
+    if (String(job?.voice_id || "").startsWith("music:") || String(job?.emotion || "").toLowerCase() === "music") return false;
+    return true;
   }
 
   function ensureSequenceNumbers() {
