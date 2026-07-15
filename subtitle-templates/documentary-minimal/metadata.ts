@@ -1,1 +1,0 @@
-export default { id: "documentary-minimal", name: "纪录片极简", description: "底部安全区、精细字距和低干扰淡入。", previewImage: "/subtitle-templates/documentary-minimal/preview.png", previewVideo: "/subtitle-templates/documentary-minimal/preview.mp4", supportedTiming: ["sentence"] as Array<"sentence">, supportedAspectRatios: ["16:9", "9:16", "1:1"] as Array<"16:9" | "9:16" | "1:1"> };

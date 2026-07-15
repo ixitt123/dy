@@ -1,1 +1,0 @@
-export default { id: "center-statement", name: "编辑部金句", description: "单句居中、留白和克制进入。", previewImage: "/subtitle-templates/center-statement/preview.png", previewVideo: "/subtitle-templates/center-statement/preview.mp4", supportedTiming: ["sentence"] as Array<"sentence">, supportedAspectRatios: ["16:9", "9:16", "1:1"] as Array<"16:9" | "9:16" | "1:1"> };

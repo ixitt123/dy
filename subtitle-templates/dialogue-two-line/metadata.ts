@@ -1,1 +1,0 @@
-export default { id: "dialogue-two-line", name: "双人访谈", description: "说话人标签、双行正文和安全底卡。", previewImage: "/subtitle-templates/dialogue-two-line/preview.png", previewVideo: "/subtitle-templates/dialogue-two-line/preview.mp4", supportedTiming: ["sentence", "word"] as Array<"sentence" | "word">, supportedAspectRatios: ["16:9", "9:16", "1:1"] as Array<"16:9" | "9:16" | "1:1"> };

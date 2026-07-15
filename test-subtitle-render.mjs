@@ -24,9 +24,8 @@ async function waitFor(jobId) {
 }
 
 for (const [effectId, aspectRatio, expected, expectedFrameRate] of [
-  ["word-highlight", "9:16", "1080x1920", 30],
-  ["caption-card", "16:9", "1920x1080", 60],
-  ["rolling-focus-subtitle", "16:9", "1920x1080", 30],
+  ["rolling-focus", "9:16", "1080x1920", 30],
+  ["rolling-focus-subtitle", "16:9", "1920x1080", 60],
 ]) {
   const project = await service.create({ effectId, aspectRatio, frameRate: expectedFrameRate, text: segment.text, segments: [segment], tts: { alignment_status: "confirmed", final_text: segment.text, duration: 1.25, sentence_timeline: [segment], word_timeline: words } });
   const job = service.startRender(project.id);
@@ -40,4 +39,4 @@ for (const [effectId, aspectRatio, expected, expectedFrameRate] of [
 }
 
 fs.rmSync(root, { recursive: true, force: true });
-console.log("subtitle formal render ok: 9:16 word timing at 30fps + 16:9 card at 60fps + left rolling focus at 30fps");
+console.log("subtitle formal render ok: retained rolling focus templates at 9:16/30fps and 16:9/60fps");

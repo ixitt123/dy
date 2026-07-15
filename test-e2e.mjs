@@ -200,11 +200,12 @@ test("Kinetic text production line", async () => {
   ]);
   const packageJson = JSON.parse(packageSource);
   const templateIds = new Set((effects.effects || []).map((item) => item.id));
-  if (!effectsResponse.ok || effects.effects?.length !== 11
-    || !templateIds.has("word-highlight")
-    || !templateIds.has("karaoke-sweep")
-    || !templateIds.has("dialogue-two-line")
+  if (!effectsResponse.ok || effects.effects?.length !== 2
+    || !templateIds.has("rolling-focus")
     || !templateIds.has("rolling-focus-subtitle")
+    || templateIds.has("word-highlight")
+    || templateIds.has("karaoke-sweep")
+    || templateIds.has("dialogue-two-line")
     || templateIds.has("glitch-jitter")
     || !page.includes('data-nav="kinetic-text"')
     || !page.includes('data-page="kinetic-text"')

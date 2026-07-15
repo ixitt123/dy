@@ -7,7 +7,7 @@ import ffprobeStatic from "ffprobe-static";
 import { KINETIC_TEXT_EFFECTS, effectById } from "./server/kinetic-text/effects.js";
 import { buildAss, createKineticTextService } from "./server/kinetic-text/kinetic-text-service.js";
 
-assert.equal(KINETIC_TEXT_EFFECTS.length, 11, "正式注册表必须包含首批 10 套和新增滚动聚焦大字字幕");
+assert.equal(KINETIC_TEXT_EFFECTS.length, 2, "正式注册表只保留两个滚动聚焦模板");
 assert.equal(KINETIC_TEXT_EFFECTS.some((item) => item.id === "glitch-jitter"), false, "旧 24 字效不得继续注册");
 
 const segments = [
@@ -47,7 +47,6 @@ for (const template of KINETIC_TEXT_EFFECTS) {
     assert.match(ass, new RegExp(`PlayResY: ${aspectRatio === "9:16" ? 1920 : 1080}`));
     assert.match(ass, /Dialogue:/, `${template.id} 必须产生正式 ASS event`);
     assert.equal(/NaN|undefined/.test(ass), false, `${template.id} 不得产生无效数值`);
-    if (["word-highlight", "karaoke-sweep"].includes(template.id)) assert.match(ass, /\\k(?:f)?\d+/, `${template.id} 必须使用真实 karaoke timing tag`);
     if (template.id === "rolling-focus-subtitle") {
       assert.match(ass, /▶/u, "滚动聚焦大字字幕必须包含当前句三角标记");
       assert.match(ass, /\\an4/u, "滚动聚焦大字字幕必须使用左对齐锚点");
@@ -67,7 +66,7 @@ const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "subtitle-template-test-"
 const service = createKineticTextService({ baseDir: tempRoot, downloadsDir: path.join(tempRoot, "downloads"), ffmpegPath, ffprobePath: ffprobeStatic.path, modelRouter: null });
 const created = await service.create({
   aspectRatio: "9:16",
-  effectId: "word-highlight",
+  effectId: "rolling-focus-subtitle",
   tts: {
     id: 20260715,
     alignment_status: "confirmed",
@@ -80,7 +79,7 @@ const created = await service.create({
 assert.equal(created.wordTimeline.length, words.length, "确认后的 TTS wordTimeline 必须原样进入字幕项目");
 assert.equal(created.segments.every((segment) => segment.words.length > 0), true, "逐词时间必须附着到对应句段");
 assert.equal(created.aspectRatio, "9:16");
-assert.equal(effectById(created.effectId).id, "word-highlight");
+assert.equal(effectById(created.effectId).id, "rolling-focus-subtitle");
 
 fs.rmSync(tempRoot, { recursive: true, force: true });
 console.log(`subtitle templates ok: ${KINETIC_TEXT_EFFECTS.length} templates, 2 aspect ratios, confirmed word timeline preserved`);

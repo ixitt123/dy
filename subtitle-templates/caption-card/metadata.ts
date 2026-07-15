@@ -1,1 +1,0 @@
-export default { id: "caption-card", name: "自适应卡片", description: "卡片尺寸随文字变化，适合步骤和结论。", previewImage: "/subtitle-templates/caption-card/preview.png", previewVideo: "/subtitle-templates/caption-card/preview.mp4", supportedTiming: ["sentence", "word"] as Array<"sentence" | "word">, supportedAspectRatios: ["16:9", "9:16", "1:1"] as Array<"16:9" | "9:16" | "1:1"> };

@@ -1,1 +1,0 @@
-export default { id: "keyword-tags", name: "知识点标签", description: "主句稳定，关键词使用克制胶囊标签。", previewImage: "/subtitle-templates/keyword-tags/preview.png", previewVideo: "/subtitle-templates/keyword-tags/preview.mp4", supportedTiming: ["sentence", "word"] as Array<"sentence" | "word">, supportedAspectRatios: ["16:9", "9:16", "1:1"] as Array<"16:9" | "9:16" | "1:1"> };
