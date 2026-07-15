@@ -1,0 +1,1 @@
+export default { id: "phrase-pop", name: "短语节拍", description: "每次 2–5 个词，按口播节奏成组出现。", previewImage: "/subtitle-templates/phrase-pop/preview.png", previewVideo: "/subtitle-templates/phrase-pop/preview.mp4", supportedTiming: ["word", "sentence"] as Array<"word" | "sentence">, supportedAspectRatios: ["16:9", "9:16", "1:1"] as Array<"16:9" | "9:16" | "1:1"> };
