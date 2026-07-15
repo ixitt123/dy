@@ -223,6 +223,13 @@ function inferKeywords(text) {
   if (!source) return [];
   const { segments, words, resultPhrases } = keywordCandidateGroups(text);
   const targetCount = keywordTargetCount(text);
+  const contentSingles = segments
+    .map((item) => item.text)
+    .filter((item) => [...item].length === 1 && !KEYWORD_SINGLE_STOP_CHARACTERS.has(item));
+  if (targetCount === 1 && words.length === 1 && contentSingles.length === 1 && !resultPhrases.length) {
+    const choices = [words[0].text, contentSingles[0]];
+    return [choices[stableKeywordHash(source) % choices.length]];
+  }
   const selected = [];
   if (words[0]) selected.push(words[0].text);
   if (targetCount > 1) {
@@ -238,7 +245,7 @@ function inferKeywords(text) {
     if (fallbackWord) selected.push(fallbackWord);
   }
   if (!selected.length) {
-    const single = segments.map((item) => item.text).find((item) => [...item].length === 1 && !KEYWORD_SINGLE_STOP_CHARACTERS.has(item));
+    const single = contentSingles[0];
     if (single) selected.push(single);
   }
   return selected.slice(0, targetCount);
