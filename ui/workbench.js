@@ -750,6 +750,8 @@ function setupTtsStudio() {
   const controlColumn = oldWorkbench.querySelector(".tts-control-column");
   const settings = lab.querySelector(".tts-settings");
   const preview = lab.querySelector(".tts-preview");
+  const alignmentEditor = lab.querySelector("#ttsAlignmentEditor");
+  const audioHandoff = lab.querySelector("#ttsAudioHandoff");
   const historyPanel = lab.querySelector(".tts-history-panel");
   const historyHead = lab.querySelector(".tts-history-head");
   const history = lab.querySelector(".tts-history");
@@ -767,6 +769,8 @@ function setupTtsStudio() {
   if (settings) settingsLane.appendChild(settings);
   if (controlColumn) settingsLane.appendChild(controlColumn);
   if (preview) resultLane.appendChild(preview);
+  if (alignmentEditor) resultLane.appendChild(alignmentEditor);
+  if (audioHandoff) resultLane.appendChild(audioHandoff);
   if (historyHead) resultLane.appendChild(historyHead);
   if (history) resultLane.appendChild(history);
   if (historyPanel && historyPanel.children.length === 0) historyPanel.remove();

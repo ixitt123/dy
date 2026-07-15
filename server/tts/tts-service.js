@@ -7,6 +7,8 @@ import { redactSecrets } from "./provider-adapter.js";
 import { alignTranscriptToAudio, validateAlignment } from "./alignment.js";
 
 const PROMPT_FILES = ["tts_script_prepare.md", "tts_emotion_prompt.md", "seo_title_generation.md"];
+const ALIGNMENT_AUTO_APPROVE_RATIO = 0.8;
+const ALIGNMENT_POLICY_VERSION = "original_vs_audio_80";
 
 function safeJson(value, fallback = {}) {
   try {
@@ -547,6 +549,23 @@ export function createTtsService({
     }, jobChanges);
   }
 
+  function preferredAlignmentText(job, metadata = safeJson(job?.metadata_json, {})) {
+    const finalText = String(metadata.final_text || "").trim();
+    const recognizedText = String(metadata.recognized_text || "").trim();
+    // Preserve an explicit manual correction. Older automatic alignments used
+    // the ASR transcript as final copy, so fall back to the original TTS copy
+    // when both values are identical.
+    if (finalText && finalText !== recognizedText) return finalText;
+    return String(
+      metadata.original_text
+      || job?.text
+      || metadata.tts_prepared_text
+      || finalText
+      || recognizedText
+      || "",
+    ).trim();
+  }
+
   function hasAlignmentPayload(job, metadata = safeJson(job?.metadata_json, {})) {
     const text = String(
       metadata.final_text
@@ -790,7 +809,7 @@ export function createTtsService({
         recognized_sentence_timeline: recognizedSentences,
       }, { status: "processing" });
       const aligned = alignTranscriptToAudio({
-        text: String(finalText || recognizedText).trim(),
+        text: String(finalText || preferredAlignmentText(initial, initialMetadata) || recognizedText).trim(),
         recognizedText,
         recognizedWords,
         recognizedSentences,
@@ -838,7 +857,11 @@ export function createTtsService({
         alignment_validation: validation,
       }, { status: "processing" });
       const revision = Number(latestMetadata.alignment_revision || 0) + 1;
-      const completed = setJobProgress(numericId, 100, "等待用户确认字幕", {
+      const autoApproved = aligned.matchRatio >= ALIGNMENT_AUTO_APPROVE_RATIO;
+      const completedAt = new Date().toISOString();
+      const completed = setJobProgress(numericId, 100, autoApproved
+        ? `字幕匹配率 ${(aligned.matchRatio * 100).toFixed(1)}%，可以发送`
+        : `字幕匹配率 ${(aligned.matchRatio * 100).toFixed(1)}%，等待选择`, {
         ...files,
         original_text: initialMetadata.original_text || initial.text,
         tts_prepared_text: initialMetadata.tts_prepared_text || initialMetadata.prepared_text || initial.text,
@@ -854,11 +877,14 @@ export function createTtsService({
         low_confidence_count: aligned.lowConfidenceCount,
         match_ratio: aligned.matchRatio,
         alignment_validation: validation,
-        alignment_status: "review_required",
-        alignment_confirmed_at: "",
+        alignment_status: autoApproved ? "confirmed" : "review_required",
+        alignment_confirmed_at: autoApproved ? completedAt : "",
+        alignment_confirmation_mode: autoApproved ? "automatic_match_threshold" : "",
+        alignment_auto_approve_ratio: ALIGNMENT_AUTO_APPROVE_RATIO,
+        alignment_policy_version: ALIGNMENT_POLICY_VERSION,
         alignment_error: "",
         alignment_revision: revision,
-        alignment_completed_at: new Date().toISOString(),
+        alignment_completed_at: completedAt,
         audio_duration: audioDuration,
       }, { status: "completed", error: "", completed_at: new Date().toISOString() });
       return { job: publicJob(completed) };
@@ -908,6 +934,9 @@ export function createTtsService({
     const confirmed = setJobProgress(job.id, 100, "字幕已确认，可以发送", {
       alignment_status: "confirmed",
       alignment_confirmed_at: new Date().toISOString(),
+      alignment_confirmation_mode: "manual_override",
+      alignment_auto_approve_ratio: ALIGNMENT_AUTO_APPROVE_RATIO,
+      alignment_policy_version: ALIGNMENT_POLICY_VERSION,
       alignment_validation: validation,
     }, { status: "completed", error: "" });
     await Promise.resolve(onJobCompleted(confirmed));
@@ -1421,9 +1450,21 @@ export function createTtsService({
   ensureSequenceNumbers();
   repairEstimatedTimelines();
   const resumeAlignmentIds = [];
+  const recheckAlignmentJobs = [];
   for (const job of taskStore.listTtsJobs({ limit: 500 })) {
-    if (!["waiting", "processing"].includes(job.status)) continue;
     const metadata = ttsJobMetadata(job);
+    if (
+      job.status === "completed"
+      && metadata.alignment_status === "review_required"
+      && metadata.alignment_policy_version !== ALIGNMENT_POLICY_VERSION
+      && String(metadata.recognized_text || "").trim()
+      && job.audio_path
+      && fs.existsSync(job.audio_path)
+    ) {
+      recheckAlignmentJobs.push({ id: job.id, text: preferredAlignmentText(job, metadata) });
+      continue;
+    }
+    if (!["waiting", "processing"].includes(job.status)) continue;
     if (job.audio_path && fs.existsSync(job.audio_path) && requiresAlignment(job, metadata)) {
       taskStore.updateTtsJob(job.id, {
         status: "completed",
@@ -1444,6 +1485,11 @@ export function createTtsService({
   if (pending.length) setTimeout(() => drain().catch(() => {}), 0);
   if (resumeAlignmentIds.length) setTimeout(() => {
     for (const id of resumeAlignmentIds) retryAlignment(id);
+  }, 0);
+  if (recheckAlignmentJobs.length) setTimeout(async () => {
+    for (const item of recheckAlignmentJobs) {
+      await processAlignment(item.id, { finalText: item.text, reuseRecognition: true });
+    }
   }, 0);
 
   return {
