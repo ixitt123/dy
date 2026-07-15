@@ -11,10 +11,13 @@ import {
   normalizeEffectId,
 } from "./effects.js";
 
-const WIDTH = 1920;
-const HEIGHT = 1080;
 const FPS = 30;
 const DEFAULT_FONT = "Microsoft YaHei";
+const OUTPUT_SIZES = {
+  "16:9": { width: 1920, height: 1080 },
+  "9:16": { width: 1080, height: 1920 },
+  "1:1": { width: 1080, height: 1080 },
+};
 const VIDEO_EXTENSIONS = new Set([".mp4", ".mov", ".mkv", ".webm", ".avi", ".m4v"]);
 const IMAGE_EXTENSIONS = new Set([".png", ".jpg", ".jpeg", ".webp", ".bmp"]);
 const AUDIO_EXTENSIONS = new Set([".mp3", ".wav", ".m4a", ".aac", ".flac", ".ogg"]);
@@ -33,6 +36,11 @@ function safeNumber(value, fallback = 0, min = -Infinity, max = Infinity) {
 function safeFileName(value, fallback = "file") {
   const clean = String(value || "").replace(/[<>:"/\\|?*\u0000-\u001f]+/g, "-").trim();
   return clean.slice(0, 120) || fallback;
+}
+
+function resolutionForProject(project = {}) {
+  const aspectRatio = Object.hasOwn(OUTPUT_SIZES, project.aspectRatio) ? project.aspectRatio : "9:16";
+  return { aspectRatio, ...OUTPUT_SIZES[aspectRatio] };
 }
 
 function readJson(filePath, fallback = null) {
@@ -163,6 +171,32 @@ function validateTimelineRules(segments, audioDuration = 0) {
   return { ok: warnings.length === 0, skillRules: TIMELINE_SKILL_IDS, warnings: warnings.slice(0, 8) };
 }
 
+function normalizeWordRows(rawWords = []) {
+  return (Array.isArray(rawWords) ? rawWords : []).map((word, index) => {
+    const start = safeNumber(word.start ?? word.start_time ?? word.startMs / 1000, 0, 0);
+    const end = safeNumber(word.end ?? word.end_time ?? word.endMs / 1000, start + 0.08, start + 0.01);
+    return {
+      index: Number(word.index || index + 1),
+      text: normalizeText(word.text || word.word || word.value),
+      start,
+      end,
+      confidence: Number.isFinite(Number(word.confidence)) ? Number(word.confidence) : null,
+      estimated: word.estimated === true,
+    };
+  }).filter((word) => word.text && word.end > word.start).sort((a, b) => a.start - b.start);
+}
+
+function attachWordTiming(segments, rawWords = []) {
+  const globalWords = normalizeWordRows(rawWords);
+  return segments.map((segment) => {
+    const ownWords = normalizeWordRows(segment.words);
+    const words = ownWords.length ? ownWords : globalWords.filter((word) => (
+      word.end > segment.start + 0.005 && word.start < segment.end - 0.005
+    ));
+    return { ...segment, words };
+  });
+}
+
 function normalizeSegments(rawSegments, text, duration = 0) {
   const rows = Array.isArray(rawSegments) ? rawSegments : [];
   const parsed = rows.map((item, index) => {
@@ -174,6 +208,8 @@ function normalizeSegments(rawSegments, text, duration = 0) {
       start,
       end,
       text: normalizeText(item.text || item.content || item.subtitle),
+      words: normalizeWordRows(item.words || item.wordTimeline || item.word_timeline),
+      speaker: normalizeText(item.speaker || item.speakerName || item.speaker_name),
       keywords: Array.isArray(item.keywords) ? item.keywords.map(normalizeText).filter(Boolean) : [],
       lineBreaks: Array.isArray(item.lineBreaks) ? item.lineBreaks.map(Number).filter(Number.isFinite) : [],
       overrides: item.overrides && typeof item.overrides === "object" ? { ...item.overrides } : {},
@@ -195,6 +231,8 @@ function normalizeSegments(rawSegments, text, duration = 0) {
       start: cursor,
       end: Math.max(cursor + 0.5, end),
       text: piece,
+      words: [],
+      speaker: "",
       keywords: inferKeywords(piece),
       lineBreaks: [],
       overrides: {},
@@ -216,7 +254,8 @@ function inferKeywords(text) {
 function normalizeProject(project) {
   const effectId = normalizeEffectId(project.effectId);
   const duration = safeNumber(project.duration, 0, 0);
-  const segments = normalizeSegments(project.segments, project.text, duration);
+  const wordTimeline = normalizeWordRows(project.wordTimeline || project.word_timeline);
+  const segments = attachWordTiming(normalizeSegments(project.segments, project.text, duration), wordTimeline);
   const computedDuration = Math.max(duration, ...segments.map((item) => item.end), 0);
   const timelineValidation = validateTimelineRules(segments, duration);
   const background = project.background && typeof project.background === "object" ? project.background : {};
@@ -227,8 +266,10 @@ function normalizeProject(project) {
     text: normalizeText(project.text) || segments.map((item) => item.text).join(""),
     effectId,
     effectParams: { ...defaultEffectParams(effectId), ...(project.effectParams || {}) },
+    aspectRatio: resolutionForProject(project).aspectRatio,
     duration: computedDuration,
     segments,
+    wordTimeline,
     subtitleSource: String(project.subtitleSource || "estimated"),
     timelineSkillRules: TIMELINE_SKILL_IDS,
     timelineValidation,
@@ -391,7 +432,7 @@ function tokenPosition(effectId, index, count, baseX, baseY, layout = {}) {
   return [baseX + centered * horizontalStep, baseY + rowOffset];
 }
 
-function buildAss(project, options = {}) {
+function buildLegacyAss(project, options = {}) {
   const normalized = normalizeProject(project);
   const effect = effectById(normalized.effectId);
   const params = { ...effect.defaultParams, ...normalized.effectParams };
