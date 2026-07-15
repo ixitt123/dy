@@ -2538,6 +2538,24 @@ pre {
   color: #72d7ab;
 }
 
+.tts-alignment-review {
+  border-top: 1px solid #27303c;
+  padding-top: 10px;
+}
+
+.tts-alignment-review > summary {
+  width: fit-content;
+  color: #9fb0c7;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.tts-alignment-review-body {
+  display: grid;
+  gap: 12px;
+  margin-top: 12px;
+}
+
 .tts-alignment-source summary {
   color: #aab5c5;
   font-size: 12px;

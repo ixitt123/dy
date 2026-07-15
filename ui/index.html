@@ -954,29 +954,34 @@
             <section class="tts-alignment-editor" id="ttsAlignmentEditor" hidden>
               <div class="tts-alignment-head">
                 <div>
-                  <strong>最终音频字幕校准</strong>
-                  <span id="ttsAlignmentSummary">等待最终音频识别。</span>
+                  <strong>字幕检查结果</strong>
+                  <span id="ttsAlignmentSummary">正在检查音频与字幕是否一致。</span>
                 </div>
                 <div class="tts-alignment-badges" id="ttsAlignmentBadges"></div>
               </div>
-              <details class="tts-alignment-source">
-                <summary>查看原始文案与实际识别文案</summary>
-                <div class="tts-alignment-source-grid">
-                  <label>原始输入文案<textarea id="ttsOriginalTranscript" rows="4" readonly></textarea></label>
-                  <label>最终音频识别文案<textarea id="ttsRecognizedTranscript" rows="4" readonly></textarea></label>
+              <details class="tts-alignment-review" id="ttsAlignmentReview">
+                <summary id="ttsAlignmentReviewSummary">需要查看或修改字幕时展开</summary>
+                <div class="tts-alignment-review-body">
+                  <details class="tts-alignment-source">
+                    <summary>对比原始文案与音频识别结果</summary>
+                    <div class="tts-alignment-source-grid">
+                      <label>原始输入文案<textarea id="ttsOriginalTranscript" rows="4" readonly></textarea></label>
+                      <label>音频实际识别文案<textarea id="ttsRecognizedTranscript" rows="4" readonly></textarea></label>
+                    </div>
+                  </details>
+                  <label class="tts-final-transcript-field" for="ttsFinalTranscript">
+                    发送时使用的最终文案
+                    <textarea id="ttsFinalTranscript" rows="7" placeholder="如有错字或断句问题，可在这里修改后重新对齐。"></textarea>
+                  </label>
+                  <div class="tts-alignment-actions">
+                    <button class="ghost small" id="retryTtsAlignment" type="button">重新检查音频</button>
+                    <button class="ghost small" id="realignTtsTranscript" type="button">按修改文案重新对齐</button>
+                    <button class="primary small" id="confirmTtsAlignment" type="button">确认无误，允许发送</button>
+                  </div>
+                  <p id="ttsAlignmentStatus">字幕检查完成前不能发送到生产线。</p>
+                  <div class="tts-alignment-timeline" id="ttsAlignmentTimeline"></div>
                 </div>
               </details>
-              <label class="tts-final-transcript-field" for="ttsFinalTranscript">
-                最终确认文案
-                <textarea id="ttsFinalTranscript" rows="7" placeholder="识别完成后可在这里修正错字和断句；修改后自动重新对齐。"></textarea>
-              </label>
-              <div class="tts-alignment-actions">
-                <button class="ghost small" id="retryTtsAlignment" type="button">重新识别音频</button>
-                <button class="ghost small" id="realignTtsTranscript" type="button">立即重新对齐</button>
-                <button class="primary small" id="confirmTtsAlignment" type="button">确认字幕并允许发送</button>
-              </div>
-              <p id="ttsAlignmentStatus">字幕校准完成前不能发送到生产线。</p>
-              <div class="tts-alignment-timeline" id="ttsAlignmentTimeline"></div>
             </section>
             <div class="tts-audio-handoff" id="ttsAudioHandoff">
               <strong>发送确定好的音频到</strong>

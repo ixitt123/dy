@@ -371,6 +371,8 @@ const ttsAudio = document.querySelector("#ttsAudio");
 const ttsAlignmentEditor = document.querySelector("#ttsAlignmentEditor");
 const ttsAlignmentSummary = document.querySelector("#ttsAlignmentSummary");
 const ttsAlignmentBadges = document.querySelector("#ttsAlignmentBadges");
+const ttsAlignmentReview = document.querySelector("#ttsAlignmentReview");
+const ttsAlignmentReviewSummary = document.querySelector("#ttsAlignmentReviewSummary");
 const ttsOriginalTranscript = document.querySelector("#ttsOriginalTranscript");
 const ttsRecognizedTranscript = document.querySelector("#ttsRecognizedTranscript");
 const ttsFinalTranscript = document.querySelector("#ttsFinalTranscript");
@@ -3938,6 +3940,11 @@ function renderTtsAlignmentEditor(job = activeTtsRailJob) {
   const rawStatus = String(job.alignment_status || job.metadata?.alignment_status || "");
   const status = ttsAlignmentDisplayStatus(job);
   const processing = job.status === "processing" || status === "processing" || status === "waiting";
+  const matchInfo = ttsAlignmentMatchInfo(job);
+  const matchText = matchInfo.percent === null ? "" : `匹配率 ${matchInfo.percent}%`;
+  const approvedText = matchText
+    ? `${matchText}，已达到 ${matchInfo.thresholdPercent}%` 
+    : "检查已完成";
   const finalText = String(job.final_text || job.recognized_text || job.text || "");
   if (ttsOriginalTranscript) ttsOriginalTranscript.value = job.original_text || job.text || "";
   if (ttsRecognizedTranscript) ttsRecognizedTranscript.value = job.recognized_text || "";
@@ -3951,15 +3958,41 @@ function renderTtsAlignmentEditor(job = activeTtsRailJob) {
       ? job.subtitle_timeline
       : [];
   if (ttsAlignmentSummary) {
-    ttsAlignmentSummary.textContent = `${job.stage || ttsAlignmentStatusLabel(status)} · ${sentenceTimeline.length} 句 · ${Array.isArray(job.word_timeline) ? job.word_timeline.length : 0} 个字/词锚点`;
+    ttsAlignmentSummary.textContent = status === "confirmed"
+      ? `${approvedText}，可以直接发送。`
+      : status === "review_required"
+        ? `${matchText || "检查未通过"}，需要试听后选择。`
+        : status === "failed"
+          ? `检查失败：${job.alignment_error || "请重新检查音频。"}`
+          : job.stage || ttsAlignmentStatusLabel(status);
   }
   if (ttsAlignmentBadges) {
-    const badges = [
-      `<span class="${status === "confirmed" ? "ok" : ""}">${escapeHtml(ttsAlignmentStatusLabel(status))}</span>`,
-      Number(job.estimated_count || 0) > 0 ? `<span class="warning">${Number(job.estimated_count)} 个估算锚点</span>` : '<span class="ok">无估算锚点</span>',
-      Number(job.low_confidence_count || 0) > 0 ? `<span class="warning">${Number(job.low_confidence_count)} 个低置信词</span>` : "",
-    ].filter(Boolean);
+    const badges = status === "confirmed"
+      ? ['<span class="ok">检查通过 · 可以发送</span>']
+      : [
+          `<span>${escapeHtml(ttsAlignmentStatusLabel(status))}</span>`,
+          Number(job.estimated_count || 0) > 0
+            ? `<span class="warning">${Number(job.estimated_count)} 处时间由系统估算（不是错字）</span>`
+            : "",
+          Number(job.low_confidence_count || 0) > 0
+            ? `<span class="warning">${Number(job.low_confidence_count)} 处识别不确定</span>`
+            : "",
+        ].filter(Boolean);
     ttsAlignmentBadges.innerHTML = badges.join("");
+  }
+  if (ttsAlignmentReview) {
+    const renderKey = `${job.id}:${status}`;
+    if (ttsAlignmentReview.dataset.renderKey !== renderKey) {
+      ttsAlignmentReview.open = status === "review_required" || status === "failed";
+      ttsAlignmentReview.dataset.renderKey = renderKey;
+    }
+  }
+  if (ttsAlignmentReviewSummary) {
+    ttsAlignmentReviewSummary.textContent = status === "review_required"
+      ? "需要核对：展开查看文案并选择"
+      : status === "confirmed"
+        ? "需要查看或修改字幕时展开"
+        : "查看字幕检查详情";
   }
   if (ttsAlignmentTimeline) {
     ttsAlignmentTimeline.innerHTML = sentenceTimeline.length
@@ -3967,7 +4000,7 @@ function renderTtsAlignmentEditor(job = activeTtsRailJob) {
           <div class="tts-alignment-row ${item.estimated ? "estimated" : ""} ${item.low_confidence ? "low-confidence" : ""}">
             <time>${formatTtsTimelineTime(item.start)} → ${formatTtsTimelineTime(item.end)}</time>
             <span>${escapeHtml(item.text || "")}</span>
-            <em>${item.estimated ? "估算" : item.low_confidence ? "低置信" : "精确"}</em>
+            <em>${item.estimated ? "时间为系统估算" : item.low_confidence ? "识别不确定" : "已对齐"}</em>
           </div>
         `).join("")
       : '<div class="tts-empty">等待生成字幕时间轴。</div>';
@@ -3977,7 +4010,10 @@ function renderTtsAlignmentEditor(job = activeTtsRailJob) {
     retryTtsAlignmentBtn.textContent = rawStatus === "failed" || rawStatus === "not_required" || !rawStatus ? "重新识别并校准" : "重新识别音频";
   }
   if (realignTtsTranscriptBtn) realignTtsTranscriptBtn.disabled = processing || !job.recognized_text;
-  if (confirmTtsAlignmentBtn) confirmTtsAlignmentBtn.disabled = rawStatus !== "review_required";
+  if (confirmTtsAlignmentBtn) {
+    confirmTtsAlignmentBtn.hidden = rawStatus !== "review_required";
+    confirmTtsAlignmentBtn.disabled = rawStatus !== "review_required";
+  }
   if (ttsFinalTranscript) ttsFinalTranscript.disabled = processing || !job.recognized_text;
   if (ttsAlignmentStatus) {
     ttsAlignmentStatus.textContent = rawStatus === "not_required" && status === "review_required"
@@ -3985,9 +4021,9 @@ function renderTtsAlignmentEditor(job = activeTtsRailJob) {
       : status === "failed"
       ? `校准失败：${job.alignment_error || "请重新识别。"}`
       : status === "confirmed"
-        ? `字幕已确认，可发送到所有生产线。确认时间：${job.alignment_confirmed_at || "刚刚"}`
+        ? `检查通过，可以发送。${matchText ? `${matchText}。` : ""}`
         : status === "review_required"
-          ? "请试听并核对最终文案；修改后会自动重新对齐，确认前不能发送。"
+          ? "匹配率低于 80%。请试听并核对文案：没有问题就确认；有问题可修改后重新对齐。"
           : `${job.stage || "正在处理最终音频"}，完成前不能发送。`;
   }
 }
