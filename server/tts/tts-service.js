@@ -550,7 +550,7 @@ export function createTtsService({
     }, jobChanges);
   }
 
-  function explicitLyricsText(metadata = {}) {
+  function explicitMusicLyricsText(metadata = {}) {
     const candidates = [
       metadata.final_lyrics,
       metadata.generated_lyrics,
@@ -558,9 +558,12 @@ export function createTtsService({
       metadata.music_lyrics,
       metadata.lyrics,
       metadata.formatted_lyrics,
-      metadata.subtitle_text,
     ];
     return candidates.map((value) => String(value || "").trim()).find(Boolean) || "";
+  }
+
+  function explicitLyricsText(metadata = {}) {
+    return explicitMusicLyricsText(metadata) || String(metadata.subtitle_text || "").trim();
   }
 
   function isSingingAlignmentJob(job, metadata = safeJson(job?.metadata_json, {})) {
@@ -581,11 +584,12 @@ export function createTtsService({
   }
 
   function preferredAlignmentText(job, metadata = safeJson(job?.metadata_json, {})) {
-    const lyricText = explicitLyricsText(metadata);
+    const singingJob = isSingingAlignmentJob(job, metadata);
+    const lyricText = singingJob ? explicitMusicLyricsText(metadata) : explicitLyricsText(metadata);
     if (lyricText) return lyricText;
     const finalText = String(metadata.final_text || "").trim();
     const recognizedText = String(metadata.recognized_text || "").trim();
-    if (isSingingAlignmentJob(job, metadata) && recognizedText) return recognizedText;
+    if (singingJob && recognizedText) return recognizedText;
     // Preserve an explicit manual correction. Older automatic alignments used
     // the ASR transcript as final copy, so fall back to the original TTS copy
     // when both values are identical.
@@ -601,10 +605,11 @@ export function createTtsService({
   }
 
   function scriptLockedFallbackText({ job, metadata = {}, targetText = "", recognizedText = "" } = {}) {
-    const lyricText = explicitLyricsText(metadata);
+    const singingJob = isSingingAlignmentJob(job, metadata);
+    const lyricText = singingJob ? explicitMusicLyricsText(metadata) : explicitLyricsText(metadata);
     if (lyricText) return lyricText;
     const asrText = String(recognizedText || "").trim();
-    if (isSingingAlignmentJob(job, metadata) && asrText) return asrText;
+    if (singingJob && asrText) return asrText;
     return String(targetText || asrText || preferredAlignmentText(job, metadata) || "").trim();
   }
 
@@ -891,7 +896,7 @@ export function createTtsService({
           recognized_word_timeline: recognizedWords,
           recognized_sentence_timeline: recognizedSentences,
         }, { status: "processing" });
-        const useRecognizedLyricsAsText = isSingingAlignmentJob(initial, initialMetadata) && !explicitLyricsText(initialMetadata) && recognizedText;
+        const useRecognizedLyricsAsText = isSingingAlignmentJob(initial, initialMetadata) && !explicitMusicLyricsText(initialMetadata) && recognizedText;
         const alignmentText = useRecognizedLyricsAsText
           ? recognizedText
           : String(targetText || recognizedText).trim();
@@ -971,7 +976,7 @@ export function createTtsService({
         };
         const singingJob = isSingingAlignmentJob(latestForFallback, latestMetadataForFallback);
         const audioTranscriptFallback = String(best?.recognizedText || "").trim();
-        if (!audioTranscriptFallback && singingJob && !explicitLyricsText(latestMetadataForFallback)) {
+        if (!audioTranscriptFallback && singingJob && !explicitMusicLyricsText(latestMetadataForFallback)) {
           throw new Error("唱歌音频没有识别到实际歌词，不能生成可靠同步字幕。请检查语音识别配置或换文案重新生成。");
         }
         const fallbackText = audioTranscriptFallback || scriptLockedFallbackText({
