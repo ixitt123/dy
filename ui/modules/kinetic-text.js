@@ -36,6 +36,8 @@ const state = {
   downloadsDir: "",
   audio: null,
   backgroundMedia: null,
+  seekResumePlaying: false,
+  seekCommitUntil: 0,
 };
 
 function $(selector, root = state.page || document) {
@@ -95,6 +97,30 @@ function previewDuration() {
 
 function previewSeekMaximum() {
   return Math.max(1, Number($("#kineticPreviewSeek")?.max || 1000));
+}
+
+function seekValueToTime(sliderValue) {
+  const duration = previewDuration();
+  return Math.max(0, Math.min(duration, (Number(sliderValue || 0) / previewSeekMaximum()) * duration));
+}
+
+function syncPreviewMediaTime(time) {
+  const targetTime = Math.max(0, Number(time || 0));
+  if (state.audio && Number.isFinite(Number(state.audio.duration))) {
+    state.audio.currentTime = Math.min(targetTime, Math.max(0, Number(state.audio.duration || 0)));
+  } else if (state.audio) {
+    state.audio.currentTime = targetTime;
+  }
+  if (state.backgroundMedia instanceof HTMLVideoElement) {
+    state.backgroundMedia.currentTime = targetTime % Math.max(state.backgroundMedia.duration || 1, 1);
+  }
+}
+
+function anchorPreviewClock(time, lockMs = 0) {
+  state.currentTime = Math.max(0, Number(time || 0));
+  state.startTime = state.currentTime;
+  state.startedAt = performance.now();
+  state.seekCommitUntil = lockMs > 0 ? state.startedAt + lockMs : 0;
 }
 
 function escapeHtml(value) {
