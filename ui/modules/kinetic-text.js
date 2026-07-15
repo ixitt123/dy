@@ -453,7 +453,7 @@ function rollingFocusPreviewRows(segments = []) {
       ...segment,
       id: `${segment.id}-focus-${index + 1}`,
       sourceSegmentId: segment.id,
-      text: group.map((word) => word.text).join(separator),
+      text: group.map((word) => word.text).join(separator).replace(/[，。！？；：、,.!?;:]+$/u, ""),
       start: Math.max(Number(segment.start || 0), Number(group[0].start || 0)),
       end: Math.min(Number(segment.end || 0), Number(group[group.length - 1].end || segment.end || 0)),
     }));

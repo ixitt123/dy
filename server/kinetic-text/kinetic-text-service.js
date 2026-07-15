@@ -670,7 +670,7 @@ function rollingFocusDisplayRows(segments = []) {
       ...segment,
       id: `${segment.id}-focus-${index + 1}`,
       sourceSegmentId: segment.id,
-      text: joinTimedWords(group, segment.text),
+      text: joinTimedWords(group, segment.text).replace(/[，。！？；：、,.!?;:]+$/u, ""),
       start: Math.max(segment.start, group[0].start),
       end: Math.min(segment.end, Math.max(group[0].start + 0.1, group[group.length - 1].end)),
       words: group,

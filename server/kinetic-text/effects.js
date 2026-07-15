@@ -46,7 +46,7 @@ const TEMPLATE_DEFS = [
     supportedTiming: ["sentence", "word"],
     requiresWordTiming: false,
     defaultParams: {
-      fontSize: 58,
+      fontSize: 72,
       x: 5,
       y: 50,
       maxLines: 1,

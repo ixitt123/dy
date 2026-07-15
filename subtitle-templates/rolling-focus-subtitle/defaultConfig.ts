@@ -2,7 +2,7 @@ import type { SubtitleTemplateConfig } from "../types";
 
 const config: SubtitleTemplateConfig = {
   fontFamily: "Microsoft YaHei",
-  fontSize: 58,
+  fontSize: 72,
   primaryColor: "#FFFFFF",
   accentColor: "#FFFFFF",
   position: { x: 5, y: 50 },
