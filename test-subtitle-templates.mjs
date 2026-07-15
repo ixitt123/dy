@@ -15,6 +15,24 @@ const segments = [
   { id: "s2", start: 1.2, end: 2.6, text: "每一步都更接近结果。", keywords: ["结果"], speaker: "嘉宾" },
 ];
 
+function compactKeywordText(value) {
+  return String(value || "").replace(/[\s，。！？；：、,.!?;:“”‘’'"（）()【】\[\]《》<>—-]/g, "");
+}
+
+function assertSegmentKeywordRules(segment) {
+  const keywords = Array.isArray(segment.keywords) ? segment.keywords : [];
+  assert.equal(keywords.length >= 1 && keywords.length <= 2, true, `字幕“${segment.text}”必须有 1-2 个关键词`);
+  const source = compactKeywordText(segment.text);
+  const ranges = keywords.map((keyword) => {
+    const start = source.indexOf(keyword);
+    assert.notEqual(start, -1, `关键词“${keyword}”必须存在于字幕原文`);
+    return { keyword, start, end: start + keyword.length };
+  }).sort((a, b) => a.start - b.start);
+  for (let index = 1; index < ranges.length; index += 1) {
+    assert.equal(ranges[index - 1].end < ranges[index].start, true, `关键词“${ranges[index - 1].keyword}”和“${ranges[index].keyword}”不得相邻`);
+  }
+}
+
 const words = segments.flatMap((segment) => [...segment.text].map((text, index, list) => ({
   text,
   start: segment.start + (segment.end - segment.start) * index / list.length,
@@ -165,11 +183,12 @@ const cleanedKeywords = await service.create({
       start: 0,
       end: 1.2,
       text: "那你听好，顺序搞反了，全白搭。",
-      keywords: ["不存在", "顺序", "顺序搞反", "那你听好顺序搞反了全白搭"],
+      keywords: ["不存在", "顺序", "搞反", "白搭", "顺序搞反", "那你听好顺序搞反了全白搭"],
     }],
   },
 });
-assert.deepEqual(cleanedKeywords.segments[0].keywords, ["顺序"], "必须删除原文不存在、整句和相互重叠的错误关键词");
+assert.deepEqual(cleanedKeywords.segments[0].keywords, ["顺序", "白搭"], "必须删除原文不存在、整句、重叠和相邻的错误关键词");
+cleanedKeywords.segments.forEach(assertSegmentKeywordRules);
 assert.deepEqual(
   cleanedKeywords.segments.map(({ start, end }) => [start, end]),
   [[0, 1.2]],
@@ -189,10 +208,11 @@ const localKeywordProject = await service.create({
 });
 assert.deepEqual(localKeywordProject.segments.map((segment) => segment.keywords), [
   ["音标", "念不准"],
-  ["顺序", "搞反"],
+  ["顺序", "白搭"],
   ["单词"],
   ["单词"],
 ], "本地分词必须选择完整词和自然结果词组，不得机械拼字");
+localKeywordProject.segments.forEach(assertSegmentKeywordRules);
 assert.equal(localKeywordProject.segments.flatMap((segment) => segment.keywords).includes("不学音标"), false, "不得把完整分句当关键词");
 assert.equal(localKeywordProject.segments.flatMap((segment) => segment.keywords).includes("单词背再"), false, "不得生成非自然拼接词组");
 const localReanalyzed = await service.analyze(localKeywordProject.id, "deepseek", { keywordsOnly: true });
