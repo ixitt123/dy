@@ -3855,6 +3855,130 @@ async function clearTtsJobs(scope = "all") {
   await refreshTtsJobs();
 }
 
+function formatTtsTimelineTime(value = 0) {
+  const total = Math.max(0, Number(value || 0));
+  const minutes = Math.floor(total / 60);
+  const seconds = total - minutes * 60;
+  return `${String(minutes).padStart(2, "0")}:${seconds.toFixed(3).padStart(6, "0")}`;
+}
+
+function renderTtsAlignmentEditor(job = activeTtsRailJob) {
+  if (!ttsAlignmentEditor) return;
+  const isMusicJob = job?.alignment_status === "not_required"
+    || job?.source === "minimax_music"
+    || String(job?.voice_id || "").startsWith("music:");
+  if (!job?.id || isMusicJob) {
+    ttsAlignmentEditor.hidden = true;
+    return;
+  }
+  ttsAlignmentEditor.hidden = false;
+  ttsAlignmentEditor.dataset.jobId = String(job.id);
+  const status = String(job.alignment_status || "");
+  const processing = job.status === "processing" || status === "processing" || status === "waiting";
+  const finalText = String(job.final_text || job.recognized_text || job.text || "");
+  if (ttsOriginalTranscript) ttsOriginalTranscript.value = job.original_text || job.text || "";
+  if (ttsRecognizedTranscript) ttsRecognizedTranscript.value = job.recognized_text || "";
+  if (ttsFinalTranscript && (document.activeElement !== ttsFinalTranscript || ttsFinalTranscript.dataset.jobId !== String(job.id))) {
+    ttsFinalTranscript.value = finalText;
+    ttsFinalTranscript.dataset.jobId = String(job.id);
+  }
+  const sentenceTimeline = Array.isArray(job.sentence_timeline)
+    ? job.sentence_timeline
+    : Array.isArray(job.subtitle_timeline)
+      ? job.subtitle_timeline
+      : [];
+  if (ttsAlignmentSummary) {
+    ttsAlignmentSummary.textContent = `${job.stage || ttsAlignmentStatusLabel(status)} · ${sentenceTimeline.length} 句 · ${Array.isArray(job.word_timeline) ? job.word_timeline.length : 0} 个字/词锚点`;
+  }
+  if (ttsAlignmentBadges) {
+    const badges = [
+      `<span class="${status === "confirmed" ? "ok" : ""}">${escapeHtml(ttsAlignmentStatusLabel(status))}</span>`,
+      Number(job.estimated_count || 0) > 0 ? `<span class="warning">${Number(job.estimated_count)} 个估算锚点</span>` : '<span class="ok">无估算锚点</span>',
+      Number(job.low_confidence_count || 0) > 0 ? `<span class="warning">${Number(job.low_confidence_count)} 个低置信词</span>` : "",
+    ].filter(Boolean);
+    ttsAlignmentBadges.innerHTML = badges.join("");
+  }
+  if (ttsAlignmentTimeline) {
+    ttsAlignmentTimeline.innerHTML = sentenceTimeline.length
+      ? sentenceTimeline.map((item) => `
+          <div class="tts-alignment-row ${item.estimated ? "estimated" : ""} ${item.low_confidence ? "low-confidence" : ""}">
+            <time>${formatTtsTimelineTime(item.start)} → ${formatTtsTimelineTime(item.end)}</time>
+            <span>${escapeHtml(item.text || "")}</span>
+            <em>${item.estimated ? "估算" : item.low_confidence ? "低置信" : "精确"}</em>
+          </div>
+        `).join("")
+      : '<div class="tts-empty">等待生成字幕时间轴。</div>';
+  }
+  if (retryTtsAlignmentBtn) {
+    retryTtsAlignmentBtn.disabled = processing;
+    retryTtsAlignmentBtn.textContent = status === "failed" || !status ? "重新识别并校准" : "重新识别音频";
+  }
+  if (realignTtsTranscriptBtn) realignTtsTranscriptBtn.disabled = processing || !job.recognized_text;
+  if (confirmTtsAlignmentBtn) confirmTtsAlignmentBtn.disabled = status !== "review_required";
+  if (ttsFinalTranscript) ttsFinalTranscript.disabled = processing || !job.recognized_text;
+  if (ttsAlignmentStatus) {
+    ttsAlignmentStatus.textContent = status === "failed"
+      ? `校准失败：${job.alignment_error || "请重新识别。"}`
+      : status === "confirmed"
+        ? `字幕已确认，可发送到所有生产线。确认时间：${job.alignment_confirmed_at || "刚刚"}`
+        : status === "review_required"
+          ? "请试听并核对最终文案；修改后会自动重新对齐，确认前不能发送。"
+          : `${job.stage || "正在处理最终音频"}，完成前不能发送。`;
+  }
+}
+
+async function retryActiveTtsAlignment(job = activeTtsRailJob) {
+  if (!job?.id) throw new Error("请先选择一条 TTS 音频。");
+  if (ttsRealignTimer) clearTimeout(ttsRealignTimer);
+  const data = await fetchJson("/api/tts/alignment/retry", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ id: job.id }),
+  });
+  activeTtsRailJob = data.job;
+  renderTtsAlignmentEditor(data.job);
+  updateTtsMainProgressFromJob(data.job);
+  await waitForTtsJob(job.id);
+}
+
+async function realignActiveTtsTranscript({ quiet = false } = {}) {
+  const job = activeTtsRailJob;
+  const text = String(ttsFinalTranscript?.value || "").trim();
+  if (!job?.id) throw new Error("请先选择一条 TTS 音频。");
+  if (!text) throw new Error("最终文案不能为空。");
+  if (ttsRealignTimer) clearTimeout(ttsRealignTimer);
+  if (!quiet && ttsAlignmentStatus) ttsAlignmentStatus.textContent = "正在根据最终音频重新对齐字幕...";
+  const data = await fetchJson("/api/tts/alignment/realign", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ id: job.id, text }),
+  });
+  activeTtsRailJob = data.job;
+  renderTtsRail(data.job);
+  renderTtsAlignmentEditor(data.job);
+  updateTtsMainProgressFromJob(data.job);
+  await refreshTtsJobs();
+  return data.job;
+}
+
+async function confirmActiveTtsAlignment() {
+  let job = activeTtsRailJob;
+  if (!job?.id) throw new Error("请先选择一条 TTS 音频。");
+  const editedText = String(ttsFinalTranscript?.value || "").trim();
+  if (editedText && editedText !== String(job.final_text || "").trim()) job = await realignActiveTtsTranscript({ quiet: true });
+  const data = await fetchJson("/api/tts/alignment/confirm", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ id: job.id }),
+  });
+  activeTtsRailJob = data.job;
+  showTtsPreview(data.job);
+  updateTtsMainProgressFromJob(data.job);
+  const payload = confirmedTtsAudioPayload(data.job);
+  if (payload) await window.videoProjects?.linkCurrent?.("tts", payload.id, ttsHandoffTitle(payload), payload);
+  await refreshTtsJobs();
+}
+
 function showTtsPreview(job) {
   ttsPreview.hidden = false;
   const isMusicJob = job.source === "minimax_music" || String(job.voice_id || "").startsWith("music:");
@@ -3862,8 +3986,14 @@ function showTtsPreview(job) {
   ttsPreviewMeta.textContent = isMusicJob
     ? `${job.voice_name || job.voice_id || "MiniMax Music"} · ${String(job.format || "").toUpperCase()}`
     : `${job.voice_name || job.voice_id || "音色"} · ${job.speed}x · ${String(job.format || "").toUpperCase()}`;
-  ttsAudio.src = `${job.audio_url}&t=${Date.now()}`;
-  ttsAudio.load();
+  if (job.audio_url) {
+    const separator = job.audio_url.includes("?") ? "&" : "?";
+    if (!ttsAudio.src.includes(`/api/tts/audio?id=${job.id}`)) {
+      ttsAudio.src = `${job.audio_url}${separator}t=${Date.now()}`;
+      ttsAudio.load();
+    }
+  }
+  renderTtsAlignmentEditor(job);
 }
 
 async function waitForTtsJob(jobId) {
@@ -3871,14 +4001,19 @@ async function waitForTtsJob(jobId) {
   const data = await fetchJson(`/api/tts/job?id=${encodeURIComponent(jobId)}`);
   const job = data.job;
   renderTtsRail(job);
+  renderTtsAlignmentEditor(job);
   updateTtsMainProgressFromJob(job);
   if (job.status === "completed") {
     generateTtsButton.disabled = false;
-    ttsStatus.textContent = "生成完成，可以试听。";
-    setTtsMainProgress(100, "生成完成");
+    ttsStatus.textContent = job.alignment_status === "confirmed"
+      ? "音频和字幕已确认，可以发送到生产线。"
+      : job.alignment_status === "review_required"
+        ? "音频与时间轴已生成，请试听、校对并确认字幕。"
+        : job.alignment_status === "failed"
+          ? `音频已生成，但字幕校准失败：${job.alignment_error || "请重试。"}`
+          : "音频生成完成。";
+    updateTtsMainProgressFromJob(job);
     showTtsPreview(job);
-    const payload = confirmedTtsAudioPayload(job);
-    if (payload) await window.videoProjects?.linkCurrent?.("tts", payload.id, ttsHandoffTitle(payload), payload);
     await refreshTtsJobs();
     return;
   }
@@ -6361,18 +6496,37 @@ document.querySelector("#clearTtsJobs")?.addEventListener("click", () => {
 
 ttsHistory?.addEventListener("click", (event) => {
   const sendButton = event.target.closest(".tts-job-send");
+  const calibrateButton = event.target.closest(".tts-job-calibrate");
+  const alignmentRetryButton = event.target.closest(".tts-job-alignment-retry");
   const deleteButton = event.target.closest(".tts-job-delete");
   const hideButton = event.target.closest(".tts-job-hide");
   const minimizeButton = event.target.closest(".tts-job-minimize");
   const row = event.target.closest("[data-tts-job-id]");
   if (!row) return;
   const jobId = Number(row.dataset.ttsJobId || 0);
+  if (calibrateButton || alignmentRetryButton) {
+    (async () => {
+      const data = await fetchJson(`/api/tts/job?id=${encodeURIComponent(jobId)}`);
+      activeTtsRailJob = data.job;
+      renderTtsRail(data.job);
+      showTtsPreview(data.job);
+      ttsAlignmentEditor?.scrollIntoView({ behavior: "smooth", block: "center" });
+      if (alignmentRetryButton) await retryActiveTtsAlignment(data.job);
+    })().catch((error) => {
+      setTtsHandoffStatus(row, error instanceof Error ? error.message : String(error));
+    });
+    return;
+  }
   if (sendButton && row) {
     (async () => {
       const data = await fetchJson(`/api/tts/job?id=${encodeURIComponent(jobId)}`);
       const job = data.job;
       if (!job || job.status !== "completed") {
         setTtsHandoffStatus(row, "这条音频还没有生成完成，不能发送。");
+        return;
+      }
+      if (job.alignment_status !== "confirmed") {
+        setTtsHandoffStatus(row, "请先检查并确认最终字幕，再发送到生产线。");
         return;
       }
       activeTtsRailJob = job;
