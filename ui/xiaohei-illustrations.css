@@ -294,10 +294,10 @@ button.danger {
 }
 
 .audio-preview {
-  padding: 12px;
+  padding: 10px;
   border: 1px solid var(--line);
   border-radius: 8px;
-  background: #fff;
+  background: #0b111b;
 }
 
 .audio-preview audio {
@@ -307,24 +307,15 @@ button.danger {
 }
 
 .audio-studio {
-  padding: 14px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
   background: var(--soft);
 }
 
 .music-studio {
-  padding: 14px;
-  border: 1px solid #d5c4f3;
-  border-radius: 8px;
-  background: #fbf8ff;
+  background: var(--paper);
 }
 
 .reference-audio-studio {
-  padding: 14px;
-  border: 1px solid #b8d5c8;
-  border-radius: 8px;
-  background: #f7fffb;
+  background: var(--paper);
 }
 
 .music-studio .panel-head {
@@ -349,33 +340,33 @@ button.danger {
 
 .music-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 12px;
-  margin: 12px 0;
+  grid-template-columns: 1fr;
+  gap: 8px;
+  margin: 10px 0;
 }
 
 .music-style-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: 1fr;
   align-items: end;
-  gap: 12px;
-  margin: 12px 0;
-  padding: 12px;
-  border: 1px solid #ded3f4;
+  gap: 8px;
+  margin: 10px 0;
+  padding: 10px;
+  border: 1px solid #303b51;
   border-radius: 6px;
-  background: #fff;
+  background: #0b111b;
 }
 
 .style-actions {
-  justify-content: flex-end;
+  justify-content: flex-start;
   padding-bottom: 2px;
 }
 
 .reference-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(260px, 0.6fr);
-  gap: 12px;
-  margin: 12px 0;
+  grid-template-columns: 1fr;
+  gap: 8px;
+  margin: 10px 0;
 }
 
 .music-studio textarea {
@@ -393,8 +384,8 @@ button.danger {
   padding: 10px;
   border: 1px solid var(--line);
   border-radius: 6px;
-  background: #fff;
-  color: #1f2f28;
+  background: #0b111b;
+  color: #d8f6eb;
   font-size: 13px;
   line-height: 1.7;
 }
@@ -413,7 +404,7 @@ button.danger {
   padding: 12px;
   border: 1px dashed #8fbda5;
   border-radius: 6px;
-  background: #fff;
+  background: #0b111b;
 }
 
 .reference-clone-controls .consent-row {
@@ -458,12 +449,12 @@ button.danger {
   padding: 10px;
   border: 1px solid var(--line);
   border-radius: 6px;
-  background: #fff;
+  background: #0b111b;
 }
 
 .audio-job.selected {
-  border-color: #237c50;
-  box-shadow: inset 3px 0 0 #237c50;
+  border-color: #35b989;
+  box-shadow: inset 3px 0 0 #35b989;
 }
 
 .audio-job strong,
@@ -482,13 +473,13 @@ button.danger {
   grid-template-columns: minmax(0, 1fr) 280px;
   align-items: center;
   gap: 18px;
-  margin-bottom: 14px;
+  margin-bottom: 0;
 }
 
 #statusLabel {
   display: block;
   font-weight: 900;
-  font-size: 18px;
+  font-size: 16px;
 }
 
 #statusDetail {
@@ -511,31 +502,31 @@ button.danger {
 }
 
 #progressPercent {
-  color: var(--ink);
-  font-size: 18px;
+  color: #b8ccff;
+  font-size: 15px;
   min-width: 48px;
   text-align: right;
 }
 
 .progress-shell {
-  height: 10px;
+  height: 8px;
   overflow: hidden;
-  background: #dfe4ee;
+  background: #20293a;
   border-radius: 999px;
 }
 
 #progressBar {
   width: 0%;
   height: 100%;
-  background: linear-gradient(90deg, var(--ink), var(--orange));
+  background: linear-gradient(90deg, #745cff, #66e3c4);
   transition: width 0.25s ease;
 }
 
 .results-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 14px;
-  margin-bottom: 14px;
+  gap: 10px;
+  margin-bottom: 0;
 }
 
 .panel-head {
@@ -543,7 +534,7 @@ button.danger {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  margin-bottom: 14px;
+  margin-bottom: 10px;
 }
 
 .panel-head span {
@@ -568,7 +559,7 @@ button.danger {
   border: 1px solid var(--line);
   border-radius: 8px;
   padding: 12px;
-  background: var(--soft);
+  background: #0b111b;
 }
 
 .settings-actions,
@@ -586,22 +577,22 @@ button.danger {
   border: 1px solid var(--line);
   border-radius: 6px;
   color: var(--muted);
-  background: #fff;
+  background: #0b111b;
   font-size: 13px;
 }
 
 .integration-status.success,
 .api-detail.success {
-  color: #126b3f;
-  border-color: #bddcc9;
-  background: #f2fbf5;
+  color: #72d5b7;
+  border-color: rgba(114, 213, 183, .35);
+  background: rgba(114, 213, 183, .08);
 }
 
 .integration-status.warning,
 .api-detail.warning {
-  color: #8a5b00;
-  border-color: #e2cf9a;
-  background: #fff9e8;
+  color: #f0bd69;
+  border-color: rgba(240, 189, 105, .35);
+  background: rgba(240, 189, 105, .08);
 }
 
 .prompt-card h3,
@@ -626,7 +617,7 @@ button.danger {
   height: 20px;
   margin-left: 6px;
   border-radius: 999px;
-  background: var(--soft);
+  background: #0b111b;
   color: var(--muted);
   font-size: 12px;
 }
@@ -648,7 +639,7 @@ button.danger {
   margin-bottom: 10px;
   padding: 10px;
   border-left: 3px solid #df722f;
-  background: #fff;
+  background: #101722;
 }
 
 .semantic-binding > strong {
@@ -692,7 +683,7 @@ button.danger {
   padding: 10px;
   border: 1px dashed #bbc4d4;
   border-radius: 6px;
-  background: #fff;
+  background: #101722;
 }
 
 .shot-image-state img,
@@ -703,18 +694,18 @@ button.danger {
   object-fit: contain;
   margin: 8px 0;
   border: 1px solid var(--line);
-  background: #fff;
+  background: #05080d;
 }
 
 .manual-preview {
   margin-top: 10px;
   padding: 10px;
   border-left: 3px solid var(--blue);
-  background: #eef4ff;
+  background: rgba(113, 215, 255, .08);
 }
 
 .binding-ok {
-  color: #126b3f;
+  color: #72d5b7;
   font-weight: 800;
   font-size: 13px;
 }
@@ -726,9 +717,9 @@ pre {
   word-break: break-word;
   margin: 0;
   padding: 10px;
-  border: 1px solid #d4dae6;
+  border: 1px solid #303b51;
   border-radius: 6px;
-  background: #fff;
+  background: #05080d;
   line-height: 1.6;
 }
 
@@ -738,8 +729,8 @@ pre {
   width: 100%;
   aspect-ratio: 16 / 9;
   object-fit: contain;
-  background: #fff;
-  border: 1px solid #d6dce8;
+  background: #05080d;
+  border: 1px solid #303b51;
   border-radius: 6px;
   margin-bottom: 10px;
 }
@@ -756,7 +747,7 @@ pre {
 }
 
 .success {
-  color: #126b3f;
+  color: #72d5b7;
   font-weight: 800;
 }
 
