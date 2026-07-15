@@ -1059,12 +1059,13 @@ export function createKineticTextService({
   }
 
   async function renderTransparentClip(project, segment, outputPath) {
+    const { width, height } = resolutionForProject(project);
     const clipDuration = Math.max(0.2, segment.end - segment.start);
     const assPath = path.join(path.dirname(outputPath), `${safeFileName(segment.id)}.ass`);
     fs.writeFileSync(assPath, buildAss(project, { segmentId: segment.id, offset: segment.start }), "utf8");
     const vf = `format=rgba,subtitles='${escapeFilterPath(assPath)}',format=yuva420p`;
     await spawnLogged(ffmpegPath, [
-      "-y", "-f", "lavfi", "-i", `color=c=black@0.0:s=${WIDTH}x${HEIGHT}:r=${FPS}:d=${clipDuration.toFixed(3)}`,
+      "-y", "-f", "lavfi", "-i", `color=c=black@0.0:s=${width}x${height}:r=${FPS}:d=${clipDuration.toFixed(3)}`,
       "-vf", vf, "-an", "-c:v", "libvpx-vp9", "-pix_fmt", "yuva420p", "-auto-alt-ref", "0", "-r", String(FPS), outputPath,
     ]);
   }
@@ -1121,6 +1122,7 @@ export function createKineticTextService({
         project = get(projectId);
       }
       const hasTtsAudio = Boolean(project.audioPath && fs.existsSync(project.audioPath));
+      const { width, height } = resolutionForProject(project);
       const duration = Math.max(project.duration, hasTtsAudio ? await probeDuration(project.audioPath) : 0, 0.5);
       const outputDir = path.join(downloadsDir, "kinetic-text", project.id);
       fs.mkdirSync(outputDir, { recursive: true });
@@ -1130,7 +1132,7 @@ export function createKineticTextService({
       const bg = project.background || { mode: "black" };
       if (bg.mode === "image" && bg.path && fs.existsSync(bg.path)) args.push("-loop", "1", "-i", bg.path);
       else if (bg.mode === "video" && bg.path && fs.existsSync(bg.path)) args.push("-stream_loop", "-1", "-i", bg.path);
-      else args.push("-f", "lavfi", "-i", `color=c=black:s=${WIDTH}x${HEIGHT}:r=${FPS}:d=${duration.toFixed(3)}`);
+      else args.push("-f", "lavfi", "-i", `color=c=black:s=${width}x${height}:r=${FPS}:d=${duration.toFixed(3)}`);
       if (hasTtsAudio) args.push("-i", project.audioPath);
       else args.push("-f", "lavfi", "-t", duration.toFixed(3), "-i", "anullsrc=channel_layout=stereo:sample_rate=44100");
       let backgroundAudioIndex = -1;
@@ -1142,7 +1144,7 @@ export function createKineticTextService({
       }
 
       updateJob(jobId, { status: "running", progress: 20, stage: "准备背景" });
-      const videoFilter = `[0:v]scale=${WIDTH}:${HEIGHT}:force_original_aspect_ratio=increase,crop=${WIDTH}:${HEIGHT},fps=${FPS},subtitles='${escapeFilterPath(assPath)}'[v]`;
+      const videoFilter = `[0:v]scale=${width}:${height}:force_original_aspect_ratio=increase,crop=${width}:${height},fps=${FPS},subtitles='${escapeFilterPath(assPath)}'[v]`;
       const ttsVolume = (project.audioMix.ttsVolume / 100).toFixed(3);
       const bgVolume = (project.audioMix.backgroundVolume / 100).toFixed(3);
       const filters = [videoFilter, `[1:a]volume=${ttsVolume}[tts]`];
