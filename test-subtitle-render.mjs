@@ -29,7 +29,30 @@ for (const [index, [effectId, aspectRatio, expected, expectedFrameRate]] of [
   ["rolling-focus-subtitle", "16:9", "1920x1080", 60],
 ].entries()) {
   if (index === 1) selectedDownloadsDir = path.join(root, "downloads-b");
-  const project = await service.create({ effectId, aspectRatio, frameRate: expectedFrameRate, text: segment.text, segments: [segment], tts: { alignment_status: "confirmed", final_text: segment.text, duration: 1.25, sentence_timeline: [segment], word_timeline: words } });
+  const withBookends = effectId === "rolling-focus-subtitle";
+  const renderDuration = withBookends ? 2.5 : 1.25;
+  const renderSegment = withBookends ? { ...segment, start: 0.65, end: 1.85 } : segment;
+  const renderWords = [...renderSegment.text].map((text, wordIndex, list) => ({
+    text,
+    start: renderSegment.start + (renderSegment.end - renderSegment.start) * wordIndex / list.length,
+    end: renderSegment.start + (renderSegment.end - renderSegment.start) * (wordIndex + 1) / list.length,
+  }));
+  const project = await service.create({
+    effectId,
+    aspectRatio,
+    frameRate: expectedFrameRate,
+    text: renderSegment.text,
+    segments: [renderSegment],
+    bookends: withBookends ? {
+      intro: { enabled: true, preset: "custom", text: "片头标题" },
+      outro: { enabled: true, preset: "custom", text: "记得关注" },
+    } : {},
+    tts: { alignment_status: "confirmed", final_text: renderSegment.text, duration: renderDuration, sentence_timeline: [renderSegment], word_timeline: renderWords },
+  });
+  if (withBookends) {
+    assert.equal(project.bookendWindows.intro.available, true, "正式渲染必须识别可用片头留白");
+    assert.equal(project.bookendWindows.outro.available, true, "正式渲染必须识别可用片尾留白");
+  }
   const job = service.startRender(project.id);
   const finished = await waitFor(job.id);
   const videoPath = finished.result?.videoPath;
