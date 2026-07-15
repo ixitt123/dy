@@ -13,6 +13,12 @@ function roundTime(value) {
   return Number(Math.max(0, finiteNumber(value)).toFixed(3));
 }
 
+function normalizedConfidence(value) {
+  if (value === null || value === undefined || value === "") return null;
+  const confidence = Number(value);
+  return Number.isFinite(confidence) && confidence > 0 ? confidence : null;
+}
+
 export function tokenizeAlignmentText(value = "") {
   return String(value || "").normalize("NFKC").match(TOKEN_PATTERN) || [];
 }
@@ -46,7 +52,7 @@ function expandRecognizedWords(words = [], duration = 0) {
         text: token,
         start: roundTime(tokenStart),
         end: roundTime(Math.max(tokenStart + 0.01, tokenEnd)),
-        confidence: Number.isFinite(Number(word.confidence)) ? Number(word.confidence) : null,
+        confidence: normalizedConfidence(word.confidence),
         source: String(word.source || "audio_asr"),
       });
     });
@@ -69,7 +75,7 @@ function estimatedWordsFromSentences(sentences = [], duration = 0) {
         text: token,
         start: roundTime(start + span * (index / tokens.length)),
         end: roundTime(start + span * ((index + 1) / tokens.length)),
-        confidence: Number.isFinite(Number(sentence.confidence)) ? Number(sentence.confidence) : null,
+        confidence: normalizedConfidence(sentence.confidence),
         source: "estimated_sentence",
       });
     });

@@ -57,4 +57,13 @@ assert.equal(sentenceFallback.sentenceTimeline.length, 2);
 assert.equal(sentenceFallback.source, "estimated_audio_duration");
 assert.equal(validateAlignment({ text: sentenceFallback.finalText, ...sentenceFallback, duration: 3 }).valid, true);
 
+const missingConfidence = alignTranscriptToAudio({
+  text: "置信度空值。",
+  recognizedText: "置信度空值。",
+  recognizedWords: preciseWords("置信度空值。").map((word) => ({ ...word, confidence: null })),
+  duration: 2,
+});
+assert.equal(missingConfidence.lowConfidenceCount, 0);
+assert.equal(missingConfidence.wordTimeline[0].confidence, null);
+
 console.log("TTS alignment tests passed");
