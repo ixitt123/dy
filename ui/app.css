@@ -9825,7 +9825,7 @@ audio {
 
 .kinetic-preview-toolbar-main {
   display: grid;
-  grid-template-columns: auto minmax(180px, 1fr) auto auto;
+  grid-template-columns: auto minmax(180px, 1fr) minmax(280px, auto);
   align-items: center;
   gap: 10px;
   min-width: 0;
@@ -10122,10 +10122,19 @@ audio {
   flex-wrap: nowrap;
 }
 
+.kinetic-preview-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  min-width: 0;
+  width: 100%;
+}
+
 #kineticRenderFinal {
   flex: 0 0 auto;
   justify-self: end;
-  margin-left: 0;
+  margin-left: auto;
 }
 
 .kinetic-preview-progress {
