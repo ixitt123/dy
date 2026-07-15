@@ -627,54 +627,74 @@ function rollingFocusDisplayRows(segments = []) {
   return segments.flatMap((segment) => {
     const words = timedWordsForSegment(segment);
     if (!words.length) return [{ ...segment, sourceSegmentId: segment.id }];
-    const groups = [];
+    const clauses = [];
     let current = [];
-    let visibleChars = 0;
     const flush = () => {
-      if (current.length) groups.push(current);
+      if (current.length) clauses.push(current);
       current = [];
-      visibleChars = 0;
     };
     words.forEach((word, index) => {
       const token = String(word.text || "");
       const punctuation = /^[，。！？；：、,.!?;:]$/u.test(token);
-      const tokenSize = punctuation ? 0 : Math.max(1, [...token.replace(/\s/g, "")].length);
+      if (punctuation) {
+        if (current.length) {
+          current.push(word);
+          flush();
+        } else if (clauses.length) {
+          clauses[clauses.length - 1].push(word);
+        }
+        return;
+      }
       const previous = current[current.length - 1];
       const pauseBefore = previous && Number(word.start) - Number(previous.end) >= 0.18;
-      const wouldOverflow = current.length && visibleChars >= 4 && visibleChars + tokenSize > 10;
-      if (pauseBefore || wouldOverflow) flush();
+      if (pauseBefore) flush();
       current.push(word);
-      visibleChars += tokenSize;
       const next = words[index + 1];
       const pauseAfter = next && Number(next.start) - Number(word.end) >= 0.18;
-      if ((punctuation && visibleChars >= 3) || visibleChars >= 10 || pauseAfter) flush();
+      if (pauseAfter) flush();
     });
     flush();
 
     const visibleLength = (group) => group.reduce((sum, word) => (
       sum + [...String(word.text || "").replace(/[，。！？；：、,.!?;:\s]/gu, "")].length
     ), 0);
-    if (groups.length > 1 && visibleLength(groups[0]) < 4 && visibleLength(groups[0]) + visibleLength(groups[1]) <= 10) {
-      groups[1] = [...groups[0], ...groups[1]];
-      groups.shift();
-    }
-    if (groups.length > 1) {
-      const last = groups.length - 1;
-      if (visibleLength(groups[last]) < 4 && visibleLength(groups[last - 1]) + visibleLength(groups[last]) <= 10) {
-        groups[last - 1].push(...groups[last]);
-        groups.pop();
-      }
-    }
+    const groups = clauses.flatMap((clause) => {
+      const total = visibleLength(clause);
+      if (total <= 8) return [clause];
+      const chunkCount = Math.ceil(total / 8);
+      const target = Math.ceil(total / chunkCount);
+      const chunks = [];
+      let chunk = [];
+      let count = 0;
+      clause.forEach((word) => {
+        const token = String(word.text || "");
+        const size = [...token.replace(/[，。！？；：、,.!?;:\s]/gu, "")].length;
+        if (size === 0) {
+          if (chunk.length) chunk.push(word);
+          else if (chunks.length) chunks[chunks.length - 1].push(word);
+          return;
+        }
+        if (chunk.length && count >= 3 && count + size > target) {
+          chunks.push(chunk);
+          chunk = [];
+          count = 0;
+        }
+        chunk.push(word);
+        count += size;
+      });
+      if (chunk.length) chunks.push(chunk);
+      return chunks;
+    });
 
     return groups.map((group, index) => ({
       ...segment,
       id: `${segment.id}-focus-${index + 1}`,
       sourceSegmentId: segment.id,
-      text: joinTimedWords(group, segment.text).replace(/[，。！？；：、,.!?;:]+$/u, ""),
+      text: joinTimedWords(group, segment.text).replace(/[，。！？；：、,.!?;:]/gu, "").trim(),
       start: Math.max(segment.start, group[0].start),
       end: Math.min(segment.end, Math.max(group[0].start + 0.1, group[group.length - 1].end)),
       words: group,
-    }));
+    })).filter((row) => row.text);
   }).sort((a, b) => a.start - b.start);
 }
 

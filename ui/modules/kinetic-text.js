@@ -427,36 +427,69 @@ function previewWordGroups(words, sourceText = "") {
 function rollingFocusPreviewRows(segments = []) {
   return segments.flatMap((segment) => {
     const words = previewWords(segment);
-    const groups = [];
+    const clauses = [];
     let current = [];
-    let chars = 0;
     const flush = () => {
-      if (current.length) groups.push(current);
+      if (current.length) clauses.push(current);
       current = [];
-      chars = 0;
     };
     words.forEach((word, index) => {
       const token = String(word.text || "");
       const punctuation = /^[，。！？；：、,.!?;:]$/u.test(token);
-      const size = punctuation ? 0 : Math.max(1, [...token.replace(/\s/g, "")].length);
+      if (punctuation) {
+        if (current.length) {
+          current.push(word);
+          flush();
+        } else if (clauses.length) {
+          clauses[clauses.length - 1].push(word);
+        }
+        return;
+      }
       const previous = current[current.length - 1];
       const pauseBefore = previous && Number(word.start) - Number(previous.end) >= 0.18;
-      if (pauseBefore || (current.length && chars >= 4 && chars + size > 10)) flush();
+      if (pauseBefore) flush();
       current.push(word);
-      chars += size;
       const next = words[index + 1];
-      if ((punctuation && chars >= 3) || chars >= 10 || (next && Number(next.start) - Number(word.end) >= 0.18)) flush();
+      if (next && Number(next.start) - Number(word.end) >= 0.18) flush();
     });
     flush();
+    const visibleLength = (group) => group.reduce((sum, word) => (
+      sum + [...String(word.text || "").replace(/[，。！？；：、,.!?;:\s]/gu, "")].length
+    ), 0);
+    const groups = clauses.flatMap((clause) => {
+      const total = visibleLength(clause);
+      if (total <= 8) return [clause];
+      const target = Math.ceil(total / Math.ceil(total / 8));
+      const chunks = [];
+      let chunk = [];
+      let count = 0;
+      clause.forEach((word) => {
+        const size = [...String(word.text || "").replace(/[，。！？；：、,.!?;:\s]/gu, "")].length;
+        if (size === 0) {
+          if (chunk.length) chunk.push(word);
+          else if (chunks.length) chunks[chunks.length - 1].push(word);
+          return;
+        }
+        if (chunk.length && count >= 3 && count + size > target) {
+          chunks.push(chunk);
+          chunk = [];
+          count = 0;
+        }
+        chunk.push(word);
+        count += size;
+      });
+      if (chunk.length) chunks.push(chunk);
+      return chunks;
+    });
     const separator = String(segment.text || "").includes(" ") ? " " : "";
     return groups.map((group, index) => ({
       ...segment,
       id: `${segment.id}-focus-${index + 1}`,
       sourceSegmentId: segment.id,
-      text: group.map((word) => word.text).join(separator).replace(/[，。！？；：、,.!?;:]+$/u, ""),
+      text: group.map((word) => word.text).join(separator).replace(/[，。！？；：、,.!?;:]/gu, "").trim(),
       start: Math.max(Number(segment.start || 0), Number(group[0].start || 0)),
       end: Math.min(Number(segment.end || 0), Number(group[group.length - 1].end || segment.end || 0)),
-    }));
+    })).filter((row) => row.text);
   }).sort((a, b) => a.start - b.start);
 }
 
