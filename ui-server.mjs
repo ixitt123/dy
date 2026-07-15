@@ -2203,11 +2203,11 @@ const downloadTypeFolders = {
   other: "其他",
 };
 
-function downloadOutputDir(type = "other", date = new Date()) {
-  const folder = downloadTypeFolders[type] || downloadTypeFolders.other;
-  const dir = path.join(downloadsDir, downloadDateStamp(date), folder);
-  fs.mkdirSync(dir, { recursive: true });
-  return dir;
+function downloadOutputDir() {
+  // The selected directory is only an output destination. Never inspect or
+  // reorganize files that were already present there.
+  fs.mkdirSync(downloadsDir, { recursive: true });
+  return downloadsDir;
 }
 
 function classifyDownloadType(fileName) {
@@ -2326,39 +2326,6 @@ function resolveDownloadFilePath(fileName) {
   if (!normalized || path.isAbsolute(normalized) || normalized.split(path.sep).includes("..")) return "";
   const filePath = path.resolve(downloadsDir, normalized);
   return isInsideDownloads(filePath) ? filePath : "";
-}
-
-function organizeLooseDownloadFiles() {
-  const moved = [];
-  if (!fs.existsSync(downloadsDir)) return moved;
-  for (const entry of fs.readdirSync(downloadsDir, { withFileTypes: true })) {
-    if (!entry.isFile()) continue;
-    const sourcePath = path.join(downloadsDir, entry.name);
-    const stat = fs.statSync(sourcePath);
-    const type = classifyDownloadType(entry.name);
-    const targetDir = downloadOutputDir(type, stat.mtime);
-    const parsed = path.parse(entry.name);
-    const targetPath = uniquePathInDir(targetDir, parsed.name, parsed.ext);
-    if (path.resolve(sourcePath) === path.resolve(targetPath)) continue;
-    fs.renameSync(sourcePath, targetPath);
-    moved.push({ from: path.resolve(sourcePath), to: path.resolve(targetPath) });
-  }
-  return moved;
-}
-
-function syncMovedDownloadTaskPaths(moved = []) {
-  if (!moved.length) return;
-  const map = new Map(moved.map((item) => [path.resolve(item.from).toLowerCase(), item.to]));
-  const pathColumns = ["video_path", "audio_path", "subtitle_path", "txt_path", "analysis_path"];
-  for (const task of taskStore.allTasks()) {
-    const changes = {};
-    for (const column of pathColumns) {
-      const current = String(task[column] || "");
-      const next = current ? map.get(path.resolve(current).toLowerCase()) : "";
-      if (next) changes[column] = next;
-    }
-    if (Object.keys(changes).length) taskStore.updateTask(task.id, changes);
-  }
 }
 
 function isInsideManagedFilePath(filePath) {
