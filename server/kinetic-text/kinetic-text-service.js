@@ -289,10 +289,14 @@ function normalizeBookends(value, title) {
 }
 
 function calculateBookendWindows(segments, duration) {
+  // Bookend availability is based on the rendered video's visual text occupancy.
+  // Audio silence is deliberately not inspected: speech may continue while the
+  // body subtitle area is already visually empty.
   const rows = (Array.isArray(segments) ? segments : []).slice().sort((a, b) => Number(a.start || 0) - Number(b.start || 0));
   const total = Math.max(0, Number(duration || 0));
   if (!rows.length || total <= 0) {
     return {
+      basis: "video-visual-timeline",
       minimumSeconds: BOOKEND_MIN_SECONDS,
       intro: { start: 0, end: 0, duration: 0, blankSeconds: 0, available: false },
       outro: { start: total, end: total, duration: 0, blankSeconds: 0, available: false },
@@ -305,6 +309,7 @@ function calculateBookendWindows(segments, duration) {
   const introDuration = Math.max(0, introEnd);
   const outroDuration = Math.max(0, total - outroStart);
   return {
+    basis: "video-visual-timeline",
     minimumSeconds: BOOKEND_MIN_SECONDS,
     intro: {
       start: 0,

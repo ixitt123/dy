@@ -104,10 +104,12 @@ function bookendPresetText(kind, preset) {
 }
 
 function bookendWindowsFor(project = state.project) {
+  // Use the canvas' visible body-subtitle intervals, never audio silence.
   const rows = (Array.isArray(project?.segments) ? project.segments : []).slice().sort((a, b) => Number(a.start || 0) - Number(b.start || 0));
   const duration = Math.max(0, Number(project?.duration || 0));
   if (!rows.length || duration <= 0) {
     return {
+      basis: "video-visual-timeline",
       minimumSeconds: BOOKEND_MIN_SECONDS,
       intro: { start: 0, end: 0, duration: 0, blankSeconds: 0, available: false },
       outro: { start: duration, end: duration, duration: 0, blankSeconds: 0, available: false },
@@ -118,6 +120,7 @@ function bookendWindowsFor(project = state.project) {
   const introEnd = Math.max(0, firstStart - 0.09);
   const outroStart = Math.min(duration, lastEnd + 0.03);
   return {
+    basis: "video-visual-timeline",
     minimumSeconds: BOOKEND_MIN_SECONDS,
     intro: { start: 0, end: introEnd, duration: introEnd, blankSeconds: firstStart, available: introEnd >= BOOKEND_MIN_SECONDS },
     outro: { start: outroStart, end: duration, duration: Math.max(0, duration - outroStart), blankSeconds: Math.max(0, duration - lastEnd), available: duration - outroStart >= BOOKEND_MIN_SECONDS },
@@ -133,11 +136,12 @@ function renderBookendAvailability() {
     const window = windows[kind];
     label.classList.toggle("ok", window.available);
     label.classList.toggle("warn", !window.available);
+    const position = kind === "outro" ? "画面末尾" : "画面开头";
     label.textContent = window.available
       ? window.duration < 0.45
-        ? `检测到 ${window.blankSeconds.toFixed(2)} 秒留白，启用短${kind === "outro" ? "结尾" : "开头"}模式，显示 ${window.duration.toFixed(2)} 秒`
-        : `检测到 ${window.blankSeconds.toFixed(2)} 秒留白，实际显示 ${window.duration.toFixed(2)} 秒`
-      : `留白仅 ${window.blankSeconds.toFixed(2)} 秒，不足 ${windows.minimumSeconds.toFixed(2)} 秒，成片中自动跳过`;
+        ? `${position}有 ${window.blankSeconds.toFixed(2)} 秒无正文字幕，启用短${kind === "outro" ? "结尾" : "开头"}模式`
+        : `${position}有 ${window.blankSeconds.toFixed(2)} 秒无正文字幕，实际显示 ${window.duration.toFixed(2)} 秒`
+      : `${position}无正文字幕仅 ${window.blankSeconds.toFixed(2)} 秒，不足 ${windows.minimumSeconds.toFixed(2)} 秒，成片中自动跳过`;
   }
 }
 

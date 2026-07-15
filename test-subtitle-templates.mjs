@@ -127,6 +127,7 @@ assert.equal(created.segments.every((segment) => segment.keywords.length >= 1 &&
 assert.deepEqual(created.segments.map(({ start, end }) => [start, end]), segments.map(({ start, end }) => [start, end]), "自动识别重点词不得改变字幕时间戳");
 assert.equal(created.bookends.intro.enabled, false, "旧项目默认不得擅自添加片头");
 assert.equal(created.bookends.outro.enabled, false, "旧项目默认不得擅自添加片尾");
+assert.equal(created.bookendWindows.basis, "video-visual-timeline", "片头片尾留白必须按视频画面正文字幕占位判断，不得按语音静音判断");
 assert.equal(created.aspectRatio, "9:16");
 assert.equal(effectById(created.effectId).id, "rolling-focus-subtitle");
 
