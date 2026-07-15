@@ -10018,6 +10018,35 @@ audio {
   font-size: 12px;
 }
 
+.kinetic-bookends-card {
+  display: grid;
+  gap: 8px;
+}
+
+.kinetic-bookend-editor {
+  display: grid;
+  gap: 6px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(51, 64, 88, .65);
+}
+
+.kinetic-bookend-editor select,
+.kinetic-bookend-editor input[type="text"] {
+  width: 100%;
+}
+
+.kinetic-bookend-editor small {
+  line-height: 1.45;
+}
+
+.kinetic-bookend-editor small.warn {
+  color: #f0bd69;
+}
+
+.kinetic-bookend-editor small.ok {
+  color: #72d5b7;
+}
+
 .kinetic-download-location {
   display: flex;
   align-items: center;
@@ -10280,14 +10309,18 @@ audio {
   overflow-x: auto;
 }
 
-.kinetic-timeline-card .kinetic-card-head > div {
-  display: grid;
-  min-width: 0;
-  gap: 2px;
+.kinetic-timeline-card .kinetic-card-head {
+  min-width: 760px;
+}
+
+.kinetic-timeline-card .kinetic-card-head strong {
+  white-space: nowrap;
 }
 
 #kineticAnalyze {
   flex: 0 0 auto;
+  width: auto;
+  max-width: 240px;
   white-space: nowrap;
 }
 

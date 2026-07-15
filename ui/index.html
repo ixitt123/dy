@@ -1613,6 +1613,33 @@
                 <label class="kinetic-range-row"><span>背景音量</span><input id="kineticBgVolume" type="range" min="0" max="100" value="18" /><output id="kineticBgVolumeValue">18%</output></label>
                 <label class="kinetic-check"><input id="kineticBottomSubtitles" type="checkbox" /><span>显示底部常规字幕</span></label>
               </section>
+              <section class="kinetic-card kinetic-bookends-card">
+                <div class="kinetic-card-head"><strong>片头与结尾</strong><span>只使用真实留白时间</span></div>
+                <div class="kinetic-bookend-editor">
+                  <label class="kinetic-check"><input id="kineticIntroEnabled" type="checkbox" /><span>添加开头文字</span></label>
+                  <select id="kineticIntroPreset">
+                    <option value="title">使用项目标题</option>
+                    <option value="remember">先记住这句话</option>
+                    <option value="core">今天只讲一个重点</option>
+                    <option value="method">正确方法只有一个</option>
+                    <option value="custom">自定义</option>
+                  </select>
+                  <input id="kineticIntroText" type="text" maxlength="80" placeholder="输入开头文字" />
+                  <small id="kineticIntroAvailability">正在检测开头留白…</small>
+                </div>
+                <div class="kinetic-bookend-editor">
+                  <label class="kinetic-check"><input id="kineticOutroEnabled" type="checkbox" /><span>添加结尾文字</span></label>
+                  <select id="kineticOutroPreset">
+                    <option value="follow">记得关注</option>
+                    <option value="private">需要完整资料，可以私聊我</option>
+                    <option value="save">点赞收藏，方便以后再看</option>
+                    <option value="next">关注我，下期继续</option>
+                    <option value="custom">自定义</option>
+                  </select>
+                  <input id="kineticOutroText" type="text" maxlength="80" placeholder="输入结尾话术" />
+                  <small id="kineticOutroAvailability">正在检测结尾留白…</small>
+                </div>
+              </section>
               <section class="kinetic-card kinetic-template-config">
                 <div class="kinetic-card-head"><strong>字幕常用参数</strong><span>高级参数已隐藏</span></div>
                 <label><span>字体</span><input id="kineticFontFamily" type="text" value="Microsoft YaHei" /></label>
@@ -1656,10 +1683,7 @@
 
               <section class="kinetic-card kinetic-timeline-card">
                 <div class="kinetic-card-head">
-                  <div>
-                    <strong>字幕时间轴</strong>
-                    <span>每句话自动添加 1–3 个重点词，仍可人工修改</span>
-                  </div>
+                  <strong>字幕时间轴</strong>
                   <button id="kineticAnalyze" class="ghost" type="button">重新识别每句关键词</button>
                 </div>
                 <div id="kineticTimelineRuleStatus" class="kinetic-rule-status" hidden></div>

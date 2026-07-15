@@ -895,6 +895,40 @@ function assEvent(layer, start, end, style, tags, text) {
   return `Dialogue: ${layer},${formatAssTime(start)},${formatAssTime(end)},${style},,0,0,0,,{${tags}}${text}`;
 }
 
+function buildBookendAssEvents({ project, template, params, width, height, fontSize, primary, maxChars, maxLines }) {
+  const events = [];
+  const x = Math.round((safeNumber(params.x, 50, 5, 95) / 100) * width);
+  const y = Math.round((safeNumber(params.y, 64, 8, 92) / 100) * height);
+  for (const kind of ["intro", "outro"]) {
+    const item = project.bookends?.[kind];
+    const window = project.bookendWindows?.[kind];
+    if (!item?.enabled || !window?.available || !item.text) continue;
+    const start = Number(window.start || 0);
+    const end = Number(window.end || 0);
+    const durationMs = Math.max(1, Math.round((end - start) * 1000));
+    if (durationMs < BOOKEND_MIN_SECONDS * 1000) continue;
+    const baseTransitionMs = template.renderMode === "rolling-focus-left"
+      ? safeNumber(params.transitionMs, 220, 180, 260)
+      : 150;
+    const transitionMs = Math.max(90, Math.min(Math.round(baseTransitionMs / safeNumber(params.animationSpeed, 1, 0.5, 2)), Math.round(durationMs / 3)));
+    const fadeMs = Math.max(70, Math.min(150, Math.round(durationMs / 4)));
+    const text = escapeAssText(wrapSubtitleText(item.text, maxChars, Math.max(2, maxLines)));
+    if (template.renderMode === "rolling-focus-left") {
+      const markerGap = Math.round(fontSize * 0.62);
+      const moveY = y + Math.round(fontSize * 0.18);
+      events.push(assEvent(6, start, end, "Modern", `\\an4\\bord0\\shad0\\q2\\move(${x + markerGap},${moveY},${x + markerGap},${y},0,${transitionMs})\\fs${fontSize}\\b1\\1c${primary}\\fad(${fadeMs},${fadeMs})`, text));
+      const markerStart = Math.min(end - 0.04, start + transitionMs / 1000);
+      if (markerStart < end) {
+        events.push(assEvent(7, markerStart, end, "Modern", `\\an4\\bord0\\shad0\\pos(${x},${y})\\fs${Math.round(fontSize * 0.72)}\\1c${primary}\\fad(40,${fadeMs})`, "▶"));
+      }
+    } else {
+      const moveY = y + Math.round(fontSize * 0.18);
+      events.push(assEvent(6, start, end, "Modern", `\\an5\\move(${x},${moveY},${x},${y},0,${transitionMs})\\fs${fontSize}\\1c${primary}\\fad(${fadeMs},${fadeMs})`, `▶  ${text}`));
+    }
+  }
+  return events;
+}
+
 export function buildAss(project, options = {}) {
   const normalized = normalizeProject(project);
   const template = effectById(normalized.effectId);
@@ -1005,6 +1039,20 @@ export function buildAss(project, options = {}) {
       events.push(assEvent(5, start, end, "Bottom", `\\an2\\pos(${Math.round(width / 2)},${Math.round(height * 0.94)})\\fad(100,80)`, escapeAssText(wrappedText)));
     }
   });
+
+  if (!limitToId && offset === 0) {
+    events.push(...buildBookendAssEvents({
+      project: normalized,
+      template,
+      params,
+      width,
+      height,
+      fontSize,
+      primary,
+      maxChars,
+      maxLines,
+    }));
+  }
 
   return [
     "[Script Info]",
