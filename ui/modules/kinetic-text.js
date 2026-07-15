@@ -698,6 +698,77 @@ function drawCaptionText(ctx, text, x, y, options = {}) {
   return { lines, height: Math.max(lineHeight, lines.length * lineHeight) };
 }
 
+function activeBookendAt(project, currentTime) {
+  const windows = bookendWindowsFor(project);
+  for (const kind of ["intro", "outro"]) {
+    const item = project.bookends?.[kind];
+    const window = windows[kind];
+    if (item?.enabled && item.text && window.available && currentTime >= window.start && currentTime <= window.end) {
+      return { kind, item, window };
+    }
+  }
+  return null;
+}
+
+function drawBookendPreview(ctx, bookend, template, params, spec) {
+  const width = ctx.canvas.width;
+  const height = ctx.canvas.height;
+  const scale = width / spec.outputWidth;
+  const x = width * Number(params.x ?? 50) / 100;
+  const y = height * Number(params.y ?? 64) / 100;
+  const fontSize = Math.max(20, Number(params.fontSize || 88) * scale);
+  const fontFamily = params.fontFamily || "Microsoft YaHei";
+  const primary = params.primaryColor || template.primary || "#fff";
+  const duration = Math.max(0.1, bookend.window.end - bookend.window.start);
+  const enterWindow = Math.min(0.22, duration / 3);
+  const exitWindow = Math.min(0.16, duration / 3);
+  const elapsed = state.currentTime - bookend.window.start;
+  const remaining = bookend.window.end - state.currentTime;
+  const enter = Math.max(0, Math.min(1, elapsed / Math.max(0.04, enterWindow)));
+  const alpha = Math.max(0, Math.min(1, enter, remaining / Math.max(0.04, exitWindow)));
+  const movingY = y + (1 - enter) * fontSize * 0.18;
+  if (template.renderMode === "rolling-focus-left") {
+    const markerGap = fontSize * 0.62;
+    drawCaptionText(ctx, bookend.item.text, x + markerGap, movingY, {
+      fontSize,
+      fontFamily,
+      weight: 800,
+      color: primary,
+      align: "left",
+      maxWidth: state.project.aspectRatio === "16:9" ? width * 0.48 : width * 0.82,
+      maxLines: 2,
+      alpha,
+      outline: false,
+      shadow: false,
+    });
+    if (enter >= 0.92) {
+      drawCaptionText(ctx, "▶", x, y, {
+        fontSize: fontSize * 0.72,
+        fontFamily,
+        weight: 800,
+        color: primary,
+        align: "left",
+        maxLines: 1,
+        alpha,
+        outline: false,
+        shadow: false,
+      });
+    }
+  } else {
+    drawCaptionText(ctx, `▶  ${bookend.item.text}`, x, movingY, {
+      fontSize,
+      fontFamily,
+      weight: 800,
+      color: primary,
+      maxWidth: width * 0.82,
+      maxLines: 2,
+      alpha,
+      outline: params.outlineEnabled !== false,
+      shadow: params.shadowEnabled !== false,
+    });
+  }
+}
+
 function drawWordRun(ctx, words, currentTime, x, y, options = {}) {
   const fontSize = Number(options.fontSize || 44);
   const fontFamily = options.fontFamily || "Microsoft YaHei";
@@ -851,6 +922,9 @@ function drawPreview() {
     }
 
     if (state.project.showBottomSubtitles) drawCaptionText(ctx, segment.text, width / 2, height * 0.94, { fontSize: Math.max(18, fontSize * 0.48), fontFamily, color: "#fff", maxWidth: width * 0.84, maxLines: 2 });
+  } else if (template) {
+    const bookend = activeBookendAt(state.project, state.currentTime);
+    if (bookend) drawBookendPreview(ctx, bookend, template, params, spec);
   }
   const duration = Math.max(0.01, Number(state.project.duration || 0));
   $("#kineticPreviewSeek").value = String(Math.round((state.currentTime / duration) * 1000));
@@ -932,6 +1006,7 @@ function renderProject() {
   renderTimelineRuleStatus();
   renderDownloadDirectory();
   if (!project) { drawPreview(); return; }
+  renderBookendSettings();
   $("#kineticTextTitle").value = project.title || "";
   $("#kineticAspectRatio").value = project.aspectRatio || "9:16";
   $("#kineticFrameRate").value = String(Number(project.frameRate) === 60 ? 60 : 30);
@@ -991,8 +1066,13 @@ function scheduleSave(changes = {}) {
     background: { ...state.project.background, ...(changes.background || {}) },
     audioMix: { ...state.project.audioMix, ...(changes.audioMix || {}) },
     effectParams: { ...state.project.effectParams, ...(changes.effectParams || {}) },
+    bookends: {
+      intro: { ...state.project.bookends?.intro, ...(changes.bookends?.intro || {}) },
+      outro: { ...state.project.bookends?.outro, ...(changes.bookends?.outro || {}) },
+    },
   };
   renderEffects();
+  renderBookendAvailability();
   drawPreview();
   clearTimeout(state.saveTimer);
   state.saveTimer = setTimeout(async () => {
@@ -1122,7 +1202,26 @@ async function receiveText(payload = {}) {
   return state.project;
 }
 
+function bindBookendControl(kind) {
+  const prefix = kind === "intro" ? "Intro" : "Outro";
+  const enabled = $(`#kinetic${prefix}Enabled`);
+  const preset = $(`#kinetic${prefix}Preset`);
+  const text = $(`#kinetic${prefix}Text`);
+  enabled.addEventListener("change", () => updateBookend(kind, { enabled: enabled.checked }));
+  preset.addEventListener("change", () => {
+    const nextText = preset.value === "custom" ? text.value : bookendPresetText(kind, preset.value);
+    text.value = nextText;
+    updateBookend(kind, { preset: preset.value, text: nextText });
+  });
+  text.addEventListener("input", () => {
+    preset.value = "custom";
+    updateBookend(kind, { preset: "custom", text: text.value });
+  });
+}
+
 function bindEvents() {
+  bindBookendControl("intro");
+  bindBookendControl("outro");
   $("#kineticTextRefresh").addEventListener("click", () => refreshProjects().catch((error) => setProgress(0, error.message)));
   $("#kineticTextProjectSelect").addEventListener("change", (event) => {
     state.project = state.projects.find((item) => item.id === event.target.value) || null;
@@ -1161,7 +1260,14 @@ function bindEvents() {
     if (video) { video.pause(); video.currentTime = 0; }
   });
   $("#kineticTimeline").addEventListener("input", (event) => { if (event.target.dataset.field) applyTimelineInput(event.target); });
-  $("#kineticTextTitle").addEventListener("input", (event) => scheduleSave({ title: event.target.value }));
+  $("#kineticTextTitle").addEventListener("input", (event) => {
+    const title = event.target.value;
+    const intro = state.project?.bookends?.intro;
+    if (intro?.preset === "title") {
+      $("#kineticIntroText").value = title;
+      scheduleSave({ title, bookends: { intro: { ...intro, text: title } } });
+    } else scheduleSave({ title });
+  });
   $("#kineticAspectRatio").addEventListener("change", (event) => {
     savePreferences({ aspectRatio: event.target.value });
     scheduleSave({ aspectRatio: event.target.value });
