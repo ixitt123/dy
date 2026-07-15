@@ -106,14 +106,29 @@ function seekValueToTime(sliderValue) {
 
 function syncPreviewMediaTime(time) {
   const targetTime = Math.max(0, Number(time || 0));
-  if (state.audio && Number.isFinite(Number(state.audio.duration))) {
-    state.audio.currentTime = Math.min(targetTime, Math.max(0, Number(state.audio.duration || 0)));
-  } else if (state.audio) {
-    state.audio.currentTime = targetTime;
+  try {
+    if (state.audio && Number.isFinite(Number(state.audio.duration))) {
+      state.audio.currentTime = Math.min(targetTime, Math.max(0, Number(state.audio.duration || 0)));
+    } else if (state.audio) {
+      state.audio.currentTime = targetTime;
+    }
+  } catch {}
+  try {
+    if (state.backgroundMedia instanceof HTMLVideoElement) {
+      state.backgroundMedia.currentTime = targetTime % Math.max(state.backgroundMedia.duration || 1, 1);
+    }
+  } catch {}
+}
+
+function previewClockTime(timestamp) {
+  const now = Number(timestamp || performance.now());
+  if (state.seekCommitUntil && now < state.seekCommitUntil) {
+    return state.startTime + (now - state.startedAt) / 1000;
   }
-  if (state.backgroundMedia instanceof HTMLVideoElement) {
-    state.backgroundMedia.currentTime = targetTime % Math.max(state.backgroundMedia.duration || 1, 1);
+  if (state.audio && Number.isFinite(Number(state.audio.currentTime))) {
+    return state.audio.currentTime;
   }
+  return state.startTime + (now - state.startedAt) / 1000;
 }
 
 function anchorPreviewClock(time, lockMs = 0) {

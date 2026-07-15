@@ -9825,7 +9825,7 @@ audio {
 
 .kinetic-preview-toolbar-main {
   display: grid;
-  grid-template-columns: auto minmax(180px, 1fr) minmax(280px, auto);
+  grid-template-columns: auto minmax(180px, 1fr) minmax(360px, 1fr);
   align-items: center;
   gap: 10px;
   min-width: 0;
@@ -10126,7 +10126,7 @@ audio {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  justify-self: end;
+  justify-self: stretch;
   gap: 10px;
   min-width: 0;
   width: 100%;
