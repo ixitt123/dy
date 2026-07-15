@@ -457,7 +457,8 @@ function normalizeProject(project) {
     subtitleSource: String(project.subtitleSource || "estimated"),
     timelineSkillRules: TIMELINE_SKILL_IDS,
     timelineValidation,
-    showBottomSubtitles: project.showBottomSubtitles === true,
+    showBottomSubtitles: project.keywordPlacement === "bottom" ? project.showBottomSubtitles !== false : true,
+    keywordPlacement: "bottom",
     background: {
       mode: ["black", "image", "video"].includes(background.mode) ? background.mode : "black",
       path: String(background.path || ""),
@@ -1063,15 +1064,7 @@ export function buildAss(project, options = {}) {
         } else {
           tags += `\\fs${smallSize}\\b0\\1c${muted}\\alpha&H${distanceAlpha}&`;
         }
-        const rowText = current
-          ? keywordStyledText(row.text, row.keywords, primary, {
-            seed: row.sourceSegmentId || row.id,
-            font,
-            fontSize,
-            outline,
-            baseOutline: 0,
-          })
-          : escapeAssText(row.text);
+        const rowText = escapeAssText(row.text);
         events.push(assEvent(current ? 4 : 2, focusStart, focusEnd, "Modern", tags, rowText));
         if (current) {
           const markerStart = reset ? focusStart : Math.min(focusEnd - 0.04, focusStart + transitionMs / 1000);
@@ -1095,21 +1088,21 @@ export function buildAss(project, options = {}) {
         const alpha = current ? "" : "\\alpha&H55&";
         const marker = current ? "▶  " : "";
         const visibleText = wrapSubtitleText(row.text, maxChars, current ? 2 : 1);
-        const text = current
-          ? keywordStyledText(visibleText, row.keywords, primary, {
-            seed: row.sourceSegmentId || row.id,
-            font,
-            fontSize: rowSize,
-            outline,
-            baseOutline: outlineWidth,
-          })
-          : escapeAssText(visibleText);
+        const text = escapeAssText(visibleText);
         events.push(assEvent(current ? 3 : 1, start, end, current ? "Modern" : "Muted", `\\an5\\move(${x},${rowY + Math.round(lineGap * 0.18)},${x},${rowY},0,${enterMs})\\fs${rowSize}\\1c${rowColor}${alpha}\\fad(${enterMs},90)`, `${marker}${text}`));
       });
     }
 
     if (normalized.showBottomSubtitles) {
-      events.push(assEvent(5, start, end, "Bottom", `\\an2\\pos(${Math.round(width / 2)},${Math.round(height * 0.94)})\\fad(100,80)`, escapeAssText(wrappedText)));
+      const bottomFontSize = Math.max(34, Math.round(fontSize * 0.48));
+      const bottomText = keywordStyledText(wrappedText, keywords, assColor("#FFFFFF"), {
+        seed: segment.sourceSegmentId || segment.id,
+        font,
+        fontSize: bottomFontSize,
+        outline,
+        baseOutline: 2.4,
+      });
+      events.push(assEvent(5, start, end, "Bottom", `\\an2\\pos(${Math.round(width / 2)},${Math.round(height * 0.94)})\\fad(100,80)`, bottomText));
     }
   });
 
@@ -1337,7 +1330,8 @@ export function createKineticTextService({
       effectParams: defaultEffectParams(effectId),
       aspectRatio: Object.hasOwn(OUTPUT_SIZES, input.aspectRatio) ? input.aspectRatio : "9:16",
       frameRate: Number(input.frameRate) === 60 ? 60 : 30,
-      showBottomSubtitles: false,
+      showBottomSubtitles: true,
+      keywordPlacement: "bottom",
       bookends: input.bookends && typeof input.bookends === "object" ? input.bookends : {},
       background: { mode: "black", path: "", name: "" },
       audioMix: { source: "none", localPath: "", localName: "", ttsVolume: 100, backgroundVolume: 18 },

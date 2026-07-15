@@ -29,14 +29,19 @@ const keywordProject = {
   text: segments.map((item) => item.text).join(""),
   wordTimeline: words,
   segments,
+  showBottomSubtitles: true,
 };
 const keywordAss = buildAss(keywordProject);
+const bottomKeywordEvents = keywordAss.split("\n").filter((line) => line.startsWith("Dialogue:") && line.includes(",Bottom,"));
+const templateEvents = keywordAss.split("\n").filter((line) => line.startsWith("Dialogue:") && line.includes(",Modern,"));
 for (const keyword of segments.flatMap((segment) => segment.keywords)) {
-  assert.match(keywordAss, new RegExp(`\\{[^}]+\\}${keyword}`), `重点词“${keyword}”必须带有独立视觉强调标签`);
+  const emphasisPattern = new RegExp(`\\{\\\\(?:1c|rKeyword)[^}]*\\}${keyword}`);
+  assert.equal(bottomKeywordEvents.some((line) => emphasisPattern.test(line)), true, `bottom subtitle keyword "${keyword}" must be emphasized`);
+  assert.equal(templateEvents.some((line) => emphasisPattern.test(line)), false, `template text keyword "${keyword}" must remain template-controlled`);
 }
-assert.match(keywordAss, /KeywordBox(?:Gold|Cyan|Lime|Violet)/u, "正式 ASS 必须注册关键词色块样式");
-assert.match(keywordAss, /\\fscx116|\\u1|\\rKeywordBox|\\1c&H/u, "重点词必须使用颜色、放大、色块或下划线强调");
-assert.equal(buildAss(keywordProject), keywordAss, "关键词自动样式必须固定，预览和重复导出不得随机跳变");
+assert.match(keywordAss, /KeywordBox(?:Gold|Cyan|Lime|Violet)/u, "formal ASS must register keyword box styles");
+assert.match(bottomKeywordEvents.join("\n"), /\\fscx116|\\u1|\\rKeywordBox|\\1c&H/u, "bottom keywords must use color, scale, box, or underline emphasis");
+assert.equal(buildAss(keywordProject), keywordAss, "keyword styles must remain deterministic across renders");
 
 const rollingFocusText = "，你真的，下定决心。要学英语了！那我就把英语，学习的唯一正确顺序告诉你。";
 const rollingFocusWords = [...rollingFocusText].map((text, index, list) => ({
@@ -139,6 +144,7 @@ const created = await service.create({
   },
 });
 assert.equal(created.wordTimeline.length, words.length, "确认后的 TTS wordTimeline 必须原样进入字幕项目");
+assert.equal(created.showBottomSubtitles, true, "new projects must enable bottom keyword subtitles by default");
 assert.equal(created.segments.every((segment) => segment.words.length > 0), true, "逐词时间必须附着到对应句段");
 assert.equal(created.segments.every((segment) => segment.keywords.length >= 1 && segment.keywords.length <= 3), true, "每条真实字幕必须自动生成 1-3 个重点词");
 assert.deepEqual(created.segments.map(({ start, end }) => [start, end]), segments.map(({ start, end }) => [start, end]), "自动识别重点词不得改变字幕时间戳");

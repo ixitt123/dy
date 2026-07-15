@@ -979,8 +979,7 @@ function drawPreview() {
             shadow: false,
             seed: row.sourceSegmentId || row.id,
           };
-          if (current) drawKeywordCaptionText(ctx, row.text, row.keywords, rowX, movingY, rowOptions);
-          else drawCaptionText(ctx, row.text, rowX, movingY, rowOptions);
+          drawCaptionText(ctx, row.text, rowX, movingY, rowOptions);
           if (current && transition >= 0.98) {
             drawCaptionText(ctx, "▶", x, movingY, {
               fontSize: fontSize * 0.72,
@@ -1015,12 +1014,20 @@ function drawPreview() {
           shadow: current && params.shadowEnabled !== false,
           seed: row.sourceSegmentId || row.id,
         };
-        if (current) drawKeywordCaptionText(ctx, rowText, row.keywords, x, rowY, rowOptions);
-        else drawCaptionText(ctx, rowText, x, rowY, rowOptions);
+        drawCaptionText(ctx, rowText, x, rowY, rowOptions);
       });
     }
 
-    if (state.project.showBottomSubtitles) drawCaptionText(ctx, segment.text, width / 2, height * 0.94, { fontSize: Math.max(18, fontSize * 0.48), fontFamily, color: "#fff", maxWidth: width * 0.84, maxLines: 2 });
+    if (state.project.showBottomSubtitles) {
+      drawKeywordCaptionText(ctx, segment.text, segment.keywords, width / 2, height * 0.94, {
+        fontSize: Math.max(18, fontSize * 0.48),
+        fontFamily,
+        color: "#fff",
+        maxWidth: width * 0.84,
+        maxLines: 2,
+        seed: segment.sourceSegmentId || segment.id,
+      });
+    }
   } else if (template) {
     const bookend = activeBookendAt(state.project, state.currentTime);
     if (bookend) drawBookendPreview(ctx, bookend, template, params, spec);
