@@ -2931,7 +2931,7 @@ function dashScopeTimestampSeconds(value) {
 function dashScopeConfidence(value) {
   if (value === null || value === undefined || value === "") return null;
   const confidence = Number(value);
-  return Number.isFinite(confidence) ? confidence : null;
+  return Number.isFinite(confidence) && confidence > 0 ? confidence : null;
 }
 
 function normalizeDashScopeSentence(sentence = {}) {
