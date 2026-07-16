@@ -1648,8 +1648,7 @@ export function createKineticTextService({
       const duration = Math.max(probedAudioDuration || project.duration, 0.5);
       const outputDir = activeDownloadsDir();
       fs.mkdirSync(outputDir, { recursive: true });
-      const renderStamp = new Date().toISOString().replace(/\D/g, "").slice(0, 14);
-      const outputPath = path.join(outputDir, `${safeFileName(project.title, project.id)}-${renderStamp}-${safeFileName(jobId, "render")}.mp4`);
+      const outputPath = path.join(outputDir, `${safeFileName(project.title, project.id)}.mp4`);
       const args = ["-y"];
       const bg = project.background || { mode: "black" };
       if (bg.mode === "image" && bg.path && fs.existsSync(bg.path)) args.push("-loop", "1", "-i", bg.path);

@@ -71,7 +71,6 @@ for (const [index, [effectId, aspectRatio, expected, expectedFrameRate]] of [
   const job = service.startRender(project.id);
   const finished = await waitFor(job.id);
   const videoPath = finished.result?.videoPath;
-  assert.match(path.basename(videoPath || ""), /-\d{14}-render-/, `${effectId} must use a unique render filename`);
   assert.equal(Boolean(videoPath && fs.existsSync(videoPath)), true, `${effectId} 正式 MP4 未生成`);
   assert.equal(path.dirname(path.resolve(videoPath)), path.resolve(selectedDownloadsDir), `${effectId} 没有直接保存到重新选择的下载目录`);
   const probe = spawnSync(ffprobeStatic.path, ["-v", "error", "-select_streams", "v:0", "-show_entries", "stream=width,height,r_frame_rate", "-of", "default=nw=1", videoPath], { encoding: "utf8", windowsHide: true });
