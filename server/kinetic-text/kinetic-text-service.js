@@ -987,8 +987,8 @@ function keywordStyledText(value, keywords, primary, options = {}) {
     const { mode, palette } = keywordEmphasisSpec(options.seed || "", part);
     const color = assColor(palette.color);
     const delay = keywordIndex * 90;
-    const peak = delay + 165;
-    const settle = delay + 300;
+    const peak = delay + 330;
+    const settle = delay + 620;
     keywordIndex += 1;
     if (mode === "scale") {
       return `{\\1c${color}\\b1\\fscx82\\fscy82\\alpha&H70&\\t(${delay},${peak},\\fscx122\\fscy122\\alpha&H00&)\\t(${peak},${settle},\\fscx116\\fscy116)}${escapeAssText(part)}{${reset}}`;

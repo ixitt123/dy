@@ -794,7 +794,7 @@ function keywordRuns(text, keywords, seed) {
 
 function keywordMotion(mode, elapsedMs, index) {
   const delay = Math.max(0, Number(index || 0)) * 90;
-  const progress = Math.max(0, Math.min(1, (Number(elapsedMs || 0) - delay) / 240));
+  const progress = Math.max(0, Math.min(1, (Number(elapsedMs || 0) - delay) / 520));
   const eased = 1 - ((1 - progress) ** 3);
   if (mode === "scale") {
     const scale = progress < 0.68
