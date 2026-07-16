@@ -1283,6 +1283,73 @@ function renderReceivedFiles() {
   }).join("");
 }
 
+function illustrationConfigFromForm() {
+  return {
+    scene: $("#kineticIllustrationScene")?.value || "explainer",
+    character: $("#kineticIllustrationCharacter")?.value || "xiaohei",
+    density: $("#kineticIllustrationDensity")?.value || "standard",
+    motion: $("#kineticIllustrationMotion")?.value || "standard",
+    tone: $("#kineticIllustrationTone")?.value || "template",
+    duration: $("#kineticIllustrationDuration")?.value || "auto",
+    showText: $("#kineticIllustrationShowText")?.checked === true,
+  };
+}
+
+function renderIllustrationSettings() {
+  const config = state.project?.dynamicIllustration?.config || readPreferences().illustration || {};
+  const setValue = (selector, value, fallback) => {
+    const control = $(selector);
+    if (control) control.value = String(value ?? fallback);
+  };
+  setValue("#kineticIllustrationScene", config.scene, "explainer");
+  setValue("#kineticIllustrationCharacter", config.character, "xiaohei");
+  setValue("#kineticIllustrationDensity", config.density, "standard");
+  setValue("#kineticIllustrationMotion", config.motion, "standard");
+  setValue("#kineticIllustrationTone", config.tone, "template");
+  setValue("#kineticIllustrationDuration", [4, 6, 8].includes(Number(config.duration)) ? Number(config.duration) : "auto", "auto");
+  const showText = $("#kineticIllustrationShowText");
+  if (showText) showText.checked = config.showText === true;
+  const outputs = state.project?.dynamicIllustration?.outputs || {};
+  const container = $("#kineticIllustrationOutputs");
+  if (!container) return;
+  container.hidden = !outputs.mp4;
+  container.innerHTML = outputs.mp4 ? [
+    `<a href="${mediaUrl("illustrationMp4")}" target="_blank">播放 MP4 预览</a>`,
+    `<a href="${mediaUrl("illustrationGif", { download: true })}">下载循环 GIF</a>`,
+    `<a href="${mediaUrl("illustrationReport")}" target="_blank">查看关键帧检查报告</a>`,
+  ].join("") : "";
+  const status = $("#kineticIllustrationStatus");
+  if (status && outputs.mp4) status.textContent = "已生成并应用：15fps MP4、循环 GIF、分层清单和关键帧检查均已保存。";
+}
+
+async function generateIllustration() {
+  if (!state.project) return;
+  const button = $("#kineticGenerateIllustration");
+  const status = $("#kineticIllustrationStatus");
+  const config = illustrationConfigFromForm();
+  savePreferences({ illustration: config });
+  button.disabled = true;
+  status.textContent = "正在按当前字幕模板生成分层手绘帧…";
+  setProgress(2, "准备手绘循环背景");
+  try {
+    const data = await postJson("/api/kinetic-text/illustration", { projectId: state.project.id, config });
+    pollJob(data.job.id, {
+      onComplete: () => {
+        button.disabled = false;
+        status.textContent = "生成完成，动态 MP4 已自动设为当前背景；GIF 和检查报告可直接下载。";
+      },
+    }).catch((error) => {
+      button.disabled = false;
+      status.textContent = error.message;
+      setProgress(0, error.message);
+    });
+  } catch (error) {
+    button.disabled = false;
+    status.textContent = error.message;
+    setProgress(0, error.message);
+  }
+}
+
 function renderProject() {
   const project = state.project;
   renderProjects();
@@ -1292,6 +1359,7 @@ function renderProject() {
   renderDownloadDirectory();
   if (!project) { drawPreview(); return; }
   renderBookendSettings();
+  renderIllustrationSettings();
   $("#kineticTextTitle").value = project.title || "";
   $("#kineticAspectRatio").value = project.aspectRatio || "9:16";
   $("#kineticFrameRate").value = String(Number(project.frameRate) === 60 ? 60 : 30);
