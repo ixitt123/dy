@@ -2449,6 +2449,7 @@ export function buildPrompt({
     styleProfile.avoid,
     "",
     "Constraints:",
+    "Each numbered storyboard prompt is one independent task (Job). Treat this number as the only image to generate for the current job. Do not merge multiple numbers onto one canvas. Do not create a collage. Do not create a contact sheet or thumbnail collection.",
     `Template lock: every visual decision must match SKILL_ID=${purpose} (${styleProfile.name}). Never fall back to the default Xiaohei article style unless SKILL_ID is article.`,
     "The picture must explain the exact source paragraph above, not merely the article's broad topic. Preserve its subject, action, direction, contrast, and result. Do not substitute a generic learning, workplace, AI, or business scene. One image explains only one core structure. Keep the main subject around 40%-60% of the canvas. Use at most 5-8 short Chinese labels derived only from this source paragraph. Do not write the structure type on the image. Do not repeat the same object set or pose across the image set. Invent a fresh visual metaphor for this specific paragraph while obeying the selected template.",
   ].join("\n");

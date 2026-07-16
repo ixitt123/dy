@@ -1904,7 +1904,7 @@ function promptClipboardText() {
   const parsedCount = (promptText.match(/^#\d+/gm) || []).length;
   const totalCount = plannedCount > 0 ? plannedCount : parsedCount;
   const imageCount = Math.min(Math.max(totalCount || 1, 1), 10);
-  return `${promptText}\n\n请按上述提示词一张一张的生成${imageCount}张，每一张都是独立的，图片素材，不要给我组图`;
+  return `${promptText}\n\n请按编号逐张生成，共生成${imageCount}次；每次只生成1张独立的16:9图片，不要拼图，不要组图。`;
 }
 
 function syncVideoPreview() {
