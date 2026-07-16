@@ -349,6 +349,21 @@ function bindEvents() {
   els.promptResults.addEventListener("change", handlePromptFileChange);
   els.promptResults.addEventListener("toggle", handlePromptDetailsToggle, true);
   els.outputHistory.addEventListener("click", handleOutputHistoryAction);
+  els.videoPreviewPlay.addEventListener("click", toggleVideoPreviewPlayback);
+  els.videoPreviewRestart.addEventListener("click", restartVideoPreview);
+  els.videoPreviewStage.addEventListener("click", toggleVideoPreviewPlayback);
+  els.videoPreviewSeek.addEventListener("input", seekVideoPreview);
+  els.videoTransitionMode.addEventListener("change", () => {
+    state.renderedVideo = null;
+    updateVideoDownloadState();
+    drawVideoPreview();
+  });
+  els.downloadXiaoheiVideo.addEventListener("click", downloadRenderedVideo);
+  els.audioPreview.addEventListener("play", startVideoPreviewLoop);
+  els.audioPreview.addEventListener("pause", stopVideoPreviewLoop);
+  els.audioPreview.addEventListener("ended", stopVideoPreviewLoop);
+  els.audioPreview.addEventListener("loadedmetadata", syncVideoPreview);
+  els.audioPreview.addEventListener("timeupdate", syncVideoPreviewTime);
 }
 
 async function loadConfig() {
