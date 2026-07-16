@@ -2971,6 +2971,17 @@ function resolveBatchDir(outputRoot, id) {
   return "";
 }
 
+function sendXiaoheiFile(res, filePath, { download = false } = {}) {
+  const stat = fs.statSync(filePath);
+  res.writeHead(200, {
+    "Content-Type": "video/mp4",
+    "Content-Length": stat.size,
+    "Content-Disposition": `${download ? "attachment" : "inline"}; filename*=UTF-8''${encodeURIComponent(path.basename(filePath))}`,
+    "Cache-Control": "no-store",
+  });
+  fs.createReadStream(filePath).pipe(res);
+}
+
 function isPathWithin(rootDir, targetPath) {
   const root = path.resolve(rootDir);
   const target = path.resolve(targetPath);
