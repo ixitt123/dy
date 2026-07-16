@@ -48,6 +48,10 @@ const state = {
   seekCommitUntil: 0,
   mediaSeekTarget: null,
   mediaSeekTrustUntil: 0,
+  overlayHitRegions: [],
+  hoverOverlay: "",
+  draggingOverlay: null,
+  suppressCanvasClick: false,
 };
 
 function $(selector, root = state.page || document) {
@@ -924,8 +928,8 @@ function drawBookendPreview(ctx, bookend, template, params, spec) {
   const width = ctx.canvas.width;
   const height = ctx.canvas.height;
   const scale = width / spec.outputWidth;
-  const x = width * Number(params.x ?? 50) / 100;
-  const y = height * Number(params.y ?? 64) / 100;
+  const x = width * Number(bookend.item.position?.x ?? params.x ?? 50) / 100;
+  const y = height * Number(bookend.item.position?.y ?? params.y ?? 64) / 100;
   const fontSize = Math.max(20, Number(params.fontSize || 88) * scale);
   const fontFamily = params.fontFamily || "Microsoft YaHei";
   const primary = params.primaryColor || template.primary || "#fff";
@@ -937,6 +941,18 @@ function drawBookendPreview(ctx, bookend, template, params, spec) {
   const enter = Math.max(0, Math.min(1, elapsed / Math.max(0.04, enterWindow)));
   const alpha = Math.max(0, Math.min(1, enter, remaining / Math.max(0.04, exitWindow)));
   const movingY = y + (1 - enter) * fontSize * 0.18;
+  const maxWidth = template.renderMode === "rolling-focus-left"
+    ? (state.project.aspectRatio === "16:9" ? width * 0.48 : width * 0.82)
+    : width * 0.82;
+  state.overlayHitRegions.push({
+    target: bookend.kind,
+    anchorX: x,
+    anchorY: y,
+    x: template.renderMode === "rolling-focus-left" ? x - fontSize * 0.28 : x - maxWidth / 2,
+    y: y - fontSize * 1.25,
+    width: template.renderMode === "rolling-focus-left" ? maxWidth + fontSize * 0.9 : maxWidth,
+    height: fontSize * 2.5,
+  });
   if (template.renderMode === "rolling-focus-left") {
     const markerGap = fontSize * 0.62;
     drawCaptionText(ctx, bookend.item.text, x + markerGap, movingY, {
@@ -1023,6 +1039,7 @@ function drawPreview() {
   const width = canvas.width;
   const height = canvas.height;
   ctx.clearRect(0, 0, width, height);
+  state.overlayHitRegions = [];
   const forceBlackBackground = state.project?.effectId === "rolling-focus-subtitle";
   ctx.fillStyle = forceBlackBackground ? "#000000" : "#07090d";
   ctx.fillRect(0, 0, width, height);
@@ -1138,8 +1155,22 @@ function drawPreview() {
     }
 
     if (state.project.showBottomSubtitles) {
-      drawKeywordCaptionText(ctx, segment.text, segment.keywords, width / 2, height * 0.94, {
-        fontSize: Math.max(18, fontSize * 0.48),
+      const bottomPosition = state.project.bottomSubtitlePosition || { x: 50, y: 94 };
+      const bottomX = width * Number(bottomPosition.x ?? 50) / 100;
+      const bottomY = height * Number(bottomPosition.y ?? 94) / 100;
+      const bottomFontSize = Math.max(18, fontSize * 0.48);
+      const bottomMaxWidth = width * 0.84;
+      state.overlayHitRegions.push({
+        target: "bottom",
+        anchorX: bottomX,
+        anchorY: bottomY,
+        x: bottomX - bottomMaxWidth / 2,
+        y: bottomY - bottomFontSize * 1.45,
+        width: bottomMaxWidth,
+        height: bottomFontSize * 2.9,
+      });
+      drawKeywordCaptionText(ctx, segment.text, segment.keywords, bottomX, bottomY, {
+        fontSize: bottomFontSize,
         fontFamily,
         color: "#fff",
         maxWidth: width * 0.84,
@@ -1152,6 +1183,7 @@ function drawPreview() {
     const bookend = activeBookendAt(state.project, state.currentTime);
     if (bookend) drawBookendPreview(ctx, bookend, template, params, spec);
   }
+  drawOverlayDragGuide(ctx);
   const duration = Math.max(0.01, previewDuration());
   $("#kineticPreviewSeek").value = String(Math.round((state.currentTime / duration) * previewSeekMaximum()));
   $("#kineticCurrentTime").textContent = formatTime(state.currentTime);
