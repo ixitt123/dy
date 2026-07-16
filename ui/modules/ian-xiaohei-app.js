@@ -1551,7 +1551,7 @@ function handlePromptDetailsToggle(event) {
   const shot = state.plan?.shots?.find((item) => Number(item.index) === index);
   const content = details.querySelector("[data-prompt-content]");
   if (content && !content.dataset.loaded) {
-    content.textContent = shot?.prompt || "";
+    content.textContent = shot ? shotPromptBlock(shot, state.plan) : "";
     content.dataset.loaded = "1";
   }
 }
@@ -1563,6 +1563,19 @@ async function handlePromptAction(event) {
   const action = button.dataset.promptAction;
   if (action === "choose-image") {
     els.promptResults.querySelector(`[data-shot-upload="${index}"]`)?.click();
+    return;
+  }
+  if (action === "copy-prompt") {
+    const shot = state.plan?.shots?.find((item) => Number(item.index) === index);
+    if (!shot) return;
+    try {
+      await navigator.clipboard.writeText(shotPromptBlock(shot, state.plan));
+      setStatus("已复制单张提示词", `#${index} 会作为独立任务生成 1 张图片。`, 100);
+      setButtonFeedback(button, "success", "已复制");
+    } catch (error) {
+      setStatus("复制失败", error.message || String(error), 0, true);
+      setButtonFeedback(button, "error", "复制失败");
+    }
     return;
   }
   if (action === "cancel-image") {
@@ -1765,6 +1778,35 @@ function restorePromptPlanCache() {
   }
 }
 
+function promptJobLimit(count = 1) {
+  return Math.min(Math.max(Number(count || 1), 1), 10);
+}
+
+function promptAspectRatio(plan = state.plan) {
+  return String(plan?.aspectRatio || els.aspectRatioSelect?.value || "16:9");
+}
+
+function shotPromptBlock(shot = {}, plan = state.plan) {
+  const ratio = promptAspectRatio(plan);
+  return [
+    `#${shot.index} ${shot.topic || ""}`,
+    `对应原文：${shot.sourceText || ""}`,
+    String(shot.prompt || "").trim(),
+    [
+      `本编号 #${shot.index} 是一个独立任务(Job)。`,
+      `只生成编号 #${shot.index} 这一张独立的 ${ratio} 图片素材。`,
+      "禁止将多个编号合并到同一张画布。",
+      "禁止自动创建 Collage（拼贴图）。",
+      "禁止自动创建 Contact Sheet（缩略图合集）。",
+      "禁止九宫格、缩略图合集、拼图、组图。",
+    ].join("\n"),
+  ].filter(Boolean).join("\n");
+}
+
+function promptPlanText(shots = [], plan = state.plan) {
+  return shots.map((shot) => shotPromptBlock(shot, plan)).join("\n\n--- NEXT INDEPENDENT JOB ---\n\n");
+}
+
 function renderPlan(plan) {
   const shots = plan?.shots || [];
   els.planCount.textContent = String(shots.length);
@@ -1914,7 +1956,7 @@ async function copyAllPrompts() {
   }
   try {
     await navigator.clipboard.writeText(promptClipboardText());
-    setStatus("已复制提示词", "提示词已经复制。", 100);
+    setStatus("已复制提示词", "已按独立 Job 格式复制，生图时应逐个编号生成。", 100);
     setButtonFeedback(els.copyPrompts, "success", "已复制");
   } catch (error) {
     setStatus("复制失败", error.message || String(error), 0, true);
@@ -1923,12 +1965,26 @@ async function copyAllPrompts() {
 }
 
 function promptClipboardText() {
-  const promptText = String(state.promptsText || "").trim();
-  const plannedCount = Number(state.plan?.shots?.length || 0);
-  const parsedCount = (promptText.match(/^#\d+/gm) || []).length;
-  const totalCount = plannedCount > 0 ? plannedCount : parsedCount;
+  const shots = Array.isArray(state.plan?.shots) ? state.plan.shots : [];
+  const fallbackPromptText = String(state.promptsText || "").trim();
+  const parsedCount = (fallbackPromptText.match(/^#\d+/gm) || []).length;
+  const totalCount = shots.length > 0 ? shots.length : parsedCount;
   const imageCount = Math.min(Math.max(totalCount || 1, 1), 10);
-  return `${promptText}\n\n请按编号逐张生成，共生成${imageCount}次；每次只生成1张独立的16:9图片，不要拼图，不要组图。`;
+  const ratio = promptAspectRatio(state.plan);
+  const promptText = shots.length
+    ? promptPlanText(shots.slice(0, imageCount), state.plan)
+    : fallbackPromptText;
+  return [
+    "批量任务协议：每一个编号就是一个独立任务(Job)。",
+    "禁止将多个编号合并到同一张画布。",
+    "禁止自动创建 Collage（拼贴图）。",
+    "禁止自动创建 Contact Sheet（缩略图合集）。",
+    "禁止九宫格、缩略图合集、拼图、组图。",
+    "",
+    promptText,
+    "",
+    `请按编号逐张生成，共生成${imageCount}次；每次只生成1张独立的${ratio}图片，不要拼图，不要组图。`,
+  ].join("\n");
 }
 
 function syncVideoPreview() {
