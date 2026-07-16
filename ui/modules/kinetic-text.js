@@ -52,6 +52,7 @@ const state = {
   hoverOverlay: "",
   draggingOverlay: null,
   suppressCanvasClick: false,
+  illustrationPlan: null,
 };
 
 function $(selector, root = state.page || document) {
@@ -1438,6 +1439,50 @@ function illustrationConfigFromForm() {
   };
 }
 
+function renderIllustrationPromptSlots() {
+  const container = $("#kineticIllustrationPromptSlots");
+  const plan = state.illustrationPlan;
+  if (!container) return;
+  if (!plan?.prompts?.length) {
+    container.innerHTML = "<small>正在读取分层提示词…</small>";
+    return;
+  }
+  container.innerHTML = plan.prompts.map((item) => `
+    <div class="kinetic-illustration-slot" data-illustration-slot="${item.index}">
+      <strong>元素 ${item.index}</strong>
+      <textarea rows="4" readonly>${escapeHtml(item.prompt)}</textarea>
+      <label class="ghost">${item.uploadedPath ? "替换图片" : "上传对应图片"}<input type="file" accept="image/png,image/jpeg,image/webp,image/bmp" data-illustration-upload="${item.index}" hidden /></label>
+      <small>${item.uploadedPath ? "已上传，可直接合成" : "尚未上传"}</small>
+    </div>
+  `).join("");
+  const buildButton = $("#kineticBuildUploadedIllustration");
+  if (buildButton) buildButton.disabled = !plan.ready;
+}
+
+async function loadIllustrationPlan() {
+  if (!state.project) return;
+  const presetId = $("#kineticIllustrationPreset")?.value || "prompt-garden";
+  const data = await postJson("/api/kinetic-text/illustration-plan", { projectId: state.project.id, presetId });
+  state.illustrationPlan = data.plan;
+  renderIllustrationPromptSlots();
+}
+
+async function uploadIllustrationSlot(index, file) {
+  if (!state.project || !file) return;
+  const status = $("#kineticIllustrationStatus");
+  status.textContent = `正在上传元素 ${index}…`;
+  const data = await postJson("/api/kinetic-text/illustration-upload", {
+    projectId: state.project.id,
+    presetId: $("#kineticIllustrationPreset")?.value || "prompt-garden",
+    index,
+    name: file.name,
+    data: await fileToDataUrl(file),
+  });
+  state.illustrationPlan = data.plan;
+  renderIllustrationPromptSlots();
+  status.textContent = data.plan.ready ? "分层图片已全部上传，可以直接合成。" : `元素 ${index} 已上传，请继续上传其余元素。`;
+}
+
 function renderIllustrationSettings() {
   const config = state.project?.dynamicIllustration?.config || readPreferences().illustration || {};
   const enabled = $("#kineticIllustrationEnabled");
@@ -1445,6 +1490,7 @@ function renderIllustrationSettings() {
   const presetId = config.presetId || "prompt-garden";
   const preset = $("#kineticIllustrationPreset");
   if (preset) preset.value = presetId;
+  if (state.illustrationPlan?.presetId !== presetId) loadIllustrationPlan().catch(() => {});
   const outputs = state.project?.dynamicIllustration?.presets?.[presetId]?.outputs
     || state.project?.dynamicIllustration?.outputs
     || {};
