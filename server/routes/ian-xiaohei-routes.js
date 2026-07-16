@@ -2946,12 +2946,21 @@ function listOutputBatches(outputRoot) {
         }))
         : directFiles;
       const stats = fs.statSync(folderPath);
+      const finalVideoPath = String(result.output?.final_video_path || "");
       return {
         id: entry.name,
         title: manifest.title || "",
         folderPath,
         timelineProjectId: 0,
         draftPath: result.output?.draft_path || manifest.draft_path || "",
+        finalVideoPath: finalVideoPath && fs.existsSync(finalVideoPath) ? finalVideoPath : "",
+        videoUrl: finalVideoPath && fs.existsSync(finalVideoPath)
+          ? `/api/ian-xiaohei/video-file?batch_id=${encodeURIComponent(entry.name)}`
+          : "",
+        downloadUrl: finalVideoPath && fs.existsSync(finalVideoPath)
+          ? `/api/ian-xiaohei/video-file?batch_id=${encodeURIComponent(entry.name)}&download=1`
+          : "",
+        transitionMode: result.output?.transition_mode || "",
         updatedAt: stats.mtime.toISOString(),
         files,
         boundImages,
