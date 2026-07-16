@@ -1868,19 +1868,6 @@ function bindEvents() {
       dynamicIllustration: { config: illustration, previousBackground: { ...state.project.background, mode: event.target.value } },
     });
   });
-  [
-    "#kineticIllustrationScene",
-    "#kineticIllustrationCharacter",
-    "#kineticIllustrationDensity",
-    "#kineticIllustrationMotion",
-    "#kineticIllustrationTone",
-    "#kineticIllustrationDuration",
-    "#kineticIllustrationShowText",
-  ].forEach((selector) => $(selector)?.addEventListener("change", () => {
-    const config = illustrationConfigFromForm();
-    savePreferences({ illustration: config });
-    scheduleSave({ dynamicIllustration: { config } });
-  }));
   $("#kineticIllustrationEnabled").addEventListener("change", (event) => {
     setIllustrationEnabled(event.target.checked).catch((error) => {
       $("#kineticIllustrationStatus").textContent = error.message;
