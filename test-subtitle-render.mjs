@@ -62,8 +62,8 @@ for (const [index, [effectId, aspectRatio, expected, expectedFrameRate]] of [
   });
   const bottomDisabledAss = buildAss({ ...project, keywordPlacement: "line", showBottomSubtitles: false });
   assert.equal(countBottomDialogues(bottomDisabledAss), 0, `${effectId} must not burn bottom subtitles when disabled`);
-  const rollingTemplateAss = buildAss({ ...project, keywordPlacement: "bottom", showBottomSubtitles: true });
-  assert.equal(countBottomDialogues(rollingTemplateAss), 0, `${effectId} must not add a second bottom subtitle layer`);
+  const bottomEnabledAss = buildAss({ ...project, keywordPlacement: "bottom", showBottomSubtitles: true });
+  assert.equal(countBottomDialogues(bottomEnabledAss) > 0, true, `${effectId} must burn bottom subtitles when enabled`);
   if (withBookends) {
     assert.equal(project.bookendWindows.intro.available, true, "正式渲染必须识别可用片头留白");
     assert.equal(project.bookendWindows.outro.available, true, "正式渲染必须识别可用片尾留白");

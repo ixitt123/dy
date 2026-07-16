@@ -1173,7 +1173,7 @@ export function buildAss(project, options = {}) {
       });
     }
 
-    if (normalized.showBottomSubtitles && !["rolling-focus", "rolling-focus-left"].includes(template.renderMode)) {
+    if (normalized.showBottomSubtitles) {
       const bottomFontSize = Math.max(34, Math.round(fontSize * 0.48));
       const bottomText = keywordStyledText(wrappedText, keywords, assColor("#FFFFFF"), {
         seed: segment.sourceSegmentId || segment.id,
