@@ -20,6 +20,8 @@ const state = {
 };
 const embeddedMode = new URLSearchParams(window.location.search).get("embedded") === "1";
 localStorage.setItem("ian-xiaohei-project-id", state.projectId);
+const PROMPT_PLAN_CACHE_VERSION = 1;
+const PROMPT_PLAN_CACHE_PREFIX = "ian-xiaohei-prompt-plan";
 
 const PURPOSE_TEMPLATE_META = {
   article: {
@@ -214,6 +216,10 @@ async function init() {
   window.addEventListener("message", handleParentHandoff);
   await loadConfig();
   await Promise.all([loadAudioJobs(), loadOutputs()]);
+  const restored = restorePromptPlanCache();
+  if (restored) {
+    setStatus("已恢复提示词计划", `刷新前生成的 ${state.plan?.shots?.length || 0} 个分镜提示词已恢复。`, 100, false, "本地缓存");
+  }
   if (embeddedMode) window.parent.postMessage({ type: "video-factory:xiaohei-ready" }, window.location.origin);
 }
 
@@ -242,7 +248,16 @@ async function handleParentHandoff(event) {
     syncTtsSource(data.job, { title: handoffTitle, text: handoffText });
     resetVisualWorkflow();
     await loadAudioJobs();
-    setStatus("已接收 TTS 资产", "文案、音频和同步时间戳已绑定，可以根据真实时间轴分析分镜配图。", 100, false, "等待分镜分析");
+    const restored = restorePromptPlanCache();
+    setStatus(
+      restored ? "已恢复提示词计划" : "已接收 TTS 资产",
+      restored
+        ? `刷新前生成的 ${state.plan?.shots?.length || 0} 个分镜提示词已恢复。`
+        : "文案、音频和同步时间戳已绑定，可以根据真实时间轴分析分镜配图。",
+      100,
+      false,
+      restored ? "本地缓存" : "等待分镜分析",
+    );
   } catch (error) {
     setStatus("TTS 资产接收失败", error.payload?.message || error.message || String(error), 100, true);
   }
@@ -977,6 +992,7 @@ async function createPlan() {
     state.pendingUploads.clear();
     renderPlan(data);
     renderImages([], []);
+    savePromptPlanCache(data, payload);
     setStatus("分镜配图分析完成", data.analysisNote || `已生成 ${data.shots?.length || 0} 个配图方案。`, 100, false, "等待上传图片");
     setButtonFeedback(els.planPrompts, "success", "已生成分镜");
     return data;
@@ -1323,6 +1339,57 @@ function formPayload() {
     purpose: els.purposeSelect?.value || "article",
     aspectRatio: els.aspectRatioSelect?.value || "16:9",
   };
+}
+
+function promptPlanCacheKey(projectId = state.projectId) {
+  return `${PROMPT_PLAN_CACHE_PREFIX}:v${PROMPT_PLAN_CACHE_VERSION}:${String(projectId || "default")}`;
+}
+
+function promptPlanCacheSignature(payload = formPayload(), job = state.selectedTtsJob || state.ttsJob) {
+  return JSON.stringify({
+    projectId: String(state.projectId || ""),
+    ttsJobId: Number(job?.id || 0),
+    title: normalizeComparableText(payload.title),
+    text: normalizeComparableText(payload.text),
+    purpose: String(payload.purpose || "article"),
+    aspectRatio: String(payload.aspectRatio || "16:9"),
+  });
+}
+
+function savePromptPlanCache(plan, payload = formPayload()) {
+  if (!plan?.shots?.length || !state.projectId) return;
+  try {
+    localStorage.setItem(promptPlanCacheKey(), JSON.stringify({
+      version: PROMPT_PLAN_CACHE_VERSION,
+      savedAt: new Date().toISOString(),
+      signature: promptPlanCacheSignature(payload),
+      plan,
+    }));
+  } catch {
+    // The plan remains usable in memory even if browser storage is unavailable.
+  }
+}
+
+function restorePromptPlanCache() {
+  if (!state.projectId || !(state.selectedTtsJob || state.ttsJob)) return false;
+  const key = promptPlanCacheKey();
+  try {
+    const cached = JSON.parse(localStorage.getItem(key) || "null");
+    if (
+      cached?.version !== PROMPT_PLAN_CACHE_VERSION
+      || cached.signature !== promptPlanCacheSignature()
+      || !cached.plan?.shots?.length
+    ) return false;
+    state.plan = cached.plan;
+    state.images = [];
+    state.pendingUploads.clear();
+    renderPlan(state.plan);
+    renderImages([], []);
+    return true;
+  } catch {
+    localStorage.removeItem(key);
+    return false;
+  }
 }
 
 function renderPlan(plan) {

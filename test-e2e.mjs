@@ -186,6 +186,19 @@ test("TTS final-audio transcript alignment", async () => {
   }
 });
 
+test("Xiaohei prompt plan refresh cache", async () => {
+  const response = await fetch(`${BASE}/modules/ian-xiaohei-app.js`);
+  const source = await response.text();
+  if (!response.ok
+    || !source.includes('const PROMPT_PLAN_CACHE_VERSION = 1')
+    || !source.includes('function savePromptPlanCache(')
+    || !source.includes('function restorePromptPlanCache()')
+    || !source.includes('savePromptPlanCache(data, payload)')
+    || !source.includes('cached.signature !== promptPlanCacheSignature()')) {
+    throw new Error("Xiaohei prompt plan refresh cache is incomplete");
+  }
+});
+
 test("Kinetic text production line", async () => {
   const [effectsResponse, pageResponse, moduleResponse, legacyResponse, packageSource, kineticServiceSource] = await Promise.all([
     fetch(`${BASE}/api/kinetic-text/effects`),
