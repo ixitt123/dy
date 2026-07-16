@@ -168,12 +168,12 @@ function assTime(value) {
   return `${hours}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}.${String(centiseconds).padStart(2, "0")}`;
 }
 
-function wrapSubtitleText(value, maxChars) {
+function wrapSubtitleText(value, maxChars, maxLines = 3) {
   const text = String(value || "").replace(/\s+/g, " ").trim();
   if (text.length <= maxChars) return text;
   const lines = [];
   let remaining = text;
-  while (remaining.length > maxChars && lines.length < 2) {
+  while (remaining.length > maxChars && lines.length < maxLines - 1) {
     let cut = maxChars;
     const window = remaining.slice(0, maxChars + 1);
     const punctuation = Math.max(...["，", "。", "！", "？", "；", ",", ".", "!", "?", ";"].map((char) => window.lastIndexOf(char)));
@@ -182,7 +182,62 @@ function wrapSubtitleText(value, maxChars) {
     remaining = remaining.slice(cut).trim();
   }
   if (remaining) lines.push(remaining);
-  return lines.slice(0, 3).join("\n");
+  return lines.slice(0, maxLines).join("\n");
+}
+
+function assColor(value) {
+  const match = String(value || "#ffffff").match(/^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i);
+  if (!match) return "&H00FFFFFF";
+  return `&H00${match[3]}${match[2]}${match[1]}`.toUpperCase();
+}
+
+function keywordAssText(value, keywords, color, enterMs) {
+  const source = String(value || "");
+  const ordered = [...new Set((keywords || []).map((item) => String(item || "").trim()).filter((item) => item && source.replace(/\n/g, "").includes(item)))]
+    .sort((a, b) => b.length - a.length)
+    .slice(0, 2);
+  if (!ordered.length) return escapeAssText(source);
+  const pattern = new RegExp(`(${ordered.map(escapeRegExp).join("|")})`, "g");
+  let keywordIndex = 0;
+  return source.split(pattern).map((part) => {
+    if (!ordered.includes(part)) return escapeAssText(part);
+    const delay = keywordIndex * 100;
+    const peak = delay + Math.round(enterMs * 0.62);
+    const settle = delay + enterMs;
+    keywordIndex += 1;
+    return `{\\1c${color}\\b1\\fscx78\\fscy78\\alpha&H80&\\t(${delay},${peak},\\fscx126\\fscy126\\alpha&H00&)\\t(${peak},${settle},\\fscx112\\fscy112)}${escapeAssText(part)}{\\rDefault}`;
+  }).join("");
+}
+
+function bookendDialogues(scenes, compose, width, height, primary, fontSize) {
+  if (!scenes.length) return [];
+  const first = scenes[0];
+  const last = scenes[scenes.length - 1];
+  const videoEnd = Math.max(Number(last.end_time || 0), scenes.reduce((sum, scene) => sum + sceneDuration(scene), 0));
+  const events = [];
+  const add = (kind, item, start, end) => {
+    if (!item?.enabled || !String(item.text || "").trim() || end - start < 0.18) return;
+    const durationMs = Math.round((end - start) * 1000);
+    const fade = Math.max(55, Math.min(150, Math.round(durationMs / 4)));
+    const y = kind === "intro" ? Math.round(height * 0.43) : Math.round(height * 0.48);
+    const text = escapeAssText(wrapSubtitleText(item.text, height > width ? 12 : 22, 2));
+    events.push(`Dialogue: 5,${assTime(start)},${assTime(end)},Bookend,,0,0,0,,{\\an5\\pos(${Math.round(width / 2)},${y})\\fs${Math.round(fontSize * 1.65)}\\1c${primary}\\fad(${fade},${fade})}${text}`);
+  };
+  const introGap = Math.max(0, Number(first.start_time || 0));
+  const introEnd = introGap >= 0.18
+    ? introGap
+    : Math.min(Number(first.end_time || 0), Math.max(0.45, Math.min(1.1, sceneDuration(first) * 0.3)));
+  add("intro", compose.intro, 0, introEnd);
+  const trailingGap = Math.max(0, videoEnd - Number(last.end_time || 0));
+  const outroStart = trailingGap >= 0.18
+    ? Number(last.end_time || 0)
+    : Math.max(0, videoEnd - Math.max(0.45, Math.min(1.1, sceneDuration(last) * 0.3)));
+  add("outro", compose.outro, outroStart, videoEnd);
+  return events;
+}
+
+function escapeRegExp(value) {
+  return String(value || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function escapeAssText(value) {
