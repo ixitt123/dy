@@ -246,6 +246,26 @@ test("Xiaohei compact template selector", async () => {
   }
 });
 
+test("Xiaohei video preview, transitions and MP4 download", async () => {
+  const [pageResponse, moduleResponse, routeResponse] = await Promise.all([
+    fetch(`${BASE}/xiaohei-illustrations.html`),
+    fetch(`${BASE}/modules/ian-xiaohei-app.js`),
+    readFile(new URL("./server/routes/ian-xiaohei-routes.js", import.meta.url), "utf8"),
+  ]);
+  const [page, source] = await Promise.all([pageResponse.text(), moduleResponse.text()]);
+  if (!pageResponse.ok || !moduleResponse.ok
+    || !page.includes('id="xiaoheiVideoCanvas"')
+    || !page.includes('id="videoTransitionMode"')
+    || !page.includes('id="downloadXiaoheiVideo"')
+    || !source.includes('function drawVideoPreview()')
+    || !source.includes('/api/ian-xiaohei/render-video')
+    || !source.includes('function downloadRenderedVideo()')
+    || !routeResponse.includes('route === "render-video"')
+    || !routeResponse.includes('route === "video-file"')) {
+    throw new Error("Xiaohei video preview/render/download flow is incomplete");
+  }
+});
+
 test("Kinetic text production line", async () => {
   const [effectsResponse, pageResponse, moduleResponse, legacyResponse, packageSource, kineticServiceSource] = await Promise.all([
     fetch(`${BASE}/api/kinetic-text/effects`),
