@@ -1303,6 +1303,7 @@ async function handlePromptAction(event) {
   }
   if (action === "cancel-image") {
     state.pendingUploads.delete(index);
+    savePromptPlanCache(state.plan);
     renderPlan(state.plan);
     return;
   }
@@ -1386,10 +1387,31 @@ function savePromptPlanCache(plan, payload = formPayload()) {
       savedAt: new Date().toISOString(),
       signature: promptPlanCacheSignature(payload),
       plan,
+      boundImages: cacheableBoundImages(state.images),
     }));
   } catch {
     // The plan remains usable in memory even if browser storage is unavailable.
   }
+}
+
+function cacheableBoundImages(images = []) {
+  return images
+    .filter((image) => image?.confirmed && (image.imagePath || image.assetId))
+    .map((image) => ({
+      index: Number(image.index),
+      topic: String(image.topic || ""),
+      purpose: String(image.purpose || ""),
+      imagePath: String(image.imagePath || ""),
+      imageUrl: String(image.imageUrl || "").startsWith("data:") ? "" : String(image.imageUrl || ""),
+      thumbnailUrl: String(image.thumbnailUrl || "").startsWith("data:") ? "" : String(image.thumbnailUrl || ""),
+      assetId: String(image.assetId || ""),
+      provider: String(image.provider || "local"),
+      model: String(image.model || "local-file"),
+      source: String(image.source || "local_upload"),
+      aspectRatio: String(image.aspectRatio || ""),
+      confirmed: true,
+    }))
+    .sort((left, right) => left.index - right.index);
 }
 
 function restorePromptPlanCache() {
@@ -1404,10 +1426,10 @@ function restorePromptPlanCache() {
       || cached.plan.skillProfileVersion !== 2
     ) return false;
     state.plan = cached.plan;
-    state.images = [];
+    state.images = cacheableBoundImages(cached.boundImages || []);
     state.pendingUploads.clear();
     renderPlan(state.plan);
-    renderImages([], []);
+    renderImages(state.images, []);
     return true;
   } catch {
     localStorage.removeItem(key);
