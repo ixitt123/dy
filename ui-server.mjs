@@ -6452,10 +6452,15 @@ function serveStatic(req, res) {
       res.end("Not found");
       return;
     }
-    const type = mimeTypes.get(path.extname(requested)) || "application/octet-stream";
+    const extension = path.extname(requested).toLowerCase();
+    const type = mimeTypes.get(extension) || "application/octet-stream";
+    const cacheControl = [".avif", ".gif", ".ico", ".jpeg", ".jpg", ".png", ".svg", ".webp", ".woff", ".woff2"]
+      .includes(extension)
+      ? "public, max-age=86400"
+      : "no-store";
     res.writeHead(200, {
       "content-type": type,
-      "cache-control": "no-store",
+      "cache-control": cacheControl,
     });
     res.end(data);
   });
