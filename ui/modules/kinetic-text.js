@@ -783,10 +783,28 @@ function keywordRuns(text, keywords, seed) {
     .sort((a, b) => b.length - a.length);
   if (!ordered.length) return [{ text: String(text || ""), emphasis: null }];
   const pattern = new RegExp(`(${ordered.map((item) => item.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")})`, "g");
-  return String(text || "").split(pattern).filter(Boolean).map((part) => ({
-    text: part,
-    emphasis: ordered.includes(part) ? keywordEmphasisSpec(seed, part) : null,
-  }));
+  let emphasisIndex = 0;
+  return String(text || "").split(pattern).filter(Boolean).map((part) => {
+    const emphasis = ordered.includes(part) ? keywordEmphasisSpec(seed, part) : null;
+    const result = { text: part, emphasis, emphasisIndex: emphasis ? emphasisIndex : -1 };
+    if (emphasis) emphasisIndex += 1;
+    return result;
+  });
+}
+
+function keywordMotion(mode, elapsedMs, index) {
+  const delay = Math.max(0, Number(index || 0)) * 90;
+  const progress = Math.max(0, Math.min(1, (Number(elapsedMs || 0) - delay) / 240));
+  const eased = 1 - ((1 - progress) ** 3);
+  if (mode === "scale") {
+    const scale = progress < 0.68
+      ? 0.82 + (1.22 - 0.82) * (progress / 0.68)
+      : 1.22 + (1.16 - 1.22) * ((progress - 0.68) / 0.32);
+    return { scale, alpha: 0.35 + eased * 0.65, reveal: eased };
+  }
+  if (mode === "box") return { scale: 0.88 + eased * 0.12, alpha: 0.3 + eased * 0.7, reveal: eased };
+  if (mode === "underline") return { scale: 1, alpha: 0.45 + eased * 0.55, reveal: eased };
+  return { scale: 1, alpha: 0.35 + eased * 0.65, reveal: eased };
 }
 
 function drawKeywordCaptionText(ctx, text, keywords, x, y, options = {}) {
@@ -805,21 +823,24 @@ function drawKeywordCaptionText(ctx, text, keywords, x, y, options = {}) {
   lines.forEach((line, lineIndex) => {
     const runs = keywordRuns(line, keywords, options.seed || "");
     const measured = runs.map((run) => {
-      const runSize = run.emphasis?.mode === "scale" ? fontSize * 1.16 : fontSize;
+      const motion = run.emphasis ? keywordMotion(run.emphasis.mode, options.elapsedMs, run.emphasisIndex) : { scale: 1, alpha: 1, reveal: 1 };
+      const runSize = run.emphasis?.mode === "scale" ? fontSize * motion.scale : fontSize;
       ctx.font = `${weight} ${runSize}px ${fontFamily}`;
-      return { ...run, runSize, width: ctx.measureText(run.text).width };
+      return { ...run, motion, runSize, width: ctx.measureText(run.text).width };
     });
     const totalWidth = measured.reduce((sum, run) => sum + run.width, 0);
     let cursor = options.align === "left" ? x : options.align === "right" ? x - totalWidth : x - totalWidth / 2;
     const lineY = y + (lineIndex - (lines.length - 1) / 2) * lineHeight;
     measured.forEach((run) => {
       ctx.save();
+      ctx.globalAlpha *= run.motion.alpha;
       ctx.font = `${weight} ${run.runSize}px ${fontFamily}`;
       ctx.textAlign = "left";
       if (run.emphasis?.mode === "box") {
         const padX = Math.max(5, fontSize * 0.11);
         const padY = Math.max(3, fontSize * 0.08);
-        roundRectPath(ctx, cursor - padX, lineY - run.runSize * 0.56 - padY, run.width + padX * 2, run.runSize * 1.12 + padY * 2, Math.max(5, fontSize * 0.12));
+        const boxWidth = (run.width + padX * 2) * run.motion.reveal;
+        roundRectPath(ctx, cursor - padX, lineY - run.runSize * 0.56 - padY, boxWidth, run.runSize * 1.12 + padY * 2, Math.max(5, fontSize * 0.12));
         ctx.fillStyle = hexToRgba(run.emphasis.color, 0.18);
         ctx.fill();
         ctx.strokeStyle = run.emphasis.color;
@@ -843,7 +864,7 @@ function drawKeywordCaptionText(ctx, text, keywords, x, y, options = {}) {
         ctx.lineWidth = Math.max(2, fontSize * 0.055);
         ctx.beginPath();
         ctx.moveTo(cursor, lineY + run.runSize * 0.56);
-        ctx.lineTo(cursor + run.width, lineY + run.runSize * 0.56);
+        ctx.lineTo(cursor + run.width * run.motion.reveal, lineY + run.runSize * 0.56);
         ctx.stroke();
       }
       ctx.restore();
@@ -1124,6 +1145,7 @@ function drawPreview() {
         maxWidth: width * 0.84,
         maxLines: 2,
         seed: segment.sourceSegmentId || segment.id,
+        elapsedMs: Math.max(0, (state.currentTime - Number(segment.start || 0)) * 1000),
       });
     }
   } else if (template) {

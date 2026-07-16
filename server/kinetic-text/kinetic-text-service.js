@@ -981,20 +981,25 @@ function keywordStyledText(value, keywords, primary, options = {}) {
   const outline = options.outline || assColor("#101216");
   const baseOutline = safeNumber(options.baseOutline, 0, 0, 12);
   const reset = `\\fn${font}\\fs${fontSize}\\1c${primary}\\3c${outline}\\bord${baseOutline}\\b1\\u0\\fscx100\\fscy100`;
+  let keywordIndex = 0;
   return source.split(pattern).map((part) => {
     if (!ordered.includes(part)) return escapeAssText(part);
     const { mode, palette } = keywordEmphasisSpec(options.seed || "", part);
     const color = assColor(palette.color);
+    const delay = keywordIndex * 90;
+    const peak = delay + 165;
+    const settle = delay + 300;
+    keywordIndex += 1;
     if (mode === "scale") {
-      return `{\\1c${color}\\b1\\fscx116\\fscy116}${escapeAssText(part)}{${reset}}`;
+      return `{\\1c${color}\\b1\\fscx82\\fscy82\\alpha&H70&\\t(${delay},${peak},\\fscx122\\fscy122\\alpha&H00&)\\t(${peak},${settle},\\fscx116\\fscy116)}${escapeAssText(part)}{${reset}}`;
     }
     if (mode === "box") {
-      return `{\\r${palette.style}\\fn${font}\\fs${fontSize}}${escapeAssText(part)}{${reset}}`;
+      return `{\\r${palette.style}\\fn${font}\\fs${fontSize}\\fscx88\\fscy88\\alpha&H70&\\t(${delay},${settle},\\fscx100\\fscy100\\alpha&H00&)}${escapeAssText(part)}{${reset}}`;
     }
     if (mode === "underline") {
-      return `{\\1c${color}\\b1\\u1}${escapeAssText(part)}{${reset}}`;
+      return `{\\1c${color}\\b1\\u1\\fscx35\\alpha&H70&\\t(${delay},${settle},\\fscx100\\alpha&H00&)}${escapeAssText(part)}{${reset}}`;
     }
-    return `{\\1c${color}\\b1}${escapeAssText(part)}{${reset}}`;
+    return `{\\1c${color}\\b1\\alpha&H70&\\t(${delay},${settle},\\alpha&H00&)}${escapeAssText(part)}{${reset}}`;
   }).join("");
 }
 
