@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 
 const source = fs.readFileSync(new URL("./ui/modules/ian-xiaohei-app.js", import.meta.url), "utf8");
+const css = fs.readFileSync(new URL("./ui/xiaohei-illustrations.css", import.meta.url), "utf8");
 
 assert.match(
   source,
@@ -37,6 +38,36 @@ assert.match(
   source,
   /data-prompt-action="copy-prompt"/,
   "Each Xiaohei shot card must provide a single-shot prompt copy action.",
+);
+
+assert.match(
+  source,
+  /data-prompt-action="confirm-all-images"/,
+  "Xiaohei prompt cards must provide a confirm-all button for pending local images.",
+);
+
+assert.match(
+  source,
+  /async function uploadAllPendingShotImages/,
+  "Xiaohei confirm-all must upload every pending local image.",
+);
+
+assert.match(
+  source,
+  /setButtonFeedback\(button, "loading", "确认中"\)/,
+  "Single-image confirmation must show loading feedback on the clicked button.",
+);
+
+assert.match(
+  css,
+  /\.prompt-batch-actions/,
+  "Xiaohei confirm-all controls must have visible layout styling.",
+);
+
+assert.match(
+  css,
+  /button\.action-feedback\.is-loading::before/,
+  "Prompt action buttons must show visible loading feedback.",
 );
 
 console.log("Xiaohei prompt copy safety: OK");
