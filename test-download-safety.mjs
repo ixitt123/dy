@@ -29,4 +29,10 @@ assert.match(
   "下载代码更新后，旧后台必须拒绝继续写入下载目录",
 );
 
+assert.match(
+  source,
+  /const autoClose = !process\.argv\.includes\("--no-auto-close"\);/,
+  "UI server must auto-close by default when the last browser page closes.",
+);
+
 console.log("Download directory safety: OK");
