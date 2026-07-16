@@ -100,8 +100,8 @@ export function initCs1VideoModule() {
     const sentences = (clean.match(/[^。！？!?；;\n]+[。！？!?；;]?/gu) || [clean]).map((item) => item.trim()).filter(Boolean);
     if (sentences.length === count) return sentences;
     if (sentences.length > count) {
-      const rows = Array.from({ length: count }, () => "");
-      sentences.forEach((sentence, index) => { rows[Math.min(count - 1, index)].concat; rows[index % count] += sentence; });
+      const rows = sentences.slice(0, count);
+      for (let index = count; index < sentences.length; index += 1) rows[count - 1] += sentences[index];
       return rows.map((item) => item.trim()).filter(Boolean);
     }
     const chars = [...clean];
@@ -153,7 +153,19 @@ export function initCs1VideoModule() {
           duration: Number(currentTtsHandoff.audio_duration || currentTtsHandoff.duration || 0),
           source: "cs1-video",
         });
-        currentTtsHandoff = window.sharedTtsHandoff?.save?.({ ...payload, ...(data.job || {}) }, { sourceTarget: "cs1-video" }) || payload;
+        currentTtsHandoff = window.sharedTtsHandoff?.save?.({
+          ...(data.job || {}),
+          ...payload,
+          final_text: data.job?.final_text || text,
+          sentence_timeline: data.job?.sentence_timeline || timeline,
+          subtitle_timeline: data.job?.subtitle_timeline || data.job?.sentence_timeline || timeline,
+          script_url: data.job?.script_url || payload.script_url,
+          script_path: data.job?.script_path || payload.script_path,
+          subtitle_url: data.job?.subtitle_url || payload.subtitle_url,
+          subtitle_path: data.job?.subtitle_path || payload.subtitle_path,
+          timestamped_text_url: data.job?.timestamped_text_url || payload.timestamped_text_url,
+          timestamped_text_path: data.job?.timestamped_text_path || payload.timestamped_text_path,
+        }, { sourceTarget: "cs1-video" }) || payload;
       } catch (error) {
         setStatus("公共文案已更新，本地文件同步失败", error.message || String(error));
       }
@@ -359,6 +371,8 @@ export function initCs1VideoModule() {
     textInput.value = EXAMPLE_TEXT;
     textInput.focus();
   });
+  textInput.addEventListener("input", scheduleTtsEditPublish);
+  titleInput.addEventListener("input", scheduleTtsEditPublish);
 
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
