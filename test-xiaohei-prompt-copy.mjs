@@ -48,6 +48,24 @@ assert.match(
 
 assert.match(
   source,
+  /function ensurePromptPlanAvailable\(\)/,
+  "Xiaohei local-image actions must restore the prompt plan before rendering upload state.",
+);
+
+assert.match(
+  source,
+  /if \(!ensurePromptPlanAvailable\(\)\) return;[\s\S]*data-prompt-action/,
+  "Xiaohei prompt action handler must guard actions against a missing in-memory plan.",
+);
+
+assert.match(
+  source,
+  /input\.value = "";/,
+  "Xiaohei local-image upload input must reset so selecting the same file again still fires change.",
+);
+
+assert.match(
+  source,
   /async function uploadAllPendingShotImages/,
   "Xiaohei confirm-all must upload every pending local image.",
 );
