@@ -22,6 +22,7 @@ const embeddedMode = new URLSearchParams(window.location.search).get("embedded")
 localStorage.setItem("ian-xiaohei-project-id", state.projectId);
 const PROMPT_PLAN_CACHE_VERSION = 2;
 const PROMPT_PLAN_CACHE_PREFIX = "ian-xiaohei-prompt-plan";
+const PROMPT_PLAN_LATEST_KEY = `${PROMPT_PLAN_CACHE_PREFIX}:latest`;
 const PURPOSE_STORAGE_KEY = "ian-xiaohei-selected-purpose";
 
 const PURPOSE_TEMPLATE_META = {
@@ -1407,15 +1408,27 @@ function promptPlanCacheMatches(cached) {
 function savePromptPlanCache(plan, payload = formPayload()) {
   if (!plan?.shots?.length || !state.projectId) return;
   try {
-    localStorage.setItem(promptPlanCacheKey(), JSON.stringify({
+    const key = promptPlanCacheKey();
+    localStorage.setItem(key, JSON.stringify({
       version: PROMPT_PLAN_CACHE_VERSION,
       savedAt: new Date().toISOString(),
       signature: promptPlanCacheSignature(payload),
       plan,
       boundImages: cacheableBoundImages(state.images),
     }));
+    localStorage.setItem(PROMPT_PLAN_LATEST_KEY, key);
+    removeOlderPromptPlanCaches(key);
   } catch {
     // The plan remains usable in memory even if browser storage is unavailable.
+  }
+}
+
+function removeOlderPromptPlanCaches(keepKey) {
+  for (let index = localStorage.length - 1; index >= 0; index -= 1) {
+    const key = localStorage.key(index);
+    if (key?.startsWith(`${PROMPT_PLAN_CACHE_PREFIX}:`) && key !== PROMPT_PLAN_LATEST_KEY && key !== keepKey) {
+      localStorage.removeItem(key);
+    }
   }
 }
 
@@ -1443,6 +1456,8 @@ function restorePromptPlanCache() {
   if (!state.projectId || !(state.selectedTtsJob || state.ttsJob)) return false;
   const key = promptPlanCacheKey();
   try {
+    const latestKey = localStorage.getItem(PROMPT_PLAN_LATEST_KEY);
+    if (latestKey && latestKey !== key) return false;
     const cached = JSON.parse(localStorage.getItem(key) || "null");
     if (
       cached?.version !== PROMPT_PLAN_CACHE_VERSION
@@ -1450,6 +1465,8 @@ function restorePromptPlanCache() {
       || !cached.plan?.shots?.length
       || cached.plan.skillProfileVersion !== 2
     ) return false;
+    localStorage.setItem(PROMPT_PLAN_LATEST_KEY, key);
+    removeOlderPromptPlanCaches(key);
     state.plan = cached.plan;
     const cachedPurpose = String(cached.plan.purpose || "article");
     if ([...els.purposeSelect.options].some((option) => option.value === cachedPurpose)) {
