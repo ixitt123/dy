@@ -1547,7 +1547,7 @@ async function setIllustrationEnabled(enabled) {
   }
 }
 
-async function generateIllustration(force = false) {
+async function generateIllustration(force = false, sourceMode = "api") {
   if (!state.project) return;
   const button = $("#kineticGenerateIllustration");
   const status = $("#kineticIllustrationStatus");
@@ -1561,7 +1561,7 @@ async function generateIllustration(force = false) {
     : "正在读取缓存；首次使用时按官方工作流生成分层素材…";
   setProgress(2, "准备官方动态插画工作流");
   try {
-    const data = await postJson("/api/kinetic-text/illustration", { projectId: state.project.id, config, force });
+    const data = await postJson("/api/kinetic-text/illustration", { projectId: state.project.id, config: { ...config, sourceMode }, force });
     pollJob(data.job.id, {
       onComplete: () => {
         button.disabled = false;
@@ -1932,10 +1932,27 @@ function bindEvents() {
   $("#kineticIllustrationPreset").addEventListener("change", () => {
     const config = illustrationConfigFromForm();
     savePreferences({ illustration: config });
+    state.illustrationPlan = null;
     renderIllustrationSettings();
+    loadIllustrationPlan().catch((error) => { $("#kineticIllustrationStatus").textContent = error.message; });
   });
-  $("#kineticGenerateIllustration").addEventListener("click", () => generateIllustration(false));
-  $("#kineticRegenerateIllustration").addEventListener("click", () => generateIllustration(true));
+  $("#kineticGenerateIllustration").addEventListener("click", () => generateIllustration(false, "api"));
+  $("#kineticRegenerateIllustration").addEventListener("click", () => generateIllustration(true, "api"));
+  $("#kineticBuildUploadedIllustration").addEventListener("click", () => generateIllustration(true, "uploaded"));
+  $("#kineticCopyIllustrationPrompts").addEventListener("click", async () => {
+    const prompts = state.illustrationPlan?.prompts || [];
+    if (!prompts.length) await loadIllustrationPlan();
+    const text = (state.illustrationPlan?.prompts || []).map((item) => `元素 ${item.index}\n${item.prompt}`).join("\n\n");
+    await navigator.clipboard.writeText(text);
+    $("#kineticIllustrationStatus").textContent = "全部分层提示词已复制。";
+  });
+  $("#kineticIllustrationPromptSlots").addEventListener("change", (event) => {
+    const input = event.target.closest("[data-illustration-upload]");
+    if (!input) return;
+    uploadIllustrationSlot(Number(input.dataset.illustrationUpload), input.files?.[0]).catch((error) => {
+      $("#kineticIllustrationStatus").textContent = error.message;
+    });
+  });
   $("#kineticAudioSource").addEventListener("change", (event) => {
     savePreferences({ audioSource: event.target.value });
     scheduleSave({ audioMix: { source: event.target.value } });
