@@ -1,6 +1,8 @@
 import fs from "node:fs";
 import path from "node:path";
 import { spawn } from "node:child_process";
+import { pathToFileURL } from "node:url";
+import WebSocket from "ws";
 
 export const ILLUSTRATION_FPS = 15;
 export const ILLUSTRATION_MAX_SECONDS = 8;
@@ -38,6 +40,103 @@ function run(command, args, cwd) {
       else reject(new Error(`${path.basename(command)} exited with ${code}\n${output}`));
     });
   });
+}
+
+function findBrowserExecutable() {
+  const candidates = [
+    path.join(process.env.PROGRAMFILES || "", "Google", "Chrome", "Application", "chrome.exe"),
+    path.join(process.env["PROGRAMFILES(X86)"] || "", "Google", "Chrome", "Application", "chrome.exe"),
+    path.join(process.env.LOCALAPPDATA || "", "Google", "Chrome", "Application", "chrome.exe"),
+    path.join(process.env.PROGRAMFILES || "", "Microsoft", "Edge", "Application", "msedge.exe"),
+    path.join(process.env["PROGRAMFILES(X86)"] || "", "Microsoft", "Edge", "Application", "msedge.exe"),
+  ];
+  return candidates.find((candidate) => candidate && fs.existsSync(candidate)) || "";
+}
+
+function createCdpClient(socketUrl) {
+  const socket = new WebSocket(socketUrl);
+  let sequence = 0;
+  const pending = new Map();
+  const ready = new Promise((resolve, reject) => {
+    socket.once("open", resolve);
+    socket.once("error", reject);
+  });
+  socket.on("message", (raw) => {
+    const message = JSON.parse(String(raw));
+    if (!message.id || !pending.has(message.id)) return;
+    const { resolve, reject } = pending.get(message.id);
+    pending.delete(message.id);
+    if (message.error) reject(new Error(message.error.message || "浏览器渲染失败。"));
+    else resolve(message.result || {});
+  });
+  const send = async (method, params = {}, sessionId = undefined) => {
+    await ready;
+    const id = ++sequence;
+    return new Promise((resolve, reject) => {
+      pending.set(id, { resolve, reject });
+      socket.send(JSON.stringify({ id, method, params, ...(sessionId ? { sessionId } : {}) }));
+    });
+  };
+  return { socket, ready, send };
+}
+
+async function waitForBrowser(port, child) {
+  let lastError = null;
+  for (let attempt = 0; attempt < 80; attempt += 1) {
+    if (child.exitCode != null) throw new Error(`无界面浏览器提前退出，代码 ${child.exitCode}。`);
+    try {
+      const response = await fetch(`http://127.0.0.1:${port}/json/version`);
+      if (response.ok) return response.json();
+    } catch (error) {
+      lastError = error;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  throw new Error(`无法启动无界面浏览器：${lastError?.message || "连接超时"}`);
+}
+
+async function rasterizeSvgFrames({ framesDir, pngDir, frameCount, width, height, targetDir, onFrame }) {
+  const browserPath = findBrowserExecutable();
+  if (!browserPath) throw new Error("未找到 Chrome 或 Edge，无法把分层插画转换为视频帧。");
+  const port = 9300 + Math.floor(Math.random() * 500);
+  const profileDir = path.join(targetDir, ".browser-profile");
+  fs.mkdirSync(pngDir, { recursive: true });
+  const child = spawn(browserPath, [
+    "--headless=new",
+    "--disable-gpu",
+    "--disable-extensions",
+    "--hide-scrollbars",
+    "--no-first-run",
+    `--remote-debugging-port=${port}`,
+    `--user-data-dir=${profileDir}`,
+    "about:blank",
+  ], { windowsHide: true, stdio: "ignore" });
+  try {
+    const version = await waitForBrowser(port, child);
+    const client = createCdpClient(version.webSocketDebuggerUrl);
+    await client.ready;
+    const { targetId } = await client.send("Target.createTarget", { url: "about:blank" });
+    const { sessionId } = await client.send("Target.attachToTarget", { targetId, flatten: true });
+    await client.send("Page.enable", {}, sessionId);
+    await client.send("Emulation.setDeviceMetricsOverride", { width, height, deviceScaleFactor: 1, mobile: false }, sessionId);
+    for (let frame = 0; frame < frameCount; frame += 1) {
+      const input = path.join(framesDir, `frame-${String(frame).padStart(3, "0")}.svg`);
+      const output = path.join(pngDir, `frame-${String(frame).padStart(3, "0")}.png`);
+      await client.send("Page.navigate", { url: pathToFileURL(input).href }, sessionId);
+      for (let readyAttempt = 0; readyAttempt < 50; readyAttempt += 1) {
+        const state = await client.send("Runtime.evaluate", { expression: "document.readyState", returnByValue: true }, sessionId);
+        if (state.result?.value === "complete") break;
+        await new Promise((resolve) => setTimeout(resolve, 10));
+      }
+      const shot = await client.send("Page.captureScreenshot", { format: "png", fromSurface: true, captureBeyondViewport: false }, sessionId);
+      fs.writeFileSync(output, Buffer.from(shot.data, "base64"));
+      if (typeof onFrame === "function") onFrame(frame + 1, frameCount);
+    }
+    client.socket.close();
+  } finally {
+    if (child.exitCode == null) child.kill();
+    fs.rmSync(profileDir, { recursive: true, force: true });
+  }
 }
 
 function normalizeHex(value, fallback) {
@@ -184,6 +283,7 @@ export async function generateIllustrationBackground({ project, effect, config: 
   const frameCount = Math.max(30, Math.round(config.duration * ILLUSTRATION_FPS));
   const colors = paletteFor(project, effect, config);
   const framesDir = path.join(targetDir, "frames");
+  const pngFramesDir = path.join(targetDir, "png-frames");
   const keyframesDir = path.join(targetDir, "keyframes");
   fs.mkdirSync(framesDir, { recursive: true });
   fs.mkdirSync(keyframesDir, { recursive: true });
@@ -192,20 +292,29 @@ export async function generateIllustrationBackground({ project, effect, config: 
     const svg = frameSvg({ width: sizes.width, height: sizes.height, frame, frameCount, project, effect, config, colors });
     fs.writeFileSync(path.join(framesDir, `frame-${String(frame).padStart(3, "0")}.svg`), svg, "utf8");
   }
+  await rasterizeSvgFrames({
+    framesDir,
+    pngDir: pngFramesDir,
+    frameCount,
+    width: sizes.width,
+    height: sizes.height,
+    targetDir,
+    onFrame: (done, total) => onProgress(10 + Math.round((done / total) * 22), `转换手绘帧 ${done}/${total}`),
+  });
   const mp4Path = path.join(targetDir, "handdrawn-loop-preview.mp4");
   const gifPath = path.join(targetDir, "handdrawn-loop.gif");
   onProgress(34, "渲染 15fps 高清 MP4");
-  await run(ffmpegPath, ["-y", "-framerate", String(ILLUSTRATION_FPS), "-i", path.join(framesDir, "frame-%03d.svg"), "-r", String(ILLUSTRATION_FPS), "-c:v", "libx264", "-preset", "veryfast", "-crf", "18", "-pix_fmt", "yuv420p", "-movflags", "+faststart", mp4Path], targetDir);
+  await run(ffmpegPath, ["-y", "-framerate", String(ILLUSTRATION_FPS), "-i", path.join(pngFramesDir, "frame-%03d.png"), "-r", String(ILLUSTRATION_FPS), "-c:v", "libx264", "-preset", "veryfast", "-crf", "18", "-pix_fmt", "yuv420p", "-movflags", "+faststart", mp4Path], targetDir);
   onProgress(62, "优化循环 GIF 调色板");
   const gifWidth = Math.min(960, sizes.width);
   const gifFilter = `fps=${ILLUSTRATION_FPS},scale=${gifWidth}:-2:flags=lanczos,split[a][b];[a]palettegen=max_colors=192:stats_mode=diff[p];[b][p]paletteuse=dither=sierra2_4a:diff_mode=rectangle`;
-  await run(ffmpegPath, ["-y", "-framerate", String(ILLUSTRATION_FPS), "-i", path.join(framesDir, "frame-%03d.svg"), "-filter_complex", gifFilter, "-loop", "0", gifPath], targetDir);
+  await run(ffmpegPath, ["-y", "-framerate", String(ILLUSTRATION_FPS), "-i", path.join(pngFramesDir, "frame-%03d.png"), "-filter_complex", gifFilter, "-loop", "0", gifPath], targetDir);
   onProgress(78, "抽取全时间轴关键帧");
   const keyframeIndexes = [...new Set([0, .2, .4, .6, .8, 1].map((ratio) => Math.min(frameCount - 1, Math.round((frameCount - 1) * ratio))))];
   const keyframes = [];
   for (const frame of keyframeIndexes) {
     const output = path.join(keyframesDir, `keyframe-${String(frame).padStart(3, "0")}.png`);
-    await run(ffmpegPath, ["-y", "-i", path.join(framesDir, `frame-${String(frame).padStart(3, "0")}.svg`), "-frames:v", "1", output], targetDir);
+    fs.copyFileSync(path.join(pngFramesDir, `frame-${String(frame).padStart(3, "0")}.png`), output);
     keyframes.push(output);
   }
   const [mp4Probe, gifProbe] = await Promise.all([probeJson(ffprobePath, mp4Path), probeJson(ffprobePath, gifPath)]);
