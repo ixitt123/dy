@@ -181,10 +181,6 @@ function effectById(id) {
   return state.effects.find((item) => item.id === id) || state.effects[0] || null;
 }
 
-function bottomSubtitlesEnabled() {
-  return false;
-}
-
 function bookendPresetText(kind, preset) {
   return BOOKEND_PRESET_TEXT[kind]?.[preset]?.() || "";
 }
@@ -601,7 +597,7 @@ function drawLegacyPreview() {
           : fontSize;
       drawToken(ctx, effect?.id === "podcast-lower-third" ? `• ${token}` : token, x, y, { progress, index, effectId: effect?.id, motion: effect?.motion, color, fontSize: tokenFontSize, fontFamily: params.fontFamily || "Microsoft YaHei" });
     });
-    if (bottomSubtitlesEnabled()) {
+    if (state.project.showBottomSubtitles) {
       ctx.save();
       ctx.font = "700 24px Microsoft YaHei";
       ctx.textAlign = "center";
@@ -1186,7 +1182,7 @@ function drawPreview() {
       });
     }
 
-    if (bottomSubtitlesEnabled()) {
+    if (state.project.showBottomSubtitles) {
       const bottomPosition = state.project.bottomSubtitlePosition || { x: 50, y: 94 };
       const bottomX = width * Number(bottomPosition.x ?? 50) / 100;
       const bottomY = height * Number(bottomPosition.y ?? 94) / 100;
@@ -1622,13 +1618,7 @@ function renderProject() {
   $("#kineticBgVolume").value = String(project.audioMix?.backgroundVolume ?? 18);
   $("#kineticTtsVolumeValue").value = `${project.audioMix?.ttsVolume ?? 100}%`;
   $("#kineticBgVolumeValue").value = `${project.audioMix?.backgroundVolume ?? 18}%`;
-  const bottomSubtitlesInput = $("#kineticBottomSubtitles");
-  if (bottomSubtitlesInput) {
-    bottomSubtitlesInput.checked = false;
-    bottomSubtitlesInput.disabled = true;
-    const wrapper = bottomSubtitlesInput.closest("label");
-    if (wrapper) wrapper.hidden = true;
-  }
+  $("#kineticBottomSubtitles").checked = project.showBottomSubtitles === true;
   const params = project.effectParams || {};
   $("#kineticFontFamily").value = params.fontFamily || "Microsoft YaHei";
   $("#kineticFontSize").value = String(params.fontSize ?? 88);
@@ -2091,9 +2081,8 @@ function bindEvents() {
     scheduleSave({ audioMix: { backgroundVolume: Number(event.target.value) } });
   });
   $("#kineticBottomSubtitles").addEventListener("change", (event) => {
-    event.target.checked = false;
-    savePreferences({ showBottomSubtitles: false });
-    scheduleSave({ showBottomSubtitles: false });
+    savePreferences({ showBottomSubtitles: event.target.checked });
+    scheduleSave({ showBottomSubtitles: event.target.checked });
   });
   $("#kineticChooseBackground").addEventListener("click", () => $("#kineticBackgroundFile").click());
   $("#kineticChooseBgm").addEventListener("click", () => $("#kineticBgmFile").click());
