@@ -1562,6 +1562,10 @@ async function handlePromptAction(event) {
   if (!button) return;
   const index = Number(button.dataset.index);
   const action = button.dataset.promptAction;
+  if (action === "confirm-all-images") {
+    await uploadAllPendingShotImages(button);
+    return;
+  }
   if (action === "choose-image") {
     els.promptResults.querySelector(`[data-shot-upload="${index}"]`)?.click();
     return;
@@ -1585,15 +1589,25 @@ async function handlePromptAction(event) {
     renderPlan(state.plan);
     return;
   }
-  if (action === "confirm-image") await uploadShotImage(index);
+  if (action === "confirm-image") await uploadShotImage(index, { button });
 }
 
-async function uploadShotImage(index) {
-  const pending = state.pendingUploads.get(index);
-  const shot = state.plan?.shots?.find((item) => Number(item.index) === Number(index));
-  if (!pending || !shot || !state.plan) return;
+async function uploadShotImage(index, { button = null, render = true, silent = false } = {}) {
+  const safeIndex = Number(index);
+  const pending = state.pendingUploads.get(safeIndex);
+  const shot = state.plan?.shots?.find((item) => Number(item.index) === safeIndex);
+  if (!pending || !shot || !state.plan) {
+    if (button) setButtonFeedback(button, "error", "没有待确认");
+    return false;
+  }
+  if (state.confirmingUploads.has(safeIndex)) return false;
+  state.confirmingUploads.add(safeIndex);
+  if (button) {
+    button.disabled = true;
+    setButtonFeedback(button, "loading", "确认中");
+  }
   const existing = state.images.find((image) => Number(image.index) === Number(index));
-  setStatus("正在替换分镜图片", `正在裁剪并绑定分镜 #${index}。`, 55, false, "本地图片");
+  if (!silent) setStatus("正在替换分镜图片", `正在裁剪并绑定分镜 #${safeIndex}。`, 55, false, "本地图片");
   try {
     const data = await fetchJson("/api/ian-xiaohei/upload-shot-image", {
       method: "POST",
@@ -1614,12 +1628,51 @@ async function uploadShotImage(index) {
     state.previewImageCache.delete(Number(index));
     state.renderedVideo = null;
     state.pendingUploads.delete(index);
-    renderPlan(state.plan);
-    renderImages(state.images, []);
-    setStatus("本地图片已绑定", `分镜 #${index} 后续只使用这张已确认图片。`, 100, false, "完成");
+    savePromptPlanCache(state.plan);
+    if (render) {
+      renderPlan(state.plan);
+      renderImages(state.images, []);
+    }
+    if (!silent) setStatus("本地图片已绑定", `分镜 #${safeIndex} 后续只使用这张已确认图片。`, 100, false, "完成");
+    if (button?.isConnected) setButtonFeedback(button, "success", "已确认");
+    return true;
   } catch (error) {
-    setStatus("图片替换失败", error.payload?.message || error.message || String(error), 100, true);
+    if (!silent) setStatus("图片替换失败", error.payload?.message || error.message || String(error), 100, true);
+    if (button?.isConnected) setButtonFeedback(button, "error", "确认失败");
+    return false;
+  } finally {
+    state.confirmingUploads.delete(safeIndex);
+    if (button?.isConnected) button.disabled = false;
   }
+}
+
+async function uploadAllPendingShotImages(button) {
+  const indexes = pendingUploadIndexes(state.plan);
+  if (!indexes.length) {
+    setButtonFeedback(button, "success", "全部已确认");
+    setStatus("全部图片已确认", "当前没有待确认的图片。", 100);
+    return;
+  }
+  setButtonFeedback(button, "loading", `确认中 0/${indexes.length}`);
+  let successCount = 0;
+  const failed = [];
+  for (const [position, index] of indexes.entries()) {
+    setButtonFeedback(button, "loading", `确认中 ${position + 1}/${indexes.length}`);
+    setStatus("正在批量确认图片", `正在确认分镜 #${index}（${position + 1}/${indexes.length}）。`, Math.round(((position + 1) / indexes.length) * 90), false, "本地图片");
+    const ok = await uploadShotImage(index, { render: false, silent: true });
+    if (ok) successCount += 1;
+    else failed.push(index);
+  }
+  renderPlan(state.plan);
+  renderImages(state.images, []);
+  const latestButton = els.promptResults.querySelector('[data-prompt-action="confirm-all-images"]') || button;
+  if (failed.length) {
+    setStatus("部分图片确认失败", `已确认 ${successCount} 张，失败：#${failed.join("、#")}。`, 100, true);
+    setButtonFeedback(latestButton, "error", `失败 ${failed.length} 张`, 2200);
+    return;
+  }
+  setStatus("全部图片已确认", `已确认 ${successCount} 张本地图片，后续生成视频会使用这些图片。`, 100, false, "完成");
+  setButtonFeedback(latestButton, "success", "全部已确认", 2400);
 }
 
 async function loadOutputs() {
@@ -1828,7 +1881,7 @@ function promptBatchActionMarkup(plan = state.plan) {
       : "添加本地图片素材后可批量确认。";
   return `
     <div class="prompt-batch-actions">
-      <button type="button" data-prompt-action="confirm-all-images" ${pendingCount > 0 ? "" : "disabled"} class="${allConfirmed ? "action-feedback is-success" : ""}">${label}</button>
+      <button type="button" data-prompt-action="confirm-all-images" ${pendingCount > 0 ? "" : "disabled"} class="${allConfirmed ? "is-confirmed action-feedback is-success" : ""}">${label}</button>
       <span>${hint}</span>
     </div>
   `;

@@ -344,6 +344,7 @@ textarea:focus {
 .voice-actions,
 .audio-actions,
 .prompt-actions,
+.prompt-batch-actions,
 .audio-job-actions,
 .manual-preview-actions {
   display: flex;
@@ -352,11 +353,75 @@ textarea:focus {
   flex-wrap: wrap;
 }
 
+.prompt-batch-actions {
+  margin-bottom: 12px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: rgba(113, 215, 255, .06);
+}
+
+.prompt-batch-actions span {
+  color: var(--muted);
+  font-size: 13px;
+}
+
 .voice-actions span {
   flex: 1;
   min-width: 220px;
   color: var(--muted);
   font-size: 12px;
+}
+
+button.action-feedback {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+
+button.action-feedback::before {
+  content: "";
+  width: 9px;
+  height: 9px;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: currentColor;
+}
+
+button.action-feedback.is-loading::before {
+  width: 12px;
+  height: 12px;
+  border: 2px solid rgba(255,255,255,.28);
+  border-top-color: #fff;
+  background: transparent;
+  animation: xiaohei-button-spin .72s linear infinite;
+}
+
+button.action-feedback.is-success,
+button.is-confirmed {
+  border-color: rgba(114, 213, 183, .65);
+  background: rgba(114, 213, 183, .15);
+  color: #d8fff3;
+}
+
+button.action-feedback.is-success::before,
+button.is-confirmed::before {
+  background: var(--green);
+  box-shadow: 0 0 0 3px rgba(114, 213, 183, .16);
+}
+
+button.action-feedback.is-error {
+  border-color: rgba(255, 112, 104, .72);
+  background: rgba(255, 112, 104, .12);
+  color: #ffd3d0;
+}
+
+button.action-feedback.is-error::before {
+  background: var(--red);
+  box-shadow: 0 0 0 3px rgba(255, 112, 104, .14);
 }
 
 button.danger {
