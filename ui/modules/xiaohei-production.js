@@ -4,8 +4,39 @@ function activeProject() {
   return window.videoProjects?.current?.() || null;
 }
 
+function handoffFromPayload(payload = {}, project = activeProject()) {
+  if (!payload?.id) return null;
+  const finalText = String(
+    payload.text
+    || payload.final_text
+    || payload.metadata?.final_text
+    || payload.tts_prepared_text
+    || payload.metadata?.tts_prepared_text
+    || payload.original_text
+    || "",
+  ).trim();
+  return {
+    projectId: project?.id || payload.projectId || "",
+    projectTitle: project?.title || payload.projectTitle || "",
+    title: project?.title || payload.title || payload.voice_name || "小黑配图视频",
+    text: finalText,
+    ttsJob: {
+      ...payload,
+      id: payload.id,
+      status: "completed",
+      final_text: finalText,
+      text: finalText,
+      alignment_status: payload.alignment_status || "confirmed",
+    },
+    files: payload.files || [],
+    sentAt: new Date().toISOString(),
+  };
+}
+
 function readHandoff() {
   try {
+    const shared = window.sharedTtsHandoff?.read?.();
+    if (shared?.id) return handoffFromPayload(shared);
     return JSON.parse(localStorage.getItem(XIAOHEI_HANDOFF_KEY) || "null");
   } catch {
     return null;
@@ -21,22 +52,7 @@ export function sendConfirmedTtsToXiaohei(job, project = activeProject()) {
   if (!job?.id || job.status !== "completed" || String(job.alignment_status || job.metadata?.alignment_status || "") !== "confirmed") {
     throw new Error("请先生成语音，并检查确认最终文案和字幕时间轴。");
   }
-  const finalText = String(
-    job.final_text
-    || job.metadata?.final_text
-    || job.tts_prepared_text
-    || job.original_text
-    || job.text
-    || "",
-  ).trim();
-  const handoff = {
-    projectId: project?.id || "",
-    projectTitle: project?.title || "",
-    title: project?.title || job.voice_name || "小黑配图视频",
-    text: finalText,
-    ttsJob: job,
-    sentAt: new Date().toISOString(),
-  };
+  const handoff = handoffFromPayload(job, project);
   if (!handoff.text) throw new Error("已确认音频缺少最终识别文案，无法发送到小黑生产线。");
   localStorage.setItem(XIAOHEI_HANDOFF_KEY, JSON.stringify(handoff));
   window.appNavigate?.("xiaohei-video");
@@ -84,6 +100,12 @@ export function initXiaoheiProductionModule() {
   });
   document.addEventListener("workbench:route", (event) => {
     if (event.detail?.page === "xiaohei-video") refreshStatus();
+  });
+  window.addEventListener("tts-shared-handoff-updated", (event) => {
+    if (event.detail?.sourceTarget === "xiaohei-video") return;
+    const handoff = handoffFromPayload(event.detail?.payload);
+    if (handoff) localStorage.setItem(XIAOHEI_HANDOFF_KEY, JSON.stringify(handoff));
+    refreshStatus();
   });
   window.videoFactorySendToXiaohei = sendConfirmedTtsToXiaohei;
   refreshStatus();
