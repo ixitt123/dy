@@ -106,7 +106,7 @@ const MINIMAX_TEXT_BASE_ALIASES = new Set([
   "https://api.minimax.chat",
   "https://api.minimax.chat/v1",
 ]);
-const autoClose = process.argv.includes("--auto-close");
+const autoClose = !process.argv.includes("--no-auto-close");
 const pageSessions = new Map();
 const activeChildProcesses = new Set();
 const runningBatchTasks = new Set();
