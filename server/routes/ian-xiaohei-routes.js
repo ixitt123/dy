@@ -2135,24 +2135,7 @@ function writeXiaoheiMaterialPackage(outputRoot, plan, images, audioJob) {
   if (!batchId) throw new Error("缺少小黑素材批次 ID。");
   const batchDir = path.join(outputRoot, batchId);
   fs.mkdirSync(batchDir, { recursive: true });
-  const imageByIndex = new Map(images.map((image) => [Number(image.index), image]));
-  const scenes = (plan.shots || []).map((shot) => {
-    const image = imageByIndex.get(Number(shot.index)) || {};
-    return {
-      segment_id: shot.segmentId || `seg-${String(shot.index).padStart(3, "0")}`,
-      scene_index: Number(shot.index),
-      start_time: Number(shot.startTime || 0),
-      end_time: Number(shot.endTime || 0),
-      duration: Number(shot.duration || 0),
-      text: shot.sourceText || "",
-      subtitle: shot.subtitleText || shot.sourceText || "",
-      image_asset_id: image.assetId || "",
-      image_path: image.imagePath || "",
-      visual_subject: shot.visualSubject || "",
-      xiaohei_action: shot.xiaoheiAction || "",
-      visual_metaphor: shot.visualMetaphor || "",
-    };
-  });
+  const scenes = buildXiaoheiScenes(plan, images);
   fs.writeFileSync(path.join(batchDir, "timeline.json"), JSON.stringify({
     title: plan.title,
     duration: Number(plan.audioDuration || 0),
@@ -2197,6 +2180,27 @@ function writeXiaoheiMaterialPackage(outputRoot, plan, images, audioJob) {
     created_at: new Date().toISOString(),
   }, null, 2), "utf8");
   return batchDir;
+}
+
+function buildXiaoheiScenes(plan, images) {
+  const imageByIndex = new Map(images.map((image) => [Number(image.index), image]));
+  return (plan.shots || []).map((shot) => {
+    const image = imageByIndex.get(Number(shot.index)) || {};
+    return {
+      segment_id: shot.segmentId || `seg-${String(shot.index).padStart(3, "0")}`,
+      scene_index: Number(shot.index),
+      start_time: Number(shot.startTime || 0),
+      end_time: Number(shot.endTime || 0),
+      duration: Number(shot.duration || 0),
+      text: shot.sourceText || "",
+      subtitle: shot.subtitleText || shot.sourceText || "",
+      image_asset_id: image.assetId || "",
+      image_path: image.imagePath || "",
+      visual_subject: shot.visualSubject || "",
+      xiaohei_action: shot.xiaoheiAction || "",
+      visual_metaphor: shot.visualMetaphor || "",
+    };
+  });
 }
 
 function validateImageBindings({ plan, images, imageService }) {
