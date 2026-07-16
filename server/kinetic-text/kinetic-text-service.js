@@ -332,6 +332,10 @@ function normalizeBookendItem(value, kind, title) {
     enabled: source.enabled === true,
     preset,
     text: (normalizeText(source.text) || normalizeText(presetText)).slice(0, 80),
+    position: {
+      x: safeNumber(source.position?.x, 50, 5, 95),
+      y: safeNumber(source.position?.y, 64, 8, 92),
+    },
   };
 }
 
@@ -520,6 +524,10 @@ function normalizeProject(project) {
     timelineSkillRules: TIMELINE_SKILL_IDS,
     timelineValidation,
     showBottomSubtitles: project.keywordPlacement === "bottom" ? project.showBottomSubtitles !== false : true,
+    bottomSubtitlePosition: {
+      x: safeNumber(project.bottomSubtitlePosition?.x, 50, 5, 95),
+      y: safeNumber(project.bottomSubtitlePosition?.y, 94, 8, 97),
+    },
     keywordPlacement: "bottom",
     background: {
       mode: ["black", "image", "video"].includes(background.mode) ? background.mode : "black",
@@ -1024,8 +1032,6 @@ function assEvent(layer, start, end, style, tags, text) {
 
 function buildBookendAssEvents({ project, template, params, width, height, fontSize, primary, maxChars, maxLines }) {
   const events = [];
-  const x = Math.round((safeNumber(params.x, 50, 5, 95) / 100) * width);
-  const y = Math.round((safeNumber(params.y, 64, 8, 92) / 100) * height);
   for (const kind of ["intro", "outro"]) {
     const item = project.bookends?.[kind];
     const window = project.bookendWindows?.[kind];
@@ -1034,6 +1040,8 @@ function buildBookendAssEvents({ project, template, params, width, height, fontS
     const end = Number(window.end || 0);
     const durationMs = Math.max(1, Math.round((end - start) * 1000));
     if (durationMs < BOOKEND_MIN_SECONDS * 1000) continue;
+    const x = Math.round((safeNumber(item.position?.x, params.x, 5, 95) / 100) * width);
+    const y = Math.round((safeNumber(item.position?.y, params.y, 8, 92) / 100) * height);
     const baseTransitionMs = template.renderMode === "rolling-focus-left"
       ? safeNumber(params.transitionMs, 220, 180, 260)
       : 150;
@@ -1173,7 +1181,9 @@ export function buildAss(project, options = {}) {
         outline,
         baseOutline: 2.4,
       });
-      events.push(assEvent(5, start, end, "Bottom", `\\an2\\pos(${Math.round(width / 2)},${Math.round(height * 0.94)})\\fad(100,80)`, bottomText));
+      const bottomX = Math.round((safeNumber(normalized.bottomSubtitlePosition?.x, 50, 5, 95) / 100) * width);
+      const bottomY = Math.round((safeNumber(normalized.bottomSubtitlePosition?.y, 94, 8, 97) / 100) * height);
+      events.push(assEvent(5, start, end, "Bottom", `\\an2\\pos(${bottomX},${bottomY})\\fad(100,80)`, bottomText));
     }
   });
 
@@ -1404,6 +1414,7 @@ export function createKineticTextService({
       aspectRatio: Object.hasOwn(OUTPUT_SIZES, input.aspectRatio) ? input.aspectRatio : "9:16",
       frameRate: Number(input.frameRate) === 60 ? 60 : 30,
       showBottomSubtitles: true,
+      bottomSubtitlePosition: { x: 50, y: 94 },
       keywordPlacement: "bottom",
       bookends: input.bookends && typeof input.bookends === "object" ? input.bookends : {},
       background: { mode: "black", path: "", name: "" },
@@ -1435,6 +1446,7 @@ export function createKineticTextService({
         intro: { ...current.bookends?.intro, ...(changes.bookends?.intro || {}) },
         outro: { ...current.bookends?.outro, ...(changes.bookends?.outro || {}) },
       },
+      bottomSubtitlePosition: { ...current.bottomSubtitlePosition, ...(changes.bottomSubtitlePosition || {}) },
       outputs: { ...current.outputs, ...(changes.outputs || {}) },
     };
     return save(merged);
