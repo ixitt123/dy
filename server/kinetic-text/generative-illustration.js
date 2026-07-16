@@ -232,13 +232,7 @@ function frameSvg({ width, height, frame, frameCount, project, effect, config, c
     const radius = unit * (0.006 + (index % 3) * 0.004);
     return `<circle cx="${px.toFixed(1)}" cy="${py.toFixed(1)}" r="${radius.toFixed(1)}" fill="none" stroke="${index % 2 ? colors.accent : colors.muted}" stroke-width="${Math.max(2, unit * 0.003)}"/>`;
   }).join("");
-  const sceneIcon = config.scene === "journey"
-    ? `<path d="M${panelX + panelW * 0.2} ${panelY + panelH * 0.58} C${panelX + panelW * 0.42} ${panelY + panelH * 0.2},${panelX + panelW * 0.6} ${panelY + panelH * 0.86},${panelX + panelW * 0.82} ${panelY + panelH * 0.4}" fill="none"/><circle cx="${panelX + panelW * 0.82}" cy="${panelY + panelH * 0.4}" r="${unit * 0.025}" fill="${colors.accent}"/>`
-    : config.scene === "dialogue"
-      ? `<path d="M${panelX + panelW * 0.18} ${panelY + panelH * 0.28} h${panelW * 0.28} v${panelH * 0.24} h${-panelW * 0.08} l${-panelW * 0.08} ${panelH * 0.12} v${-panelH * 0.12} h${-panelW * 0.12}z"/><path d="M${panelX + panelW * 0.54} ${panelY + panelH * 0.48} h${panelW * 0.28} v${panelH * 0.24} h${-panelW * 0.12} v${panelH * 0.12} l${-panelW * 0.08} ${-panelH * 0.12} h${-panelW * 0.08}z"/>`
-      : config.scene === "system"
-        ? `<rect x="${panelX + panelW * 0.13}" y="${panelY + panelH * 0.25}" width="${panelW * 0.2}" height="${panelH * 0.22}" rx="12"/><rect x="${panelX + panelW * 0.4}" y="${panelY + panelH * 0.25}" width="${panelW * 0.2}" height="${panelH * 0.22}" rx="12"/><rect x="${panelX + panelW * 0.67}" y="${panelY + panelH * 0.25}" width="${panelW * 0.2}" height="${panelH * 0.22}" rx="12"/><path d="M${panelX + panelW * 0.33} ${panelY + panelH * 0.36} H${panelX + panelW * 0.4} M${panelX + panelW * 0.6} ${panelY + panelH * 0.36} H${panelX + panelW * 0.67}"/>`
-        : `<path d="M${panelX + panelW * 0.5} ${panelY + panelH * 0.18} a${unit * 0.09} ${unit * 0.09} 0 1 0 0.1 0 M${panelX + panelW * 0.44} ${panelY + panelH * 0.34} h${panelW * 0.12} M${panelX + panelW * 0.46} ${panelY + panelH * 0.42} h${panelW * 0.08}"/>`;
+  const sceneIcon = `<path d="M${panelX + panelW * 0.2} ${panelY + panelH * 0.58} C${panelX + panelW * 0.42} ${panelY + panelH * 0.2},${panelX + panelW * 0.6} ${panelY + panelH * 0.86},${panelX + panelW * 0.82} ${panelY + panelH * 0.4}" fill="none"/><circle cx="${panelX + panelW * 0.82}" cy="${panelY + panelH * 0.4}" r="${unit * 0.025}" fill="${colors.accent}"/>`;
   return `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
   <rect width="100%" height="100%" fill="${colors.background}"/>
@@ -246,7 +240,10 @@ function frameSvg({ width, height, frame, frameCount, project, effect, config, c
     <rect x="${width * 0.025}" y="${height * 0.035}" width="${width * 0.95}" height="${height * 0.93}" rx="${unit * 0.035}" fill="${colors.paper}" stroke="${colors.faint}" stroke-width="${Math.max(2, unit * 0.003)}"/>
     <path d="M${width * 0.08} ${height * 0.15} Q${width * 0.34} ${height * (0.12 + Math.sin(phase) * 0.006 * amount)} ${width * 0.58} ${height * 0.15}" fill="none" stroke="${colors.faint}" stroke-width="${Math.max(2, unit * 0.004)}" stroke-dasharray="${unit * 0.02} ${unit * 0.016}"/>
   </g>
-  <g id="layer-character">${characterSvg("xiaohei", cx, cy, charSize, colors.ink, colors.accent, phase, amount)}</g>
+  <g id="layer-hero" transform="translate(${cx} ${cy + Math.sin(phase) * unit * 0.008}) scale(${1 + Math.sin(phase) * 0.025})">
+    <circle cx="0" cy="0" r="${charSize * 0.22}" fill="${paletteAlpha(colors.accent, 0.18)}" stroke="${colors.ink}" stroke-width="${Math.max(3, unit * 0.006)}"/>
+    <circle cx="0" cy="0" r="${charSize * 0.06}" fill="${colors.accent}"/>
+  </g>
   <g id="layer-icons" transform="translate(${panelX + panelW / 2} ${panelY + panelH / 2}) scale(${iconPulse}) translate(${-panelX - panelW / 2} ${-panelY - panelH / 2})" fill="${paletteAlpha(colors.accent, 0.12)}" stroke="${colors.ink}" stroke-width="${Math.max(3, unit * 0.006)}" stroke-linecap="round" stroke-linejoin="round">${sceneIcon}</g>
   <g id="layer-arrows" fill="none" stroke="${colors.accent}" stroke-width="${Math.max(4, unit * 0.008)}" stroke-linecap="round" stroke-linejoin="round">
     <path d="M${cx + charSize * 0.36} ${cy - charSize * 0.22} Q${width * 0.42} ${height * 0.18} ${panelX + panelW * 0.18} ${panelY + panelH * 0.18}" pathLength="100" stroke-dasharray="100" stroke-dashoffset="${(100 - Number(arrowProgress)).toFixed(2)}"/>
@@ -319,14 +316,14 @@ export async function generateIllustrationBackground({ project, effect, config: 
     timing: { fps: ILLUSTRATION_FPS, duration: config.duration, frameCount, syncedToProject: Number(project.duration || 0) <= ILLUSTRATION_MAX_SECONDS ? Math.abs(config.duration - Number(project.duration || 0)) < 0.08 : config.duration === ILLUSTRATION_MAX_SECONDS, loopsAcrossLongVideo: Number(project.duration || 0) > ILLUSTRATION_MAX_SECONDS },
     layers: [
       { id: "background", purpose: "纸张与构图基底，仅做轻微呼吸" },
-      { id: "character", purpose: "角色呼吸和手势，全部为刚体位移或关节旋转" },
-      { id: "icons", purpose: "按场景强调核心概念" },
+      { id: "hero", purpose: "代码原生核心元素，使用确定性位移与缩放" },
+      { id: "icons", purpose: "独立概念元素，按时间函数整体运动" },
       { id: "arrows", purpose: "引导阅读路径，周期性描边" },
       { id: "text", purpose: "官方要求生成素材不含文字；本层关闭", enabled: false },
       { id: "decoration", purpose: "平衡留白，不参与主体叙事" },
     ],
     checks: {
-      characterDeformation: { passed: true, detail: "角色轮廓固定，仅使用 translate/rotate。" },
+      characterDeformation: { passed: true, detail: "未使用角色或整图变形；独立元素仅整体位移、旋转和缩放。" },
       chineseText: { passed: true, detail: "遵循官方 no text 规则，背景文字层关闭。" },
       overlap: { passed: true, detail: "角色、信息板和字幕安全区使用固定分区。" },
       naturalMotion: { passed: true, detail: "所有运动使用有界正弦周期，未使用随机逐帧漂移。" },
