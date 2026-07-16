@@ -127,13 +127,6 @@ function bindEvents() {
   els.sourceVideo?.addEventListener("seeked", drawPreview);
   els.sourceAudio?.addEventListener("ended", pausePreview);
   window.addEventListener("money-printer-handoff", (event) => receiveTts(event.detail));
-  window.addEventListener("tts-shared-handoff-updated", (event) => {
-    if (event.detail?.sourceTarget === "money-printer") return;
-    receiveTts(event.detail?.payload, { navigate: false });
-  });
-  document.addEventListener("workbench:before-route", (event) => {
-    if (event.detail?.from === "money-printer") pausePreview();
-  });
   document.addEventListener("workbench:route", (event) => {
     if (event.detail?.page === "money-printer") {
       loadStoredHandoff();
@@ -192,8 +185,7 @@ async function applyDefaultPreferences() {
 }
 
 function loadStoredHandoff() {
-  const shared = window.sharedTtsHandoff?.read?.();
-  const stored = shared?.id ? shared : readJsonStorage(HANDOFF_KEY, null);
+  const stored = readJsonStorage(HANDOFF_KEY, null);
   if (stored?.id && (!state.handoff || String(stored.id) !== String(state.handoff.id))) receiveTts(stored, { navigate: false });
 }
 

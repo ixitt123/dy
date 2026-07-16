@@ -224,16 +224,16 @@
 
               <div class="collector-options" aria-label="下载附加选项">
                 <label class="check-row">
+                  <input id="downloadExtractTranscript" type="checkbox" />
+                  下载后提取并自动校正文案
+                </label>
+                <label class="check-row">
                   <input id="downloadExtractAudio" type="checkbox" />
                   下载后提取音频
                 </label>
                 <label class="check-row">
                   <input id="downloadCreateSubtitle" type="checkbox" />
                   下载后生成 SRT 字幕文件
-                </label>
-                <label class="check-row">
-                  <input id="downloadCorrectTranscript" type="checkbox" />
-                  文案校正
                 </label>
                 <label>
                   音频格式
@@ -307,33 +307,10 @@
               <div class="result-head">
                 <div>
                   <h2>文案库</h2>
-                  <p>所有提取后的文案集中在这里，可选择是否校正，也可手动编辑后继续分析、改写、TTS 或进入生产线。</p>
-                </div>
-                <div class="result-tools transcript-vault-tools">
-                  <button class="ghost small" id="selectAllTranscripts" type="button">全选</button>
-                  <button class="ghost small" id="correctSelectedTranscripts" type="button">校正文案</button>
+                  <p>所有提取并校正后的文案集中在这里，可继续分析、改写、TTS 或进入生产线。</p>
                 </div>
               </div>
               <div class="transcript-list" id="transcriptList"></div>
-            </section>
-
-            <section class="analysis-area transcript-edit-panel" id="transcriptEditPanel" hidden>
-              <div class="result-head">
-                <div>
-                  <h2>手动编辑文案</h2>
-                  <p id="transcriptEditTitle">选择一条文案后编辑。</p>
-                </div>
-                <div class="result-tools">
-                  <button class="ghost small" id="saveTranscriptEdit" type="button">保存文案</button>
-                  <button class="ghost small" id="closeTranscriptEdit" type="button">关闭</button>
-                </div>
-              </div>
-              <div class="analysis-body">
-                <input id="transcriptEditTaskId" type="hidden" />
-                <label for="transcriptEditText">文案内容</label>
-                <textarea id="transcriptEditText" rows="12"></textarea>
-                <p id="transcriptEditStatus">保存后会更新文案库里的这条文案。</p>
-              </div>
             </section>
 
             <section class="analysis-area" id="analysisPanel" hidden>
@@ -1765,7 +1742,7 @@
               <section class="kinetic-card kinetic-timeline-card">
                 <div class="kinetic-card-head">
                   <strong>字幕时间轴</strong>
-                  <button id="kineticAnalyze" class="ghost" type="button">重新识别</button>
+                  <button id="kineticAnalyze" class="ghost" type="button">本地重新识别关键词</button>
                 </div>
                 <div id="kineticTimelineRuleStatus" class="kinetic-rule-status" hidden></div>
                 <div class="kinetic-timeline-head">

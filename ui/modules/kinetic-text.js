@@ -1156,11 +1156,8 @@ function drawPreview() {
         }
       }
     } else if (template.renderMode === "rolling-focus") {
-      const lineGapBoost = Math.max(0, Number(params.lineGapBoost || 0));
-      const gap = fontSize * (1.5 + lineGapBoost);
-      const contextLines = Math.max(0, Math.min(1, Math.round(Number(params.contextLines || 0))));
-      const focusIndexes = contextLines > 0 ? [segmentIndex - 1, segmentIndex, segmentIndex + 1] : [segmentIndex];
-      focusIndexes.forEach((index) => {
+      const gap = fontSize * 1.5;
+      [segmentIndex - 1, segmentIndex, segmentIndex + 1].forEach((index) => {
         const row = state.project.segments[index];
         if (!row) return;
         const delta = index - segmentIndex;
@@ -1265,21 +1262,14 @@ function startPreviewPlayback() {
   state.raf = requestAnimationFrame(previewTick);
 }
 
-function pausePreviewPlayback() {
-  state.playing = false;
-  state.seekResumePlaying = false;
-  state.audio?.pause();
-  if (state.backgroundMedia instanceof HTMLVideoElement) state.backgroundMedia.pause();
-  cancelAnimationFrame(state.raf);
-  state.raf = 0;
-  const playButton = $("#kineticPreviewPlay");
-  if (playButton) playButton.textContent = "播放预览";
-}
-
 function playPreview() {
   if (!state.project || state.seeking) return;
   if (state.playing) {
-    pausePreviewPlayback();
+    state.playing = false;
+    $("#kineticPreviewPlay").textContent = "播放预览";
+    state.audio?.pause();
+    if (state.backgroundMedia instanceof HTMLVideoElement) state.backgroundMedia.pause();
+    cancelAnimationFrame(state.raf);
     return;
   }
   startPreviewPlayback();
@@ -1656,91 +1646,6 @@ async function refreshProjects(preferredId = "") {
   renderProject();
 }
 
-function textFromSegments(segments = []) {
-  return (segments || []).map((segment) => String(segment.text || "").trim()).filter(Boolean).join("");
-}
-
-function timelineFromSegments(segments = []) {
-  return (segments || []).map((segment, index) => ({
-    id: String(segment.id || `segment-${index + 1}`),
-    index: index + 1,
-    start: Number(segment.start || 0),
-    end: Number(segment.end || 0),
-    text: String(segment.text || "").trim(),
-    words: Array.isArray(segment.words) ? segment.words : [],
-  })).filter((segment) => segment.text && segment.end > segment.start);
-}
-
-function ttsPayloadFromProject(project = {}, job = {}) {
-  const timeline = timelineFromSegments(project.segments || []);
-  const text = textFromSegments(project.segments || []) || String(project.text || "");
-  const id = Number(project.ttsJobId || job.id || 0);
-  return {
-    ...job,
-    id,
-    title: project.title || job.title || `配音 #${id || ""}`.trim(),
-    text,
-    final_text: text,
-    audio_url: project.audioUrl || job.audio_url || "",
-    audio_path: project.audioPath || job.audio_path || "",
-    script_url: job.script_url || (id ? `/api/tts/script?id=${encodeURIComponent(id)}` : ""),
-    script_path: job.script_path || project.scriptPath || "",
-    subtitle_url: job.subtitle_url || (id ? `/api/tts/subtitle?id=${encodeURIComponent(id)}` : ""),
-    subtitle_path: job.subtitle_path || project.subtitlePath || "",
-    timestamped_text_url: job.timestamped_text_url || (id ? `/api/tts/timestamped-text?id=${encodeURIComponent(id)}` : ""),
-    timestamped_text_path: job.timestamped_text_path || project.timestampedTextPath || "",
-    timed_subtitle_url: job.timestamped_text_url || job.subtitle_url || (id ? `/api/tts/timestamped-text?id=${encodeURIComponent(id)}` : ""),
-    timed_subtitle_path: job.timestamped_text_path || job.subtitle_path || project.timestampedTextPath || project.subtitlePath || "",
-    sentence_timeline: timeline,
-    subtitle_timeline: timeline,
-    word_timeline: Array.isArray(project.wordTimeline) ? project.wordTimeline : [],
-    duration: Number(project.duration || job.duration || job.audio_duration || 0),
-    audio_duration: Number(project.duration || job.audio_duration || job.duration || 0),
-    alignment_status: "confirmed",
-    alignment_confirmed_at: job.alignment_confirmed_at || new Date().toISOString(),
-    source: "kinetic-text",
-    synced_from: "kinetic-text",
-    sentAt: new Date().toISOString(),
-  };
-}
-
-let lastSharedTtsSyncSignature = "";
-
-async function syncSharedTtsFromProject(project = state.project, { force = false } = {}) {
-  const ttsJobId = Number(project?.ttsJobId || 0);
-  if (!ttsJobId) return null;
-  const timeline = timelineFromSegments(project.segments || []);
-  const text = textFromSegments(project.segments || []) || String(project.text || "");
-  if (!text || !timeline.length) return null;
-  const signature = JSON.stringify({
-    id: ttsJobId,
-    text,
-    timeline: timeline.map(({ start, end, text: rowText }) => [Number(start).toFixed(3), Number(end).toFixed(3), rowText]),
-  });
-  if (!force && signature === lastSharedTtsSyncSignature) return null;
-  const basePayload = ttsPayloadFromProject(project);
-  window.sharedTtsHandoff?.save?.(basePayload, { sourceTarget: "kinetic-text" });
-  try {
-    const data = await postJson("/api/tts/alignment/sync", {
-      id: ttsJobId,
-      title: project.title || "",
-      text,
-      sentenceTimeline: timeline,
-      subtitleTimeline: timeline,
-      wordTimeline: Array.isArray(project.wordTimeline) ? project.wordTimeline : [],
-      duration: Number(project.duration || 0),
-      source: "kinetic-text",
-    });
-    const payload = ttsPayloadFromProject(project, data.job || {});
-    window.sharedTtsHandoff?.save?.(payload, { sourceTarget: "kinetic-text" });
-    lastSharedTtsSyncSignature = signature;
-    return payload;
-  } catch (error) {
-    console.warn("同步公共 TTS 文案失败", error);
-    return basePayload;
-  }
-}
-
 function scheduleSave(changes = {}) {
   if (!state.project) return;
   state.project = {
@@ -1770,7 +1675,6 @@ function scheduleSave(changes = {}) {
       state.project = data.project;
       const index = state.projects.findIndex((item) => item.id === state.project.id);
       if (index >= 0) state.projects[index] = state.project;
-      await syncSharedTtsFromProject(state.project);
       renderProjects();
       renderTimelineRuleStatus();
     } catch (error) {
@@ -1790,25 +1694,9 @@ function applyTimelineInput(input) {
     if (field === "lineBreaks") return { ...segment, lineBreaks: [...new Set(input.value.split(/[,，、\s]+/).map(Number).filter((value) => Number.isInteger(value) && value > 0 && value < String(segment.text || "").length))].sort((a, b) => a - b) };
     if (["x", "y", "primaryColor"].includes(field)) return { ...segment, overrides: { ...(segment.overrides || {}), [field]: ["x", "y"].includes(field) ? Number(input.value) : input.value } };
     if (["start", "end"].includes(field)) return { ...segment, [field]: Number(input.value) };
-    if (field === "text") {
-      const text = input.value;
-      return {
-        ...segment,
-        text,
-        lineBreaks: (segment.lineBreaks || []).filter((value) => Number(value) > 0 && Number(value) < text.length),
-      };
-    }
     return { ...segment, [field]: input.value };
   });
-  const duration = Math.max(0, ...segments.map((item) => Number(item.end || 0)), state.project.duration || 0);
-  const timeline = timelineFromSegments(segments);
-  scheduleSave({
-    segments,
-    text: textFromSegments(segments),
-    sentenceTimeline: timeline,
-    subtitleTimeline: timeline,
-    duration,
-  });
+  scheduleSave({ segments, duration: Math.max(...segments.map((item) => Number(item.end || 0)), state.project.duration || 0) });
 }
 
 function fileToDataUrl(file) {
@@ -1873,7 +1761,6 @@ async function saveProjectImmediately() {
   state.project = data.project;
   const index = state.projects.findIndex((item) => item.id === state.project.id);
   if (index >= 0) state.projects[index] = state.project;
-  await syncSharedTtsFromProject(state.project, { force: true });
   return state.project;
 }
 
@@ -2092,18 +1979,16 @@ function bindEvents() {
     if (!state.project) return;
     const button = $("#kineticAnalyze");
     button.disabled = true;
-    setProgress(5, "正在同步公共文案并重新识别关键词");
+    setProgress(5, "正在本地识别每句关键词（不调用 API）");
     try {
-      await saveProjectImmediately();
       const data = await postJson("/api/kinetic-text/analyze", {
         projectId: state.project.id,
         provider: $("#kineticTextProvider").value,
         keywordsOnly: true,
       });
       state.project = data.project;
-      await syncSharedTtsFromProject(state.project, { force: true });
       renderProject();
-      setProgress(100, data.aiUsed ? `重新识别完成 · ${data.provider}` : "重新识别完成 · 已同步公共文案");
+      setProgress(100, data.aiUsed ? `关键词识别完成 · ${data.provider}` : "关键词识别完成 · 本地规则");
     } catch (error) {
       setProgress(0, error.message);
     } finally {
@@ -2111,9 +1996,6 @@ function bindEvents() {
     }
   });
   $("#kineticPreviewPlay").addEventListener("click", playPreview);
-  document.addEventListener("workbench:before-route", (event) => {
-    if (event.detail?.from === "kinetic-text") pausePreviewPlayback();
-  });
   $("#kineticPreviewCanvas").addEventListener("pointerdown", beginOverlayDrag);
   $("#kineticPreviewCanvas").addEventListener("pointermove", moveOverlayDrag);
   $("#kineticPreviewCanvas").addEventListener("pointerup", finishOverlayDrag);
