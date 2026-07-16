@@ -1713,23 +1713,8 @@ async function refreshProjects(preferredId = "") {
 
 function scheduleSave(changes = {}) {
   if (!state.project) return;
-  state.project = {
-    ...state.project,
-    ...changes,
-    background: { ...state.project.background, ...(changes.background || {}) },
-    audioMix: { ...state.project.audioMix, ...(changes.audioMix || {}) },
-    effectParams: { ...state.project.effectParams, ...(changes.effectParams || {}) },
-    dynamicIllustration: {
-      ...state.project.dynamicIllustration,
-      ...(changes.dynamicIllustration || {}),
-      config: { ...state.project.dynamicIllustration?.config, ...(changes.dynamicIllustration?.config || {}) },
-      outputs: { ...state.project.dynamicIllustration?.outputs, ...(changes.dynamicIllustration?.outputs || {}) },
-    },
-    bookends: {
-      intro: { ...state.project.bookends?.intro, ...(changes.bookends?.intro || {}) },
-      outro: { ...state.project.bookends?.outro, ...(changes.bookends?.outro || {}) },
-    },
-  };
+  state.project = mergeProjectChanges(state.project, changes);
+  state.pendingSaveChanges = mergeProjectChanges(state.pendingSaveChanges, changes);
   renderEffects();
   renderBookendAvailability();
   drawPreview();
