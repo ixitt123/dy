@@ -1683,6 +1683,57 @@ export function createKineticTextService({
     return job;
   }
 
+  function illustrationConcept(project) {
+    const keywords = (project.segments || []).flatMap((segment) => Array.isArray(segment.keywords) ? segment.keywords : []);
+    const uniqueKeywords = [...new Set(keywords.map((item) => String(item || "").trim()).filter(Boolean))].slice(0, 5);
+    const source = String(project.title || project.segments?.[0]?.text || "成长与改变").trim();
+    return [source, uniqueKeywords.length ? `关键词：${uniqueKeywords.join("、")}` : ""].filter(Boolean).join("；").slice(0, 240);
+  }
+
+  function illustrationAssetPrompts(project, presetId) {
+    const common = "single isolated element, plain solid white background, no text, no letters, no logo, clean silhouette, generous margin";
+    if (presetId === "prompt-garden") {
+      return [
+        `a single elegant poppy on a tall slender curved stem, soft coral-red petals with a delicate dark center, one leaf, refined minimal flat vector, ${common}`,
+        `a single small withered seedling with a bent thin stem and two drooping desaturated blue-gray leaves, refined minimal flat vector, ${common}`,
+      ];
+    }
+    const concept = illustrationConcept(project);
+    return [
+      `Create the single main visual metaphor object for this Chinese short-video concept: ${concept}. Refined editorial illustration, visually specific, ${common}`,
+      `Create one supporting object that clearly causes or explains this concept: ${concept}. Refined editorial illustration, distinct from the main object, ${common}`,
+      `Create one small result or destination symbol for this concept: ${concept}. Refined editorial illustration, simple and recognizable, ${common}`,
+    ];
+  }
+
+  async function generateIllustrationAssets(project, presetId, targetDir, jobId) {
+    if (!imageService || typeof imageService.generateImage !== "function") {
+      throw new Error("项目现有图片 API 服务不可用，无法生成官方分层素材。");
+    }
+    const prompts = illustrationAssetPrompts(project, presetId);
+    const assetsDir = path.join(targetDir, "source-assets");
+    fs.mkdirSync(assetsDir, { recursive: true });
+    const paths = [];
+    const metadata = [];
+    for (let index = 0; index < prompts.length; index += 1) {
+      updateJob(jobId, { status: "running", progress: 5 + Math.round((index / prompts.length) * 20), stage: `调用现有图片 API 生成独立元素 ${index + 1}/${prompts.length}` });
+      const generated = await imageService.generateImage({
+        prompt: prompts[index],
+        aspectRatio: "1:1",
+        count: 1,
+        sourceType: "generative-illustration",
+        sourceId: `${project.id}:${presetId}:${index + 1}`,
+        folderName: `${project.id}-${presetId}`,
+        folderPath: assetsDir,
+      });
+      const first = generated.results.find((item) => item.success && item.imagePath);
+      if (!first) throw new Error(generated.results.find((item) => item.error)?.error || `第 ${index + 1} 个分层素材生成失败。`);
+      paths.push(first.imagePath);
+      metadata.push({ prompt: prompts[index], provider: first.provider, model: first.model, sourcePath: first.imagePath });
+    }
+    return { paths, metadata, concept: presetId === "copy-concept" ? illustrationConcept(project) : "Prompt Garden" };
+  }
+
   async function renderIllustration(projectId, config, jobId) {
     try {
       let project = get(projectId);
