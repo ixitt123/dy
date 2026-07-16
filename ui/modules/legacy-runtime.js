@@ -1273,10 +1273,94 @@ function renderTranscripts(items) {
   updateTranscriptSelectionControls(rows.length);
 }
 
+function updateTranscriptSelectionControls(total = transcriptList?.querySelectorAll(".transcript-select").length || 0) {
+  if (selectAllTranscriptsBtn) {
+    const allSelected = total > 0 && selectedTranscriptIds.size >= total;
+    selectAllTranscriptsBtn.textContent = allSelected ? "取消全选" : "全选";
+    selectAllTranscriptsBtn.disabled = total === 0;
+  }
+  if (correctSelectedTranscriptsBtn) {
+    correctSelectedTranscriptsBtn.textContent = selectedTranscriptIds.size
+      ? `校正文案（${selectedTranscriptIds.size}）`
+      : "校正文案";
+    correctSelectedTranscriptsBtn.disabled = selectedTranscriptIds.size === 0;
+  }
+}
+
 async function refreshTranscripts() {
   const data = await fetchJson("/api/transcripts");
   renderTranscripts(data.transcripts);
   return data.transcripts;
+}
+
+async function openTranscriptEditor(taskId) {
+  const transcripts = await refreshTranscripts();
+  const item = transcripts.find((row) => String(row.id) === String(taskId));
+  if (!item || !transcriptEditPanel) return;
+  transcriptEditTaskId.value = item.id;
+  transcriptEditTitle.textContent = item.title || `任务 ${item.id}`;
+  transcriptEditText.value = item.text || "";
+  transcriptEditStatus.textContent = "可以直接修改这条文案，保存后文案库会刷新。";
+  transcriptEditPanel.hidden = false;
+  transcriptEditPanel.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+async function saveTranscriptEdit() {
+  const id = Number(transcriptEditTaskId?.value || 0);
+  const text = String(transcriptEditText?.value || "").trim();
+  if (!id) {
+    if (transcriptEditStatus) transcriptEditStatus.textContent = "没有正在编辑的文案。";
+    return;
+  }
+  if (!text) {
+    if (transcriptEditStatus) transcriptEditStatus.textContent = "文案不能为空。";
+    return;
+  }
+  if (saveTranscriptEditBtn) saveTranscriptEditBtn.disabled = true;
+  if (transcriptEditStatus) transcriptEditStatus.textContent = "正在保存文案...";
+  try {
+    const data = await fetchJson("/api/tasks/transcript/save", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ id, text }),
+    });
+    renderTranscripts(data.transcripts);
+    if (transcriptEditStatus) transcriptEditStatus.textContent = "文案已保存。";
+    await refreshTasks().catch(() => {});
+  } catch (error) {
+    if (transcriptEditStatus) transcriptEditStatus.textContent = error instanceof Error ? error.message : String(error);
+  } finally {
+    if (saveTranscriptEditBtn) saveTranscriptEditBtn.disabled = false;
+  }
+}
+
+async function correctSelectedTranscripts() {
+  const ids = [...selectedTranscriptIds].map((id) => Number(id)).filter(Boolean);
+  if (!ids.length) {
+    resultBox.textContent = "请先在文案库勾选要校正的文案。";
+    setReady("未选择文案", false);
+    return;
+  }
+  correctSelectedTranscriptsBtn.disabled = true;
+  correctSelectedTranscriptsBtn.textContent = `正在校正（${ids.length}）`;
+  resultBox.textContent = `正在校正 ${ids.length} 条文案，请稍等...`;
+  try {
+    const data = await fetchJson("/api/tasks/transcript/correct", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ ids }),
+    });
+    selectedTranscriptIds.clear();
+    renderTranscripts(data.transcripts);
+    resultBox.textContent = data.message || `已校正 ${ids.length} 条文案。`;
+    setReady("校正完成", true);
+    await refreshTasks().catch(() => {});
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    resultBox.textContent = message;
+    setReady("校正失败", false);
+    updateTranscriptSelectionControls();
+  }
 }
 
 async function openAnalysisEditor(taskId) {
@@ -7272,10 +7356,30 @@ sendResultRewriteBtn?.addEventListener("click", () => {
 });
 
 transcriptList.addEventListener("click", (event) => {
+  const selectInput = event.target.closest(".transcript-select");
+  if (selectInput) {
+    const id = String(selectInput.dataset.taskId || "");
+    if (id) {
+      if (selectInput.checked) selectedTranscriptIds.add(id);
+      else selectedTranscriptIds.delete(id);
+    }
+    const card = selectInput.closest(".transcript-card");
+    if (card) card.classList.toggle("selected", selectInput.checked);
+    updateTranscriptSelectionControls();
+    return;
+  }
+  const editButton = event.target.closest(".transcript-edit");
   const analyzeButton = event.target.closest(".transcript-analyze");
   const rewriteButton = event.target.closest(".transcript-rewrite");
   const ttsButton = event.target.closest(".transcript-tts");
   const directorButton = event.target.closest(".transcript-director");
+  if (editButton) {
+    openTranscriptEditor(editButton.dataset.taskId).catch((error) => {
+      resultBox.textContent = error instanceof Error ? error.message : String(error);
+      setReady("打开编辑失败", false);
+    });
+    return;
+  }
   if (analyzeButton) {
     openAnalysisEditor(analyzeButton.dataset.taskId).catch((error) => {
       resultBox.textContent = error instanceof Error ? error.message : String(error);
@@ -7302,6 +7406,36 @@ transcriptList.addEventListener("click", (event) => {
     resultBox.textContent = error instanceof Error ? error.message : String(error);
     setReady("打开改写失败", false);
   });
+});
+
+selectAllTranscriptsBtn?.addEventListener("click", () => {
+  const inputs = [...transcriptList.querySelectorAll(".transcript-select")];
+  const shouldSelect = inputs.some((input) => !input.checked);
+  selectedTranscriptIds.clear();
+  for (const input of inputs) {
+    input.checked = shouldSelect;
+    const id = String(input.dataset.taskId || "");
+    if (shouldSelect && id) selectedTranscriptIds.add(id);
+    input.closest(".transcript-card")?.classList.toggle("selected", shouldSelect);
+  }
+  updateTranscriptSelectionControls(inputs.length);
+});
+
+correctSelectedTranscriptsBtn?.addEventListener("click", () => {
+  correctSelectedTranscripts().catch((error) => {
+    resultBox.textContent = error instanceof Error ? error.message : String(error);
+    setReady("校正失败", false);
+  });
+});
+
+saveTranscriptEditBtn?.addEventListener("click", () => {
+  saveTranscriptEdit().catch((error) => {
+    if (transcriptEditStatus) transcriptEditStatus.textContent = error instanceof Error ? error.message : String(error);
+  });
+});
+
+closeTranscriptEditBtn?.addEventListener("click", () => {
+  if (transcriptEditPanel) transcriptEditPanel.hidden = true;
 });
 
 rewritePanel?.addEventListener("click", (event) => {
