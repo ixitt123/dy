@@ -1708,15 +1708,21 @@ async function ensureProviderConfigured(providerId, { title = "API 配置", reas
 
 function providerHasSavedConfig(config, scope = "") {
   if (!config || typeof config !== "object") return false;
+  const hasSavedSecret = Boolean(
+    config.configured === true
+    || config.apiKeyConfigured === true
+    || String(config.apiKeyMask || config.secret_mask || "").trim()
+  );
   if (scope === "tts") {
     return Boolean(
+      hasSavedSecret
       String(config.apiKey || config.api_key || "").trim()
       || String(config.baseUrl || config.base_url || "").trim()
       || String(config.secret_id || "").trim()
     );
   }
   return Boolean(
-    String(config.apiKey || config.api_key || "").trim()
+    (hasSavedSecret || String(config.apiKey || config.api_key || "").trim())
     && String(config.baseUrl || config.base_url || "").trim()
     && String(config.model || config.default_model || "").trim()
   );
