@@ -1379,6 +1379,21 @@ function promptPlanCacheSignature(payload = formPayload(), job = state.selectedT
   });
 }
 
+function promptPlanCacheMatches(cached) {
+  let signature;
+  try {
+    signature = JSON.parse(cached?.signature || "{}");
+  } catch {
+    return false;
+  }
+  const currentJob = state.selectedTtsJob || state.ttsJob;
+  if (String(signature.projectId || "") !== String(state.projectId || "")) return false;
+  if (Number(signature.ttsJobId || 0) !== Number(currentJob?.id || 0)) return false;
+  const currentText = normalizeComparableText(confirmedTtsText(currentJob) || formPayload().text);
+  const cachedText = normalizeComparableText(cached?.plan?.sourceText || signature.text);
+  return !currentText || !cachedText || currentText === cachedText;
+}
+
 function savePromptPlanCache(plan, payload = formPayload()) {
   if (!plan?.shots?.length || !state.projectId) return;
   try {
@@ -1421,11 +1436,23 @@ function restorePromptPlanCache() {
     const cached = JSON.parse(localStorage.getItem(key) || "null");
     if (
       cached?.version !== PROMPT_PLAN_CACHE_VERSION
-      || cached.signature !== promptPlanCacheSignature()
+      || !promptPlanCacheMatches(cached)
       || !cached.plan?.shots?.length
       || cached.plan.skillProfileVersion !== 2
     ) return false;
     state.plan = cached.plan;
+    const cachedPurpose = String(cached.plan.purpose || "article");
+    if ([...els.purposeSelect.options].some((option) => option.value === cachedPurpose)) {
+      els.purposeSelect.value = cachedPurpose;
+      localStorage.setItem(PURPOSE_STORAGE_KEY, cachedPurpose);
+      renderPurposeTemplates();
+    }
+    const cachedAspectRatio = String(cached.plan.aspectRatio || "16:9");
+    if ([...els.aspectRatioSelect.options].some((option) => option.value === cachedAspectRatio)) {
+      els.aspectRatioSelect.value = cachedAspectRatio;
+    }
+    if (els.titleInput && !els.titleInput.value.trim()) els.titleInput.value = cached.plan.title || "";
+    if (els.copyInput && !els.copyInput.value.trim()) els.copyInput.value = cached.plan.sourceText || "";
     state.images = cacheableBoundImages(cached.boundImages || []);
     state.pendingUploads.clear();
     renderPlan(state.plan);
