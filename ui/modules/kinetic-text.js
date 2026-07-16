@@ -749,6 +749,8 @@ function hexToRgba(hex, alpha = 1) {
 function canvasLines(ctx, text, maxWidth, maxLines = 2) {
   const source = String(text || "").trim();
   if (!source) return [];
+  const forcedLines = source.split(/\\N|\r?\n/).map((line) => line.trim()).filter(Boolean);
+  if (forcedLines.length > 1) return forcedLines.slice(0, maxLines);
   const units = source.includes(" ") ? source.split(/(\s+)/).filter(Boolean) : [...source];
   const lines = [];
   let line = "";
@@ -761,6 +763,32 @@ function canvasLines(ctx, text, maxWidth, maxLines = 2) {
   }
   if (line.trim()) lines.push(line.trim());
   return lines.slice(0, maxLines);
+}
+
+function wrapPreviewSubtitleText(value, maxChars = 14, maxLines = 2) {
+  const source = String(value || "").trim().replace(/\s+/g, " ");
+  if (!source || source.length <= maxChars || maxLines <= 1) return source;
+  const chars = [...source];
+  const lines = [];
+  let cursor = 0;
+  while (cursor < chars.length && lines.length < maxLines) {
+    const remaining = chars.length - cursor;
+    if (lines.length === maxLines - 1 || remaining <= maxChars) {
+      lines.push(chars.slice(cursor).join(""));
+      break;
+    }
+    const ideal = Math.min(chars.length, cursor + maxChars);
+    let split = ideal;
+    for (let index = ideal; index > Math.max(cursor + Math.floor(maxChars * 0.62), cursor); index -= 1) {
+      if (/[，。！？；：、,.!?;:\s]/u.test(chars[index - 1] || "")) {
+        split = index;
+        break;
+      }
+    }
+    lines.push(chars.slice(cursor, split).join("").trim());
+    cursor = split;
+  }
+  return lines.filter(Boolean).join("\\N");
 }
 
 const KEYWORD_EMPHASIS_PALETTE = ["#FFD84D", "#69E7FF", "#B7FF5A", "#C59CFF"];
@@ -1089,7 +1117,8 @@ function drawPreview() {
     const overrides = segment.overrides || {};
     const x = width * Number(overrides.x ?? params.x ?? 50) / 100;
     const y = height * Number(overrides.y ?? params.y ?? 64) / 100;
-    const fontSize = Math.max(20, Number(overrides.fontSize || params.fontSize || 88) * scale);
+    const landscapeScale = spec.outputWidth > spec.outputHeight ? 1.12 : 1;
+    const fontSize = Math.max(20, Number(overrides.fontSize || params.fontSize || 88) * scale * landscapeScale);
     const primary = overrides.primaryColor || params.primaryColor || template.primary || "#fff";
     const accent = overrides.accentColor || params.accentColor || template.accent || "#ffd84d";
     const fontFamily = params.fontFamily || "Microsoft YaHei";
@@ -1097,7 +1126,8 @@ function drawPreview() {
     const words = previewWords(segment);
     const groups = previewWordGroups(words, segment.text);
     const localProgress = Math.max(0, Math.min(1, (state.currentTime - segment.start) / Math.max(0.1, segment.end - segment.start)));
-    const enter = Math.min(1, (state.currentTime - segment.start) / 0.16);
+    const enterMs = Math.min(220, Math.max(90, Math.round(150 / Math.max(0.5, Math.min(2, Number(params.animationSpeed || 1))))));
+    const enter = Math.min(1, (state.currentTime - segment.start) / (enterMs / 1000));
 
     if (template.renderMode === "rolling-focus-left") {
       const rows = rollingFocusPreviewRows(state.project.segments);
@@ -1157,21 +1187,22 @@ function drawPreview() {
       }
     } else if (template.renderMode === "rolling-focus") {
       const lineGapBoost = Math.max(0, Number(params.lineGapBoost || 0));
-      const gap = fontSize * (1.5 + lineGapBoost);
+      const gap = fontSize * (1.32 + lineGapBoost);
+      const maxChars = state.project.aspectRatio === "16:9" ? 24 : state.project.aspectRatio === "1:1" ? 16 : 13;
       [segmentIndex - 1, segmentIndex, segmentIndex + 1].forEach((index) => {
         const row = state.project.segments[index];
         if (!row) return;
         const delta = index - segmentIndex;
         const current = delta === 0;
-        const rowText = `${current ? "▶  " : ""}${row.text}`;
+        const rowText = `${current ? "▶  " : ""}${wrapPreviewSubtitleText(row.text, maxChars, current ? 2 : 1)}`;
         const rowY = y + delta * gap + (1 - enter) * gap * 0.18;
         const rowOptions = {
-          fontSize: current ? fontSize : fontSize * 0.63,
+          fontSize: current ? fontSize : fontSize * 0.64,
           fontFamily,
           color: current ? primary : (template.muted || "#7b8493"),
           maxWidth: width * 0.82,
           maxLines: current ? 2 : 1,
-          alpha: current ? 1 : 0.48,
+          alpha: current ? 1 : 0.67,
           outline: current && params.outlineEnabled !== false,
           shadow: current && params.shadowEnabled !== false,
           seed: row.sourceSegmentId || row.id,
