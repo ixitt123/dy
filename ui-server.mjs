@@ -248,6 +248,10 @@ const mimeTypes = new Map([
   [".js", "application/javascript; charset=utf-8"],
   [".json", "application/json; charset=utf-8"],
   [".svg", "image/svg+xml"],
+  [".png", "image/png"],
+  [".jpg", "image/jpeg"],
+  [".jpeg", "image/jpeg"],
+  [".webp", "image/webp"],
 ]);
 const downloadJobs = new Map();
 const transcriptJobs = new Map();
