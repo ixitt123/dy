@@ -1142,29 +1142,32 @@ async function generateCompleteWorkflow() {
     state.ttsJob = ttsJob;
     showAudio(ttsJob.audio_url || `/api/tts/audio?id=${ttsJob.id}`, `已确定使用 · 音频 #${ttsJob.id}`);
 
-    setStatus("正在生成小黑素材包", "图片、TTS 和字幕已绑定，正在写入小黑生产线输出目录。", 88, false, "写入文件");
-    const exported = await fetchJson("/api/ian-xiaohei/export-draft", {
+    setStatus("正在合成小黑视频", "正在按字幕时间轴组合分镜图片、转场、大字字幕和已确认 TTS 音频。", 88, false, "合成 MP4");
+    els.videoRenderStatus.textContent = "正在生成 MP4，请保持页面打开…";
+    const exported = await fetchJson("/api/ian-xiaohei/render-video", {
       method: "POST",
       body: JSON.stringify({
         project_id: state.projectId,
         tts_job_id: ttsJob.id,
         plan: state.plan,
         images: state.images,
-        jianying_template: "education_tips",
-        bgm_strategy: "none",
+        transition_mode: els.videoTransitionMode.value || "smart",
       }),
     });
-    const project = exported.project || {};
+    state.renderedVideo = exported;
+    updateVideoDownloadState();
     await loadOutputs();
-    if (project.status !== "completed") throw new Error(project.error || "小黑素材包生成失败。");
+    if (!exported.videoUrl) throw new Error("视频已经处理，但没有返回 MP4 地址。");
+    els.videoRenderStatus.textContent = `MP4 已生成 · ${exported.width}×${exported.height} · ${exported.fps}fps`;
     setStatus(
-      "完整素材已生成",
-      `素材包已生成：${project.output_dir || exported.packageDir || ""}`,
+      "小黑视频已生成",
+      "请在预览确认后点击右侧“下载视频”。",
       100,
       false,
-      "完成",
+      "MP4 完成",
     );
   } catch (error) {
+    els.videoRenderStatus.textContent = error.payload?.message || error.message || String(error);
     setStatus("生成失败", error.payload?.message || error.message || String(error), 100, true, "已停止");
   } finally {
     setBusy(false);
