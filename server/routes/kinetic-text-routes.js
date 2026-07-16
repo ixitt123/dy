@@ -97,7 +97,7 @@ export function createKineticTextRoutes({
     },
   });
 
-  return async function handleKineticTextRoutes(req, res, url) {
+  const handleKineticTextRoutes = async function handleKineticTextRoutes(req, res, url) {
     if (!url.pathname.startsWith("/api/kinetic-text/")) return false;
     const route = url.pathname.replace("/api/kinetic-text/", "");
     try {
@@ -184,4 +184,7 @@ export function createKineticTextRoutes({
       return true;
     }
   };
+
+  handleKineticTextRoutes.isBusy = () => service.isBusy();
+  return handleKineticTextRoutes;
 }

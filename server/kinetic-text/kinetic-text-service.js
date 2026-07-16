@@ -1908,6 +1908,10 @@ export function createKineticTextService({
     return filePath;
   }
 
+  function isBusy() {
+    return [...jobs.values()].some((job) => ["queued", "running"].includes(job.status));
+  }
+
   return {
     effects: () => KINETIC_TEXT_EFFECTS,
     providers: () => typeof modelRouter?.listProviders === "function" ? modelRouter.listProviders() : [],
@@ -1923,6 +1927,7 @@ export function createKineticTextService({
     illustrationPlan,
     uploadIllustrationAsset,
     getJob: (id) => jobs.get(String(id || "")) || null,
+    isBusy,
     resolveOutputFile,
   };
 }
