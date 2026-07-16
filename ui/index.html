@@ -1380,31 +1380,37 @@
       </section>
 
       <section class="workbench-page" data-page="money-printer" id="moneyPrinterPage">
-        <section class="money-printer-maker">
+        <section class="money-printer-maker kinetic-text-maker">
           <div class="result-head money-printer-head">
             <div>
-              <span class="section-eyebrow">PRODUCTION LINE 03</span>
-              <h2>免费素材混剪配置</h2>
-              <p>独立对接 MoneyPrinterTurbo，本页负责启动 API、提交主题/脚本、轮询任务并打开最终 MP4。</p>
+              <span class="section-eyebrow">PRODUCTION LINE 08</span>
+              <h2>MoneyPrinterTurbo 素材混剪生产线</h2>
+              <p>只接收 TTS 已确认的文案、音频和时间戳字幕；自动调用 MoneyPrinterTurbo 获取素材，再套用动态大字字幕模板合成成片。</p>
             </div>
             <span id="moneyPrinterApiBadge" class="money-printer-badge warning">检测中</span>
           </div>
 
-          <section class="money-printer-layout">
-            <form id="moneyPrinterForm" class="money-printer-form">
-              <section class="money-printer-card">
-                <div class="money-printer-card-head">
-                  <div>
-                    <strong>服务连接</strong>
-                    <small id="moneyPrinterRootPath">正在读取路径...</small>
-                  </div>
-                  <div class="money-printer-actions">
-                    <button id="moneyPrinterStartApi" type="button">启动 API</button>
-                    <button id="moneyPrinterRefresh" class="ghost" type="button">刷新</button>
-                    <button id="moneyPrinterOpenDocs" class="ghost" type="button">API 文档</button>
-                    <button id="moneyPrinterOpenRoot" class="ghost" type="button">项目目录</button>
-                    <button id="moneyPrinterOpenTasks" class="ghost" type="button">输出目录</button>
-                  </div>
+          <div class="kinetic-text-layout money-printer-production-layout">
+            <aside class="kinetic-text-controls money-printer-controls">
+              <section class="kinetic-card money-printer-card">
+                <div class="kinetic-card-head">
+                  <strong>输入与服务</strong>
+                  <span id="moneyPrinterHandoffBadge">等待 TTS</span>
+                </div>
+                <label>
+                  <span>项目标题</span>
+                  <input id="moneyPrinterSubject" type="text" placeholder="从 TTS 标题自动带入" />
+                </label>
+                <label>
+                  <span>MoneyPrinterTurbo</span>
+                  <small id="moneyPrinterRootPath">正在读取路径...</small>
+                </label>
+                <div class="money-printer-service-actions">
+                  <button id="moneyPrinterStartApi" type="button">启动 API</button>
+                  <button id="moneyPrinterRefresh" class="ghost" type="button">刷新</button>
+                  <button id="moneyPrinterOpenDocs" class="ghost" type="button">API 文档</button>
+                  <button id="moneyPrinterOpenRoot" class="ghost" type="button">项目目录</button>
+                  <button id="moneyPrinterOpenTasks" class="ghost" type="button">输出目录</button>
                 </div>
                 <div class="money-printer-status-line">
                   <strong id="moneyPrinterStatus">检测中</strong>
@@ -1412,131 +1418,150 @@
                 </div>
               </section>
 
-              <section class="money-printer-card">
-                <div class="money-printer-grid">
-                  <label>
-                    <span>视频主题</span>
-                    <input id="moneyPrinterSubject" type="text" placeholder="例如：人工智能如何改变普通人的日常生活" />
-                  </label>
-                  <label>
-                    <span>画幅</span>
-                    <select id="moneyPrinterAspect">
-                      <option value="16:9" selected>16:9 横屏</option>
-                      <option value="9:16">9:16 竖屏</option>
-                      <option value="1:1">1:1 方屏</option>
-                    </select>
-                  </label>
-                  <label>
-                    <span>素材来源</span>
-                    <select id="moneyPrinterSource">
-                      <option value="pexels" selected>Pexels 免费素材</option>
-                      <option value="pixabay">Pixabay 免费素材</option>
-                      <option value="coverr">Coverr 免费素材</option>
-                      <option value="local">MoneyPrinter 本地素材</option>
-                    </select>
-                  </label>
-                  <label>
-                    <span>配音音色</span>
-                    <input id="moneyPrinterVoice" type="text" value="zh-CN-XiaoxiaoNeural-Female" />
-                  </label>
+              <section class="kinetic-card money-printer-card">
+                <div class="kinetic-card-head">
+                  <strong>素材与转场</strong>
+                  <span>自动匹配</span>
                 </div>
-
                 <label>
-                  <span>完整脚本（可选，填写后跳过 AI 写稿）</span>
-                  <textarea id="moneyPrinterScript" placeholder="可以粘贴已经改写好的口播脚本；留空则按主题自动生成。"></textarea>
+                  <span>素材来源</span>
+                  <select id="moneyPrinterSource">
+                    <option value="pexels" selected>Pexels 免费素材</option>
+                    <option value="pixabay">Pixabay 免费素材</option>
+                    <option value="coverr">Coverr 免费素材</option>
+                    <option value="local">MoneyPrinter 本地素材</option>
+                  </select>
                 </label>
-
-                <div class="money-printer-grid">
-                  <label>
-                    <span>素材关键词（可选）</span>
-                    <input id="moneyPrinterTerms" type="text" placeholder="AI, daily life, technology" />
-                  </label>
-                  <label>
-                    <span>BGM</span>
-                    <select id="moneyPrinterBgm">
-                      <option value="random" selected>随机 BGM</option>
-                      <option value="none">不加 BGM</option>
-                    </select>
-                  </label>
-                  <label>
-                    <span>单素材时长</span>
-                    <select id="moneyPrinterClipDuration">
-                      <option value="3">3 秒</option>
-                      <option value="5" selected>5 秒</option>
-                      <option value="8">8 秒</option>
-                    </select>
-                  </label>
-                  <label>
-                    <span>生成数量</span>
-                    <select id="moneyPrinterVideoCount">
-                      <option value="1" selected>1 条</option>
-                      <option value="2">2 条</option>
-                      <option value="3">3 条</option>
-                    </select>
-                  </label>
-                </div>
-
+                <label>
+                  <span>转场</span>
+                  <select id="moneyPrinterTransition">
+                    <option value="auto" selected>自动</option>
+                    <option value="fade">交叉淡化</option>
+                    <option value="slide">滑动</option>
+                    <option value="none">无转场</option>
+                  </select>
+                </label>
                 <label class="money-printer-local-materials">
                   <span>本地素材文件名</span>
-                  <textarea id="moneyPrinterLocalMaterials" placeholder="仅素材来源选择“本地”时使用。填写 MoneyPrinterTurbo/storage/local_videos 内的文件名，每行一个。"></textarea>
+                  <textarea id="moneyPrinterLocalMaterials" placeholder="仅素材来源选择“本地”时使用。填写 storage/local_videos 内的文件名，每行一个。"></textarea>
                 </label>
-
-                <label class="money-printer-check">
-                  <input id="moneyPrinterMatchScript" type="checkbox" />
-                  <span>按脚本顺序匹配素材</span>
-                </label>
-
                 <div class="money-printer-actions">
-                  <button id="moneyPrinterSubmit" class="primary" type="submit">生成 MoneyPrinter 视频</button>
-                  <button id="moneyPrinterExample" class="ghost" type="button">填入示例</button>
+                  <button id="moneyPrinterSubmit" class="primary" type="button">自动匹配素材并预览</button>
                 </div>
               </section>
-            </form>
 
-            <aside class="money-printer-side">
-              <section class="money-printer-card">
-                <div class="money-printer-card-head">
-                  <strong>任务进度</strong>
-                  <span id="moneyPrinterProgressPercent">0%</span>
+              <section class="kinetic-card money-printer-card">
+                <div class="kinetic-card-head">
+                  <strong>成片参数</strong>
+                  <span>本页缓存</span>
                 </div>
-                <div class="money-printer-progress" id="moneyPrinterProgress">
-                  <i id="moneyPrinterProgressFill"></i>
+                <label>
+                  <span>字幕模板</span>
+                  <select id="moneyPrinterEffect"></select>
+                </label>
+                <label>
+                  <span>画面比例</span>
+                  <select id="moneyPrinterAspect">
+                    <option value="9:16">9:16 竖屏短视频</option>
+                    <option value="16:9">16:9 横屏视频</option>
+                    <option value="1:1">1:1 方形视频</option>
+                  </select>
+                </label>
+                <label>
+                  <span>导出帧率</span>
+                  <select id="moneyPrinterFrameRate">
+                    <option value="30">30fps 标准</option>
+                    <option value="60">60fps 流畅</option>
+                  </select>
+                </label>
+                <label class="kinetic-range-row"><span>字号</span><input id="moneyPrinterFontSize" type="range" min="34" max="160" value="88" /><output id="moneyPrinterFontSizeValue">88</output></label>
+                <div class="kinetic-color-row">
+                  <label><span>文字颜色</span><input id="moneyPrinterPrimaryColor" type="color" value="#ffffff" /></label>
+                  <label><span>强调色</span><input id="moneyPrinterAccentColor" type="color" value="#ffd84d" /></label>
+                </div>
+                <label>
+                  <span>最大行数</span>
+                  <select id="moneyPrinterMaxLines"><option value="1">1 行</option><option value="2" selected>2 行</option><option value="3">3 行</option></select>
+                </label>
+                <label class="kinetic-range-row"><span>TTS 音量</span><input id="moneyPrinterTtsVolume" type="range" min="0" max="200" value="100" /><output id="moneyPrinterTtsVolumeValue">100%</output></label>
+                <label class="kinetic-check"><input id="moneyPrinterBottomSubtitles" type="checkbox" checked /><span>显示底部关键词字幕</span></label>
+              </section>
+
+              <details class="kinetic-card money-printer-card money-printer-log-card">
+                <summary>API 启动日志</summary>
+                <pre id="moneyPrinterApiLogs">暂无 API 启动日志。</pre>
+              </details>
+            </aside>
+
+            <main class="kinetic-text-workspace money-printer-workspace">
+              <section class="kinetic-preview-card money-printer-preview-card">
+                <div class="kinetic-preview-toolbar">
+                  <div class="kinetic-preview-toolbar-main">
+                    <div class="kinetic-preview-title">
+                      <strong id="moneyPrinterPreviewTitle">MoneyPrinter 最终预览</strong>
+                      <span id="moneyPrinterPreviewSpec">等待 TTS 三件套</span>
+                    </div>
+                    <div class="kinetic-preview-actions">
+                      <div class="kinetic-preview-buttons">
+                        <button id="moneyPrinterPreviewPlay" class="ghost" type="button">播放预览</button>
+                        <button id="moneyPrinterPreviewRestart" class="ghost" type="button">从头播放</button>
+                      </div>
+                      <button id="moneyPrinterRenderFinal" class="primary" type="button">下载视频</button>
+                    </div>
+                  </div>
+                  <div class="kinetic-preview-progress">
+                    <div class="kinetic-progress money-printer-progress"><i id="moneyPrinterProgressFill"></i></div>
+                    <div class="kinetic-progress-meta"><strong id="moneyPrinterProgressStage">等待开始</strong><span id="moneyPrinterProgressPercent">0%</span></div>
+                  </div>
+                </div>
+                <div class="kinetic-canvas-wrap money-printer-canvas-wrap">
+                  <video id="moneyPrinterSourceVideo" muted playsinline preload="metadata" hidden></video>
+                  <audio id="moneyPrinterSourceAudio" preload="metadata" hidden></audio>
+                  <canvas id="moneyPrinterPreviewCanvas" width="960" height="540" role="button" tabindex="0" aria-label="点击画面播放或暂停" title="点击画面播放或暂停"></canvas>
+                  <div id="moneyPrinterPreviewEmpty">从 TTS 页面发送已确认音频后开始制作</div>
+                </div>
+                <input id="moneyPrinterPreviewSeek" type="range" min="0" max="1000" value="0" />
+                <div class="kinetic-preview-time"><span id="moneyPrinterCurrentTime">00:00.000</span><span id="moneyPrinterDuration">00:00.000</span></div>
+              </section>
+
+              <section class="kinetic-card money-printer-card">
+                <div class="kinetic-card-head">
+                  <strong>任务进度</strong>
+                  <span id="moneyPrinterTaskState">等待中</span>
                 </div>
                 <dl class="money-printer-task-meta">
                   <dt>Task ID</dt>
                   <dd id="moneyPrinterTaskId">未创建</dd>
-                  <dt>状态</dt>
-                  <dd id="moneyPrinterTaskState">等待中</dd>
+                  <dt>素材</dt>
+                  <dd id="moneyPrinterMaterialSummary">等待匹配</dd>
                 </dl>
                 <div id="moneyPrinterTaskVideos" class="money-printer-videos">
-                  <p>生成完成后这里会出现 MP4 链接。</p>
+                  <p>预览完成后这里会显示官方混剪和最终视频。</p>
                 </div>
               </section>
 
-              <section class="money-printer-card">
-                <div class="money-printer-card-head">
+              <section class="kinetic-card money-printer-card money-printer-timeline-card">
+                <div class="kinetic-card-head">
+                  <strong>字幕时间轴 / 素材检查</strong>
+                  <span id="moneyPrinterTimelineSummary">等待 TTS</span>
+                </div>
+                <div class="money-printer-timeline-head">
+                  <span>序号</span><span>开始</span><span>结束</span><span>字幕文案</span><span>检索词</span><span>素材 / 来源</span><span>转场</span>
+                </div>
+                <div id="moneyPrinterTimeline" class="money-printer-timeline"></div>
+              </section>
+
+              <section class="kinetic-card money-printer-card">
+                <div class="kinetic-card-head">
                   <strong>素材概况</strong>
+                  <span>MoneyPrinterTurbo</span>
                 </div>
                 <div id="moneyPrinterAssets" class="money-printer-assets">
                   <p>API 启动后显示本地 BGM 和本地素材。</p>
                 </div>
               </section>
-
-              <section class="money-printer-card">
-                <div class="money-printer-card-head">
-                  <strong>最近任务</strong>
-                </div>
-                <div id="moneyPrinterTaskList" class="money-printer-task-list">
-                  <p>正在读取任务...</p>
-                </div>
-              </section>
-
-              <details class="money-printer-card money-printer-log-card">
-                <summary>API 启动日志</summary>
-                <pre id="moneyPrinterApiLogs">暂无 API 启动日志。</pre>
-              </details>
-            </aside>
-          </section>
+            </main>
+          </div>
         </section>
       </section>
 
