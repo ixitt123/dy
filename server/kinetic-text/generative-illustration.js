@@ -134,8 +134,14 @@ async function rasterizeSvgFrames({ framesDir, pngDir, frameCount, width, height
     }
     client.socket.close();
   } finally {
-    if (child.exitCode == null) child.kill();
-    fs.rmSync(profileDir, { recursive: true, force: true });
+    if (child.exitCode == null) {
+      child.kill();
+      await Promise.race([
+        new Promise((resolve) => child.once("close", resolve)),
+        new Promise((resolve) => setTimeout(resolve, 1800)),
+      ]);
+    }
+    try { fs.rmSync(profileDir, { recursive: true, force: true, maxRetries: 4, retryDelay: 150 }); } catch {}
   }
 }
 
