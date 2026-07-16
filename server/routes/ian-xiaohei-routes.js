@@ -2184,14 +2184,21 @@ function writeXiaoheiMaterialPackage(outputRoot, plan, images, audioJob) {
 
 function buildXiaoheiScenes(plan, images) {
   const imageByIndex = new Map(images.map((image) => [Number(image.index), image]));
-  return (plan.shots || []).map((shot) => {
+  const shots = plan.shots || [];
+  const audioDuration = Number(plan.audioDuration || shots[shots.length - 1]?.endTime || 0);
+  return shots.map((shot, index) => {
     const image = imageByIndex.get(Number(shot.index)) || {};
+    const visualStart = index === 0 ? 0 : Number(shot.startTime || 0);
+    const visualEnd = index < shots.length - 1
+      ? Number(shots[index + 1].startTime || shot.endTime || visualStart)
+      : Math.max(audioDuration, Number(shot.endTime || visualStart));
     return {
       segment_id: shot.segmentId || `seg-${String(shot.index).padStart(3, "0")}`,
       scene_index: Number(shot.index),
       start_time: Number(shot.startTime || 0),
       end_time: Number(shot.endTime || 0),
       duration: Number(shot.duration || 0),
+      visual_duration: Math.max(0.12, visualEnd - visualStart),
       text: shot.sourceText || "",
       subtitle: shot.subtitleText || shot.sourceText || "",
       image_asset_id: image.assetId || "",

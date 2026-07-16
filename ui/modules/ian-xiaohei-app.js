@@ -1750,7 +1750,7 @@ function drawVideoPreview() {
   const shots = state.plan?.shots || [];
   const currentTime = Number(els.audioPreview.currentTime || els.videoPreviewSeek.value || 0);
   const shot = shots.find((item) => currentTime >= Number(item.startTime || 0) && currentTime < Number(item.endTime || 0))
-    || shots[shots.length - 1];
+    || (currentTime < Number(shots[0]?.startTime || 0) ? shots[0] : shots[shots.length - 1]);
   if (!shot) return;
   const imageRecord = state.images.find((item) => Number(item.index) === Number(shot.index));
   const image = getPreviewImage(imageRecord);

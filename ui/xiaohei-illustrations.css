@@ -982,6 +982,10 @@ pre {
   background: rgba(5, 7, 11, .82);
 }
 
+.xiaohei-video-empty[hidden] {
+  display: none;
+}
+
 .xiaohei-video-seek-row {
   display: grid;
   gap: 6px;

@@ -17,11 +17,11 @@ export function xiaoheiVideoResolution(aspectRatio) {
 
 export function buildXiaoheiVideoFilter({ scenes, width, height, fps = 30, transitionMode = "smart", assPath }) {
   const mode = normalizeXiaoheiTransitionMode(transitionMode);
-  const transitionDuration = mode === "none" ? 0 : Math.min(0.42, ...scenes.map((scene) => Math.max(0.12, Number(scene.duration || 0) * 0.22)));
+  const transitionDuration = mode === "none" ? 0 : Math.min(0.42, ...scenes.map((scene) => Math.max(0.12, sceneDuration(scene) * 0.22)));
   const filters = [];
 
   scenes.forEach((scene, index) => {
-    const duration = Math.max(0.12, Number(scene.duration || 0)) + (index < scenes.length - 1 ? transitionDuration : 0);
+    const duration = sceneDuration(scene) + (index < scenes.length - 1 ? transitionDuration : 0);
     filters.push(
       `[${index}:v]scale=${width}:${height}:force_original_aspect_ratio=increase,` +
       `crop=${width}:${height},setsar=1,fps=${fps},trim=duration=${duration.toFixed(3)},` +
@@ -31,7 +31,7 @@ export function buildXiaoheiVideoFilter({ scenes, width, height, fps = 30, trans
 
   let currentLabel = "v0";
   if (scenes.length > 1 && transitionDuration > 0) {
-    let offset = Math.max(0.12, Number(scenes[0].duration || 0));
+    let offset = sceneDuration(scenes[0]);
     for (let index = 1; index < scenes.length; index += 1) {
       const transition = transitionForScene(mode, index);
       const nextLabel = `vx${index}`;
@@ -40,7 +40,7 @@ export function buildXiaoheiVideoFilter({ scenes, width, height, fps = 30, trans
         `offset=${offset.toFixed(3)}[${nextLabel}]`,
       );
       currentLabel = nextLabel;
-      offset += Math.max(0.12, Number(scenes[index].duration || 0));
+      offset += sceneDuration(scenes[index]);
     }
   } else if (scenes.length > 1) {
     filters.push(`${scenes.map((_, index) => `[v${index}]`).join("")}concat=n=${scenes.length}:v=1:a=0[vconcat]`);
@@ -94,7 +94,7 @@ export async function renderXiaoheiVideo({ ffmpegPath, scenes, audioPath, output
   const { filter, transitionDuration } = buildXiaoheiVideoFilter({ scenes, width, height, fps, transitionMode, assPath });
   const args = ["-y"];
   scenes.forEach((scene, index) => {
-    const duration = Math.max(0.12, Number(scene.duration || 0)) + (index < scenes.length - 1 ? transitionDuration : 0);
+    const duration = sceneDuration(scene) + (index < scenes.length - 1 ? transitionDuration : 0);
     args.push("-loop", "1", "-framerate", String(fps), "-t", duration.toFixed(3), "-i", scene.image_path);
   });
   args.push(
@@ -122,6 +122,10 @@ function transitionForScene(mode, index) {
   if (mode === "slide") return index % 2 ? "slideleft" : "slideright";
   if (mode === "zoom") return "zoomin";
   return ["fade", "smoothleft", "circleopen", "slideup"][(index - 1) % 4];
+}
+
+function sceneDuration(scene) {
+  return Math.max(0.12, Number(scene.visual_duration || scene.duration || 0));
 }
 
 function escapeFilterPath(filePath) {
