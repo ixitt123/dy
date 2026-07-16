@@ -1,7 +1,10 @@
 import fs from "node:fs";
 import path from "node:path";
 import { spawn, spawnSync } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import { HttpBodyError, readJsonBody } from "../utils/http-body.js";
+import { buildAss } from "../kinetic-text/kinetic-text-service.js";
+import { KINETIC_TEXT_EFFECTS, defaultEffectParams, normalizeEffectId } from "../kinetic-text/effects.js";
 
 const DEFAULT_API_PORT = 8080;
 const DEFAULT_WEBUI_PORT = 8501;
@@ -17,9 +20,11 @@ const TASK_STATE_PROCESSING = 4;
 
 let apiProcess = null;
 const apiLogs = [];
+const renderedFiles = new Map();
 
-export function createMoneyPrinterRoutes({ baseDir, sendJson }) {
-  const defaultRoot = path.resolve(baseDir, "..", "MoneyPrinterTurbo");
+export function createMoneyPrinterRoutes({ baseDir, sendJson, ffmpegPath, ffprobePath, getDownloadsDir }) {
+  const defaultRoot = path.resolve(process.env.MONEY_PRINTER_TURBO_ROOT || path.join(baseDir, "integrations", "moneyprinterturbo"));
+  const workflowDir = path.join(baseDir, ".data", "money-printer");
 
   return async function handleMoneyPrinterRoutes(req, res, url) {
     if (!url.pathname.startsWith("/api/money-printer/")) return false;
@@ -31,12 +36,50 @@ export function createMoneyPrinterRoutes({ baseDir, sendJson }) {
       return true;
     }
 
+    if (req.method === "GET" && route === "effects") {
+      sendJson(res, 200, { ok: true, effects: KINETIC_TEXT_EFFECTS });
+      return true;
+    }
+
+    if (req.method === "GET" && route === "file") {
+      const id = String(url.searchParams.get("id") || "").trim();
+      const record = id ? renderedFiles.get(id) : null;
+      if (!record?.filePath || !fs.existsSync(record.filePath)) {
+        sendJson(res, 404, { ok: false, message: "MoneyPrinter 输出文件不存在。" });
+      } else {
+        sendFile(res, record.filePath, { download: url.searchParams.get("download") === "1" });
+      }
+      return true;
+    }
+
     if (req.method === "POST" && route === "start-api") {
       try {
         const status = await startApi(defaultRoot);
         sendJson(res, 200, { ok: true, ...status });
       } catch (error) {
         sendJson(res, 400, { ok: false, message: error instanceof Error ? error.message : String(error), logs: apiLogs.slice(-80) });
+      }
+      return true;
+    }
+
+    if (req.method === "POST" && route === "render-final") {
+      try {
+        const body = await readJsonBody(req, { maxBytes: 2 * 1024 * 1024 });
+        const status = await buildStatus(defaultRoot);
+        const result = await renderFinalVideo(body, {
+          rootDir: status.root,
+          workflowDir,
+          downloadsDir: typeof getDownloadsDir === "function" ? getDownloadsDir() : path.join(baseDir, "downloads"),
+          ffmpegPath,
+          ffprobePath,
+        });
+        renderedFiles.set(result.id, { filePath: result.outputPath, createdAt: new Date().toISOString() });
+        sendJson(res, 200, { ok: true, ...result, videoUrl: `/api/money-printer/file?id=${encodeURIComponent(result.id)}` });
+      } catch (error) {
+        sendJson(res, error instanceof HttpBodyError ? error.statusCode : 400, {
+          ok: false,
+          message: error instanceof Error ? error.message : String(error),
+        });
       }
       return true;
     }
@@ -258,6 +301,11 @@ function buildGeneratePayload(body = {}) {
     video_script_prompt: String(body.video_script_prompt || "").slice(0, 2000),
     custom_system_prompt: String(body.custom_system_prompt || "").slice(0, 8000),
   };
+  const customAudioFile = String(body.custom_audio_file || body.audio_path || "").trim();
+  if (customAudioFile) {
+    payload.custom_audio_file = customAudioFile;
+    payload.subtitle_enabled = body.subtitle_enabled === true;
+  }
   if (source === "local") payload.video_materials = parseLocalMaterials(body.video_materials);
   return payload;
 }
@@ -298,6 +346,8 @@ function normalizeBgmType(value) {
 
 function normalizeTask(task, apiBaseUrl) {
   const state = Number(task.state || 0);
+  const taskId = task.task_id || "";
+  const localPaths = localTaskPaths(task, taskId);
   return {
     ...task,
     state,
@@ -305,6 +355,28 @@ function normalizeTask(task, apiBaseUrl) {
     progress: Number(task.progress || 0),
     videos: normalizeTaskUrls(task.videos, apiBaseUrl),
     combined_videos: normalizeTaskUrls(task.combined_videos, apiBaseUrl),
+    localVideos: localPaths.videos,
+    localCombinedVideos: localPaths.combinedVideos,
+    localMaterials: localPaths.materials,
+  };
+}
+
+function localTaskPaths(task, taskId = "") {
+  const convert = (items) => (Array.isArray(items) ? items : [])
+    .map((item) => String(item || ""))
+    .filter(Boolean)
+    .map((item) => {
+      if (path.isAbsolute(item)) return item;
+      const match = item.match(/\/tasks\/([^/]+)\/([^?#]+)/);
+      if (match) return path.join("storage", "tasks", match[1], decodeURIComponent(match[2]));
+      if (taskId && !/^https?:\/\//i.test(item)) return path.join("storage", "tasks", taskId, item);
+      return "";
+    })
+    .filter(Boolean);
+  return {
+    videos: convert(task.videos),
+    combinedVideos: convert(task.combined_videos),
+    materials: convert(task.materials),
   };
 }
 
