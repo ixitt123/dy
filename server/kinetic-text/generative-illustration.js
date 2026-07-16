@@ -173,7 +173,23 @@ function paletteAlpha(hex, alpha) {
   return `${hex}${value}`;
 }
 
-function frameSvg({ width, height, frame, frameCount, project, effect, config, colors }) {
+function imageDataUri(filePath) {
+  return `data:image/png;base64,${fs.readFileSync(filePath).toString("base64")}`;
+}
+
+async function prepareTransparentAssets(paths, targetDir, ffmpegPath) {
+  const preparedDir = path.join(targetDir, "prepared-assets");
+  fs.mkdirSync(preparedDir, { recursive: true });
+  const prepared = [];
+  for (let index = 0; index < paths.length; index += 1) {
+    const output = path.join(preparedDir, `element-${index + 1}.png`);
+    await run(ffmpegPath, ["-y", "-i", paths[index], "-vf", "colorkey=0xFFFFFF:0.10:0.06,format=rgba", "-frames:v", "1", output], targetDir);
+    prepared.push(imageDataUri(output));
+  }
+  return prepared;
+}
+
+function frameSvg({ width, height, frame, frameCount, project, effect, config, colors, assetUris }) {
   const phase = (frame / frameCount) * Math.PI * 2;
   const amount = 1;
   const landscape = width / height > 1.2;
@@ -195,7 +211,38 @@ function frameSvg({ width, height, frame, frameCount, project, effect, config, c
     const radius = unit * (0.006 + (index % 3) * 0.004);
     return `<circle cx="${px.toFixed(1)}" cy="${py.toFixed(1)}" r="${radius.toFixed(1)}" fill="none" stroke="${index % 2 ? colors.accent : colors.muted}" stroke-width="${Math.max(2, unit * 0.003)}"/>`;
   }).join("");
-  const sceneIcon = `<path d="M${panelX + panelW * 0.2} ${panelY + panelH * 0.58} C${panelX + panelW * 0.42} ${panelY + panelH * 0.2},${panelX + panelW * 0.6} ${panelY + panelH * 0.86},${panelX + panelW * 0.82} ${panelY + panelH * 0.4}" fill="none"/><circle cx="${panelX + panelW * 0.82}" cy="${panelY + panelH * 0.4}" r="${unit * 0.025}" fill="${colors.accent}"/>`;
+  const imageTag = (href, x, y, w, h, transform = "") => href
+    ? `<image href="${href}" x="${x}" y="${y}" width="${w}" height="${h}" preserveAspectRatio="xMidYMid meet"${transform ? ` transform="${transform}"` : ""}/>`
+    : "";
+  const progress = frame / Math.max(1, frameCount - 1);
+  const promptGarden = config.presetId === "prompt-garden";
+  const gardenLayer = promptGarden ? (() => {
+    const groundY = height * 0.78;
+    const dead = assetUris[1] || assetUris[0];
+    const living = assetUris[0];
+    const deadPlants = Array.from({ length: 7 }, (_, index) => {
+      const w = unit * 0.14;
+      const x = width * (0.08 + index * 0.12);
+      const sway = Math.sin(phase + index) * 2.2;
+      return imageTag(dead, x, groundY - w, w, w, `rotate(${sway} ${x + w / 2} ${groundY})`);
+    }).join("");
+    const bloom = Math.min(1, Math.max(0, (progress - 0.28) / 0.32));
+    const bloomScale = 0.2 + (1 - (1 - bloom) ** 3) * 0.8;
+    const flowerW = unit * 0.31;
+    const flowerX = width * 0.58;
+    const words = ["again", "warmer", "closer", "less", "brighter", "again"]
+      .map((word, index) => {
+        const x = width * (0.12 + ((index * 0.163) % 0.72));
+        const y = ((progress * height * 1.3 + index * height * 0.18) % (height * 1.08)) - height * 0.08;
+        return `<text x="${x}" y="${y}" fill="${index % 3 === 0 ? colors.ink : colors.muted}" opacity="${0.28 + (index % 3) * 0.18}" font-family="monospace" font-size="${Math.max(18, unit * 0.023)}" transform="rotate(${index % 2 ? -14 : 12} ${x} ${y})">${word}</text>`;
+      }).join("");
+    return `<g id="layer-prompt-words">${words}</g><g id="layer-withered-plants">${deadPlants}</g><g id="layer-success-flower" transform="translate(${flowerX + flowerW / 2} ${groundY}) scale(${bloomScale}) translate(${-flowerX - flowerW / 2} ${-groundY})">${imageTag(living, flowerX, groundY - flowerW, flowerW, flowerW)}</g>`;
+  })() : (() => {
+    const heroW = unit * 0.42;
+    const supportW = unit * 0.25;
+    const pulse = 0.96 + Math.sin(phase) * 0.035;
+    return `<g id="layer-concept-hero" transform="translate(${width * 0.5} ${height * 0.5}) scale(${pulse}) translate(${-width * 0.5} ${-height * 0.5})">${imageTag(assetUris[0], width * 0.5 - heroW / 2, height * 0.5 - heroW / 2, heroW, heroW)}</g><g id="layer-concept-support">${imageTag(assetUris[1], width * 0.12, height * 0.25 + Math.sin(phase) * unit * 0.015, supportW, supportW)}${imageTag(assetUris[2], width * 0.68, height * 0.62 - Math.sin(phase) * unit * 0.015, supportW, supportW)}</g>`;
+  })();
   return `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
   <rect width="100%" height="100%" fill="${colors.background}"/>
@@ -203,15 +250,7 @@ function frameSvg({ width, height, frame, frameCount, project, effect, config, c
     <rect x="${width * 0.025}" y="${height * 0.035}" width="${width * 0.95}" height="${height * 0.93}" rx="${unit * 0.035}" fill="${colors.paper}" stroke="${colors.faint}" stroke-width="${Math.max(2, unit * 0.003)}"/>
     <path d="M${width * 0.08} ${height * 0.15} Q${width * 0.34} ${height * (0.12 + Math.sin(phase) * 0.006 * amount)} ${width * 0.58} ${height * 0.15}" fill="none" stroke="${colors.faint}" stroke-width="${Math.max(2, unit * 0.004)}" stroke-dasharray="${unit * 0.02} ${unit * 0.016}"/>
   </g>
-  <g id="layer-hero" transform="translate(${cx} ${cy + Math.sin(phase) * unit * 0.008}) scale(${1 + Math.sin(phase) * 0.025})">
-    <circle cx="0" cy="0" r="${charSize * 0.22}" fill="${paletteAlpha(colors.accent, 0.18)}" stroke="${colors.ink}" stroke-width="${Math.max(3, unit * 0.006)}"/>
-    <circle cx="0" cy="0" r="${charSize * 0.06}" fill="${colors.accent}"/>
-  </g>
-  <g id="layer-icons" transform="translate(${panelX + panelW / 2} ${panelY + panelH / 2}) scale(${iconPulse}) translate(${-panelX - panelW / 2} ${-panelY - panelH / 2})" fill="${paletteAlpha(colors.accent, 0.12)}" stroke="${colors.ink}" stroke-width="${Math.max(3, unit * 0.006)}" stroke-linecap="round" stroke-linejoin="round">${sceneIcon}</g>
-  <g id="layer-arrows" fill="none" stroke="${colors.accent}" stroke-width="${Math.max(4, unit * 0.008)}" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M${cx + charSize * 0.36} ${cy - charSize * 0.22} Q${width * 0.42} ${height * 0.18} ${panelX + panelW * 0.18} ${panelY + panelH * 0.18}" pathLength="100" stroke-dasharray="100" stroke-dashoffset="${(100 - Number(arrowProgress)).toFixed(2)}"/>
-    <path d="M${panelX + panelW * 0.18} ${panelY + panelH * 0.18} l${-unit * 0.025} ${-unit * 0.004} l${unit * 0.01} ${unit * 0.024}"/>
-  </g>
+  ${gardenLayer}
   <g id="layer-decoration" opacity="${decorOpacity}" stroke-linecap="round">${decorations}
     <path d="M${width * 0.72} ${height * 0.82} q${unit * 0.04} ${-unit * 0.035} ${unit * 0.08} 0" fill="none" stroke="${colors.accent}" stroke-width="${Math.max(3, unit * 0.006)}"/>
   </g>
