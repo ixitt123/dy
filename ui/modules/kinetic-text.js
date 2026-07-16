@@ -1876,7 +1876,23 @@ function bindEvents() {
     }
   });
   $("#kineticPreviewPlay").addEventListener("click", playPreview);
-  $("#kineticPreviewCanvas").addEventListener("click", playPreview);
+  $("#kineticPreviewCanvas").addEventListener("pointerdown", beginOverlayDrag);
+  $("#kineticPreviewCanvas").addEventListener("pointermove", moveOverlayDrag);
+  $("#kineticPreviewCanvas").addEventListener("pointerup", finishOverlayDrag);
+  $("#kineticPreviewCanvas").addEventListener("pointercancel", finishOverlayDrag);
+  $("#kineticPreviewCanvas").addEventListener("pointerleave", (event) => {
+    if (state.draggingOverlay) return;
+    state.hoverOverlay = "";
+    event.currentTarget.style.cursor = "pointer";
+    drawPreview();
+  });
+  $("#kineticPreviewCanvas").addEventListener("click", () => {
+    if (state.suppressCanvasClick) {
+      state.suppressCanvasClick = false;
+      return;
+    }
+    playPreview();
+  });
   $("#kineticPreviewCanvas").addEventListener("keydown", (event) => {
     if (!["Enter", " "].includes(event.key)) return;
     event.preventDefault();
