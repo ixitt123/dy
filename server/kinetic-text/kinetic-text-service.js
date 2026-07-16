@@ -1430,6 +1430,28 @@ export function createKineticTextService({
   function update(id, changes = {}) {
     const current = get(id);
     if (!current) throw new Error("动态大字项目不存在。");
+    const shouldInvalidateOutputs = [
+      "text",
+      "segments",
+      "sentenceTimeline",
+      "subtitleTimeline",
+      "wordTimeline",
+      "effectId",
+      "effectParams",
+      "aspectRatio",
+      "frameRate",
+      "showBottomSubtitles",
+      "bottomSubtitlePosition",
+      "keywordPlacement",
+      "background",
+      "audioMix",
+      "bookends",
+    ].some((key) => Object.hasOwn(changes, key));
+    const nextOutputs = changes.outputs
+      ? { ...current.outputs, ...(changes.outputs || {}) }
+      : shouldInvalidateOutputs
+        ? {}
+        : { ...current.outputs };
     const merged = {
       ...current,
       ...changes,
@@ -1448,7 +1470,7 @@ export function createKineticTextService({
         outro: { ...current.bookends?.outro, ...(changes.bookends?.outro || {}) },
       },
       bottomSubtitlePosition: { ...current.bottomSubtitlePosition, ...(changes.bottomSubtitlePosition || {}) },
-      outputs: { ...current.outputs, ...(changes.outputs || {}) },
+      outputs: nextOutputs,
     };
     return save(merged);
   }
