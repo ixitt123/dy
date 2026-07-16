@@ -63,6 +63,7 @@ export function initCs1VideoModule() {
   let progressTimer = null;
   let progressValue = 0;
   let currentTtsHandoff = null;
+  let ttsEditTimer = 0;
 
   if (beatCountSelect && !beatCountSelect.querySelector('option[value="auto"]')) {
     beatCountSelect.insertAdjacentHTML("afterbegin", [
@@ -91,6 +92,78 @@ export function initCs1VideoModule() {
     setStatus("已接收 TTS 三件套", "CS1 正在使用公共文案、音频和时间戳字幕。");
     if (navigate) window.workbenchNavigate?.("cs1-video");
     return currentTtsHandoff;
+  };
+
+  const splitTextForTimeline = (text, count) => {
+    const clean = String(text || "").trim();
+    if (!clean || count <= 0) return [];
+    const sentences = (clean.match(/[^。！？!?；;\n]+[。！？!?；;]?/gu) || [clean]).map((item) => item.trim()).filter(Boolean);
+    if (sentences.length === count) return sentences;
+    if (sentences.length > count) {
+      const rows = Array.from({ length: count }, () => "");
+      sentences.forEach((sentence, index) => { rows[Math.min(count - 1, index)].concat; rows[index % count] += sentence; });
+      return rows.map((item) => item.trim()).filter(Boolean);
+    }
+    const chars = [...clean];
+    const size = Math.ceil(chars.length / count);
+    return Array.from({ length: count }, (_, index) => chars.slice(index * size, (index + 1) * size).join("").trim()).filter(Boolean);
+  };
+
+  const timelineWithText = (payload, text) => {
+    const source = Array.isArray(payload?.sentence_timeline) && payload.sentence_timeline.length
+      ? payload.sentence_timeline
+      : Array.isArray(payload?.subtitle_timeline)
+        ? payload.subtitle_timeline
+        : [];
+    if (!source.length) return [];
+    const pieces = splitTextForTimeline(text, source.length);
+    return source.map((row, index) => ({
+      ...row,
+      id: String(row.id || `cs1-sync-${index + 1}`),
+      index: index + 1,
+      start: Number(row.start || 0),
+      end: Number(row.end || Number(row.start || 0) + 0.5),
+      text: pieces[index] || "",
+    })).filter((row) => row.text && row.end > row.start);
+  };
+
+  const publishTtsEdit = async () => {
+    if (!currentTtsHandoff?.id) return;
+    const text = textInput.value.trim();
+    if (!text) return;
+    const timeline = timelineWithText(currentTtsHandoff, text);
+    const payload = {
+      ...currentTtsHandoff,
+      title: titleInput.value.trim() || currentTtsHandoff.title,
+      text,
+      final_text: text,
+      sentence_timeline: timeline.length ? timeline : currentTtsHandoff.sentence_timeline,
+      subtitle_timeline: timeline.length ? timeline : currentTtsHandoff.subtitle_timeline,
+      sentAt: new Date().toISOString(),
+    };
+    currentTtsHandoff = window.sharedTtsHandoff?.save?.(payload, { sourceTarget: "cs1-video" }) || payload;
+    if (timeline.length) {
+      try {
+        const data = await postJson("/api/tts/alignment/sync", {
+          id: currentTtsHandoff.id,
+          title: payload.title,
+          text,
+          sentenceTimeline: timeline,
+          subtitleTimeline: timeline,
+          duration: Number(currentTtsHandoff.audio_duration || currentTtsHandoff.duration || 0),
+          source: "cs1-video",
+        });
+        currentTtsHandoff = window.sharedTtsHandoff?.save?.({ ...payload, ...(data.job || {}) }, { sourceTarget: "cs1-video" }) || payload;
+      } catch (error) {
+        setStatus("公共文案已更新，本地文件同步失败", error.message || String(error));
+      }
+    }
+  };
+
+  const scheduleTtsEditPublish = () => {
+    if (!currentTtsHandoff?.id) return;
+    window.clearTimeout(ttsEditTimer);
+    ttsEditTimer = window.setTimeout(() => { publishTtsEdit().catch(() => {}); }, 650);
   };
 
   const setProgress = (value, stage = "") => {
