@@ -56,6 +56,7 @@ try {
     ...scene,
     image_path: path.join(sourceRoot, `${index + 1}.png`),
     text: scene.subtitle,
+    keywords: [String(scene.subtitle).slice(0, 2)],
   }));
   const outputPath = path.join(tempDir, "final.mp4");
   await renderXiaoheiVideo({
@@ -80,6 +81,7 @@ try {
   });
   assert.ok(fs.existsSync(outputPath));
   assert.ok(fs.statSync(outputPath).size > 10_000);
+  assert.ok(fs.readFileSync(path.join(tempDir, "video-subtitles.ass"), "utf8").includes("\\t("));
   console.log(`Xiaohei MP4 render verified: ${fs.statSync(outputPath).size} bytes.`);
 } finally {
   fs.rmSync(tempDir, { recursive: true, force: true });
