@@ -329,6 +329,42 @@ function estimatedSubtitleTimeline(text = "", duration = 0) {
   });
 }
 
+function normalizeManualSentenceTimeline(raw = [], fallbackText = "", duration = 0) {
+  const rows = subtitleEntries(raw);
+  if (!rows.length) return estimatedSubtitleTimeline(fallbackText, duration);
+  return rows.map((row, index) => {
+    const start = Math.max(0, Number(row.start || 0));
+    const end = Math.max(start + 0.25, Number(row.end || start + 0.25));
+    return {
+      ...row,
+      id: String(row.id || `sentence-${index + 1}`),
+      index: index + 1,
+      start,
+      end,
+      text: String(row.text || "").trim(),
+    };
+  }).filter((row) => row.text).sort((a, b) => a.start - b.start);
+}
+
+function estimatedWordTimelineFromSentences(sentenceTimeline = []) {
+  const words = [];
+  for (const sentence of sentenceTimeline) {
+    const tokens = [...String(sentence.text || "").replace(/\s+/g, "")];
+    const duration = Math.max(0.05, Number(sentence.end || 0) - Number(sentence.start || 0));
+    const step = duration / Math.max(1, tokens.length);
+    tokens.forEach((token, index) => {
+      const start = Number(sentence.start || 0) + step * index;
+      words.push({
+        text: token,
+        start,
+        end: Math.min(Number(sentence.end || start + step), start + step),
+        estimated: true,
+      });
+    });
+  }
+  return words;
+}
+
 function resultDuration(result = {}) {
   return Number(result.duration || result.metadata?.duration || result.metadata?.audio_duration || 0)
     || (Number(result.metadata?.audio_length_ms || result.metadata?.duration_ms || result.metadata?.music_duration_ms || 0) / 1000)
