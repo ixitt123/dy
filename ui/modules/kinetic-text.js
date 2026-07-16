@@ -1433,6 +1433,7 @@ function renderReceivedFiles() {
 
 function illustrationConfigFromForm() {
   return {
+    enabled: $("#kineticIllustrationEnabled")?.checked === true,
     scene: $("#kineticIllustrationScene")?.value || "explainer",
     character: $("#kineticIllustrationCharacter")?.value || "xiaohei",
     density: $("#kineticIllustrationDensity")?.value || "standard",
@@ -1455,6 +1456,8 @@ function renderIllustrationSettings() {
   setValue("#kineticIllustrationMotion", config.motion, "standard");
   setValue("#kineticIllustrationTone", config.tone, "template");
   setValue("#kineticIllustrationDuration", [4, 6, 8].includes(Number(config.duration)) ? Number(config.duration) : "auto", "auto");
+  const enabled = $("#kineticIllustrationEnabled");
+  if (enabled) enabled.checked = config.enabled === true;
   const showText = $("#kineticIllustrationShowText");
   if (showText) showText.checked = config.showText === true;
   const outputs = state.project?.dynamicIllustration?.outputs || {};
@@ -1467,7 +1470,48 @@ function renderIllustrationSettings() {
     `<a href="${mediaUrl("illustrationReport")}" target="_blank">查看关键帧检查报告</a>`,
   ].join("") : "";
   const status = $("#kineticIllustrationStatus");
-  if (status && outputs.mp4) status.textContent = "已生成并应用：15fps MP4、循环 GIF、分层清单和关键帧检查均已保存。";
+  if (status && outputs.mp4) status.textContent = config.enabled
+    ? "动态背景特效已启用：15fps MP4、循环 GIF、分层清单和关键帧检查均已保存。"
+    : "动态背景素材已生成，但当前未启用；开启后会直接应用，无需重新生成。";
+}
+
+async function setIllustrationEnabled(enabled) {
+  if (!state.project) return;
+  const control = $("#kineticIllustrationEnabled");
+  const status = $("#kineticIllustrationStatus");
+  const dynamic = state.project.dynamicIllustration || {};
+  const outputs = dynamic.outputs || {};
+  const generatedPath = outputs.mp4 || "";
+  const generatedActive = Boolean(generatedPath && state.project.background?.path === generatedPath);
+  const previousBackground = generatedActive
+    ? (dynamic.previousBackground || { mode: "black", path: "", name: "" })
+    : { ...(state.project.background || { mode: "black", path: "", name: "" }) };
+  const config = { ...illustrationConfigFromForm(), enabled };
+  const changes = {
+    dynamicIllustration: { config, previousBackground },
+  };
+  if (enabled && generatedPath) {
+    changes.background = { mode: "video", path: generatedPath, name: "手绘循环动态背景.mp4" };
+  } else if (!enabled && generatedActive) {
+    changes.background = previousBackground;
+  }
+  control.disabled = true;
+  savePreferences({ illustration: config });
+  try {
+    const data = await postJson("/api/kinetic-text/update", { projectId: state.project.id, changes });
+    state.project = data.project;
+    const index = state.projects.findIndex((item) => item.id === state.project.id);
+    if (index >= 0) state.projects[index] = state.project;
+    renderProject();
+    status.textContent = enabled
+      ? (generatedPath ? "动态背景特效已启用并应用。" : "已启用；请生成一次动态背景素材。")
+      : "动态背景特效已关闭，已恢复之前的背景。";
+  } catch (error) {
+    control.checked = !enabled;
+    status.textContent = error.message;
+  } finally {
+    control.disabled = false;
+  }
 }
 
 async function generateIllustration() {
@@ -1484,7 +1528,9 @@ async function generateIllustration() {
     pollJob(data.job.id, {
       onComplete: () => {
         button.disabled = false;
-        status.textContent = "生成完成，动态 MP4 已自动设为当前背景；GIF 和检查报告可直接下载。";
+        status.textContent = config.enabled
+          ? "生成完成，动态 MP4 已自动设为当前背景；GIF 和检查报告可直接下载。"
+          : "素材生成完成；当前开关关闭，所以没有替换现有背景。";
       },
       onFailed: (job) => {
         button.disabled = false;
@@ -1832,6 +1878,11 @@ function bindEvents() {
     savePreferences({ illustration: config });
     scheduleSave({ dynamicIllustration: { config } });
   }));
+  $("#kineticIllustrationEnabled").addEventListener("change", (event) => {
+    setIllustrationEnabled(event.target.checked).catch((error) => {
+      $("#kineticIllustrationStatus").textContent = error.message;
+    });
+  });
   $("#kineticGenerateIllustration").addEventListener("click", () => generateIllustration());
   $("#kineticAudioSource").addEventListener("change", (event) => {
     savePreferences({ audioSource: event.target.value });
