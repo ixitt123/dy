@@ -523,7 +523,7 @@ function normalizeProject(project) {
     subtitleSource: String(project.subtitleSource || "estimated"),
     timelineSkillRules: TIMELINE_SKILL_IDS,
     timelineValidation,
-    showBottomSubtitles: project.keywordPlacement === "bottom" ? project.showBottomSubtitles !== false : true,
+    showBottomSubtitles: project.showBottomSubtitles !== false,
     bottomSubtitlePosition: {
       x: safeNumber(project.bottomSubtitlePosition?.x, 50, 5, 95),
       y: safeNumber(project.bottomSubtitlePosition?.y, 94, 8, 97),
