@@ -1263,14 +1263,21 @@ function startPreviewPlayback() {
   state.raf = requestAnimationFrame(previewTick);
 }
 
+function pausePreviewPlayback() {
+  state.playing = false;
+  state.seekResumePlaying = false;
+  state.audio?.pause();
+  if (state.backgroundMedia instanceof HTMLVideoElement) state.backgroundMedia.pause();
+  cancelAnimationFrame(state.raf);
+  state.raf = 0;
+  const playButton = $("#kineticPreviewPlay");
+  if (playButton) playButton.textContent = "播放预览";
+}
+
 function playPreview() {
   if (!state.project || state.seeking) return;
   if (state.playing) {
-    state.playing = false;
-    $("#kineticPreviewPlay").textContent = "播放预览";
-    state.audio?.pause();
-    if (state.backgroundMedia instanceof HTMLVideoElement) state.backgroundMedia.pause();
-    cancelAnimationFrame(state.raf);
+    pausePreviewPlayback();
     return;
   }
   startPreviewPlayback();
@@ -2102,6 +2109,9 @@ function bindEvents() {
     }
   });
   $("#kineticPreviewPlay").addEventListener("click", playPreview);
+  document.addEventListener("workbench:before-route", (event) => {
+    if (event.detail?.from === "kinetic-text") pausePreviewPlayback();
+  });
   $("#kineticPreviewCanvas").addEventListener("pointerdown", beginOverlayDrag);
   $("#kineticPreviewCanvas").addEventListener("pointermove", moveOverlayDrag);
   $("#kineticPreviewCanvas").addEventListener("pointerup", finishOverlayDrag);

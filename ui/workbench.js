@@ -77,6 +77,14 @@ const COLLECTOR_TAB_KEY = "short-video-collector-tab";
 const PROJECT_ASSET_TYPE_KEY = "short-video-project-asset-type";
 const PROJECT_ASSET_PAGE_SIZE_KEY = "short-video-project-asset-page-size";
 const PROJECT_ASSET_PAGE_SIZES = [10, 20, 50, 100];
+
+function pauseWorkbenchMedia(detail = {}) {
+  document.dispatchEvent(new CustomEvent("workbench:before-route", { detail }));
+  document.querySelectorAll("audio, video").forEach((media) => {
+    try { media.pause(); } catch {}
+  });
+}
+
 const PROJECT_ASSET_TYPES = [
   ["image", "图片"],
   ["video", "视频"],
@@ -964,6 +972,8 @@ function navigateWorkbench(pageId, options = {}) {
   const normalized = aliases[pageId] || pageId;
   const target = workbenchPages[normalized] ? normalized : "dashboard";
   const collectorTab = options.collectorTab || ((pageId === "analysis" || pageId === "transcript") ? "copybank" : "");
+  const previousPage = activeWorkbenchPage;
+  if (previousPage !== target) pauseWorkbenchMedia({ from: previousPage, page: target });
   activeWorkbenchPage = target;
   document.body.dataset.activeModule = target;
   document.querySelectorAll(".workbench-page").forEach((page) => {
