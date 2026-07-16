@@ -22,6 +22,7 @@ const embeddedMode = new URLSearchParams(window.location.search).get("embedded")
 localStorage.setItem("ian-xiaohei-project-id", state.projectId);
 const PROMPT_PLAN_CACHE_VERSION = 2;
 const PROMPT_PLAN_CACHE_PREFIX = "ian-xiaohei-prompt-plan";
+const PURPOSE_STORAGE_KEY = "ian-xiaohei-selected-purpose";
 
 const PURPOSE_TEMPLATE_META = {
   article: {
@@ -212,14 +213,16 @@ init().catch((error) => setStatus("初始化失败", error.message || String(err
 
 async function init() {
   if (embeddedMode) document.body.classList.add("embedded-production-mode");
+  hydratePurposeSelect();
+  renderPurposeTemplates();
   bindEvents();
   window.addEventListener("message", handleParentHandoff);
-  await loadConfig();
-  await Promise.all([loadAudioJobs(), loadOutputs()]);
+  await Promise.all([loadConfig(), loadAudioJobs()]);
   const restored = restorePromptPlanCache();
   if (restored) {
     setStatus("已恢复提示词计划", `刷新前生成的 ${state.plan?.shots?.length || 0} 个分镜提示词已恢复。`, 100, false, "本地缓存");
   }
+  void loadOutputs().catch(() => {});
   if (embeddedMode) window.parent.postMessage({ type: "video-factory:xiaohei-ready" }, window.location.origin);
 }
 
@@ -317,6 +320,7 @@ function bindEvents() {
   els.savedApiSelect.addEventListener("change", () => renderSavedApiDetail());
   els.aspectRatioSelect.addEventListener("change", () => resetVisualWorkflow("视频比例已改变，请重新生成分镜计划。"));
   els.purposeSelect.addEventListener("change", () => {
+    localStorage.setItem(PURPOSE_STORAGE_KEY, els.purposeSelect.value || "article");
     renderPurposeTemplates();
     resetVisualWorkflow("视觉模板已改变，请重新生成分镜计划。");
   });
@@ -326,6 +330,7 @@ function bindEvents() {
   els.audioJobs.addEventListener("click", handleAudioJobAction);
   els.promptResults.addEventListener("click", handlePromptAction);
   els.promptResults.addEventListener("change", handlePromptFileChange);
+  els.promptResults.addEventListener("toggle", handlePromptDetailsToggle, true);
   els.outputHistory.addEventListener("click", handleOutputHistoryAction);
 }
 
@@ -334,9 +339,13 @@ async function loadConfig() {
   state.config = data;
   state.outputDir = data.outputDir || "";
   els.outputDirLabel.textContent = state.outputDir;
+  const preferredPurpose = els.purposeSelect.value || localStorage.getItem(PURPOSE_STORAGE_KEY) || "article";
   els.purposeSelect.innerHTML = (data.purposes || [])
     .map((item) => `<option value="${escapeAttr(item.id)}">${escapeHtml(item.label)}</option>`)
     .join("");
+  if ([...els.purposeSelect.options].some((option) => option.value === preferredPurpose)) {
+    els.purposeSelect.value = preferredPurpose;
+  }
   renderPurposeTemplates();
   els.aspectRatioSelect.innerHTML = (data.aspectRatios || [{ id: "16:9", label: "16:9 横版（默认）" }])
     .map((item) => `<option value="${escapeAttr(item.id)}" ${item.id === "16:9" ? "selected" : ""}>${escapeHtml(item.label)}</option>`)
@@ -356,6 +365,17 @@ async function loadConfig() {
   renderIntegrationStatus(data.integrations || {});
   renderVoiceChoices(data.tts || {});
   renderMusicPresets(data.music || {}, data.referenceAudio || {});
+}
+
+function hydratePurposeSelect() {
+  if (!els.purposeSelect || els.purposeSelect.options.length) return;
+  els.purposeSelect.innerHTML = Object.entries(PURPOSE_TEMPLATE_META)
+    .map(([id, meta]) => `<option value="${escapeAttr(id)}">${escapeHtml(meta.name || id)}</option>`)
+    .join("");
+  const preferredPurpose = localStorage.getItem(PURPOSE_STORAGE_KEY) || "article";
+  if ([...els.purposeSelect.options].some((option) => option.value === preferredPurpose)) {
+    els.purposeSelect.value = preferredPurpose;
+  }
 }
 
 function renderSavedApis(savedApis) {
