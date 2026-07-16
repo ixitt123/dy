@@ -10572,6 +10572,14 @@ audio {
   background: #285e45;
 }
 
+.kinetic-preview-drag-tip {
+  display: block;
+  margin-top: 6px;
+  color: #7f90ad;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
 .parameter-panel > .parameter-panel-body {
   display: contents;
 }
