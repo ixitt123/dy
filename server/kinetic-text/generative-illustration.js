@@ -12,15 +12,6 @@ function clamp(value, min, max, fallback) {
   return Number.isFinite(number) ? Math.min(max, Math.max(min, number)) : fallback;
 }
 
-function escapeXml(value) {
-  return String(value || "")
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&apos;");
-}
-
 function run(command, args, cwd) {
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, { cwd, windowsHide: true });
@@ -174,35 +165,6 @@ function paletteFor(project, effect, config) {
   };
 }
 
-function characterSvg(kind, x, y, size, ink, accent, phase, amount) {
-  const bob = Math.sin(phase) * size * 0.025 * amount;
-  const wave = Math.sin(phase) * 13 * amount;
-  if (kind === "stick") {
-    return `<g transform="translate(${x} ${y + bob})" stroke="${ink}" stroke-width="${size * 0.045}" stroke-linecap="round" stroke-linejoin="round" fill="none">
-      <circle cx="0" cy="${-size * 0.45}" r="${size * 0.18}" fill="${accent}" fill-opacity=".14"/>
-      <path d="M0 ${-size * 0.27} L0 ${size * 0.18} M0 ${-size * 0.08} L${-size * 0.28} ${size * 0.02} M0 ${-size * 0.08} L${size * 0.25} ${-size * 0.2}"/>
-      <g transform="rotate(${wave} ${size * 0.25} ${-size * 0.2})"><path d="M${size * 0.25} ${-size * 0.2} L${size * 0.42} ${-size * 0.42}"/></g>
-      <path d="M0 ${size * 0.18} L${-size * 0.2} ${size * 0.5} M0 ${size * 0.18} L${size * 0.22} ${size * 0.5}"/>
-    </g>`;
-  }
-  if (kind === "littlebox") {
-    return `<g transform="translate(${x} ${y + bob})" stroke="${ink}" stroke-width="${size * 0.035}" stroke-linecap="round" stroke-linejoin="round">
-      <rect x="${-size * 0.34}" y="${-size * 0.38}" width="${size * 0.68}" height="${size * 0.62}" rx="${size * 0.08}" fill="${paletteAlpha(accent, 0.18)}"/>
-      <path d="M${-size * 0.14} ${-size * 0.42} L${size * 0.12} ${-size * 0.42}"/>
-      <circle cx="${-size * 0.12}" cy="${-size * 0.1}" r="${size * 0.025}" fill="${ink}"/><circle cx="${size * 0.12}" cy="${-size * 0.1}" r="${size * 0.025}" fill="${ink}"/>
-      <path d="M${-size * 0.1} ${size * 0.04} Q0 ${size * 0.12} ${size * 0.12} ${size * 0.02}" fill="none"/>
-      <path d="M${-size * 0.18} ${size * 0.25} L${-size * 0.2} ${size * 0.48} M${size * 0.18} ${size * 0.25} L${size * 0.2} ${size * 0.48}"/>
-      <g transform="rotate(${wave} ${size * 0.34} ${-size * 0.02})"><path d="M${size * 0.34} ${-size * 0.02} L${size * 0.52} ${-size * 0.25}"/></g>
-    </g>`;
-  }
-  return `<g transform="translate(${x} ${y + bob})" stroke="${ink}" stroke-width="${size * 0.032}" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M${-size * 0.28} ${size * 0.2} Q${-size * 0.36} ${-size * 0.4} 0 ${-size * 0.5} Q${size * 0.36} ${-size * 0.4} ${size * 0.28} ${size * 0.2} Q0 ${size * 0.42} ${-size * 0.28} ${size * 0.2}Z" fill="${ink}"/>
-    <circle cx="${-size * 0.1}" cy="${-size * 0.17}" r="${size * 0.03}" fill="${paletteAlpha(accent, 1)}" stroke="none"/><circle cx="${size * 0.11}" cy="${-size * 0.17}" r="${size * 0.03}" fill="${paletteAlpha(accent, 1)}" stroke="none"/>
-    <path d="M${-size * 0.14} ${size * 0.28} L${-size * 0.16} ${size * 0.48} M${size * 0.14} ${size * 0.28} L${size * 0.16} ${size * 0.48}"/>
-    <g transform="rotate(${wave} ${size * 0.28} ${-size * 0.04})"><path d="M${size * 0.28} ${-size * 0.04} L${size * 0.5} ${-size * 0.28}"/></g>
-  </g>`;
-}
-
 function paletteAlpha(hex, alpha) {
   if (alpha >= 1) return hex;
   const value = Math.round(alpha * 255).toString(16).padStart(2, "0");
@@ -224,7 +186,6 @@ function frameSvg({ width, height, frame, frameCount, project, effect, config, c
   const iconPulse = 1 + Math.sin(phase) * 0.055 * amount;
   const arrowProgress = ((frame / frameCount) * 100).toFixed(2);
   const decorOpacity = (0.35 + (Math.sin(phase + Math.PI / 2) + 1) * 0.12).toFixed(3);
-  const title = escapeXml([...String(project.title || "")].slice(0, 18).join(""));
   const densityCount = 6;
   const decorations = Array.from({ length: densityCount }, (_, index) => {
     const px = width * (0.08 + ((index * 0.137) % 0.84));
