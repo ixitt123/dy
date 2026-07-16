@@ -29,6 +29,7 @@ const PURPOSE_TEMPLATE_META = {
     accent: "#f0bd69",
     line: "#71d7ff",
     visual: "xiaohei",
+    previewImage: "/assets/xiaohei-skills/ian-xiaohei-illustrations.webp",
   },
   "xiaohei-scenes": {
     name: "小黑实物场景 · ian-xiaohei-scenes",
@@ -37,6 +38,7 @@ const PURPOSE_TEMPLATE_META = {
     accent: "#58c4dd",
     line: "#f0bd69",
     visual: "scenes",
+    previewImage: "/assets/xiaohei-skills/ian-xiaohei-scenes.webp",
   },
   "visual-ip": {
     name: "视觉 IP · visual-ip-illustrations",
@@ -45,6 +47,7 @@ const PURPOSE_TEMPLATE_META = {
     accent: "#ff8bb3",
     line: "#72d5b7",
     visual: "ip",
+    previewImage: "/assets/xiaohei-skills/visual-ip-illustrations.webp",
   },
   littlebox: {
     name: "小盒 · 5km-littlebox",
@@ -53,6 +56,7 @@ const PURPOSE_TEMPLATE_META = {
     accent: "#9dd36a",
     line: "#71d7ff",
     visual: "box",
+    previewImage: "/assets/xiaohei-skills/littlebox-illustrations.webp",
   },
   "stick-figure": {
     name: "火柴人 · stick-figure",
@@ -61,6 +65,7 @@ const PURPOSE_TEMPLATE_META = {
     accent: "#f6d764",
     line: "#ff7068",
     visual: "stick",
+    previewImage: "/assets/xiaohei-skills/stick-figure-illustrations.webp",
   },
   "handdrawn-tech": {
     name: "手绘技术页 · handdrawn-tech",
@@ -69,6 +74,7 @@ const PURPOSE_TEMPLATE_META = {
     accent: "#71d7ff",
     line: "#72d5b7",
     visual: "tech",
+    previewImage: "/assets/xiaohei-skills/handdrawn-tech-illustrations.webp",
   },
   "ian-handdrawn-ppt": {
     name: "Ian 手绘 PPT · handdrawn-ppt",
@@ -77,6 +83,7 @@ const PURPOSE_TEMPLATE_META = {
     accent: "#c7a6ff",
     line: "#f0bd69",
     visual: "ppt",
+    previewImage: "/assets/xiaohei-skills/ian-handdrawn-ppt.webp",
   },
   capybara: {
     name: "松弛水豚 · capybara",
@@ -85,6 +92,7 @@ const PURPOSE_TEMPLATE_META = {
     accent: "#d5a05f",
     line: "#72d5b7",
     visual: "capybara",
+    previewImage: "/assets/xiaohei-skills/capybara-illustrations.webp",
   },
   wechat: {
     name: "公众号配图 · 图文叙事",
@@ -411,7 +419,8 @@ function renderPurposeTemplates() {
     const tags = meta.tags || [item.label, "Skill"];
     return `
       <article class="xiaohei-template-card${active ? " active" : ""}" data-purpose-template="${escapeAttr(item.id)}" style="--template-accent:${escapeAttr(meta.accent || "#f0bd69")};--template-line:${escapeAttr(meta.line || "#71d7ff")}">
-        <div class="xiaohei-template-visual" data-template-visual="${escapeAttr(meta.visual || "xiaohei")}" aria-hidden="true">
+        <div class="xiaohei-template-visual${meta.previewImage ? " has-preview" : ""}" data-template-visual="${escapeAttr(meta.visual || "xiaohei")}" aria-hidden="true">
+          ${meta.previewImage ? `<img class="xiaohei-template-preview" src="${escapeAttr(meta.previewImage)}" alt="" loading="lazy" />` : ""}
           <span class="xiaohei-template-mark"></span>
           <span class="xiaohei-template-stroke stroke-a"></span>
           <span class="xiaohei-template-stroke stroke-b"></span>

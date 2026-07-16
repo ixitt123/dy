@@ -246,6 +246,8 @@ test("Kinetic text production line", async () => {
     || !kineticServiceSource.includes("calculateBookendWindows")
     || !moduleSource.includes("FAVORITES_KEY")
     || !moduleSource.includes("previewWordGroups")
+    || !moduleSource.includes("/assets/xiaohei-skills/ian-xiaohei-illustrations.webp")
+    || !moduleSource.includes("class=\"xiaohei-template-preview\"")
     || !moduleSource.includes('$("#kineticPreviewCanvas").addEventListener("click", playPreview)')
     || !moduleSource.includes('$("#kineticPreviewSeek").addEventListener("pointerdown", beginPreviewSeek)')
     || !moduleSource.includes('$("#kineticPreviewSeek").addEventListener("pointerup", finishPreviewSeek)')
