@@ -1706,6 +1706,40 @@ export function createKineticTextService({
     ];
   }
 
+  function illustrationPlan(projectId, presetId = "prompt-garden") {
+    const project = get(projectId);
+    if (!project) throw new Error("动态大字项目不存在。");
+    const normalized = normalizeIllustrationConfig({ presetId }, project);
+    const prompts = illustrationAssetPrompts(project, normalized.presetId);
+    const uploaded = project.dynamicIllustration?.manualAssets?.[normalized.presetId] || {};
+    return {
+      presetId: normalized.presetId,
+      prompts: prompts.map((prompt, index) => ({ index: index + 1, prompt, uploadedPath: uploaded[index + 1] || "" })),
+      ready: prompts.every((_, index) => uploaded[index + 1] && fs.existsSync(uploaded[index + 1])),
+    };
+  }
+
+  function uploadIllustrationAsset({ projectId, presetId, index, name, data }) {
+    const project = get(projectId);
+    if (!project) throw new Error("动态大字项目不存在。");
+    const plan = illustrationPlan(projectId, presetId);
+    const slot = Number(index);
+    if (!Number.isInteger(slot) || slot < 1 || slot > plan.prompts.length) throw new Error("分层素材位置无效。");
+    const extension = path.extname(String(name || "")).toLowerCase();
+    if (!IMAGE_EXTENSIONS.has(extension)) throw new Error("请上传 PNG、JPG、WEBP 或 BMP 图片。");
+    const parsed = dataUrlParts(data);
+    const targetDir = path.join(projectDir(projectId), "dynamic-illustration", "manual-assets", plan.presetId);
+    const targetPath = path.join(targetDir, `element-${slot}${extension}`);
+    fs.mkdirSync(targetDir, { recursive: true });
+    fs.writeFileSync(targetPath, parsed.base64 ? Buffer.from(parsed.data, "base64") : Buffer.from(decodeURIComponent(parsed.data)));
+    const manualAssets = {
+      ...(project.dynamicIllustration?.manualAssets || {}),
+      [plan.presetId]: { ...(project.dynamicIllustration?.manualAssets?.[plan.presetId] || {}), [slot]: targetPath },
+    };
+    update(projectId, { dynamicIllustration: { ...project.dynamicIllustration, manualAssets } });
+    return illustrationPlan(projectId, plan.presetId);
+  }
+
   async function generateIllustrationAssets(project, presetId, targetDir, jobId) {
     if (!imageService || typeof imageService.generateImage !== "function") {
       throw new Error("项目现有图片 API 服务不可用，无法生成官方分层素材。");
@@ -1756,7 +1790,15 @@ export function createKineticTextService({
       const targetDir = path.join(projectDir(projectId), "dynamic-illustration", presetId);
       fs.rmSync(targetDir, { recursive: true, force: true });
       fs.mkdirSync(targetDir, { recursive: true });
-      const generatedAssets = await generateIllustrationAssets(project, presetId, targetDir, jobId);
+      const manualPlan = illustrationPlan(projectId, presetId);
+      const generatedAssets = config.sourceMode === "uploaded"
+        ? {
+            paths: manualPlan.prompts.map((item) => item.uploadedPath),
+            metadata: manualPlan.prompts.map((item) => ({ prompt: item.prompt, provider: "manual-upload", model: "external" })),
+            concept: presetId === "copy-concept" ? illustrationConcept(project) : "Prompt Garden",
+          }
+        : await generateIllustrationAssets(project, presetId, targetDir, jobId);
+      if (config.sourceMode === "uploaded" && !manualPlan.ready) throw new Error("对应的分层图片还没有全部上传。");
       const result = await generateIllustrationBackground({
         project,
         effect: effectById(project.effectId),
@@ -1855,6 +1897,8 @@ export function createKineticTextService({
     startMaterials,
     startRender,
     startIllustration,
+    illustrationPlan,
+    uploadIllustrationAsset,
     getJob: (id) => jobs.get(String(id || "")) || null,
     resolveOutputFile,
   };
