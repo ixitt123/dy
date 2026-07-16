@@ -760,6 +760,11 @@ export function createImageService({ baseDir, getSettings, taskStore = null, ffm
     };
   }
 
+  function isBusy() {
+    const row = db.prepare("SELECT COUNT(*) AS count FROM image_jobs WHERE completed_at IS NULL AND progress < 100").get();
+    return Number(row?.count || 0) > 0;
+  }
+
   return {
     generateImage,
     generateImageAsync,
@@ -774,5 +779,6 @@ export function createImageService({ baseDir, getSettings, taskStore = null, ffm
     getAssets,
     deleteAsset,
     getStats,
+    isBusy,
   };
 }

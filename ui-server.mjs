@@ -2359,16 +2359,28 @@ function shutdownNow() {
   process.exit(0);
 }
 
+function serviceIsBusy(service) {
+  try {
+    return typeof service?.isBusy === "function" && service.isBusy();
+  } catch {
+    return false;
+  }
+}
+
 function scheduleShutdownIfIdle() {
   const hasRunningJobs = [...downloadJobs.values(), ...transcriptJobs.values()].some((job) => job.status === "running");
   if (
     !autoClose
     || pageSessions.size > 0
     || hasRunningJobs
+    || activeChildProcesses.size > 0
     || runningBatchTasks.size > 0
     || taskStore.hasPendingWork()
+    || serviceIsBusy(ttsService)
+    || serviceIsBusy(imageService)
     || directorService.isBusy()
     || vfoService.isBusy()
+    || serviceIsBusy(handleKineticTextRoutes)
   ) {
     return;
   }

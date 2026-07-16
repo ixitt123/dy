@@ -1841,6 +1841,13 @@ export function createTtsService({
     }
   }, 0);
 
+  function isBusy() {
+    return working
+      || pending.length > 0
+      || alignmentRunning.size > 0
+      || taskStore.listTtsJobs({ limit: 500 }).some((job) => ["waiting", "processing"].includes(job.status));
+  }
+
   return {
     enqueue,
     importGenerated,
@@ -1859,6 +1866,7 @@ export function createTtsService({
     listVoices,
     voicePreview,
     generateStaticPreview,
+    isBusy,
     outputDir,
     subtitleDir,
   };
