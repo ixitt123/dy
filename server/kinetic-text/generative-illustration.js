@@ -276,7 +276,6 @@ export async function generateIllustrationBackground({ project, effect, config: 
       { id: "hero", purpose: "代码原生核心元素，使用确定性位移与缩放" },
       { id: "icons", purpose: "独立概念元素，按时间函数整体运动" },
       { id: "arrows", purpose: "引导阅读路径，周期性描边" },
-      { id: "text", purpose: "官方要求生成素材不含文字；本层关闭", enabled: false },
       { id: "decoration", purpose: "平衡留白，不参与主体叙事" },
     ],
     checks: {
