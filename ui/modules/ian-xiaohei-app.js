@@ -198,13 +198,11 @@ const els = {
   progressPercent: document.querySelector("#progressPercent"),
   progressBar: document.querySelector("#progressBar"),
   promptResults: document.querySelector("#promptResults"),
-  imageResults: document.querySelector("#imageResults"),
   outputHistory: document.querySelector("#outputHistory"),
   outputHistoryPanel: document.querySelector("#outputHistoryPanel"),
   outputHistoryCount: document.querySelector("#outputHistoryCount"),
   outputDirLabel: document.querySelector("#outputDirLabel"),
   planCount: document.querySelector("#planCount"),
-  imageCount: document.querySelector("#imageCount"),
   videoPreview: document.querySelector("#xiaoheiVideoPreview"),
   videoPreviewStage: document.querySelector("#xiaoheiVideoStage"),
   videoPreviewCanvas: document.querySelector("#xiaoheiVideoCanvas"),
@@ -1601,33 +1599,10 @@ function renderPlan(plan) {
 }
 
 function renderImages(images, errors = []) {
-  els.imageCount.textContent = String(images.length);
-  if (!images.length && !errors.length) {
-    els.imageResults.className = "image-list empty";
-    els.imageResults.textContent = "上传并确认后的图片会显示在这里。";
-    return;
+  // 已绑定图片直接显示在对应提示词卡片中，不再维护重复的“生成结果”模块。
+  if (errors.length) {
+    setStatus("部分图片处理失败", errors.map((item) => `#${item.index || "-"} ${item.message || "未知错误"}`).join("；"), 100, true);
   }
-  els.imageResults.className = "image-list";
-  const ratioStyle = previewRatioStyle(state.plan?.aspectRatio);
-  const imageHtml = images.map((image) => {
-    const shot = state.plan?.shots?.find((item) => Number(item.index) === Number(image.index));
-    return `
-      <article class="image-card">
-        <img style="${ratioStyle}" src="${escapeAttr(image.imageUrl || image.thumbnailUrl || "")}" alt="${escapeAttr(image.topic || "小黑配图")}" />
-        <h3>#${image.index} ${escapeHtml(image.topic || "小黑配图")}</h3>
-        <p class="meta">${escapeHtml(shot?.sourceText || image.purpose || "")}</p>
-        <p class="path">${escapeHtml(image.imagePath || "")}</p>
-      </article>
-    `;
-  }).join("");
-  const errorHtml = errors.map((error) => `
-    <article class="image-card">
-      <h3 class="error">#${escapeHtml(error.index || "-")} 生成失败</h3>
-      <p>${escapeHtml(error.topic || "")}</p>
-      <p class="error">${escapeHtml(error.message || "未知错误")}</p>
-    </article>
-  `).join("");
-  els.imageResults.innerHTML = imageHtml + errorHtml;
 }
 
 function missingShotImages(plan, images = []) {

@@ -636,9 +636,55 @@ button.danger {
 
 .results-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
   gap: 10px;
   margin-bottom: 0;
+}
+
+.prompt-plan-panel {
+  width: 100%;
+}
+
+.prompt-plan-summary {
+  margin: 0;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+
+.prompt-plan-summary::-webkit-details-marker {
+  display: none;
+}
+
+.prompt-plan-summary h2 {
+  margin: 0;
+}
+
+.prompt-plan-summary span {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.prompt-plan-summary b {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.prompt-plan-toggle::after {
+  content: "收起全部 ▴";
+  color: #b9c4dc;
+  font-size: 13px;
+  font-style: normal;
+}
+
+.prompt-plan-panel:not([open]) .prompt-plan-toggle::after {
+  content: "展开全部 ▾";
+}
+
+.prompt-plan-panel[open] .prompt-list {
+  margin-top: 10px;
 }
 
 .panel-head {

@@ -118,20 +118,13 @@
           </section>
 
           <section class="results-grid">
-            <div class="panel">
-              <div class="panel-head">
+            <details id="promptPlanPanel" class="panel prompt-plan-panel" open>
+              <summary class="panel-head prompt-plan-summary">
                 <h2>提示词计划</h2>
-                <span id="planCount">0</span>
-              </div>
+                <span><b id="planCount">0</b><i class="prompt-plan-toggle"></i></span>
+              </summary>
               <div id="promptResults" class="prompt-list empty">还没有生成提示词。</div>
-            </div>
-            <div class="panel">
-              <div class="panel-head">
-                <h2>生成结果</h2>
-                <span id="imageCount">0</span>
-              </div>
-              <div id="imageResults" class="image-list empty">上传并确认后的图片会显示在这里。</div>
-            </div>
+            </details>
           </section>
 
           <section class="panel output-panel">
