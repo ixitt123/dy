@@ -194,13 +194,15 @@ test("Xiaohei prompt plan refresh cache", async () => {
     || !source.includes('function savePromptPlanCache(')
     || !source.includes('function restorePromptPlanCache()')
     || !source.includes('savePromptPlanCache(data, payload)')
-    || !source.includes('cached.signature !== promptPlanCacheSignature()')
+    || !source.includes('function promptPlanCacheMatches(cached)')
+    || !source.includes('|| !promptPlanCacheMatches(cached)')
     || !source.includes('cached.plan.skillProfileVersion !== 2')
     || !source.includes('data-prompt-content')
     || !source.includes('handlePromptDetailsToggle')
     || !source.includes('boundImages: cacheableBoundImages(state.images)')
     || !source.includes('state.images = cacheableBoundImages(cached.boundImages || [])')
-    || !source.includes('savePromptPlanCache(state.plan)')) {
+    || !source.includes('savePromptPlanCache(state.plan)')
+    || !source.includes('els.purposeSelect.value = cachedPurpose')) {
     throw new Error("Xiaohei prompt plan refresh cache is incomplete");
   }
 });
