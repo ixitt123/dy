@@ -3353,50 +3353,76 @@ function locallyCorrectTranscriptText(value) {
     .trim();
 }
 
+function configuredRewriteProviderIdsForTranscript(settings = readSettings()) {
+  const ids = [];
+  const add = (id) => {
+    const value = String(id || "").trim();
+    if (value && settings.rewriteProviders?.[value] && !ids.includes(value)) ids.push(value);
+  };
+  add("dashscope");
+  add(settings.rewrite?.defaultProvider || "");
+  for (const id of REWRITE_PROVIDER_ORDER) add(id);
+  return ids.filter((id) => {
+    const provider = settings.rewriteProviders?.[id];
+    return provider
+      && String(provider.apiKey || "").trim()
+      && String(provider.baseUrl || "").trim()
+      && String(provider.model || "").trim();
+  });
+}
+
 async function correctTranscriptWithRewriteModel(rawText, videoInfo = {}, signal) {
   const text = String(rawText || "").trim();
   if (!text) throw new Error("没有可校正的文案");
   if (text.length > TRANSCRIPT_CORRECTION_MODEL_MAX_CHARS) {
     return locallyCorrectTranscriptText(text);
   }
-  const provider = await getRewriteProvider("");
-  try {
-    const content = await chatCompletion(provider, [
-      {
-        role: "system",
-        content: [
-          "你是短视频 ASR 文案校正员，使用 copy-editing 高分规则和短视频转写清洗规则。",
-          "采用 copy-editing 的核心原则：提升清晰度、修复语句问题、保持语气一致、保留作者原意。",
-          "采用短视频转写清洗原则：清理噪声 ASR、同音错词、断句、标点、重复口吃和明显识别错误。",
-          "禁止使用营销改写项：不要补利益点、不要添加证明、不要强化情绪、不要改写成新文案。",
-          "准确性优先：不确定的词不要编造；能从上下文确定才修正，无法确定时保留原词或标注【听不清】。",
-          "内部自检：逐句对照原文，确保核心信息、顺序、数字、人名、地名、品牌名没有被改动。",
-          "只输出校正后的最终文案。",
-        ].join("\n"),
-      },
-      {
-        role: "user",
-        content: [
-          `标题：${videoInfo.title || ""}`,
-          `平台：${videoInfo.extractor || videoInfo.platform || ""}`,
-          "待校正文案：",
-          text,
-        ].join("\n"),
-      },
-    ], signal, {
-      temperature: 0.1,
-      requestName: "文案校正",
-      maxTokens: Math.min(12000, Math.max(2000, Math.ceil(text.length * 1.8))),
-      timeoutMs: TRANSCRIPT_CORRECTION_TIMEOUT_MS,
-    });
-    const corrected = cleanModelText(content);
-    if (!corrected) throw new Error("文案校正没有返回结果");
-    return corrected;
-  } catch (error) {
-    if (isPauseError(error)) throw error;
-    if (!isModelContentInspectionError(error) && !isTransientTranscriptCorrectionError(error)) throw error;
-    return locallyCorrectTranscriptText(text);
+  const providerIds = configuredRewriteProviderIdsForTranscript();
+  let lastError = null;
+  for (const providerId of providerIds) {
+    try {
+      const provider = await getRewriteProvider(providerId, {
+        refreshAutoModel: providerId === "dashscope",
+        persistAutoModel: providerId === "dashscope",
+      });
+      const content = await chatCompletion(provider, [
+        {
+          role: "system",
+          content: [
+            "你是短视频 ASR 文案校正员，使用 copy-editing 高分规则和短视频转写清洗规则。",
+            "采用 copy-editing 的核心原则：提升清晰度、修复语句问题、保持语气一致、保留作者原意。",
+            "采用短视频转写清洗原则：清理噪声 ASR、同音错词、断句、标点、重复口吃和明显识别错误。",
+            "禁止使用营销改写项：不要补利益点、不要添加证明、不要强化情绪、不要改写成新文案。",
+            "准确性优先：不确定的词不要编造；能从上下文确定才修正，无法确定时保留原词或标注【听不清】。",
+            "内部自检：逐句对照原文，确保核心信息、顺序、数字、人名、地名、品牌名没有被改动。",
+            "只输出校正后的最终文案。",
+          ].join("\n"),
+        },
+        {
+          role: "user",
+          content: [
+            `标题：${videoInfo.title || ""}`,
+            `平台：${videoInfo.extractor || videoInfo.platform || ""}`,
+            "待校正文案：",
+            text,
+          ].join("\n"),
+        },
+      ], signal, {
+        temperature: 0.1,
+        requestName: `文案校正（${provider.label || providerId}）`,
+        maxTokens: Math.min(12000, Math.max(2000, Math.ceil(text.length * 1.8))),
+        timeoutMs: TRANSCRIPT_CORRECTION_TIMEOUT_MS,
+      });
+      const corrected = cleanModelText(content);
+      if (corrected) return corrected;
+      lastError = new Error("文案校正没有返回结果");
+    } catch (error) {
+      if (isPauseError(error)) throw error;
+      lastError = error;
+    }
   }
+  if (lastError) console.warn(`Transcript correction fell back to local cleanup: ${errorMessage(lastError)}`);
+  return locallyCorrectTranscriptText(text);
 }
 
 function normalizeRewriteVersionContent(value) {
@@ -5793,14 +5819,20 @@ async function completeTaskWithTranscript(task, videoInfo, messagePrefix = "", s
         : task.video_path && fs.existsSync(task.video_path)
           ? task.video_path
           : findExistingVideo(videoInfo);
-      rawTranscript = await extractTranscriptForVideoInfo(videoInfo, apiKey, (progress) => {
-        const raw = Number(progress.percent || 0);
-        taskStore.updateTask(task.id, {
-          status: TASK_STATUS.TRANSCRIBING,
-          progress: Math.max(72, Math.min(91, Math.round(72 + raw * 0.19))),
-          message: progress.message || "正在提取文案",
-        });
-      }, signal, { localVideoPath });
+      try {
+        rawTranscript = await extractTranscriptForVideoInfo(videoInfo, apiKey, (progress) => {
+          const raw = Number(progress.percent || 0);
+          taskStore.updateTask(task.id, {
+            status: TASK_STATUS.TRANSCRIBING,
+            progress: Math.max(72, Math.min(91, Math.round(72 + raw * 0.19))),
+            message: progress.message || "正在提取文案",
+          });
+        }, signal, { localVideoPath });
+      } catch (error) {
+        if (isPauseError(error)) throw error;
+        updates.message = `${messagePrefix}视频已完成；平台字幕不可用，ASR 识别失败，已跳过文案校正：${errorMessage(error)}`;
+        return updates;
+      }
     }
 
     taskStore.updateTask(task.id, {
@@ -5835,6 +5867,8 @@ async function completeTaskWithTranscript(task, videoInfo, messagePrefix = "", s
 async function processBatchTask(task, signal) {
   try {
     throwIfPaused(signal);
+    const taskStats = safeJsonParse(task.stats_json);
+    const forceFresh = taskStats.forceFresh === true;
     if (task.kind !== "video") {
       throw new Error("当前版本先支持作品链接批量下载；账号、合集、评论和统计采集已预留任务类型，需接入 TikTokDownloader 后启用");
     }
@@ -5974,11 +6008,11 @@ async function processBatchTask(task, signal) {
       message: "检查是否已下载",
     });
 
-    const completedTask = taskStore.findCompletedByVideoId(videoInfo.videoId);
+    const completedTask = forceFresh ? null : taskStore.findCompletedByVideoId(videoInfo.videoId);
     const completedPath = completedTask?.video_path && fs.existsSync(completedTask.video_path)
       ? completedTask.video_path
       : "";
-    const existingVideoPath = completedPath || findExistingVideo(videoInfo);
+    const existingVideoPath = forceFresh ? "" : (completedPath || findExistingVideo(videoInfo));
 
     let videoPath = existingVideoPath;
     let fileSize = 0;
