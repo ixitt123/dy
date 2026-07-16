@@ -896,6 +896,11 @@ pre {
   background: #0b111b;
 }
 
+.prompt-card {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 560px;
+}
+
 .xiaohei-template-selected .xiaohei-template-visual {
   min-height: 150px;
 }

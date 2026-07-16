@@ -446,7 +446,7 @@ function renderPurposeTemplates() {
   els.templateGrid.innerHTML = `
     <article class="xiaohei-template-selected" style="--template-accent:${escapeAttr(meta.accent || "#f0bd69")};--template-line:${escapeAttr(meta.line || "#71d7ff")}">
       <div class="xiaohei-template-visual${meta.previewImage ? " has-preview" : ""}" data-template-visual="${escapeAttr(meta.visual || "xiaohei")}" aria-hidden="true">
-        ${meta.previewImage ? `<img class="xiaohei-template-preview" src="${escapeAttr(meta.previewImage)}" alt="" />` : ""}
+        ${meta.previewImage ? `<img class="xiaohei-template-preview" src="${escapeAttr(meta.previewImage)}" alt="" decoding="async" fetchpriority="high" width="640" height="360" />` : ""}
         <span class="xiaohei-template-mark"></span>
         <span class="xiaohei-template-stroke stroke-a"></span>
         <span class="xiaohei-template-stroke stroke-b"></span>
@@ -1280,6 +1280,18 @@ async function handlePromptFileChange(event) {
   renderPlan(state.plan);
 }
 
+function handlePromptDetailsToggle(event) {
+  const details = event.target.closest("details[data-prompt-details]");
+  if (!details?.open) return;
+  const index = Number(details.dataset.promptDetails);
+  const shot = state.plan?.shots?.find((item) => Number(item.index) === index);
+  const content = details.querySelector("[data-prompt-content]");
+  if (content && !content.dataset.loaded) {
+    content.textContent = shot?.prompt || "";
+    content.dataset.loaded = "1";
+  }
+}
+
 async function handlePromptAction(event) {
   const button = event.target.closest("[data-prompt-action]");
   if (!button) return;
@@ -1431,9 +1443,9 @@ function renderPlan(plan) {
             <dt>视觉隐喻</dt><dd>${escapeHtml(shot.visualMetaphor || "")}</dd>
           </dl>
         </div>
-        <details>
+        <details data-prompt-details="${shot.index}">
           <summary>查看完整生图提示词</summary>
-          <pre>${escapeHtml(shot.prompt)}</pre>
+          <pre data-prompt-content></pre>
         </details>
         <div class="prompt-actions">
           <button type="button" data-prompt-action="choose-image" data-index="${shot.index}">${image ? "替换本地图片" : "添加本地图片素材"}</button>
