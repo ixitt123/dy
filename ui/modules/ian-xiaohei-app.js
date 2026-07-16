@@ -19,6 +19,7 @@ const state = {
   previewImageCache: new Map(),
   previewFrame: 0,
   renderedVideo: null,
+  backgroundAudio: null,
   projectId: localStorage.getItem("ian-xiaohei-project-id") || `xiaohei-${Date.now()}`,
 };
 const embeddedMode = new URLSearchParams(window.location.search).get("embedded") === "1";
@@ -151,6 +152,31 @@ const els = {
   emotionSelect: document.querySelector("#emotionSelect"),
   speedSelect: document.querySelector("#speedSelect"),
   aspectRatioSelect: document.querySelector("#aspectRatioSelect"),
+  frameRate: document.querySelector("#xiaoheiFrameRate"),
+  imageFit: document.querySelector("#xiaoheiImageFit"),
+  ttsVolume: document.querySelector("#xiaoheiTtsVolume"),
+  ttsVolumeValue: document.querySelector("#xiaoheiTtsVolumeValue"),
+  chooseBgm: document.querySelector("#chooseXiaoheiBgm"),
+  bgmFile: document.querySelector("#xiaoheiBgmFile"),
+  bgmName: document.querySelector("#xiaoheiBgmName"),
+  bgmVolume: document.querySelector("#xiaoheiBgmVolume"),
+  bgmVolumeValue: document.querySelector("#xiaoheiBgmVolumeValue"),
+  showSubtitles: document.querySelector("#xiaoheiShowSubtitles"),
+  subtitleSize: document.querySelector("#xiaoheiSubtitleSize"),
+  subtitleSizeValue: document.querySelector("#xiaoheiSubtitleSizeValue"),
+  subtitleColor: document.querySelector("#xiaoheiSubtitleColor"),
+  keywordColor: document.querySelector("#xiaoheiKeywordColor"),
+  subtitleLines: document.querySelector("#xiaoheiSubtitleLines"),
+  subtitleSpeed: document.querySelector("#xiaoheiSubtitleSpeed"),
+  subtitleSpeedValue: document.querySelector("#xiaoheiSubtitleSpeedValue"),
+  subtitleOutline: document.querySelector("#xiaoheiSubtitleOutline"),
+  subtitleShadow: document.querySelector("#xiaoheiSubtitleShadow"),
+  introEnabled: document.querySelector("#xiaoheiIntroEnabled"),
+  introPreset: document.querySelector("#xiaoheiIntroPreset"),
+  introText: document.querySelector("#xiaoheiIntroText"),
+  outroEnabled: document.querySelector("#xiaoheiOutroEnabled"),
+  outroPreset: document.querySelector("#xiaoheiOutroPreset"),
+  outroText: document.querySelector("#xiaoheiOutroText"),
   purposeSelect: document.querySelector("#purposeSelect"),
   voiceDescription: document.querySelector("#voiceDescription"),
   previewVoice: document.querySelector("#previewVoice"),
@@ -231,6 +257,7 @@ async function init() {
   hydratePurposeSelect();
   renderPurposeTemplates();
   bindEvents();
+  restoreComposeSettings();
   window.addEventListener("message", handleParentHandoff);
   await Promise.all([loadConfig(), loadAudioJobs()]);
   const restored = restorePromptPlanCache();
@@ -334,6 +361,14 @@ function bindEvents() {
   els.voiceSelect.addEventListener("change", () => renderVoiceDescription());
   els.savedApiSelect.addEventListener("change", () => renderSavedApiDetail());
   els.aspectRatioSelect.addEventListener("change", () => resetVisualWorkflow("视频比例已改变，请重新生成分镜计划。"));
+  els.chooseBgm.addEventListener("click", () => els.bgmFile.click());
+  els.bgmFile.addEventListener("change", (event) => uploadXiaoheiBgm(event.target.files?.[0]));
+  for (const element of [els.frameRate, els.imageFit, els.showSubtitles, els.subtitleColor, els.keywordColor, els.subtitleLines, els.subtitleOutline, els.subtitleShadow, els.introEnabled, els.introPreset, els.introText, els.outroEnabled, els.outroPreset, els.outroText]) {
+    element.addEventListener("change", handleComposeSettingsChange);
+  }
+  for (const element of [els.ttsVolume, els.bgmVolume, els.subtitleSize, els.subtitleSpeed]) {
+    element.addEventListener("input", handleComposeSettingsChange);
+  }
   els.purposeSelect.addEventListener("change", () => {
     localStorage.setItem(PURPOSE_STORAGE_KEY, els.purposeSelect.value || "article");
     renderPurposeTemplates();
@@ -1150,6 +1185,8 @@ async function generateCompleteWorkflow() {
         plan: state.plan,
         images: state.images,
         transition_mode: els.videoTransitionMode.value || "smart",
+        compose: composeSettings(),
+        background_audio: state.backgroundAudio,
       }),
     });
     state.renderedVideo = exported;
@@ -1705,7 +1742,7 @@ function syncVideoPreview() {
   els.videoPreviewSeek.max = String(Math.max(0, duration));
   els.videoPreviewDuration.textContent = formatPreviewClock(duration);
   els.videoPreviewSpec.textContent = shots.length
-    ? `${ratio} · 30fps · ${shots.length} 个分镜 · ${duration.toFixed(1)} 秒`
+    ? `${ratio} · ${Number(els.frameRate.value) === 60 ? 60 : 30}fps · ${shots.length} 个分镜 · ${duration.toFixed(1)} 秒`
     : "等待分镜图片和 TTS 时间轴";
   const ready = Boolean(shots.length && state.images.length && !missingShotImages(state.plan, state.images).length);
   els.videoPreviewEmpty.hidden = ready;
@@ -1958,6 +1995,88 @@ function setBusy(busy) {
     renderVoiceDescription();
     renderReferenceStyleChoices();
     updateVideoDownloadState();
+  }
+}
+
+const COMPOSE_SETTINGS_KEY = "ian-xiaohei-compose-settings-v1";
+
+function composeSettings() {
+  return {
+    fps: Number(els.frameRate.value) === 60 ? 60 : 30,
+    imageFit: els.imageFit.value === "contain" ? "contain" : "cover",
+    ttsVolume: Number(els.ttsVolume.value || 100),
+    bgmVolume: Number(els.bgmVolume.value || 18),
+    showSubtitles: els.showSubtitles.checked,
+    subtitleSize: Number(els.subtitleSize.value || 48),
+    subtitleColor: els.subtitleColor.value || "#ffffff",
+    keywordColor: els.keywordColor.value || "#b7ff5a",
+    maxLines: Number(els.subtitleLines.value || 2),
+    animationSpeed: Number(els.subtitleSpeed.value || 100) / 100,
+    outline: els.subtitleOutline.checked,
+    shadow: els.subtitleShadow.checked,
+    intro: { enabled: els.introEnabled.checked, text: resolvedBookendText("intro") },
+    outro: { enabled: els.outroEnabled.checked, text: resolvedBookendText("outro") },
+  };
+}
+
+function resolvedBookendText(kind) {
+  const intro = kind === "intro";
+  const preset = intro ? els.introPreset.value : els.outroPreset.value;
+  const custom = (intro ? els.introText.value : els.outroText.value).trim();
+  if (preset === "custom") return custom;
+  if (intro && preset === "title") return els.titleInput.value.trim() || state.plan?.title || "";
+  const values = { core: "今天只讲一个重点", next: "关注我，下期继续", follow: "记得关注", private: "需要完整资料，可以私聊我" };
+  return values[preset] || custom;
+}
+
+function handleComposeSettingsChange() {
+  els.ttsVolumeValue.textContent = `${els.ttsVolume.value}%`;
+  els.bgmVolumeValue.textContent = `${els.bgmVolume.value}%`;
+  els.subtitleSizeValue.textContent = els.subtitleSize.value;
+  els.subtitleSpeedValue.textContent = `${(Number(els.subtitleSpeed.value) / 100).toFixed(2)}×`;
+  localStorage.setItem(COMPOSE_SETTINGS_KEY, JSON.stringify(composeSettings()));
+  state.renderedVideo = null;
+  syncVideoPreview();
+}
+
+function restoreComposeSettings() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(COMPOSE_SETTINGS_KEY) || "{}");
+    if (saved.fps) els.frameRate.value = String(saved.fps);
+    if (saved.imageFit) els.imageFit.value = saved.imageFit;
+    if (saved.ttsVolume !== undefined) els.ttsVolume.value = String(saved.ttsVolume);
+    if (saved.bgmVolume !== undefined) els.bgmVolume.value = String(saved.bgmVolume);
+    if (saved.showSubtitles !== undefined) els.showSubtitles.checked = Boolean(saved.showSubtitles);
+    if (saved.subtitleSize) els.subtitleSize.value = String(saved.subtitleSize);
+    if (saved.subtitleColor) els.subtitleColor.value = saved.subtitleColor;
+    if (saved.keywordColor) els.keywordColor.value = saved.keywordColor;
+    if (saved.maxLines) els.subtitleLines.value = String(saved.maxLines);
+    if (saved.animationSpeed) els.subtitleSpeed.value = String(Math.round(saved.animationSpeed * 100));
+    if (saved.outline !== undefined) els.subtitleOutline.checked = Boolean(saved.outline);
+    if (saved.shadow !== undefined) els.subtitleShadow.checked = Boolean(saved.shadow);
+    if (saved.intro) { els.introEnabled.checked = Boolean(saved.intro.enabled); els.introText.value = saved.intro.text || ""; }
+    if (saved.outro) { els.outroEnabled.checked = Boolean(saved.outro.enabled); els.outroText.value = saved.outro.text || ""; }
+  } catch {}
+  handleComposeSettingsChange();
+}
+
+async function uploadXiaoheiBgm(file) {
+  if (!file) return;
+  els.bgmName.textContent = "正在上传背景音乐…";
+  try {
+    const data = await fetchJson("/api/ian-xiaohei/upload-video-bgm", {
+      method: "POST",
+      body: JSON.stringify({ project_id: state.projectId, file_name: file.name, audio_mime: file.type, audio_data: await readFileDataUrl(file) }),
+    });
+    state.backgroundAudio = data.audio;
+    els.bgmName.textContent = `当前：${data.audio.name}`;
+    state.renderedVideo = null;
+    updateVideoDownloadState();
+  } catch (error) {
+    state.backgroundAudio = null;
+    els.bgmName.textContent = error.payload?.message || error.message || "背景音乐上传失败";
+  } finally {
+    els.bgmFile.value = "";
   }
 }
 
