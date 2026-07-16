@@ -1495,6 +1495,7 @@ async function pollJob(jobId, options = {}) {
   if (job.status === "failed") {
     setProgress(job.progress || 0, `${job.stage}：${job.error}`);
     if (options.renderOnComplete) setRenderButtonBusy(false);
+    if (typeof options.onFailed === "function") options.onFailed(job);
     return job;
   }
   state.pollTimer = setTimeout(() => pollJob(jobId, options).catch((error) => {
@@ -1666,6 +1667,20 @@ function bindEvents() {
     savePreferences({ backgroundMode: event.target.value });
     scheduleSave({ background: { mode: event.target.value } });
   });
+  [
+    "#kineticIllustrationScene",
+    "#kineticIllustrationCharacter",
+    "#kineticIllustrationDensity",
+    "#kineticIllustrationMotion",
+    "#kineticIllustrationTone",
+    "#kineticIllustrationDuration",
+    "#kineticIllustrationShowText",
+  ].forEach((selector) => $(selector)?.addEventListener("change", () => {
+    const config = illustrationConfigFromForm();
+    savePreferences({ illustration: config });
+    scheduleSave({ dynamicIllustration: { config } });
+  }));
+  $("#kineticGenerateIllustration").addEventListener("click", () => generateIllustration());
   $("#kineticAudioSource").addEventListener("change", (event) => {
     savePreferences({ audioSource: event.target.value });
     scheduleSave({ audioMix: { source: event.target.value } });
