@@ -1768,7 +1768,7 @@ function restorePromptPlanCache() {
 function renderPlan(plan) {
   const shots = plan?.shots || [];
   els.planCount.textContent = String(shots.length);
-  state.promptsText = shots.map((shot) => `#${shot.index} ${shot.topic}\n对应原文：${shot.sourceText}\n${shot.prompt}`).join("\n\n---\n\n");
+  state.promptsText = promptPlanText(shots, plan);
   if (!shots.length) {
     els.promptResults.className = "prompt-list empty";
     els.promptResults.textContent = "还没有生成提示词。";
@@ -1799,6 +1799,7 @@ function renderPlan(plan) {
           <pre data-prompt-content></pre>
         </details>
         <div class="prompt-actions">
+          <button type="button" data-prompt-action="copy-prompt" data-index="${shot.index}">复制本张提示词</button>
           <button type="button" data-prompt-action="choose-image" data-index="${shot.index}">${image ? "替换本地图片" : "添加本地图片素材"}</button>
           <input hidden type="file" accept=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp" data-shot-upload="${shot.index}" />
           ${image ? `<span class="binding-ok">已绑定本地图片</span>` : ""}
