@@ -1031,6 +1031,8 @@ async function createPlan() {
     });
     state.plan = data;
     state.images = [];
+    state.previewImageCache.clear();
+    state.renderedVideo = null;
     state.pendingUploads.clear();
     renderPlan(data);
     renderImages([], []);
@@ -1365,6 +1367,8 @@ async function uploadShotImage(index) {
       ...state.images.filter((image) => Number(image.index) !== Number(index)),
       data.image,
     ].sort((left, right) => Number(left.index) - Number(right.index));
+    state.previewImageCache.delete(Number(index));
+    state.renderedVideo = null;
     state.pendingUploads.delete(index);
     renderPlan(state.plan);
     renderImages(state.images, []);
@@ -1529,6 +1533,7 @@ function renderPlan(plan) {
   if (!shots.length) {
     els.promptResults.className = "prompt-list empty";
     els.promptResults.textContent = "还没有生成提示词。";
+    syncVideoPreview();
     return;
   }
   const ratioStyle = previewRatioStyle(plan.aspectRatio);
@@ -1580,6 +1585,7 @@ function renderPlan(plan) {
       </article>
     `;
   }).join("");
+  syncVideoPreview();
 }
 
 function renderImages(images, errors = []) {
