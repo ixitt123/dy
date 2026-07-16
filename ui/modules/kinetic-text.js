@@ -1506,6 +1506,8 @@ async function generateIllustration(force = false) {
   const button = $("#kineticGenerateIllustration");
   const status = $("#kineticIllustrationStatus");
   const config = illustrationConfigFromForm();
+  config.enabled = true;
+  $("#kineticIllustrationEnabled").checked = true;
   savePreferences({ illustration: config });
   button.disabled = true;
   status.textContent = force
