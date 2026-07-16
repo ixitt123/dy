@@ -39,6 +39,16 @@ const direct = buildXiaoheiVideoFilter({
 });
 assert.ok(direct.filter.includes("concat=n=2:v=1:a=0"));
 
+const contain = buildXiaoheiVideoFilter({
+  scenes,
+  width: 1920,
+  height: 1080,
+  transitionMode: "fade",
+  imageFit: "contain",
+  assPath: "C:\\temp\\subtitles.ass",
+});
+assert.ok(contain.filter.includes("force_original_aspect_ratio=decrease,pad=1920:1080"));
+
 const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "xiaohei-video-render-"));
 try {
   const sourceRoot = path.resolve("integrations/moneyprinterturbo/test/resources");
@@ -52,10 +62,21 @@ try {
     ffmpegPath,
     scenes: renderScenes,
     audioPath: path.resolve("integrations/moneyprinterturbo/resource/songs/output000.mp3"),
+    backgroundAudioPath: path.resolve("integrations/moneyprinterturbo/resource/songs/output000.mp3"),
     outputPath,
     aspectRatio: "16:9",
     transitionMode: "fade",
     fps: 30,
+    compose: {
+      imageFit: "contain",
+      ttsVolume: 100,
+      bgmVolume: 8,
+      showSubtitles: true,
+      subtitleSize: 48,
+      keywordColor: "#b7ff5a",
+      intro: { enabled: true, text: "Intro" },
+      outro: { enabled: true, text: "Follow" },
+    },
   });
   assert.ok(fs.existsSync(outputPath));
   assert.ok(fs.statSync(outputPath).size > 10_000);
