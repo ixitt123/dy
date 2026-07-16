@@ -184,7 +184,10 @@ async function applyDefaultPreferences() {
   els.primaryColor.value = params.primaryColor || effect.primary || "#ffffff";
   els.accentColor.value = params.accentColor || effect.accent || "#ffd84d";
   els.ttsVolume.value = String(moneyPrefs.ttsVolume ?? latestKinetic?.audioMix?.ttsVolume ?? kineticPrefs.ttsVolume ?? 100);
-  els.bottomSubtitles.checked = moneyPrefs.showBottomSubtitles ?? latestKinetic?.showBottomSubtitles ?? kineticPrefs.showBottomSubtitles ?? true;
+  els.bottomSubtitles.checked = false;
+  els.bottomSubtitles.disabled = true;
+  const bottomSubtitlesWrapper = els.bottomSubtitles.closest("label");
+  if (bottomSubtitlesWrapper) bottomSubtitlesWrapper.hidden = true;
   setSelectValue(els.transition, moneyPrefs.transition || "auto");
   setSelectValue(els.source, moneyPrefs.source || "pexels");
   state.page.classList.toggle("money-printer-local-source", els.source.value === "local");
@@ -505,7 +508,7 @@ function currentSettings() {
     aspectRatio: els.aspect.value || "9:16",
     frameRate: Number(els.frameRate.value) === 60 ? 60 : 30,
     ttsVolume: Number(els.ttsVolume.value || 100) / 100,
-    showBottomSubtitles: els.bottomSubtitles.checked,
+    showBottomSubtitles: false,
     effectParams: {
       ...(effect.defaultParams || {}),
       fontSize: Number(els.fontSize.value || 88),
@@ -523,7 +526,7 @@ function savePreferences() {
     aspectRatio: settings.aspectRatio,
     frameRate: settings.frameRate,
     ttsVolume: Number(els.ttsVolume.value || 100),
-    showBottomSubtitles: settings.showBottomSubtitles,
+    showBottomSubtitles: false,
     transition: els.transition.value,
     source: els.source.value,
     subject: els.subject.value,
@@ -589,15 +592,6 @@ function drawSubtitle(ctx, segment, width, height) {
     ctx.fillStyle = keywordMatch(line, segment.keywords) ? accent : primary;
     ctx.fillText(line, width / 2, yy);
   });
-  if (els.bottomSubtitles.checked) {
-    ctx.font = `700 ${Math.max(18, Math.round(fontSize * 0.42))}px "Microsoft YaHei", sans-serif`;
-    ctx.fillStyle = "#ffffff";
-    ctx.strokeStyle = "rgba(0,0,0,.82)";
-    ctx.lineWidth = 4;
-    const bottom = truncateText(ctx, segment.text, width * 0.84);
-    ctx.strokeText(bottom, width / 2, height * 0.92);
-    ctx.fillText(bottom, width / 2, height * 0.92);
-  }
   ctx.restore();
 }
 
