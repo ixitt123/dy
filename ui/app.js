@@ -11,6 +11,7 @@ import { initXiaoheiProductionModule } from "./modules/xiaohei-production.js";
 import { initMoneyPrinterModule } from "./modules/money-printer.js";
 import { initKineticTextModule } from "./modules/kinetic-text.js";
 import { initSettingsModule } from "./modules/settings.js";
+import { initCollapsibleParameterPanels } from "./modules/collapsible-parameters.js";
 
 const modules = [
   initRouter,
@@ -36,6 +37,7 @@ async function startApplication() {
       console.error("模块初始化失败", initialize.name || "anonymous", error);
     }
   }
+  initCollapsibleParameterPanels();
   document.documentElement.dataset.appReady = "true";
 }
 
