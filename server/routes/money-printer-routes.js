@@ -490,3 +490,204 @@ function appendLog(value) {
 function wait(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
+
+async function renderFinalVideo(body = {}, context = {}) {
+  if (!context.ffmpegPath || !fs.existsSync(context.ffmpegPath)) throw new Error("没有找到 ffmpeg，无法合成最终视频。");
+  const tts = body.tts && typeof body.tts === "object" ? body.tts : {};
+  const audioPath = String(body.audio_path || tts.audio_path || tts.audioPath || "").trim();
+  if (!audioPath || !fs.existsSync(audioPath)) throw new Error("缺少已确认 TTS 音频文件，无法合成。");
+  const segments = normalizeRenderSegments(body.segments || body.timeline || tts.sentence_timeline || tts.subtitle_timeline);
+  if (!segments.length) throw new Error("缺少已确认时间戳字幕，无法合成。");
+  const backgroundPath = resolveMptFilePath(body.background_video || body.backgroundVideo || body.combined_video || firstLocalCombinedVideo(body.task), context.rootDir);
+  if (!backgroundPath || !fs.existsSync(backgroundPath)) throw new Error("缺少 MoneyPrinterTurbo 混剪背景视频，请先完成素材匹配预览。");
+
+  const settings = body.settings && typeof body.settings === "object" ? body.settings : {};
+  const effectId = normalizeEffectId(settings.effectId);
+  const project = {
+    id: `money-printer-${Date.now()}`,
+    title: String(body.title || tts.title || "MoneyPrinter 视频").trim() || "MoneyPrinter 视频",
+    text: String(body.text || tts.final_text || tts.text || segments.map((item) => item.text).join("")).trim(),
+    duration: Math.max(...segments.map((item) => Number(item.end || 0)), Number(tts.audio_duration || tts.duration || 0), 0.5),
+    audioPath,
+    segments,
+    effectId,
+    effectParams: { ...defaultEffectParams(effectId), ...(settings.effectParams || {}) },
+    aspectRatio: ALLOWED_ASPECTS.has(String(settings.aspectRatio || "")) ? String(settings.aspectRatio) : "9:16",
+    frameRate: Number(settings.frameRate) === 60 ? 60 : 30,
+    showBottomSubtitles: settings.showBottomSubtitles !== false,
+    bottomSubtitlePosition: settings.bottomSubtitlePosition || { x: 50, y: 94 },
+    bookends: settings.bookends || {},
+  };
+
+  const runId = `mpt-${Date.now()}-${randomUUID().slice(0, 6)}`;
+  const runDir = path.join(context.workflowDir, runId);
+  fs.mkdirSync(runDir, { recursive: true });
+  const assPath = path.join(runDir, "dynamic-subtitles.ass");
+  fs.writeFileSync(assPath, buildAss(project), "utf8");
+  fs.writeFileSync(path.join(runDir, "manifest.json"), `${JSON.stringify({ project, backgroundPath, sourceTask: body.task || {} }, null, 2)}\n`, "utf8");
+
+  const outputDir = context.downloadsDir || process.cwd();
+  fs.mkdirSync(outputDir, { recursive: true });
+  const outputPath = uniqueOutputPath(path.join(outputDir, `${safeFileName(project.title, "moneyprinter-video")}.mp4`));
+  const { width, height } = outputSize(project.aspectRatio);
+  const duration = await probeDuration(context.ffprobePath, audioPath) || project.duration;
+  const ttsVolume = clampFloat(settings.ttsVolume, 0, 2, 1);
+  const args = [
+    "-y",
+    "-stream_loop", "-1", "-i", backgroundPath,
+    "-i", audioPath,
+    "-filter_complex",
+    `[0:v]scale=${width}:${height}:force_original_aspect_ratio=increase,crop=${width}:${height},fps=${project.frameRate},subtitles='${escapeFilterPath(assPath)}'[v];[1:a]volume=${ttsVolume.toFixed(3)}[a]`,
+    "-map", "[v]",
+    "-map", "[a]",
+    "-t", Math.max(0.5, duration).toFixed(3),
+    "-r", String(project.frameRate),
+    "-c:v", "libx264",
+    "-preset", "veryfast",
+    "-crf", "19",
+    "-pix_fmt", "yuv420p",
+    "-c:a", "aac",
+    "-b:a", "192k",
+    "-movflags", "+faststart",
+    outputPath,
+  ];
+  await spawnLogged(context.ffmpegPath, args);
+  return {
+    id: runId,
+    outputPath,
+    assPath,
+    manifestPath: path.join(runDir, "manifest.json"),
+    title: project.title,
+  };
+}
+
+function normalizeRenderSegments(value) {
+  return (Array.isArray(value) ? value : [])
+    .map((item, index) => {
+      const start = safeNumber(item.start ?? item.start_time ?? item.startTime, NaN);
+      const end = safeNumber(item.end ?? item.end_time ?? item.endTime, NaN);
+      const text = String(item.text || item.sentence || item.subtitle || item.sourceText || "").trim();
+      if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start || !text) return null;
+      return {
+        id: String(item.id || `mpt-segment-${index + 1}`),
+        start,
+        end,
+        text,
+        keywords: Array.isArray(item.keywords) ? item.keywords : inferKeywords(text),
+        words: Array.isArray(item.words) ? item.words : [],
+        sourceSegmentId: item.sourceSegmentId || "",
+      };
+    })
+    .filter(Boolean)
+    .sort((a, b) => a.start - b.start);
+}
+
+function inferKeywords(text) {
+  const source = String(text || "").replace(/[，。！？；：、,.!?;:\s]/gu, " ");
+  const words = source.match(/[A-Za-z0-9%]+|[\u4e00-\u9fff]{2,6}/gu) || [];
+  return [...new Set(words.map((item) => item.trim()).filter((item) => item.length >= 2))].slice(0, 2);
+}
+
+function firstLocalCombinedVideo(task = {}) {
+  const combined = Array.isArray(task.localCombinedVideos) && task.localCombinedVideos.length
+    ? task.localCombinedVideos
+    : Array.isArray(task.combined_videos)
+      ? task.combined_videos
+      : [];
+  return combined[0] || "";
+}
+
+function resolveMptFilePath(value, rootDir) {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  if (path.isAbsolute(raw)) return path.normalize(raw);
+  const decoded = decodeURIComponent(raw);
+  const taskMatch = decoded.match(/\/tasks\/([^/?#]+)\/([^?#]+)/);
+  if (taskMatch) return path.join(rootDir, "storage", "tasks", taskMatch[1], taskMatch[2]);
+  if (/^https?:\/\//i.test(decoded)) {
+    try {
+      const parsed = new URL(decoded);
+      const match = parsed.pathname.match(/\/tasks\/([^/]+)\/([^/]+)$/);
+      if (match) return path.join(rootDir, "storage", "tasks", match[1], decodeURIComponent(match[2]));
+    } catch {}
+    return "";
+  }
+  return path.resolve(rootDir, decoded);
+}
+
+function outputSize(aspectRatio) {
+  if (aspectRatio === "16:9") return { width: 1920, height: 1080 };
+  if (aspectRatio === "1:1") return { width: 1080, height: 1080 };
+  return { width: 1080, height: 1920 };
+}
+
+async function probeDuration(ffprobePath, filePath) {
+  if (!ffprobePath || !fs.existsSync(ffprobePath) || !filePath || !fs.existsSync(filePath)) return 0;
+  try {
+    const output = await spawnLogged(ffprobePath, ["-v", "error", "-show_entries", "format=duration", "-of", "default=nw=1:nk=1", filePath]);
+    return clampFloat(output.trim(), 0, Number.POSITIVE_INFINITY, 0);
+  } catch {
+    return 0;
+  }
+}
+
+function spawnLogged(command, args, { cwd } = {}) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(command, args, { cwd, windowsHide: true, stdio: ["ignore", "pipe", "pipe"] });
+    const output = [];
+    const onData = (chunk) => {
+      const text = chunk.toString("utf8");
+      output.push(text);
+      for (const line of text.split(/\r?\n/).map((item) => item.trim()).filter(Boolean)) appendLog(line);
+    };
+    child.stdout?.on("data", onData);
+    child.stderr?.on("data", onData);
+    child.on("error", reject);
+    child.on("exit", (code) => {
+      if (code === 0) resolve(output.join(""));
+      else reject(new Error(`命令执行失败(${code})：${output.join("").slice(-1600)}`));
+    });
+  });
+}
+
+function sendFile(res, filePath, { download = false } = {}) {
+  const stat = fs.statSync(filePath);
+  res.writeHead(200, {
+    "Content-Type": contentType(filePath),
+    "Content-Length": stat.size,
+    "Content-Disposition": `${download ? "attachment" : "inline"}; filename*=UTF-8''${encodeURIComponent(path.basename(filePath))}`,
+    "Cache-Control": "no-store",
+  });
+  fs.createReadStream(filePath).pipe(res);
+}
+
+function contentType(filePath) {
+  const extension = path.extname(filePath).toLowerCase();
+  if (extension === ".mp4") return "video/mp4";
+  if (extension === ".webm") return "video/webm";
+  if (extension === ".mov") return "video/quicktime";
+  if (extension === ".ass") return "text/plain; charset=utf-8";
+  if (extension === ".json") return "application/json; charset=utf-8";
+  return "application/octet-stream";
+}
+
+function escapeFilterPath(filePath) {
+  return path.resolve(filePath).replace(/\\/g, "/").replace(/:/g, "\\:").replace(/'/g, "\\'");
+}
+
+function safeFileName(value, fallback = "file") {
+  const clean = String(value || "").replace(/[<>:"/\\|?*\u0000-\u001f]+/g, "-").trim();
+  return clean.slice(0, 120) || fallback;
+}
+
+function uniqueOutputPath(filePath) {
+  if (!fs.existsSync(filePath)) return filePath;
+  const dir = path.dirname(filePath);
+  const ext = path.extname(filePath);
+  const base = path.basename(filePath, ext);
+  for (let index = 2; index < 1000; index += 1) {
+    const next = path.join(dir, `${base}-${index}${ext}`);
+    if (!fs.existsSync(next)) return next;
+  }
+  return path.join(dir, `${base}-${Date.now()}${ext}`);
+}

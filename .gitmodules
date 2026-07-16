@@ -1,0 +1,4 @@
+[submodule "integrations/moneyprinterturbo"]
+	path = integrations/moneyprinterturbo
+	url = https://github.com/harry0703/MoneyPrinterTurbo.git
+	branch = main

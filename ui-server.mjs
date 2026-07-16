@@ -181,6 +181,9 @@ const handleCs1VideoRoutes = createCs1VideoRoutes({
 const handleMoneyPrinterRoutes = createMoneyPrinterRoutes({
   baseDir: __dirname,
   sendJson,
+  ffmpegPath,
+  ffprobePath,
+  getDownloadsDir: () => downloadsDir,
 });
 const handleIanXiaoheiRoutes = createIanXiaoheiRoutes({
   baseDir: __dirname,
