@@ -24,6 +24,7 @@
     "test:tts-alignment-service": "node test-tts-alignment-service.mjs",
     "test:subtitle-templates": "node test-subtitle-templates.mjs",
     "test:subtitle-render": "node test-subtitle-render.mjs",
+    "test:xiaohei-skill-routing": "node test-xiaohei-skill-routing.mjs",
     "test:download-safety": "node test-download-safety.mjs",
     "patch-output": "node patch-mcp-output.mjs",
     "postinstall": "node patch-mcp-output.mjs"
