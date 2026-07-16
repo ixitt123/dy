@@ -320,14 +320,6 @@ function bindEvents() {
     renderPurposeTemplates();
     resetVisualWorkflow("视觉模板已改变，请重新生成分镜计划。");
   });
-  els.templateGrid?.addEventListener("click", (event) => {
-    const card = event.target.closest("[data-purpose-template]");
-    if (!card) return;
-    const purpose = card.dataset.purposeTemplate || "";
-    if (!purpose || els.purposeSelect.value === purpose) return;
-    els.purposeSelect.value = purpose;
-    els.purposeSelect.dispatchEvent(new Event("change", { bubbles: true }));
-  });
   els.copyPrompts.addEventListener("click", () => copyAllPrompts());
   els.openOutputDir.addEventListener("click", () => openOutputDir());
   els.refreshOutputs.addEventListener("click", () => loadOutputs());
@@ -428,27 +420,25 @@ function renderPurposeTemplates() {
     const meta = PURPOSE_TEMPLATE_META[selected.id] || {};
     els.templateSummary.textContent = `${meta.name || selected.label} · 后台调用小黑分镜、提示词、素材包和剪映草稿模块。`;
   }
-  els.templateGrid.innerHTML = options.map((item) => {
-    const meta = PURPOSE_TEMPLATE_META[item.id] || {};
-    const active = item.id === current;
-    const tags = meta.tags || [item.label, "Skill"];
-    return `
-      <article class="xiaohei-template-card${active ? " active" : ""}" data-purpose-template="${escapeAttr(item.id)}" style="--template-accent:${escapeAttr(meta.accent || "#f0bd69")};--template-line:${escapeAttr(meta.line || "#71d7ff")}">
-        <div class="xiaohei-template-visual${meta.previewImage ? " has-preview" : ""}" data-template-visual="${escapeAttr(meta.visual || "xiaohei")}" aria-hidden="true">
-          ${meta.previewImage ? `<img class="xiaohei-template-preview" src="${escapeAttr(meta.previewImage)}" alt="" loading="lazy" />` : ""}
-          <span class="xiaohei-template-mark"></span>
-          <span class="xiaohei-template-stroke stroke-a"></span>
-          <span class="xiaohei-template-stroke stroke-b"></span>
-        </div>
-        <div class="xiaohei-template-copy">
-          <strong>${escapeHtml(meta.name || item.label)}</strong>
-          <p>${escapeHtml(meta.description || "调用小黑视频风格生成模块，自动完成分镜和素材包规划。")}</p>
-          <div class="xiaohei-template-meta">${tags.map((tag) => `<span>${escapeHtml(tag)}</span>`).join("")}</div>
-          <button class="xiaohei-template-use" type="button">${active ? "正在使用" : "立即使用"}</button>
-        </div>
-      </article>
-    `;
-  }).join("");
+  const selected = options.find((item) => item.id === current) || options[0];
+  const meta = PURPOSE_TEMPLATE_META[selected.id] || {};
+  const tags = meta.tags || [selected.label, "Skill"];
+  els.templateGrid.innerHTML = `
+    <article class="xiaohei-template-selected" style="--template-accent:${escapeAttr(meta.accent || "#f0bd69")};--template-line:${escapeAttr(meta.line || "#71d7ff")}">
+      <div class="xiaohei-template-visual${meta.previewImage ? " has-preview" : ""}" data-template-visual="${escapeAttr(meta.visual || "xiaohei")}" aria-hidden="true">
+        ${meta.previewImage ? `<img class="xiaohei-template-preview" src="${escapeAttr(meta.previewImage)}" alt="" />` : ""}
+        <span class="xiaohei-template-mark"></span>
+        <span class="xiaohei-template-stroke stroke-a"></span>
+        <span class="xiaohei-template-stroke stroke-b"></span>
+      </div>
+      <div class="xiaohei-template-copy">
+        <span class="xiaohei-template-current">当前使用</span>
+        <strong>${escapeHtml(meta.name || selected.label)}</strong>
+        <p>${escapeHtml(meta.description || "调用小黑视频风格生成模块，自动完成分镜和素材包规划。")}</p>
+        <div class="xiaohei-template-meta">${tags.map((tag) => `<span>${escapeHtml(tag)}</span>`).join("")}</div>
+      </div>
+    </article>
+  `;
 }
 
 function renderMusicPresets(music, referenceAudio = {}) {

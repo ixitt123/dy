@@ -199,6 +199,24 @@ test("Xiaohei prompt plan refresh cache", async () => {
   }
 });
 
+test("Xiaohei compact template selector", async () => {
+  const [pageResponse, moduleResponse, cssResponse] = await Promise.all([
+    fetch(`${BASE}/xiaohei-illustrations.html`),
+    fetch(`${BASE}/modules/ian-xiaohei-app.js`),
+    fetch(`${BASE}/xiaohei-illustrations.css`),
+  ]);
+  const [page, source, css] = await Promise.all([pageResponse.text(), moduleResponse.text(), cssResponse.text()]);
+  if (!pageResponse.ok || !moduleResponse.ok || !cssResponse.ok
+    || !page.includes('class="xiaohei-template-picker"')
+    || !page.includes('id="purposeSelect"')
+    || !page.includes('id="xiaoheiTemplateGrid" class="xiaohei-template-detail"')
+    || !source.includes('class="xiaohei-template-selected"')
+    || !source.includes('class="xiaohei-template-current"')
+    || !css.includes('.xiaohei-template-selected')) {
+    throw new Error("Xiaohei compact template selector is incomplete");
+  }
+});
+
 test("Kinetic text production line", async () => {
   const [effectsResponse, pageResponse, moduleResponse, legacyResponse, packageSource, kineticServiceSource] = await Promise.all([
     fetch(`${BASE}/api/kinetic-text/effects`),

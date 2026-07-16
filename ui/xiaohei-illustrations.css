@@ -867,6 +867,55 @@ pre {
   overflow: hidden;
 }
 
+.xiaohei-template-picker {
+  display: grid;
+  grid-template-columns: auto minmax(220px, 300px);
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+
+.xiaohei-template-picker span {
+  color: #c7d2e7;
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.xiaohei-template-detail {
+  min-width: 0;
+}
+
+.xiaohei-template-selected {
+  display: grid;
+  grid-template-columns: minmax(220px, 38%) minmax(0, 1fr);
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid #2f3b54;
+  border-radius: 8px;
+  background: #0b111b;
+}
+
+.xiaohei-template-selected .xiaohei-template-visual {
+  min-height: 150px;
+}
+
+.xiaohei-template-selected .xiaohei-template-copy {
+  align-content: center;
+  padding: 14px;
+}
+
+.xiaohei-template-current {
+  width: fit-content;
+  padding: 3px 8px;
+  border: 1px solid rgba(114, 213, 183, .48);
+  border-radius: 999px;
+  background: rgba(114, 213, 183, .12);
+  color: #d8fff3;
+  font-size: 10px;
+  font-weight: 800;
+}
+
 .xiaohei-template-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(184px, 1fr));
@@ -1318,6 +1367,24 @@ pre {
 
   .xiaohei-template-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .xiaohei-template-library .xiaohei-card-head,
+  .xiaohei-template-picker {
+    align-items: stretch;
+    grid-template-columns: 1fr;
+  }
+
+  .xiaohei-template-library .xiaohei-card-head {
+    display: grid;
+  }
+
+  .xiaohei-template-selected {
+    grid-template-columns: 1fr;
+  }
+
+  .xiaohei-template-selected .xiaohei-template-visual {
+    min-height: 170px;
   }
 
   .music-style-row {

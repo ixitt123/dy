@@ -41,10 +41,6 @@
               <span>视频比例</span>
               <select id="aspectRatioSelect"></select>
             </label>
-            <label class="field xiaohei-hidden-purpose">
-              <span>当前模板</span>
-              <select id="purposeSelect"></select>
-            </label>
             <div id="audioPreviewPanel" class="audio-preview" hidden>
               <strong id="audioPreviewTitle">当前 TTS 音频</strong>
               <audio id="audioPreview" controls></audio>
@@ -74,8 +70,12 @@
                 <strong>小黑视觉模板 / Skill</strong>
                 <small id="xiaoheiTemplateSummary">选择一个模板，后台仍调用小黑分镜模块完成提示词、素材包和剪映草稿。</small>
               </div>
+              <label class="xiaohei-template-picker" for="purposeSelect">
+                <span>选择模板</span>
+                <select id="purposeSelect"></select>
+              </label>
             </div>
-            <div id="xiaoheiTemplateGrid" class="xiaohei-template-grid"></div>
+            <div id="xiaoheiTemplateGrid" class="xiaohei-template-detail"></div>
           </section>
 
           <div class="actions xiaohei-actions">
