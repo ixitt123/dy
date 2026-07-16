@@ -6,6 +6,7 @@ import { HttpBodyError, readJsonBody } from "../utils/http-body.js";
 import { createTtsProvider } from "../tts/providers/index.js";
 import { MINIMAX_PRESET_VOICE_IDS } from "../tts/providers/minimax.js";
 import { MINIMAX_MUSIC_MODEL, MINIMAX_MUSIC_PRESETS as MUSIC_PRESETS } from "../tts/minimax-music-presets.js";
+import { normalizeXiaoheiTransitionMode, renderXiaoheiVideo } from "../xiaohei-video-renderer.js";
 
 const STRUCTURE_TYPES = [
   "Workflow",
@@ -298,6 +299,14 @@ export function createIanXiaoheiRoutes({
   return async function handleIanXiaoheiRoutes(req, res, url) {
     if (!url.pathname.startsWith("/api/ian-xiaohei/")) return false;
     const route = url.pathname.replace("/api/ian-xiaohei/", "");
+
+    if (req.method === "GET" && route === "video-file") {
+      const batchDir = resolveBatchDir(outputRoot, url.searchParams.get("batch_id"));
+      const videoPath = batchDir ? path.join(batchDir, "final.mp4") : "";
+      if (!videoPath || !fs.existsSync(videoPath)) sendJson(res, 404, { ok: false, message: "成片 MP4 不存在，请先生成视频。" });
+      else sendXiaoheiFile(res, videoPath, { download: url.searchParams.get("download") === "1" });
+      return true;
+    }
 
     if (req.method === "GET" && route === "config") {
       const settings = getSettings() || {};
@@ -1055,6 +1064,72 @@ export function createIanXiaoheiRoutes({
           },
         });
         sendJson(res, 200, { ok: true, project, packageDir });
+      } catch (error) {
+        sendJson(res, error instanceof HttpBodyError ? error.statusCode : 400, {
+          ok: false,
+          message: error instanceof Error ? error.message : String(error),
+        });
+      }
+      return true;
+    }
+
+    if (req.method === "POST" && route === "render-video") {
+      try {
+        const body = await readJsonBody(req, { maxBytes: 2 * 1024 * 1024 });
+        const plan = body.plan && typeof body.plan === "object" ? body.plan : null;
+        const images = Array.isArray(body.images) ? body.images : [];
+        const projectId = String(body.project_id || plan?.projectId || "").trim();
+        if (!plan?.ttsJobId || !plan?.batchId || !projectId) throw new Error("缺少当前分镜计划或 TTS 绑定信息。");
+        if (String(plan.projectId || "") && String(plan.projectId) !== projectId) {
+          throw new Error("当前分镜计划不属于这个项目，请重新按音频分析分镜。");
+        }
+        const selectedJob = ttsService?.getSelectedProjectJob?.(projectId);
+        if (!selectedJob || Number(selectedJob.id) !== Number(plan.ttsJobId)) {
+          throw new Error("当前确认音频与分镜计划不一致，请重新发送 TTS 资产。");
+        }
+        const audioJob = ttsService?.getJob?.(Number(plan.ttsJobId)) || taskStore?.getTtsJob?.(Number(plan.ttsJobId));
+        if (!audioJob || audioJob.status !== "completed" || !audioJob.audio_path || !fs.existsSync(audioJob.audio_path)) {
+          throw new Error("已确认的 TTS 音频文件不存在。");
+        }
+        if (String(audioJob.alignment_status || audioJob.metadata?.alignment_status || "") !== "confirmed") {
+          throw new Error("字幕时间轴尚未确认，不能生成视频。");
+        }
+        const missing = (plan.shots || []).filter((shot) => !images.some((image) => Number(image.index) === Number(shot.index) && image.assetId));
+        if (missing.length) throw new Error(`缺少配图：${missing.map((shot) => `#${shot.index}`).join("、")}。`);
+        validateImageBindings({ plan, images, imageService });
+        const packageDir = writeXiaoheiMaterialPackage(outputRoot, plan, images, audioJob);
+        const scenes = buildXiaoheiScenes(plan, images);
+        const outputPath = path.join(packageDir, "final.mp4");
+        const transitionMode = normalizeXiaoheiTransitionMode(body.transition_mode);
+        const rendered = await renderXiaoheiVideo({
+          ffmpegPath,
+          scenes,
+          audioPath: audioJob.audio_path,
+          outputPath,
+          aspectRatio: plan.aspectRatio,
+          transitionMode,
+          fps: 30,
+        });
+        updateResultFile(packageDir, {
+          output: {
+            package_dir: packageDir,
+            final_video_path: outputPath,
+            transition_mode: transitionMode,
+            status: "completed",
+            created_at: new Date().toISOString(),
+          },
+        });
+        sendJson(res, 200, {
+          ok: true,
+          batchId: plan.batchId,
+          videoPath: outputPath,
+          videoUrl: `/api/ian-xiaohei/video-file?batch_id=${encodeURIComponent(plan.batchId)}`,
+          downloadUrl: `/api/ian-xiaohei/video-file?batch_id=${encodeURIComponent(plan.batchId)}&download=1`,
+          transitionMode,
+          width: rendered.width,
+          height: rendered.height,
+          fps: rendered.fps,
+        });
       } catch (error) {
         sendJson(res, error instanceof HttpBodyError ? error.statusCode : 400, {
           ok: false,
