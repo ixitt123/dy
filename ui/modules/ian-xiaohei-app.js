@@ -1785,9 +1785,10 @@ function drawVideoPreview() {
     context.scale(scale, scale);
     context.translate(-width / 2, -height / 2);
   }
-  drawImageCover(context, image, width, height);
+  drawImageFit(context, image, width, height, els.imageFit.value);
   context.restore();
-  drawPreviewSubtitle(context, shot.subtitleText || shot.sourceText || "", width, height, progress);
+  if (els.showSubtitles.checked) drawPreviewSubtitle(context, shot, width, height, localTime * 1000);
+  drawPreviewBookend(context, currentTime, shots, width, height);
 }
 
 function getPreviewImage(imageRecord) {
@@ -1809,34 +1810,101 @@ function drawImageCover(context, image, width, height) {
   context.drawImage(image, (width - drawWidth) / 2, (height - drawHeight) / 2, drawWidth, drawHeight);
 }
 
-function drawPreviewSubtitle(context, text, width, height, progress) {
-  const fontSize = Math.max(28, Math.round(height * (height > width ? 0.038 : 0.05)));
+function drawImageFit(context, image, width, height, mode) {
+  if (mode !== "contain") return drawImageCover(context, image, width, height);
+  const scale = Math.min(width / image.naturalWidth, height / image.naturalHeight);
+  const drawWidth = image.naturalWidth * scale;
+  const drawHeight = image.naturalHeight * scale;
+  context.drawImage(image, (width - drawWidth) / 2, (height - drawHeight) / 2, drawWidth, drawHeight);
+}
+
+function drawPreviewSubtitle(context, shot, width, height, elapsedMs) {
+  const text = shot.subtitleText || shot.sourceText || "";
+  const fontSize = Math.max(18, Math.round(Number(els.subtitleSize.value || 48) * height / 1080));
   const maxWidth = width * 0.84;
-  const lines = wrapCanvasText(context, String(text || ""), maxWidth, fontSize, 3);
+  const lines = wrapCanvasText(context, String(text || ""), maxWidth, fontSize, Number(els.subtitleLines.value || 2));
   const lineHeight = fontSize * 1.28;
   const blockHeight = lines.length * lineHeight;
   const yStart = height - Math.max(36, height * 0.065) - blockHeight;
-  const alpha = Math.min(1, progress * 2.4);
   context.save();
-  context.globalAlpha = alpha;
   const gradient = context.createLinearGradient(0, height * 0.62, 0, height);
   gradient.addColorStop(0, "rgba(0,0,0,0)");
   gradient.addColorStop(1, "rgba(0,0,0,.78)");
   context.fillStyle = gradient;
   context.fillRect(0, height * 0.58, width, height * 0.42);
-  context.textAlign = "center";
+  context.textAlign = "left";
   context.textBaseline = "middle";
   context.font = `900 ${fontSize}px "Microsoft YaHei", sans-serif`;
   context.lineJoin = "round";
+  const keywords = [...new Set([...(shot.keywords || []), ...(shot.labels || [])].map((item) => String(item || "").trim()).filter((item) => item.length >= 2 && item.length <= 6 && String(text).includes(item)))].slice(0, 2);
+  const pattern = keywords.length ? new RegExp(`(${keywords.sort((a, b) => b.length - a.length).map(escapeRegExp).join("|")})`, "g") : null;
   lines.forEach((line, index) => {
     const y = yStart + lineHeight * (index + 0.5);
-    context.strokeStyle = "rgba(12,15,22,.95)";
-    context.lineWidth = Math.max(4, fontSize * 0.09);
-    context.strokeText(line, width / 2, y, maxWidth);
-    context.fillStyle = "#ffffff";
-    context.fillText(line, width / 2, y, maxWidth);
+    const runs = pattern ? line.split(pattern).filter(Boolean) : [line];
+    const widths = runs.map((run) => context.measureText(run).width);
+    let cursor = (width - widths.reduce((sum, value) => sum + value, 0)) / 2;
+    let keywordIndex = 0;
+    runs.forEach((run, runIndex) => {
+      const highlighted = keywords.includes(run);
+      const delay = keywordIndex * 100;
+      const duration = 520 / Math.max(0.6, Number(els.subtitleSpeed.value || 100) / 100);
+      const p = highlighted ? Math.max(0, Math.min(1, (elapsedMs - delay) / duration)) : 1;
+      const eased = easeOut(p);
+      context.save();
+      context.globalAlpha = highlighted ? 0.25 + eased * 0.75 : 1;
+      if (highlighted) keywordIndex += 1;
+      context.strokeStyle = "rgba(12,15,22,.95)";
+      context.lineWidth = els.subtitleOutline.checked ? Math.max(2, fontSize * 0.09) : 0;
+      if (els.subtitleShadow.checked) { context.shadowColor = "rgba(0,0,0,.62)"; context.shadowBlur = fontSize * 0.16; }
+      if (context.lineWidth) context.strokeText(run, cursor, y);
+      context.fillStyle = highlighted ? els.keywordColor.value : els.subtitleColor.value;
+      context.fillText(run, cursor, y);
+      if (highlighted) {
+        context.strokeStyle = els.keywordColor.value;
+        context.lineWidth = Math.max(2, fontSize * 0.07);
+        context.beginPath();
+        context.moveTo(cursor, y + fontSize * 0.62);
+        context.lineTo(cursor + widths[runIndex] * eased, y + fontSize * 0.62);
+        context.stroke();
+      }
+      context.restore();
+      cursor += widths[runIndex];
+    });
   });
   context.restore();
+}
+
+function drawPreviewBookend(context, currentTime, shots, width, height) {
+  const settings = composeSettings();
+  const first = shots[0];
+  const last = shots[shots.length - 1];
+  const videoEnd = Number(state.plan?.audioDuration || last?.endTime || 0);
+  const introGap = Math.max(0, Number(first?.startTime || 0));
+  const introEnd = introGap >= 0.18 ? introGap : Math.min(Number(first?.endTime || 0), Math.max(0.45, Math.min(1.1, Number(first?.duration || 0) * 0.3)));
+  const trailing = Math.max(0, videoEnd - Number(last?.endTime || 0));
+  const outroStart = trailing >= 0.18 ? Number(last?.endTime || 0) : Math.max(0, videoEnd - Math.max(0.45, Math.min(1.1, Number(last?.duration || 0) * 0.3)));
+  const item = settings.intro.enabled && currentTime < introEnd
+    ? { ...settings.intro, start: 0, end: introEnd }
+    : settings.outro.enabled && currentTime >= outroStart
+      ? { ...settings.outro, start: outroStart, end: videoEnd }
+      : null;
+  if (!item?.text || item.end - item.start < 0.18) return;
+  const progress = Math.max(0, Math.min(1, (currentTime - item.start) / Math.min(0.28, (item.end - item.start) / 2)));
+  context.save();
+  context.globalAlpha = easeOut(progress);
+  context.textAlign = "center";
+  context.textBaseline = "middle";
+  context.font = `900 ${Math.max(28, Math.round(height * 0.065))}px "Microsoft YaHei", sans-serif`;
+  context.strokeStyle = "rgba(8,10,16,.92)";
+  context.lineWidth = Math.max(4, height * 0.008);
+  context.strokeText(item.text, width / 2, height * 0.45, width * 0.82);
+  context.fillStyle = els.subtitleColor.value;
+  context.fillText(item.text, width / 2, height * 0.45, width * 0.82);
+  context.restore();
+}
+
+function escapeRegExp(value) {
+  return String(value || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function wrapCanvasText(context, text, maxWidth, fontSize, maxLines) {
