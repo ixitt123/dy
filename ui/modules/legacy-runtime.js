@@ -3875,7 +3875,18 @@ function confirmedTtsAudioPayload(job = activeTtsRailJob) {
   };
 }
 
-function saveTtsAudioHandoff(target, payload) {
+const PRODUCTION_TTS_TARGETS = ["cs1-video", "xiaohei-video", "money-printer", "kinetic-text"];
+const SHARED_TTS_HANDOFF_KEY = "dy:handoff:shared:audio";
+
+function readStoredJson(key, fallback = null) {
+  try {
+    return JSON.parse(localStorage.getItem(key) || "null") ?? fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function writeTtsTargetHandoff(target, payload) {
   const key = `dy:handoff:${target}:audio`;
   localStorage.setItem(key, JSON.stringify(payload));
   localStorage.setItem(`video-factory-handoff:${target}`, JSON.stringify({
@@ -3887,16 +3898,60 @@ function saveTtsAudioHandoff(target, payload) {
     files: payload.files || [],
     sentAt: new Date().toISOString(),
   }));
+}
+
+function saveSharedTtsHandoff(payload = {}, { sourceTarget = "" } = {}) {
+  if (!payload?.id) return payload;
+  const sharedPayload = {
+    ...payload,
+    handoffType: payload.handoffType || "音频",
+    shared: true,
+    sharedUpdatedAt: new Date().toISOString(),
+  };
+  localStorage.setItem(SHARED_TTS_HANDOFF_KEY, JSON.stringify(sharedPayload));
   localStorage.setItem("video-factory-last-handoff", JSON.stringify({
-    target,
+    target: sourceTarget || "shared",
     source: "tts",
-    title: ttsHandoffTitle(payload),
-    text: payload.text || "",
-    tts: payload,
-    files: payload.files || [],
+    title: ttsHandoffTitle(sharedPayload),
+    text: sharedPayload.text || "",
+    tts: sharedPayload,
+    files: sharedPayload.files || [],
     sentAt: new Date().toISOString(),
   }));
+  for (const target of PRODUCTION_TTS_TARGETS) {
+    writeTtsTargetHandoff(target, sharedPayload);
+    markProductionTargetReceived(target, sharedPayload);
+  }
+  window.dispatchEvent(new CustomEvent("tts-shared-handoff-updated", {
+    detail: { payload: sharedPayload, sourceTarget },
+  }));
+  return sharedPayload;
 }
+
+function saveTtsAudioHandoff(target, payload) {
+  return saveSharedTtsHandoff(payload, { sourceTarget: target });
+}
+
+function restoreProductionTtsBadges() {
+  const shared = readStoredJson(SHARED_TTS_HANDOFF_KEY, null);
+  if (shared?.id) {
+    for (const target of PRODUCTION_TTS_TARGETS) markProductionTargetReceived(target, shared);
+    return;
+  }
+  for (const target of PRODUCTION_TTS_TARGETS) {
+    const payload = readStoredJson(`dy:handoff:${target}:audio`, null);
+    if (payload?.id) markProductionTargetReceived(target, payload);
+  }
+}
+
+window.sharedTtsHandoff = {
+  targets: PRODUCTION_TTS_TARGETS,
+  read: () => readStoredJson(SHARED_TTS_HANDOFF_KEY, null),
+  save: saveSharedTtsHandoff,
+  restoreBadges: restoreProductionTtsBadges,
+};
+
+setTimeout(restoreProductionTtsBadges, 0);
 
 function ttsHandoffTitle(payload = {}) {
   const platformTitles = payload.platform_titles || {};

@@ -1863,6 +1863,7 @@ async function saveProjectImmediately() {
   state.project = data.project;
   const index = state.projects.findIndex((item) => item.id === state.project.id);
   if (index >= 0) state.projects[index] = state.project;
+  await syncSharedTtsFromProject(state.project, { force: true });
   return state.project;
 }
 
@@ -2081,16 +2082,18 @@ function bindEvents() {
     if (!state.project) return;
     const button = $("#kineticAnalyze");
     button.disabled = true;
-    setProgress(5, "正在本地识别每句关键词（不调用 API）");
+    setProgress(5, "正在同步公共文案并重新识别关键词");
     try {
+      await saveProjectImmediately();
       const data = await postJson("/api/kinetic-text/analyze", {
         projectId: state.project.id,
         provider: $("#kineticTextProvider").value,
         keywordsOnly: true,
       });
       state.project = data.project;
+      await syncSharedTtsFromProject(state.project, { force: true });
       renderProject();
-      setProgress(100, data.aiUsed ? `关键词识别完成 · ${data.provider}` : "关键词识别完成 · 本地规则");
+      setProgress(100, data.aiUsed ? `重新识别完成 · ${data.provider}` : "重新识别完成 · 已同步公共文案");
     } catch (error) {
       setProgress(0, error.message);
     } finally {
