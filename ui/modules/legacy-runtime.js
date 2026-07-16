@@ -1661,6 +1661,16 @@ async function ensureProviderConfigured(providerId, { title = "API 配置", reas
     const label = scope === "tts"
       ? ttsProviderConfig?.label || rewriteProvider?.label || id
       : rewriteProvider?.label || ttsProviderConfig?.label || id;
+    const savedConfig = scope === "tts" ? ttsProviderConfig : rewriteProvider;
+    const hasSavedConfig = providerHasSavedConfig(savedConfig, scope);
+    if (hasSavedConfig && isProviderConnectivityError(localCheck.message)) {
+      const message = `${label} 已保存配置，但当前在线检测失败：${localCheck.message || "检测失败"}。先继续当前流程，若后续调用失败请检查网络、代理、额度或 API 服务状态。`;
+      if (typeof setTaskStatus === "function") setTaskStatus(message);
+      else if (typeof setDownloadStatus === "function") setDownloadStatus(message);
+      else console.warn(message);
+      await loadSettings().catch(() => {});
+      return true;
+    }
     const apiKey = window.prompt([
       `${title}需要配置：${label}`,
       reason,
@@ -1694,6 +1704,26 @@ async function ensureProviderConfigured(providerId, { title = "API 配置", reas
     }
     window.alert(`检测失败：${result.message || "请检查 API Key、模型或额度后重新填写。"}`);
   }
+}
+
+function providerHasSavedConfig(config, scope = "") {
+  if (!config || typeof config !== "object") return false;
+  if (scope === "tts") {
+    return Boolean(
+      String(config.apiKey || config.api_key || "").trim()
+      || String(config.baseUrl || config.base_url || "").trim()
+      || String(config.secret_id || "").trim()
+    );
+  }
+  return Boolean(
+    String(config.apiKey || config.api_key || "").trim()
+    && String(config.baseUrl || config.base_url || "").trim()
+    && String(config.model || config.default_model || "").trim()
+  );
+}
+
+function isProviderConnectivityError(message = "") {
+  return /fetch failed|network|timeout|timed out|econnreset|enotfound|eai_again|etimedout|socket|代理|网络|连接|超时/i.test(String(message || ""));
 }
 
 function setMomentsStatus(message, type = "") {
