@@ -1421,6 +1421,7 @@ async function pollJob(jobId, options = {}) {
       setProgress(100, `视频已保存：${videoPath}`);
       setRenderButtonBusy(false);
     }
+    if (typeof options.onComplete === "function") options.onComplete(job);
     return job;
   }
   if (job.status === "failed") {
