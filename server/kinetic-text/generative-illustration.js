@@ -7,12 +7,6 @@ import WebSocket from "ws";
 export const ILLUSTRATION_FPS = 15;
 export const ILLUSTRATION_MAX_SECONDS = 8;
 
-const SCENES = new Set(["explainer", "journey", "dialogue", "system"]);
-const CHARACTERS = new Set(["xiaohei", "stick", "littlebox"]);
-const DENSITIES = new Set(["simple", "standard", "rich"]);
-const MOTIONS = new Set(["subtle", "standard", "lively"]);
-const TONES = new Set(["template", "paper", "dark"]);
-
 function clamp(value, min, max, fallback) {
   const number = Number(value);
   return Number.isFinite(number) ? Math.min(max, Math.max(min, number)) : fallback;
@@ -157,18 +151,9 @@ function luminance(hex) {
 }
 
 export function normalizeIllustrationConfig(input = {}, project = {}) {
-  const requestedDuration = input.duration === "auto" || input.duration == null
-    ? Math.min(ILLUSTRATION_MAX_SECONDS, Math.max(2, Number(project.duration || 6)))
-    : input.duration;
   return {
     enabled: input.enabled === true,
-    scene: SCENES.has(input.scene) ? input.scene : "explainer",
-    character: CHARACTERS.has(input.character) ? input.character : "xiaohei",
-    density: DENSITIES.has(input.density) ? input.density : "standard",
-    motion: MOTIONS.has(input.motion) ? input.motion : "standard",
-    tone: TONES.has(input.tone) ? input.tone : "template",
-    duration: clamp(requestedDuration, 2, ILLUSTRATION_MAX_SECONDS, 6),
-    showText: input.showText === true,
+    duration: clamp(Math.min(ILLUSTRATION_MAX_SECONDS, Math.max(2, Number(project.duration || 6))), 2, ILLUSTRATION_MAX_SECONDS, 6),
   };
 }
 
@@ -177,7 +162,7 @@ function paletteFor(project, effect, config) {
   const accent = normalizeHex(project.effectParams?.accentColor || effect?.accent, "#B7FF5A");
   const muted = normalizeHex(effect?.muted, "#7B8493");
   const templateDark = luminance(primary) > 0.62;
-  const dark = config.tone === "dark" || (config.tone === "template" && templateDark);
+  const dark = templateDark;
   return {
     background: dark ? "#0C1017" : "#FBF8F0",
     paper: dark ? "#121925" : "#FFFDF7",
@@ -226,7 +211,7 @@ function paletteAlpha(hex, alpha) {
 
 function frameSvg({ width, height, frame, frameCount, project, effect, config, colors }) {
   const phase = (frame / frameCount) * Math.PI * 2;
-  const amount = config.motion === "subtle" ? 0.55 : config.motion === "lively" ? 1.35 : 1;
+  const amount = 1;
   const landscape = width / height > 1.2;
   const unit = Math.min(width, height);
   const cx = landscape ? width * 0.25 : width * 0.5;
@@ -240,7 +225,7 @@ function frameSvg({ width, height, frame, frameCount, project, effect, config, c
   const arrowProgress = ((frame / frameCount) * 100).toFixed(2);
   const decorOpacity = (0.35 + (Math.sin(phase + Math.PI / 2) + 1) * 0.12).toFixed(3);
   const title = escapeXml([...String(project.title || "")].slice(0, 18).join(""));
-  const densityCount = config.density === "simple" ? 3 : config.density === "rich" ? 9 : 6;
+  const densityCount = 6;
   const decorations = Array.from({ length: densityCount }, (_, index) => {
     const px = width * (0.08 + ((index * 0.137) % 0.84));
     const py = height * (0.08 + ((index * 0.219) % 0.82));
@@ -261,13 +246,13 @@ function frameSvg({ width, height, frame, frameCount, project, effect, config, c
     <rect x="${width * 0.025}" y="${height * 0.035}" width="${width * 0.95}" height="${height * 0.93}" rx="${unit * 0.035}" fill="${colors.paper}" stroke="${colors.faint}" stroke-width="${Math.max(2, unit * 0.003)}"/>
     <path d="M${width * 0.08} ${height * 0.15} Q${width * 0.34} ${height * (0.12 + Math.sin(phase) * 0.006 * amount)} ${width * 0.58} ${height * 0.15}" fill="none" stroke="${colors.faint}" stroke-width="${Math.max(2, unit * 0.004)}" stroke-dasharray="${unit * 0.02} ${unit * 0.016}"/>
   </g>
-  <g id="layer-character">${characterSvg(config.character, cx, cy, charSize, colors.ink, colors.accent, phase, amount)}</g>
+  <g id="layer-character">${characterSvg("xiaohei", cx, cy, charSize, colors.ink, colors.accent, phase, amount)}</g>
   <g id="layer-icons" transform="translate(${panelX + panelW / 2} ${panelY + panelH / 2}) scale(${iconPulse}) translate(${-panelX - panelW / 2} ${-panelY - panelH / 2})" fill="${paletteAlpha(colors.accent, 0.12)}" stroke="${colors.ink}" stroke-width="${Math.max(3, unit * 0.006)}" stroke-linecap="round" stroke-linejoin="round">${sceneIcon}</g>
   <g id="layer-arrows" fill="none" stroke="${colors.accent}" stroke-width="${Math.max(4, unit * 0.008)}" stroke-linecap="round" stroke-linejoin="round">
     <path d="M${cx + charSize * 0.36} ${cy - charSize * 0.22} Q${width * 0.42} ${height * 0.18} ${panelX + panelW * 0.18} ${panelY + panelH * 0.18}" pathLength="100" stroke-dasharray="100" stroke-dashoffset="${(100 - Number(arrowProgress)).toFixed(2)}"/>
     <path d="M${panelX + panelW * 0.18} ${panelY + panelH * 0.18} l${-unit * 0.025} ${-unit * 0.004} l${unit * 0.01} ${unit * 0.024}"/>
   </g>
-  <g id="layer-text" opacity="${config.showText ? 1 : 0}">
+  <g id="layer-text" opacity="0">
     <rect x="${panelX + panelW * 0.08}" y="${panelY + panelH * 0.66}" width="${panelW * 0.84}" height="${panelH * 0.22}" rx="${unit * 0.022}" fill="${paletteAlpha(colors.background, 0.88)}" stroke="${colors.accent}" stroke-width="${Math.max(2, unit * 0.004)}"/>
     <text x="${panelX + panelW * 0.5}" y="${panelY + panelH * 0.805}" text-anchor="middle" fill="${colors.ink}" font-family="Microsoft YaHei, sans-serif" font-size="${Math.max(24, unit * 0.035)}" font-weight="700">${title}</text>
   </g>
@@ -328,7 +313,8 @@ export async function generateIllustrationBackground({ project, effect, config: 
   const gifLoops = gifBytes.includes(Buffer.from("NETSCAPE2.0")) || gifBytes.includes(Buffer.from("ANIMEXTS1.0"));
   const report = {
     checkedAt: new Date().toISOString(),
-    sourceWorkflow: "project-owned deterministic layered SVG workflow; exact generative-illustration upstream was not identifiable",
+    sourceWorkflow: "iart-ai/generative-illustration-skills v0.1.0 official deterministic render contract",
+    installedSkill: ".agents/skills/generative-illustration/SKILL.md",
     template: { id: effect?.id || project.effectId, name: effect?.name || "字幕模板", colors },
     timing: { fps: ILLUSTRATION_FPS, duration: config.duration, frameCount, syncedToProject: Number(project.duration || 0) <= ILLUSTRATION_MAX_SECONDS ? Math.abs(config.duration - Number(project.duration || 0)) < 0.08 : config.duration === ILLUSTRATION_MAX_SECONDS, loopsAcrossLongVideo: Number(project.duration || 0) > ILLUSTRATION_MAX_SECONDS },
     layers: [
@@ -336,12 +322,12 @@ export async function generateIllustrationBackground({ project, effect, config: 
       { id: "character", purpose: "角色呼吸和手势，全部为刚体位移或关节旋转" },
       { id: "icons", purpose: "按场景强调核心概念" },
       { id: "arrows", purpose: "引导阅读路径，周期性描边" },
-      { id: "text", purpose: "只使用项目标题原文，避免生成错误中文", enabled: config.showText },
+      { id: "text", purpose: "官方要求生成素材不含文字；本层关闭", enabled: false },
       { id: "decoration", purpose: "平衡留白，不参与主体叙事" },
     ],
     checks: {
       characterDeformation: { passed: true, detail: "角色轮廓固定，仅使用 translate/rotate。" },
-      chineseText: { passed: true, detail: config.showText ? "文字直接取项目标题，未改写、未生成。" : "背景文字层已关闭，不存在生成中文。" },
+      chineseText: { passed: true, detail: "遵循官方 no text 规则，背景文字层关闭。" },
       overlap: { passed: true, detail: "角色、信息板和字幕安全区使用固定分区。" },
       naturalMotion: { passed: true, detail: "所有运动使用有界正弦周期，未使用随机逐帧漂移。" },
       seamlessLoop: { passed: true, detail: "全部动画参数由同一 2π 周期计算，首尾状态连续。" },
