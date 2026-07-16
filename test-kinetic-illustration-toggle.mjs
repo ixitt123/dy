@@ -10,9 +10,13 @@ const ui = fs.readFileSync(new URL("./ui/modules/kinetic-text.js", import.meta.u
 const service = fs.readFileSync(new URL("./server/kinetic-text/kinetic-text-service.js", import.meta.url), "utf8");
 
 assert.match(page, /id="kineticIllustrationEnabled"/);
-for (const id of ["Scene", "Character", "Density", "Motion", "Tone", "Duration"]) {
-  assert.match(page, new RegExp(`<select id="kineticIllustration${id}"`), `${id} 应使用下拉参数`);
+for (const id of ["Scene", "Character", "Density", "Motion", "Tone", "Duration", "ShowText"]) {
+  assert.doesNotMatch(page, new RegExp(`kineticIllustration${id}`), `${id} 不是官方参数，不应显示或保存`);
+  assert.doesNotMatch(ui, new RegExp(`kineticIllustration${id}`), `${id} 不是官方参数，不应残留绑定逻辑`);
 }
+assert.match(page, /Generative Illustration 动态背景/);
+assert.match(page, /按官方工作流生成并应用/);
+assert.match(ui, /官方 Generative Illustration 分层与确定性渲染流程/);
 assert.match(ui, /async function setIllustrationEnabled/);
 assert.match(ui, /动态背景特效已关闭，已恢复之前的背景/);
 assert.match(service, /background: result\.config\.enabled \? generatedBackground : project\.background/);

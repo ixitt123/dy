@@ -32,7 +32,11 @@ package-lock.json
 ui-server.pid
 ui-server.url
 .cache-tools/
-.agents/
+.agents/*
+!.agents/skills/
+.agents/skills/*
+!.agents/skills/generative-illustration/
+!.agents/skills/generative-illustration/**
 
 *.log
 *.tmp
