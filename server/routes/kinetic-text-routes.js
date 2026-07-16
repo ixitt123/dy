@@ -13,12 +13,14 @@ function contentType(filePath) {
   if ([".jpg", ".jpeg"].includes(extension)) return "image/jpeg";
   if (extension === ".png") return "image/png";
   if (extension === ".webp") return "image/webp";
+  if (extension === ".gif") return "image/gif";
   if (extension === ".mp3") return "audio/mpeg";
   if (extension === ".wav") return "audio/wav";
   if (extension === ".m4a") return "audio/mp4";
   if (extension === ".zip") return "application/zip";
   if (extension === ".srt") return "application/x-subrip; charset=utf-8";
   if (extension === ".txt") return "text/plain; charset=utf-8";
+  if (extension === ".json") return "application/json; charset=utf-8";
   return "application/octet-stream";
 }
 
@@ -147,6 +149,11 @@ export function createKineticTextRoutes({
       if (req.method === "POST" && route === "render") {
         const body = await readJsonBody(req, { maxBytes: 256 * 1024 });
         sendJson(res, 202, { ok: true, job: service.startRender(body.projectId) });
+        return true;
+      }
+      if (req.method === "POST" && route === "illustration") {
+        const body = await readJsonBody(req, { maxBytes: 256 * 1024 });
+        sendJson(res, 202, { ok: true, job: service.startIllustration(body.projectId, body.config || {}) });
         return true;
       }
       sendJson(res, 404, { ok: false, message: "Unknown kinetic text API" });
