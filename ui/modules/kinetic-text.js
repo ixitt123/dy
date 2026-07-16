@@ -1434,32 +1434,13 @@ function renderReceivedFiles() {
 function illustrationConfigFromForm() {
   return {
     enabled: $("#kineticIllustrationEnabled")?.checked === true,
-    scene: $("#kineticIllustrationScene")?.value || "explainer",
-    character: $("#kineticIllustrationCharacter")?.value || "xiaohei",
-    density: $("#kineticIllustrationDensity")?.value || "standard",
-    motion: $("#kineticIllustrationMotion")?.value || "standard",
-    tone: $("#kineticIllustrationTone")?.value || "template",
-    duration: $("#kineticIllustrationDuration")?.value || "auto",
-    showText: $("#kineticIllustrationShowText")?.checked === true,
   };
 }
 
 function renderIllustrationSettings() {
   const config = state.project?.dynamicIllustration?.config || readPreferences().illustration || {};
-  const setValue = (selector, value, fallback) => {
-    const control = $(selector);
-    if (control) control.value = String(value ?? fallback);
-  };
-  setValue("#kineticIllustrationScene", config.scene, "explainer");
-  setValue("#kineticIllustrationCharacter", config.character, "xiaohei");
-  setValue("#kineticIllustrationDensity", config.density, "standard");
-  setValue("#kineticIllustrationMotion", config.motion, "standard");
-  setValue("#kineticIllustrationTone", config.tone, "template");
-  setValue("#kineticIllustrationDuration", [4, 6, 8].includes(Number(config.duration)) ? Number(config.duration) : "auto", "auto");
   const enabled = $("#kineticIllustrationEnabled");
   if (enabled) enabled.checked = config.enabled === true;
-  const showText = $("#kineticIllustrationShowText");
-  if (showText) showText.checked = config.showText === true;
   const outputs = state.project?.dynamicIllustration?.outputs || {};
   const container = $("#kineticIllustrationOutputs");
   if (!container) return;
@@ -1521,8 +1502,8 @@ async function generateIllustration() {
   const config = illustrationConfigFromForm();
   savePreferences({ illustration: config });
   button.disabled = true;
-  status.textContent = "正在按当前字幕模板生成分层手绘帧…";
-  setProgress(2, "准备手绘循环背景");
+  status.textContent = "正在执行官方 Generative Illustration 分层与确定性渲染流程…";
+  setProgress(2, "准备官方动态插画工作流");
   try {
     const data = await postJson("/api/kinetic-text/illustration", { projectId: state.project.id, config });
     pollJob(data.job.id, {
