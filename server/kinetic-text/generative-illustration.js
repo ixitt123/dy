@@ -6,6 +6,7 @@ import WebSocket from "ws";
 
 export const ILLUSTRATION_FPS = 15;
 export const ILLUSTRATION_MAX_SECONDS = 8;
+export const ILLUSTRATION_PRESETS = new Set(["prompt-garden", "copy-concept"]);
 
 function clamp(value, min, max, fallback) {
   const number = Number(value);
@@ -144,6 +145,7 @@ function luminance(hex) {
 export function normalizeIllustrationConfig(input = {}, project = {}) {
   return {
     enabled: input.enabled === true,
+    presetId: ILLUSTRATION_PRESETS.has(input.presetId) ? input.presetId : "prompt-garden",
     duration: clamp(Math.min(ILLUSTRATION_MAX_SECONDS, Math.max(2, Number(project.duration || 6))), 2, ILLUSTRATION_MAX_SECONDS, 6),
   };
 }
