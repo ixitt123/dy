@@ -924,6 +924,30 @@ function activeBookendAt(project, currentTime) {
   return null;
 }
 
+function drawOverlayDragGuide(ctx) {
+  const target = state.draggingOverlay?.target || state.hoverOverlay;
+  const region = state.overlayHitRegions.find((item) => item.target === target);
+  if (!region) return;
+  const labels = { bottom: "拖动底部关键词字幕", intro: "拖动开头文字", outro: "拖动结尾文字" };
+  ctx.save();
+  ctx.strokeStyle = "rgba(105,231,255,.95)";
+  ctx.fillStyle = "rgba(8,13,22,.78)";
+  ctx.lineWidth = 2;
+  ctx.setLineDash([7, 5]);
+  ctx.strokeRect(region.x, region.y, region.width, region.height);
+  ctx.setLineDash([]);
+  ctx.font = "600 13px Microsoft YaHei";
+  const label = labels[target] || "拖动定位";
+  const labelWidth = ctx.measureText(label).width + 16;
+  const labelY = Math.max(2, region.y - 25);
+  ctx.fillRect(region.x, labelY, labelWidth, 22);
+  ctx.fillStyle = "#69E7FF";
+  ctx.textAlign = "left";
+  ctx.textBaseline = "middle";
+  ctx.fillText(label, region.x + 8, labelY + 11);
+  ctx.restore();
+}
+
 function drawBookendPreview(ctx, bookend, template, params, spec) {
   const width = ctx.canvas.width;
   const height = ctx.canvas.height;
