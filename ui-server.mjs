@@ -3332,6 +3332,13 @@ function isModelContentInspectionError(error) {
   return /DataInspectionFailed|inappropriate content|content inspection|内容审核|数据检查|输出内容/i.test(errorMessage(error));
 }
 
+const TRANSCRIPT_CORRECTION_TIMEOUT_MS = 12_000;
+const TRANSCRIPT_CORRECTION_MODEL_MAX_CHARS = 12_000;
+
+function isTransientTranscriptCorrectionError(error) {
+  return /fetch failed|UND_ERR_SOCKET|network|timeout|timed out|econnreset|enotfound|eai_again|etimedout|socket|terminated|代理|网络|连接|超时/i.test(errorMessage(error));
+}
+
 function locallyCorrectTranscriptText(value) {
   return String(value || "")
     .replace(/\r/g, "\n")
@@ -3349,6 +3356,9 @@ function locallyCorrectTranscriptText(value) {
 async function correctTranscriptWithRewriteModel(rawText, videoInfo = {}, signal) {
   const text = String(rawText || "").trim();
   if (!text) throw new Error("没有可校正的文案");
+  if (text.length > TRANSCRIPT_CORRECTION_MODEL_MAX_CHARS) {
+    return locallyCorrectTranscriptText(text);
+  }
   const provider = await getRewriteProvider("");
   try {
     const content = await chatCompletion(provider, [
@@ -3370,19 +3380,21 @@ async function correctTranscriptWithRewriteModel(rawText, videoInfo = {}, signal
           `标题：${videoInfo.title || ""}`,
           `平台：${videoInfo.extractor || videoInfo.platform || ""}`,
           "待校正文案：",
-          text.slice(0, 20000),
+          text,
         ].join("\n"),
       },
     ], signal, {
       temperature: 0.1,
       requestName: "文案校正",
       maxTokens: Math.min(12000, Math.max(2000, Math.ceil(text.length * 1.8))),
+      timeoutMs: TRANSCRIPT_CORRECTION_TIMEOUT_MS,
     });
     const corrected = cleanModelText(content);
     if (!corrected) throw new Error("文案校正没有返回结果");
     return corrected;
   } catch (error) {
-    if (!isModelContentInspectionError(error)) throw error;
+    if (isPauseError(error)) throw error;
+    if (!isModelContentInspectionError(error) && !isTransientTranscriptCorrectionError(error)) throw error;
     return locallyCorrectTranscriptText(text);
   }
 }
