@@ -1646,6 +1646,91 @@ async function refreshProjects(preferredId = "") {
   renderProject();
 }
 
+function textFromSegments(segments = []) {
+  return (segments || []).map((segment) => String(segment.text || "").trim()).filter(Boolean).join("");
+}
+
+function timelineFromSegments(segments = []) {
+  return (segments || []).map((segment, index) => ({
+    id: String(segment.id || `segment-${index + 1}`),
+    index: index + 1,
+    start: Number(segment.start || 0),
+    end: Number(segment.end || 0),
+    text: String(segment.text || "").trim(),
+    words: Array.isArray(segment.words) ? segment.words : [],
+  })).filter((segment) => segment.text && segment.end > segment.start);
+}
+
+function ttsPayloadFromProject(project = {}, job = {}) {
+  const timeline = timelineFromSegments(project.segments || []);
+  const text = textFromSegments(project.segments || []) || String(project.text || "");
+  const id = Number(project.ttsJobId || job.id || 0);
+  return {
+    ...job,
+    id,
+    title: project.title || job.title || `配音 #${id || ""}`.trim(),
+    text,
+    final_text: text,
+    audio_url: project.audioUrl || job.audio_url || "",
+    audio_path: project.audioPath || job.audio_path || "",
+    script_url: job.script_url || (id ? `/api/tts/script?id=${encodeURIComponent(id)}` : ""),
+    script_path: job.script_path || project.scriptPath || "",
+    subtitle_url: job.subtitle_url || (id ? `/api/tts/subtitle?id=${encodeURIComponent(id)}` : ""),
+    subtitle_path: job.subtitle_path || project.subtitlePath || "",
+    timestamped_text_url: job.timestamped_text_url || (id ? `/api/tts/timestamped-text?id=${encodeURIComponent(id)}` : ""),
+    timestamped_text_path: job.timestamped_text_path || project.timestampedTextPath || "",
+    timed_subtitle_url: job.timestamped_text_url || job.subtitle_url || (id ? `/api/tts/timestamped-text?id=${encodeURIComponent(id)}` : ""),
+    timed_subtitle_path: job.timestamped_text_path || job.subtitle_path || project.timestampedTextPath || project.subtitlePath || "",
+    sentence_timeline: timeline,
+    subtitle_timeline: timeline,
+    word_timeline: Array.isArray(project.wordTimeline) ? project.wordTimeline : [],
+    duration: Number(project.duration || job.duration || job.audio_duration || 0),
+    audio_duration: Number(project.duration || job.audio_duration || job.duration || 0),
+    alignment_status: "confirmed",
+    alignment_confirmed_at: job.alignment_confirmed_at || new Date().toISOString(),
+    source: "kinetic-text",
+    synced_from: "kinetic-text",
+    sentAt: new Date().toISOString(),
+  };
+}
+
+let lastSharedTtsSyncSignature = "";
+
+async function syncSharedTtsFromProject(project = state.project, { force = false } = {}) {
+  const ttsJobId = Number(project?.ttsJobId || 0);
+  if (!ttsJobId) return null;
+  const timeline = timelineFromSegments(project.segments || []);
+  const text = textFromSegments(project.segments || []) || String(project.text || "");
+  if (!text || !timeline.length) return null;
+  const signature = JSON.stringify({
+    id: ttsJobId,
+    text,
+    timeline: timeline.map(({ start, end, text: rowText }) => [Number(start).toFixed(3), Number(end).toFixed(3), rowText]),
+  });
+  if (!force && signature === lastSharedTtsSyncSignature) return null;
+  const basePayload = ttsPayloadFromProject(project);
+  window.sharedTtsHandoff?.save?.(basePayload, { sourceTarget: "kinetic-text" });
+  try {
+    const data = await postJson("/api/tts/alignment/sync", {
+      id: ttsJobId,
+      title: project.title || "",
+      text,
+      sentenceTimeline: timeline,
+      subtitleTimeline: timeline,
+      wordTimeline: Array.isArray(project.wordTimeline) ? project.wordTimeline : [],
+      duration: Number(project.duration || 0),
+      source: "kinetic-text",
+    });
+    const payload = ttsPayloadFromProject(project, data.job || {});
+    window.sharedTtsHandoff?.save?.(payload, { sourceTarget: "kinetic-text" });
+    lastSharedTtsSyncSignature = signature;
+    return payload;
+  } catch (error) {
+    console.warn("同步公共 TTS 文案失败", error);
+    return basePayload;
+  }
+}
+
 function scheduleSave(changes = {}) {
   if (!state.project) return;
   state.project = {
@@ -1675,6 +1760,7 @@ function scheduleSave(changes = {}) {
       state.project = data.project;
       const index = state.projects.findIndex((item) => item.id === state.project.id);
       if (index >= 0) state.projects[index] = state.project;
+      await syncSharedTtsFromProject(state.project);
       renderProjects();
       renderTimelineRuleStatus();
     } catch (error) {
@@ -1694,9 +1780,25 @@ function applyTimelineInput(input) {
     if (field === "lineBreaks") return { ...segment, lineBreaks: [...new Set(input.value.split(/[,，、\s]+/).map(Number).filter((value) => Number.isInteger(value) && value > 0 && value < String(segment.text || "").length))].sort((a, b) => a - b) };
     if (["x", "y", "primaryColor"].includes(field)) return { ...segment, overrides: { ...(segment.overrides || {}), [field]: ["x", "y"].includes(field) ? Number(input.value) : input.value } };
     if (["start", "end"].includes(field)) return { ...segment, [field]: Number(input.value) };
+    if (field === "text") {
+      const text = input.value;
+      return {
+        ...segment,
+        text,
+        lineBreaks: (segment.lineBreaks || []).filter((value) => Number(value) > 0 && Number(value) < text.length),
+      };
+    }
     return { ...segment, [field]: input.value };
   });
-  scheduleSave({ segments, duration: Math.max(...segments.map((item) => Number(item.end || 0)), state.project.duration || 0) });
+  const duration = Math.max(0, ...segments.map((item) => Number(item.end || 0)), state.project.duration || 0);
+  const timeline = timelineFromSegments(segments);
+  scheduleSave({
+    segments,
+    text: textFromSegments(segments),
+    sentenceTimeline: timeline,
+    subtitleTimeline: timeline,
+    duration,
+  });
 }
 
 function fileToDataUrl(file) {
