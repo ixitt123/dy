@@ -262,12 +262,18 @@ async function probeJson(ffprobePath, filePath) {
   return JSON.parse(output || "{}");
 }
 
-export async function generateIllustrationBackground({ project, effect, config: inputConfig, targetDir, ffmpegPath, ffprobePath, onProgress = () => {} }) {
+export async function generateIllustrationBackground({ project, effect, config: inputConfig, assets = {}, targetDir, ffmpegPath, ffprobePath, onProgress = () => {} }) {
   if (!ffmpegPath || !ffprobePath) throw new Error("FFmpeg/FFprobe 未配置，无法生成动态背景。");
   const config = normalizeIllustrationConfig(inputConfig, project);
   const sizes = project.aspectRatio === "16:9" ? { width: 1920, height: 1080 } : project.aspectRatio === "1:1" ? { width: 1080, height: 1080 } : { width: 1080, height: 1920 };
   const frameCount = Math.max(30, Math.round(config.duration * ILLUSTRATION_FPS));
   const colors = paletteFor(project, effect, config);
+  const sourceAssetPaths = Array.isArray(assets.paths) ? assets.paths.filter((item) => item && fs.existsSync(item)) : [];
+  if (sourceAssetPaths.length < (config.presetId === "prompt-garden" ? 2 : 3)) {
+    throw new Error("当前预设缺少对应的独立分层图片，请先调用图片 API 或上传全部素材。");
+  }
+  onProgress(27, "移除独立元素白色背景");
+  const assetUris = await prepareTransparentAssets(sourceAssetPaths, targetDir, ffmpegPath);
   const framesDir = path.join(targetDir, "frames");
   const pngFramesDir = path.join(targetDir, "png-frames");
   const keyframesDir = path.join(targetDir, "keyframes");
@@ -275,7 +281,7 @@ export async function generateIllustrationBackground({ project, effect, config: 
   fs.mkdirSync(keyframesDir, { recursive: true });
   onProgress(8, "生成分层手绘帧");
   for (let frame = 0; frame < frameCount; frame += 1) {
-    const svg = frameSvg({ width: sizes.width, height: sizes.height, frame, frameCount, project, effect, config, colors });
+    const svg = frameSvg({ width: sizes.width, height: sizes.height, frame, frameCount, project, effect, config, colors, assetUris });
     fs.writeFileSync(path.join(framesDir, `frame-${String(frame).padStart(3, "0")}.svg`), svg, "utf8");
   }
   await rasterizeSvgFrames({
@@ -314,9 +320,7 @@ export async function generateIllustrationBackground({ project, effect, config: 
     timing: { fps: ILLUSTRATION_FPS, duration: config.duration, frameCount, syncedToProject: Number(project.duration || 0) <= ILLUSTRATION_MAX_SECONDS ? Math.abs(config.duration - Number(project.duration || 0)) < 0.08 : config.duration === ILLUSTRATION_MAX_SECONDS, loopsAcrossLongVideo: Number(project.duration || 0) > ILLUSTRATION_MAX_SECONDS },
     layers: [
       { id: "background", purpose: "纸张与构图基底，仅做轻微呼吸" },
-      { id: "hero", purpose: "代码原生核心元素，使用确定性位移与缩放" },
-      { id: "icons", purpose: "独立概念元素，按时间函数整体运动" },
-      { id: "arrows", purpose: "引导阅读路径，周期性描边" },
+      ...assets.metadata.map((item, index) => ({ id: `asset-${index + 1}`, purpose: "图片 API 生成的独立无文字元素", provider: item.provider, model: item.model, prompt: item.prompt })),
       { id: "decoration", purpose: "平衡留白，不参与主体叙事" },
     ],
     checks: {
