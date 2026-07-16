@@ -28,6 +28,7 @@ const PROMPT_PLAN_CACHE_VERSION = 2;
 const PROMPT_PLAN_CACHE_PREFIX = "ian-xiaohei-prompt-plan";
 const PROMPT_PLAN_LATEST_KEY = `${PROMPT_PLAN_CACHE_PREFIX}:latest`;
 const PURPOSE_STORAGE_KEY = "ian-xiaohei-selected-purpose";
+const COMPOSE_SETTINGS_KEY = "ian-xiaohei-compose-settings-v1";
 
 const PURPOSE_TEMPLATE_META = {
   article: {
@@ -1997,8 +1998,6 @@ function setBusy(busy) {
     updateVideoDownloadState();
   }
 }
-
-const COMPOSE_SETTINGS_KEY = "ian-xiaohei-compose-settings-v1";
 
 function composeSettings() {
   return {
