@@ -1274,6 +1274,98 @@ function playPreview() {
   startPreviewPlayback();
 }
 
+function canvasPoint(event) {
+  const canvas = $("#kineticPreviewCanvas");
+  const rect = canvas.getBoundingClientRect();
+  return {
+    x: (event.clientX - rect.left) * canvas.width / Math.max(1, rect.width),
+    y: (event.clientY - rect.top) * canvas.height / Math.max(1, rect.height),
+  };
+}
+
+function overlayAtPoint(point) {
+  return [...state.overlayHitRegions].reverse().find((region) => (
+    point.x >= region.x && point.x <= region.x + region.width
+    && point.y >= region.y && point.y <= region.y + region.height
+  )) || null;
+}
+
+function setOverlayPosition(target, xPercent, yPercent) {
+  if (!state.project) return;
+  const position = {
+    x: Math.max(5, Math.min(95, Number(xPercent))),
+    y: Math.max(8, Math.min(target === "bottom" ? 97 : 92, Number(yPercent))),
+  };
+  if (target === "bottom") {
+    state.project.bottomSubtitlePosition = position;
+    return;
+  }
+  const item = state.project.bookends?.[target];
+  if (item) item.position = position;
+}
+
+function beginOverlayDrag(event) {
+  if (!state.project || event.button !== 0) return;
+  const canvas = event.currentTarget;
+  const point = canvasPoint(event);
+  const region = overlayAtPoint(point);
+  if (!region) return;
+  if (state.playing) playPreview();
+  state.draggingOverlay = {
+    target: region.target,
+    pointerId: event.pointerId,
+    offsetX: point.x - region.anchorX,
+    offsetY: point.y - region.anchorY,
+    startX: point.x,
+    startY: point.y,
+    moved: false,
+  };
+  state.hoverOverlay = region.target;
+  canvas.style.cursor = "grabbing";
+  try { canvas.setPointerCapture(event.pointerId); } catch {}
+  event.preventDefault();
+  drawPreview();
+}
+
+function moveOverlayDrag(event) {
+  const canvas = event.currentTarget;
+  const point = canvasPoint(event);
+  if (!state.draggingOverlay) {
+    const region = overlayAtPoint(point);
+    const target = region?.target || "";
+    canvas.style.cursor = target ? "grab" : "pointer";
+    if (state.hoverOverlay !== target) {
+      state.hoverOverlay = target;
+      drawPreview();
+    }
+    return;
+  }
+  const drag = state.draggingOverlay;
+  drag.moved ||= Math.hypot(point.x - drag.startX, point.y - drag.startY) > 3;
+  const anchorX = point.x - drag.offsetX;
+  const anchorY = point.y - drag.offsetY;
+  setOverlayPosition(drag.target, anchorX / canvas.width * 100, anchorY / canvas.height * 100);
+  event.preventDefault();
+  drawPreview();
+}
+
+function finishOverlayDrag(event) {
+  const canvas = event.currentTarget;
+  const drag = state.draggingOverlay;
+  if (!drag) return;
+  try { canvas.releasePointerCapture(drag.pointerId); } catch {}
+  state.draggingOverlay = null;
+  state.suppressCanvasClick = drag.moved;
+  canvas.style.cursor = state.hoverOverlay ? "grab" : "pointer";
+  if (drag.target === "bottom") {
+    scheduleSave({ bottomSubtitlePosition: { ...state.project.bottomSubtitlePosition } });
+  } else {
+    const item = state.project.bookends?.[drag.target];
+    scheduleSave({ bookends: { [drag.target]: { ...item, position: { ...item.position } } } });
+  }
+  event.preventDefault();
+}
+
 function beginPreviewSeek(event) {
   if (!state.project || state.seeking) return;
   try {
