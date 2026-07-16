@@ -1889,13 +1889,22 @@ async function copyAllPrompts() {
     return;
   }
   try {
-    await navigator.clipboard.writeText(state.promptsText);
+    await navigator.clipboard.writeText(promptClipboardText());
     setStatus("已复制提示词", "提示词已经复制。", 100);
     setButtonFeedback(els.copyPrompts, "success", "已复制");
   } catch (error) {
     setStatus("复制失败", error.message || String(error), 0, true);
     setButtonFeedback(els.copyPrompts, "error", "复制失败");
   }
+}
+
+function promptClipboardText() {
+  const promptText = String(state.promptsText || "").trim();
+  const plannedCount = Number(state.plan?.shots?.length || 0);
+  const parsedCount = (promptText.match(/^#\d+/gm) || []).length;
+  const totalCount = plannedCount > 0 ? plannedCount : parsedCount;
+  const imageCount = Math.min(Math.max(totalCount || 1, 1), 10);
+  return `${promptText}\n\n请按上述提示词生成${imageCount}张独立的图片素材`;
 }
 
 function syncVideoPreview() {
