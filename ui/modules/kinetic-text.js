@@ -1434,6 +1434,7 @@ function renderReceivedFiles() {
 function illustrationConfigFromForm() {
   return {
     enabled: $("#kineticIllustrationEnabled")?.checked === true,
+    presetId: $("#kineticIllustrationPreset")?.value || "prompt-garden",
   };
 }
 
@@ -1441,7 +1442,12 @@ function renderIllustrationSettings() {
   const config = state.project?.dynamicIllustration?.config || readPreferences().illustration || {};
   const enabled = $("#kineticIllustrationEnabled");
   if (enabled) enabled.checked = config.enabled === true;
-  const outputs = state.project?.dynamicIllustration?.outputs || {};
+  const presetId = config.presetId || "prompt-garden";
+  const preset = $("#kineticIllustrationPreset");
+  if (preset) preset.value = presetId;
+  const outputs = state.project?.dynamicIllustration?.presets?.[presetId]?.outputs
+    || state.project?.dynamicIllustration?.outputs
+    || {};
   const container = $("#kineticIllustrationOutputs");
   if (!container) return;
   container.hidden = !outputs.mp4;
@@ -1495,17 +1501,19 @@ async function setIllustrationEnabled(enabled) {
   }
 }
 
-async function generateIllustration() {
+async function generateIllustration(force = false) {
   if (!state.project) return;
   const button = $("#kineticGenerateIllustration");
   const status = $("#kineticIllustrationStatus");
   const config = illustrationConfigFromForm();
   savePreferences({ illustration: config });
   button.disabled = true;
-  status.textContent = "正在执行官方 Generative Illustration 分层与确定性渲染流程…";
+  status.textContent = force
+    ? "正在重新生成当前预设的独立分层素材…"
+    : "正在读取缓存；首次使用时按官方工作流生成分层素材…";
   setProgress(2, "准备官方动态插画工作流");
   try {
-    const data = await postJson("/api/kinetic-text/illustration", { projectId: state.project.id, config });
+    const data = await postJson("/api/kinetic-text/illustration", { projectId: state.project.id, config, force });
     pollJob(data.job.id, {
       onComplete: () => {
         button.disabled = false;
@@ -1873,7 +1881,13 @@ function bindEvents() {
       $("#kineticIllustrationStatus").textContent = error.message;
     });
   });
-  $("#kineticGenerateIllustration").addEventListener("click", () => generateIllustration());
+  $("#kineticIllustrationPreset").addEventListener("change", () => {
+    const config = illustrationConfigFromForm();
+    savePreferences({ illustration: config });
+    renderIllustrationSettings();
+  });
+  $("#kineticGenerateIllustration").addEventListener("click", () => generateIllustration(false));
+  $("#kineticRegenerateIllustration").addEventListener("click", () => generateIllustration(true));
   $("#kineticAudioSource").addEventListener("change", (event) => {
     savePreferences({ audioSource: event.target.value });
     scheduleSave({ audioMix: { source: event.target.value } });

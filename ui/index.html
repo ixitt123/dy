@@ -1664,7 +1664,9 @@
               <section class="kinetic-card kinetic-illustration-config" data-parameter-panel="kinetic-illustration">
                 <div class="kinetic-card-head"><strong>Generative Illustration 动态背景</strong><span>官方工作流</span></div>
                 <label class="kinetic-check"><input id="kineticIllustrationEnabled" type="checkbox" /><span>启用动态背景</span></label>
-                <button id="kineticGenerateIllustration" class="primary" type="button">按官方工作流生成并应用</button>
+                <label><span>背景预设</span><select id="kineticIllustrationPreset"><option value="prompt-garden">官方原版 · Prompt Garden</option><option value="copy-concept">当前文案 · 核心概念</option></select></label>
+                <button id="kineticGenerateIllustration" class="primary" type="button">生成或应用当前预设</button>
+                <button id="kineticRegenerateIllustration" class="ghost" type="button">重新生成当前预设</button>
                 <small id="kineticIllustrationStatus">独立元素分层、确定性逐帧渲染，并输出 MP4、GIF 和全时间轴检查。</small>
                 <div id="kineticIllustrationOutputs" class="kinetic-illustration-outputs" hidden></div>
               </section>
