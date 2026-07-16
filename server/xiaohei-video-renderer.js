@@ -15,16 +15,18 @@ export function xiaoheiVideoResolution(aspectRatio) {
   return { width: 1920, height: 1080 };
 }
 
-export function buildXiaoheiVideoFilter({ scenes, width, height, fps = 30, transitionMode = "smart", assPath }) {
+export function buildXiaoheiVideoFilter({ scenes, width, height, fps = 30, transitionMode = "smart", assPath, imageFit = "cover" }) {
   const mode = normalizeXiaoheiTransitionMode(transitionMode);
   const transitionDuration = mode === "none" ? 0 : Math.min(0.42, ...scenes.map((scene) => Math.max(0.12, sceneDuration(scene) * 0.22)));
   const filters = [];
 
   scenes.forEach((scene, index) => {
     const duration = sceneDuration(scene) + (index < scenes.length - 1 ? transitionDuration : 0);
+    const fit = imageFit === "contain"
+      ? `scale=${width}:${height}:force_original_aspect_ratio=decrease,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2:black`
+      : `scale=${width}:${height}:force_original_aspect_ratio=increase,crop=${width}:${height}`;
     filters.push(
-      `[${index}:v]scale=${width}:${height}:force_original_aspect_ratio=increase,` +
-      `crop=${width}:${height},setsar=1,fps=${fps},trim=duration=${duration.toFixed(3)},` +
+      `[${index}:v]${fit},setsar=1,fps=${fps},trim=duration=${duration.toFixed(3)},` +
       `setpts=PTS-STARTPTS,format=yuv420p[v${index}]`,
     );
   });
@@ -51,14 +53,23 @@ export function buildXiaoheiVideoFilter({ scenes, width, height, fps = 30, trans
   return { filter: filters.join(";"), transitionDuration };
 }
 
-export function writeXiaoheiAssSubtitles({ outputPath, scenes, width, height }) {
-  const fontSize = Math.max(42, Math.round(height * (height > width ? 0.038 : 0.048)));
+export function writeXiaoheiAssSubtitles({ outputPath, scenes, width, height, compose = {} }) {
+  const fontSize = Math.max(28, Math.round(Number(compose.subtitleSize || 48) * height / 1080));
   const marginV = Math.max(48, Math.round(height * 0.065));
   const maxChars = height > width ? 14 : 24;
-  const dialogues = scenes.map((scene) => {
-    const text = wrapSubtitleText(scene.subtitle || scene.text || "", maxChars);
-    return `Dialogue: 0,${assTime(scene.start_time)},${assTime(scene.end_time)},Default,,0,0,0,,{\\fad(90,110)}${escapeAssText(text)}`;
+  const maxLines = Math.max(1, Math.min(3, Number(compose.maxLines || 2)));
+  const primary = assColor(compose.subtitleColor || "#ffffff");
+  const keyword = assColor(compose.keywordColor || "#b7ff5a");
+  const speed = Math.max(0.6, Math.min(1.6, Number(compose.animationSpeed || 1)));
+  const enterMs = Math.round(520 / speed);
+  const dialogues = compose.showSubtitles === false ? [] : scenes.map((scene) => {
+    const text = wrapSubtitleText(scene.subtitle || scene.text || "", maxChars, maxLines);
+    const styled = keywordAssText(text, scene.keywords, keyword, enterMs);
+    return `Dialogue: 2,${assTime(scene.start_time)},${assTime(scene.end_time)},Default,,0,0,0,,{\\fad(100,90)}${styled}`;
   });
+  dialogues.push(...bookendDialogues(scenes, compose, width, height, primary, fontSize));
+  const outline = compose.outline === false ? 0 : 3;
+  const shadow = compose.shadow === false ? 0 : 2;
   const content = [
     "[Script Info]",
     "ScriptType: v4.00+",
@@ -69,7 +80,8 @@ export function writeXiaoheiAssSubtitles({ outputPath, scenes, width, height }) 
     "",
     "[V4+ Styles]",
     "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding",
-    `Style: Default,Microsoft YaHei,${fontSize},&H00FFFFFF,&H00FFFFFF,&H00151515,&H70000000,-1,0,0,0,100,100,0,0,1,3,0,2,70,70,${marginV},1`,
+    `Style: Default,Microsoft YaHei,${fontSize},${primary},${keyword},&H00151515,&H70000000,-1,0,0,0,100,100,0,0,1,${outline},${shadow},2,70,70,${marginV},1`,
+    `Style: Bookend,Microsoft YaHei,${Math.round(fontSize * 1.65)},${primary},${keyword},&H00151515,&H50000000,-1,0,0,0,100,100,0,0,1,${outline},${shadow},5,80,80,80,1`,
     "",
     "[Events]",
     "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text",
@@ -80,7 +92,7 @@ export function writeXiaoheiAssSubtitles({ outputPath, scenes, width, height }) 
   return outputPath;
 }
 
-export async function renderXiaoheiVideo({ ffmpegPath, scenes, audioPath, outputPath, aspectRatio = "16:9", transitionMode = "smart", fps = 30 }) {
+export async function renderXiaoheiVideo({ ffmpegPath, scenes, audioPath, backgroundAudioPath = "", outputPath, aspectRatio = "16:9", transitionMode = "smart", fps = 30, compose = {} }) {
   if (!ffmpegPath || !fs.existsSync(ffmpegPath)) throw new Error("FFmpeg 不可用，无法生成视频。");
   if (!Array.isArray(scenes) || !scenes.length) throw new Error("缺少可合成的分镜。");
   if (!audioPath || !fs.existsSync(audioPath)) throw new Error("已确认的 TTS 音频文件不存在。");
@@ -90,18 +102,33 @@ export async function renderXiaoheiVideo({ ffmpegPath, scenes, audioPath, output
 
   const { width, height } = xiaoheiVideoResolution(aspectRatio);
   const assPath = path.join(path.dirname(outputPath), "video-subtitles.ass");
-  writeXiaoheiAssSubtitles({ outputPath: assPath, scenes, width, height });
-  const { filter, transitionDuration } = buildXiaoheiVideoFilter({ scenes, width, height, fps, transitionMode, assPath });
+  writeXiaoheiAssSubtitles({ outputPath: assPath, scenes, width, height, compose });
+  const built = buildXiaoheiVideoFilter({ scenes, width, height, fps, transitionMode, assPath, imageFit: compose.imageFit });
+  let filter = built.filter;
+  const transitionDuration = built.transitionDuration;
   const args = ["-y"];
   scenes.forEach((scene, index) => {
     const duration = sceneDuration(scene) + (index < scenes.length - 1 ? transitionDuration : 0);
     args.push("-loop", "1", "-framerate", String(fps), "-t", duration.toFixed(3), "-i", scene.image_path);
   });
+  const ttsInputIndex = scenes.length;
+  const ttsVolume = Math.max(0, Math.min(2, Number(compose.ttsVolume ?? 100) / 100));
+  const bgmVolume = Math.max(0, Math.min(1, Number(compose.bgmVolume ?? 18) / 100));
+  let audioMap = `${ttsInputIndex}:a:0`;
+  args.push("-i", audioPath);
+  if (backgroundAudioPath) {
+    if (!fs.existsSync(backgroundAudioPath)) throw new Error("背景音乐文件不存在，请重新选择。");
+    args.push("-stream_loop", "-1", "-i", backgroundAudioPath);
+    filter += `;[${ttsInputIndex}:a]volume=${ttsVolume.toFixed(3)}[tts];[${ttsInputIndex + 1}:a]volume=${bgmVolume.toFixed(3)}[bgm];[tts][bgm]amix=inputs=2:duration=first:dropout_transition=2[aout]`;
+    audioMap = "[aout]";
+  } else if (ttsVolume !== 1) {
+    filter += `;[${ttsInputIndex}:a]volume=${ttsVolume.toFixed(3)}[aout]`;
+    audioMap = "[aout]";
+  }
   args.push(
-    "-i", audioPath,
     "-filter_complex", filter,
     "-map", "[vout]",
-    "-map", `${scenes.length}:a:0`,
+    "-map", audioMap,
     "-c:v", "libx264",
     "-preset", "medium",
     "-crf", "20",
