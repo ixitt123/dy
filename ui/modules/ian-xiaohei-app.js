@@ -15,6 +15,7 @@ const state = {
   referenceCloneDraft: null,
   referenceStylePresets: [],
   pendingUploads: new Map(),
+  confirmingUploads: new Set(),
   buttonFeedbackTimers: new Map(),
   previewImageCache: new Map(),
   previewFrame: 0,
@@ -1807,6 +1808,32 @@ function promptPlanText(shots = [], plan = state.plan) {
   return shots.map((shot) => shotPromptBlock(shot, plan)).join("\n\n--- NEXT INDEPENDENT JOB ---\n\n");
 }
 
+function pendingUploadIndexes(plan = state.plan) {
+  const validIndexes = new Set((plan?.shots || []).map((shot) => Number(shot.index)));
+  return [...state.pendingUploads.keys()]
+    .map((index) => Number(index))
+    .filter((index) => validIndexes.has(index))
+    .sort((left, right) => left - right);
+}
+
+function promptBatchActionMarkup(plan = state.plan) {
+  const shots = plan?.shots || [];
+  const pendingCount = pendingUploadIndexes(plan).length;
+  const allConfirmed = Boolean(shots.length && pendingCount === 0 && !missingShotImages(plan, state.images).length);
+  const label = pendingCount > 0 ? `全部确认使用（${pendingCount}）` : allConfirmed ? "全部已确认" : "等待添加图片";
+  const hint = pendingCount > 0
+    ? "会按编号逐张确认当前已添加的本地图片。"
+    : allConfirmed
+      ? "所有分镜图片都已绑定。"
+      : "添加本地图片素材后可批量确认。";
+  return `
+    <div class="prompt-batch-actions">
+      <button type="button" data-prompt-action="confirm-all-images" ${pendingCount > 0 ? "" : "disabled"} class="${allConfirmed ? "action-feedback is-success" : ""}">${label}</button>
+      <span>${hint}</span>
+    </div>
+  `;
+}
+
 function renderPlan(plan) {
   const shots = plan?.shots || [];
   els.planCount.textContent = String(shots.length);
@@ -1819,7 +1846,7 @@ function renderPlan(plan) {
   }
   const ratioStyle = previewRatioStyle(plan.aspectRatio);
   els.promptResults.className = "prompt-list";
-  els.promptResults.innerHTML = shots.map((shot) => {
+  els.promptResults.innerHTML = `${promptBatchActionMarkup(plan)}${shots.map((shot) => {
     const image = state.images.find((item) => Number(item.index) === Number(shot.index));
     const pending = state.pendingUploads.get(Number(shot.index));
     return `
@@ -1866,7 +1893,7 @@ function renderPlan(plan) {
         ` : ""}
       </article>
     `;
-  }).join("");
+  }).join("")}`;
   syncVideoPreview();
 }
 
