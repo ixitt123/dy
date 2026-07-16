@@ -1617,6 +1617,12 @@ function scheduleSave(changes = {}) {
     background: { ...state.project.background, ...(changes.background || {}) },
     audioMix: { ...state.project.audioMix, ...(changes.audioMix || {}) },
     effectParams: { ...state.project.effectParams, ...(changes.effectParams || {}) },
+    dynamicIllustration: {
+      ...state.project.dynamicIllustration,
+      ...(changes.dynamicIllustration || {}),
+      config: { ...state.project.dynamicIllustration?.config, ...(changes.dynamicIllustration?.config || {}) },
+      outputs: { ...state.project.dynamicIllustration?.outputs, ...(changes.dynamicIllustration?.outputs || {}) },
+    },
     bookends: {
       intro: { ...state.project.bookends?.intro, ...(changes.bookends?.intro || {}) },
       outro: { ...state.project.bookends?.outro, ...(changes.bookends?.outro || {}) },
@@ -1671,6 +1677,15 @@ async function uploadFile(kind, file) {
   const dataUrl = await fileToDataUrl(file);
   const data = await postJson("/api/kinetic-text/upload", { projectId: state.project.id, kind, name: file.name, data: dataUrl });
   state.project = data.project;
+  if (kind === "background" && state.project.dynamicIllustration?.config?.enabled) {
+    const config = { ...state.project.dynamicIllustration.config, enabled: false };
+    const updated = await postJson("/api/kinetic-text/update", {
+      projectId: state.project.id,
+      changes: { dynamicIllustration: { config, previousBackground: state.project.background } },
+    });
+    state.project = updated.project;
+    savePreferences({ illustration: config });
+  }
   savePreferences({ backgroundMode: state.project.background.mode, audioSource: state.project.audioMix.source });
   renderProject();
 }
