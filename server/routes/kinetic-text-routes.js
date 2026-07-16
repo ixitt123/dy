@@ -35,7 +35,7 @@ function sendFile(res, filePath, { download = false } = {}) {
   fs.createReadStream(filePath).pipe(res);
 }
 
-function sanitizeClientProjectChanges(changes = {}) {
+export function sanitizeClientProjectChanges(changes = {}) {
   if (!changes || typeof changes !== "object") return {};
   const { outputs, ...safeChanges } = changes;
   return safeChanges;

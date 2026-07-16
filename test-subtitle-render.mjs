@@ -6,6 +6,7 @@ import { spawnSync } from "node:child_process";
 import ffmpegPath from "ffmpeg-static";
 import ffprobeStatic from "ffprobe-static";
 import { buildAss, createKineticTextService } from "./server/kinetic-text/kinetic-text-service.js";
+import { sanitizeClientProjectChanges } from "./server/routes/kinetic-text-routes.js";
 
 const root = fs.mkdtempSync(path.join(os.tmpdir(), "subtitle-render-test-"));
 let selectedDownloadsDir = path.join(root, "downloads-a");
@@ -16,6 +17,12 @@ const words = [...segment.text].map((text, index, list) => ({ text, start: 1.25 
 function countBottomDialogues(ass) {
   return ass.split(/\r?\n/).filter((line) => line.startsWith("Dialogue:") && line.includes(",Bottom,")).length;
 }
+
+assert.deepEqual(
+  sanitizeClientProjectChanges({ showBottomSubtitles: false, outputs: { finalVideo: "old.mp4" } }),
+  { showBottomSubtitles: false },
+  "client project updates must not preserve stale render outputs",
+);
 
 async function waitFor(jobId) {
   const started = Date.now();
