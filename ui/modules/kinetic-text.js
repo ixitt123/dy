@@ -40,6 +40,7 @@ const state = {
   startTime: 0,
   raf: 0,
   saveTimer: 0,
+  pendingSaveChanges: {},
   pollTimer: 0,
   downloadsDir: "",
   audio: null,
@@ -94,6 +95,38 @@ async function jsonFetch(url, options = {}) {
 
 function postJson(url, body) {
   return jsonFetch(url, { method: "POST", body: JSON.stringify(body) });
+}
+
+function mergeProjectChanges(base = {}, changes = {}) {
+  const next = {
+    ...base,
+    ...changes,
+  };
+  if (Object.hasOwn(changes, "background")) next.background = { ...(base.background || {}), ...(changes.background || {}) };
+  if (Object.hasOwn(changes, "audioMix")) next.audioMix = { ...(base.audioMix || {}), ...(changes.audioMix || {}) };
+  if (Object.hasOwn(changes, "effectParams")) next.effectParams = { ...(base.effectParams || {}), ...(changes.effectParams || {}) };
+  if (Object.hasOwn(changes, "bottomSubtitlePosition")) next.bottomSubtitlePosition = { ...(base.bottomSubtitlePosition || {}), ...(changes.bottomSubtitlePosition || {}) };
+  if (Object.hasOwn(changes, "dynamicIllustration")) {
+    next.dynamicIllustration = {
+      ...(base.dynamicIllustration || {}),
+      ...(changes.dynamicIllustration || {}),
+      config: { ...(base.dynamicIllustration?.config || {}), ...(changes.dynamicIllustration?.config || {}) },
+      outputs: { ...(base.dynamicIllustration?.outputs || {}), ...(changes.dynamicIllustration?.outputs || {}) },
+    };
+  }
+  if (Object.hasOwn(changes, "bookends")) {
+    next.bookends = {
+      ...(base.bookends || {}),
+      intro: { ...(base.bookends?.intro || {}), ...(changes.bookends?.intro || {}) },
+      outro: { ...(base.bookends?.outro || {}), ...(changes.bookends?.outro || {}) },
+    };
+  }
+  return next;
+}
+
+function currentControlChanges() {
+  const bottomSubtitles = $("#kineticBottomSubtitles");
+  return bottomSubtitles ? { showBottomSubtitles: bottomSubtitles.checked } : {};
 }
 
 function formatTime(value) {

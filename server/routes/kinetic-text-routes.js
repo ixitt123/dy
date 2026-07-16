@@ -35,6 +35,12 @@ function sendFile(res, filePath, { download = false } = {}) {
   fs.createReadStream(filePath).pipe(res);
 }
 
+function sanitizeClientProjectChanges(changes = {}) {
+  if (!changes || typeof changes !== "object") return {};
+  const { outputs, ...safeChanges } = changes;
+  return safeChanges;
+}
+
 export function createKineticTextRoutes({
   baseDir,
   downloadsDir,
@@ -130,7 +136,7 @@ export function createKineticTextRoutes({
       }
       if (req.method === "POST" && route === "update") {
         const body = await readJsonBody(req, { maxBytes: 4 * 1024 * 1024 });
-        sendJson(res, 200, { ok: true, project: service.update(body.projectId || body.id, body.changes || body.project || {}) });
+        sendJson(res, 200, { ok: true, project: service.update(body.projectId || body.id, sanitizeClientProjectChanges(body.changes || body.project || {})) });
         return true;
       }
       if (req.method === "POST" && route === "upload") {
