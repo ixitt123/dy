@@ -155,7 +155,7 @@ export function createKineticTextRoutes({
       }
       if (req.method === "POST" && route === "illustration") {
         const body = await readJsonBody(req, { maxBytes: 256 * 1024 });
-        sendJson(res, 202, { ok: true, job: service.startIllustration(body.projectId, body.config || {}) });
+        sendJson(res, 202, { ok: true, job: service.startIllustration(body.projectId, { ...(body.config || {}), force: body.force === true }) });
         return true;
       }
       sendJson(res, 404, { ok: false, message: "Unknown kinetic text API" });
