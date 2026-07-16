@@ -1158,7 +1158,9 @@ function drawPreview() {
     } else if (template.renderMode === "rolling-focus") {
       const lineGapBoost = Math.max(0, Number(params.lineGapBoost || 0));
       const gap = fontSize * (1.5 + lineGapBoost);
-      [segmentIndex - 1, segmentIndex, segmentIndex + 1].forEach((index) => {
+      const contextLines = Math.max(0, Math.min(1, Math.round(Number(params.contextLines || 0))));
+      const focusIndexes = contextLines > 0 ? [segmentIndex - 1, segmentIndex, segmentIndex + 1] : [segmentIndex];
+      focusIndexes.forEach((index) => {
         const row = state.project.segments[index];
         if (!row) return;
         const delta = index - segmentIndex;

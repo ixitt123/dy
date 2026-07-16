@@ -1160,11 +1160,15 @@ export function buildAss(project, options = {}) {
     } else if (template.renderMode === "rolling-focus") {
       const lineGapBoost = safeNumber(params.lineGapBoost, 0, 0, 1.2);
       const lineGap = Math.round(fontSize * (1.32 + lineGapBoost));
-      const neighbors = [
-        { row: renderSegments[segmentIndex - 1], delta: -1 },
-        { row: segment, delta: 0 },
-        { row: renderSegments[segmentIndex + 1], delta: 1 },
-      ].filter((item) => item.row);
+      const contextLines = Math.round(safeNumber(params.contextLines, 0, 0, 1));
+      const neighbors = (contextLines > 0
+        ? [
+            { row: renderSegments[segmentIndex - 1], delta: -1 },
+            { row: segment, delta: 0 },
+            { row: renderSegments[segmentIndex + 1], delta: 1 },
+          ]
+        : [{ row: segment, delta: 0 }]
+      ).filter((item) => item.row);
       neighbors.forEach(({ row, delta }) => {
         const current = delta === 0;
         const rowY = y + delta * lineGap;

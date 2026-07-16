@@ -26,7 +26,7 @@ const TEMPLATE_DEFS = [
     motion: "focus-scroll",
     supportedTiming: ["sentence"],
     requiresWordTiming: false,
-    defaultParams: { fontSize: 78, y: 54, maxLines: 3, animationSpeed: 0.9, lineGapBoost: 0.67 },
+    defaultParams: { fontSize: 78, y: 54, maxLines: 3, animationSpeed: 0.9, lineGapBoost: 0.67, contextLines: 0 },
     source: "CapCut 2024-2026 lyric/focus layouts + deterministic timing primitives",
     license: "Integration code: project-owned; see SOURCE.md",
   },
