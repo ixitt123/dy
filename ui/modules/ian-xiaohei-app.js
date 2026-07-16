@@ -319,6 +319,7 @@ function syncTtsSource(job, { title = "", text = "" } = {}) {
     if (els.ttsSourceTitle) els.ttsSourceTitle.textContent = "还没有绑定 TTS 音频";
     if (els.ttsSourceMeta) els.ttsSourceMeta.textContent = "请先在 TTS 语音页生成并确认字幕时间轴，然后发送到小黑配图软件。";
     if (els.ttsSourceText) els.ttsSourceText.textContent = "收到后，这里会显示 TTS 最终文案，不在本页手动输入。";
+    renderSubtitleTimeline(null);
     hideAudio();
     return;
   }
@@ -340,6 +341,7 @@ function syncTtsSource(job, { title = "", text = "" } = {}) {
   }
   if (els.ttsSourceText) els.ttsSourceText.textContent = finalText || "这条 TTS 资产暂时没有最终文案。";
   showAudio(job.audio_url || `/api/tts/audio?id=${job.id}`, `已绑定 TTS 音频 #${job.id}`);
+  renderSubtitleTimeline(job);
 }
 
 function bindEvents() {
@@ -348,6 +350,8 @@ function bindEvents() {
   els.testMinimaxSettings.addEventListener("click", () => testMinimaxSettings());
   els.deleteMinimaxApi.addEventListener("click", () => deleteMinimaxApi());
   els.generateImages.addEventListener("click", () => generateCompleteWorkflow());
+  els.timelineRefresh?.addEventListener("click", () => refreshSubtitleTimelineFromTts());
+  els.subtitleTimeline?.addEventListener("input", handleSubtitleTimelineInput);
   els.generateAudio.addEventListener("click", () => generateAudioOnly());
   els.confirmAudio.addEventListener("click", () => confirmCurrentAudio());
   els.generateMusic.addEventListener("click", () => generateMusicMaterial());
