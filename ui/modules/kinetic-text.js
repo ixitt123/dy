@@ -1878,7 +1878,14 @@ function bindEvents() {
   });
   $("#kineticBackgroundMode").addEventListener("change", (event) => {
     savePreferences({ backgroundMode: event.target.value });
-    scheduleSave({ background: { mode: event.target.value } });
+    const illustration = { ...illustrationConfigFromForm(), enabled: false };
+    const enabled = $("#kineticIllustrationEnabled");
+    if (enabled) enabled.checked = false;
+    savePreferences({ illustration });
+    scheduleSave({
+      background: { mode: event.target.value },
+      dynamicIllustration: { config: illustration, previousBackground: { ...state.project.background, mode: event.target.value } },
+    });
   });
   [
     "#kineticIllustrationScene",
