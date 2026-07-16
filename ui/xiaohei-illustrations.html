@@ -81,8 +81,41 @@
           <div class="actions xiaohei-actions">
             <button id="planPrompts" type="button">根据 TTS 时间轴分析分镜配图</button>
             <button id="copyPrompts" type="button">复制全部提示词</button>
-            <button id="generateImages" type="button" class="primary">一键生成剪映草稿</button>
           </div>
+
+          <section id="xiaoheiVideoPreview" class="panel xiaohei-video-preview">
+            <div class="xiaohei-video-toolbar">
+              <div class="xiaohei-video-title">
+                <h2>小黑视频预览</h2>
+                <span id="videoPreviewSpec">等待分镜图片和 TTS 时间轴</span>
+              </div>
+              <label class="xiaohei-transition-picker" for="videoTransitionMode">
+                <span>图片转场</span>
+                <select id="videoTransitionMode">
+                  <option value="smart" selected>智能交替（推荐）</option>
+                  <option value="fade">淡入淡出</option>
+                  <option value="slide">左右滑动</option>
+                  <option value="zoom">缩放切换</option>
+                  <option value="none">直接切换</option>
+                </select>
+              </label>
+              <div class="xiaohei-video-actions">
+                <button id="videoPreviewPlay" type="button">播放预览</button>
+                <button id="videoPreviewRestart" type="button">从头播放</button>
+                <button id="generateImages" type="button" class="primary">生成 MP4</button>
+                <button id="downloadXiaoheiVideo" type="button" class="primary" disabled>下载视频</button>
+              </div>
+            </div>
+            <div class="xiaohei-video-stage" id="xiaoheiVideoStage" title="点击画面播放或暂停">
+              <canvas id="xiaoheiVideoCanvas" width="960" height="540"></canvas>
+              <div id="videoPreviewEmpty" class="xiaohei-video-empty">补齐分镜图片后即可按真实音频时间轴预览</div>
+            </div>
+            <div class="xiaohei-video-seek-row">
+              <input id="videoPreviewSeek" type="range" min="0" max="0" step="0.01" value="0" />
+              <div class="xiaohei-video-time"><span id="videoPreviewCurrent">00:00.000</span><span id="videoPreviewDuration">00:00.000</span></div>
+            </div>
+            <p id="videoRenderStatus" class="meta">预览使用当前绑定图片、已确认 TTS 音频和字幕时间戳；生成 MP4 后再下载。</p>
+          </section>
 
           <section class="results-grid">
             <div class="panel">
