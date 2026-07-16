@@ -2831,6 +2831,20 @@ function listOutputBatches(outputRoot) {
       const result = readJsonFile(path.join(folderPath, "result.json"), {});
       const manifest = readJsonFile(path.join(folderPath, "project_manifest.json"), {});
       const resultImages = Array.isArray(result.images) ? result.images : [];
+      const boundImages = resultImages.map((image) => ({
+        index: Number(image.index || 0),
+        topic: String(image.topic || ""),
+        purpose: String(image.purpose || ""),
+        imagePath: String(image.imagePath || ""),
+        imageUrl: image.imageUrl || (image.imagePath ? `/api/image/file?path=${encodeURIComponent(image.imagePath)}` : ""),
+        thumbnailUrl: String(image.thumbnailUrl || ""),
+        assetId: String(image.assetId || ""),
+        provider: String(image.provider || "local"),
+        model: String(image.model || "local-file"),
+        source: String(image.source || "local_upload"),
+        aspectRatio: String(image.aspectRatio || ""),
+        confirmed: image.confirmed !== false,
+      })).filter((image) => image.index > 0 && (image.imagePath || image.assetId));
       const directFiles = fs.readdirSync(folderPath, { withFileTypes: true })
         .filter((file) => file.isFile() && /\.(png|jpe?g|webp)$/i.test(file.name))
         .map((file) => {
@@ -2861,6 +2875,7 @@ function listOutputBatches(outputRoot) {
         draftPath: result.output?.draft_path || manifest.draft_path || "",
         updatedAt: stats.mtime.toISOString(),
         files,
+        boundImages,
       };
     })
     .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
