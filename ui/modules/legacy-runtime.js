@@ -2218,15 +2218,7 @@ async function publishMomentsToWechat(authCode = "") {
 }
 
 async function ensureTranscriptProvidersConfigured() {
-  const textProviderId = rewriteProvider?.value || "dashscope";
-  await ensureProviderConfigured(textProviderId, {
-    title: "文案校正",
-    reason: "提取文案后需要调用文本模型自动校正错字、断句和标点。",
-  });
-  await ensureProviderConfigured("dashscope", {
-    title: "文案识别",
-    reason: "如果平台没有字幕，需要使用 DashScope ASR 从音频识别文案。",
-  });
+  await loadSettings().catch(() => {});
   return true;
 }
 

@@ -1100,11 +1100,31 @@ export function openTaskStore(baseDir) {
           if (existing.status === TASK_STATUS.DONE && hasRequiredOutput) {
             summary.skippedDownloaded += 1;
           } else {
+            const fromFailedOrPartial = existing.status !== TASK_STATUS.DONE;
             updateTask(existing.id, {
+              url: item.url,
               status: TASK_STATUS.WAITING,
               progress: 0,
-              message: "等待重新处理",
+              message: fromFailedOrPartial ? "上次未成功，已从头重新处理" : "等待补齐输出结果",
               error: "",
+              source_text: item.sourceText || item.url,
+              transcript_enabled: item.transcriptEnabled ? 1 : 0,
+              audio_enabled: item.audioEnabled ? 1 : 0,
+              audio_format: String(item.audioFormat || "mp3"),
+              analysis_enabled: item.analysisEnabled ? 1 : 0,
+              only_transcript: item.onlyTranscript ? 1 : 0,
+              ...(fromFailedOrPartial
+                ? {
+                    video_path: "",
+                    audio_path: "",
+                    subtitle_path: "",
+                    txt_path: "",
+                    analysis_path: "",
+                    file_hash: "",
+                    file_size: 0,
+                    stats_json: JSON.stringify({ forceFresh: true }),
+                  }
+                : {}),
               completed_at: "",
             });
             summary.duplicate += 1;
