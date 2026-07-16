@@ -752,6 +752,9 @@ function buildLegacyAss(project, options = {}) {
       ].join("");
       events.push(`Dialogue: ${highlighted ? 2 : 1},${formatAssTime(start)},${formatAssTime(end)},Dynamic,,0,0,0,,{${tags}}${escapeAss(prefix + token)}`);
     });
+    if (normalized.showBottomSubtitles) {
+      events.push(`Dialogue: 3,${formatAssTime(start)},${formatAssTime(end)},Subtitle,,80,80,48,,{\\an2\\pos(960,1010)\\fad(120,100)}${escapeAss(segment.text)}`);
+    }
   }
 
   return [
@@ -765,6 +768,7 @@ function buildLegacyAss(project, options = {}) {
     "[V4+ Styles]",
     "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding",
     `Style: Dynamic,${font},${fontSize},${primary},${accent},&H00101010,&H00000000,-1,0,0,0,100,100,0,0,1,1.2,0,5,40,40,40,1`,
+    `Style: Subtitle,${font},42,&H00FFFFFF,&H00FFFFFF,&H00101010,&H88000000,-1,0,0,0,100,100,0,0,1,3,0,2,80,80,48,1`,
     "",
     "[Events]",
     "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text",
@@ -1178,6 +1182,19 @@ export function buildAss(project, options = {}) {
       });
     }
 
+    if (normalized.showBottomSubtitles) {
+      const bottomFontSize = Math.max(34, Math.round(fontSize * 0.48));
+      const bottomText = keywordStyledText(wrappedText, keywords, assColor("#FFFFFF"), {
+        seed: segment.sourceSegmentId || segment.id,
+        font,
+        fontSize: bottomFontSize,
+        outline,
+        baseOutline: 2.4,
+      });
+      const bottomX = Math.round((safeNumber(normalized.bottomSubtitlePosition?.x, 50, 5, 95) / 100) * width);
+      const bottomY = Math.round((safeNumber(normalized.bottomSubtitlePosition?.y, 94, 8, 97) / 100) * height);
+      events.push(assEvent(5, start, end, "Bottom", `\\an2\\pos(${bottomX},${bottomY})\\fad(100,80)`, bottomText));
+    }
   });
 
   if (!limitToId && offset === 0) {
@@ -1207,6 +1224,7 @@ export function buildAss(project, options = {}) {
     "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding",
     `Style: Modern,${font},${fontSize},${primary},${primary},${outline},&H00000000,-1,0,0,0,100,100,0,0,1,${outlineWidth},${shadow},5,70,70,70,1`,
     `Style: Muted,${font},${Math.round(fontSize * 0.64)},${muted},${muted},${outline},&H00000000,-1,0,0,0,100,100,0,0,1,1.2,0,5,70,70,70,1`,
+    `Style: Bottom,${font},${Math.max(34, Math.round(fontSize * 0.48))},&H00FFFFFF,&H00FFFFFF,${outline},&H00000000,-1,0,0,0,100,100,0,0,1,2.4,0,2,80,80,48,1`,
     ...KEYWORD_EMPHASIS_PALETTE.map(({ style, color }) => `Style: ${style},${font},${fontSize},&H00101216,&H00101216,${assColor(color)},${assColor(color)},-1,0,0,0,100,100,0,0,3,4,0,5,70,70,70,1`),
     "",
     "[Events]",
