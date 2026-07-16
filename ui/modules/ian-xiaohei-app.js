@@ -1717,13 +1717,229 @@ async function copyAllPrompts() {
   }
 }
 
+function syncVideoPreview() {
+  if (!els.videoPreviewCanvas) return;
+  const shots = state.plan?.shots || [];
+  const duration = Number(state.plan?.audioDuration || els.audioPreview.duration || 0);
+  const ratio = state.plan?.aspectRatio || els.aspectRatioSelect.value || "16:9";
+  const dimensions = ratio === "9:16" ? [540, 960] : ratio === "1:1" ? [720, 720] : [960, 540];
+  if (els.videoPreviewCanvas.width !== dimensions[0] || els.videoPreviewCanvas.height !== dimensions[1]) {
+    els.videoPreviewCanvas.width = dimensions[0];
+    els.videoPreviewCanvas.height = dimensions[1];
+  }
+  els.videoPreviewSeek.max = String(Math.max(0, duration));
+  els.videoPreviewDuration.textContent = formatPreviewClock(duration);
+  els.videoPreviewSpec.textContent = shots.length
+    ? `${ratio} · 30fps · ${shots.length} 个分镜 · ${duration.toFixed(1)} 秒`
+    : "等待分镜图片和 TTS 时间轴";
+  const ready = Boolean(shots.length && state.images.length && !missingShotImages(state.plan, state.images).length);
+  els.videoPreviewEmpty.hidden = ready;
+  drawVideoPreview();
+  updateVideoDownloadState();
+}
+
+function drawVideoPreview() {
+  const canvas = els.videoPreviewCanvas;
+  if (!canvas) return;
+  const context = canvas.getContext("2d");
+  const width = canvas.width;
+  const height = canvas.height;
+  context.clearRect(0, 0, width, height);
+  context.fillStyle = "#080b12";
+  context.fillRect(0, 0, width, height);
+  const shots = state.plan?.shots || [];
+  const currentTime = Number(els.audioPreview.currentTime || els.videoPreviewSeek.value || 0);
+  const shot = shots.find((item) => currentTime >= Number(item.startTime || 0) && currentTime < Number(item.endTime || 0))
+    || shots[shots.length - 1];
+  if (!shot) return;
+  const imageRecord = state.images.find((item) => Number(item.index) === Number(shot.index));
+  const image = getPreviewImage(imageRecord);
+  if (!image?.complete || !image.naturalWidth) return;
+
+  const localTime = Math.max(0, currentTime - Number(shot.startTime || 0));
+  const transitionLength = Math.min(0.42, Math.max(0.14, Number(shot.duration || 0) * 0.22));
+  const progress = Math.min(1, localTime / transitionLength);
+  const mode = previewTransitionForShot(els.videoTransitionMode.value, Number(shot.index));
+  context.save();
+  if (mode === "fade") context.globalAlpha = easeOut(progress);
+  if (mode === "slideleft" || mode === "slideright") {
+    const direction = mode === "slideleft" ? 1 : -1;
+    context.translate(direction * width * (1 - easeOut(progress)), 0);
+  }
+  if (mode === "zoom") {
+    const scale = 1.08 - 0.08 * easeOut(progress);
+    context.translate(width / 2, height / 2);
+    context.scale(scale, scale);
+    context.translate(-width / 2, -height / 2);
+  }
+  drawImageCover(context, image, width, height);
+  context.restore();
+  drawPreviewSubtitle(context, shot.subtitleText || shot.sourceText || "", width, height, progress);
+}
+
+function getPreviewImage(imageRecord) {
+  if (!imageRecord) return null;
+  const key = Number(imageRecord.index);
+  if (state.previewImageCache.has(key)) return state.previewImageCache.get(key);
+  const image = new Image();
+  image.decoding = "async";
+  image.onload = drawVideoPreview;
+  image.src = imageRecord.imageUrl || imageRecord.thumbnailUrl || "";
+  state.previewImageCache.set(key, image);
+  return image;
+}
+
+function drawImageCover(context, image, width, height) {
+  const scale = Math.max(width / image.naturalWidth, height / image.naturalHeight);
+  const drawWidth = image.naturalWidth * scale;
+  const drawHeight = image.naturalHeight * scale;
+  context.drawImage(image, (width - drawWidth) / 2, (height - drawHeight) / 2, drawWidth, drawHeight);
+}
+
+function drawPreviewSubtitle(context, text, width, height, progress) {
+  const fontSize = Math.max(28, Math.round(height * (height > width ? 0.038 : 0.05)));
+  const maxWidth = width * 0.84;
+  const lines = wrapCanvasText(context, String(text || ""), maxWidth, fontSize, 3);
+  const lineHeight = fontSize * 1.28;
+  const blockHeight = lines.length * lineHeight;
+  const yStart = height - Math.max(36, height * 0.065) - blockHeight;
+  const alpha = Math.min(1, progress * 2.4);
+  context.save();
+  context.globalAlpha = alpha;
+  const gradient = context.createLinearGradient(0, height * 0.62, 0, height);
+  gradient.addColorStop(0, "rgba(0,0,0,0)");
+  gradient.addColorStop(1, "rgba(0,0,0,.78)");
+  context.fillStyle = gradient;
+  context.fillRect(0, height * 0.58, width, height * 0.42);
+  context.textAlign = "center";
+  context.textBaseline = "middle";
+  context.font = `900 ${fontSize}px "Microsoft YaHei", sans-serif`;
+  context.lineJoin = "round";
+  lines.forEach((line, index) => {
+    const y = yStart + lineHeight * (index + 0.5);
+    context.strokeStyle = "rgba(12,15,22,.95)";
+    context.lineWidth = Math.max(4, fontSize * 0.09);
+    context.strokeText(line, width / 2, y, maxWidth);
+    context.fillStyle = "#ffffff";
+    context.fillText(line, width / 2, y, maxWidth);
+  });
+  context.restore();
+}
+
+function wrapCanvasText(context, text, maxWidth, fontSize, maxLines) {
+  context.font = `900 ${fontSize}px "Microsoft YaHei", sans-serif`;
+  const chars = [...text.replace(/\s+/g, " ").trim()];
+  const lines = [];
+  let line = "";
+  for (const char of chars) {
+    const candidate = `${line}${char}`;
+    if (line && context.measureText(candidate).width > maxWidth) {
+      lines.push(line);
+      line = char;
+      if (lines.length >= maxLines - 1) break;
+    } else {
+      line = candidate;
+    }
+  }
+  if (line) lines.push(line);
+  return lines.slice(0, maxLines);
+}
+
+function previewTransitionForShot(mode, index) {
+  if (mode === "none") return "none";
+  if (mode === "fade") return "fade";
+  if (mode === "slide") return index % 2 ? "slideleft" : "slideright";
+  if (mode === "zoom") return "zoom";
+  return ["fade", "slideleft", "zoom", "slideright"][(index - 1) % 4];
+}
+
+function easeOut(value) {
+  return 1 - (1 - value) ** 3;
+}
+
+function toggleVideoPreviewPlayback() {
+  if (!state.plan?.shots?.length || missingShotImages(state.plan, state.images).length) {
+    setStatus("预览尚未就绪", "请先生成分镜计划并补齐全部图片。", 0, true);
+    return;
+  }
+  if (els.audioPreview.paused) els.audioPreview.play().catch((error) => setStatus("播放失败", error.message || String(error), 0, true));
+  else els.audioPreview.pause();
+}
+
+function restartVideoPreview() {
+  els.audioPreview.currentTime = 0;
+  els.videoPreviewSeek.value = "0";
+  drawVideoPreview();
+  els.audioPreview.play().catch(() => {});
+}
+
+function seekVideoPreview() {
+  const value = Number(els.videoPreviewSeek.value || 0);
+  els.audioPreview.currentTime = value;
+  syncVideoPreviewTime();
+}
+
+function startVideoPreviewLoop() {
+  stopVideoPreviewLoop();
+  els.videoPreviewPlay.textContent = "暂停预览";
+  const tick = () => {
+    syncVideoPreviewTime();
+    if (!els.audioPreview.paused && !els.audioPreview.ended) state.previewFrame = requestAnimationFrame(tick);
+  };
+  state.previewFrame = requestAnimationFrame(tick);
+}
+
+function stopVideoPreviewLoop() {
+  if (state.previewFrame) cancelAnimationFrame(state.previewFrame);
+  state.previewFrame = 0;
+  els.videoPreviewPlay.textContent = "播放预览";
+  syncVideoPreviewTime();
+}
+
+function syncVideoPreviewTime() {
+  const current = Number(els.audioPreview.currentTime || 0);
+  els.videoPreviewSeek.value = String(current);
+  els.videoPreviewCurrent.textContent = formatPreviewClock(current);
+  drawVideoPreview();
+}
+
+function updateVideoDownloadState() {
+  const ready = Boolean(state.renderedVideo?.downloadUrl);
+  els.downloadXiaoheiVideo.disabled = !ready;
+  if (ready && !els.videoRenderStatus.textContent.includes("已生成")) {
+    els.videoRenderStatus.textContent = "MP4 已生成，可以直接下载。";
+  }
+}
+
+function downloadRenderedVideo() {
+  const url = state.renderedVideo?.downloadUrl;
+  if (!url) return;
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = "";
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+}
+
+function formatPreviewClock(value) {
+  const totalMs = Math.max(0, Math.round(Number(value || 0) * 1000));
+  const minutes = Math.floor(totalMs / 60000);
+  const seconds = Math.floor((totalMs % 60000) / 1000);
+  const milliseconds = totalMs % 1000;
+  return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}.${String(milliseconds).padStart(3, "0")}`;
+}
+
 function resetVisualWorkflow(message = "") {
   state.plan = null;
   state.images = [];
+  state.previewImageCache.clear();
+  state.renderedVideo = null;
   state.pendingUploads.clear();
   state.promptsText = "";
   renderPlan(null);
   renderImages([], []);
+  syncVideoPreview();
   if (message) setStatus("需要重新生成分镜", message, 0);
 }
 
