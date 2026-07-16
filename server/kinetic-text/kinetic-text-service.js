@@ -10,6 +10,7 @@ import {
   motionCanvasProjectDescriptor,
   normalizeEffectId,
 } from "./effects.js";
+import { generateIllustrationBackground, normalizeIllustrationConfig } from "./generative-illustration.js";
 
 const FPS = 30;
 const DEFAULT_FONT = "Microsoft YaHei";
@@ -501,6 +502,7 @@ function normalizeProject(project) {
   const timelineValidation = validateTimelineRules(segments, duration);
   const background = project.background && typeof project.background === "object" ? project.background : {};
   const audioMix = project.audioMix && typeof project.audioMix === "object" ? project.audioMix : {};
+  const dynamicIllustration = project.dynamicIllustration && typeof project.dynamicIllustration === "object" ? project.dynamicIllustration : {};
   return {
     ...project,
     title,
@@ -523,6 +525,10 @@ function normalizeProject(project) {
       mode: ["black", "image", "video"].includes(background.mode) ? background.mode : "black",
       path: String(background.path || ""),
       name: String(background.name || ""),
+    },
+    dynamicIllustration: {
+      ...dynamicIllustration,
+      config: normalizeIllustrationConfig(dynamicIllustration.config || {}, { ...project, duration: computedDuration }),
     },
     audioMix: {
       source: ["none", "video", "local"].includes(audioMix.source) ? audioMix.source : "none",
@@ -1401,6 +1407,7 @@ export function createKineticTextService({
       keywordPlacement: "bottom",
       bookends: input.bookends && typeof input.bookends === "object" ? input.bookends : {},
       background: { mode: "black", path: "", name: "" },
+      dynamicIllustration: { config: normalizeIllustrationConfig({}, { duration }), outputs: {} },
       audioMix: { source: "none", localPath: "", localName: "", ttsVolume: 100, backgroundVolume: 18 },
       outputs: {},
       createdAt: nowIso(),
@@ -1416,6 +1423,12 @@ export function createKineticTextService({
       ...changes,
       id: current.id,
       background: { ...current.background, ...(changes.background || {}) },
+      dynamicIllustration: {
+        ...current.dynamicIllustration,
+        ...(changes.dynamicIllustration || {}),
+        config: { ...current.dynamicIllustration?.config, ...(changes.dynamicIllustration?.config || {}) },
+        outputs: { ...current.dynamicIllustration?.outputs, ...(changes.dynamicIllustration?.outputs || {}) },
+      },
       audioMix: { ...current.audioMix, ...(changes.audioMix || {}) },
       effectParams: { ...current.effectParams, ...(changes.effectParams || {}) },
       bookends: {
@@ -1657,6 +1670,52 @@ export function createKineticTextService({
     return job;
   }
 
+  async function renderIllustration(projectId, config, jobId) {
+    try {
+      let project = get(projectId);
+      if (!project) throw new Error("动态大字项目不存在。");
+      updateJob(jobId, { status: "running", progress: 3, stage: "准备字幕模板视觉规则" });
+      const targetDir = path.join(projectDir(projectId), "dynamic-illustration");
+      fs.rmSync(targetDir, { recursive: true, force: true });
+      fs.mkdirSync(targetDir, { recursive: true });
+      const result = await generateIllustrationBackground({
+        project,
+        effect: effectById(project.effectId),
+        config,
+        targetDir,
+        ffmpegPath,
+        ffprobePath,
+        onProgress: (progress, stage) => updateJob(jobId, { status: "running", progress, stage }),
+      });
+      project = update(projectId, {
+        background: { mode: "video", path: result.mp4Path, name: "手绘循环动态背景.mp4" },
+        dynamicIllustration: {
+          config: result.config,
+          generatedAt: nowIso(),
+          outputs: {
+            mp4: result.mp4Path,
+            gif: result.gifPath,
+            report: result.reportPath,
+            manifest: result.manifestPath,
+            keyframes: result.keyframes,
+          },
+          quality: result.report.checks,
+        },
+      });
+      updateJob(jobId, { status: "completed", progress: 100, stage: "手绘循环背景完成并已应用", result: { project, ...result } });
+      return project;
+    } catch (error) {
+      updateJob(jobId, { status: "failed", stage: "手绘循环背景生成失败", error: error instanceof Error ? error.message : String(error) });
+      throw error;
+    }
+  }
+
+  function startIllustration(projectId, config = {}) {
+    const job = createJob(projectId, "illustration");
+    setImmediate(() => renderIllustration(projectId, config, job.id).catch(() => {}));
+    return job;
+  }
+
   function resolveOutputFile(projectId, key) {
     const project = get(projectId);
     if (!project) return null;
@@ -1670,6 +1729,10 @@ export function createKineticTextService({
       script: project.scriptPath,
       subtitle: project.subtitlePath,
       timestamped: project.timestampedTextPath,
+      illustrationMp4: project.dynamicIllustration?.outputs?.mp4,
+      illustrationGif: project.dynamicIllustration?.outputs?.gif,
+      illustrationReport: project.dynamicIllustration?.outputs?.report,
+      illustrationManifest: project.dynamicIllustration?.outputs?.manifest,
     };
     const filePath = allowed[key];
     if (!filePath || !fs.existsSync(filePath)) return null;
@@ -1687,6 +1750,7 @@ export function createKineticTextService({
     analyze,
     startMaterials,
     startRender,
+    startIllustration,
     getJob: (id) => jobs.get(String(id || "")) || null,
     resolveOutputFile,
   };
