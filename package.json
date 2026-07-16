@@ -25,6 +25,7 @@
     "test:subtitle-templates": "node test-subtitle-templates.mjs",
     "test:subtitle-render": "node test-subtitle-render.mjs",
     "test:xiaohei-skill-routing": "node test-xiaohei-skill-routing.mjs",
+    "test:xiaohei-video-render": "node test-xiaohei-video-render.mjs",
     "test:download-safety": "node test-download-safety.mjs",
     "patch-output": "node patch-mcp-output.mjs",
     "postinstall": "node patch-mcp-output.mjs"
