@@ -20,7 +20,7 @@ assert.match(page, /当前文案 · 核心概念/);
 assert.match(page, /生成或应用当前预设/);
 assert.match(page, /复制全部提示词/);
 assert.match(page, /使用已上传图片合成/);
-assert.match(ui, /官方 Generative Illustration 分层与确定性渲染流程/);
+assert.match(ui, /首次使用时按官方工作流生成分层素材/);
 assert.match(ui, /sourceMode = "api"/);
 assert.match(ui, /async function setIllustrationEnabled/);
 assert.match(ui, /动态背景特效已关闭，已恢复之前的背景/);
