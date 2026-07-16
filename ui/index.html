@@ -248,7 +248,6 @@
                 <button class="accent" id="transcriptBtn" type="button">提取文案</button>
                 <button class="secondary" id="subtitleExtractBtn" type="button">提取字幕</button>
                 <button class="secondary" id="audioExtractBtn" type="button">提取音频</button>
-                <button class="secondary" id="correctTranscriptBtn" type="button">校正文案</button>
               </div>
 
               <div class="progress-panel" id="progressPanel" hidden>
@@ -304,10 +303,33 @@
               <div class="result-head">
                 <div>
                   <h2>文案库</h2>
-                  <p>所有提取并校正后的文案集中在这里，可继续分析、改写、TTS 或进入生产线。</p>
+                  <p>所有提取后的文案集中在这里，可选择是否校正，也可手动编辑后继续分析、改写、TTS 或进入生产线。</p>
+                </div>
+                <div class="result-tools transcript-vault-tools">
+                  <button class="ghost small" id="selectAllTranscripts" type="button">全选</button>
+                  <button class="ghost small" id="correctSelectedTranscripts" type="button">校正文案</button>
                 </div>
               </div>
               <div class="transcript-list" id="transcriptList"></div>
+            </section>
+
+            <section class="analysis-area transcript-edit-panel" id="transcriptEditPanel" hidden>
+              <div class="result-head">
+                <div>
+                  <h2>手动编辑文案</h2>
+                  <p id="transcriptEditTitle">选择一条文案后编辑。</p>
+                </div>
+                <div class="result-tools">
+                  <button class="ghost small" id="saveTranscriptEdit" type="button">保存文案</button>
+                  <button class="ghost small" id="closeTranscriptEdit" type="button">关闭</button>
+                </div>
+              </div>
+              <div class="analysis-body">
+                <input id="transcriptEditTaskId" type="hidden" />
+                <label for="transcriptEditText">文案内容</label>
+                <textarea id="transcriptEditText" rows="12"></textarea>
+                <p id="transcriptEditStatus">保存后会更新文案库里的这条文案。</p>
+              </div>
             </section>
 
             <section class="analysis-area" id="analysisPanel" hidden>

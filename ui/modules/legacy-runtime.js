@@ -217,6 +217,15 @@ const prevTaskPage = document.querySelector("#prevTaskPage");
 const nextTaskPage = document.querySelector("#nextTaskPage");
 const taskPageInfo = document.querySelector("#taskPageInfo");
 const transcriptList = document.querySelector("#transcriptList");
+const selectAllTranscriptsBtn = document.querySelector("#selectAllTranscripts");
+const correctSelectedTranscriptsBtn = document.querySelector("#correctSelectedTranscripts");
+const transcriptEditPanel = document.querySelector("#transcriptEditPanel");
+const transcriptEditTitle = document.querySelector("#transcriptEditTitle");
+const transcriptEditTaskId = document.querySelector("#transcriptEditTaskId");
+const transcriptEditText = document.querySelector("#transcriptEditText");
+const transcriptEditStatus = document.querySelector("#transcriptEditStatus");
+const saveTranscriptEditBtn = document.querySelector("#saveTranscriptEdit");
+const closeTranscriptEditBtn = document.querySelector("#closeTranscriptEdit");
 const analysisPanel = document.querySelector("#analysisPanel");
 const analysisTaskId = document.querySelector("#analysisTaskId");
 const analysisProvider = document.querySelector("#analysisProvider");
@@ -508,6 +517,7 @@ let voiceAssetFilter = "preset";
 let selectedVoiceAssetId = 0;
 let voiceTestPollTimer = 0;
 const selectedFiles = new Set();
+const selectedTranscriptIds = new Set();
 const taskActionLabels = {
   parse: "解析信息",
   link: "获取下载链接",
@@ -1219,6 +1229,11 @@ function syncRewriteSliderLabels() {
 
 function renderTranscripts(items) {
   const rows = Array.isArray(items) ? items : [];
+  const availableIds = new Set(rows.map((item) => String(item.id)));
+  for (const id of [...selectedTranscriptIds]) {
+    if (!availableIds.has(id)) selectedTranscriptIds.delete(id);
+  }
+  updateTranscriptSelectionControls(rows.length);
   if (rows.length === 0) {
     transcriptList.innerHTML = "";
     return;
@@ -1234,14 +1249,19 @@ function renderTranscripts(items) {
         ? `已改写：${rewrite.direction || item.rewriteDirection || "-"} / ${rewrite.style || item.rewriteStyle || "-"}`
         : "";
       const label = [[category, tags].filter(Boolean).join(" / "), rewriteLabel].filter(Boolean).join(" · ");
+      const selected = selectedTranscriptIds.has(String(item.id));
       return `
-        <div class="transcript-card">
-          <div>
+        <div class="transcript-card${selected ? " selected" : ""}" data-transcript-id="${item.id}">
+          <label class="transcript-select-cell" aria-label="选择文案 ${escapeHtml(item.title || `任务 ${item.id}`)}">
+            <input class="transcript-select" type="checkbox" data-task-id="${item.id}" ${selected ? "checked" : ""} />
+          </label>
+          <div class="transcript-content">
             <div class="transcript-title">${escapeHtml(item.title || `任务 ${item.id}`)}</div>
             <div class="transcript-text">${escapeHtml(item.text || "")}</div>
             <div class="transcript-tags">${escapeHtml(label || "未分析")}</div>
           </div>
           <div class="transcript-actions">
+            <button class="ghost small transcript-edit" type="button" data-task-id="${item.id}">手动编辑</button>
             <button class="ghost small transcript-analyze" type="button" data-task-id="${item.id}">AI 分析</button>
             <button class="ghost small transcript-rewrite" type="button" data-task-id="${item.id}">定制改写</button>
             <button class="ghost small transcript-tts" type="button" data-task-id="${item.id}">导入 TTS</button>
@@ -1250,6 +1270,7 @@ function renderTranscripts(items) {
       `;
     })
     .join("");
+  updateTranscriptSelectionControls(rows.length);
 }
 
 async function refreshTranscripts() {
