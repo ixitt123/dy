@@ -202,6 +202,7 @@ const extractLocalVideoAudioBtn = document.querySelector("#extractLocalVideoAudi
 const localAudioFormat = document.querySelector("#localAudioFormat");
 const downloadExtractAudio = document.querySelector("#downloadExtractAudio");
 const downloadCreateSubtitle = document.querySelector("#downloadCreateSubtitle");
+const downloadCorrectTranscript = document.querySelector("#downloadCorrectTranscript");
 const downloadAudioFormat = document.querySelector("#downloadAudioFormat");
 const batchKind = document.querySelector("#batchKind");
 const batchLimit = document.querySelector("#batchLimit");
@@ -2613,6 +2614,7 @@ async function enqueueTasks(action, options = {}) {
         skipDownloaded: skipDownloaded.checked,
         extractAudio: Boolean(downloadExtractAudio?.checked),
         extractSubtitle: Boolean(downloadCreateSubtitle?.checked),
+        correctTranscript: Boolean(downloadCorrectTranscript?.checked),
         audioFormat: downloadAudioFormat?.value || "mp3",
       }),
     });

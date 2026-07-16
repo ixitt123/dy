@@ -334,6 +334,14 @@ function normalizeRow(row) {
   };
 }
 
+function safeJsonParse(value, fallback = {}) {
+  try {
+    return JSON.parse(value || "");
+  } catch {
+    return fallback;
+  }
+}
+
 function placeholders(count) {
   return Array.from({ length: count }, () => "?").join(", ");
 }
@@ -768,9 +776,9 @@ export function openTaskStore(baseDir) {
   const insertTask = db.prepare(`
     INSERT INTO tasks (
       kind, task_action, url, normalized_url, status, progress, message, source_text,
-      transcript_enabled, audio_enabled, audio_format, analysis_enabled, only_transcript, created_at, updated_at
+      transcript_enabled, audio_enabled, audio_format, analysis_enabled, only_transcript, stats_json, created_at, updated_at
     )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
   const getById = db.prepare(`SELECT ${COLUMNS.join(", ")} FROM tasks WHERE id = ?`);
   const getNextWaiting = db.prepare(`
@@ -1113,6 +1121,11 @@ export function openTaskStore(baseDir) {
               audio_format: String(item.audioFormat || "mp3"),
               analysis_enabled: item.analysisEnabled ? 1 : 0,
               only_transcript: item.onlyTranscript ? 1 : 0,
+              stats_json: JSON.stringify({
+                ...safeJsonParse(existing.stats_json),
+                correctTranscript: item.correctTranscript === true,
+                ...(fromFailedOrPartial ? { forceFresh: true } : {}),
+              }),
               ...(fromFailedOrPartial
                 ? {
                     video_path: "",
@@ -1122,7 +1135,6 @@ export function openTaskStore(baseDir) {
                     analysis_path: "",
                     file_hash: "",
                     file_size: 0,
-                    stats_json: JSON.stringify({ forceFresh: true }),
                   }
                 : {}),
               completed_at: "",
@@ -1147,6 +1159,7 @@ export function openTaskStore(baseDir) {
           String(item.audioFormat || "mp3"),
           item.analysisEnabled ? 1 : 0,
           item.onlyTranscript ? 1 : 0,
+          JSON.stringify({ correctTranscript: item.correctTranscript === true }),
           createdAt,
           createdAt
         );

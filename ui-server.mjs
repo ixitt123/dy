@@ -368,7 +368,7 @@ function extractDouyinUrls(text, { limit = 1000, kind = "video", taskAction = "d
   };
 }
 
-function extractAnyUrls(text, { limit = 1000, kind = "video", taskAction = "download", transcriptEnabled = false, audioEnabled = false, audioFormat = "mp3", analysisEnabled = false, onlyTranscript = false } = {}) {
+function extractAnyUrls(text, { limit = 1000, kind = "video", taskAction = "download", transcriptEnabled = false, audioEnabled = false, audioFormat = "mp3", analysisEnabled = false, onlyTranscript = false, correctTranscript = false } = {}) {
   const matches = String(text || "").match(/https?:\/\/[^\s"'<>]+/g) || [];
   const seen = new Set();
   const items = [];
@@ -391,6 +391,7 @@ function extractAnyUrls(text, { limit = 1000, kind = "video", taskAction = "down
         : "mp3",
       analysisEnabled,
       onlyTranscript,
+      correctTranscript,
     });
     if (items.length >= limit) break;
   }
@@ -5791,6 +5792,7 @@ async function downloadVideoForTask(task, videoInfo, signal) {
 async function completeTaskWithTranscript(task, videoInfo, messagePrefix = "", signal, options = {}) {
   throwIfPaused(signal);
   const apiKey = getActiveProviderApiKey();
+  const shouldCorrectTranscript = options.correctTranscript !== false;
   const updates = {};
   let transcriptText = "";
   let txtPath = findExistingTranscript(videoInfo);
@@ -5835,12 +5837,17 @@ async function completeTaskWithTranscript(task, videoInfo, messagePrefix = "", s
       }
     }
 
-    taskStore.updateTask(task.id, {
-      status: TASK_STATUS.TRANSCRIBING,
-      progress: 92,
-      message: "正在自动校正文案",
-    });
-    transcriptText = await correctTranscriptWithRewriteModel(rawTranscript, videoInfo, signal);
+    if (shouldCorrectTranscript) {
+      taskStore.updateTask(task.id, {
+        status: TASK_STATUS.TRANSCRIBING,
+        progress: 92,
+        message: "正在自动校正文案",
+      });
+      transcriptText = await correctTranscriptWithRewriteModel(rawTranscript, videoInfo, signal);
+    } else {
+      transcriptText = String(rawTranscript || "").trim();
+      updates.message = `${messagePrefix}文案已提取，未校正`;
+    }
     txtPath = saveTranscript(videoInfo, transcriptText);
     updates.txt_path = txtPath;
 
@@ -5860,7 +5867,7 @@ async function completeTaskWithTranscript(task, videoInfo, messagePrefix = "", s
     return updates;
   }
 
-  updates.message = `${messagePrefix}${txtPath ? "视频和文案已完成" : "视频已完成"}`;
+  updates.message = updates.message || `${messagePrefix}${txtPath ? "视频和文案已完成" : "视频已完成"}`;
   return updates;
 }
 
@@ -5925,7 +5932,7 @@ async function processBatchTask(task, signal) {
         videoInfo,
         "仅提取文案：",
         signal,
-        { localVideoPath: transcriptVideoPath, subtitlePath }
+        { localVideoPath: transcriptVideoPath, subtitlePath, correctTranscript: taskStats.correctTranscript === true }
       );
       taskStore.updateTask(task.id, {
         ...transcriptUpdates,
@@ -5959,7 +5966,7 @@ async function processBatchTask(task, signal) {
         videoInfo,
         "字幕文件：",
         signal,
-        { localVideoPath: videoPath, subtitlePath: downloaded.subtitlePath || "" }
+        { localVideoPath: videoPath, subtitlePath: downloaded.subtitlePath || "", correctTranscript: taskStats.correctTranscript === true }
       );
       taskStore.updateTask(task.id, {
         ...transcriptUpdates,
@@ -6075,7 +6082,7 @@ async function processBatchTask(task, signal) {
       videoInfo,
       messagePrefix,
       signal,
-      { localVideoPath: videoPath, subtitlePath: currentTask?.subtitle_path || "" }
+      { localVideoPath: videoPath, subtitlePath: currentTask?.subtitle_path || "", correctTranscript: taskStats.correctTranscript === true }
     );
     taskStore.updateTask(task.id, {
       ...transcriptUpdates,
@@ -7058,6 +7065,7 @@ const server = http.createServer(async (req, res) => {
         audioFormat: body.audioFormat || "mp3",
         analysisEnabled: false,
         onlyTranscript: taskAction === "transcript",
+        correctTranscript: body.correctTranscript === true,
       });
 
       if (extracted.items.length === 0) {
