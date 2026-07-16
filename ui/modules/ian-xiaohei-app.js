@@ -16,6 +16,8 @@ const state = {
   referenceStylePresets: [],
   pendingUploads: new Map(),
   confirmingUploads: new Set(),
+  localImagePickerActive: false,
+  lastStablePlan: null,
   buttonFeedbackTimers: new Map(),
   previewImageCache: new Map(),
   previewFrame: 0,
@@ -1576,6 +1578,7 @@ async function handlePromptAction(event) {
   if (action === "choose-image") {
     if (!ensurePromptPlanAvailable()) return;
     savePromptPlanCache(state.plan);
+    state.localImagePickerActive = true;
     els.promptResults.querySelector(`[data-shot-upload="${index}"]`)?.click();
     return;
   }
@@ -1848,6 +1851,12 @@ function restorePromptPlanCache() {
 
 function ensurePromptPlanAvailable() {
   if (state.plan?.shots?.length) return true;
+  if (state.lastStablePlan?.shots?.length) {
+    state.plan = state.lastStablePlan;
+    renderPlan(state.plan);
+    renderImages(state.images, []);
+    return true;
+  }
   if (restorePromptPlanCache()) return true;
   setStatus("提示词计划未恢复", "当前分镜计划不在内存里，请重新按 TTS 时间轴分析分镜配图。", 0, true);
   return false;
@@ -1918,6 +1927,7 @@ function renderPlan(plan) {
     syncVideoPreview();
     return;
   }
+  state.lastStablePlan = plan;
   const ratioStyle = previewRatioStyle(plan.aspectRatio);
   els.promptResults.className = "prompt-list";
   els.promptResults.innerHTML = `${promptBatchActionMarkup(plan)}${shots.map((shot) => {
