@@ -195,8 +195,28 @@ test("Xiaohei prompt plan refresh cache", async () => {
     || !source.includes('function restorePromptPlanCache()')
     || !source.includes('savePromptPlanCache(data, payload)')
     || !source.includes('cached.signature !== promptPlanCacheSignature()')
-    || !source.includes('cached.plan.skillProfileVersion !== 2')) {
+    || !source.includes('cached.plan.skillProfileVersion !== 2')
+    || !source.includes('data-prompt-content')
+    || !source.includes('handlePromptDetailsToggle')) {
     throw new Error("Xiaohei prompt plan refresh cache is incomplete");
+  }
+});
+
+test("Xiaohei fast preview and cache restore", async () => {
+  const [assetResponse, moduleResponse, cssResponse] = await Promise.all([
+    fetch(`${BASE}/assets/xiaohei-skills/ian-xiaohei-scenes.webp`),
+    fetch(`${BASE}/modules/ian-xiaohei-app.js`),
+    fetch(`${BASE}/xiaohei-illustrations.css`),
+  ]);
+  const [source, css] = await Promise.all([moduleResponse.text(), cssResponse.text()]);
+  if (!assetResponse.ok
+    || !assetResponse.headers.get("cache-control")?.includes("max-age=86400")
+    || !source.includes("hydratePurposeSelect();")
+    || !source.includes("await Promise.all([loadConfig(), loadAudioJobs()]);")
+    || !source.includes("void loadOutputs().catch(() => {});")
+    || !source.includes('decoding="async"')
+    || !css.includes("content-visibility: auto")) {
+    throw new Error("Xiaohei preview/cache loading optimization is incomplete");
   }
 });
 
