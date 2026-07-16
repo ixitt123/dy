@@ -35,4 +35,16 @@ assert.match(
   "UI server must auto-close by default when the last browser page closes.",
 );
 
+assert.match(
+  source,
+  /activeChildProcesses\.size > 0/,
+  "UI server must not auto-close while child processes are still running.",
+);
+
+assert.match(
+  source,
+  /serviceIsBusy\(ttsService\)[\s\S]*serviceIsBusy\(imageService\)[\s\S]*serviceIsBusy\(handleKineticTextRoutes\)/,
+  "UI server must not auto-close while production services still have background work.",
+);
+
 console.log("Download directory safety: OK");
