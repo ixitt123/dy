@@ -4017,6 +4017,10 @@ function markProductionTargetReceived(target, payload = {}) {
 }
 
 function applyTtsToCs1(payload = {}) {
+  if (window.cs1VideoProduction?.receiveTts) {
+    window.cs1VideoProduction.receiveTts(payload, { navigate: false });
+    return;
+  }
   setTextareaValue(document.querySelector("#cs1VideoText"), payload.text || "");
   const titleInput = document.querySelector("#cs1VideoTitle");
   if (titleInput && !titleInput.value.trim()) titleInput.value = ttsHandoffTitle(payload);

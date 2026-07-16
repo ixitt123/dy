@@ -1,5 +1,6 @@
 import { postJson } from "./api.js";
 
+const HANDOFF_KEY = "dy:handoff:cs1-video:audio";
 const EXAMPLE_TEXT = "看着明天仪征几千名初三学生奔赴考场，新初二、新初三的家长们，你们以为中考离你们还远吗？别等初三，现在就开始查短板、定节奏。";
 const DEFAULT_SCRIPT_FORMAT = [
   "标题：一句话说清主题。",
@@ -61,6 +62,7 @@ export function initCs1VideoModule() {
   let outputDir = "";
   let progressTimer = null;
   let progressValue = 0;
+  let currentTtsHandoff = null;
 
   if (beatCountSelect && !beatCountSelect.querySelector('option[value="auto"]')) {
     beatCountSelect.insertAdjacentHTML("afterbegin", [
@@ -73,6 +75,22 @@ export function initCs1VideoModule() {
   const setStatus = (value, detail = "") => {
     status.textContent = value;
     message.textContent = detail;
+  };
+
+  const ttsText = (payload = {}) => String(payload.text || payload.final_text || payload.tts_prepared_text || payload.original_text || "").trim();
+
+  const receiveTts = (payload = {}, { navigate = false } = {}) => {
+    if (!payload?.id) return null;
+    currentTtsHandoff = payload;
+    localStorage.setItem(HANDOFF_KEY, JSON.stringify(payload));
+    const text = ttsText(payload);
+    if (text) textInput.value = text;
+    if (titleInput && !titleInput.value.trim()) titleInput.value = payload.title || payload.seo_title || payload.publish_title || `配音 #${payload.display_number || payload.id}`;
+    if (bgmPathInput && payload.audio_path) bgmPathInput.value = payload.audio_path;
+    if (bgmModeSelect && payload.audio_path) bgmModeSelect.value = "local";
+    setStatus("已接收 TTS 三件套", "CS1 正在使用公共文案、音频和时间戳字幕。");
+    if (navigate) window.workbenchNavigate?.("cs1-video");
+    return currentTtsHandoff;
   };
 
   const setProgress = (value, stage = "") => {
@@ -172,6 +190,18 @@ export function initCs1VideoModule() {
       card.classList.add("active");
     });
   });
+
+  window.cs1VideoProduction = { receiveTts };
+  window.addEventListener("tts-shared-handoff-updated", (event) => {
+    if (event.detail?.sourceTarget === "cs1-video") return;
+    receiveTts(event.detail?.payload, { navigate: false });
+  });
+  window.addEventListener("cs1-video-handoff", (event) => receiveTts(event.detail, { navigate: true }));
+  try {
+    const shared = window.sharedTtsHandoff?.read?.();
+    const stored = shared?.id ? shared : JSON.parse(localStorage.getItem(HANDOFF_KEY) || "null");
+    if (stored?.id) receiveTts(stored, { navigate: false });
+  } catch {}
 
   const updateStyleDescription = () => {
     const style = styleCatalog.find((item) => item.id === selectedStyle());
