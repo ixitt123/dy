@@ -41,6 +41,29 @@
               <span>视频比例</span>
               <select id="aspectRatioSelect"></select>
             </label>
+            <details class="xiaohei-compose-settings" open>
+              <summary>视频合成设置</summary>
+              <div class="xiaohei-compose-grid">
+                <label class="field"><span>导出帧率</span><select id="xiaoheiFrameRate"><option value="30">30fps 标准</option><option value="60">60fps 流畅</option></select></label>
+                <label class="field"><span>分镜画面</span><select id="xiaoheiImageFit"><option value="cover">铺满画面</option><option value="contain">完整显示，留黑边</option></select></label>
+                <label class="field"><span>TTS 音量</span><input id="xiaoheiTtsVolume" type="range" min="0" max="200" value="100" /><output id="xiaoheiTtsVolumeValue">100%</output></label>
+                <label class="field"><span>背景音乐</span><button id="chooseXiaoheiBgm" type="button">选择本地背景音乐</button><small id="xiaoheiBgmName">未选择背景音乐</small></label>
+                <input id="xiaoheiBgmFile" type="file" accept="audio/mpeg,audio/wav,audio/x-wav,audio/mp4,audio/x-m4a" hidden />
+                <label class="field"><span>背景音量</span><input id="xiaoheiBgmVolume" type="range" min="0" max="100" value="18" /><output id="xiaoheiBgmVolumeValue">18%</output></label>
+                <label class="xiaohei-check"><input id="xiaoheiShowSubtitles" type="checkbox" checked /><span>显示底部关键词字幕</span></label>
+                <label class="field"><span>字幕字号</span><input id="xiaoheiSubtitleSize" type="range" min="28" max="96" value="48" /><output id="xiaoheiSubtitleSizeValue">48</output></label>
+                <label class="field"><span>文字颜色</span><input id="xiaoheiSubtitleColor" type="color" value="#ffffff" /></label>
+                <label class="field"><span>强调色</span><input id="xiaoheiKeywordColor" type="color" value="#b7ff5a" /></label>
+                <label class="field"><span>最大行数</span><select id="xiaoheiSubtitleLines"><option value="1">1 行</option><option value="2" selected>2 行</option><option value="3">3 行</option></select></label>
+                <label class="field"><span>动画速度</span><input id="xiaoheiSubtitleSpeed" type="range" min="60" max="160" value="100" /><output id="xiaoheiSubtitleSpeedValue">1.00×</output></label>
+                <label class="xiaohei-check"><input id="xiaoheiSubtitleOutline" type="checkbox" checked /><span>描边</span></label>
+                <label class="xiaohei-check"><input id="xiaoheiSubtitleShadow" type="checkbox" checked /><span>阴影</span></label>
+                <label class="xiaohei-check"><input id="xiaoheiIntroEnabled" type="checkbox" /><span>添加片头文字</span></label>
+                <label class="field"><span>片头</span><select id="xiaoheiIntroPreset"><option value="title">使用项目标题</option><option value="core">今天只讲一个重点</option><option value="custom">自定义</option></select><input id="xiaoheiIntroText" type="text" maxlength="80" placeholder="片头文字" /></label>
+                <label class="xiaohei-check"><input id="xiaoheiOutroEnabled" type="checkbox" checked /><span>添加结尾文字</span></label>
+                <label class="field"><span>结尾</span><select id="xiaoheiOutroPreset"><option value="next">关注我，下期继续</option><option value="follow">记得关注</option><option value="private">需要完整资料，可以私聊我</option><option value="custom">自定义</option></select><input id="xiaoheiOutroText" type="text" maxlength="80" value="关注我，下期继续" /></label>
+              </div>
+            </details>
             <div id="audioPreviewPanel" class="audio-preview" hidden>
               <strong id="audioPreviewTitle">当前 TTS 音频</strong>
               <audio id="audioPreview" controls></audio>

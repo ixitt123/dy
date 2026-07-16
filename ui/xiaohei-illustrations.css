@@ -687,6 +687,47 @@ button.danger {
   margin-top: 10px;
 }
 
+.xiaohei-compose-settings {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 10px;
+}
+
+.xiaohei-compose-settings > summary {
+  cursor: pointer;
+  color: #eef3ff;
+  font-weight: 700;
+}
+
+.xiaohei-compose-grid {
+  display: grid;
+  gap: 9px;
+  margin-top: 12px;
+}
+
+.xiaohei-compose-grid .field {
+  display: grid;
+  gap: 6px;
+}
+
+.xiaohei-compose-grid output,
+.xiaohei-compose-grid small {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.xiaohei-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+}
+
+.xiaohei-check input {
+  width: 16px;
+  height: 16px;
+}
+
 .panel-head {
   display: flex;
   align-items: center;
