@@ -741,6 +741,87 @@ button.danger {
   font-size: 13px;
 }
 
+.xiaohei-timeline-card {
+  overflow-x: auto;
+}
+
+.xiaohei-timeline-title button {
+  padding: 8px 12px;
+}
+
+.xiaohei-rule-status {
+  margin-bottom: 8px;
+  padding: 8px 10px;
+  border: 1px solid rgba(240, 189, 105, .38);
+  border-radius: 6px;
+  background: rgba(240, 189, 105, .1);
+  color: #ffe39f;
+  font-size: 12px;
+}
+
+.xiaohei-timeline-head,
+.xiaohei-timeline-row {
+  display: grid;
+  grid-template-columns: 34px 62px 62px minmax(260px, 1.8fr) minmax(150px, .85fr) 92px 92px 54px;
+  gap: 6px;
+  align-items: center;
+  min-width: 920px;
+}
+
+.xiaohei-timeline-head {
+  padding: 0 8px 6px;
+  color: #91a7c8;
+  font-size: 12px;
+}
+
+.xiaohei-subtitle-timeline {
+  display: grid;
+  gap: 6px;
+  max-height: 310px;
+  overflow: auto;
+  padding-right: 4px;
+}
+
+.xiaohei-subtitle-timeline.empty {
+  min-height: 56px;
+  padding: 12px;
+  border: 1px dashed #303b51;
+  border-radius: 6px;
+}
+
+.xiaohei-timeline-row {
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #0b111b;
+}
+
+.xiaohei-row-index {
+  color: #8ab6ff;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.xiaohei-timeline-row input,
+.xiaohei-timeline-row textarea {
+  min-height: 34px;
+  border-color: #253148;
+  background: #070b12;
+  font-size: 12px;
+}
+
+.xiaohei-timeline-row textarea {
+  min-height: 48px;
+  padding: 7px 8px;
+  resize: vertical;
+  line-height: 1.45;
+}
+
+.xiaohei-timeline-row input[type="color"] {
+  min-height: 34px;
+  padding: 3px;
+}
+
 .prompt-list,
 .image-list,
 .history-list {

@@ -2221,6 +2221,7 @@ function setBusy(busy) {
     els.confirmAudio,
     els.planPrompts,
     els.copyPrompts,
+    els.timelineRefresh,
     els.previewVoice,
     els.setDefaultVoice,
     els.deleteVoice,
