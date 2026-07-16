@@ -1338,6 +1338,10 @@ async function generateIllustration() {
         button.disabled = false;
         status.textContent = "生成完成，动态 MP4 已自动设为当前背景；GIF 和检查报告可直接下载。";
       },
+      onFailed: (job) => {
+        button.disabled = false;
+        status.textContent = job.error || "动态背景生成失败。";
+      },
     }).catch((error) => {
       button.disabled = false;
       status.textContent = error.message;
