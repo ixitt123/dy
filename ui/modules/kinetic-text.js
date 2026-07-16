@@ -630,7 +630,7 @@ function drawLegacyPreview() {
           : fontSize;
       drawToken(ctx, effect?.id === "podcast-lower-third" ? `• ${token}` : token, x, y, { progress, index, effectId: effect?.id, motion: effect?.motion, color, fontSize: tokenFontSize, fontFamily: params.fontFamily || "Microsoft YaHei" });
     });
-    if (state.project.showBottomSubtitles) {
+    if (state.project.showBottomSubtitles && !["rolling-focus", "rolling-focus-left"].includes(template.renderMode)) {
       ctx.save();
       ctx.font = "700 24px Microsoft YaHei";
       ctx.textAlign = "center";

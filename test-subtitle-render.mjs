@@ -62,6 +62,8 @@ for (const [index, [effectId, aspectRatio, expected, expectedFrameRate]] of [
   });
   const bottomDisabledAss = buildAss({ ...project, keywordPlacement: "line", showBottomSubtitles: false });
   assert.equal(countBottomDialogues(bottomDisabledAss), 0, `${effectId} must not burn bottom subtitles when disabled`);
+  const rollingTemplateAss = buildAss({ ...project, keywordPlacement: "bottom", showBottomSubtitles: true });
+  assert.equal(countBottomDialogues(rollingTemplateAss), 0, `${effectId} must not add a second bottom subtitle layer`);
   if (withBookends) {
     assert.equal(project.bookendWindows.intro.available, true, "正式渲染必须识别可用片头留白");
     assert.equal(project.bookendWindows.outro.available, true, "正式渲染必须识别可用片尾留白");
@@ -69,6 +71,7 @@ for (const [index, [effectId, aspectRatio, expected, expectedFrameRate]] of [
   const job = service.startRender(project.id);
   const finished = await waitFor(job.id);
   const videoPath = finished.result?.videoPath;
+  assert.match(path.basename(videoPath || ""), /-\d{14}-render-/, `${effectId} must use a unique render filename`);
   assert.equal(Boolean(videoPath && fs.existsSync(videoPath)), true, `${effectId} 正式 MP4 未生成`);
   assert.equal(path.dirname(path.resolve(videoPath)), path.resolve(selectedDownloadsDir), `${effectId} 没有直接保存到重新选择的下载目录`);
   const probe = spawnSync(ffprobeStatic.path, ["-v", "error", "-select_streams", "v:0", "-show_entries", "stream=width,height,r_frame_rate", "-of", "default=nw=1", videoPath], { encoding: "utf8", windowsHide: true });
