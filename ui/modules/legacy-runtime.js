@@ -200,7 +200,6 @@ const extractLocalVideoTranscriptBtn = document.querySelector("#extractLocalVide
 const extractLocalVideoSubtitleBtn = document.querySelector("#extractLocalVideoSubtitle");
 const extractLocalVideoAudioBtn = document.querySelector("#extractLocalVideoAudio");
 const localAudioFormat = document.querySelector("#localAudioFormat");
-const downloadExtractTranscript = document.querySelector("#downloadExtractTranscript");
 const downloadExtractAudio = document.querySelector("#downloadExtractAudio");
 const downloadCreateSubtitle = document.querySelector("#downloadCreateSubtitle");
 const downloadAudioFormat = document.querySelector("#downloadAudioFormat");
@@ -513,7 +512,7 @@ const taskActionLabels = {
   parse: "解析信息",
   link: "获取下载链接",
   download: "下载视频",
-  transcript: "提取并校正文案",
+  transcript: "校正文案",
   subtitle: "提取字幕",
   audio: "提取音频",
 };
@@ -2478,7 +2477,7 @@ async function refreshTasks() {
   scheduleTasksPoll(active);
 }
 
-async function enqueueTasks(action) {
+async function enqueueTasks(action, options = {}) {
   const text = shareLink.value.trim();
   if (!text) {
     batchStatus.textContent = "请先在上方粘贴平台视频链接";
@@ -2486,13 +2485,13 @@ async function enqueueTasks(action) {
     return;
   }
 
-  const label = taskActionLabels[action] || "任务";
+  const label = options.label || taskActionLabels[action] || "任务";
   batchStatus.textContent = `正在导入${label}队列`;
   resultBox.textContent = `正在导入${label}任务，请稍等...`;
   try {
     const needsTranscript = action === "transcript"
       || action === "subtitle"
-      || (action === "download" && (downloadExtractTranscript?.checked || downloadCreateSubtitle?.checked));
+      || (action === "download" && downloadCreateSubtitle?.checked);
     if (needsTranscript) {
       batchStatus.textContent = "正在检查文案识别和校正 API...";
       await ensureTranscriptProvidersConfigured();
@@ -2507,7 +2506,6 @@ async function enqueueTasks(action) {
         limit: Number(batchLimit.value || 10),
         concurrency: Number(batchConcurrency.value || 3),
         skipDownloaded: skipDownloaded.checked,
-        extractTranscript: Boolean(downloadExtractTranscript?.checked),
         extractAudio: Boolean(downloadExtractAudio?.checked),
         extractSubtitle: Boolean(downloadCreateSubtitle?.checked),
         audioFormat: downloadAudioFormat?.value || "mp3",
@@ -6551,7 +6549,7 @@ document.querySelector("#downloadBtn").addEventListener("click", () => {
 });
 
 document.querySelector("#transcriptBtn").addEventListener("click", () => {
-  enqueueTasks("transcript");
+  enqueueTasks("transcript", { label: "提取文案" });
 });
 
 document.querySelector("#subtitleExtractBtn")?.addEventListener("click", () => {
@@ -6560,6 +6558,10 @@ document.querySelector("#subtitleExtractBtn")?.addEventListener("click", () => {
 
 document.querySelector("#audioExtractBtn")?.addEventListener("click", () => {
   enqueueTasks("audio");
+});
+
+document.querySelector("#correctTranscriptBtn")?.addEventListener("click", () => {
+  enqueueTasks("transcript", { label: "校正文案" });
 });
 
 document.querySelector("#saveApiKey")?.addEventListener("click", () => {

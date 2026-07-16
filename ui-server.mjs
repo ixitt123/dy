@@ -7053,7 +7053,7 @@ const server = http.createServer(async (req, res) => {
         limit,
         kind: String(body.kind || "video"),
         taskAction,
-        transcriptEnabled: taskAction === "transcript" || taskAction === "subtitle" || (taskAction === "download" && (body.extractTranscript === true || body.extractSubtitle === true)),
+        transcriptEnabled: taskAction === "transcript" || taskAction === "subtitle" || (taskAction === "download" && body.extractSubtitle === true),
         audioEnabled: taskAction === "audio" || (taskAction === "download" && body.extractAudio === true),
         audioFormat: body.audioFormat || "mp3",
         analysisEnabled: false,
