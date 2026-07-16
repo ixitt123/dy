@@ -266,6 +266,35 @@ test("Xiaohei video preview, transitions and MP4 download", async () => {
   }
 });
 
+test("Xiaohei prompt plan uses one collapsible full-width panel", async () => {
+  const [page, styles, moduleSource] = await Promise.all([
+    readFile(new URL("./ui/xiaohei-illustrations.html", import.meta.url), "utf8"),
+    readFile(new URL("./ui/xiaohei-illustrations.css", import.meta.url), "utf8"),
+    readFile(new URL("./ui/modules/ian-xiaohei-app.js", import.meta.url), "utf8"),
+  ]);
+  if (!page.includes('id="promptPlanPanel"')
+    || !styles.includes('content: "展开全部 ▾"')
+    || page.includes("<h2>生成结果</h2>")
+    || page.includes('id="imageResults"')
+    || !styles.includes("grid-template-columns: minmax(0, 1fr)")
+    || moduleSource.includes('document.querySelector("#imageResults")')) {
+    throw new Error("Xiaohei prompt plan collapse/full-width layout is incomplete");
+  }
+});
+
+test("Kinetic bottom keywords animate in preview and final ASS", async () => {
+  const [moduleSource, serviceSource] = await Promise.all([
+    readFile(new URL("./ui/modules/kinetic-text.js", import.meta.url), "utf8"),
+    readFile(new URL("./server/kinetic-text/kinetic-text-service.js", import.meta.url), "utf8"),
+  ]);
+  if (!moduleSource.includes("function keywordMotion(mode, elapsedMs, index)")
+    || !moduleSource.includes("elapsedMs: Math.max(0, (state.currentTime")
+    || !serviceSource.includes("const delay = keywordIndex * 90")
+    || !serviceSource.includes("\\\\t(${delay},${peak}")) {
+    throw new Error("Kinetic keyword motion is not wired into preview and final ASS");
+  }
+});
+
 test("Kinetic text production line", async () => {
   const [effectsResponse, pageResponse, moduleResponse, legacyResponse, packageSource, kineticServiceSource] = await Promise.all([
     fetch(`${BASE}/api/kinetic-text/effects`),
