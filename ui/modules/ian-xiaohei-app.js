@@ -20,7 +20,7 @@ const state = {
 };
 const embeddedMode = new URLSearchParams(window.location.search).get("embedded") === "1";
 localStorage.setItem("ian-xiaohei-project-id", state.projectId);
-const PROMPT_PLAN_CACHE_VERSION = 1;
+const PROMPT_PLAN_CACHE_VERSION = 2;
 const PROMPT_PLAN_CACHE_PREFIX = "ian-xiaohei-prompt-plan";
 
 const PURPOSE_TEMPLATE_META = {
@@ -1369,6 +1369,7 @@ function restorePromptPlanCache() {
       cached?.version !== PROMPT_PLAN_CACHE_VERSION
       || cached.signature !== promptPlanCacheSignature()
       || !cached.plan?.shots?.length
+      || cached.plan.skillProfileVersion !== 2
     ) return false;
     state.plan = cached.plan;
     state.images = [];
@@ -1400,12 +1401,13 @@ function renderPlan(plan) {
       <article class="prompt-card" data-shot-card="${shot.index}">
         <h3>#${shot.index} ${escapeHtml(shot.topic)}</h3>
         <p class="meta">${shot.startTime !== undefined ? `${formatTime(shot.startTime)}–${formatTime(shot.endTime)} · ${Number(shot.duration || 0).toFixed(1)} 秒 · ` : ""}${escapeHtml(shot.role || "自动角色")} · ${escapeHtml(shot.structureType)}</p>
+        <p class="meta">已锁定 Skill：${escapeHtml(shot.skillName || plan.skillName || shot.skillId || "")}</p>
         <div class="semantic-binding">
           <strong>对应原文</strong>
           <p>${escapeHtml(shot.sourceText || "")}</p>
           <dl>
             <dt>核心意思</dt><dd>${escapeHtml(shot.coreIdea || "")}</dd>
-            <dt>小黑动作</dt><dd>${escapeHtml(shot.xiaoheiAction || "")}</dd>
+            <dt>主体动作</dt><dd>${escapeHtml(shot.xiaoheiAction || "")}</dd>
             <dt>视觉隐喻</dt><dd>${escapeHtml(shot.visualMetaphor || "")}</dd>
           </dl>
         </div>

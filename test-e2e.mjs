@@ -190,11 +190,12 @@ test("Xiaohei prompt plan refresh cache", async () => {
   const response = await fetch(`${BASE}/modules/ian-xiaohei-app.js`);
   const source = await response.text();
   if (!response.ok
-    || !source.includes('const PROMPT_PLAN_CACHE_VERSION = 1')
+    || !source.includes('const PROMPT_PLAN_CACHE_VERSION = 2')
     || !source.includes('function savePromptPlanCache(')
     || !source.includes('function restorePromptPlanCache()')
     || !source.includes('savePromptPlanCache(data, payload)')
-    || !source.includes('cached.signature !== promptPlanCacheSignature()')) {
+    || !source.includes('cached.signature !== promptPlanCacheSignature()')
+    || !source.includes('cached.plan.skillProfileVersion !== 2')) {
     throw new Error("Xiaohei prompt plan refresh cache is incomplete");
   }
 });

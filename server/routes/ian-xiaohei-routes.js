@@ -1290,7 +1290,7 @@ async function buildXiaoheiPlan(input = {}, modelRouter = null) {
   const title = inferTitle(text, input.title);
   const aiAnchors = input.semanticAnalysis === false
     ? null
-    : await analyzeSemanticAnchorsWithModel({ text, title, maxCount, modelRouter });
+    : await analyzeSemanticAnchorsWithModel({ text, title, maxCount, purpose, modelRouter });
   const anchors = aiAnchors?.length
     ? aiAnchors
     : selectSemanticAnchors(text, maxCount);
@@ -1311,6 +1311,9 @@ async function buildXiaoheiPlan(input = {}, modelRouter = null) {
     aspectRatio,
     purpose,
     purposeLabel: PURPOSES.find((item) => item.id === purpose)?.label || "文章正文配图",
+    skillId: purpose,
+    skillName: getPurposeStyleProfile(purpose).name,
+    skillProfileVersion: SKILL_PROFILE_VERSION,
     requestedCount: maxCount,
     semanticUnitCount,
     analysisMode: aiAnchors?.length ? "ai_semantic" : "local_semantic",
@@ -1344,6 +1347,7 @@ async function buildTimedXiaoheiPlan({
   const aiAnchors = await enrichTimedSegmentsWithModel({
     title,
     segments: timedSegments.map((segment) => segment.text),
+    purpose,
     modelRouter,
   });
   const anchors = timedSegments.map((segment, index) => {
@@ -1380,6 +1384,9 @@ async function buildTimedXiaoheiPlan({
     aspectRatio,
     purpose,
     purposeLabel: PURPOSES.find((item) => item.id === purpose)?.label || "文章正文配图",
+    skillId: purpose,
+    skillName: getPurposeStyleProfile(purpose).name,
+    skillProfileVersion: SKILL_PROFILE_VERSION,
     requestedCount: "auto",
     semanticUnitCount: shots.length,
     analysisMode: aiAnchors?.length === timedSegments.length ? "ai_timed_semantic" : "local_timed_semantic",
@@ -1393,8 +1400,9 @@ async function buildTimedXiaoheiPlan({
   };
 }
 
-async function enrichTimedSegmentsWithModel({ title, segments, modelRouter }) {
+async function enrichTimedSegmentsWithModel({ title, segments, purpose = "article", modelRouter }) {
   if (!modelRouter || typeof modelRouter.generate !== "function" || !segments.length) return null;
+  const styleProfile = getPurposeStyleProfile(purpose);
   try {
     const result = await modelRouter.generate({
       taskType: "rewrite",
@@ -1402,13 +1410,18 @@ async function enrichTimedSegmentsWithModel({ title, segments, modelRouter }) {
         {
           role: "system",
           content: [
-            "你是 Ian 小黑视频配图导演。用户已经按 TTS 音频节奏拆好了全部文案段落。",
+            `你是“${styleProfile.name}”视频配图导演。当前必须使用 SKILL_ID=${purpose}，不得替换成文章正文配图或其他模板。`,
+            `风格目标：${styleProfile.intent}`,
+            `主体规则：${styleProfile.characterRule}`,
+            `构图规则：${styleProfile.compositionRule}`,
+            `禁止项：${styleProfile.avoid}`,
+            "用户已经按 TTS 音频节奏拆好了全部文案段落。",
             "不得删除、合并、重排或新增段落。必须为每个输入段落返回一条视觉设计，数量和 source_index 完全一致。",
-            "每条只解释该段原文：提炼主体、动作、转折和结果，再发明一个低科技、怪诞但清楚的物理隐喻。",
-            "小黑是黑色实心、白点眼、细腿、空表情的严肃操作员，必须执行核心动作；不能穿衣、微笑、举标题牌或当装饰。",
-            "禁止通用英语学习图、通用职场图、PPT、正式流程图、商业插画、可爱卡通和大段可读文字。",
+            `每条只解释该段原文：提炼主体、动作、转折和结果，并严格转译为“${styleProfile.name}”的视觉语言。`,
+            `${styleProfile.actorName}必须遵守上述主体规则；没有强制角色的模板不得擅自加入小黑。`,
+            "禁止通用英语学习图、通用职场图和大段可读文字。",
             "只返回 JSON，不要 markdown。",
-            '{"anchors":[{"source_index":0,"role_id":"hook|problem|switch|method|path|warning|layer|loop|cta","visual_title":"","core_idea":"","visual_subject":"","xiaohei_action":"","visual_metaphor":"","structure_type":"Workflow|系统局部|前后对比|角色状态|概念隐喻|方法分层|地图路线|小漫画分镜","labels":[""],"elements":[""]}]}',
+            '{"anchors":[{"source_index":0,"role_id":"hook|problem|switch|method|path|warning|layer|loop|cta","visual_title":"","core_idea":"","visual_subject":"","subject_action":"","visual_metaphor":"","structure_type":"Workflow|系统局部|前后对比|角色状态|概念隐喻|方法分层|地图路线|小漫画分镜","labels":[""],"elements":[""]}]}',
           ].join("\n"),
         },
         {
@@ -1682,7 +1695,7 @@ function createDirectorProjectForPlan(taskStore, plan, audioJob) {
     title: plan.title,
     source_text: plan.sourceText,
     video_type: "knowledge",
-    visual_style: "ian_xiaohei_whiteboard",
+    visual_style: plan.skillId || plan.purpose || "article",
     platform: platformForAspectRatio(plan.aspectRatio),
     pace: "audio_synced",
     estimated_duration: Number(plan.audioDuration || 0),
@@ -1698,6 +1711,9 @@ function createDirectorProjectForPlan(taskStore, plan, audioJob) {
       ratio: normalizeAspectRatio(plan.aspectRatio),
       timing_source: plan.timingSource,
       batch_id: plan.batchId,
+      skill_id: plan.skillId || plan.purpose || "article",
+      skill_name: plan.skillName || getPurposeStyleProfile(plan.purpose).name,
+      skill_profile_version: plan.skillProfileVersion || SKILL_PROFILE_VERSION,
     }),
   });
   taskStore.replaceDirectorScenes(project.id, plan.shots.map((shot) => ({
@@ -1707,7 +1723,7 @@ function createDirectorProjectForPlan(taskStore, plan, audioJob) {
     emotion: "自然",
     voice_text: shot.sourceText,
     subtitle: shot.subtitleText || shot.sourceText,
-    visual_style: "Ian 小黑白底手绘",
+    visual_style: shot.skillName || plan.skillName || getPurposeStyleProfile(plan.purpose).name,
     camera: "slow_push_in",
     composition: shot.composition,
     image_prompt: shot.prompt,
@@ -1725,6 +1741,9 @@ function createDirectorProjectForPlan(taskStore, plan, audioJob) {
       subtitle_text: shot.subtitleText || shot.sourceText,
       visual_subject: shot.visualSubject,
       xiaohei_action: shot.xiaoheiAction,
+      subject_action: shot.xiaoheiAction,
+      skill_id: shot.skillId || plan.skillId || plan.purpose,
+      skill_name: shot.skillName || plan.skillName,
     }),
   })));
   return taskStore.getDirectorProject(project.id);
@@ -2198,6 +2217,7 @@ function updateResultFile(batchDir, { image = null, error = null, output = null 
 }
 
 function buildShot({ index, total, title, anchor, purpose, aspectRatio = "16:9", preferredStructure }) {
+  const styleProfile = getPurposeStyleProfile(purpose);
   const segment = anchor.sourceText;
   const shotRole = getRoleDefinition(anchor.roleId) || inferRoleDefinition(segment, index, total);
   const structureType = STRUCTURE_TYPES.includes(preferredStructure)
@@ -2213,6 +2233,7 @@ function buildShot({ index, total, title, anchor, purpose, aspectRatio = "16:9",
     title,
     shotRole,
     anchor,
+    purpose,
   });
   const labels = Array.isArray(anchor.labels) && anchor.labels.length
     ? anchor.labels.slice(0, 6)
@@ -2234,6 +2255,9 @@ function buildShot({ index, total, title, anchor, purpose, aspectRatio = "16:9",
   });
   return {
     index,
+    skillId: purpose,
+    skillName: styleProfile.name,
+    skillProfileVersion: SKILL_PROFILE_VERSION,
     topic,
     purpose: shotPurposeLabel(purpose, index),
     role: shotRole.label,
@@ -2252,7 +2276,7 @@ function buildShot({ index, total, title, anchor, purpose, aspectRatio = "16:9",
   };
 }
 
-function buildPrompt({
+export function buildPrompt({
   purpose = "article",
   topic,
   seriesRole,
@@ -2276,14 +2300,18 @@ function buildPrompt({
   return [
     `Generate one standalone ${formatDescription}.`,
     "",
-    "Selected template / Skill:",
+    "Mandatory selected template / Skill (do not substitute another style):",
+    `SKILL_ID: ${purpose}`,
     `${styleProfile.name}. ${styleProfile.intent}`,
     "",
     "Visual DNA:",
     styleProfile.visualDna || DEFAULT_VISUAL_DNA,
     "",
-    "Recurring IP character required:",
+    "Subject / character rule:",
     styleProfile.characterRule || DEFAULT_CHARACTER_RULE,
+    "",
+    "Template composition rule:",
+    styleProfile.compositionRule,
     "",
     `Theme: ${topic}`,
     `Series role: ${seriesRole}. This image belongs to a multi-image set, so it must use a clearly different metaphor, object set, and composition from the other images in the same set.`,
@@ -2291,17 +2319,21 @@ function buildPrompt({
     `Structure type: ${structureType}`,
     `Core idea: ${coreIdea}`,
     `Visual subject: ${visualSubject || coreIdea}`,
-    `Xiaohei core action: ${xiaoheiAction || "小黑执行当前段落最关键的动作"}`,
+    `${styleProfile.actorName} action: ${xiaoheiAction || `${styleProfile.actorName}执行当前段落最关键的动作`}`,
     `Fresh metaphor for this paragraph: ${visualMetaphor || "从当前段落重新发明一个低科技物理隐喻"}`,
     `Composition: ${composition}`,
     `Suggested elements: ${elements.join(" / ")}`,
     `Chinese handwritten labels: ${labels.join(" / ")}`,
     "",
     "Color use:",
-    "Black for main line art and 小黑. Orange for main flow/path/arrows. Red only for key warnings/problems/results. Blue only for secondary notes or feedback/system state.",
+    styleProfile.colorRule,
+    "",
+    "Template-specific avoid rule:",
+    styleProfile.avoid,
     "",
     "Constraints:",
-    "The picture must explain the exact source paragraph above, not merely the article's broad topic. Preserve its subject, action, direction, contrast, and result. Do not substitute a generic learning, workplace, AI, or business scene. Draw only one Xiaohei character unless the composition explicitly requires a before/after comparison; even then, each Xiaohei must have exactly two eyes and two legs. One image explains only one core structure. Keep the main subject around 40%-60% of the canvas. Preserve at least 35% blank white space. Use at most 5-8 short handwritten Chinese labels, and derive labels only from this source paragraph. Do not write a title in the top-left corner. Do not write the structure type on the image. Do not make it a formal diagram, course slide, or dense explainer. Do not repeat the same machine, route, door, funnel, card, or character pose across the image set. Do not copy prior examples or reuse known case compositions unless explicitly requested; invent a fresh visual metaphor for this specific paragraph. It should be clear but not instructional, interesting but not childish, strange but clean.",
+    `Template lock: every visual decision must match SKILL_ID=${purpose} (${styleProfile.name}). Never fall back to the default Xiaohei article style unless SKILL_ID is article.`,
+    "The picture must explain the exact source paragraph above, not merely the article's broad topic. Preserve its subject, action, direction, contrast, and result. Do not substitute a generic learning, workplace, AI, or business scene. One image explains only one core structure. Keep the main subject around 40%-60% of the canvas. Use at most 5-8 short Chinese labels derived only from this source paragraph. Do not write the structure type on the image. Do not repeat the same object set or pose across the image set. Invent a fresh visual metaphor for this specific paragraph while obeying the selected template.",
   ].join("\n");
 }
 
@@ -2309,12 +2341,13 @@ function getPurposeStyleProfile(purpose) {
   return PURPOSE_STYLE_PROFILES[purpose] || PURPOSE_STYLE_PROFILES.article;
 }
 
-function buildMetaphor(segment, structureType, { index, total, title, shotRole, anchor = {} }) {
+function buildMetaphor(segment, structureType, { index, total, title, shotRole, anchor = {}, purpose = "article" }) {
+  const styleProfile = getPurposeStyleProfile(purpose);
   const domain = inferDomainLayer(`${title} ${segment}`);
   const semanticBase = anchor.visualMetaphor && anchor.xiaoheiAction
-    ? `核心隐喻是“${anchor.visualMetaphor}”。小黑正在${anchor.xiaoheiAction}。`
-    : (shotRole?.composition || fallbackCompositionFor(structureType));
-  const composition = `${semanticBase} 画面只翻译当前原文“${trimText(segment, 80)}”，不扩写成全文主题；围绕“${anchor.visualSubject || inferTopic(segment, title, index)}”选择具体物件，可参考${domain.elements.join("、")}，但不允许用通用图标替代原文动作。保持第 ${index}/${total} 张与其他张的主物件和小黑动作不同。`;
+    ? `核心隐喻是“${anchor.visualMetaphor}”。${styleProfile.actorName}正在${anchor.xiaoheiAction}。`
+    : adaptCompositionToProfile(shotRole?.composition || fallbackCompositionFor(structureType), styleProfile);
+  const composition = `${styleProfile.compositionRule} ${semanticBase} 画面只翻译当前原文“${trimText(segment, 80)}”，不扩写成全文主题；围绕“${anchor.visualSubject || inferTopic(segment, title, index)}”选择具体物件，可参考${domain.elements.join("、")}，但不允许用通用图标替代原文动作。保持第 ${index}/${total} 张与其他张的主物件和主体动作不同。`;
   return {
     composition,
     elements: uniqueList([
@@ -2323,6 +2356,12 @@ function buildMetaphor(segment, structureType, { index, total, title, shotRole, 
       ...domain.elements,
     ]).slice(0, 6),
   };
+}
+
+function adaptCompositionToProfile(composition, styleProfile) {
+  return String(composition || "")
+    .replaceAll("小黑", styleProfile.actorName)
+    .replaceAll("白纸", styleProfile.actorName === "小黑" ? "白纸" : "画面");
 }
 
 function fallbackCompositionFor(structureType) {
@@ -2391,8 +2430,9 @@ function inferRoleDefinition(segment, index, total) {
   return getRoleDefinition("method");
 }
 
-async function analyzeSemanticAnchorsWithModel({ text, title, maxCount, modelRouter }) {
+async function analyzeSemanticAnchorsWithModel({ text, title, maxCount, purpose = "article", modelRouter }) {
   if (!modelRouter || typeof modelRouter.generate !== "function") return null;
+  const styleProfile = getPurposeStyleProfile(purpose);
   try {
     const result = await modelRouter.generate({
       taskType: "rewrite",
@@ -2400,17 +2440,21 @@ async function analyzeSemanticAnchorsWithModel({ text, title, maxCount, modelRou
         {
           role: "system",
           content: [
-            "你是 Ian 小黑中文正文配图的语义导演，只负责理解文章和选择真正需要配图的认知锚点。",
+            `你是“${styleProfile.name}”的语义导演。当前必须使用 SKILL_ID=${purpose}，不得替换成文章正文配图或其他模板。`,
+            `风格目标：${styleProfile.intent}`,
+            `主体规则：${styleProfile.characterRule}`,
+            `构图规则：${styleProfile.compositionRule}`,
+            `禁止项：${styleProfile.avoid}`,
+            "你只负责理解文章和选择真正需要配图的认知锚点。",
             "不要平均切字，不要为了凑数量重复段落，不要按固定的开头/问题/方法/结尾模板强套原文。",
             "优先选择：核心判断、认知转折、断点、输入输出闭环、前后对比、角色变化、方法动作、常见误区。",
             "每张图只能绑定一段语义完整的原文，source_text 必须逐字摘自用户原文。",
-            "小黑必须执行该段的核心物理动作，不能只站在旁边。隐喻必须为当前段重新发明，不能只画宽泛主题。",
-            "core_idea、visual_subject、xiaohei_action、visual_metaphor 只能解释各自 source_text，禁止混入相邻句或全文其他内容。",
-            "小黑保持黑色实心、白点眼、细腿、空表情；不要给小黑穿衣服、不要微笑、不要举写有大字的牌子。",
+            `${styleProfile.actorName}必须执行该段的核心物理动作，不能只站在旁边；没有强制角色的模板不得擅自加入小黑。`,
+            "core_idea、visual_subject、subject_action、visual_metaphor 只能解释各自 source_text，禁止混入相邻句或全文其他内容。",
             "不要把原文或标题写进画面，只允许 2-6 字的少量短批注。",
             `最多输出 ${maxCount} 个锚点；短文可以少于 ${maxCount} 个。按原文出现顺序返回。`,
             "只返回 JSON，不要 markdown。格式：",
-            '{"anchors":[{"source_text":"","role_id":"hook|problem|switch|method|path|warning|layer|loop|cta","visual_title":"","core_idea":"","visual_subject":"","xiaohei_action":"","visual_metaphor":"","structure_type":"Workflow|系统局部|前后对比|角色状态|概念隐喻|方法分层|地图路线|小漫画分镜","labels":[""],"elements":[""]}]}',
+            '{"anchors":[{"source_text":"","role_id":"hook|problem|switch|method|path|warning|layer|loop|cta","visual_title":"","core_idea":"","visual_subject":"","subject_action":"","visual_metaphor":"","structure_type":"Workflow|系统局部|前后对比|角色状态|概念隐喻|方法分层|地图路线|小漫画分镜","labels":[""],"elements":[""]}]}',
             "visual_subject 只写当前段落的核心对象或变化，最多 12 个中文，不要写完整构图。",
             "labels 只能使用当前 source_text 中已有或直接概括出的 2-6 字短词，最多 6 个。",
           ].join("\n"),
@@ -2442,7 +2486,7 @@ function normalizeAiAnchor(value, units) {
   const inferredRole = inferRoleDefinition(sourceText, 1, 1);
   const roleId = inferExplicitRoleId(sourceText) || getRoleDefinition(value.role_id)?.id || inferredRole.id;
   const fallbackAction = defaultActionForRole(roleId, sourceText);
-  const proposedAction = trimText(value.xiaohei_action || "", 48);
+  const proposedAction = trimText(value.subject_action || value.xiaohei_action || "", 48);
   const proposedSubject = trimText(value.visual_subject || "", 32);
   const specializedSubject = specializedSubjectForText(sourceText);
   return {
@@ -2767,7 +2811,7 @@ function promptsMarkdown(plan) {
       `结构：${shot.structureType}`,
       `对应原文：${shot.sourceText || ""}`,
       `核心意思：${shot.coreIdea || ""}`,
-      `小黑动作：${shot.xiaoheiAction || ""}`,
+      `主体动作：${shot.xiaoheiAction || ""}`,
       `视觉隐喻：${shot.visualMetaphor || ""}`,
       "",
       "```text",
