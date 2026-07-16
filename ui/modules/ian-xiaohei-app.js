@@ -1538,10 +1538,16 @@ async function handleAudioJobAction(event) {
 async function handlePromptFileChange(event) {
   const input = event.target.closest("[data-shot-upload]");
   if (!input?.files?.[0]) return;
+  if (!ensurePromptPlanAvailable()) return;
   const index = Number(input.dataset.shotUpload);
+  if (!(state.plan?.shots || []).some((shot) => Number(shot.index) === index)) {
+    setStatus("图片没有对应分镜", `当前文件选择来自 #${index}，但计划里找不到这个分镜。`, 0, true);
+    return;
+  }
   const file = input.files[0];
   const dataUrl = await readFileDataUrl(file);
   state.pendingUploads.set(index, { dataUrl, mimeType: file.type, fileName: file.name });
+  input.value = "";
   renderPlan(state.plan);
 }
 
@@ -1563,14 +1569,18 @@ async function handlePromptAction(event) {
   const index = Number(button.dataset.index);
   const action = button.dataset.promptAction;
   if (action === "confirm-all-images") {
+    if (!ensurePromptPlanAvailable()) return;
     await uploadAllPendingShotImages(button);
     return;
   }
   if (action === "choose-image") {
+    if (!ensurePromptPlanAvailable()) return;
+    savePromptPlanCache(state.plan);
     els.promptResults.querySelector(`[data-shot-upload="${index}"]`)?.click();
     return;
   }
   if (action === "copy-prompt") {
+    if (!ensurePromptPlanAvailable()) return;
     const shot = state.plan?.shots?.find((item) => Number(item.index) === index);
     if (!shot) return;
     try {
@@ -1584,12 +1594,16 @@ async function handlePromptAction(event) {
     return;
   }
   if (action === "cancel-image") {
+    if (!ensurePromptPlanAvailable()) return;
     state.pendingUploads.delete(index);
     savePromptPlanCache(state.plan);
     renderPlan(state.plan);
     return;
   }
-  if (action === "confirm-image") await uploadShotImage(index, { button });
+  if (action === "confirm-image") {
+    if (!ensurePromptPlanAvailable()) return;
+    await uploadShotImage(index, { button });
+  }
 }
 
 async function uploadShotImage(index, { button = null, render = true, silent = false } = {}) {
@@ -1830,6 +1844,13 @@ function restorePromptPlanCache() {
     localStorage.removeItem(key);
     return false;
   }
+}
+
+function ensurePromptPlanAvailable() {
+  if (state.plan?.shots?.length) return true;
+  if (restorePromptPlanCache()) return true;
+  setStatus("提示词计划未恢复", "当前分镜计划不在内存里，请重新按 TTS 时间轴分析分镜配图。", 0, true);
+  return false;
 }
 
 function promptJobLimit(count = 1) {
