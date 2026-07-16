@@ -2,7 +2,6 @@ import { postJson } from "./api.js";
 
 const HANDOFF_KEY = "dy:handoff:money-printer:audio";
 const PREF_KEY = "dy:money-printer:preferences";
-const KINETIC_PREF_KEY = "dy:kinetic-text:preferences";
 const POLL_INTERVAL_MS = 2500;
 
 const state = {
@@ -154,30 +153,22 @@ function renderEffectOptions() {
 }
 
 async function applyDefaultPreferences() {
-  const kineticPrefs = readJsonStorage(KINETIC_PREF_KEY, {});
   const moneyPrefs = readJsonStorage(PREF_KEY, {});
-  let latestKinetic = null;
-  try {
-    const data = await fetchJson("/api/kinetic-text/projects");
-    const projects = Array.isArray(data.projects) ? data.projects : [];
-    latestKinetic = projects.find((item) => item.id === localStorage.getItem("dy:kinetic-text:project-id")) || projects[0] || null;
-  } catch {}
-  const effectId = moneyPrefs.effectId || latestKinetic?.effectId || kineticPrefs.effectId || state.effects[0]?.id || "";
+  const effectId = moneyPrefs.effectId || state.effects[0]?.id || "";
   const effect = state.effects.find((item) => item.id === effectId) || state.effects[0] || {};
   const params = {
     ...(effect.defaultParams || {}),
-    ...(latestKinetic?.effectParams || {}),
     ...(moneyPrefs.effectParams || {}),
   };
   setSelectValue(els.effect, effectId);
-  setSelectValue(els.aspect, moneyPrefs.aspectRatio || latestKinetic?.aspectRatio || kineticPrefs.aspectRatio || "9:16");
-  setSelectValue(els.frameRate, String(moneyPrefs.frameRate || latestKinetic?.frameRate || kineticPrefs.frameRate || 30));
+  setSelectValue(els.aspect, moneyPrefs.aspectRatio || "9:16");
+  setSelectValue(els.frameRate, String(moneyPrefs.frameRate || 30));
   setSelectValue(els.maxLines, String(params.maxLines || 2));
   els.fontSize.value = String(params.fontSize || 88);
   els.primaryColor.value = params.primaryColor || effect.primary || "#ffffff";
   els.accentColor.value = params.accentColor || effect.accent || "#ffd84d";
-  els.ttsVolume.value = String(moneyPrefs.ttsVolume ?? latestKinetic?.audioMix?.ttsVolume ?? kineticPrefs.ttsVolume ?? 100);
-  els.bottomSubtitles.checked = moneyPrefs.showBottomSubtitles ?? latestKinetic?.showBottomSubtitles ?? kineticPrefs.showBottomSubtitles ?? true;
+  els.ttsVolume.value = String(moneyPrefs.ttsVolume ?? 100);
+  els.bottomSubtitles.checked = moneyPrefs.showBottomSubtitles ?? true;
   setSelectValue(els.transition, moneyPrefs.transition || "auto");
   setSelectValue(els.source, moneyPrefs.source || "pexels");
   state.page.classList.toggle("money-printer-local-source", els.source.value === "local");

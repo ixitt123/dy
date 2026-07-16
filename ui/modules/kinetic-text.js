@@ -1720,14 +1720,17 @@ function scheduleSave(changes = {}) {
   drawPreview();
   clearTimeout(state.saveTimer);
   state.saveTimer = setTimeout(async () => {
+    const changesToSave = state.pendingSaveChanges;
+    state.pendingSaveChanges = {};
     try {
-      const data = await postJson("/api/kinetic-text/update", { projectId: state.project.id, changes: state.project });
+      const data = await postJson("/api/kinetic-text/update", { projectId: state.project.id, changes: changesToSave });
       state.project = data.project;
       const index = state.projects.findIndex((item) => item.id === state.project.id);
       if (index >= 0) state.projects[index] = state.project;
       renderProjects();
       renderTimelineRuleStatus();
     } catch (error) {
+      state.pendingSaveChanges = mergeProjectChanges(changesToSave, state.pendingSaveChanges);
       setProgress(state.project.progress || 0, `自动保存失败：${error.message}`);
     }
   }, 550);
@@ -1807,7 +1810,10 @@ async function pollJob(jobId, options = {}) {
 async function saveProjectImmediately() {
   if (!state.project) return null;
   clearTimeout(state.saveTimer);
-  const data = await postJson("/api/kinetic-text/update", { projectId: state.project.id, changes: state.project });
+  const changesToSave = mergeProjectChanges(state.pendingSaveChanges, currentControlChanges());
+  state.pendingSaveChanges = {};
+  state.project = mergeProjectChanges(state.project, changesToSave);
+  const data = await postJson("/api/kinetic-text/update", { projectId: state.project.id, changes: changesToSave });
   state.project = data.project;
   const index = state.projects.findIndex((item) => item.id === state.project.id);
   if (index >= 0) state.projects[index] = state.project;
