@@ -6591,6 +6591,69 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
+    if (req.method === "POST" && url.pathname === "/api/tasks/transcript/save") {
+      try {
+        const body = await readJsonBody(req, { maxBytes: 1024 * 1024 });
+        const id = Number(body.id || 0);
+        const text = String(body.text || "").trim();
+        const task = taskStore.getTask(id);
+        if (!task || !task.txt_path || !fs.existsSync(task.txt_path)) throw new Error("没有找到可编辑的文案");
+        if (!text) throw new Error("文案不能为空");
+        fs.writeFileSync(task.txt_path, `${text}\n`, "utf8");
+        const updatedTask = taskStore.updateTask(id, {
+          message: "文案已手动编辑",
+        });
+        sendJson(res, 200, {
+          ok: true,
+          task: updatedTask,
+          transcripts: transcriptRows(),
+        });
+      } catch (error) {
+        sendJson(res, 400, { ok: false, message: error instanceof Error ? error.message : String(error) });
+      }
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/tasks/transcript/correct") {
+      try {
+        const body = await readJsonBody(req, { maxBytes: 256 * 1024 });
+        const ids = Array.isArray(body.ids) ? body.ids : [body.id];
+        const safeIds = [...new Set(ids.map((id) => Number(id || 0)).filter(Boolean))].slice(0, 50);
+        if (!safeIds.length) throw new Error("请先选择要校正的文案");
+        let correctedCount = 0;
+        for (const id of safeIds) {
+          const task = taskStore.getTask(id);
+          if (!task || !task.txt_path || !fs.existsSync(task.txt_path)) continue;
+          const sourceText = fs.readFileSync(task.txt_path, "utf8").trim();
+          if (!sourceText) continue;
+          const correctedText = await correctTranscriptWithRewriteModel(sourceText, {
+            title: task.title,
+            videoId: task.video_id,
+          });
+          fs.writeFileSync(task.txt_path, `${correctedText}\n`, "utf8");
+          taskStore.updateTask(id, {
+            message: "文案已校正",
+            stats_json: JSON.stringify({
+              ...safeJsonParse(task.stats_json),
+              correctTranscript: true,
+              correctedAt: new Date().toISOString(),
+            }),
+          });
+          correctedCount += 1;
+        }
+        if (!correctedCount) throw new Error("没有可校正的文案");
+        sendJson(res, 200, {
+          ok: true,
+          correctedCount,
+          message: `已校正 ${correctedCount} 条文案。`,
+          transcripts: transcriptRows(),
+        });
+      } catch (error) {
+        sendJson(res, 400, { ok: false, message: error instanceof Error ? error.message : String(error) });
+      }
+      return;
+    }
+
     if (req.method === "GET" && url.pathname === "/api/reference-examples") {
       sendJson(res, 200, {
         ok: true,

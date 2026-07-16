@@ -6667,10 +6667,6 @@ document.querySelector("#audioExtractBtn")?.addEventListener("click", () => {
   enqueueTasks("audio");
 });
 
-document.querySelector("#correctTranscriptBtn")?.addEventListener("click", () => {
-  enqueueTasks("transcript", { label: "校正文案" });
-});
-
 document.querySelector("#saveApiKey")?.addEventListener("click", () => {
   saveApiKey();
 });

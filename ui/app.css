@@ -814,16 +814,38 @@ button:disabled {
 
 .transcript-card {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   gap: 12px;
   padding: 12px 0;
   border-bottom: 1px solid #eef2f3;
+}
+
+.transcript-card.selected {
+  border-color: rgba(124, 92, 255, 0.45);
+  box-shadow: inset 3px 0 0 var(--primary, #7c5cff);
+}
+
+.transcript-select-cell {
+  display: flex;
+  align-items: flex-start;
+  padding-top: 3px;
+}
+
+.transcript-select-cell input {
+  width: 16px;
+  height: 16px;
+}
+
+.transcript-content {
+  min-width: 0;
 }
 
 .transcript-actions {
   display: flex;
   align-items: flex-start;
   gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
 .transcript-card:last-child {
@@ -850,6 +872,14 @@ button:disabled {
   color: var(--primary-dark);
   font-size: 13px;
   font-weight: 700;
+}
+
+.transcript-vault-tools {
+  align-items: center;
+}
+
+.transcript-edit-panel {
+  margin-top: 14px;
 }
 
 .batch-body {
@@ -5785,6 +5815,11 @@ body[data-active-module="xiaohei-video"] .floating-workflow-guide [data-nav="xia
 .voice-test-row {
   border-color: #2b323e;
   background: #141820;
+}
+
+.transcript-card.selected {
+  border-color: rgba(124, 92, 255, 0.65);
+  background: #171c28;
 }
 
 .transcript-card + .transcript-card,
