@@ -5,13 +5,17 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import ffmpegPath from "ffmpeg-static";
 import ffprobeStatic from "ffprobe-static";
-import { createKineticTextService } from "./server/kinetic-text/kinetic-text-service.js";
+import { buildAss, createKineticTextService } from "./server/kinetic-text/kinetic-text-service.js";
 
 const root = fs.mkdtempSync(path.join(os.tmpdir(), "subtitle-render-test-"));
 let selectedDownloadsDir = path.join(root, "downloads-a");
 const service = createKineticTextService({ baseDir: root, downloadsDir: selectedDownloadsDir, getDownloadsDir: () => selectedDownloadsDir, ffmpegPath, ffprobePath: ffprobeStatic.path, modelRouter: null });
 const segment = { id: "s1", start: 0, end: 1.25, text: "真正重要的是结果。", keywords: ["重要", "结果"], speaker: "主讲人" };
 const words = [...segment.text].map((text, index, list) => ({ text, start: 1.25 * index / list.length, end: 1.25 * (index + 1) / list.length }));
+
+function countBottomDialogues(ass) {
+  return ass.split(/\r?\n/).filter((line) => line.startsWith("Dialogue:") && line.includes(",Bottom,")).length;
+}
 
 async function waitFor(jobId) {
   const started = Date.now();
@@ -49,6 +53,8 @@ for (const [index, [effectId, aspectRatio, expected, expectedFrameRate]] of [
     } : {},
     tts: { alignment_status: "confirmed", final_text: renderSegment.text, duration: renderDuration, sentence_timeline: [renderSegment], word_timeline: renderWords },
   });
+  const bottomDisabledAss = buildAss({ ...project, keywordPlacement: "line", showBottomSubtitles: false });
+  assert.equal(countBottomDialogues(bottomDisabledAss), 0, `${effectId} must not burn bottom subtitles when disabled`);
   if (withBookends) {
     assert.equal(project.bookendWindows.intro.available, true, "正式渲染必须识别可用片头留白");
     assert.equal(project.bookendWindows.outro.available, true, "正式渲染必须识别可用片尾留白");
