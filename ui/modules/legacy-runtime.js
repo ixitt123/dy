@@ -1716,7 +1716,7 @@ function providerHasSavedConfig(config, scope = "") {
   if (scope === "tts") {
     return Boolean(
       hasSavedSecret
-      String(config.apiKey || config.api_key || "").trim()
+      || String(config.apiKey || config.api_key || "").trim()
       || String(config.baseUrl || config.base_url || "").trim()
       || String(config.secret_id || "").trim()
     );
