@@ -210,10 +210,6 @@ function frameSvg({ width, height, frame, frameCount, project, effect, config, c
     <path d="M${cx + charSize * 0.36} ${cy - charSize * 0.22} Q${width * 0.42} ${height * 0.18} ${panelX + panelW * 0.18} ${panelY + panelH * 0.18}" pathLength="100" stroke-dasharray="100" stroke-dashoffset="${(100 - Number(arrowProgress)).toFixed(2)}"/>
     <path d="M${panelX + panelW * 0.18} ${panelY + panelH * 0.18} l${-unit * 0.025} ${-unit * 0.004} l${unit * 0.01} ${unit * 0.024}"/>
   </g>
-  <g id="layer-text" opacity="0">
-    <rect x="${panelX + panelW * 0.08}" y="${panelY + panelH * 0.66}" width="${panelW * 0.84}" height="${panelH * 0.22}" rx="${unit * 0.022}" fill="${paletteAlpha(colors.background, 0.88)}" stroke="${colors.accent}" stroke-width="${Math.max(2, unit * 0.004)}"/>
-    <text x="${panelX + panelW * 0.5}" y="${panelY + panelH * 0.805}" text-anchor="middle" fill="${colors.ink}" font-family="Microsoft YaHei, sans-serif" font-size="${Math.max(24, unit * 0.035)}" font-weight="700">${title}</text>
-  </g>
   <g id="layer-decoration" opacity="${decorOpacity}" stroke-linecap="round">${decorations}
     <path d="M${width * 0.72} ${height * 0.82} q${unit * 0.04} ${-unit * 0.035} ${unit * 0.08} 0" fill="none" stroke="${colors.accent}" stroke-width="${Math.max(3, unit * 0.006)}"/>
   </g>
