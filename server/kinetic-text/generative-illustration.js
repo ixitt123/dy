@@ -161,7 +161,7 @@ export function normalizeIllustrationConfig(input = {}, project = {}) {
     ? Math.min(ILLUSTRATION_MAX_SECONDS, Math.max(2, Number(project.duration || 6)))
     : input.duration;
   return {
-    enabled: input.enabled !== false,
+    enabled: input.enabled === true,
     scene: SCENES.has(input.scene) ? input.scene : "explainer",
     character: CHARACTERS.has(input.character) ? input.character : "xiaohei",
     density: DENSITIES.has(input.density) ? input.density : "standard",

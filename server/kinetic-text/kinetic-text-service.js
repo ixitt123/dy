@@ -1699,10 +1699,17 @@ export function createKineticTextService({
         ffprobePath,
         onProgress: (progress, stage) => updateJob(jobId, { status: "running", progress, stage }),
       });
+      const previousOutput = project.dynamicIllustration?.outputs?.mp4;
+      const generatedBackgroundActive = Boolean(previousOutput && project.background?.path === previousOutput);
+      const previousBackground = generatedBackgroundActive
+        ? (project.dynamicIllustration?.previousBackground || { mode: "black", path: "", name: "" })
+        : project.background;
+      const generatedBackground = { mode: "video", path: result.mp4Path, name: "手绘循环动态背景.mp4" };
       project = update(projectId, {
-        background: { mode: "video", path: result.mp4Path, name: "手绘循环动态背景.mp4" },
+        background: result.config.enabled ? generatedBackground : project.background,
         dynamicIllustration: {
           config: result.config,
+          previousBackground,
           generatedAt: nowIso(),
           outputs: {
             mp4: result.mp4Path,
@@ -1714,7 +1721,8 @@ export function createKineticTextService({
           quality: result.report.checks,
         },
       });
-      updateJob(jobId, { status: "completed", progress: 100, stage: "手绘循环背景完成并已应用", result: { project, ...result } });
+      const stage = result.config.enabled ? "手绘循环背景完成并已应用" : "手绘循环背景素材已生成（当前未启用）";
+      updateJob(jobId, { status: "completed", progress: 100, stage, result: { project, ...result } });
       return project;
     } catch (error) {
       updateJob(jobId, { status: "failed", stage: "手绘循环背景生成失败", error: error instanceof Error ? error.message : String(error) });
