@@ -491,6 +491,10 @@ function normalizeSegments(rawSegments, text, duration = 0) {
   });
 }
 
+function textFromSegments(segments = []) {
+  return (segments || []).map((segment) => normalizeText(segment.text)).filter(Boolean).join("");
+}
+
 function normalizeProject(project) {
   const effectId = normalizeEffectId(project.effectId);
   const duration = safeNumber(project.duration, 0, 0);
@@ -504,13 +508,14 @@ function normalizeProject(project) {
   const bookends = normalizeBookends(project.bookends, title);
   const bookendWindows = calculateBookendWindows(segments, computedDuration);
   const timelineValidation = validateTimelineRules(segments, duration);
+  const segmentText = textFromSegments(segments);
   const background = project.background && typeof project.background === "object" ? project.background : {};
   const audioMix = project.audioMix && typeof project.audioMix === "object" ? project.audioMix : {};
   const dynamicIllustration = project.dynamicIllustration && typeof project.dynamicIllustration === "object" ? project.dynamicIllustration : {};
   return {
     ...project,
     title,
-    text: normalizeText(project.text) || segments.map((item) => item.text).join(""),
+    text: segmentText || normalizeText(project.text),
     effectId,
     effectParams: { ...defaultEffectParams(effectId), ...(project.effectParams || {}) },
     aspectRatio: resolutionForProject(project).aspectRatio,
@@ -1322,10 +1327,28 @@ export function createKineticTextService({
     return path.join(projectDir(id), "project.json");
   }
 
+  function syncDerivedTextFiles(project) {
+    if (Number(project.ttsJobId || 0) > 0) return project;
+    const derivedDir = path.join(projectDir(project.id), "derived");
+    fs.mkdirSync(derivedDir, { recursive: true });
+    const scriptPath = path.join(derivedDir, "script.txt");
+    const subtitlePath = path.join(derivedDir, "subtitles.srt");
+    const timestampedTextPath = path.join(derivedDir, "timestamped.txt");
+    const scriptText = (project.segments || []).map((segment) => segment.text).filter(Boolean).join("\n");
+    const timestampedText = (project.segments || []).map((segment) => (
+      `[${formatSrtTime(segment.start).replace(",", ".")} --> ${formatSrtTime(segment.end).replace(",", ".")}] ${segment.text}`
+    )).join("\n");
+    fs.writeFileSync(scriptPath, `${scriptText}\n`, "utf8");
+    fs.writeFileSync(subtitlePath, buildSrt(project), "utf8");
+    fs.writeFileSync(timestampedTextPath, `${timestampedText}\n`, "utf8");
+    return { ...project, scriptPath, subtitlePath, timestampedTextPath };
+  }
+
   function save(project) {
     const normalized = normalizeProject({ ...project, updatedAt: nowIso() });
-    writeJson(projectPath(normalized.id), normalized);
-    return projectPublic(normalized);
+    const synced = syncDerivedTextFiles(normalized);
+    writeJson(projectPath(synced.id), synced);
+    return projectPublic(synced);
   }
 
   function get(id) {

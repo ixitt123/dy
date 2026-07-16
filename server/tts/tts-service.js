@@ -1233,6 +1233,64 @@ export function createTtsService({
     return { job: publicJob(confirmed) };
   }
 
+  async function syncConfirmedTimeline(id, input = {}) {
+    const job = taskStore.getTtsJob(Number(id || 0));
+    if (!job) return { error: "没有找到这条语音任务。" };
+    if (job.status !== "completed") return { error: "只有已完成的 TTS 音频才能同步公共文案。" };
+    if (!job.audio_path || !fs.existsSync(job.audio_path)) return { error: "最终音频文件不存在。" };
+    const metadata = safeJson(job.metadata_json, {});
+    const duration = Number(input.duration || metadata.audio_duration || metadata.duration || 0);
+    const providedTimeline = input.sentenceTimeline || input.sentence_timeline || input.subtitleTimeline || input.subtitle_timeline || input.segments || [];
+    let finalText = String(input.text || input.final_text || "").trim();
+    let sentenceTimeline = normalizeManualSentenceTimeline(providedTimeline, finalText, duration);
+    if (!finalText) finalText = sentenceTimeline.map((row) => row.text).join("");
+    if (!sentenceTimeline.length) sentenceTimeline = normalizeManualSentenceTimeline(metadata.sentence_timeline || metadata.subtitle_timeline || [], finalText, duration);
+    const wordTimeline = Array.isArray(input.wordTimeline) && input.wordTimeline.length
+      ? input.wordTimeline
+      : Array.isArray(input.word_timeline) && input.word_timeline.length
+        ? input.word_timeline
+        : Array.isArray(metadata.word_timeline) && metadata.word_timeline.length
+          ? metadata.word_timeline
+          : estimatedWordTimelineFromSentences(sentenceTimeline);
+    const validation = validateAlignment({
+      text: finalText,
+      wordTimeline,
+      sentenceTimeline,
+      duration,
+    });
+    if (!validation.valid) return { error: `字幕时间轴同步失败：${validation.errors.join("；")}` };
+    const sequenceNumber = Number(metadata.sequence_number || 0) || ttsSequenceNumber(job) || Number(job.id || 0);
+    const fileBaseName = String(metadata.file_base_name || "").trim() || ttsFileBaseName(sequenceNumber);
+    const files = writeAlignedTextFiles({
+      directory: subtitleDir,
+      job,
+      finalText,
+      sentenceTimeline,
+      wordTimeline,
+      fileBaseName,
+      title: String(input.title || metadata.title || metadata.seo_title || ""),
+    });
+    const syncedAt = new Date().toISOString();
+    const synced = setJobProgress(job.id, 100, "公共文案和字幕时间轴已同步", {
+      ...files,
+      final_text: finalText,
+      word_timeline: wordTimeline,
+      sentence_timeline: sentenceTimeline,
+      subtitle_timeline: sentenceTimeline,
+      subtitle_source: String(input.source || "shared_manual_sync"),
+      alignment_status: "confirmed",
+      alignment_confirmed_at: metadata.alignment_confirmed_at || syncedAt,
+      alignment_confirmation_mode: "shared_manual_sync",
+      alignment_validation: validation,
+      alignment_error: "",
+      alignment_failure_action: "",
+      alignment_revision: Number(metadata.alignment_revision || 0) + 1,
+      shared_sync_updated_at: syncedAt,
+      shared_sync_source: String(input.source || ""),
+    }, { status: "completed", error: "" });
+    return { job: publicJob(synced) };
+  }
+
   async function processJob(jobId) {
     const job = taskStore.getTtsJob(jobId);
     if (!job) return;
@@ -1790,6 +1848,7 @@ export function createTtsService({
     retryAlignment,
     realignJob,
     confirmAlignment,
+    syncConfirmedTimeline,
     getJob,
     listJobs,
     listProjectJobs,

@@ -7425,6 +7425,17 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
+    if (req.method === "POST" && url.pathname === "/api/tts/alignment/sync") {
+      const body = await readJsonBody(req, { maxBytes: 2 * 1024 * 1024 });
+      const result = await ttsService.syncConfirmedTimeline(body.id || body.jobId || 0, body);
+      if (result.error) {
+        sendJson(res, 400, { ok: false, message: result.error, job: result.job || null });
+        return;
+      }
+      sendJson(res, 200, { ok: true, job: result.job });
+      return;
+    }
+
     if (req.method === "GET" && url.pathname === "/api/tts/audio") {
       const job = taskStore.getTtsJob(Number(url.searchParams.get("id") || 0));
       const audioPath = job?.audio_path ? path.resolve(job.audio_path) : "";
