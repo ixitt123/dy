@@ -202,7 +202,8 @@ test("Xiaohei prompt plan refresh cache", async () => {
     || !source.includes('boundImages: cacheableBoundImages(state.images)')
     || !source.includes('state.images = cacheableBoundImages(cached.boundImages || [])')
     || !source.includes('savePromptPlanCache(state.plan)')
-    || !source.includes('els.purposeSelect.value = cachedPurpose')) {
+    || !source.includes('els.purposeSelect.value = cachedPurpose')
+    || !source.includes('currentBatch?.boundImages || []')) {
     throw new Error("Xiaohei prompt plan refresh cache is incomplete");
   }
 });
