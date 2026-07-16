@@ -181,8 +181,8 @@ function effectById(id) {
   return state.effects.find((item) => item.id === id) || state.effects[0] || null;
 }
 
-function bottomSubtitlesEnabled(project = state.project) {
-  return project?.showBottomSubtitles === true;
+function bottomSubtitlesEnabled() {
+  return false;
 }
 
 function bookendPresetText(kind, preset) {
@@ -1624,10 +1624,10 @@ function renderProject() {
   $("#kineticBgVolumeValue").value = `${project.audioMix?.backgroundVolume ?? 18}%`;
   const bottomSubtitlesInput = $("#kineticBottomSubtitles");
   if (bottomSubtitlesInput) {
-    bottomSubtitlesInput.checked = project.showBottomSubtitles === true;
-    bottomSubtitlesInput.disabled = false;
+    bottomSubtitlesInput.checked = false;
+    bottomSubtitlesInput.disabled = true;
     const wrapper = bottomSubtitlesInput.closest("label");
-    if (wrapper) wrapper.hidden = false;
+    if (wrapper) wrapper.hidden = true;
   }
   const params = project.effectParams || {};
   $("#kineticFontFamily").value = params.fontFamily || "Microsoft YaHei";
@@ -2091,8 +2091,9 @@ function bindEvents() {
     scheduleSave({ audioMix: { backgroundVolume: Number(event.target.value) } });
   });
   $("#kineticBottomSubtitles").addEventListener("change", (event) => {
-    savePreferences({ showBottomSubtitles: event.target.checked });
-    scheduleSave({ showBottomSubtitles: event.target.checked });
+    event.target.checked = false;
+    savePreferences({ showBottomSubtitles: false });
+    scheduleSave({ showBottomSubtitles: false });
   });
   $("#kineticChooseBackground").addEventListener("click", () => $("#kineticBackgroundFile").click());
   $("#kineticChooseBgm").addEventListener("click", () => $("#kineticBgmFile").click());
