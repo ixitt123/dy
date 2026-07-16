@@ -290,6 +290,9 @@ async function init() {
   bindEvents();
   restoreComposeSettings();
   window.addEventListener("message", handleParentHandoff);
+  window.addEventListener("focus", () => {
+    if (state.localImagePickerActive) setTimeout(() => { state.localImagePickerActive = false; }, 250);
+  });
   await Promise.all([loadConfig(), loadAudioJobs()]);
   const restored = restorePromptPlanCache();
   if (restored) {
@@ -1539,6 +1542,7 @@ async function handleAudioJobAction(event) {
 
 async function handlePromptFileChange(event) {
   const input = event.target.closest("[data-shot-upload]");
+  state.localImagePickerActive = false;
   if (!input?.files?.[0]) return;
   if (!ensurePromptPlanAvailable()) return;
   const index = Number(input.dataset.shotUpload);
@@ -2380,7 +2384,14 @@ function formatPreviewClock(value) {
 }
 
 function resetVisualWorkflow(message = "") {
+  if (state.localImagePickerActive && (state.plan?.shots?.length || state.lastStablePlan?.shots?.length)) {
+    state.plan = state.plan?.shots?.length ? state.plan : state.lastStablePlan;
+    renderPlan(state.plan);
+    setStatus("正在选择本地图片", "已保留当前分镜计划，不会因为文件选择窗口清空记录。", 60, false, "本地图片");
+    return;
+  }
   state.plan = null;
+  state.lastStablePlan = null;
   state.images = [];
   state.previewImageCache.clear();
   state.renderedVideo = null;

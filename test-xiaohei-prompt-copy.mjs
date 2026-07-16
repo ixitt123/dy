@@ -3,6 +3,7 @@ import fs from "node:fs";
 
 const source = fs.readFileSync(new URL("./ui/modules/ian-xiaohei-app.js", import.meta.url), "utf8");
 const css = fs.readFileSync(new URL("./ui/xiaohei-illustrations.css", import.meta.url), "utf8");
+const html = fs.readFileSync(new URL("./ui/xiaohei-illustrations.html", import.meta.url), "utf8");
 
 assert.match(
   source,
@@ -62,6 +63,24 @@ assert.match(
   source,
   /input\.value = "";/,
   "Xiaohei local-image upload input must reset so selecting the same file again still fires change.",
+);
+
+assert.match(
+  source,
+  /lastStablePlan/,
+  "Xiaohei must keep the last valid prompt plan as a local-image upload fallback.",
+);
+
+assert.match(
+  source,
+  /localImagePickerActive[\s\S]*resetVisualWorkflow/,
+  "Xiaohei must not reset the prompt plan while the local-image picker is active.",
+);
+
+assert.match(
+  html,
+  /ian-xiaohei-app\.js\?v=\d+/,
+  "Xiaohei page must cache-bust the app module after local-image workflow fixes.",
 );
 
 assert.match(
