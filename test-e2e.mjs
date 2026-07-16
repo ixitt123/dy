@@ -257,10 +257,18 @@ test("Xiaohei video preview, transitions and MP4 download", async () => {
     || !page.includes('id="xiaoheiVideoCanvas"')
     || !page.includes('id="videoTransitionMode"')
     || !page.includes('id="downloadXiaoheiVideo"')
+    || !page.includes('id="xiaoheiFrameRate"')
+    || !page.includes('id="xiaoheiBgmFile"')
+    || !page.includes('id="xiaoheiIntroEnabled"')
+    || !page.includes('id="xiaoheiOutroEnabled"')
+    || !page.includes('id="xiaoheiShowSubtitles"')
     || !source.includes('function drawVideoPreview()')
+    || !source.includes('function composeSettings()')
+    || !source.includes('/api/ian-xiaohei/upload-video-bgm')
     || !source.includes('/api/ian-xiaohei/render-video')
     || !source.includes('function downloadRenderedVideo()')
     || !routeResponse.includes('route === "render-video"')
+    || !routeResponse.includes('route === "upload-video-bgm"')
     || !routeResponse.includes('route === "video-file"')) {
     throw new Error("Xiaohei video preview/render/download flow is incomplete");
   }
