@@ -528,7 +528,7 @@ function normalizeProject(project) {
     subtitleSource: String(project.subtitleSource || "estimated"),
     timelineSkillRules: TIMELINE_SKILL_IDS,
     timelineValidation,
-    showBottomSubtitles: false,
+    showBottomSubtitles: project.keywordPlacement === "bottom" ? project.showBottomSubtitles !== false : true,
     bottomSubtitlePosition: {
       x: safeNumber(project.bottomSubtitlePosition?.x, 50, 5, 95),
       y: safeNumber(project.bottomSubtitlePosition?.y, 94, 8, 97),
@@ -1442,7 +1442,7 @@ export function createKineticTextService({
       effectParams: defaultEffectParams(effectId),
       aspectRatio: Object.hasOwn(OUTPUT_SIZES, input.aspectRatio) ? input.aspectRatio : "9:16",
       frameRate: Number(input.frameRate) === 60 ? 60 : 30,
-      showBottomSubtitles: false,
+      showBottomSubtitles: true,
       bottomSubtitlePosition: { x: 50, y: 94 },
       keywordPlacement: "bottom",
       bookends: input.bookends && typeof input.bookends === "object" ? input.bookends : {},
