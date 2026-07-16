@@ -2228,6 +2228,10 @@ function buildXiaoheiScenes(plan, images) {
       visual_duration: Math.max(0.12, visualEnd - visualStart),
       text: shot.sourceText || "",
       subtitle: shot.subtitleText || shot.sourceText || "",
+      keywords: [...new Set([...(shot.keywords || []), ...(shot.labels || [])]
+        .map((item) => String(item || "").trim())
+        .filter((item) => item.length >= 2 && item.length <= 6 && String(shot.subtitleText || shot.sourceText || "").includes(item)))]
+        .slice(0, 2),
       image_asset_id: image.assetId || "",
       image_path: image.imagePath || "",
       visual_subject: shot.visualSubject || "",
