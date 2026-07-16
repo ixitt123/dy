@@ -30,6 +30,29 @@ const PROMPT_PLAN_LATEST_KEY = `${PROMPT_PLAN_CACHE_PREFIX}:latest`;
 const PURPOSE_STORAGE_KEY = "ian-xiaohei-selected-purpose";
 const COMPOSE_SETTINGS_KEY = "ian-xiaohei-compose-settings-v1";
 
+function startStandalonePageSession() {
+  if (embeddedMode) return;
+  const sessionId = `xiaohei-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  const postSession = (url, keepalive = false) => {
+    const body = JSON.stringify({ sessionId });
+    if (keepalive && navigator.sendBeacon) {
+      navigator.sendBeacon(url, new Blob([body], { type: "application/json" }));
+      return;
+    }
+    fetch(url, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body,
+      keepalive,
+    }).catch(() => {});
+  };
+  postSession("/api/page-open");
+  setInterval(() => postSession("/api/heartbeat"), 3000);
+  window.addEventListener("pagehide", () => postSession("/api/page-close", true));
+}
+
+startStandalonePageSession();
+
 const PURPOSE_TEMPLATE_META = {
   article: {
     name: "小黑 Skill · 纯白手绘解释图",
