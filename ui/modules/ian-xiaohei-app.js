@@ -1386,6 +1386,14 @@ async function loadOutputs() {
   const currentBatch = state.plan?.batchId
     ? (data.batches || []).find((batch) => batch.id === state.plan.batchId)
     : null;
+  if (currentBatch?.videoUrl) {
+    state.renderedVideo = {
+      videoUrl: currentBatch.videoUrl,
+      downloadUrl: currentBatch.downloadUrl,
+      transitionMode: currentBatch.transitionMode || "smart",
+    };
+    if (currentBatch.transitionMode) els.videoTransitionMode.value = currentBatch.transitionMode;
+  }
   const persistedImages = cacheableBoundImages(currentBatch?.boundImages || []);
   if (state.plan && persistedImages.length) {
     state.images = persistedImages;
@@ -1393,6 +1401,7 @@ async function loadOutputs() {
     renderImages(state.images, []);
     savePromptPlanCache(state.plan);
   }
+  updateVideoDownloadState();
 }
 
 async function openOutputDir() {
