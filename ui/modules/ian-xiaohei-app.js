@@ -1347,6 +1347,16 @@ async function loadOutputs() {
   state.outputDir = data.outputDir || state.outputDir;
   els.outputDirLabel.textContent = state.outputDir;
   renderHistory(data.batches || []);
+  const currentBatch = state.plan?.batchId
+    ? (data.batches || []).find((batch) => batch.id === state.plan.batchId)
+    : null;
+  const persistedImages = cacheableBoundImages(currentBatch?.boundImages || []);
+  if (state.plan && persistedImages.length) {
+    state.images = persistedImages;
+    renderPlan(state.plan);
+    renderImages(state.images, []);
+    savePromptPlanCache(state.plan);
+  }
 }
 
 async function openOutputDir() {
