@@ -1415,7 +1415,7 @@ export function createKineticTextService({
       effectParams: defaultEffectParams(effectId),
       aspectRatio: Object.hasOwn(OUTPUT_SIZES, input.aspectRatio) ? input.aspectRatio : "9:16",
       frameRate: Number(input.frameRate) === 60 ? 60 : 30,
-      showBottomSubtitles: true,
+      showBottomSubtitles: false,
       bottomSubtitlePosition: { x: 50, y: 94 },
       keywordPlacement: "bottom",
       bookends: input.bookends && typeof input.bookends === "object" ? input.bookends : {},
@@ -1648,7 +1648,8 @@ export function createKineticTextService({
       const duration = Math.max(probedAudioDuration || project.duration, 0.5);
       const outputDir = activeDownloadsDir();
       fs.mkdirSync(outputDir, { recursive: true });
-      const outputPath = path.join(outputDir, `${safeFileName(project.title, project.id)}.mp4`);
+      const renderStamp = new Date().toISOString().replace(/\D/g, "").slice(0, 14);
+      const outputPath = path.join(outputDir, `${safeFileName(project.title, project.id)}-${renderStamp}-${safeFileName(jobId, "render")}.mp4`);
       const args = ["-y"];
       const bg = project.background || { mode: "black" };
       if (bg.mode === "image" && bg.path && fs.existsSync(bg.path)) args.push("-loop", "1", "-i", bg.path);
