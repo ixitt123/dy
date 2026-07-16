@@ -391,7 +391,6 @@ const realignTtsTranscriptBtn = document.querySelector("#realignTtsTranscript");
 const confirmTtsAlignmentBtn = document.querySelector("#confirmTtsAlignment");
 const ttsAlignmentStatus = document.querySelector("#ttsAlignmentStatus");
 const ttsAlignmentTimeline = document.querySelector("#ttsAlignmentTimeline");
-const alertedTtsAlignmentFailures = new Set();
 const ttsAudioHandoff = document.querySelector("#ttsAudioHandoff");
 const sendConfirmedTtsAudioBtn = document.querySelector("#sendConfirmedTtsAudio");
 const ttsAudioHandoffStatus = document.querySelector("#ttsAudioHandoffStatus");
@@ -3414,15 +3413,6 @@ function ttsAlignmentFailureMessage(job = {}) {
   return job.alignment_error || "字幕校准失败，请重新生成音频。";
 }
 
-function maybeAlertTtsAlignmentFailure(job = {}) {
-  const status = String(job.alignment_status || job.metadata?.alignment_status || "");
-  if (status !== "failed" || !ttsAlignmentRewriteRequired(job)) return;
-  const key = `${job.id || ""}:${job.alignment_revision || job.metadata?.alignment_revision || ""}:${job.match_ratio || job.metadata?.match_ratio || ""}`;
-  if (!key || alertedTtsAlignmentFailures.has(key)) return;
-  alertedTtsAlignmentFailures.add(key);
-  window.setTimeout(() => window.alert(ttsAlignmentFailureMessage(job)), 0);
-}
-
 function ttsHasAlignmentPayload(job = {}) {
   const metadata = job.metadata && typeof job.metadata === "object" ? job.metadata : {};
   const text = String(
@@ -3772,7 +3762,6 @@ function renderTtsJobsEnhanced(jobs = []) {
           <button class="ghost small tts-job-minimize" type="button" ${["waiting", "processing"].includes(job.status) ? "disabled" : ""}>最小化</button>
         </div>
       `;
-    maybeAlertTtsAlignmentFailure(job);
     return `
       <div class="tts-history-row" data-tts-job-id="${job.id}">
         <div class="tts-history-summary">
@@ -4312,7 +4301,6 @@ function renderTtsAlignmentEditor(job = activeTtsRailJob) {
           ? "匹配率低于门槛，系统会自动重新识别；不再人工确认放行。"
           : `${job.stage || "正在处理最终音频"}，完成前不能发送。`;
   }
-  maybeAlertTtsAlignmentFailure(job);
 }
 
 async function retryActiveTtsAlignment(job = activeTtsRailJob) {
