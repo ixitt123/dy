@@ -285,12 +285,14 @@ export function createIanXiaoheiRoutes({
 }) {
   const outputRoot = path.join(baseDir, "image-assets", "ian-xiaohei");
   const uploadRoot = path.join(outputRoot, "_uploaded-audio");
+  const videoAudioRoot = path.join(outputRoot, "_video-audio");
   const voicePreviewRoot = path.join(baseDir, "ui", "assets", "voice-previews");
   const musicOutputRoot = path.join(baseDir, ".data", "music", "minimax");
   const localMusicRoot = path.join(baseDir, "assets", "bgm");
   const referenceAudioRoot = path.join(baseDir, ".data", "audio-reference", "ian-xiaohei");
   fs.mkdirSync(outputRoot, { recursive: true });
   fs.mkdirSync(uploadRoot, { recursive: true });
+  fs.mkdirSync(videoAudioRoot, { recursive: true });
   fs.mkdirSync(voicePreviewRoot, { recursive: true });
   fs.mkdirSync(musicOutputRoot, { recursive: true });
   fs.mkdirSync(localMusicRoot, { recursive: true });
@@ -305,6 +307,23 @@ export function createIanXiaoheiRoutes({
       const videoPath = batchDir ? path.join(batchDir, "final.mp4") : "";
       if (!videoPath || !fs.existsSync(videoPath)) sendJson(res, 404, { ok: false, message: "成片 MP4 不存在，请先生成视频。" });
       else sendXiaoheiFile(res, videoPath, { download: url.searchParams.get("download") === "1" });
+      return true;
+    }
+
+    if (req.method === "POST" && route === "upload-video-bgm") {
+      try {
+        const body = await readJsonBody(req, { maxBytes: 42 * 1024 * 1024 });
+        const projectId = safeBatchId(body.project_id);
+        if (!projectId) throw new Error("缺少当前项目 ID。");
+        const uploaded = decodeUploadedAudio(body.audio_data, body.audio_mime);
+        const projectAudioDir = path.join(videoAudioRoot, projectId);
+        fs.mkdirSync(projectAudioDir, { recursive: true });
+        const audioPath = path.join(projectAudioDir, `background-${randomUUID().slice(0, 8)}${uploaded.extension}`);
+        fs.writeFileSync(audioPath, uploaded.buffer);
+        sendJson(res, 200, { ok: true, audio: { path: audioPath, name: path.basename(String(body.file_name || "背景音乐")), mimeType: uploaded.mimeType } });
+      } catch (error) {
+        sendJson(res, error instanceof HttpBodyError ? error.statusCode : 400, { ok: false, message: error instanceof Error ? error.message : String(error) });
+      }
       return true;
     }
 
@@ -1101,20 +1120,27 @@ export function createIanXiaoheiRoutes({
         const scenes = buildXiaoheiScenes(plan, images);
         const outputPath = path.join(packageDir, "final.mp4");
         const transitionMode = normalizeXiaoheiTransitionMode(body.transition_mode);
+        const compose = normalizeXiaoheiCompose(body.compose);
+        const backgroundAudioPath = body.background_audio?.path
+          ? resolveFileWithin(videoAudioRoot, body.background_audio.path)
+          : "";
         const rendered = await renderXiaoheiVideo({
           ffmpegPath,
           scenes,
           audioPath: audioJob.audio_path,
+          backgroundAudioPath,
           outputPath,
           aspectRatio: plan.aspectRatio,
           transitionMode,
-          fps: 30,
+          fps: compose.fps,
+          compose,
         });
         updateResultFile(packageDir, {
           output: {
             package_dir: packageDir,
             final_video_path: outputPath,
             transition_mode: transitionMode,
+            compose,
             status: "completed",
             created_at: new Date().toISOString(),
           },
@@ -1129,6 +1155,7 @@ export function createIanXiaoheiRoutes({
           width: rendered.width,
           height: rendered.height,
           fps: rendered.fps,
+          compose,
         });
       } catch (error) {
         sendJson(res, error instanceof HttpBodyError ? error.statusCode : 400, {
@@ -2441,6 +2468,38 @@ function buildMetaphor(segment, structureType, { index, total, title, shotRole, 
       ...(shotRole?.elements || []),
       ...domain.elements,
     ]).slice(0, 6),
+  };
+}
+
+function resolveFileWithin(rootDir, filePath) {
+  const root = path.resolve(rootDir);
+  const resolved = path.resolve(String(filePath || ""));
+  if (resolved !== root && !resolved.startsWith(`${root}${path.sep}`)) throw new Error("背景音乐路径无效。");
+  if (!fs.existsSync(resolved) || !fs.statSync(resolved).isFile()) throw new Error("背景音乐文件不存在，请重新选择。");
+  return resolved;
+}
+
+function normalizeXiaoheiCompose(value = {}) {
+  const source = value && typeof value === "object" ? value : {};
+  const bookend = (item, fallback = "") => ({
+    enabled: item?.enabled === true && Boolean(String(item?.text || fallback).trim()),
+    text: String(item?.text || fallback).trim().slice(0, 80),
+  });
+  return {
+    fps: Number(source.fps) === 60 ? 60 : 30,
+    imageFit: source.imageFit === "contain" ? "contain" : "cover",
+    ttsVolume: clamp(Number(source.ttsVolume ?? 100), 0, 200),
+    bgmVolume: clamp(Number(source.bgmVolume ?? 18), 0, 100),
+    showSubtitles: source.showSubtitles !== false,
+    subtitleSize: clamp(Number(source.subtitleSize ?? 48), 28, 96),
+    subtitleColor: /^#[0-9a-f]{6}$/i.test(String(source.subtitleColor || "")) ? String(source.subtitleColor) : "#ffffff",
+    keywordColor: /^#[0-9a-f]{6}$/i.test(String(source.keywordColor || "")) ? String(source.keywordColor) : "#b7ff5a",
+    maxLines: clamp(Math.round(Number(source.maxLines ?? 2)), 1, 3),
+    animationSpeed: clamp(Number(source.animationSpeed ?? 1), 0.6, 1.6),
+    outline: source.outline !== false,
+    shadow: source.shadow !== false,
+    intro: bookend(source.intro),
+    outro: bookend(source.outro, "关注我，下期继续"),
   };
 }
 
