@@ -1667,6 +1667,12 @@
                 <label><span>背景预设</span><select id="kineticIllustrationPreset"><option value="prompt-garden">官方原版 · Prompt Garden</option><option value="copy-concept">当前文案 · 核心概念</option></select></label>
                 <button id="kineticGenerateIllustration" class="primary" type="button">生成或应用当前预设</button>
                 <button id="kineticRegenerateIllustration" class="ghost" type="button">重新生成当前预设</button>
+                <details id="kineticIllustrationManual">
+                  <summary>在其他地方生成并上传分层图片</summary>
+                  <button id="kineticCopyIllustrationPrompts" class="ghost" type="button">复制全部提示词</button>
+                  <div id="kineticIllustrationPromptSlots"></div>
+                  <button id="kineticBuildUploadedIllustration" class="ghost" type="button">使用已上传图片合成</button>
+                </details>
                 <small id="kineticIllustrationStatus">独立元素分层、确定性逐帧渲染，并输出 MP4、GIF 和全时间轴检查。</small>
                 <div id="kineticIllustrationOutputs" class="kinetic-illustration-outputs" hidden></div>
               </section>

@@ -158,6 +158,16 @@ export function createKineticTextRoutes({
         sendJson(res, 202, { ok: true, job: service.startIllustration(body.projectId, { ...(body.config || {}), force: body.force === true }) });
         return true;
       }
+      if (req.method === "POST" && route === "illustration-plan") {
+        const body = await readJsonBody(req, { maxBytes: 256 * 1024 });
+        sendJson(res, 200, { ok: true, plan: service.illustrationPlan(body.projectId, body.presetId) });
+        return true;
+      }
+      if (req.method === "POST" && route === "illustration-upload") {
+        const body = await readJsonBody(req, { maxBytes: 32 * 1024 * 1024 });
+        sendJson(res, 200, { ok: true, plan: service.uploadIllustrationAsset(body) });
+        return true;
+      }
       sendJson(res, 404, { ok: false, message: "Unknown kinetic text API" });
       return true;
     } catch (error) {
