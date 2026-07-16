@@ -1158,7 +1158,8 @@ export function buildAss(project, options = {}) {
         }
       }
     } else if (template.renderMode === "rolling-focus") {
-      const lineGap = Math.round(fontSize * 1.32);
+      const lineGapBoost = safeNumber(params.lineGapBoost, 0, 0, 1.2);
+      const lineGap = Math.round(fontSize * (1.32 + lineGapBoost));
       const neighbors = [
         { row: renderSegments[segmentIndex - 1], delta: -1 },
         { row: segment, delta: 0 },
