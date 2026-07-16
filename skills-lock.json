@@ -7,6 +7,12 @@
       "skillPath": "skills/copy-editing/SKILL.md",
       "computedHash": "b70d360d6d7e49adf84d595c62103583787008e16acb7b4b4b9c449dbbb768d9"
     },
+    "generative-illustration": {
+      "source": "iart-ai/generative-illustration-skills",
+      "sourceType": "github",
+      "skillPath": "skills/generative-illustration/SKILL.md",
+      "computedHash": "b48c1573914a6e398c66395c27741c946aa9e64595d89a73be3ffa6185d67c1a"
+    },
     "visual-style": {
       "source": "calesthio/openmontage",
       "sourceType": "github",
