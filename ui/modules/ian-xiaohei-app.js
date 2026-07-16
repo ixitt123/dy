@@ -1975,12 +1975,14 @@ function setBusy(busy) {
     els.previewVoice,
     els.setDefaultVoice,
     els.deleteVoice,
+    els.downloadXiaoheiVideo,
   ].filter(Boolean)) {
     element.disabled = busy;
   }
   if (!busy) {
     renderVoiceDescription();
     renderReferenceStyleChoices();
+    updateVideoDownloadState();
   }
 }
 
