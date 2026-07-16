@@ -10572,6 +10572,53 @@ audio {
   background: #285e45;
 }
 
+.parameter-panel > .parameter-panel-body {
+  display: contents;
+}
+
+.parameter-panel.is-collapsed > .parameter-panel-body {
+  display: none;
+}
+
+.parameter-panel-toggle {
+  margin-left: auto;
+  min-width: 50px;
+  padding: 4px 10px !important;
+  border: 1px solid #36425a !important;
+  border-radius: 999px !important;
+  background: #121827 !important;
+  color: #a9b8d4 !important;
+  font-size: 12px !important;
+  line-height: 1.2;
+}
+
+.parameter-panel.is-collapsed {
+  gap: 0 !important;
+}
+
+.kinetic-illustration-config .primary {
+  width: 100%;
+}
+
+.kinetic-illustration-outputs {
+  display: grid;
+  gap: 7px;
+}
+
+.kinetic-illustration-outputs[hidden] {
+  display: none;
+}
+
+.kinetic-illustration-outputs a {
+  padding: 8px 10px;
+  border: 1px solid #34415a;
+  border-radius: 8px;
+  color: #b7d7ff;
+  text-decoration: none;
+  text-align: center;
+  background: #0d1420;
+}
+
 @media (max-width: 820px) {
   .kinetic-color-row, .kinetic-toggle-row { grid-template-columns: 1fr; }
 }
