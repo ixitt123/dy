@@ -1738,14 +1738,30 @@ export function createKineticTextService({
     try {
       let project = get(projectId);
       if (!project) throw new Error("动态大字项目不存在。");
+      const normalizedConfig = normalizeIllustrationConfig(config, project);
+      const presetId = normalizedConfig.presetId;
+      const cachedPreset = project.dynamicIllustration?.presets?.[presetId];
+      if (config.force !== true && cachedPreset?.outputs?.mp4 && fs.existsSync(cachedPreset.outputs.mp4)) {
+        const previousBackground = project.background?.path === cachedPreset.outputs.mp4
+          ? (project.dynamicIllustration?.previousBackground || { mode: "black", path: "", name: "" })
+          : project.background;
+        project = update(projectId, {
+          background: { mode: "video", path: cachedPreset.outputs.mp4, name: cachedPreset.name || "动态插画背景.mp4" },
+          dynamicIllustration: { ...project.dynamicIllustration, config: { ...normalizedConfig, enabled: true }, previousBackground },
+        });
+        updateJob(jobId, { status: "completed", progress: 100, stage: "已应用缓存动态背景，不调用图片 API", result: { project, cached: true } });
+        return project;
+      }
       updateJob(jobId, { status: "running", progress: 3, stage: "准备字幕模板视觉规则" });
-      const targetDir = path.join(projectDir(projectId), "dynamic-illustration");
+      const targetDir = path.join(projectDir(projectId), "dynamic-illustration", presetId);
       fs.rmSync(targetDir, { recursive: true, force: true });
       fs.mkdirSync(targetDir, { recursive: true });
+      const generatedAssets = await generateIllustrationAssets(project, presetId, targetDir, jobId);
       const result = await generateIllustrationBackground({
         project,
         effect: effectById(project.effectId),
-        config,
+        config: normalizedConfig,
+        assets: generatedAssets,
         targetDir,
         ffmpegPath,
         ffprobePath,
@@ -1763,6 +1779,22 @@ export function createKineticTextService({
           config: result.config,
           previousBackground,
           generatedAt: nowIso(),
+          presets: {
+            ...(project.dynamicIllustration?.presets || {}),
+            [presetId]: {
+              id: presetId,
+              name: presetId === "prompt-garden" ? "官方原版 · Prompt Garden" : "当前文案 · 核心概念",
+              concept: generatedAssets.concept,
+              generatedAt: nowIso(),
+              assets: generatedAssets.metadata,
+              outputs: {
+                mp4: result.mp4Path,
+                gif: result.gifPath,
+                report: result.reportPath,
+                manifest: result.manifestPath,
+              },
+            },
+          },
           outputs: {
             mp4: result.mp4Path,
             gif: result.gifPath,
