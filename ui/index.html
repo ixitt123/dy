@@ -1662,17 +1662,10 @@
                 <button id="kineticResetTemplate" class="ghost" type="button">恢复模板默认参数</button>
               </section>
               <section class="kinetic-card kinetic-illustration-config" data-parameter-panel="kinetic-illustration">
-                <div class="kinetic-card-head"><strong>手绘循环动态背景</strong><span>跟随当前字幕模板</span></div>
-                <label class="kinetic-check"><input id="kineticIllustrationEnabled" type="checkbox" /><span>启用手绘动态背景特效</span></label>
-                <label><span>插画场景</span><select id="kineticIllustrationScene"><option value="explainer">概念讲解</option><option value="journey">路径成长</option><option value="dialogue">对话互动</option><option value="system">流程系统</option></select></label>
-                <label><span>统一角色</span><select id="kineticIllustrationCharacter"><option value="xiaohei">小黑角色</option><option value="stick">火柴人</option><option value="littlebox">小盒角色</option></select></label>
-                <label><span>元素密度</span><select id="kineticIllustrationDensity"><option value="simple">简洁</option><option value="standard">标准</option><option value="rich">丰富</option></select></label>
-                <label><span>动作幅度</span><select id="kineticIllustrationMotion"><option value="subtle">克制</option><option value="standard">标准</option><option value="lively">活泼</option></select></label>
-                <label><span>背景基调</span><select id="kineticIllustrationTone"><option value="template">跟随字幕模板</option><option value="paper">浅色手绘纸张</option><option value="dark">深色手绘画布</option></select></label>
-                <label><span>循环时长</span><select id="kineticIllustrationDuration"><option value="auto">自动同步，最长 8 秒</option><option value="4">4 秒</option><option value="6">6 秒</option><option value="8">8 秒</option></select></label>
-                <label class="kinetic-check"><input id="kineticIllustrationShowText" type="checkbox" /><span>背景中显示项目标题原文</span></label>
-                <button id="kineticGenerateIllustration" class="primary" type="button">生成并应用动态背景</button>
-                <small id="kineticIllustrationStatus">15fps；分层生成；同时输出 MP4、GIF 和关键帧检查。</small>
+                <div class="kinetic-card-head"><strong>Generative Illustration 动态背景</strong><span>官方工作流</span></div>
+                <label class="kinetic-check"><input id="kineticIllustrationEnabled" type="checkbox" /><span>启用动态背景</span></label>
+                <button id="kineticGenerateIllustration" class="primary" type="button">按官方工作流生成并应用</button>
+                <small id="kineticIllustrationStatus">独立元素分层、确定性逐帧渲染，并输出 MP4、GIF 和全时间轴检查。</small>
                 <div id="kineticIllustrationOutputs" class="kinetic-illustration-outputs" hidden></div>
               </section>
             </aside>
