@@ -19,6 +19,7 @@
     "test:record-cleanup": "node test-record-cleanup.mjs",
     "test:image-normalize": "node test-image-normalize-filter.mjs",
     "test:kinetic-preview-seek": "node test-kinetic-preview-seek.mjs",
+    "test:kinetic-overlay-position": "node test-kinetic-overlay-position.mjs",
     "test:minimax-tts": "node test-minimax-tts.mjs",
     "test:tts-alignment": "node test-tts-alignment.mjs",
     "test:tts-alignment-service": "node test-tts-alignment-service.mjs",
