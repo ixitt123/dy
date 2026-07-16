@@ -344,6 +344,166 @@ function syncTtsSource(job, { title = "", text = "" } = {}) {
   renderSubtitleTimeline(job);
 }
 
+function timelineSource(job = state.selectedTtsJob || state.ttsJob) {
+  if (!job) return [];
+  if (Array.isArray(job.subtitle_timeline) && job.subtitle_timeline.length) return job.subtitle_timeline;
+  if (Array.isArray(job.sentence_timeline) && job.sentence_timeline.length) return job.sentence_timeline;
+  if (Array.isArray(job.metadata?.subtitle_timeline) && job.metadata.subtitle_timeline.length) return job.metadata.subtitle_timeline;
+  if (Array.isArray(job.metadata?.sentence_timeline) && job.metadata.sentence_timeline.length) return job.metadata.sentence_timeline;
+  return [];
+}
+
+function normalizeTimelineRow(item = {}, index = 0) {
+  const start = Number(item.start ?? item.startTime ?? item.from ?? 0);
+  const end = Number(item.end ?? item.endTime ?? item.to ?? start);
+  const keywords = Array.isArray(item.keywords)
+    ? item.keywords.join("，")
+    : String(item.keywords || item.keyword || item.focus || item.keywords_text || "");
+  const position = item.position && typeof item.position === "object"
+    ? [item.position.x, item.position.y].filter((value) => value !== undefined && value !== "").join(",")
+    : String(item.position || item.xy || item.subtitlePosition || "");
+  return {
+    index,
+    start: Number.isFinite(start) ? start : 0,
+    end: Number.isFinite(end) ? end : 0,
+    text: String(item.text || item.subtitle || item.sentence || ""),
+    keywords,
+    breakAt: String(item.breakAt || item.break_at || item.lineBreak || ""),
+    position,
+    color: String(item.color || item.subtitleColor || els.subtitleColor?.value || "#ffffff"),
+  };
+}
+
+function timelineRows(job = state.selectedTtsJob || state.ttsJob) {
+  return timelineSource(job).map((item, index) => normalizeTimelineRow(item, index));
+}
+
+function formatTimelineValue(value) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number.toFixed(2) : "0.00";
+}
+
+function renderSubtitleTimeline(job = state.selectedTtsJob || state.ttsJob) {
+  if (!els.subtitleTimeline) return;
+  const rows = timelineRows(job);
+  if (!job) {
+    els.subtitleTimeline.className = "xiaohei-subtitle-timeline empty";
+    els.subtitleTimeline.textContent = "等待 TTS 语音页发送已确认的字幕时间轴。";
+    if (els.timelineStatus) els.timelineStatus.textContent = "小黑页面只接收 TTS 语音页发送的最终文案、音频和同步时间戳。";
+    if (els.timelineRuleStatus) els.timelineRuleStatus.hidden = true;
+    return;
+  }
+  if (!rows.length) {
+    els.subtitleTimeline.className = "xiaohei-subtitle-timeline empty";
+    els.subtitleTimeline.textContent = "这条 TTS 资产暂时没有字幕时间轴，请回到 TTS 语音页重新识别后再发送。";
+    if (els.timelineStatus) els.timelineStatus.textContent = "缺少字幕时间轴。";
+    if (els.timelineRuleStatus) els.timelineRuleStatus.hidden = true;
+    return;
+  }
+  els.subtitleTimeline.className = "xiaohei-subtitle-timeline";
+  els.subtitleTimeline.innerHTML = rows.map((row) => `
+    <div class="xiaohei-timeline-row" data-row-index="${row.index}">
+      <span class="xiaohei-row-index">${row.index + 1}</span>
+      <input data-field="start" inputmode="decimal" value="${escapeAttr(formatTimelineValue(row.start))}" />
+      <input data-field="end" inputmode="decimal" value="${escapeAttr(formatTimelineValue(row.end))}" />
+      <textarea data-field="text" rows="2">${escapeHtml(row.text)}</textarea>
+      <input data-field="keywords" value="${escapeAttr(row.keywords)}" />
+      <input data-field="breakAt" placeholder="如 6,12" value="${escapeAttr(row.breakAt)}" />
+      <input data-field="position" placeholder="如 5,88" value="${escapeAttr(row.position)}" />
+      <input data-field="color" type="color" value="${escapeAttr(/^#[0-9a-f]{6}$/i.test(row.color) ? row.color : "#ffffff")}" />
+    </div>
+  `).join("");
+  const duration = Math.max(0, ...rows.map((row) => Number(row.end || 0)));
+  if (els.timelineStatus) els.timelineStatus.textContent = `共 ${rows.length} 段字幕 / ${duration.toFixed(1)} 秒，修改字幕文字后会同步小黑文案和分镜输入。`;
+  updateTimelineRuleStatus(rows);
+}
+
+function updateTimelineRuleStatus(rows = timelineRows()) {
+  if (!els.timelineRuleStatus) return;
+  const longRows = rows
+    .map((row, index) => ({ index: index + 1, length: String(row.text || "").length }))
+    .filter((row) => row.length > 32);
+  if (!longRows.length) {
+    els.timelineRuleStatus.hidden = true;
+    els.timelineRuleStatus.textContent = "";
+    return;
+  }
+  els.timelineRuleStatus.hidden = false;
+  els.timelineRuleStatus.textContent = `时间轴规则提醒：第 ${longRows.slice(0, 4).map((row) => row.index).join("、")} 条字幕偏长，建议按语义拆短。`;
+}
+
+function collectSubtitleTimelineRows() {
+  return [...(els.subtitleTimeline?.querySelectorAll(".xiaohei-timeline-row") || [])].map((row, index) => {
+    const value = (field) => row.querySelector(`[data-field="${field}"]`)?.value || "";
+    return normalizeTimelineRow({
+      start: value("start"),
+      end: value("end"),
+      text: value("text"),
+      keywords: value("keywords"),
+      breakAt: value("breakAt"),
+      position: value("position"),
+      color: value("color"),
+    }, index);
+  });
+}
+
+function applySubtitleTimelineRows(rows = []) {
+  const timeline = rows.map((row) => ({
+    start: row.start,
+    end: row.end,
+    text: row.text,
+    keywords: row.keywords.split(/[，,、\s]+/).map((item) => item.trim()).filter(Boolean),
+    breakAt: row.breakAt,
+    position: row.position,
+    color: row.color,
+  }));
+  const finalText = rows.map((row) => row.text.trim()).filter(Boolean).join("\n");
+  [state.selectedTtsJob, state.ttsJob].filter(Boolean).forEach((job) => {
+    job.subtitle_timeline = timeline;
+    job.sentence_timeline = timeline;
+    job.final_text = finalText || job.final_text || job.text || "";
+    job.text = finalText || job.text || "";
+    job.metadata = {
+      ...(job.metadata || {}),
+      subtitle_timeline: timeline,
+      sentence_timeline: timeline,
+      final_text: finalText || job.metadata?.final_text || "",
+    };
+  });
+  if (els.copyInput) els.copyInput.value = finalText;
+  if (els.ttsSourceText) els.ttsSourceText.textContent = finalText || "这条 TTS 资产暂时没有最终文案。";
+  updateTimelineRuleStatus(rows);
+  if (state.plan?.shots?.length) resetVisualWorkflow("字幕时间轴已修改，请重新按 TTS 时间轴分析分镜配图。");
+}
+
+function handleSubtitleTimelineInput(event) {
+  if (!event.target.closest("[data-field]")) return;
+  const rows = collectSubtitleTimelineRows();
+  applySubtitleTimelineRows(rows);
+  if (els.timelineStatus) els.timelineStatus.textContent = `已同步 ${rows.length} 段字幕到小黑当前文案。`;
+}
+
+async function refreshSubtitleTimelineFromTts() {
+  const job = state.selectedTtsJob || state.ttsJob;
+  if (!job?.id) {
+    setStatus("缺少 TTS 资产", "请先从 TTS 语音页发送已确认的文案、音频和字幕时间轴。", 0, true);
+    setButtonFeedback(els.timelineRefresh, "error", "缺少 TTS");
+    return;
+  }
+  setButtonFeedback(els.timelineRefresh, "loading", "同步中");
+  try {
+    const data = await fetchJson(`/api/ian-xiaohei/tts-job?id=${encodeURIComponent(job.id)}`);
+    state.selectedTtsJob = data.job;
+    state.ttsJob = data.job;
+    syncTtsSource(data.job, { title: els.titleInput?.value || "", text: confirmedTtsText(data.job) });
+    resetVisualWorkflow("已同步最新字幕时间轴，请重新分析分镜配图。");
+    setButtonFeedback(els.timelineRefresh, "success", "已同步");
+  } catch (error) {
+    setStatus("同步时间轴失败", error.payload?.message || error.message || String(error), 0, true);
+    setButtonFeedback(els.timelineRefresh, "error", "同步失败");
+  }
+}
+
 function bindEvents() {
   els.planPrompts.addEventListener("click", () => createPlan());
   els.saveMinimaxSettings.addEventListener("click", () => saveMinimaxSettings());
