@@ -747,7 +747,7 @@ function buildLegacyAss(project, options = {}) {
       ].join("");
       events.push(`Dialogue: ${highlighted ? 2 : 1},${formatAssTime(start)},${formatAssTime(end)},Dynamic,,0,0,0,,{${tags}}${escapeAss(prefix + token)}`);
     });
-    if (normalized.showBottomSubtitles) {
+    if (normalized.showBottomSubtitles && !["rolling-focus", "rolling-focus-left"].includes(template.renderMode)) {
       events.push(`Dialogue: 3,${formatAssTime(start)},${formatAssTime(end)},Subtitle,,80,80,48,,{\\an2\\pos(960,1010)\\fad(120,100)}${escapeAss(segment.text)}`);
     }
   }
