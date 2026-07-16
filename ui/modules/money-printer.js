@@ -131,6 +131,9 @@ function bindEvents() {
     if (event.detail?.sourceTarget === "money-printer") return;
     receiveTts(event.detail?.payload, { navigate: false });
   });
+  document.addEventListener("workbench:before-route", (event) => {
+    if (event.detail?.from === "money-printer") pausePreview();
+  });
   document.addEventListener("workbench:route", (event) => {
     if (event.detail?.page === "money-printer") {
       loadStoredHandoff();
