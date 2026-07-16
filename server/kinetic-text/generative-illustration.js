@@ -320,7 +320,7 @@ export async function generateIllustrationBackground({ project, effect, config: 
     timing: { fps: ILLUSTRATION_FPS, duration: config.duration, frameCount, syncedToProject: Number(project.duration || 0) <= ILLUSTRATION_MAX_SECONDS ? Math.abs(config.duration - Number(project.duration || 0)) < 0.08 : config.duration === ILLUSTRATION_MAX_SECONDS, loopsAcrossLongVideo: Number(project.duration || 0) > ILLUSTRATION_MAX_SECONDS },
     layers: [
       { id: "background", purpose: "纸张与构图基底，仅做轻微呼吸" },
-      ...assets.metadata.map((item, index) => ({ id: `asset-${index + 1}`, purpose: "图片 API 生成的独立无文字元素", provider: item.provider, model: item.model, prompt: item.prompt })),
+      ...(assets.metadata || []).map((item, index) => ({ id: `asset-${index + 1}`, purpose: "图片 API 生成的独立无文字元素", provider: item.provider, model: item.model, prompt: item.prompt })),
       { id: "decoration", purpose: "平衡留白，不参与主体叙事" },
     ],
     checks: {
