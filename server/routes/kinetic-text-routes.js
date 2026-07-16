@@ -41,6 +41,7 @@ export function createKineticTextRoutes({
   getDownloadsDir,
   sendJson,
   modelRouter,
+  imageService,
   ffmpegPath,
   ffprobePath,
   projectCenter,
@@ -51,6 +52,7 @@ export function createKineticTextRoutes({
     getDownloadsDir,
     sendJson,
     modelRouter,
+    imageService,
     ffmpegPath,
     ffprobePath,
     onOutput: (project, outputs) => {

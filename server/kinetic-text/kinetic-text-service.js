@@ -1298,6 +1298,7 @@ export function createKineticTextService({
   ffmpegPath,
   ffprobePath,
   modelRouter,
+  imageService,
   onOutput = () => {},
 }) {
   const rootDir = path.join(baseDir, ".data", "kinetic-text");

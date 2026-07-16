@@ -201,6 +201,7 @@ const handleKineticTextRoutes = createKineticTextRoutes({
   getDownloadsDir: () => downloadsDir,
   sendJson,
   modelRouter,
+  imageService,
   ffmpegPath,
   ffprobePath,
   projectCenter,
