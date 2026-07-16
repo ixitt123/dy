@@ -3850,6 +3850,8 @@ function applyTtsToMoneyPrinter(payload = {}) {
   const detail = document.querySelector("#moneyPrinterDetail");
   if (status) status.textContent = "已接收 TTS 三件套";
   if (detail) detail.textContent = "脚本已填入，音频和带时间戳字幕已保存到 MoneyPrinter handoff。";
+  if (window.moneyPrinterProduction?.receiveTts) window.moneyPrinterProduction.receiveTts(payload);
+  else window.dispatchEvent(new CustomEvent("money-printer-handoff", { detail: payload }));
 }
 
 async function applyTtsToXiaohei(payload = {}) {
