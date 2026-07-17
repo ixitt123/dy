@@ -1206,6 +1206,64 @@ export function createTtsService({
     return processAlignment(job.id, { finalText: String(text).trim(), reuseRecognition: true });
   }
 
+  async function alignCorrectedText(id, text, input = {}) {
+    const job = taskStore.getTtsJob(Number(id || 0));
+    if (!job) return { error: "没有找到这条语音任务。" };
+    if (job.status !== "completed") return { error: "只有已完成的 TTS 音频才能校正字幕。" };
+    if (!job.audio_path || !fs.existsSync(job.audio_path)) return { error: "最终音频文件不存在。" };
+    const correctedText = String(text || "").trim();
+    if (!correctedText) return { error: "校正后的字幕文案不能为空。" };
+    const metadata = safeJson(job.metadata_json, {});
+    if (metadata.alignment_status !== "confirmed") return { error: "现有字幕尚未确认，不能执行发送前校正。" };
+    const duration = probeAudioDurationSync(job.audio_path)
+      || Number(metadata.audio_duration || metadata.duration || 0)
+      || 0;
+    if (duration <= 0) return { error: "无法读取最终音频时长。" };
+    const recognizedText = String(metadata.recognized_text || metadata.final_text || job.text || "").trim();
+    const recognizedWords = Array.isArray(metadata.recognized_word_timeline) && metadata.recognized_word_timeline.length
+      ? metadata.recognized_word_timeline
+      : Array.isArray(metadata.word_timeline)
+        ? metadata.word_timeline
+        : [];
+    const recognizedSentences = Array.isArray(metadata.recognized_sentence_timeline) && metadata.recognized_sentence_timeline.length
+      ? metadata.recognized_sentence_timeline
+      : Array.isArray(metadata.sentence_timeline)
+        ? metadata.sentence_timeline
+        : [];
+    if (!recognizedText) return { error: "缺少已识别的音频文字，无法微调时间戳。" };
+    const aligned = alignTranscriptToAudio({
+      text: correctedText,
+      recognizedText,
+      recognizedWords,
+      recognizedSentences,
+      duration,
+    });
+    const validation = validateAlignment({
+      text: aligned.finalText,
+      wordTimeline: aligned.wordTimeline,
+      sentenceTimeline: aligned.sentenceTimeline,
+      duration,
+    });
+    if (!validation.valid) return { error: `校正字幕时间轴检查失败：${validation.errors.join("；")}` };
+    if (aligned.matchRatio < ALIGNMENT_AUTO_APPROVE_RATIO) {
+      return { error: `校正文字与音频匹配率 ${(aligned.matchRatio * 100).toFixed(1)}%，低于 80%，已保留原字幕。` };
+    }
+    return syncConfirmedTimeline(job.id, {
+      text: aligned.finalText,
+      sentenceTimeline: aligned.sentenceTimeline,
+      wordTimeline: aligned.wordTimeline,
+      duration,
+      source: String(input.source || "ai_corrected_before_handoff"),
+      confirmationMode: "ai_corrected_before_handoff",
+      correctionStatus: "corrected",
+      correctionProvider: String(input.provider || ""),
+      correctionModel: String(input.model || ""),
+      correctionChangedCharacters: Number(input.changedCharacters || 0),
+      correctionAt: new Date().toISOString(),
+      title: metadata.title || metadata.seo_title || "",
+    });
+  }
+
   async function confirmAlignment(id) {
     const job = taskStore.getTtsJob(Number(id || 0));
     if (!job) return { error: "没有找到这条语音任务。" };
@@ -1280,13 +1338,18 @@ export function createTtsService({
       subtitle_source: String(input.source || "shared_manual_sync"),
       alignment_status: "confirmed",
       alignment_confirmed_at: metadata.alignment_confirmed_at || syncedAt,
-      alignment_confirmation_mode: "shared_manual_sync",
+      alignment_confirmation_mode: String(input.confirmationMode || "shared_manual_sync"),
       alignment_validation: validation,
       alignment_error: "",
       alignment_failure_action: "",
       alignment_revision: Number(metadata.alignment_revision || 0) + 1,
       shared_sync_updated_at: syncedAt,
       shared_sync_source: String(input.source || ""),
+      subtitle_correction_status: String(input.correctionStatus || metadata.subtitle_correction_status || ""),
+      subtitle_correction_provider: String(input.correctionProvider || metadata.subtitle_correction_provider || ""),
+      subtitle_correction_model: String(input.correctionModel || metadata.subtitle_correction_model || ""),
+      subtitle_correction_changed_characters: Number(input.correctionChangedCharacters || 0),
+      subtitle_correction_at: String(input.correctionAt || metadata.subtitle_correction_at || ""),
     }, { status: "completed", error: "" });
     return { job: publicJob(synced) };
   }
@@ -1854,6 +1917,7 @@ export function createTtsService({
     retryJob,
     retryAlignment,
     realignJob,
+    alignCorrectedText,
     confirmAlignment,
     syncConfirmedTimeline,
     getJob,
