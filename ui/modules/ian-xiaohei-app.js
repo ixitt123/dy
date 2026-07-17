@@ -36,8 +36,13 @@ const COMPOSE_SETTINGS_KEY = "ian-xiaohei-compose-settings-v1";
 function startStandalonePageSession() {
   if (embeddedMode) return;
   const sessionId = `xiaohei-${Date.now()}-${Math.random().toString(16).slice(2)}`;
-  const postSession = (url, keepalive = false) => {
-    const body = JSON.stringify({ sessionId });
+  let pageExitReason = "close";
+  const markReload = () => {
+    pageExitReason = "reload";
+    window.setTimeout(() => { pageExitReason = "close"; }, 2000);
+  };
+  const postSession = (url, keepalive = false, details = {}) => {
+    const body = JSON.stringify({ sessionId, ...details });
     if (keepalive && navigator.sendBeacon) {
       navigator.sendBeacon(url, new Blob([body], { type: "application/json" }));
       return;
@@ -49,9 +54,19 @@ function startStandalonePageSession() {
       keepalive,
     }).catch(() => {});
   };
+  window.navigation?.addEventListener?.("navigate", (event) => {
+    if (event.navigationType === "reload") markReload();
+  });
+  window.addEventListener("keydown", (event) => {
+    if (event.key === "F5" || ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "r")) markReload();
+  }, true);
   postSession("/api/page-open");
   setInterval(() => postSession("/api/heartbeat"), 3000);
-  window.addEventListener("pagehide", () => postSession("/api/page-close", true));
+  window.addEventListener("pagehide", () => postSession("/api/page-close", true, { reason: pageExitReason }));
+  window.addEventListener("pageshow", (event) => {
+    pageExitReason = "close";
+    if (event.persisted) postSession("/api/page-open");
+  });
 }
 
 startStandalonePageSession();

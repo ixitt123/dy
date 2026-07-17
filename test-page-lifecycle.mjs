@@ -91,9 +91,17 @@ assert.equal(crashShutdowns, 1, "A crashed browser must trigger the same 30-seco
 
 const runtime = fs.readFileSync(new URL("./ui/modules/legacy-runtime.js", import.meta.url), "utf8");
 const server = fs.readFileSync(new URL("./ui-server.mjs", import.meta.url), "utf8");
+const workbench = fs.readFileSync(new URL("./ui/workbench.js", import.meta.url), "utf8");
+const launcher = fs.readFileSync(new URL("./launch-ui.mjs", import.meta.url), "utf8");
 assert.match(runtime, /pagehide[\s\S]*\/api\/page-close/u, "Page close and refresh must notify the lifecycle endpoint.");
 assert.match(server, /graceMs:\s*30_000/u, "Production lifecycle grace period must remain 30 seconds.");
 assert.match(runtime, /navigationType === "reload"[\s\S]*reason: pageExitReason/u, "Refresh and close must be reported separately when the browser exposes navigation intent.");
 assert.match(server, /lifecycle:\s*pageLifecycle\.status\(\)/u, "Status API must expose lifecycle state for verification.");
+assert.match(runtime, /UI_DRAFT_STORAGE_KEY[\s\S]*restoreUiDraftValues/u, "Text inputs and ordinary parameters must be restored after refresh.");
+assert.match(runtime, /api\.\?key\|secret\|token\|cookie\|password/u, "Sensitive credentials must never be stored in browser drafts.");
+assert.match(workbench, /short-video-workbench-page/u, "The active feature page must be restored after refresh.");
+assert.match(launcher, /const url = await existingServerUrl\(\)/u, "The launcher must always reuse an existing backend.");
+assert.doesNotMatch(launcher, /syncChanged\s*\?\s*""\s*:\s*await existingServerUrl/u, "A repository sync must never bypass single-instance reuse.");
+assert.match(server, /fs\.openSync\(pidPath, "wx"\)/u, "The backend must use an exclusive single-instance lock.");
 
 console.log("Page lifecycle: OK");
