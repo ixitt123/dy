@@ -29,7 +29,7 @@ function nowIso() {
   return new Date().toISOString();
 }
 
-function safeNumber(value, fallback = 0, min = -Infinity, max = Infinity) {
+export function safeNumber(value, fallback = 0, min = -Infinity, max = Infinity) {
   const number = Number(value);
   return Number.isFinite(number) ? Math.min(max, Math.max(min, number)) : fallback;
 }

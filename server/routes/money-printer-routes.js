@@ -4,7 +4,7 @@ import path from "node:path";
 import { spawn, spawnSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { HttpBodyError, readJsonBody } from "../utils/http-body.js";
-import { buildAss } from "../kinetic-text/kinetic-text-service.js";
+import { buildAss, safeNumber } from "../kinetic-text/kinetic-text-service.js";
 import { KINETIC_TEXT_EFFECTS, defaultEffectParams, normalizeEffectId } from "../kinetic-text/effects.js";
 
 const DEFAULT_API_PORT = 8080;
