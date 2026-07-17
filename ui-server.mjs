@@ -1773,6 +1773,28 @@ function publicUnifiedProviders(settings = readSettings()) {
     });
   }
 
+  const mptMaterialKeys = readMptMaterialKeys();
+  for (const def of MPT_MATERIAL_PROVIDERS) {
+    const keys = mptMaterialKeys[def.id] || [];
+    providers.push({
+      id: def.id,
+      label: def.label,
+      group: "素材平台",
+      feature: "MoneyPrinterTurbo 视频素材匹配",
+      description: "为 MoneyPrinterTurbo 提供视频素材；支持多个 Key 轮换，用英文逗号或换行分隔。",
+      configured: keys.length > 0,
+      apiKeyMask: keys.length ? `${keys.length} 个 Key 已保存` : "",
+      keyCount: keys.length,
+      applyUrl: def.applyUrl,
+      balanceUrl: def.applyUrl,
+      activeDefault: false,
+      supportsBaseUrl: false,
+      supportsModel: false,
+      supportsMaterialMeta: false,
+      enabled: true,
+    });
+  }
+
   return providers;
 }
 
@@ -1783,6 +1805,13 @@ function saveUnifiedProvider(settings, body) {
   const baseUrl = String(body.baseUrl || "").trim();
   const workspaceId = String(body.workspaceId || "").trim();
   const model = String(body.model || "").trim();
+
+  if (MPT_MATERIAL_IDS.has(id)) {
+    const raw = String(body.apiKey || "").trim();
+    const keys = raw ? raw.split(/[\r\n,，]+/).map((item) => item.trim()).filter(Boolean) : [];
+    writeMptMaterialKeys(id, keys);
+    return;
+  }
 
   if (["volcengine_ark", "jimeng"].includes(id)) {
     if (!settings.imageProviders) settings.imageProviders = {};
@@ -2106,6 +2135,25 @@ async function testUnifiedProvider(settings, providerId) {
       return { ok: false, status: "failed", message: `Fish Audio：网络错误，${error instanceof Error ? error.message : String(error)}` };
     }
   }
+  if (MPT_MATERIAL_IDS.has(providerId)) {
+    const def = MPT_MATERIAL_PROVIDERS.find((item) => item.id === providerId);
+    const keys = readMptMaterialKeys()[providerId] || [];
+    if (!keys.length) return { ok: false, status: "missing", message: `${def.label}：尚未保存 API Key。` };
+    if (!def.test) {
+      return { ok: true, status: "saved", message: `${def.label} Key 已保存（该平台无公开连通性测试接口，保存后即可在 MoneyPrinterTurbo 中使用）。` };
+    }
+    const url = typeof def.test.url === "function" ? def.test.url(keys[0]) : def.test.url;
+    const headers = def.test.authHeader ? { [def.test.authHeader]: keys[0] } : {};
+    try {
+      const response = await fetch(url, { headers });
+      if (response.ok) return { ok: true, status: "success", message: `${def.label} API Key 有效。` };
+      if (response.status === 401 || response.status === 403) return { ok: false, status: "failed", message: `${def.label} API Key 无效或未授权。` };
+      return { ok: false, status: "failed", message: `${def.label} 测试失败（HTTP ${response.status}）。` };
+    } catch (error) {
+      return { ok: false, status: "failed", message: `${def.label} 网络错误：${error instanceof Error ? error.message : String(error)}` };
+    }
+  }
+
   return providerConfigStatus(settings, providerId);
 }
 

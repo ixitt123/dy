@@ -2218,8 +2218,10 @@ function setupV2Settings() {
               <div class="provider-meta">
                 <span>功能：${html(provider.feature || "")}</span>
                 <span>Key：${provider.configured ? html(provider.apiKeyMask || "已保存") : "未保存"}</span>
+                ${provider.supportsMaterialMeta === false ? "" : `
                 <span>默认模型：${html(provider.model || provider.models?.[0] || "跟随模型中心")}</span>
                 <span>备用模型：${html(provider.models?.[1] || "未设置")}</span>
+                `}
               </div>
             </div>
             <div class="provider-fields">
