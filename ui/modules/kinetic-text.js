@@ -339,8 +339,8 @@ function renderTimeline() {
     return `
       <div class="kinetic-timeline-row" data-segment-index="${index}">
         <span class="kinetic-segment-index">${index + 1}</span>
-        <input data-field="start" type="number" min="0" step="0.01" value="${Number(segment.start).toFixed(2)}" />
-        <input data-field="end" type="number" min="0" step="0.01" value="${Number(segment.end).toFixed(2)}" />
+        <input data-field="start" type="number" min="0" step="0.01" value="${Number(segment.start).toFixed(2)}" readonly aria-readonly="true" />
+        <input data-field="end" type="number" min="0" step="0.01" value="${Number(segment.end).toFixed(2)}" readonly aria-readonly="true" />
         <textarea data-field="text" rows="2">${escapeHtml(segment.text)}</textarea>
         <input data-field="keywords" type="text" value="${escapeHtml((segment.keywords || []).join("、"))}" placeholder="每段1-2个，关键词不相邻" />
         <input data-field="lineBreaks" type="text" value="${escapeHtml((segment.lineBreaks || []).join(","))}" placeholder="如 6,12" title="按字符序号设置换行位置" />
@@ -1752,6 +1752,62 @@ function applyTimelineInput(input) {
   scheduleSave({ segments, duration: Math.max(...segments.map((item) => Number(item.end || 0)), state.project.duration || 0) });
 }
 
+function sharedTimelineFromPayload(payload = {}) {
+  const rows = Array.isArray(payload.sentence_timeline) && payload.sentence_timeline.length
+    ? payload.sentence_timeline
+    : Array.isArray(payload.subtitle_timeline)
+      ? payload.subtitle_timeline
+      : [];
+  return rows.map((row, index) => ({
+    ...row,
+    index,
+    start: Number(row.start || 0),
+    end: Number(row.end || 0),
+    text: String(row.text || ""),
+  })).filter((row) => row.text && row.end > row.start);
+}
+
+async function applySharedTimelineToKineticProject(payload = {}) {
+  const project = state.projects.find((item) => String(item.ttsJobId || "") === String(payload.id || ""));
+  const rows = sharedTimelineFromPayload(payload);
+  if (!project || !rows.length) return null;
+  const segments = rows.map((row, index) => ({
+    ...(project.segments?.[index] || {}),
+    ...row,
+    id: project.segments?.[index]?.id || row.id || `segment-${index + 1}`,
+  }));
+  const data = await postJson("/api/kinetic-text/update", {
+    projectId: project.id,
+    changes: {
+      segments,
+      duration: Math.max(...segments.map((item) => Number(item.end || 0)), project.duration || 0),
+      subtitleSource: "shared-production-timeline",
+    },
+  });
+  const projectIndex = state.projects.findIndex((item) => item.id === data.project.id);
+  if (projectIndex >= 0) state.projects[projectIndex] = data.project;
+  if (state.project?.id === data.project.id) {
+    state.project = data.project;
+    renderProject();
+  }
+  return data.project;
+}
+
+async function syncKineticSubtitleText() {
+  if (!state.project?.ttsJobId || !state.project.segments?.length) return;
+  setProgress(state.project.progress || 0, "正在自动保存字幕...");
+  try {
+    const payload = await window.sharedTtsHandoff.syncTimeline(state.project.segments, {
+      sourceTarget: "kinetic-text",
+      title: state.project.title,
+    });
+    await applySharedTimelineToKineticProject(payload);
+    setProgress(state.project.progress || 0, "字幕已保存：原时间戳和已生成视频保持不变");
+  } catch (error) {
+    setProgress(state.project.progress || 0, `字幕自动保存失败：${error.message || error}`);
+  }
+}
+
 function fileToDataUrl(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -1921,6 +1977,9 @@ function bindEvents() {
     if (video) { video.pause(); video.currentTime = 0; }
   });
   $("#kineticTimeline").addEventListener("input", (event) => { if (event.target.dataset.field) applyTimelineInput(event.target); });
+  $("#kineticTimeline").addEventListener("focusout", (event) => {
+    if (event.target.matches('[data-field="text"]')) syncKineticSubtitleText();
+  });
   $("#kineticTextTitle").addEventListener("input", (event) => {
     const title = event.target.value;
     const intro = state.project?.bookends?.intro;
@@ -2123,6 +2182,10 @@ function bindEvents() {
   });
   window.addEventListener("kinetic-text-handoff", (event) => receiveTts(event.detail).catch((error) => setProgress(0, error.message)));
   window.addEventListener("kinetic-text-text-handoff", (event) => receiveText(event.detail).catch((error) => setProgress(0, error.message)));
+  window.addEventListener("tts-shared-handoff-updated", (event) => {
+    if (event.detail?.sourceTarget === "kinetic-text") return;
+    applySharedTimelineToKineticProject(event.detail?.payload).catch((error) => setProgress(state.project?.progress || 0, `字幕同步失败：${error.message}`));
+  });
 }
 
 export async function initKineticTextModule() {

@@ -10232,6 +10232,12 @@ audio {
   resize: vertical;
 }
 
+.kinetic-timeline-row input[readonly] {
+  color: #8da0bd;
+  background: #0a0f17;
+  cursor: default;
+}
+
 .kinetic-position-inputs {
   display: grid;
   grid-template-columns: 1fr 1fr;
