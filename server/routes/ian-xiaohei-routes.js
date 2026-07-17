@@ -3077,19 +3077,39 @@ function listOutputBatches(outputRoot) {
         : directFiles;
       const stats = fs.statSync(folderPath);
       const finalVideoPath = String(result.output?.final_video_path || "");
+      const hasFinalMp4 = finalVideoPath && fs.existsSync(finalVideoPath);
+      // 历史批次也注册到统一下载体系，保证下载地址一致
+      let unifiedDownloadUrl = "";
+      let unifiedDownloadId = "";
+      if (hasFinalMp4 && resolvedDownloadsDir) {
+        // 查找是否已注册（避免重复注册）
+        let existingId = null;
+        for (const [fid, frec] of xiaoheiRenderedFiles.entries()) {
+          if (frec.filePath === finalVideoPath || frec.filePath === path.resolve(finalVideoPath)) {
+            existingId = fid;
+            break;
+          }
+        }
+        if (!existingId) {
+          const dName = xiaoheiVideoDownloadName(manifest.title);
+          existingId = registerXiaoheiFile(finalVideoPath, dName);
+        }
+        unifiedDownloadUrl = `/api/ian-xiaohei/file?id=${encodeURIComponent(existingId)}&download=1`;
+        unifiedDownloadId = existingId;
+      }
       return {
         id: entry.name,
         title: manifest.title || "",
         folderPath,
         timelineProjectId: 0,
         draftPath: result.output?.draft_path || manifest.draft_path || "",
-        finalVideoPath: finalVideoPath && fs.existsSync(finalVideoPath) ? finalVideoPath : "",
-        videoUrl: finalVideoPath && fs.existsSync(finalVideoPath)
+        finalVideoPath: hasFinalMp4 ? finalVideoPath : "",
+        videoUrl: hasFinalMp4
           ? `/api/ian-xiaohei/video-file?batch_id=${encodeURIComponent(entry.name)}`
           : "",
-        downloadUrl: finalVideoPath && fs.existsSync(finalVideoPath)
+        downloadUrl: unifiedDownloadUrl || (hasFinalMp4
           ? `/api/ian-xiaohei/video-file?batch_id=${encodeURIComponent(entry.name)}&download=1`
-          : "",
+          : ""),
         downloadName: xiaoheiVideoDownloadName(manifest.title),
         transitionMode: result.output?.transition_mode || "",
         updatedAt: stats.mtime.toISOString(),
