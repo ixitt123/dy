@@ -36,17 +36,15 @@ async function existingServerUrl() {
   return "";
 }
 
-let syncChanged = false;
 try {
-  const syncResult = await runSync({ mode: "startup", quiet: true });
-  syncChanged = Boolean(syncResult.changed);
+  await runSync({ mode: "startup", quiet: true });
 } catch {
-  syncChanged = false;
+  // A sync failure must not create a second backend process.
 }
 
 startSyncWatcher();
 
-const url = syncChanged ? "" : await existingServerUrl();
+const url = await existingServerUrl();
 if (url) {
   openUrl(url);
   process.exit(0);

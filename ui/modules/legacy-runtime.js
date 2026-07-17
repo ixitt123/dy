@@ -63,6 +63,83 @@ function writeUiChoicePreferences(preferences) {
   }
 }
 
+function readUiDraftValues() {
+  try {
+    return JSON.parse(window.localStorage?.getItem(UI_DRAFT_STORAGE_KEY) || "{}");
+  } catch {
+    return {};
+  }
+}
+
+function writeUiDraftValues(values) {
+  try {
+    window.localStorage?.setItem(UI_DRAFT_STORAGE_KEY, JSON.stringify(values));
+  } catch {
+    // Draft persistence is optional and must not block the workbench.
+  }
+}
+
+function isPersistableDraftControl(control) {
+  if (!control || control.closest("[data-no-draft-persist], [data-no-choice-persist]")) return false;
+  if (!control.matches(UI_DRAFT_SELECTOR)) return false;
+  const identity = [
+    control.id,
+    control.name,
+    control.dataset?.field,
+    control.autocomplete,
+    control.placeholder,
+  ].filter(Boolean).join(" ").toLowerCase();
+  return !/(?:api.?key|secret|token|cookie|password|credential|authorization)/i.test(identity);
+}
+
+function draftControlBaseKey(control) {
+  if (control.id) return `#${control.id}`;
+  const pageId = control.closest("[data-page]")?.dataset.page || "global";
+  const dataIdentity = ["field", "provider", "task", "target", "draftKey"]
+    .map((key) => control.dataset?.[key] ? `${key}=${control.dataset[key]}` : "")
+    .filter(Boolean)
+    .join(";");
+  const nameIdentity = control.name ? `name=${control.name}` : "";
+  const classIdentity = [...control.classList].sort().join(".");
+  return `${pageId}:${control.tagName.toLowerCase()}:${dataIdentity || nameIdentity || classIdentity || "unnamed"}`;
+}
+
+function draftControlKey(control) {
+  const baseKey = draftControlBaseKey(control);
+  if (control.id) return baseKey;
+  const peers = [...document.querySelectorAll(UI_DRAFT_SELECTOR)]
+    .filter((candidate) => isPersistableDraftControl(candidate) && draftControlBaseKey(candidate) === baseKey);
+  return `${baseKey}:${Math.max(0, peers.indexOf(control))}`;
+}
+
+function restoreUiDraftControl(control, drafts, { dispatch = false } = {}) {
+  if (!isPersistableDraftControl(control) || restoredUiDraftControls.has(control)) return;
+  restoredUiDraftControls.add(control);
+  const key = draftControlKey(control);
+  if (!Object.prototype.hasOwnProperty.call(drafts, key)) return;
+  const value = String(drafts[key] ?? "");
+  if (value.length > 200_000 || control.value === value) return;
+  control.value = value;
+  if (dispatch) control.dispatchEvent(new Event("input", { bubbles: true }));
+}
+
+function restoreUiDraftValues(options = {}) {
+  const drafts = readUiDraftValues();
+  for (const control of document.querySelectorAll(UI_DRAFT_SELECTOR)) {
+    restoreUiDraftControl(control, drafts, options);
+  }
+}
+
+function saveUiDraftValue(event) {
+  const control = event.target?.closest?.(UI_DRAFT_SELECTOR);
+  if (!isPersistableDraftControl(control)) return;
+  const value = String(control.value ?? "");
+  if (value.length > 200_000) return;
+  const drafts = readUiDraftValues();
+  drafts[draftControlKey(control)] = value;
+  writeUiDraftValues(drafts);
+}
+
 function readUiNamedChoice(key, allowedValues, fallback) {
   const stored = readUiChoicePreferences()[`named:${key}`];
   return allowedValues.includes(stored) ? stored : fallback;
@@ -163,7 +240,10 @@ function restoreUiChoicePreferences(options = {}) {
 
 function scheduleUiChoicePreferenceRestore() {
   window.clearTimeout(uiChoiceRestoreTimer);
-  uiChoiceRestoreTimer = window.setTimeout(() => restoreUiChoicePreferences({ dispatch: true }), 80);
+  uiChoiceRestoreTimer = window.setTimeout(() => {
+    restoreUiChoicePreferences({ dispatch: true });
+    restoreUiDraftValues({ dispatch: true });
+  }, 80);
 }
 
 function saveUiChoicePreference(event) {
@@ -178,6 +258,8 @@ function saveUiChoicePreference(event) {
 
 document.addEventListener("change", saveUiChoicePreference, true);
 document.addEventListener("input", saveUiChoicePreference, true);
+document.addEventListener("change", saveUiDraftValue, true);
+document.addEventListener("input", saveUiDraftValue, true);
 
 new MutationObserver(scheduleUiChoicePreferenceRestore).observe(document.body, {
   childList: true,
@@ -8110,6 +8192,7 @@ async function init() {
     await loadTtsMusicPresets();
     await loadVoiceAssets({ applyDefault: true });
     restoreUiChoicePreferences({ dispatch: true });
+    restoreUiDraftValues({ dispatch: true });
     await loadMomentsPersonas();
     loadMomentsDraft();
     updateTtsVoiceSource();
