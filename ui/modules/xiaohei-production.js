@@ -7,9 +7,9 @@ function activeProject() {
 function handoffFromPayload(payload = {}, project = activeProject()) {
   if (!payload?.id) return null;
   const finalText = String(
-    payload.text
-    || payload.final_text
+    payload.final_text
     || payload.metadata?.final_text
+    || payload.text
     || payload.tts_prepared_text
     || payload.metadata?.tts_prepared_text
     || payload.original_text
@@ -98,7 +98,13 @@ export function initXiaoheiProductionModule() {
   window.addEventListener("message", (event) => {
     if (event.origin !== window.location.origin || event.source !== frame.contentWindow) return;
     if (event.data?.type !== "video-factory:xiaohei-shared-timeline-updated" || !event.data.payload?.id) return;
-    const payload = window.sharedTtsHandoff?.save?.(event.data.payload, { sourceTarget: "xiaohei-video" }) || event.data.payload;
+    const latestText = String(event.data.payload.final_text || event.data.payload.text || "").trim();
+    const normalizedPayload = {
+      ...event.data.payload,
+      text: latestText,
+      final_text: latestText,
+    };
+    const payload = window.sharedTtsHandoff?.save?.(normalizedPayload, { sourceTarget: "xiaohei-video" }) || normalizedPayload;
     const handoff = handoffFromPayload(payload);
     if (handoff) localStorage.setItem(XIAOHEI_HANDOFF_KEY, JSON.stringify(handoff));
     status.textContent = `字幕已自动保存并同步到四条生产线 · 音频 #${payload.id}`;

@@ -37,6 +37,7 @@ assert.match(kinetic, /focusout[\s\S]*syncKineticSubtitleText/u);
 assert.match(xiaohei, /data-field="start"[\s\S]*readonly aria-readonly="true"/u);
 assert.match(xiaohei, /focusout[\s\S]*persistSharedSubtitleText/u);
 assert.match(xiaoheiParent, /video-factory:xiaohei-shared-timeline-updated/u);
+assert.match(xiaoheiParent, /const latestText = String\(event\.data\.payload\.final_text \|\| event\.data\.payload\.text/u);
 assert.match(service, /subtitle_vtt_path/u);
 assert.match(service, /timeline_json_path/u);
 assert.match(service, /WEBVTT/u);
