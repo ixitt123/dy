@@ -2226,7 +2226,7 @@ function setupV2Settings() {
             </div>
             <div class="provider-actions">
               <button class="primary small" type="button" data-save-provider="${html(provider.id)}">保存</button>
-              ${provider.group === "文本模型" || provider.group === "TTS 语音" ? `<button class="ghost small" type="button" data-default-provider="${html(provider.id)}">设为默认</button>` : ""}
+              ${["文本模型", "TTS 语音", "图片生成"].includes(provider.group) ? `<button class="ghost small" type="button" data-default-provider="${html(provider.id)}">设为默认</button>` : ""}
               <button class="ghost small" type="button" data-test-provider="${html(provider.id)}">检查</button>
               ${provider.id === "fish_audio" ? `<button class="ghost small" type="button" data-test-provider-sample="${html(provider.id)}">测试生成语音</button>` : ""}
               ${provider.applyUrl ? `<button class="ghost small" type="button" data-open-url="${html(provider.applyUrl)}">申请入口</button>` : ""}

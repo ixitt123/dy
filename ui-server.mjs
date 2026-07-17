@@ -1720,6 +1720,26 @@ function saveUnifiedProvider(settings, body) {
   const workspaceId = String(body.workspaceId || "").trim();
   const model = String(body.model || "").trim();
 
+  if (["volcengine_ark", "jimeng"].includes(id)) {
+    if (!settings.imageProviders) settings.imageProviders = {};
+    const existing = settings.imageProviders[id] || {};
+    const nextModel = id === "volcengine_ark"
+      ? normalizeVolcengineArkImageModel(model || existing.model)
+      : model || existing.model || "flux-dev";
+    settings.imageProviders[id] = {
+      ...existing,
+      label: id === "volcengine_ark" ? "火山方舟 Seedream" : "即梦 AI",
+      ...(apiKey ? { apiKey } : {}),
+      ...(body.baseUrl !== undefined ? { baseUrl } : {}),
+      model: nextModel,
+    };
+    if (body.setDefault === true) {
+      settings.modelMap.image = { provider: id, model: nextModel };
+      settings.modelMapping = settings.modelMap;
+    }
+    return;
+  }
+
   if (scope !== "tts" && settings.rewriteProviders?.[id]) {
     const provider = settings.rewriteProviders[id];
     if (apiKey) provider.apiKey = apiKey;
@@ -1915,7 +1935,9 @@ function applyLocalProviderConfig(settings, providerId) {
 
 function applyModelMapping(settings, mapping) {
   const normalized = { ...DEFAULT_MODEL_MAPPING, ...(mapping || {}) };
-  delete normalized.image;
+  if (normalized.image?.provider === "volcengine_ark") {
+    normalized.image = { ...normalized.image, model: normalizeVolcengineArkImageModel(normalized.image.model) };
+  }
   settings.modelMap = normalized;
   settings.modelMapping = normalized;
 
@@ -1999,6 +2021,9 @@ function providerConfigStatus(settings, providerId, options = {}) {
 async function testUnifiedProvider(settings, providerId) {
   const provider = publicUnifiedProviders(settings).find((item) => item.id === providerId);
   if (!provider) return { ok: false, status: "failed", message: "未知 API 服务" };
+  if (["volcengine_ark", "jimeng"].includes(providerId)) {
+    return imageService.testProviderConnection(providerId);
+  }
   if (providerId === "fish_audio") {
     const config = settings.tts?.fish_audio || {};
     const apiKey = String(config.api_key || "").trim();
