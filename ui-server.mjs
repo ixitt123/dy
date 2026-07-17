@@ -6563,7 +6563,7 @@ const server = http.createServer(async (req, res) => {
 
   try {
     if (req.method === "GET" && url.pathname === "/api/status") {
-      sendJson(res, 200, { ok: true, downloadsDir, tasks: queueState() });
+      sendJson(res, 200, { ok: true, downloadsDir, tasks: queueState(), lifecycle: pageLifecycle.status() });
       return;
     }
 
@@ -7863,21 +7863,21 @@ const server = http.createServer(async (req, res) => {
     if (req.method === "POST" && url.pathname === "/api/page-open") {
       const body = await readJsonBody(req);
       touchPageSession(String(body.sessionId || ""));
-      sendJson(res, 200, { ok: true });
+      sendJson(res, 200, { ok: true, lifecycle: pageLifecycle.status() });
       return;
     }
 
     if (req.method === "POST" && url.pathname === "/api/heartbeat") {
       const body = await readJsonBody(req);
       touchPageSession(String(body.sessionId || ""));
-      sendJson(res, 200, { ok: true });
+      sendJson(res, 200, { ok: true, lifecycle: pageLifecycle.status() });
       return;
     }
 
     if (req.method === "POST" && url.pathname === "/api/page-close") {
       const body = await readJsonBody(req);
       closePageSession(String(body.sessionId || ""));
-      sendJson(res, 200, { ok: true });
+      sendJson(res, 200, { ok: true, lifecycle: pageLifecycle.status() });
       return;
     }
 
