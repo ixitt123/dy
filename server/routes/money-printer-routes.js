@@ -26,7 +26,7 @@ export function createMoneyPrinterRoutes({ baseDir, sendJson, ffmpegPath, ffprob
   const defaultRoot = path.resolve(process.env.MONEY_PRINTER_TURBO_ROOT || path.join(baseDir, "integrations", "moneyprinterturbo"));
   const workflowDir = path.join(baseDir, ".data", "money-printer");
 
-  return async function handleMoneyPrinterRoutes(req, res, url) {
+  const handleMoneyPrinterRoutes = async function handleMoneyPrinterRoutes(req, res, url) {
     if (!url.pathname.startsWith("/api/money-printer/")) return false;
     const route = url.pathname.replace("/api/money-printer/", "");
 
@@ -188,6 +188,26 @@ export function createMoneyPrinterRoutes({ baseDir, sendJson, ffmpegPath, ffprob
 
     return false;
   };
+  handleMoneyPrinterRoutes.shutdown = stopApiProcess;
+  return handleMoneyPrinterRoutes;
+}
+
+function stopApiProcess() {
+  const child = apiProcess;
+  apiProcess = null;
+  if (!child?.pid || child.killed) return;
+  try {
+    if (process.platform === "win32") {
+      spawnSync("taskkill.exe", ["/PID", String(child.pid), "/T", "/F"], {
+        windowsHide: true,
+        stdio: "ignore",
+      });
+    } else {
+      child.kill("SIGTERM");
+    }
+  } catch {
+    try { child.kill(); } catch {}
+  }
 }
 
 async function buildStatus(rootDir) {
@@ -253,7 +273,10 @@ async function startApi(rootDir) {
   });
   apiProcess.stdout?.on("data", (chunk) => appendLog(chunk.toString("utf8")));
   apiProcess.stderr?.on("data", (chunk) => appendLog(chunk.toString("utf8")));
-  apiProcess.on("exit", (code) => appendLog(`MoneyPrinterTurbo API exited with code ${code}`));
+  apiProcess.on("exit", (code) => {
+    apiProcess = null;
+    appendLog(`MoneyPrinterTurbo API exited with code ${code}`);
+  });
 
   for (let attempt = 0; attempt < 30; attempt += 1) {
     await wait(1000);
