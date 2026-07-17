@@ -101,7 +101,7 @@ async function initialize() {
   loadStoredHandoff();
   renderAll();
   if (state.page.classList.contains("active") || document.body.dataset.activeModule === "money-printer") {
-    await ensureApiReady();
+    await ensureApiReady().catch(() => null);
   }
 }
 
@@ -116,6 +116,7 @@ function bindEvents() {
   els.source?.addEventListener("change", () => {
     state.page.classList.toggle("money-printer-local-source", els.source.value === "local");
     savePreferences();
+    updateButtons();
   });
   for (const input of [els.effect, els.aspect, els.frameRate, els.fontSize, els.primaryColor, els.accentColor, els.maxLines, els.ttsVolume, els.bottomSubtitles, els.transition]) {
     input?.addEventListener("input", () => { savePreferences(); updateSettingOutputs(); drawPreview(); renderTimeline(); });
@@ -340,10 +341,12 @@ function renderStatus(status) {
   state.status = status;
   const installed = Boolean(status.installed);
   const online = Boolean(status.api?.online);
-  els.apiBadge.textContent = online ? "API 在线" : installed ? "API 未启动" : "未安装";
+  const starting = Boolean(status.process?.startedByDy && !online);
+  const materialSources = Array.isArray(status.materials?.fallbackOrder) ? status.materials.fallbackOrder : [];
+  els.apiBadge.textContent = online ? "API 在线" : starting ? "API 启动中" : installed ? "API 未启动" : "未安装";
   els.apiBadge.className = `money-printer-badge ${online ? "ready" : installed ? "warning" : "error"}`;
   els.rootPath.textContent = status.root || "";
-  els.startApi.disabled = !installed || online;
+  els.startApi.disabled = !installed || online || starting;
   els.openDocs.disabled = !online;
   els.openRoot.disabled = !installed;
   els.openTasks.disabled = !installed;
@@ -351,7 +354,9 @@ function renderStatus(status) {
   if (hasConfirmedHandoff()) {
     setStatus(
       online ? "MoneyPrinterTurbo 已就绪" : installed ? "MoneyPrinterTurbo 已安装，等待启动 API" : "未找到 MoneyPrinterTurbo",
-      online ? `API：${status.api.baseUrl}` : installed ? "首次启动会通过 uv 准备依赖，可能需要几分钟。" : "请确认 integrations/moneyprinterturbo 子模块已初始化。",
+      online
+        ? `API：${status.api.baseUrl}；素材备用顺序：${materialSources.length ? materialSources.join(" → ") : "尚未配置"}`
+        : installed ? `正在使用 ${status.runtime || "内置环境"} 准备 API。` : "请确认 integrations/moneyprinterturbo 子模块已初始化。",
       !installed,
     );
   }
@@ -359,22 +364,29 @@ function renderStatus(status) {
 }
 
 async function startApi() {
-  els.startApi.disabled = true;
-  setStatus("正在启动 MoneyPrinterTurbo API", "首次启动会安装/校验 Python 依赖。");
-  try {
-    const data = await postJson("/api/money-printer/start-api", {});
-    renderStatus(data);
-    if (!data.api?.online) {
-      const timer = window.setInterval(async () => {
-        const next = await refreshStatus();
-        if (next?.api?.online) window.clearInterval(timer);
-      }, 3000);
+  await ensureApiReady({ manual: true }).catch(() => null);
+}
+
+async function ensureApiReady({ manual = false } = {}) {
+  if (state.status?.api?.online) return state.status;
+  if (state.apiStartPromise) return state.apiStartPromise;
+  state.apiStartPromise = (async () => {
+    els.startApi.disabled = true;
+    setStatus("正在自动启动 MoneyPrinterTurbo API", "优先使用项目内置 Python 环境；检测到现有实例时只连接，不重复启动。");
+    try {
+      const data = await postJson("/api/money-printer/start-api", {});
+      renderStatus(data);
+      if (!data.api?.online) throw new Error(data.message || "API 尚未就绪");
+      return data;
+    } catch (error) {
+      setStatus(manual ? "启动失败" : "API 自动启动失败", error.message, true);
+      throw error;
+    } finally {
+      state.apiStartPromise = null;
+      els.startApi.disabled = Boolean(state.status?.api?.online);
     }
-  } catch (error) {
-    setStatus("启动失败", error.message, true);
-  } finally {
-    els.startApi.disabled = Boolean(state.status?.api?.online);
-  }
+  })();
+  return state.apiStartPromise;
 }
 
 async function submitForPreview() {
@@ -382,10 +394,8 @@ async function submitForPreview() {
     setStatus("缺少已确认 TTS", "请先从 TTS 语音页发送已确认音频和时间戳字幕。", true);
     return;
   }
-  if (!state.status?.api?.online) {
-    setStatus("API 未启动", "请先启动 MoneyPrinterTurbo API。", true);
-    return;
-  }
+  if (!state.status?.api?.online) await ensureApiReady().catch(() => null);
+  if (!state.status?.api?.online) return;
   stopPolling();
   state.previewReady = false;
   setProgress(4, "提交 MoneyPrinterTurbo 素材任务");
@@ -433,6 +443,9 @@ async function pollTask(taskId) {
     const data = await fetchJson(`/api/money-printer/task?id=${encodeURIComponent(taskId)}`);
     state.task = data.task;
     setProgress(state.task.progress || 0, state.task.stateLabel || "生成中");
+    if (state.task.fallback_message) {
+      setStatus("正在切换备用素材 API", state.task.fallback_message);
+    }
     renderTask();
     if (Number(state.task.state) === 1) {
       stopPolling();
@@ -442,7 +455,7 @@ async function pollTask(taskId) {
       setStatus("预览已就绪", "当前预览使用 MoneyPrinterTurbo 混剪素材、已确认 TTS 音频和动态大字字幕模板。");
     } else if (Number(state.task.state) === -1) {
       stopPolling();
-      setStatus("MoneyPrinterTurbo 任务失败", "请展开 API 日志或检查素材 API 配置。", true);
+      setStatus("MoneyPrinterTurbo 任务失败", state.task.error || "全部素材 API 均失败，请检查后台配置。", true);
     }
   } catch (error) {
     stopPolling();
@@ -727,7 +740,9 @@ function hasConfirmedHandoff() {
 
 function updateButtons() {
   const ready = hasConfirmedHandoff();
-  els.submit.disabled = !ready || !state.status?.api?.online;
+  const source = els.source?.value || "pexels";
+  const materialsReady = source === "local" || Boolean(state.status?.materials?.fallbackOrder?.length);
+  els.submit.disabled = !ready || !state.status?.api?.online || !materialsReady;
   els.renderFinal.disabled = !ready || !state.previewReady || !state.task;
 }
 
