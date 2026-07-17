@@ -357,7 +357,7 @@ function isPortListening(host, port) {
   });
 }
 
-function readMaterialProviderStatus(configPath) {
+export function readMaterialProviderStatus(configPath) {
   const text = configPath && fs.existsSync(configPath) ? fs.readFileSync(configPath, "utf8") : "";
   const providers = [
     { id: "pexels", label: "Pexels", configKey: "pexels_api_keys" },
@@ -379,7 +379,7 @@ function tomlArrayValueCount(text, key) {
   return (match[1].match(/"(?:[^"\\\\]|\\\\.)+"|'(?:[^'\\\\]|\\\\.)+'/g) || []).length;
 }
 
-function resolveMaterialSourceOrder(preferred, materials = {}) {
+export function resolveMaterialSourceOrder(preferred, materials = {}) {
   const selected = ALLOWED_SOURCES.has(String(preferred || "")) ? String(preferred) : "pexels";
   if (selected === "local") return ["local"];
   const configured = Array.isArray(materials.fallbackOrder) ? materials.fallbackOrder : [];
@@ -464,7 +464,7 @@ async function pollManagedTask(status, managed) {
   };
 }
 
-function shouldTryNextMaterialSource(task, managed) {
+export function shouldTryNextMaterialSource(task, managed) {
   if (managed.sourceIndex >= managed.materialSources.length - 1) return false;
   const stage = String(task.failed_stage || "").toLowerCase();
   const error = String(task.error || task.message || "").toLowerCase();
@@ -473,7 +473,7 @@ function shouldTryNextMaterialSource(task, managed) {
     || /pexels|pixabay|coverr|material|素材|api[_ ]keys?/.test(error);
 }
 
-function sanitizeMptError(value) {
+export function sanitizeMptError(value) {
   const text = String(value || "").replace(/\u001b\[[0-9;]*m/g, "").trim();
   if (!text) return "";
   const missingKey = /(pexels|pixabay|coverr)_api_keys? is not set/i.exec(text);
