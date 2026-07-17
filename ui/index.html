@@ -1153,6 +1153,16 @@
                 输入文案
                 <textarea id="cs1VideoText" rows="8" maxlength="1200" placeholder="把要做成视频的文字粘贴到这里..." required></textarea>
               </label>
+              <section class="cs1-shared-timeline-card">
+                <div class="cs1-shared-timeline-title">
+                  <strong>字幕时间轴</strong>
+                  <span id="cs1TimelineStatus">等待 TTS 字幕</span>
+                </div>
+                <div class="shared-subtitle-timeline-head">
+                  <span>序号</span><span>开始</span><span>结束</span><span>字幕文字（失去焦点自动保存）</span>
+                </div>
+                <div id="cs1SubtitleTimeline" class="shared-subtitle-timeline"></div>
+              </section>
               <label>
                 视频比例 / 平台
                 <select id="cs1VideoAspectRatio">
