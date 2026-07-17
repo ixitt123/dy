@@ -173,6 +173,12 @@ const audioLyrics = "你问我 AI 怎么拍成片 我用一段旋律唱给你听
   assert.equal(corrected.job.subtitle_correction_provider, "deepseek");
   assert.ok(corrected.job.subtitle_timeline.length > 0);
   assert.ok(corrected.job.subtitle_timeline.at(-1).end <= corrected.job.audio_duration + 0.05);
+  assert.equal(fs.existsSync(corrected.job.subtitle_path), true);
+  assert.equal(fs.existsSync(corrected.job.subtitle_vtt_path), true);
+  assert.equal(fs.existsSync(corrected.job.timestamped_text_path), true);
+  assert.equal(fs.existsSync(corrected.job.timeline_json_path), true);
+  assert.equal(JSON.parse(fs.readFileSync(corrected.job.timeline_json_path, "utf8"))[0].text, spokenText);
+  assert.match(fs.readFileSync(corrected.job.subtitle_vtt_path, "utf8"), /^WEBVTT\n\n/u);
   assert.equal(calls(), 1, "send-time correction must reuse the existing word timeline");
 }
 
