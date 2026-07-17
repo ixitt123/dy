@@ -345,6 +345,21 @@ export function createIanXiaoheiRoutes({
       return true;
     }
 
+    // 统一下载文件服务（与 MoneyPrinter /api/money-printer/file?id= 同模式）
+    if (req.method === "GET" && route === "file") {
+      const id = String(url.searchParams.get("id") || "").trim();
+      const record = id ? xiaoheiRenderedFiles.get(id) : null;
+      if (!record?.filePath || !fs.existsSync(record.filePath)) {
+        sendJson(res, 404, { ok: false, message: "小黑输出文件不存在。" });
+      } else {
+        sendXiaoheiFile(res, record.filePath, {
+          download: url.searchParams.get("download") === "1",
+          downloadName: record.downloadName || "小黑视频.mp4",
+        });
+      }
+      return true;
+    }
+
     if (req.method === "POST" && route === "upload-video-bgm") {
       try {
         const body = await readJsonBody(req, { maxBytes: 42 * 1024 * 1024 });
