@@ -1181,24 +1181,25 @@ export function createIanXiaoheiRoutes({
     }
 
     if (req.method === "POST" && route === "generate-shot") {
-      sendJson(res, 410, { ok: false, message: "小黑页面已移除 AI 生图，请上传本地图片素材。" });
-      return true;
-      /*
       try {
         const body = await readJsonBody(req, { maxBytes: 512 * 1024 });
         const plan = body.plan && typeof body.plan === "object" ? body.plan : null;
         const shot = normalizeShotInput(body.shot);
         const batchId = safeBatchId(body.batchId || plan?.batchId);
-        if (!batchId) throw new Error("缺少输出批次 ID。");
+        if (!batchId || !plan) throw new Error("缺少当前提示词计划。");
+        if (!shot.index || !(plan.shots || []).some((item) => Number(item.index) === Number(shot.index))) {
+          throw new Error("当前图片没有对应的分镜。");
+        }
         if (!shot.prompt) throw new Error("缺少当前配图提示词。");
 
         const batchDir = path.join(outputRoot, batchId);
         fs.mkdirSync(batchDir, { recursive: true });
-        if (plan) savePlanFiles(batchDir, plan);
+        savePlanFiles(batchDir, plan);
+        const aspectRatio = normalizeAspectRatio(body.aspectRatio || plan.aspectRatio);
 
         const generated = await imageService.generateImage({
           prompt: shot.prompt,
-          aspectRatio: normalizeAspectRatio(plan?.aspectRatio),
+          aspectRatio,
           count: 1,
           sourceType: "ian-xiaohei",
           sourceId: plan?.directorProjectId
@@ -1225,6 +1226,9 @@ export function createIanXiaoheiRoutes({
           assetId: first.assetId,
           provider: first.provider,
           model: first.model,
+          source: "ai_generated",
+          aspectRatio,
+          confirmed: true,
         };
         updateResultFile(batchDir, { image });
         sendJson(res, 200, { ok: true, batchId, outputDir: batchDir, image });
@@ -1235,7 +1239,6 @@ export function createIanXiaoheiRoutes({
         });
       }
       return true;
-      */
     }
 
     if (req.method === "POST" && route === "upload-shot-image") {

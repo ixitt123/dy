@@ -16,6 +16,9 @@ const state = {
   referenceStylePresets: [],
   pendingUploads: new Map(),
   confirmingUploads: new Set(),
+  generatingImages: new Set(),
+  imageBatchGenerating: false,
+  imageBatchProgress: null,
   localImagePickerActive: false,
   lastStablePlan: null,
   buttonFeedbackTimers: new Map(),
@@ -1637,6 +1640,11 @@ async function handlePromptAction(event) {
     await uploadAllPendingShotImages(button);
     return;
   }
+  if (action === "generate-all-images") {
+    if (!ensurePromptPlanAvailable()) return;
+    await generateAllMissingShotImages(button);
+    return;
+  }
   if (action === "choose-image") {
     if (!ensurePromptPlanAvailable()) return;
     savePromptPlanCache(state.plan);
@@ -1723,6 +1731,101 @@ async function uploadShotImage(index, { button = null, render = true, silent = f
     state.confirmingUploads.delete(safeIndex);
     if (button?.isConnected) button.disabled = false;
   }
+}
+
+async function generateShotImage(index) {
+  const safeIndex = Number(index);
+  const shot = state.plan?.shots?.find((item) => Number(item.index) === safeIndex);
+  if (!shot || !state.plan) return { ok: false, message: "没有找到对应提示词。" };
+  if (state.images.some((image) => Number(image.index) === safeIndex && image.assetId)) {
+    return { ok: true, skipped: true };
+  }
+  state.generatingImages.add(safeIndex);
+  renderPlan(state.plan);
+  try {
+    const data = await fetchJson("/api/ian-xiaohei/generate-shot", {
+      method: "POST",
+      body: JSON.stringify({
+        batchId: state.plan.batchId,
+        plan: state.plan,
+        aspectRatio: promptAspectRatio(state.plan),
+        provider: "",
+        shot: {
+          ...shot,
+          prompt: shotPromptBlock(shot, state.plan),
+        },
+      }),
+    });
+    state.images = [
+      ...state.images.filter((image) => Number(image.index) !== safeIndex),
+      data.image,
+    ].sort((left, right) => Number(left.index) - Number(right.index));
+    state.previewImageCache.delete(safeIndex);
+    state.renderedVideo = null;
+    savePromptPlanCache(state.plan);
+    return { ok: true, image: data.image };
+  } catch (error) {
+    return { ok: false, message: error.payload?.message || error.message || String(error) };
+  } finally {
+    state.generatingImages.delete(safeIndex);
+    renderPlan(state.plan);
+    renderImages(state.images, []);
+  }
+}
+
+function missingImageGenerationIndexes(plan = state.plan) {
+  const bound = new Set(state.images.filter((image) => image?.assetId).map((image) => Number(image.index)));
+  const pending = new Set([...state.pendingUploads.keys()].map(Number));
+  return (plan?.shots || [])
+    .map((shot) => Number(shot.index))
+    .filter((index) => !bound.has(index) && !pending.has(index));
+}
+
+async function generateAllMissingShotImages(button) {
+  if (state.imageBatchGenerating) return;
+  const indexes = missingImageGenerationIndexes(state.plan);
+  if (!indexes.length) {
+    setButtonFeedback(button, "success", "图片已齐全");
+    setStatus("无需生成图片", "已有素材位和待确认的本地图片已全部跳过。", 100);
+    return;
+  }
+  state.imageBatchGenerating = true;
+  state.imageBatchProgress = { current: 0, total: indexes.length };
+  renderPlan(state.plan);
+  let successCount = 0;
+  const failed = [];
+  try {
+    for (const [position, index] of indexes.entries()) {
+      state.imageBatchProgress = { current: position + 1, total: indexes.length };
+      setStatus(
+        "正在一键生成图片",
+        `正在生成分镜 #${index}（${position + 1}/${indexes.length}），成功后会立即绑定。`,
+        Math.round(((position + 1) / indexes.length) * 90),
+        false,
+        "图片 API",
+      );
+      renderPlan(state.plan);
+      const result = await generateShotImage(index);
+      if (result.ok) successCount += result.skipped ? 0 : 1;
+      else failed.push({ index, message: result.message });
+    }
+  } finally {
+    state.imageBatchGenerating = false;
+    state.imageBatchProgress = null;
+    renderPlan(state.plan);
+    renderImages(state.images, failed);
+  }
+  if (failed.length) {
+    setStatus(
+      "图片批量生成部分完成",
+      `成功并绑定 ${successCount} 张；失败：${failed.map((item) => `#${item.index}`).join("、")}。可再次点击仅重试空缺项。`,
+      100,
+      true,
+      "部分完成",
+    );
+    return;
+  }
+  setStatus("图片已全部生成", `成功生成并绑定 ${successCount} 张图片，可以直接预览或生成视频。`, 100, false, "完成");
 }
 
 async function uploadAllPendingShotImages(button) {
@@ -1936,6 +2039,7 @@ function shotPromptBlock(shot = {}, plan = state.plan) {
   const ratio = promptAspectRatio(plan);
   return [
     `#${shot.index} ${shot.topic || ""}`,
+    `锁定 Skill：${shot.skillName || plan?.skillName || shot.skillId || ""}`,
     `对应原文：${shot.sourceText || ""}`,
     String(shot.prompt || "").trim(),
     [
@@ -1964,6 +2068,7 @@ function pendingUploadIndexes(plan = state.plan) {
 function promptBatchActionMarkup(plan = state.plan) {
   const shots = plan?.shots || [];
   const pendingCount = pendingUploadIndexes(plan).length;
+  const generationCount = missingImageGenerationIndexes(plan).length;
   const allConfirmed = Boolean(shots.length && pendingCount === 0 && !missingShotImages(plan, state.images).length);
   const label = pendingCount > 0 ? `全部确认使用（${pendingCount}）` : allConfirmed ? "全部已确认" : "等待添加图片";
   const hint = pendingCount > 0
@@ -1974,6 +2079,7 @@ function promptBatchActionMarkup(plan = state.plan) {
   return `
     <div class="prompt-batch-actions">
       <button type="button" data-prompt-action="confirm-all-images" ${pendingCount > 0 ? "" : "disabled"} class="${allConfirmed ? "is-confirmed action-feedback is-success" : ""}">${label}</button>
+      <button type="button" class="primary" data-prompt-action="generate-all-images" ${generationCount > 0 && !state.imageBatchGenerating ? "" : "disabled"}>${state.imageBatchGenerating ? `正在生成 ${state.imageBatchProgress?.current || 0}/${state.imageBatchProgress?.total || generationCount}` : generationCount > 0 ? `一键生成图片（${generationCount}）` : "图片已齐全"}</button>
       <span>${hint}</span>
     </div>
   `;
@@ -1995,6 +2101,7 @@ function renderPlan(plan) {
   els.promptResults.innerHTML = `${promptBatchActionMarkup(plan)}${shots.map((shot) => {
     const image = state.images.find((item) => Number(item.index) === Number(shot.index));
     const pending = state.pendingUploads.get(Number(shot.index));
+    const generating = state.generatingImages.has(Number(shot.index));
     return `
       <article class="prompt-card" data-shot-card="${shot.index}">
         <h3>#${shot.index} ${escapeHtml(shot.topic)}</h3>
@@ -2017,7 +2124,7 @@ function renderPlan(plan) {
           <button type="button" data-prompt-action="copy-prompt" data-index="${shot.index}">复制本张提示词</button>
           <button type="button" data-prompt-action="choose-image" data-index="${shot.index}">${image ? "替换本地图片" : "添加本地图片素材"}</button>
           <input hidden type="file" accept=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp" data-shot-upload="${shot.index}" />
-          ${image ? `<span class="binding-ok">已绑定本地图片</span>` : ""}
+          ${image ? `<span class="binding-ok">${image.source === "ai_generated" ? "已绑定生成图片" : "已绑定本地图片"}</span>` : generating ? `<span class="binding-progress">正在生成图片…</span>` : ""}
         </div>
         ${image ? `
           <div class="shot-image-state">
