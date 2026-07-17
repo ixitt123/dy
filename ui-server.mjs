@@ -31,6 +31,7 @@ import { createIanXiaoheiRoutes } from "./server/routes/ian-xiaohei-routes.js";
 import { createMoneyPrinterRoutes } from "./server/routes/money-printer-routes.js";
 import { createKineticTextRoutes } from "./server/routes/kinetic-text-routes.js";
 import { createYtDlpService } from "./server/core/yt-dlp-service.js";
+import { formatOriginalMomentsPost } from "./server/core/moments-original.js";
 import { HttpBodyError, readBody, readJsonBody } from "./server/utils/http-body.js";
 import { DEFAULT_REWRITE_REFERENCE, REWRITE_DIRECTIONS, REWRITE_STYLES, REWRITE_VERSION_DEFS, REWRITE_VERSION_DEFAULTS } from "./server/config/rewrite-presets.js";
 import { DEFAULT_MODEL_MAPPING, SETTINGS_TASKS } from "./server/config/model-defaults.js";
@@ -4271,7 +4272,9 @@ function normalizeMomentsResult(raw = {}, fallback = {}) {
     || clampMomentsImageCount(fallback.imageCount)
     || 1;
   const rawPost = normalizeMomentsPostLayout(raw.post || raw.copy || raw.text || "");
-  const post = fallback.addEmoji === true ? rawPost : normalizeMomentsPostLayout(stripMomentsEmoji(rawPost));
+  const post = fallback.preserveOriginal === true || fallback.addEmoji === true
+    ? rawPost
+    : normalizeMomentsPostLayout(stripMomentsEmoji(rawPost));
   if (!post) throw new Error("朋友圈生成结果缺少文案。");
   const theme = String(raw.theme || fallback.theme || "朋友圈图文").trim().slice(0, 120);
   const seriesStyle = normalizeMomentsSeriesStyle(raw, fallback);
@@ -4515,6 +4518,7 @@ function getMomentsProgressJob(progressId) {
 async function generateMomentsPostJsonV2(body = {}, { onProgress = () => {} } = {}) {
   const sourceText = String(body.text || "").trim();
   const persona = String(body.persona || "").trim();
+  const originalMode = String(body.copyMode || "rewrite").trim().toLowerCase() === "original";
   if (!sourceText) throw new Error("请先填写朋友圈文案输入区。");
   if (!persona) throw new Error("请先选择或填写人设。");
   const fixedImageCount = clampMomentsImageCount(body.imageCount);
@@ -4527,10 +4531,12 @@ async function generateMomentsPostJsonV2(body = {}, { onProgress = () => {} } = 
   const localMaterials = String(body.localMaterials || "").trim();
   const tone = String(body.tone || "普通朋友聊天式分享").trim();
   const intent = String(body.intent || "auto-promo").trim();
-  const referenceStyle = resolveMomentsReferenceStyle(body.referenceStyle);
+  const referenceStyle = originalMode ? "" : resolveMomentsReferenceStyle(body.referenceStyle);
   const toneStrategy = momentsToneStrategy(tone);
   const intentStrategy = momentsIntentStrategy(intent);
-  const referenceStrategy = momentsReferenceStrategy(referenceStyle);
+  const referenceStrategy = originalMode
+    ? "原文模式不引用任何外部素材；图片提示词只能从用户原文和已选视觉设置提炼。"
+    : momentsReferenceStrategy(referenceStyle);
   const primaryProviderId = String(body.provider || readSettings().rewrite?.defaultProvider || "").trim();
   const fallbackProviderId = body.fallbackProvider === undefined
     ? "deepseek"
@@ -4619,7 +4625,32 @@ async function generateMomentsPostJsonV2(body = {}, { onProgress = () => {} } = 
     "没有真实素材时，不要写本地素材占位；用户上传素材后由系统追加。",
   ].join("\n");
 
-  const copyRun = await runMomentsStage(15, "正在生成朋友圈初稿", {
+  let copyRun = {};
+  let copyData = {};
+  let post = "";
+  let finalPostLength = 0;
+  let wordCountWarning = "";
+  if (originalMode) {
+    reportProgress(35, "正在整理原文格式和表情");
+    post = formatOriginalMomentsPost(sourceText);
+    post = addEmoji
+      ? ensureMomentsEmojiMinimum(post, momentsEmojiTargetCount(post))
+      : post;
+    finalPostLength = rewriteCharacterCount(post);
+    wordCountWarning = `原文模式不调整字数，实际 ${finalPostLength} 字。`;
+    copyData = {
+      post,
+      theme: "原文朋友圈图文",
+      angle: "原文直接发布",
+      core_judgment: "",
+      visual_anchor: "从原文内容提炼",
+      reference_style: "",
+      reference_used: "",
+      persona_used: persona,
+      notes: ["朋友圈正文保留原文字词，仅整理换行并按设置添加表情。"],
+    };
+  } else {
+  copyRun = await runMomentsStage(15, "正在生成朋友圈初稿", {
     temperature: 0.82,
     requestName: "朋友圈文案生成",
     maxTokens: 5200,
@@ -4685,7 +4716,7 @@ async function generateMomentsPostJsonV2(body = {}, { onProgress = () => {} } = 
     ],
   });
 
-  let copyData = copyRun.data && typeof copyRun.data === "object" ? copyRun.data : {};
+  copyData = copyRun.data && typeof copyRun.data === "object" ? copyRun.data : {};
   if (humanizerSkill && !copyEditingSkill) {
     const humanizedRun = await runMomentsStage(42, "正在去除 AI 味", {
       temperature: 0.45,
@@ -4805,7 +4836,7 @@ async function generateMomentsPostJsonV2(body = {}, { onProgress = () => {} } = 
       };
     }
   }
-  let post = normalizeMomentsPostLayout(copyData.post || "");
+  post = normalizeMomentsPostLayout(copyData.post || "");
   if (
     rewriteCharacterCount(post) < wordCount.min
     || rewriteCharacterCount(post) > wordCount.max
@@ -4860,7 +4891,7 @@ async function generateMomentsPostJsonV2(body = {}, { onProgress = () => {} } = 
     post = normalizeMomentsPostLayout(copyData.post || post);
   }
   post = addEmoji ? post : normalizeMomentsPostLayout(stripMomentsEmoji(post));
-  let finalPostLength = rewriteCharacterCount(post);
+  finalPostLength = rewriteCharacterCount(post);
   if (finalPostLength < wordCount.min || finalPostLength > wordCount.max) {
     const compressed = await runMomentsStage(80, "正在校准文案字数", {
       temperature: 0.2,
@@ -4899,7 +4930,7 @@ async function generateMomentsPostJsonV2(body = {}, { onProgress = () => {} } = 
     ? applyPresetMomentsEmojis(post)
     : normalizeMomentsPostLayout(stripMomentsEmoji(post));
   finalPostLength = rewriteCharacterCount(post);
-  const wordCountWarning = finalPostLength < wordCount.min || finalPostLength > wordCount.max
+  wordCountWarning = finalPostLength < wordCount.min || finalPostLength > wordCount.max
     ? `建议 ${wordCount.min}-${wordCount.max} 字，实际 ${finalPostLength} 字；已保留完整表达。`
     : "";
   if (!momentsReferenceIsUsed(post, copyData.reference_used, referenceStyle)) {
@@ -4907,6 +4938,7 @@ async function generateMomentsPostJsonV2(body = {}, { onProgress = () => {} } = 
   }
   if (!momentsCopyPasteReady(post)) {
     throw new Error("本次生成的文案排版不适合直接复制发布，请重试。");
+  }
   }
 
   const imageRun = await runMomentsStage(90, "正在生成图片提示词", {
@@ -4951,7 +4983,9 @@ async function generateMomentsPostJsonV2(body = {}, { onProgress = () => {} } = 
           "",
           "引用策略：",
           referenceStrategy,
-          `引用类别：${referenceStyle}；图片提示词要围绕正文实际引用形成的主题锚点，不要额外编造引用。`,
+          originalMode
+            ? "原文模式：不要引入原文之外的名言、热梗、金句、古诗、案例、数据或观点。"
+            : `引用类别：${referenceStyle}；图片提示词要围绕正文实际引用形成的主题锚点，不要额外编造引用。`,
           "",
           "本地图片素材说明：",
           localMaterials || "用户没有提供本地素材；不要在最终提示词里写“无本地素材”。",
@@ -5019,9 +5053,10 @@ async function generateMomentsPostJsonV2(body = {}, { onProgress = () => {} } = 
       localMaterials,
       persona,
       mainCharacter,
-      wordCount,
+      wordCount: originalMode ? null : wordCount,
       wordCountWarning,
       addEmoji,
+      preserveOriginal: originalMode,
       referenceStyle,
       theme: copyData.theme || "朋友圈图文",
     }),
