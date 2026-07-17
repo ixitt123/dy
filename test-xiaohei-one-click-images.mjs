@@ -28,5 +28,6 @@ assert.match(server, /group: "图片生成"/u);
 assert.match(server, /imageService\.testProviderConnection\(providerId\)/u);
 assert.match(server, /settings\.modelMap\.image = \{ provider: id, model: nextModel \}/u);
 assert.match(workbench, /"图片生成"/u);
+assert.match(workbench, /taskKey === "image"/u);
 
 console.log("Xiaohei one-click image generation: OK");

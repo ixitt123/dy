@@ -2093,6 +2093,7 @@ function setupV2Settings() {
     { key: "director", label: "生产线分镜", hint: "故事弧、分镜、镜头计划" },
     { key: "storyboard", label: "分镜生成", hint: "镜头拆解和画面描述" },
     { key: "image_prompt", label: "图片提示词", hint: "画面提示词和风格描述" },
+    { key: "image", label: "图片生成", hint: "调用图片 API 生成并保存项目素材" },
     { key: "tts", label: "TTS 语音", hint: "配音和声音复刻" },
   ];
 
@@ -2240,6 +2241,13 @@ function setupV2Settings() {
   }
 
   function optionsForTask(taskKey) {
+    if (taskKey === "image") {
+      return state.providers
+        .filter((provider) => provider.group === "图片生成")
+        .flatMap((provider) => (provider.models?.length ? provider.models : [provider.model || ""])
+          .filter(Boolean)
+          .map((model) => ({ provider: provider.id, model, label: `${provider.label} / ${model}` })));
+    }
     if (taskKey === "tts") {
       return state.providers
         .filter((provider) => provider.group === "TTS 语音")
