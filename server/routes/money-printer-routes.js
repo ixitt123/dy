@@ -308,6 +308,181 @@ async function startApiOnce(rootDir) {
   return waitForApiReady(status, { started: true, connectedExisting: false });
 }
 
+async function waitForApiReady(initialStatus, flags = {}) {
+  const deadline = Date.now() + 120_000;
+  let lastMessage = initialStatus.api?.message || "not ready";
+  while (Date.now() < deadline) {
+    await wait(1000);
+    const api = await checkApi(initialStatus.api.v1BaseUrl);
+    if (api.online) {
+      const ready = await buildStatus(initialStatus.root);
+      return {
+        ...ready,
+        ...flags,
+        message: flags.connectedExisting
+          ? "已连接现有 MoneyPrinterTurbo API 实例。"
+          : "MoneyPrinterTurbo API 已自动启动。",
+      };
+    }
+    lastMessage = api.message || lastMessage;
+    if (flags.started && !apiProcess) break;
+  }
+  const recentLogs = apiLogs.slice(-12).join(" | ");
+  throw new Error(`MoneyPrinterTurbo API 启动失败：${sanitizeMptError(recentLogs || lastMessage)}`);
+}
+
+function resolveApiLauncher(rootDir) {
+  const candidates = process.platform === "win32"
+    ? [path.join(rootDir, ".venv", "Scripts", "python.exe"), path.join(rootDir, "venv", "Scripts", "python.exe")]
+    : [path.join(rootDir, ".venv", "bin", "python"), path.join(rootDir, "venv", "bin", "python")];
+  const projectPython = candidates.find((candidate) => fs.existsSync(candidate));
+  if (projectPython) return { command: projectPython, args: ["main.py"], label: "project-venv" };
+  if (commandAvailable("uv")) return { command: "uv", args: ["run", "python", "main.py"], label: "uv" };
+  if (commandAvailable("python")) return { command: "python", args: ["main.py"], label: "system-python" };
+  return null;
+}
+
+function isPortListening(host, port) {
+  return new Promise((resolve) => {
+    const socket = net.createConnection({ host, port: Number(port) });
+    const finish = (value) => {
+      socket.removeAllListeners();
+      socket.destroy();
+      resolve(value);
+    };
+    socket.setTimeout(800);
+    socket.once("connect", () => finish(true));
+    socket.once("timeout", () => finish(false));
+    socket.once("error", () => finish(false));
+  });
+}
+
+function readMaterialProviderStatus(configPath) {
+  const text = configPath && fs.existsSync(configPath) ? fs.readFileSync(configPath, "utf8") : "";
+  const providers = [
+    { id: "pexels", label: "Pexels", configKey: "pexels_api_keys" },
+    { id: "pixabay", label: "Pixabay", configKey: "pixabay_api_keys" },
+    { id: "coverr", label: "Coverr", configKey: "coverr_api_keys" },
+  ].map((provider) => {
+    const keyCount = tomlArrayValueCount(text, provider.configKey);
+    return { id: provider.id, label: provider.label, configured: keyCount > 0, keyCount };
+  });
+  return {
+    providers,
+    fallbackOrder: providers.filter((provider) => provider.configured).map((provider) => provider.id),
+  };
+}
+
+function tomlArrayValueCount(text, key) {
+  const match = new RegExp(`^\\s*${key}\\s*=\\s*\\[([^\\]]*)\\]`, "m").exec(String(text || ""));
+  if (!match) return 0;
+  return (match[1].match(/"(?:[^"\\\\]|\\\\.)+"|'(?:[^'\\\\]|\\\\.)+'/g) || []).length;
+}
+
+function resolveMaterialSourceOrder(preferred, materials = {}) {
+  const selected = ALLOWED_SOURCES.has(String(preferred || "")) ? String(preferred) : "pexels";
+  if (selected === "local") return ["local"];
+  const configured = Array.isArray(materials.fallbackOrder) ? materials.fallbackOrder : [];
+  if (!configured.length) {
+    throw new Error("MoneyPrinterTurbo 素材 API 尚未配置：Pexels、Pixabay、Coverr 均没有可用 API Key。");
+  }
+  return [selected, ...configured].filter((source, index, all) => configured.includes(source) && all.indexOf(source) === index);
+}
+
+async function createManagedTask(status, payload, materialSources) {
+  const managed = {
+    id: `dy-mpt-${randomUUID()}`,
+    payload: { ...payload },
+    materialSources: [...materialSources],
+    sourceIndex: 0,
+    officialTaskId: "",
+    attempts: [],
+    createdAt: new Date().toISOString(),
+  };
+  managed.officialTaskId = await submitOfficialTask(status, managed.payload);
+  managedTasks.set(managed.id, managed);
+  return managed;
+}
+
+async function submitOfficialTask(status, payload) {
+  const result = await fetchMptJson(`${status.api.v1BaseUrl}/videos`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (Number(result?.status || 0) !== 200 || !result?.data?.task_id) {
+    throw new Error(result?.message || "MoneyPrinterTurbo 创建任务失败。");
+  }
+  return String(result.data.task_id);
+}
+
+function managedTaskSnapshot(managed, overrides = {}) {
+  return {
+    task_id: managed.id,
+    official_task_id: managed.officialTaskId,
+    state: 4,
+    progress: 0,
+    stateLabel: "等待中",
+    material_source: managed.materialSources[managed.sourceIndex] || "",
+    material_sources: managed.materialSources,
+    fallback_attempts: managed.attempts,
+    ...overrides,
+  };
+}
+
+async function pollManagedTask(status, managed) {
+  const result = await fetchMptJson(`${status.api.v1BaseUrl}/tasks/${encodeURIComponent(managed.officialTaskId)}`);
+  if (Number(result?.status || 0) !== 200) throw new Error(result?.message || "读取任务失败。");
+  const official = normalizeTask(result.data || {}, status.api.baseUrl);
+  const source = managed.materialSources[managed.sourceIndex] || managed.payload.video_source || "";
+  if (official.state === TASK_STATE_FAILED && shouldTryNextMaterialSource(official, managed)) {
+    managed.attempts.push({ source, taskId: managed.officialTaskId, error: sanitizeMptError(official.error || official.message || "素材获取失败") });
+    managed.sourceIndex += 1;
+    const nextSource = managed.materialSources[managed.sourceIndex];
+    managed.payload = { ...managed.payload, video_source: nextSource };
+    managed.officialTaskId = await submitOfficialTask(status, managed.payload);
+    return managedTaskSnapshot(managed, {
+      stateLabel: `切换到 ${nextSource}`,
+      fallback_message: `${source} 素材失败，已自动切换到 ${nextSource}。`,
+    });
+  }
+  const attempts = [...managed.attempts];
+  if (official.state === TASK_STATE_FAILED && !attempts.some((item) => item.taskId === managed.officialTaskId)) {
+    attempts.push({ source, taskId: managed.officialTaskId, error: sanitizeMptError(official.error || official.message || "任务失败") });
+    managed.attempts = attempts;
+  }
+  return {
+    ...official,
+    task_id: managed.id,
+    official_task_id: managed.officialTaskId,
+    material_source: source,
+    material_sources: managed.materialSources,
+    fallback_attempts: attempts,
+    error: official.state === TASK_STATE_FAILED
+      ? attempts.map((item) => `${item.source}: ${item.error}`).join("；")
+      : sanitizeMptError(official.error || ""),
+  };
+}
+
+function shouldTryNextMaterialSource(task, managed) {
+  if (managed.sourceIndex >= managed.materialSources.length - 1) return false;
+  const stage = String(task.failed_stage || "").toLowerCase();
+  const error = String(task.error || task.message || "").toLowerCase();
+  return stage === "materials"
+    || Number(task.progress || 0) === 40
+    || /pexels|pixabay|coverr|material|素材|api[_ ]keys?/.test(error);
+}
+
+function sanitizeMptError(value) {
+  const text = String(value || "").replace(/\u001b\[[0-9;]*m/g, "").trim();
+  const missingKey = /(pexels|pixabay|coverr)_api_keys? is not set/i.exec(text);
+  if (missingKey) return `${missingKey[1][0].toUpperCase()}${missingKey[1].slice(1)} 素材 API Key 未配置`;
+  return text
+    .replace(/("[^"\r\n]*(?:key|secret|token)[^"\r\n]*"\s*:\s*)"[^"]*"/gi, '$1"[REDACTED]"')
+    .replace(/\s+/g, " ")
+    .slice(0, 800) || "未知错误";
+}
+
 function buildGeneratePayload(body = {}) {
   const subject = String(body.video_subject || body.subject || "").trim();
   const script = String(body.video_script || body.script || "").trim();
