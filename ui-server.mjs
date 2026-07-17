@@ -193,6 +193,70 @@ const handleMoneyPrinterRoutes = createMoneyPrinterRoutes({
   ffprobePath,
   getDownloadsDir: () => downloadsDir,
 });
+
+// -----------------------------------------------------------------------------
+// MoneyPrinterTurbo 素材平台 API Key 管理
+// MPT 的素材 API Key（Pexels / Pixabay / Coverr）保存在它的 config.toml 里，
+// 这里把设置页的通用 provider 网格作为前端入口，读写直接落到 config.toml。
+// -----------------------------------------------------------------------------
+const MPT_ROOT_DIR = path.join(__dirname, "integrations", "moneyprinterturbo");
+const MPT_MATERIAL_PROVIDERS = [
+  {
+    id: "pexels",
+    label: "Pexels",
+    applyUrl: "https://www.pexels.com/api/",
+    test: { method: "GET", url: "https://api.pexels.com/videos/popular?per_page=1", authHeader: "Authorization" },
+  },
+  {
+    id: "pixabay",
+    label: "Pixabay",
+    applyUrl: "https://pixabay.com/api/docs/",
+    test: { method: "GET", url: (key) => `https://pixabay.com/api/videos/?key=${encodeURIComponent(key)}&per_page=1` },
+  },
+  {
+    id: "coverr",
+    label: "Coverr",
+    applyUrl: "https://coverr.co/developers?ctx=header_navigation",
+    test: null,
+  },
+];
+const MPT_MATERIAL_IDS = new Set(MPT_MATERIAL_PROVIDERS.map((item) => item.id));
+
+function readMptMaterialKeys() {
+  const configPath = path.join(MPT_ROOT_DIR, "config.toml");
+  if (!fs.existsSync(configPath)) return {};
+  const text = fs.readFileSync(configPath, "utf8");
+  const result = {};
+  for (const id of MPT_MATERIAL_IDS) {
+    const key = `${id}_api_keys`;
+    const match = new RegExp(`^\\s*${key}\\s*=\\s*\\[([^\\]]*)\\]`, "m").exec(text);
+    const raw = match ? match[1] : "";
+    const keys = (raw.match(/"((?:[^"\\\\]|\\\\.)*)"/g) || [])
+      .map((item) => item.slice(1, -1))
+      .filter(Boolean);
+    result[id] = keys;
+  }
+  return result;
+}
+
+function writeMptMaterialKeys(providerId, keys) {
+  const configPath = path.join(MPT_ROOT_DIR, "config.toml");
+  if (!fs.existsSync(configPath)) {
+    throw new Error("未找到 MoneyPrinterTurbo 的 config.toml，请先初始化 MoneyPrinterTurbo 子模块。");
+  }
+  const tomKey = `${providerId}_api_keys`;
+  const escaped = keys.map((key) => `"${String(key).replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`);
+  const line = `${tomKey} = [${escaped.join(", ")}]`;
+  let text = fs.readFileSync(configPath, "utf8");
+  const regex = new RegExp(`^\\s*${tomKey}\\s*=\\s*\\[[^\\]]*\\]\\s*$`, "m");
+  if (regex.test(text)) {
+    text = text.replace(regex, line);
+  } else {
+    text += `\n${line}\n`;
+  }
+  fs.writeFileSync(configPath, text, "utf8");
+}
+
 const handleIanXiaoheiRoutes = createIanXiaoheiRoutes({
   baseDir: __dirname,
   sendJson,
