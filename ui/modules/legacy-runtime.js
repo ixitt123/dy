@@ -2301,7 +2301,7 @@ async function generateMomentsPost(copyMode = "rewrite") {
     stopMomentsProgress();
     return;
   }
-  if (!payload.persona) {
+  if (!payload.persona && !originalMode) {
     setMomentsStatus("请先选择或填写人设。", "warning");
     stopMomentsProgress();
     return;
