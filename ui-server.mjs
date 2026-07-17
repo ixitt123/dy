@@ -4258,8 +4258,10 @@ function normalizeMomentsSeriesStyle(raw = {}, fallback = {}) {
 }
 
 function normalizeMomentsResult(raw = {}, fallback = {}) {
-  const imageCount = clampMomentsImageCount(raw.image_count || raw.imageCount)
-    || clampMomentsImageCount(fallback.imageCount)
+  const fixedImageCount = clampMomentsImageCount(fallback.imageCount);
+  const imageCount = fixedImageCount
+    || clampMomentsImageCount(raw.image_count || raw.imageCount)
+    || clampMomentsImageCount(Array.isArray(raw.images) ? raw.images.length : 0)
     || 1;
   const rawPost = normalizeMomentsPostLayout(raw.post || raw.copy || raw.text || "");
   const post = fallback.preserveOriginal === true || fallback.addEmoji === true
@@ -4269,7 +4271,11 @@ function normalizeMomentsResult(raw = {}, fallback = {}) {
   const theme = String(raw.theme || fallback.theme || "朋友圈图文").trim().slice(0, 120);
   const seriesStyle = normalizeMomentsSeriesStyle(raw, fallback);
   const stylePreset = normalizeMomentsVisualStyle(fallback.visualStyle);
-  const images = (Array.isArray(raw.images) ? raw.images : [])
+  const rawImages = Array.isArray(raw.images) ? raw.images : [];
+  if (fixedImageCount && rawImages.length < fixedImageCount) {
+    throw new Error(`朋友圈生成结果需要 ${fixedImageCount} 张配图提示词，实际只生成 ${rawImages.length} 张。`);
+  }
+  const images = rawImages
     .slice(0, imageCount)
     .map((item, index) => {
       const prompt = ensureMomentsSeriesPrompt(item.prompt || "", seriesStyle, theme, stylePreset, fallback.mainCharacter);
@@ -4510,7 +4516,7 @@ async function generateMomentsPostJsonV2(body = {}, { onProgress = () => {} } = 
   const persona = String(body.persona || "").trim();
   const originalMode = String(body.copyMode || "rewrite").trim().toLowerCase() === "original";
   if (!sourceText) throw new Error("请先填写朋友圈文案输入区。");
-  if (!persona) throw new Error("请先选择或填写人设。");
+  if (!persona && !originalMode) throw new Error("请先选择或填写人设。");
   const fixedImageCount = clampMomentsImageCount(body.imageCount);
   const visualStyle = normalizeMomentsVisualStyle(body.visualStyle);
   const visualStyleSkill = getMomentsVisualStyleSkill(visualStyle);
@@ -4614,6 +4620,16 @@ async function generateMomentsPostJsonV2(body = {}, { onProgress = () => {} } = 
     "多图分工：第 1 张做主题/封面冲击，第 2 张做误区或问题，第 3 张做方法或结果；数量少时按正文最重要的认知锚点取舍。",
     "没有真实素材时，不要写本地素材占位；用户上传素材后由系统追加。",
   ].join("\n");
+  const originalImageConstraints = originalMode ? [
+    "原文模式图片硬约束：",
+    `1. 图片视觉风格只能使用当前选择的 Skill：${visualStyleSkill.label}（${visualStyle}）；禁止自行改换或混合其他画风。`,
+    fixedImageCount
+      ? `2. 必须且只能返回 ${fixedImageCount} 张配图提示词，images 数组长度必须等于 ${fixedImageCount}。`
+      : "2. 当前为自动配图数量，只能根据原文在 1-3 张之间决定，并让 image_count 与 images 数组长度一致。",
+    `3. 主角约束：${mainCharacter || "未填写额外主角时，严格使用所选 Skill 的默认主角。"}`,
+    `4. 本地素材约束：${localMaterials || "没有本地素材说明时，不得虚构本地素材。"}`,
+    "5. 图片内容只从用户原文提炼；不得使用人设、分享语气、生成方式、引用素材或建议字数补充、改写或扩展图片内容。",
+  ].join("\n") : "";
 
   let copyRun = {};
   let copyData = {};
@@ -4931,6 +4947,7 @@ async function generateMomentsPostJsonV2(body = {}, { onProgress = () => {} } = 
   }
   }
 
+  const imageSourcePost = originalMode ? formatOriginalMomentsPost(sourceText) : post;
   const imageRun = await runMomentsStage(90, "正在生成图片提示词", {
     temperature: 0.72,
     requestName: "朋友圈图片提示词生成",
@@ -4947,6 +4964,8 @@ async function generateMomentsPostJsonV2(body = {}, { onProgress = () => {} } = 
       {
         role: "user",
         content: [
+          originalImageConstraints,
+          originalImageConstraints ? "" : "",
           imageSkill,
           "",
           "视觉方向：",
@@ -4957,13 +4976,13 @@ async function generateMomentsPostJsonV2(body = {}, { onProgress = () => {} } = 
           imageCountRule,
           "",
           "人设：",
-          persona,
+          originalMode ? "原文模式不使用人设影响图片提示词。" : persona,
           "",
           "朋友圈正文成品：",
-          post,
+          imageSourcePost,
           "",
           "文案策略：",
-          JSON.stringify({
+          originalMode ? "原文模式不读取改写文案策略。" : JSON.stringify({
             theme: copyData.theme || "",
             angle: copyData.angle || "",
             core_judgment: copyData.core_judgment || "",

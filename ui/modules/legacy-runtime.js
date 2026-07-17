@@ -2287,6 +2287,15 @@ async function generateMomentsPost(copyMode = "rewrite") {
   const payload = collectMomentsPayload();
   const originalMode = copyMode === "original";
   payload.copyMode = originalMode ? "original" : "rewrite";
+  if (originalMode) {
+    payload.persona = "";
+    payload.personaName = "";
+    payload.wordCount = "";
+    payload.wordCountCustom = "";
+    payload.tone = "";
+    payload.intent = "";
+    payload.referenceStyle = "";
+  }
   if (!payload.text) {
     setMomentsStatus("请先填写朋友圈文案输入区。", "warning");
     stopMomentsProgress();
