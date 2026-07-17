@@ -37,14 +37,14 @@ assert.match(
 
 assert.match(
   source,
-  /activeChildProcesses\.size > 0/,
-  "UI server must not auto-close while child processes are still running.",
+  /graceMs:\s*120_000/,
+  "UI server must keep a 120-second reconnect window after the page disconnects.",
 );
 
 assert.match(
   source,
-  /serviceIsBusy\(ttsService\)[\s\S]*serviceIsBusy\(imageService\)[\s\S]*serviceIsBusy\(handleKineticTextRoutes\)/,
-  "UI server must not auto-close while production services still have background work.",
+  /function shutdownNow\(\)[\s\S]*activeBatchControllers\.values\(\)[\s\S]*handleMoneyPrinterRoutes\.shutdown[\s\S]*activeChildProcesses/,
+  "UI server must stop background tasks and child processes after the reconnect window expires.",
 );
 
 console.log("Download directory safety: OK");
