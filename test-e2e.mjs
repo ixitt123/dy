@@ -267,9 +267,11 @@ test("Xiaohei video preview, transitions and MP4 download", async () => {
     || !source.includes('/api/ian-xiaohei/upload-video-bgm')
     || !source.includes('/api/ian-xiaohei/render-video')
     || !source.includes('function downloadRenderedVideo()')
+    || !source.includes('系统默认下载目录')
     || !routeResponse.includes('route === "render-video"')
     || !routeResponse.includes('route === "upload-video-bgm"')
-    || !routeResponse.includes('route === "video-file"')) {
+    || !routeResponse.includes('route === "video-file"')
+    || !routeResponse.includes('xiaoheiVideoDownloadName(manifest.title)')) {
     throw new Error("Xiaohei video preview/render/download flow is incomplete");
   }
 });

@@ -306,7 +306,13 @@ export function createIanXiaoheiRoutes({
       const batchDir = resolveBatchDir(outputRoot, url.searchParams.get("batch_id"));
       const videoPath = batchDir ? path.join(batchDir, "final.mp4") : "";
       if (!videoPath || !fs.existsSync(videoPath)) sendJson(res, 404, { ok: false, message: "成片 MP4 不存在，请先生成视频。" });
-      else sendXiaoheiFile(res, videoPath, { download: url.searchParams.get("download") === "1" });
+      else {
+        const manifest = readJsonFile(path.join(batchDir, "project_manifest.json"), {});
+        sendXiaoheiFile(res, videoPath, {
+          download: url.searchParams.get("download") === "1",
+          downloadName: xiaoheiVideoDownloadName(manifest.title),
+        });
+      }
       return true;
     }
 
@@ -1151,6 +1157,7 @@ export function createIanXiaoheiRoutes({
           videoPath: outputPath,
           videoUrl: `/api/ian-xiaohei/video-file?batch_id=${encodeURIComponent(plan.batchId)}`,
           downloadUrl: `/api/ian-xiaohei/video-file?batch_id=${encodeURIComponent(plan.batchId)}&download=1`,
+          downloadName: xiaoheiVideoDownloadName(plan.title),
           transitionMode,
           width: rendered.width,
           height: rendered.height,
@@ -3034,6 +3041,7 @@ function listOutputBatches(outputRoot) {
         downloadUrl: finalVideoPath && fs.existsSync(finalVideoPath)
           ? `/api/ian-xiaohei/video-file?batch_id=${encodeURIComponent(entry.name)}&download=1`
           : "",
+        downloadName: xiaoheiVideoDownloadName(manifest.title),
         transitionMode: result.output?.transition_mode || "",
         updatedAt: stats.mtime.toISOString(),
         files,
@@ -3054,15 +3062,27 @@ function resolveBatchDir(outputRoot, id) {
   return "";
 }
 
-function sendXiaoheiFile(res, filePath, { download = false } = {}) {
+function sendXiaoheiFile(res, filePath, { download = false, downloadName = "" } = {}) {
   const stat = fs.statSync(filePath);
+  const fileName = download ? xiaoheiVideoDownloadName(downloadName) : path.basename(filePath);
   res.writeHead(200, {
     "Content-Type": "video/mp4",
     "Content-Length": stat.size,
-    "Content-Disposition": `${download ? "attachment" : "inline"}; filename*=UTF-8''${encodeURIComponent(path.basename(filePath))}`,
+    "Content-Disposition": `${download ? "attachment" : "inline"}; filename*=UTF-8''${encodeURIComponent(fileName)}`,
     "Cache-Control": "no-store",
   });
   fs.createReadStream(filePath).pipe(res);
+}
+
+export function xiaoheiVideoDownloadName(value, fallback = "小黑视频") {
+  const raw = String(value || "").replace(/\.mp4$/i, "").trim();
+  const clean = raw
+    .replace(/[<>:"/\\|?*\u0000-\u001f]+/g, "-")
+    .replace(/\s+/g, " ")
+    .replace(/[. ]+$/g, "")
+    .slice(0, 100)
+    .trim();
+  return `${clean || fallback}.mp4`;
 }
 
 function isPathWithin(rootDir, targetPath) {

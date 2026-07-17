@@ -9,6 +9,7 @@ import {
   renderXiaoheiVideo,
   xiaoheiVideoResolution,
 } from "./server/xiaohei-video-renderer.js";
+import { xiaoheiVideoDownloadName } from "./server/routes/ian-xiaohei-routes.js";
 
 const scenes = [
   { scene_index: 1, start_time: 0, end_time: 0.8, duration: 0.8, subtitle: "第一段测试字幕" },
@@ -18,6 +19,9 @@ const scenes = [
 assert.deepEqual(xiaoheiVideoResolution("16:9"), { width: 1920, height: 1080 });
 assert.deepEqual(xiaoheiVideoResolution("9:16"), { width: 1080, height: 1920 });
 assert.equal(normalizeXiaoheiTransitionMode("unknown"), "smart");
+assert.equal(xiaoheiVideoDownloadName("学习：告诉你，这不是你笨"), "学习：告诉你，这不是你笨.mp4");
+assert.equal(xiaoheiVideoDownloadName('学习:方法/第一课?'), "学习-方法-第一课-.mp4");
+assert.equal(xiaoheiVideoDownloadName("小黑视频.mp4"), "小黑视频.mp4");
 
 const smart = buildXiaoheiVideoFilter({
   scenes,

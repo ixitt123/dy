@@ -1869,6 +1869,7 @@ async function loadOutputs() {
     state.renderedVideo = {
       videoUrl: currentBatch.videoUrl,
       downloadUrl: currentBatch.downloadUrl,
+      downloadName: currentBatch.downloadName,
       transitionMode: currentBatch.transitionMode || "smart",
     };
     if (currentBatch.transitionMode) els.videoTransitionMode.value = currentBatch.transitionMode;
@@ -2534,10 +2535,11 @@ function downloadRenderedVideo() {
   if (!url) return;
   const anchor = document.createElement("a");
   anchor.href = url;
-  anchor.download = "";
+  anchor.download = state.renderedVideo?.downloadName || "小黑视频.mp4";
   document.body.appendChild(anchor);
   anchor.click();
   anchor.remove();
+  els.videoRenderStatus.textContent = `已提交浏览器下载：${anchor.download}（系统默认下载目录）`;
 }
 
 function formatPreviewClock(value) {
