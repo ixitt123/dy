@@ -448,8 +448,8 @@ function renderSubtitleTimeline(job = state.selectedTtsJob || state.ttsJob) {
   els.subtitleTimeline.innerHTML = rows.map((row) => `
     <div class="xiaohei-timeline-row" data-row-index="${row.index}">
       <span class="xiaohei-row-index">${row.index + 1}</span>
-      <input data-field="start" inputmode="decimal" value="${escapeAttr(formatTimelineValue(row.start))}" />
-      <input data-field="end" inputmode="decimal" value="${escapeAttr(formatTimelineValue(row.end))}" />
+      <input data-field="start" inputmode="decimal" value="${escapeAttr(formatTimelineValue(row.start))}" readonly aria-readonly="true" />
+      <input data-field="end" inputmode="decimal" value="${escapeAttr(formatTimelineValue(row.end))}" readonly aria-readonly="true" />
       <textarea data-field="text" rows="2">${escapeHtml(row.text)}</textarea>
       <input data-field="keywords" value="${escapeAttr(row.keywords)}" />
       <input data-field="breakAt" placeholder="如 6,12" value="${escapeAttr(row.breakAt)}" />
@@ -501,7 +501,7 @@ function applySubtitleTimelineRows(rows = []) {
     position: row.position,
     color: row.color,
   }));
-  const finalText = rows.map((row) => row.text.trim()).filter(Boolean).join("\n");
+  const finalText = rows.map((row) => row.text.trim()).filter(Boolean).join("");
   [state.selectedTtsJob, state.ttsJob].filter(Boolean).forEach((job) => {
     job.subtitle_timeline = timeline;
     job.sentence_timeline = timeline;
@@ -525,6 +525,46 @@ function handleSubtitleTimelineInput(event) {
   const rows = collectSubtitleTimelineRows();
   applySubtitleTimelineRows(rows);
   if (els.timelineStatus) els.timelineStatus.textContent = `已同步 ${rows.length} 段字幕到小黑当前文案。`;
+}
+
+async function persistSharedSubtitleText() {
+  const job = state.selectedTtsJob || state.ttsJob;
+  const rows = collectSubtitleTimelineRows();
+  if (!job?.id || !rows.length) return;
+  if (els.timelineStatus) els.timelineStatus.textContent = "正在自动保存字幕...";
+  try {
+    const timeline = rows.map((row) => ({
+      start: row.start,
+      end: row.end,
+      text: row.text.trim(),
+    }));
+    const finalText = timeline.map((row) => row.text).join("");
+    const data = await fetchJson("/api/tts/alignment/sync", {
+      method: "POST",
+      body: JSON.stringify({
+        id: job.id,
+        title: els.titleInput?.value || job.title || "",
+        text: finalText,
+        sentenceTimeline: timeline,
+        subtitleTimeline: timeline,
+        duration: Number(job.audio_duration || job.duration || 0),
+        source: "xiaohei-video",
+        confirmationMode: "shared_production_timeline",
+      }),
+    });
+    state.selectedTtsJob = data.job;
+    state.ttsJob = data.job;
+    syncTtsSource(data.job, { title: els.titleInput?.value || "", text: data.job?.final_text || finalText });
+    if (embeddedMode) {
+      window.parent.postMessage({
+        type: "video-factory:xiaohei-shared-timeline-updated",
+        payload: data.job,
+      }, window.location.origin);
+    }
+    if (els.timelineStatus) els.timelineStatus.textContent = `已自动保存 ${timeline.length} 段字幕，原时间戳保持不变。`;
+  } catch (error) {
+    if (els.timelineStatus) els.timelineStatus.textContent = `自动保存失败：${error.payload?.message || error.message || error}`;
+  }
 }
 
 async function refreshSubtitleTimelineFromTts() {
@@ -556,6 +596,9 @@ function bindEvents() {
   els.generateImages.addEventListener("click", () => generateCompleteWorkflow());
   els.timelineRefresh?.addEventListener("click", () => refreshSubtitleTimelineFromTts());
   els.subtitleTimeline?.addEventListener("input", handleSubtitleTimelineInput);
+  els.subtitleTimeline?.addEventListener("focusout", (event) => {
+    if (event.target.matches('[data-field="text"]')) persistSharedSubtitleText();
+  });
   els.generateAudio.addEventListener("click", () => generateAudioOnly());
   els.confirmAudio.addEventListener("click", () => confirmCurrentAudio());
   els.generateMusic.addEventListener("click", () => generateMusicMaterial());

@@ -95,6 +95,14 @@ export function initXiaoheiProductionModule() {
   };
 
   frame.addEventListener("load", refreshStatus);
+  window.addEventListener("message", (event) => {
+    if (event.origin !== window.location.origin || event.source !== frame.contentWindow) return;
+    if (event.data?.type !== "video-factory:xiaohei-shared-timeline-updated" || !event.data.payload?.id) return;
+    const payload = window.sharedTtsHandoff?.save?.(event.data.payload, { sourceTarget: "xiaohei-video" }) || event.data.payload;
+    const handoff = handoffFromPayload(payload);
+    if (handoff) localStorage.setItem(XIAOHEI_HANDOFF_KEY, JSON.stringify(handoff));
+    status.textContent = `字幕已自动保存并同步到四条生产线 · 音频 #${payload.id}`;
+  });
   refresh.addEventListener("click", () => {
     frame.src = `/xiaohei-illustrations.html?embedded=1&t=${Date.now()}`;
   });
