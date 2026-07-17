@@ -29,6 +29,22 @@ if (typeof window.fetch !== "function") {
 
 const UI_CHOICE_STORAGE_KEY = "dy.ui.choicePreferences.v1";
 const UI_CHOICE_SELECTOR = 'select, input[type="checkbox"], input[type="radio"], input[type="range"]';
+const UI_DRAFT_STORAGE_KEY = "dy.ui.inputDrafts.v1";
+const UI_DRAFT_SELECTOR = [
+  "textarea",
+  'input:not([type])',
+  'input[type="text"]',
+  'input[type="search"]',
+  'input[type="url"]',
+  'input[type="tel"]',
+  'input[type="email"]',
+  'input[type="number"]',
+  'input[type="date"]',
+  'input[type="time"]',
+  'input[type="datetime-local"]',
+  'input[type="color"]',
+].join(", ");
+const restoredUiDraftControls = new WeakSet();
 let uiChoiceRestoreTimer = 0;
 
 function readUiChoicePreferences() {
