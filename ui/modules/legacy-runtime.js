@@ -4045,6 +4045,63 @@ function saveSharedTtsHandoff(payload = {}, { sourceTarget = "" } = {}) {
   return sharedPayload;
 }
 
+function sharedTimelineRows(payload = {}) {
+  const rows = Array.isArray(payload.sentence_timeline) && payload.sentence_timeline.length
+    ? payload.sentence_timeline
+    : Array.isArray(payload.subtitle_timeline)
+      ? payload.subtitle_timeline
+      : [];
+  return rows.map((row, index) => ({
+    ...row,
+    id: String(row.id || `shared-subtitle-${index + 1}`),
+    index: index + 1,
+    start: Number(row.start || 0),
+    end: Number(row.end || 0),
+    text: String(row.text || "").trim(),
+  })).filter((row) => row.text && row.end > row.start);
+}
+
+async function syncSharedTtsTimeline(rows = [], { sourceTarget = "", title = "" } = {}) {
+  const current = readStoredJson(SHARED_TTS_HANDOFF_KEY, null);
+  if (!current?.id) throw new Error("没有可同步的 TTS 字幕任务。");
+  const sourceRows = sharedTimelineRows(current);
+  if (!Array.isArray(rows) || rows.length !== sourceRows.length) {
+    throw new Error("字幕行数必须与原时间轴保持一致。");
+  }
+  const timeline = sourceRows.map((source, index) => ({
+    ...source,
+    start: source.start,
+    end: source.end,
+    text: String(rows[index]?.text || "").trim(),
+  }));
+  if (timeline.some((row) => !row.text)) throw new Error("字幕文字不能为空。");
+  const finalText = timeline.map((row) => row.text).join("");
+  const data = await fetchJson("/api/tts/alignment/sync", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      id: current.id,
+      title: title || current.title || current.seo_title || "",
+      text: finalText,
+      sentenceTimeline: timeline,
+      subtitleTimeline: timeline,
+      duration: Number(current.audio_duration || current.duration || 0),
+      source: sourceTarget || "shared-production-timeline",
+      confirmationMode: "shared_production_timeline",
+    }),
+  });
+  const job = data.job || {};
+  return saveSharedTtsHandoff({
+    ...current,
+    ...job,
+    title: job.title || current.title || title,
+    text: job.final_text || finalText,
+    final_text: job.final_text || finalText,
+    sentence_timeline: job.sentence_timeline || timeline,
+    subtitle_timeline: job.subtitle_timeline || job.sentence_timeline || timeline,
+  }, { sourceTarget });
+}
+
 function saveTtsAudioHandoff(target, payload) {
   return saveSharedTtsHandoff(payload, { sourceTarget: target });
 }
@@ -4065,6 +4122,8 @@ window.sharedTtsHandoff = {
   targets: PRODUCTION_TTS_TARGETS,
   read: () => readStoredJson(SHARED_TTS_HANDOFF_KEY, null),
   save: saveSharedTtsHandoff,
+  timelineRows: sharedTimelineRows,
+  syncTimeline: syncSharedTtsTimeline,
   restoreBadges: restoreProductionTtsBadges,
 };
 

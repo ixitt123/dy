@@ -381,7 +381,9 @@ function writeTimedTextFiles({ directory, job, preparedText, result, fileBaseNam
   const safeBaseName = String(fileBaseName || `tts-${job.id}`).replace(/[^a-z0-9_-]+/gi, "_") || `tts-${job.id}`;
   const scriptPath = path.join(directory, `${safeBaseName}.txt`);
   const srtPath = path.join(directory, `${safeBaseName}.srt`);
+  const vttPath = path.join(directory, `${safeBaseName}.vtt`);
   const textPath = path.join(directory, `${safeBaseName}-timestamped.txt`);
+  const timelineJsonPath = path.join(directory, `${safeBaseName}-timeline.json`);
   const srt = timeline.map((item, index) => [
     String(index + 1),
     `${formatClock(item.start, ",")} --> ${formatClock(item.end, ",")}`,
@@ -390,15 +392,23 @@ function writeTimedTextFiles({ directory, job, preparedText, result, fileBaseNam
   const timestampedText = timeline
     .map((item) => `[${formatClock(item.start)} --> ${formatClock(item.end)}] ${item.text}`)
     .join("\n") + "\n";
+  const vtt = `WEBVTT\n\n${timeline.map((item) => [
+    `${formatClock(item.start)} --> ${formatClock(item.end)}`,
+    item.text,
+  ].join("\n")).join("\n\n")}\n`;
   const cleanTitle = String(title || "").trim();
   const titlePrefix = cleanTitle ? `标题：${cleanTitle}\n\n` : "";
   fs.writeFileSync(scriptPath, `${titlePrefix}${preparedText.trim()}\n`, "utf8");
   fs.writeFileSync(srtPath, srt, "utf8");
+  fs.writeFileSync(vttPath, vtt, "utf8");
   fs.writeFileSync(textPath, `${titlePrefix}${timestampedText}`, "utf8");
+  fs.writeFileSync(timelineJsonPath, `${JSON.stringify(timeline, null, 2)}\n`, "utf8");
   return {
     script_path: scriptPath,
     subtitle_path: srtPath,
+    subtitle_vtt_path: vttPath,
     timestamped_text_path: textPath,
+    timeline_json_path: timelineJsonPath,
     subtitle_timeline: timeline,
     subtitle_source: providerTimeline.length ? "provider" : (duration > 0 ? "estimated_audio_duration" : "estimated"),
     audio_duration: duration,
@@ -410,7 +420,9 @@ function writeAlignedTextFiles({ directory, job, finalText, sentenceTimeline, wo
   const safeBaseName = String(fileBaseName || `tts-${job.id}`).replace(/[^a-z0-9_-]+/gi, "_") || `tts-${job.id}`;
   const scriptPath = path.join(directory, `${safeBaseName}.txt`);
   const srtPath = path.join(directory, `${safeBaseName}.srt`);
+  const vttPath = path.join(directory, `${safeBaseName}.vtt`);
   const textPath = path.join(directory, `${safeBaseName}-timestamped.txt`);
+  const timelineJsonPath = path.join(directory, `${safeBaseName}-timeline.json`);
   const wordTimelinePath = path.join(directory, `${safeBaseName}-word-timeline.json`);
   const srt = sentenceTimeline.map((item, index) => [
     String(index + 1),
@@ -420,16 +432,24 @@ function writeAlignedTextFiles({ directory, job, finalText, sentenceTimeline, wo
   const timestampedText = sentenceTimeline
     .map((item) => `[${formatClock(item.start)} --> ${formatClock(item.end)}] ${item.text}${item.estimated ? "【估算】" : ""}`)
     .join("\n") + "\n";
+  const vtt = `WEBVTT\n\n${sentenceTimeline.map((item) => [
+    `${formatClock(item.start)} --> ${formatClock(item.end)}`,
+    item.text,
+  ].join("\n")).join("\n\n")}\n`;
   const cleanTitle = String(title || "").trim();
   const titlePrefix = cleanTitle ? `标题：${cleanTitle}\n\n` : "";
   fs.writeFileSync(scriptPath, `${titlePrefix}${String(finalText || "").trim()}\n`, "utf8");
   fs.writeFileSync(srtPath, srt, "utf8");
+  fs.writeFileSync(vttPath, vtt, "utf8");
   fs.writeFileSync(textPath, `${titlePrefix}${timestampedText}`, "utf8");
+  fs.writeFileSync(timelineJsonPath, `${JSON.stringify(sentenceTimeline, null, 2)}\n`, "utf8");
   fs.writeFileSync(wordTimelinePath, `${JSON.stringify(wordTimeline, null, 2)}\n`, "utf8");
   return {
     script_path: scriptPath,
     subtitle_path: srtPath,
+    subtitle_vtt_path: vttPath,
     timestamped_text_path: textPath,
+    timeline_json_path: timelineJsonPath,
     word_timeline_path: wordTimelinePath,
   };
 }
@@ -786,7 +806,9 @@ export function createTtsService({
       file_base_name: String(metadata.file_base_name || ""),
       script_path: String(metadata.script_path || ""),
       subtitle_path: String(metadata.subtitle_path || ""),
+      subtitle_vtt_path: String(metadata.subtitle_vtt_path || ""),
       timestamped_text_path: String(metadata.timestamped_text_path || ""),
+      timeline_json_path: String(metadata.timeline_json_path || ""),
       word_timeline_path: String(metadata.word_timeline_path || ""),
       word_timeline: Array.isArray(metadata.word_timeline) ? metadata.word_timeline : [],
       sentence_timeline: Array.isArray(metadata.sentence_timeline) ? metadata.sentence_timeline : [],
@@ -1742,7 +1764,7 @@ export function createTtsService({
     }
     if (deleteFile) {
       const root = path.resolve(subtitleDir);
-      for (const filePath of [metadata.script_path, metadata.subtitle_path, metadata.timestamped_text_path, metadata.word_timeline_path]) {
+      for (const filePath of [metadata.script_path, metadata.subtitle_path, metadata.subtitle_vtt_path, metadata.timestamped_text_path, metadata.timeline_json_path, metadata.word_timeline_path]) {
         const target = filePath ? path.resolve(filePath) : "";
         if (target && target !== root && target.startsWith(`${root}${path.sep}`) && fs.existsSync(target)) {
           fs.rmSync(target, { force: true });
