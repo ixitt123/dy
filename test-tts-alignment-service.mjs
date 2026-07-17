@@ -142,6 +142,42 @@ const audioLyrics = "你问我 AI 怎么拍成片 我用一段旋律唱给你听
 
 {
   const baseDir = createTempProject();
+  const audioPath = createAudioFile(baseDir, "strict-text-correction.mp3");
+  const taskStore = new MemoryTaskStore();
+  const spokenText = "学习不是靠熬时间，而是靠方法。";
+  const { service, calls } = createService({
+    baseDir,
+    taskStore,
+    transcript: spokenText,
+  });
+  const imported = await service.importGenerated({
+    audio_path: audioPath,
+    text: "学习不是靠熬时间，而是靠方发。",
+    provider: "minimax",
+    voice_name: "普通旁白",
+    emotion: "natural",
+    source: "tts_generated",
+  });
+  assert.equal(imported.error, undefined);
+  assert.equal(imported.job.alignment_status, "confirmed");
+  const corrected = await service.alignCorrectedText(imported.job.id, spokenText, {
+    provider: "deepseek",
+    model: "deepseek-chat",
+    changedCharacters: 1,
+  });
+  assert.equal(corrected.error, undefined);
+  assert.equal(corrected.job.final_text, spokenText);
+  assert.equal(corrected.job.subtitle_source, "ai_corrected_before_handoff");
+  assert.equal(corrected.job.alignment_confirmation_mode, "ai_corrected_before_handoff");
+  assert.equal(corrected.job.subtitle_correction_changed_characters, 1);
+  assert.equal(corrected.job.subtitle_correction_provider, "deepseek");
+  assert.ok(corrected.job.subtitle_timeline.length > 0);
+  assert.ok(corrected.job.subtitle_timeline.at(-1).end <= corrected.job.audio_duration + 0.05);
+  assert.equal(calls(), 1, "send-time correction must reuse the existing word timeline");
+}
+
+{
+  const baseDir = createTempProject();
   const audioPath = createAudioFile(baseDir, "low-match.mp3");
   const completed = [];
   const taskStore = new MemoryTaskStore();

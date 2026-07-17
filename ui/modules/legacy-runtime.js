@@ -7133,6 +7133,7 @@ ttsHistory?.addEventListener("click", (event) => {
     return;
   }
   if (sendButton && row) {
+    sendButton.disabled = true;
     (async () => {
       const data = await fetchJson(`/api/tts/job?id=${encodeURIComponent(jobId)}`);
       const job = data.job;
@@ -7150,6 +7151,8 @@ ttsHistory?.addEventListener("click", (event) => {
       await sendConfirmedTtsAudio(row, job);
     })().catch((error) => {
       setTtsHandoffStatus(row, error instanceof Error ? error.message : String(error));
+    }).finally(() => {
+      sendButton.disabled = false;
     });
     return;
   }
