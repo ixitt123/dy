@@ -5111,55 +5111,43 @@ function requestedWordCountRange(input) {
   return { min: Math.max(1, number - tolerance), max: number + tolerance };
 }
 
-function wordCountIssues(versions, specs) {
-  const byKey = new Map(versions.map((item) => [item.key, item]));
-  return specs
-    .map((spec) => {
-      const range = requestedWordCountRange(spec.wordCount);
-      if (!range) return null;
-      const version = byKey.get(spec.key) || { ...spec, content: "" };
-      const count = rewriteCharacterCount(version.content);
-      if (count >= range.min && count <= range.max) return null;
-      return { spec, version, count, range };
-    })
-    .filter(Boolean);
+const REWRITE_WORD_COUNT_OVERFLOW_RATE = 0.2;
+
+function rewriteSoftMaximum(range) {
+  if (!range || !Number.isFinite(range.max)) return Number.POSITIVE_INFINITY;
+  return Math.max(range.max, Math.ceil(range.max * (1 + REWRITE_WORD_COUNT_OVERFLOW_RATE)));
 }
 
-function truncateRewriteToLimit(value, maxCharacters) {
+function rewriteHasNaturalEnding(value) {
   const text = String(value || "").trim();
-  if (!Number.isFinite(maxCharacters) || rewriteCharacterCount(text) <= maxCharacters) return text;
-  let count = 0;
-  let result = "";
-  for (const character of Array.from(text)) {
-    if (!/\s/.test(character)) {
-      if (count >= maxCharacters) break;
-      count += 1;
-    }
-    result += character;
-  }
-  result = result.trim().replace(/[，、；：,;:]+$/u, "");
-  if (result && !/[。！？!?]$/u.test(result) && rewriteCharacterCount(result) < maxCharacters) result += "。";
-  return result;
+  if (!text) return false;
+  if (/[，、；：,;:]$/u.test(text)) return false;
+  if (/(?:第一|第二|第三|第四|首先|其次|最后)[，,:：]?$/u.test(text)) return false;
+  const pairedMarks = [["“", "”"], ["‘", "’"], ["（", "）"], ["【", "】"], ["《", "》"]];
+  return pairedMarks.every(([open, close]) => text.split(open).length === text.split(close).length);
 }
 
-function padRewriteToMinimum(value, minCharacters, maxCharacters) {
-  let result = String(value || "").trim();
-  const supplements = [
-    "别急着找捷径，先把每天该做的动作做扎实。",
-    "把问题拆开、逐项检查，进步才会真正看得见。",
-    "有效的方法不是听懂了，而是能够反复做到。",
-    "今天就从最薄弱的一项开始，连续执行再看结果。",
-    "方向对了还不够，真正拉开差距的是每天落实。",
-    "少一点空想，多一次练习，结果自然会慢慢变化。",
-    "先完成，再复盘，再调整，这比盲目努力更重要。",
-    "愿意开始行动的人，才有机会把问题真正解决。",
-  ];
-  let supplementIndex = 0;
-  while (rewriteCharacterCount(result) < minCharacters) {
-    result = `${result}\n${supplements[supplementIndex % supplements.length]}`.trim();
-    supplementIndex += 1;
+function rewriteCandidateScore(value, range) {
+  const count = rewriteCharacterCount(value);
+  const softMax = rewriteSoftMaximum(range);
+  let score = rewriteHasNaturalEnding(value) ? 0 : 1_000_000;
+  if (count < range.min) score += (range.min - count) * 100;
+  else if (Number.isFinite(softMax) && count > softMax) score += (count - softMax) * 100;
+  else if (Number.isFinite(range.max) && count > range.max) score += count - range.max;
+  return score;
+}
+
+function rewriteWordCountWarning(value, range, requestedLabel = "") {
+  if (!range) return "";
+  const count = rewriteCharacterCount(value);
+  const softMax = rewriteSoftMaximum(range);
+  if (Number.isFinite(softMax) && count > softMax) {
+    return `字数略超：要求 ${requestedLabel || `${range.min}-${range.max} 字`}，完整文章实际 ${count} 字；已优先保留完整表达。`;
   }
-  return truncateRewriteToLimit(result, maxCharacters);
+  if (count < range.min) {
+    return `字数偏少：要求 ${requestedLabel || `${range.min}-${range.max} 字`}，完整文章实际 ${count} 字；已优先保留完整表达。`;
+  }
+  return "";
 }
 
 async function repairRewriteWordCounts(provider, versions, specs, signal) {
