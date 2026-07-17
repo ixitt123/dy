@@ -9,7 +9,7 @@ export function createPageLifecycle({
 } = {}) {
   const sessions = new Map();
   let shutdownTimer = null;
-  let disconnectedAt = 0;
+  let disconnectedAt = null;
   let hasConnected = false;
 
   function cancelShutdown() {
@@ -20,12 +20,12 @@ export function createPageLifecycle({
   function scheduleIfDisconnected(disconnectedAtValue = now()) {
     if (!enabled || !hasConnected || sessions.size > 0) {
       if (sessions.size > 0) {
-        disconnectedAt = 0;
+        disconnectedAt = null;
         cancelShutdown();
       }
       return;
     }
-    if (!disconnectedAt) disconnectedAt = disconnectedAtValue;
+    if (disconnectedAt === null) disconnectedAt = disconnectedAtValue;
     if (shutdownTimer !== null) return;
     const delay = Math.max(0, graceMs - Math.max(0, now() - disconnectedAt));
     shutdownTimer = setTimer(() => {
@@ -40,7 +40,7 @@ export function createPageLifecycle({
     if (!sessionId) return;
     hasConnected = true;
     sessions.set(sessionId, now());
-    disconnectedAt = 0;
+    disconnectedAt = null;
     cancelShutdown();
   }
 
@@ -53,19 +53,19 @@ export function createPageLifecycle({
   function sweep() {
     if (!enabled || !hasConnected) return;
     const currentTime = now();
-    let latestExpiredHeartbeat = 0;
+    let latestExpiredHeartbeat = null;
     for (const [id, lastSeen] of sessions) {
       if (currentTime - lastSeen <= heartbeatStaleMs) continue;
       sessions.delete(id);
-      latestExpiredHeartbeat = Math.max(latestExpiredHeartbeat, lastSeen);
+      latestExpiredHeartbeat = Math.max(latestExpiredHeartbeat ?? lastSeen, lastSeen);
     }
-    if (sessions.size === 0 && latestExpiredHeartbeat) {
+    if (sessions.size === 0 && latestExpiredHeartbeat !== null) {
       scheduleIfDisconnected(latestExpiredHeartbeat);
     }
   }
 
   function status() {
-    const remainingMs = disconnectedAt && sessions.size === 0
+    const remainingMs = disconnectedAt !== null && sessions.size === 0
       ? Math.max(0, graceMs - Math.max(0, now() - disconnectedAt))
       : 0;
     return {
