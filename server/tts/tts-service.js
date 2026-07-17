@@ -1300,31 +1300,32 @@ export function createTtsService({
     if (!job.audio_path || !fs.existsSync(job.audio_path)) return { error: "最终音频文件不存在。" };
     const metadata = safeJson(job.metadata_json, {});
     if (metadata.alignment_status !== "confirmed") return { error: "现有字幕尚未确认，不能执行发送前修复。" };
-    const currentTimeline = normalizeManualSentenceTimeline(
-      metadata.sentence_timeline || metadata.subtitle_timeline || [],
-      metadata.final_text || metadata.recognized_text || job.text || "",
-      Number(metadata.audio_duration || metadata.duration || 0),
-    );
+    const storedTimeline = Array.isArray(metadata.sentence_timeline) && metadata.sentence_timeline.length
+      ? metadata.sentence_timeline
+      : Array.isArray(metadata.subtitle_timeline)
+        ? metadata.subtitle_timeline
+        : [];
+    const currentTimeline = storedTimeline.map((row) => ({ ...row }));
     if (!currentTimeline.length) return { error: "缺少现有字幕时间轴。" };
+    const preservedWordTimeline = Array.isArray(metadata.word_timeline)
+      ? metadata.word_timeline.map((row) => ({ ...row }))
+      : [];
+    if (!preservedWordTimeline.length) return { error: "缺少现有逐字/逐词时间轴，不能在不重估时间的前提下修复文字。" };
     if (!Array.isArray(rows) || rows.length !== currentTimeline.length) {
       return { error: `修复结果必须保持 ${currentTimeline.length} 行字幕，当前为 ${Array.isArray(rows) ? rows.length : 0} 行。` };
     }
     const sentenceTimeline = currentTimeline.map((source, index) => ({
       ...source,
-      index: index + 1,
-      start: source.start,
-      end: source.end,
       text: String(rows[index]?.text || "").trim() || source.text,
     }));
-    const duration = Math.max(
-      Number(metadata.audio_duration || metadata.duration || 0),
-      probeAudioDurationSync(job.audio_path),
-      Number(sentenceTimeline.at(-1)?.end || 0),
-    );
+    const duration = Number(metadata.audio_duration || metadata.duration || 0)
+      || Number(sentenceTimeline.at(-1)?.end || 0)
+      || probeAudioDurationSync(job.audio_path);
     return syncConfirmedTimeline(job.id, {
       text: sentenceTimeline.map((row) => row.text).join(""),
       sentenceTimeline,
-      wordTimeline: estimatedWordTimelineFromSentences(sentenceTimeline),
+      wordTimeline: preservedWordTimeline,
+      preserveTimelineValues: true,
       duration,
       source: String(input.source || "source_constrained_music_asr_repair"),
       confirmationMode: "source_constrained_music_asr_repair",
@@ -1373,7 +1374,9 @@ export function createTtsService({
     const duration = Number(input.duration || metadata.audio_duration || metadata.duration || 0);
     const providedTimeline = input.sentenceTimeline || input.sentence_timeline || input.subtitleTimeline || input.subtitle_timeline || input.segments || [];
     let finalText = String(input.text || input.final_text || "").trim();
-    let sentenceTimeline = normalizeManualSentenceTimeline(providedTimeline, finalText, duration);
+    let sentenceTimeline = input.preserveTimelineValues === true && Array.isArray(providedTimeline)
+      ? providedTimeline.map((row) => ({ ...row }))
+      : normalizeManualSentenceTimeline(providedTimeline, finalText, duration);
     if (!finalText) finalText = sentenceTimeline.map((row) => row.text).join("");
     if (!sentenceTimeline.length) sentenceTimeline = normalizeManualSentenceTimeline(metadata.sentence_timeline || metadata.subtitle_timeline || [], finalText, duration);
     const wordTimeline = Array.isArray(input.wordTimeline) && input.wordTimeline.length

@@ -26,7 +26,15 @@ assert.match(server, /corrected: false,[\s\S]*fallback: true,[\s\S]*warning,/u);
 assert.match(service, /async function alignCorrectedText/u);
 assert.match(service, /async function syncSourceConstrainedRows/u);
 assert.match(service, /rows\.length !== currentTimeline\.length/u);
-assert.match(service, /wordTimeline: estimatedWordTimelineFromSentences\(sentenceTimeline\)/u);
+assert.match(service, /const preservedWordTimeline = Array\.isArray\(metadata\.word_timeline\)/u);
+assert.match(service, /wordTimeline: preservedWordTimeline/u);
+assert.match(service, /preserveTimelineValues: true/u);
+assert.match(service, /input\.preserveTimelineValues === true[\s\S]*providedTimeline\.map\(\(row\) => \(\{ \.\.\.row \}\)\)/u);
+const musicSyncFunction = service.slice(
+  service.indexOf("async function syncSourceConstrainedRows"),
+  service.indexOf("async function confirmAlignment"),
+);
+assert.doesNotMatch(musicSyncFunction, /estimatedWordTimelineFromSentences/u);
 assert.match(service, /recognized_word_timeline[\s\S]*word_timeline/u);
 assert.match(service, /aligned\.matchRatio < ALIGNMENT_AUTO_APPROVE_RATIO/u);
 assert.match(service, /confirmationMode: "ai_corrected_before_handoff"/u);

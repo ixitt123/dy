@@ -4327,7 +4327,7 @@ async function sendConfirmedTtsAudio(container = document, job = activeTtsRailJo
   const correctionStatus = corrected && correctionMode === "source_constrained_music_asr_repair"
     ? partialCorrection
       ? `${correctionWarning || "已完成原文约束修复，未确定内容保留原识别文字；"}`
-      : "已按配音前文案完成句子、短语和拼音对齐修复，字幕行数及原时间戳保持不变；"
+      : "已按配音前文案完成句子、短语和拼音对齐修复；只更新字幕正文，逐行及逐字时间轴保持原样；"
     : corrected
       ? "字幕错字和标点已校正，时间戳已按字词边界微调；"
     : `${correctionWarning || "字幕未校正，已采用原字幕继续发送。"}`;
