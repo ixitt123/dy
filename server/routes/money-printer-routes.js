@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import net from "node:net";
 import path from "node:path";
 import { spawn, spawnSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
@@ -19,8 +20,10 @@ const TASK_STATE_COMPLETE = 1;
 const TASK_STATE_PROCESSING = 4;
 
 let apiProcess = null;
+let apiStartPromise = null;
 const apiLogs = [];
 const renderedFiles = new Map();
+const managedTasks = new Map();
 
 export function createMoneyPrinterRoutes({ baseDir, sendJson, ffmpegPath, ffprobePath, getDownloadsDir }) {
   const defaultRoot = path.resolve(process.env.MONEY_PRINTER_TURBO_ROOT || path.join(baseDir, "integrations", "moneyprinterturbo"));
@@ -106,19 +109,16 @@ export function createMoneyPrinterRoutes({ baseDir, sendJson, ffmpegPath, ffprob
     if (req.method === "POST" && route === "generate") {
       try {
         const body = await readJsonBody(req, { maxBytes: 96 * 1024 });
-        const status = await buildStatus(defaultRoot);
+        const status = await startApi(defaultRoot);
         if (!status.api.online) throw new Error("MoneyPrinterTurbo API 未运行，请先点击“启动 API”。");
-        const payload = buildGeneratePayload(body);
-        const result = await fetchMptJson(`${status.api.v1BaseUrl}/videos`, {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify(payload),
-        });
-        if (Number(result?.status || 0) !== 200) throw new Error(result?.message || "MoneyPrinterTurbo 创建任务失败。");
+        const materialSources = resolveMaterialSourceOrder(body.video_source, status.materials);
+        const payload = buildGeneratePayload({ ...body, video_source: materialSources[0] });
+        const managed = await createManagedTask(status, payload, materialSources);
         sendJson(res, 202, {
           ok: true,
-          task: result.data,
+          task: managedTaskSnapshot(managed),
           payload,
+          materialSources,
           apiBaseUrl: status.api.baseUrl,
         });
       } catch (error) {
@@ -136,6 +136,12 @@ export function createMoneyPrinterRoutes({ baseDir, sendJson, ffmpegPath, ffprob
         if (!taskId) throw new Error("缺少 MoneyPrinterTurbo 任务 ID。");
         const status = await buildStatus(defaultRoot);
         if (!status.api.online) throw new Error("MoneyPrinterTurbo API 未运行。");
+        const managed = managedTasks.get(taskId);
+        if (managed) {
+          const task = await pollManagedTask(status, managed);
+          sendJson(res, 200, { ok: true, task, apiBaseUrl: status.api.baseUrl });
+          return true;
+        }
         const task = await fetchMptJson(`${status.api.v1BaseUrl}/tasks/${encodeURIComponent(taskId)}`);
         if (Number(task?.status || 0) !== 200) throw new Error(task?.message || "读取任务失败。");
         sendJson(res, 200, {
@@ -195,6 +201,7 @@ export function createMoneyPrinterRoutes({ baseDir, sendJson, ffmpegPath, ffprob
 function stopApiProcess() {
   const child = apiProcess;
   apiProcess = null;
+  apiStartPromise = null;
   if (!child?.pid || child.killed) return;
   try {
     if (process.platform === "win32") {
@@ -220,6 +227,8 @@ async function buildStatus(rootDir) {
   const apiV1BaseUrl = `${apiBaseUrl}/api/v1`;
   const webuiBaseUrl = `http://${LOCAL_HOST}:${DEFAULT_WEBUI_PORT}`;
   const api = await checkApi(apiV1BaseUrl);
+  const launcher = resolveApiLauncher(root);
+  const materials = readMaterialProviderStatus(configPath);
   return {
     root,
     installed,
@@ -227,6 +236,7 @@ async function buildStatus(rootDir) {
     hasConfig: fs.existsSync(configPath),
     uv: commandAvailable("uv"),
     python: pythonVersion(),
+    runtime: launcher?.label || "unavailable",
     api: {
       baseUrl: apiBaseUrl,
       v1BaseUrl: apiV1BaseUrl,
@@ -242,6 +252,7 @@ async function buildStatus(rootDir) {
       pid: apiProcess?.pid || 0,
       logs: apiLogs.slice(-80),
     },
+    materials,
     defaults: {
       aspect: "16:9",
       source: "pexels",
@@ -253,15 +264,31 @@ async function buildStatus(rootDir) {
 }
 
 async function startApi(rootDir) {
+  if (apiStartPromise) return apiStartPromise;
+  apiStartPromise = startApiOnce(rootDir).finally(() => {
+    apiStartPromise = null;
+  });
+  return apiStartPromise;
+}
+
+async function startApiOnce(rootDir) {
   const status = await buildStatus(rootDir);
   if (!status.installed) throw new Error(`没有找到 MoneyPrinterTurbo：${status.root}`);
-  if (status.api.online) return { ...status, started: false, message: "MoneyPrinterTurbo API 已经在运行。" };
-  if (apiProcess && !apiProcess.killed) return { ...status, started: false, message: "MoneyPrinterTurbo API 正在启动中。" };
-  if (!status.uv) throw new Error("没有找到 uv，请先安装 uv 或在 MoneyPrinterTurbo 目录准备 Python 环境。");
+  if (status.api.online) return { ...status, started: false, connectedExisting: true, message: "MoneyPrinterTurbo API 已经在运行，已连接现有实例。" };
+  if (apiProcess && !apiProcess.killed) {
+    return waitForApiReady(status, { started: false, connectedExisting: true });
+  }
+  if (await isPortListening(LOCAL_HOST, new URL(status.api.baseUrl).port)) {
+    appendLog(`Port ${new URL(status.api.baseUrl).port} is occupied; waiting for the existing API instance.`);
+    return waitForApiReady(status, { started: false, connectedExisting: true });
+  }
+
+  const launcher = resolveApiLauncher(status.root);
+  if (!launcher) throw new Error("没有找到 MoneyPrinterTurbo 内置 Python 环境、uv 或可用 Python，无法启动 API。");
 
   apiLogs.length = 0;
-  appendLog(`Starting MoneyPrinterTurbo API in ${status.root}`);
-  apiProcess = spawn("uv", ["run", "python", "main.py"], {
+  appendLog(`Starting MoneyPrinterTurbo API with ${launcher.label} in ${status.root}`);
+  apiProcess = spawn(launcher.command, launcher.args, {
     cwd: status.root,
     env: {
       ...process.env,
@@ -273,17 +300,12 @@ async function startApi(rootDir) {
   });
   apiProcess.stdout?.on("data", (chunk) => appendLog(chunk.toString("utf8")));
   apiProcess.stderr?.on("data", (chunk) => appendLog(chunk.toString("utf8")));
+  apiProcess.on("error", (error) => appendLog(`MoneyPrinterTurbo API failed to start: ${error.message}`));
   apiProcess.on("exit", (code) => {
     apiProcess = null;
     appendLog(`MoneyPrinterTurbo API exited with code ${code}`);
   });
-
-  for (let attempt = 0; attempt < 30; attempt += 1) {
-    await wait(1000);
-    const nextStatus = await buildStatus(rootDir);
-    if (nextStatus.api.online) return { ...nextStatus, started: true, message: "MoneyPrinterTurbo API 已启动。" };
-  }
-  return { ...(await buildStatus(rootDir)), started: true, message: "已发起启动，请稍后刷新状态。首次 uv 安装依赖可能需要几分钟。" };
+  return waitForApiReady(status, { started: true, connectedExisting: false });
 }
 
 function buildGeneratePayload(body = {}) {
