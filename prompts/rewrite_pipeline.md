@@ -54,8 +54,10 @@ The selected preset is not decoration. It must visibly affect the output:
 - Persona: {{persona}}
 - Tone preset: {{tone_preset}}
 - Purpose: {{purpose}}
+- Coherence contract: {{coherence_contract}}
 
 You must make the structure and voice clearly match this contract while preserving the factual core.
+Priority order: factual accuracy and a complete, coherent article come first; the selected preset's hook, conflict, short-sentence rhythm, emotion, and conversion style come second. If they conflict, weaken the style rather than damage continuity.
 
 ## Revision Instruction
 
@@ -93,6 +95,9 @@ Step 7: Run a fidelity check before output.
 - If a sentence cannot be supported by the Original Text, delete or rewrite it.
 - Do not output generic education, enrollment, parent, school, or teacher copy unless the Original Text is actually about that.
 - Confirm the preset made a visible structural and tonal difference. If not, rewrite again before output.
+- Confirm the output reads as one complete article rather than stitched sentences or an outline.
+- Confirm every paragraph follows logically from the previous paragraph, pronouns have clear referents, and no later sentence contradicts an earlier claim.
+- Confirm the opening enters the topic naturally and the ending fully resolves the article.
 
 Step 8: Output exactly the selected versions in Output boxes.
 - Use each selected version key exactly.

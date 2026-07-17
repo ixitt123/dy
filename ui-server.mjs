@@ -5279,6 +5279,7 @@ async function rewriteTranscriptWithProvider({ providerId, transcriptText, analy
       structure_goal: String(safeParams.structureGoal || "保留原文事实，强化表达结构。"),
       visible_difference: String(safeParams.visibleDifference || "结构和口吻要明显不同，但主题和事实不变。"),
       forbidden_inventions: String(safeParams.forbiddenInventions || "不得凭空新增行业、人物、场景、数据或案例。"),
+      coherence_contract: String(safeParams.coherenceContract || "必须输出一篇主题一致、事实不矛盾、句段衔接自然、结尾完整的文章；模板风格不能破坏通顺和连贯。"),
       target_platform: String(safeParams.targetPlatform || ""),
       persona: String(safeParams.persona || ""),
       tone_preset: String(safeParams.tonePreset || ""),
@@ -5328,6 +5329,7 @@ async function rewriteTranscriptWithProvider({ providerId, transcriptText, analy
         conflict_level: safeParams.conflictLevel || 7,
         emotion_level: safeParams.emotionLevel || 7,
         sales_level: safeParams.salesLevel || 6,
+        coherence_contract: String(safeParams.coherenceContract || "必须输出一篇主题一致、事实不矛盾、句段衔接自然、结尾完整的文章；模板风格不能破坏通顺和连贯。"),
         version_specs: JSON.stringify(specBatch, null, 2),
         draft_json: JSON.stringify({
           versions: Object.fromEntries(batchRewrite.versions.map((item) => [item.key, item.content])),
