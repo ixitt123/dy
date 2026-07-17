@@ -68,6 +68,43 @@ export function isMusic26FreeJob(job = {}) {
   return model === MUSIC_REPAIR_MODEL;
 }
 
+export function buildFixedAsrRows({ fixedRows = [], recognizedWords = [] } = {}) {
+  if (!Array.isArray(fixedRows) || !fixedRows.length) throw new Error("当前歌唱音频没有可用的字幕时间轴。");
+  const rows = fixedRows.map((row, offset) => ({
+    index: offset + 1,
+    start: Number(row?.start || 0),
+    end: Number(row?.end || row?.start || 0),
+    text: "",
+  }));
+  const words = (Array.isArray(recognizedWords) ? recognizedWords : [])
+    .map((word) => ({
+      text: String(word?.text || "").trim(),
+      start: Number(word?.start || 0),
+      end: Number(word?.end || word?.start || 0),
+    }))
+    .filter((word) => word.text && Number.isFinite(word.start) && Number.isFinite(word.end));
+  for (const word of words) {
+    const midpoint = word.start + Math.max(0, word.end - word.start) / 2;
+    let targetIndex = rows.findIndex((row, index) => midpoint >= row.start && (midpoint < row.end || (index === rows.length - 1 && midpoint <= row.end)));
+    if (targetIndex < 0) {
+      let bestDistance = Number.POSITIVE_INFINITY;
+      rows.forEach((row, index) => {
+        const rowMidpoint = row.start + Math.max(0, row.end - row.start) / 2;
+        const distance = Math.abs(midpoint - rowMidpoint);
+        if (distance < bestDistance) {
+          bestDistance = distance;
+          targetIndex = index;
+        }
+      });
+    }
+    if (targetIndex >= 0) rows[targetIndex].text += word.text;
+  }
+  return rows.map((row, index) => ({
+    ...row,
+    text: row.text || String(fixedRows[index]?.text || "").trim(),
+  }));
+}
+
 export function mergeSourceConstrainedRows({ sourceText = "", asrRows = [], modelRows = [] } = {}) {
   const source = String(sourceText || "").trim();
   if (!source) throw new Error("缺少配音前文案，无法执行原文约束修复。");

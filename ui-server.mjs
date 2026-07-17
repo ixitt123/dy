@@ -23,7 +23,7 @@ import { PIPELINE_EVENTS } from "./server/core/pipeline-bus/PipelineEvents.js";
 import { createProjectCenter } from "./server/core/project-center.js";
 import { generatePlatformTitles } from "./server/core/title-generator.js";
 import { TTS_PROVIDER_LABELS } from "./server/tts/providers/index.js";
-import { isMusic26FreeJob, mergeSourceConstrainedRows } from "./server/tts/source-constrained-repair.js";
+import { buildFixedAsrRows, isMusic26FreeJob, mergeSourceConstrainedRows } from "./server/tts/source-constrained-repair.js";
 import { createVoiceAssetService } from "./server/voices/voice-asset-service.js";
 import { createDirectorService } from "./server/director/director-service.js";
 import { createVfoService } from "./server/vfo/vfo-service.js";
@@ -3731,27 +3731,9 @@ async function correctTtsSubtitleBeforeHandoff(jobId, signal) {
 function musicAsrRowsForFixedTimeline(job) {
   const metadata = job.metadata && typeof job.metadata === "object" ? job.metadata : {};
   const fixedRows = Array.isArray(job.sentence_timeline) ? job.sentence_timeline : [];
-  const recognizedRows = Array.isArray(metadata.recognized_sentence_timeline) ? metadata.recognized_sentence_timeline : [];
-  if (!fixedRows.length) throw new Error("当前歌唱音频没有可用的字幕时间轴。");
-  return fixedRows.map((fixed, offset) => {
-    const start = Number(fixed.start || 0);
-    const end = Number(fixed.end || start);
-    const overlapping = recognizedRows.filter((row) => {
-      const rowStart = Number(row.start || 0);
-      const rowEnd = Number(row.end || rowStart);
-      return rowStart < end && rowEnd > start;
-    });
-    const recognizedText = overlapping.map((row) => String(row.text || "").trim()).filter(Boolean).join("");
-    const positionMatchedText = recognizedRows.length === fixedRows.length
-      ? String(recognizedRows[offset]?.text || "").trim()
-      : "";
-    return {
-      index: offset + 1,
-      start,
-      end,
-      text: recognizedText || positionMatchedText || String(fixed.text || "").trim(),
-    };
-  });
+  const recognizedWords = Array.isArray(metadata.recognized_word_timeline) ? metadata.recognized_word_timeline : [];
+  if (!recognizedWords.length) throw new Error("缺少原始逐字/逐词识别时间轴，无法在不修改时间戳的前提下拆分字幕文字。");
+  return buildFixedAsrRows({ fixedRows, recognizedWords });
 }
 
 async function correctMusicSubtitleBeforeHandoff(job, signal) {

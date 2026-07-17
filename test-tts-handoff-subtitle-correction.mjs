@@ -16,6 +16,8 @@ assert.match(server, /original\.length !== corrected\.length/u);
 assert.match(server, /严格禁止增加、删除、调换字词/u);
 assert.match(server, /isMusic26FreeJob\(job\)/u);
 assert.match(server, /correctMusicSubtitleBeforeHandoff/u);
+assert.match(server, /buildFixedAsrRows\(\{ fixedRows, recognizedWords \}\)/u);
+assert.doesNotMatch(server, /overlapping\.map\(\(row\)[\s\S]*recognizedText/u);
 assert.match(server, /句子级、短语级、拼音级、音节级、语义级/u);
 assert.match(server, /禁止只做机械错别字替换/u);
 assert.match(server, /mergeSourceConstrainedRows/u);

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { isMusic26FreeJob, mergeSourceConstrainedRows } from "./server/tts/source-constrained-repair.js";
+import { buildFixedAsrRows, isMusic26FreeJob, mergeSourceConstrainedRows } from "./server/tts/source-constrained-repair.js";
 
 const sourceText = [
   "觉得自己学什么都吃力？非得先搞明白来龙去脉才肯往下走。",
@@ -47,5 +47,21 @@ assert.equal(partial.partial, true);
 assert.equal(partial.fallbackCount, 2);
 assert.equal(isMusic26FreeJob({ metadata: { model: "music-2.6-free" } }), true);
 assert.equal(isMusic26FreeJob({ metadata: { model: "speech-2.6-hd" } }), false);
+
+const splitRows = buildFixedAsrRows({
+  fixedRows: [
+    { start: 0, end: 2, text: "旧行一" },
+    { start: 2, end: 4, text: "旧行二" },
+    { start: 4, end: 6, text: "旧行三" },
+  ],
+  recognizedWords: [
+    { start: 0.1, end: 1, text: "第一段" },
+    { start: 2.1, end: 3, text: "第二段" },
+    { start: 4.1, end: 5, text: "第三段" },
+  ],
+});
+assert.deepEqual(splitRows.map((row) => row.text), ["第一段", "第二段", "第三段"]);
+assert.deepEqual(splitRows.map((row) => [row.start, row.end]), [[0, 2], [2, 4], [4, 6]]);
+assert.equal(new Set(splitRows.map((row) => row.text)).size, 3);
 
 console.log("Source-constrained music ASR repair: OK");
