@@ -1,7 +1,7 @@
 import http from "node:http";
 import fs from "node:fs";
 import path from "node:path";
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
 import { once } from "node:events";
 import { fileURLToPath } from "node:url";
@@ -2346,6 +2346,22 @@ function isInsideManagedFilePath(filePath) {
   return roots.some((root) => resolved === root || resolved.startsWith(`${root}${path.sep}`));
 }
 
+function stopChildProcess(child) {
+  if (!child?.pid || child.killed) return;
+  try {
+    if (process.platform === "win32") {
+      spawnSync("taskkill.exe", ["/PID", String(child.pid), "/T", "/F"], {
+        windowsHide: true,
+        stdio: "ignore",
+      });
+    } else {
+      child.kill("SIGTERM");
+    }
+  } catch {
+    try { child.kill(); } catch {}
+  }
+}
+
 function shutdownNow() {
   for (const controller of activeBatchControllers.values()) {
     try {
@@ -2360,11 +2376,7 @@ function shutdownNow() {
     // Best effort only.
   }
   for (const child of activeChildProcesses) {
-    try {
-      child.kill();
-    } catch {
-      // Best effort only.
-    }
+    stopChildProcess(child);
   }
   cleanupRuntimeFiles();
   process.exit(0);
