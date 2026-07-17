@@ -417,6 +417,7 @@ const momentsTone = document.querySelector("#momentsTone");
 const momentsIntent = document.querySelector("#momentsIntent");
 const momentsReferenceStyle = document.querySelector("#momentsReferenceStyle");
 const generateMomentsPostBtn = document.querySelector("#generateMomentsPost");
+const generateOriginalMomentsPostBtn = document.querySelector("#generateOriginalMomentsPost");
 const momentsProgress = document.querySelector("#momentsProgress");
 const momentsProgressLabel = document.querySelector("#momentsProgressLabel");
 const momentsProgressPercent = document.querySelector("#momentsProgressPercent");
@@ -2184,8 +2185,10 @@ function renderMomentsResult(result) {
   renderMomentsImages(result.generatedImages || []);
 }
 
-async function generateMomentsPost() {
+async function generateMomentsPost(copyMode = "rewrite") {
   const payload = collectMomentsPayload();
+  const originalMode = copyMode === "original";
+  payload.copyMode = originalMode ? "original" : "rewrite";
   if (!payload.text) {
     setMomentsStatus("请先填写朋友圈文案输入区。", "warning");
     stopMomentsProgress();
@@ -2196,11 +2199,14 @@ async function generateMomentsPost() {
     stopMomentsProgress();
     return;
   }
-  setMomentsStatus("正在生成朋友圈文案和配图提示词...");
+  setMomentsStatus(originalMode
+    ? "正在保留原文字词、整理格式并生成配图提示词..."
+    : "正在改写朋友圈文案和生成配图提示词...");
   const progressId = `moments-${pageSessionId}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   payload.progressId = progressId;
   startMomentsProgress(progressId);
   if (generateMomentsPostBtn) generateMomentsPostBtn.disabled = true;
+  if (generateOriginalMomentsPostBtn) generateOriginalMomentsPostBtn.disabled = true;
   try {
     const data = await fetchJson("/api/moments/generate", {
       method: "POST",
@@ -2211,14 +2217,20 @@ async function generateMomentsPost() {
     if (momentsPostOutput) momentsPostOutput.value = currentMomentsResult.post || "";
     renderMomentsResult(currentMomentsResult);
     saveMomentsDraft();
-    stopMomentsProgress("朋友圈文案和图片提示词生成完成", 100);
+    stopMomentsProgress(originalMode
+      ? "原文朋友圈文案和图片提示词生成完成"
+      : "改写朋友圈文案和图片提示词生成完成", 100);
     const fallbackNotice = data.fallbackUsed ? "本次已自动切换到备用 API。" : "";
-    setMomentsStatus(`已生成：${currentMomentsResult.image_count || currentMomentsResult.images?.length || 0} 张配图提示词，可继续修改。${fallbackNotice}`, "success");
+    const copyNotice = originalMode
+      ? "已保留原文字词，仅整理换行并按设置添加表情；"
+      : "文案已完成改写；";
+    setMomentsStatus(`${copyNotice}已生成 ${currentMomentsResult.image_count || currentMomentsResult.images?.length || 0} 张配图提示词，可继续修改。${fallbackNotice}`, "success");
   } catch (error) {
     stopMomentsProgress("生成失败", 100);
     setMomentsStatus(error instanceof Error ? error.message : String(error), "error");
   } finally {
     if (generateMomentsPostBtn) generateMomentsPostBtn.disabled = false;
+    if (generateOriginalMomentsPostBtn) generateOriginalMomentsPostBtn.disabled = false;
   }
 }
 
@@ -7701,7 +7713,10 @@ document.querySelector("#deleteMomentsPersona")?.addEventListener("click", () =>
 });
 
 generateMomentsPostBtn?.addEventListener("click", () => {
-  generateMomentsPost();
+  generateMomentsPost("rewrite");
+});
+generateOriginalMomentsPostBtn?.addEventListener("click", () => {
+  generateMomentsPost("original");
 });
 
 copyMomentsPostBtn?.addEventListener("click", () => {
