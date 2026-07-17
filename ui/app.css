@@ -5450,10 +5450,23 @@ a {
   background: #0b1018;
 }
 
-.money-printer-timeline-row p {
+.money-printer-timeline-row p,
+.money-printer-timeline-row textarea {
   margin: 0;
   color: #dbe5f6;
   line-height: 1.4;
+}
+
+.money-printer-timeline-row textarea {
+  width: 100%;
+  min-width: 0;
+  min-height: 46px;
+  padding: 7px 8px;
+  border: 1px solid #334058;
+  border-radius: 6px;
+  background: #070b12;
+  resize: vertical;
+  font: inherit;
 }
 
 .money-printer-timeline-row strong {
@@ -5515,6 +5528,7 @@ a {
   }
 
   .money-printer-timeline-row p,
+  .money-printer-timeline-row textarea,
   .money-printer-timeline-row strong,
   .money-printer-material-cell {
     grid-column: 1 / -1;

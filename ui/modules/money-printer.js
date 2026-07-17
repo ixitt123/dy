@@ -126,6 +126,21 @@ function bindEvents() {
   els.sourceVideo?.addEventListener("seeked", drawPreview);
   els.sourceAudio?.addEventListener("ended", pausePreview);
   window.addEventListener("money-printer-handoff", (event) => receiveTts(event.detail));
+  window.addEventListener("tts-shared-handoff-updated", (event) => {
+    if (event.detail?.sourceTarget === "money-printer") return;
+    receiveTts(event.detail?.payload, { navigate: false });
+  });
+  els.timeline?.addEventListener("input", (event) => {
+    const textarea = event.target.closest('[data-field="text"]');
+    const row = textarea?.closest(".money-printer-timeline-row");
+    const index = Number(row?.dataset.segmentIndex);
+    if (!textarea || !Number.isInteger(index) || !state.segments[index]) return;
+    state.segments[index] = { ...state.segments[index], text: textarea.value };
+    drawPreview();
+  });
+  els.timeline?.addEventListener("focusout", (event) => {
+    if (event.target.matches('[data-field="text"]')) syncTimelineText();
+  });
   document.addEventListener("workbench:route", (event) => {
     if (event.detail?.page === "money-printer") {
       loadStoredHandoff();
@@ -176,22 +191,46 @@ async function applyDefaultPreferences() {
 }
 
 function loadStoredHandoff() {
-  const stored = readJsonStorage(HANDOFF_KEY, null);
-  if (stored?.id && (!state.handoff || String(stored.id) !== String(state.handoff.id))) receiveTts(stored, { navigate: false });
+  const stored = window.sharedTtsHandoff?.read?.() || readJsonStorage(HANDOFF_KEY, null);
+  if (stored?.id && (!state.handoff || String(stored.id) !== String(state.handoff.id) || stored.sharedUpdatedAt !== state.handoff.sharedUpdatedAt)) {
+    receiveTts(stored, { navigate: false });
+  }
 }
 
 function receiveTts(payload = {}, { navigate = true } = {}) {
+  if (!payload?.id) return;
+  const sameJob = String(state.handoff?.id || "") === String(payload.id);
+  const previousSegments = sameJob ? state.segments : [];
   state.handoff = payload;
-  state.task = null;
-  state.previewReady = false;
-  state.currentTime = 0;
-  state.segments = normalizeSegments(payload.subtitle_timeline?.length ? payload.subtitle_timeline : payload.sentence_timeline, payload);
+  if (!sameJob) {
+    state.task = null;
+    state.previewReady = false;
+    state.currentTime = 0;
+  }
+  state.segments = normalizeSegments(payload.subtitle_timeline?.length ? payload.subtitle_timeline : payload.sentence_timeline, payload)
+    .map((segment, index) => ({ ...(previousSegments[index] || {}), ...segment }));
   if (!els.subject.value.trim()) els.subject.value = payload.title || payload.seo_title || payload.publish_title || "MoneyPrinter 视频";
   if (payload.audio_url) els.sourceAudio.src = payload.audio_url;
   else els.sourceAudio.removeAttribute("src");
   if (navigate) window.workbenchNavigate?.("money-printer");
   renderAll();
   savePreferences();
+}
+
+async function syncTimelineText() {
+  if (!state.handoff?.id || !state.segments.length) return;
+  els.timelineSummary.textContent = "正在自动保存字幕...";
+  try {
+    const payload = await window.sharedTtsHandoff.syncTimeline(state.segments, {
+      sourceTarget: "money-printer",
+      title: els.subject.value.trim() || state.handoff.title,
+    });
+    receiveTts(payload, { navigate: false });
+    setStatus("字幕已同步", "原时间戳已保留，原字幕文件和其他三条生产线已更新。");
+  } catch (error) {
+    els.timelineSummary.textContent = `自动保存失败：${error.message || error}`;
+    setStatus("字幕保存失败", error.message || String(error), true);
+  }
 }
 
 function normalizeSegments(timeline = [], payload = {}) {
@@ -248,11 +287,11 @@ function renderTimeline() {
   const source = els.source?.value || "pexels";
   els.timelineSummary.textContent = `共 ${state.segments.length} 段字幕 / ${matchedMaterialCount()} 段素材 / 转场${transitionLabel(els.transition.value)}`;
   els.timeline.innerHTML = state.segments.map((segment, index) => `
-    <article class="money-printer-timeline-row">
+    <article class="money-printer-timeline-row" data-segment-index="${index}">
       <span class="money-printer-segment-index">${String(index + 1).padStart(2, "0")}</span>
       <span>${formatTime(segment.start)}</span>
       <span>${formatTime(segment.end)}</span>
-      <p>${escapeHtml(segment.text)}</p>
+      <textarea data-field="text" rows="2">${escapeHtml(segment.text)}</textarea>
       <strong>${escapeHtml(segment.searchTerm || automaticSearchTerm(segment.text, state.handoff))}</strong>
       <div class="money-printer-material-cell">
         ${segment.thumbnail ? `<img src="${escapeAttr(segment.thumbnail)}" alt="" loading="lazy" />` : ""}
