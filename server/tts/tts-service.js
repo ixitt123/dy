@@ -797,6 +797,8 @@ export function createTtsService({
       seo_keywords: seoKeywords,
       hashtags,
       title_score: metadata.title_score || metadata.titleScore || {},
+      model: String(metadata.model || metadata.target_model || ""),
+      provider_kind: String(metadata.provider_kind || ""),
       audio_url: ["processing", "completed"].includes(job.status) && job.audio_path ? `/api/tts/audio?id=${job.id}` : "",
       script_url: job.status === "completed" && metadata.script_path ? `/api/tts/script?id=${job.id}` : "",
       subtitle_url: job.status === "completed" && metadata.subtitle_path ? `/api/tts/subtitle?id=${job.id}` : "",
@@ -1291,6 +1293,50 @@ export function createTtsService({
     });
   }
 
+  async function syncSourceConstrainedRows(id, rows = [], input = {}) {
+    const job = taskStore.getTtsJob(Number(id || 0));
+    if (!job) return { error: "没有找到这条语音任务。" };
+    if (job.status !== "completed") return { error: "只有已完成的歌唱音频才能修复字幕。" };
+    if (!job.audio_path || !fs.existsSync(job.audio_path)) return { error: "最终音频文件不存在。" };
+    const metadata = safeJson(job.metadata_json, {});
+    if (metadata.alignment_status !== "confirmed") return { error: "现有字幕尚未确认，不能执行发送前修复。" };
+    const currentTimeline = normalizeManualSentenceTimeline(
+      metadata.sentence_timeline || metadata.subtitle_timeline || [],
+      metadata.final_text || metadata.recognized_text || job.text || "",
+      Number(metadata.audio_duration || metadata.duration || 0),
+    );
+    if (!currentTimeline.length) return { error: "缺少现有字幕时间轴。" };
+    if (!Array.isArray(rows) || rows.length !== currentTimeline.length) {
+      return { error: `修复结果必须保持 ${currentTimeline.length} 行字幕，当前为 ${Array.isArray(rows) ? rows.length : 0} 行。` };
+    }
+    const sentenceTimeline = currentTimeline.map((source, index) => ({
+      ...source,
+      index: index + 1,
+      start: source.start,
+      end: source.end,
+      text: String(rows[index]?.text || "").trim() || source.text,
+    }));
+    const duration = Math.max(
+      Number(metadata.audio_duration || metadata.duration || 0),
+      probeAudioDurationSync(job.audio_path),
+      Number(sentenceTimeline.at(-1)?.end || 0),
+    );
+    return syncConfirmedTimeline(job.id, {
+      text: sentenceTimeline.map((row) => row.text).join(""),
+      sentenceTimeline,
+      wordTimeline: estimatedWordTimelineFromSentences(sentenceTimeline),
+      duration,
+      source: String(input.source || "source_constrained_music_asr_repair"),
+      confirmationMode: "source_constrained_music_asr_repair",
+      correctionStatus: input.partial ? "partially_corrected" : "corrected",
+      correctionProvider: String(input.provider || ""),
+      correctionModel: String(input.model || ""),
+      correctionChangedCharacters: Number(input.changedCharacters || 0),
+      correctionAt: new Date().toISOString(),
+      title: metadata.title || metadata.seo_title || "",
+    });
+  }
+
   async function confirmAlignment(id) {
     const job = taskStore.getTtsJob(Number(id || 0));
     if (!job) return { error: "没有找到这条语音任务。" };
@@ -1639,6 +1685,7 @@ export function createTtsService({
     });
     const metadata = {
       imported_generated_audio: true,
+      ...inputMetadata,
       ...titleMetadata,
       sequence_number: sequenceNumber,
       file_base_name: fileBaseName,
@@ -1945,6 +1992,7 @@ export function createTtsService({
     retryAlignment,
     realignJob,
     alignCorrectedText,
+    syncSourceConstrainedRows,
     confirmAlignment,
     syncConfirmedTimeline,
     getJob,

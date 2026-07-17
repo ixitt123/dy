@@ -23,6 +23,7 @@ import { PIPELINE_EVENTS } from "./server/core/pipeline-bus/PipelineEvents.js";
 import { createProjectCenter } from "./server/core/project-center.js";
 import { generatePlatformTitles } from "./server/core/title-generator.js";
 import { TTS_PROVIDER_LABELS } from "./server/tts/providers/index.js";
+import { isMusic26FreeJob, mergeSourceConstrainedRows } from "./server/tts/source-constrained-repair.js";
 import { createVoiceAssetService } from "./server/voices/voice-asset-service.js";
 import { createDirectorService } from "./server/director/director-service.js";
 import { createVfoService } from "./server/vfo/vfo-service.js";
