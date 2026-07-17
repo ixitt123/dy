@@ -475,12 +475,13 @@ function shouldTryNextMaterialSource(task, managed) {
 
 function sanitizeMptError(value) {
   const text = String(value || "").replace(/\u001b\[[0-9;]*m/g, "").trim();
+  if (!text) return "";
   const missingKey = /(pexels|pixabay|coverr)_api_keys? is not set/i.exec(text);
   if (missingKey) return `${missingKey[1][0].toUpperCase()}${missingKey[1].slice(1)} 素材 API Key 未配置`;
   return text
     .replace(/("[^"\r\n]*(?:key|secret|token)[^"\r\n]*"\s*:\s*)"[^"]*"/gi, '$1"[REDACTED]"')
     .replace(/\s+/g, " ")
-    .slice(0, 800) || "未知错误";
+    .slice(0, 800);
 }
 
 function buildGeneratePayload(body = {}) {
@@ -573,6 +574,8 @@ function normalizeTask(task, apiBaseUrl) {
     state,
     stateLabel: state === TASK_STATE_COMPLETE ? "已完成" : state === TASK_STATE_FAILED ? "失败" : state === TASK_STATE_PROCESSING ? "生成中" : "等待中",
     progress: Number(task.progress || 0),
+    failed_stage: String(task.failed_stage || ""),
+    error: sanitizeMptError(task.error || ""),
     videos: normalizeTaskUrls(task.videos, apiBaseUrl),
     combined_videos: normalizeTaskUrls(task.combined_videos, apiBaseUrl),
     localVideos: localPaths.videos,

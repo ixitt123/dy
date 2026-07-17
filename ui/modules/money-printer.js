@@ -18,6 +18,7 @@ const state = {
   startedAt: 0,
   startTime: 0,
   previewReady: false,
+  apiStartPromise: null,
 };
 
 function $(selector) {
@@ -99,6 +100,9 @@ async function initialize() {
   await applyDefaultPreferences();
   loadStoredHandoff();
   renderAll();
+  if (state.page.classList.contains("active") || document.body.dataset.activeModule === "money-printer") {
+    await ensureApiReady();
+  }
 }
 
 function bindEvents() {
@@ -145,6 +149,7 @@ function bindEvents() {
     if (event.detail?.page === "money-printer") {
       loadStoredHandoff();
       renderAll();
+      ensureApiReady().catch((error) => setStatus("API 自动启动失败", error.message, true));
     }
   });
 }
