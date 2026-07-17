@@ -4299,7 +4299,12 @@ async function sendConfirmedTtsAudio(container = document, job = activeTtsRailJo
   let handoffJob = job;
   let correctionWarning = "";
   let corrected = false;
-  setTtsHandoffStatus(container, "正在用当前大模型校正错字和标点，并按音频字词边界微调字幕时间戳...");
+  let correctionMode = "";
+  let partialCorrection = false;
+  const isMusicRepair = String(job?.model || job?.metadata?.model || "").toLowerCase() === "music-2.6-free";
+  setTtsHandoffStatus(container, isMusicRepair
+    ? "正在用当前大模型理解配音前文案，并对实际歌唱识别稿做句子、短语和拼音对齐修复..."
+    : "正在用当前大模型校正错字和标点，并按音频字词边界微调字幕时间戳...");
   try {
     const correction = await fetchJson("/api/tts/subtitle/correct-before-handoff", {
       method: "POST",
@@ -4308,6 +4313,8 @@ async function sendConfirmedTtsAudio(container = document, job = activeTtsRailJo
     });
     handoffJob = correction.job || job;
     corrected = correction.corrected === true;
+    correctionMode = String(correction.mode || "");
+    partialCorrection = correction.partial === true;
     correctionWarning = String(correction.warning || "").trim();
   } catch (error) {
     correctionWarning = `字幕文字校正失败：${error instanceof Error ? error.message : String(error)}；已采用原字幕继续发送。`;
@@ -4317,8 +4324,12 @@ async function sendConfirmedTtsAudio(container = document, job = activeTtsRailJo
   activeTtsRailJob = handoffJob;
   await window.videoProjects?.linkCurrent?.("tts", payload.id, ttsHandoffTitle(payload), payload);
   const sent = await sendTtsPayloadToTargets(payload, targets);
-  const correctionStatus = corrected
-    ? "字幕错字和标点已校正，时间戳已按字词边界微调；"
+  const correctionStatus = corrected && correctionMode === "source_constrained_music_asr_repair"
+    ? partialCorrection
+      ? `${correctionWarning || "已完成原文约束修复，未确定内容保留原识别文字；"}`
+      : "已按配音前文案完成句子、短语和拼音对齐修复，字幕行数及原时间戳保持不变；"
+    : corrected
+      ? "字幕错字和标点已校正，时间戳已按字词边界微调；"
     : `${correctionWarning || "字幕未校正，已采用原字幕继续发送。"}`;
   setTtsHandoffStatus(container, `${correctionStatus}已发送三件套到：${sent.join("、")}。`);
 }
