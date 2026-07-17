@@ -34,7 +34,7 @@ function fakeClock() {
 const clock = fakeClock();
 let shutdowns = 0;
 const lifecycle = createPageLifecycle({
-  graceMs: 120_000,
+  graceMs: 30_000,
   heartbeatStaleMs: 12_000,
   onShutdown: () => { shutdowns += 1; },
   now: clock.now,
@@ -46,19 +46,36 @@ lifecycle.scheduleIfDisconnected();
 assert.equal(lifecycle.status().shutdownPending, false, "Server must not close before its first page connection.");
 lifecycle.touch("page-before-refresh");
 lifecycle.close("page-before-refresh");
-assert.equal(lifecycle.status().shutdownInSeconds, 120);
-clock.advance(119_000);
+assert.equal(lifecycle.status().shutdownInSeconds, 30);
+clock.advance(29_000);
 assert.equal(shutdowns, 0, "A disconnected page must keep the backend alive throughout the grace period.");
 lifecycle.touch("page-after-refresh");
 assert.equal(lifecycle.status().shutdownPending, false, "A refreshed page must cancel pending shutdown.");
 lifecycle.close("page-after-refresh");
-clock.advance(120_000);
-assert.equal(shutdowns, 1, "The backend must close after 120 seconds without a page.");
+clock.advance(30_000);
+assert.equal(shutdowns, 1, "The backend must close after 30 seconds without a page.");
+
+const reloadClock = fakeClock();
+let reloadShutdowns = 0;
+const reloadLifecycle = createPageLifecycle({
+  graceMs: 30_000,
+  heartbeatStaleMs: 12_000,
+  onShutdown: () => { reloadShutdowns += 1; },
+  now: reloadClock.now,
+  setTimer: reloadClock.setTimer,
+  clearTimer: reloadClock.clearTimer,
+});
+reloadLifecycle.touch("page-being-refreshed");
+reloadLifecycle.close("page-being-refreshed", { isReload: true });
+assert.equal(reloadLifecycle.status().shutdownPending, false, "A detected refresh must not start the close countdown.");
+reloadClock.advance(1_000);
+reloadLifecycle.touch("page-after-reload");
+assert.equal(reloadShutdowns, 0, "Reload reconnection must keep the backend and tasks alive.");
 
 const crashClock = fakeClock();
 let crashShutdowns = 0;
 const crashLifecycle = createPageLifecycle({
-  graceMs: 120_000,
+  graceMs: 30_000,
   heartbeatStaleMs: 12_000,
   onShutdown: () => { crashShutdowns += 1; },
   now: crashClock.now,
@@ -68,14 +85,15 @@ const crashLifecycle = createPageLifecycle({
 crashLifecycle.touch("crashed-page");
 crashClock.advance(13_000);
 crashLifecycle.sweep();
-assert.equal(crashLifecycle.status().shutdownInSeconds, 107, "Crash timeout must count from the last heartbeat.");
-crashClock.advance(107_000);
-assert.equal(crashShutdowns, 1, "A crashed browser must trigger the same 120-second shutdown rule.");
+assert.equal(crashLifecycle.status().shutdownInSeconds, 17, "Crash timeout must count from the last heartbeat.");
+crashClock.advance(17_000);
+assert.equal(crashShutdowns, 1, "A crashed browser must trigger the same 30-second shutdown rule.");
 
 const runtime = fs.readFileSync(new URL("./ui/modules/legacy-runtime.js", import.meta.url), "utf8");
 const server = fs.readFileSync(new URL("./ui-server.mjs", import.meta.url), "utf8");
 assert.match(runtime, /pagehide[\s\S]*\/api\/page-close/u, "Page close and refresh must notify the lifecycle endpoint.");
-assert.match(server, /graceMs:\s*120_000/u, "Production lifecycle grace period must remain 120 seconds.");
+assert.match(server, /graceMs:\s*30_000/u, "Production lifecycle grace period must remain 30 seconds.");
+assert.match(runtime, /navigationType === "reload"[\s\S]*reason: pageExitReason/u, "Refresh and close must be reported separately when the browser exposes navigation intent.");
 assert.match(server, /lifecycle:\s*pageLifecycle\.status\(\)/u, "Status API must expose lifecycle state for verification.");
 
 console.log("Page lifecycle: OK");

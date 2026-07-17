@@ -37,8 +37,8 @@ assert.match(
 
 assert.match(
   source,
-  /graceMs:\s*120_000/,
-  "UI server must keep a 120-second reconnect window after the page disconnects.",
+  /graceMs:\s*30_000/,
+  "UI server must keep a 30-second reconnect window after the page closes.",
 );
 
 assert.match(
