@@ -3648,6 +3648,84 @@ async function getRewriteProvider(providerId, { refreshAutoModel = true, persist
   return { id, ...provider };
 }
 
+function subtitleCoreCharacters(value) {
+  return Array.from(String(value || "").normalize("NFKC").replace(/[\s\p{P}]/gu, ""));
+}
+
+function validateStrictSubtitleCorrection(originalText, correctedText) {
+  const original = subtitleCoreCharacters(originalText);
+  const corrected = subtitleCoreCharacters(correctedText);
+  if (!corrected.length) throw new Error("大模型没有返回校正后的字幕文字。");
+  if (original.length !== corrected.length) {
+    throw new Error(`校正结果增删了字词（校正前 ${original.length} 字，校正后 ${corrected.length} 字），不允许发送。`);
+  }
+  let changedCharacters = 0;
+  for (let index = 0; index < original.length; index += 1) {
+    if (original[index] !== corrected[index]) changedCharacters += 1;
+  }
+  const maximumChanges = Math.max(6, Math.ceil(original.length * 0.1));
+  if (changedCharacters > maximumChanges) {
+    throw new Error(`校正结果改动 ${changedCharacters} 个字，超过只修正错字的安全上限 ${maximumChanges} 字。`);
+  }
+  return { changedCharacters, characterCount: original.length };
+}
+
+async function correctTtsSubtitleBeforeHandoff(jobId, signal) {
+  const job = ttsService.getJob(Number(jobId || 0));
+  if (!job) throw new Error("没有找到这条语音任务。");
+  if (job.status !== "completed" || job.alignment_status !== "confirmed") {
+    throw new Error("只有已完成并确认字幕的音频才能执行发送前校正。");
+  }
+  const currentText = String(job.final_text || job.recognized_text || job.text || "").trim();
+  if (!currentText) throw new Error("现有字幕文字为空。");
+  const referenceText = String(job.original_text || job.tts_prepared_text || job.text || currentText).trim();
+  const provider = await getRewriteProvider("");
+  const responseText = await chatCompletion(provider, [
+    {
+      role: "system",
+      content: "你是中文音频字幕错字校正器。只输出严格 JSON，不要 Markdown，不要解释。",
+    },
+    {
+      role: "user",
+      content: [
+        "音频已经生成，下面的现有字幕顺序和内容结构必须锁定。",
+        "只允许修正确认错误的错别字、同音字、专有名词和标点；严格禁止增加、删除、调换字词，禁止改写表达，禁止改变句子和段落的先后顺序。",
+        "参考文案只能帮助判断正确用字；不得把参考文案中有、但现有字幕没有的内容补进来。",
+        "可以调整标点和换行以改善字幕断句，但去掉空格、换行和标点后，校正前后的字词数量、位置和顺序必须完全一致，只能在原位置替换错误字词。",
+        "返回前逐字检查：没有明确错误的字一律保持不变。",
+        `参考文案：\n${referenceText.slice(0, 12000)}`,
+        `现有字幕：\n${currentText.slice(0, 12000)}`,
+        '输出格式：{"corrected_text":"严格保持顺序和结构、只修正错字与标点后的完整字幕","corrections":[{"before":"错字","after":"正字","reason":"原因"}]}',
+      ].join("\n\n"),
+    },
+  ], signal, {
+    temperature: 0.1,
+    requestName: "发送前字幕文字校正",
+    maxTokens: 8000,
+    jsonMode: true,
+    timeoutMs: 60000,
+  });
+  const response = parseJsonFromModelText(responseText);
+  const correctedText = String(response.corrected_text || response.correctedText || response.text || "").trim();
+  const validation = validateStrictSubtitleCorrection(currentText, correctedText);
+  const aligned = await ttsService.alignCorrectedText(job.id, correctedText, {
+    source: "ai_corrected_before_handoff",
+    provider: provider.id,
+    model: provider.model,
+    changedCharacters: validation.changedCharacters,
+  });
+  if (aligned.error) throw new Error(aligned.error);
+  if (!aligned.job || aligned.job.alignment_status !== "confirmed") {
+    throw new Error("校正后的字幕没有通过字词级音频对齐检查。");
+  }
+  return {
+    job: aligned.job,
+    provider: provider.id,
+    model: provider.model,
+    changedCharacters: validation.changedCharacters,
+  };
+}
+
 function createModelRequestError(message, { code = "MODEL_REQUEST_FAILED", status = 0 } = {}) {
   const error = new Error(message);
   error.code = code;
@@ -7588,6 +7666,38 @@ const server = http.createServer(async (req, res) => {
         return;
       }
       sendJson(res, 200, { ok: true, job: result.job });
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/tts/subtitle/correct-before-handoff") {
+      const body = await readJsonBody(req);
+      const jobId = Number(body.id || body.jobId || 0);
+      const existingJob = ttsService.getJob(jobId);
+      if (!existingJob || existingJob.status !== "completed" || existingJob.alignment_status !== "confirmed") {
+        sendJson(res, 400, { ok: false, message: "只有已完成并确认字幕的音频才能发送。" });
+        return;
+      }
+      try {
+        const result = await correctTtsSubtitleBeforeHandoff(jobId);
+        sendJson(res, 200, {
+          ok: true,
+          corrected: true,
+          fallback: false,
+          changedCharacters: result.changedCharacters,
+          provider: result.provider,
+          model: result.model,
+          job: result.job,
+        });
+      } catch (error) {
+        const warning = `字幕文字校正失败：${errorMessage(error)}；已保留原字幕继续发送。`;
+        sendJson(res, 200, {
+          ok: true,
+          corrected: false,
+          fallback: true,
+          warning,
+          job: ttsService.getJob(jobId) || existingJob,
+        });
+      }
       return;
     }
 

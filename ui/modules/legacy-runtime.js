@@ -4227,8 +4227,8 @@ async function sendTtsPayloadToTargets(payload, targets = []) {
 }
 
 async function sendConfirmedTtsAudio(container = document, job = activeTtsRailJob) {
-  const payload = confirmedTtsAudioPayload(job);
-  if (!payload) {
+  const originalPayload = confirmedTtsAudioPayload(job);
+  if (!originalPayload) {
     setTtsHandoffStatus(container, "请先完成最终音频字幕校准并点击确认，再发送。");
     return;
   }
@@ -4237,9 +4237,31 @@ async function sendConfirmedTtsAudio(container = document, job = activeTtsRailJo
     setTtsHandoffStatus(container, "请至少勾选一个要发送的模块。");
     return;
   }
+  let handoffJob = job;
+  let correctionWarning = "";
+  let corrected = false;
+  setTtsHandoffStatus(container, "正在用当前大模型校正错字和标点，并按音频字词边界微调字幕时间戳...");
+  try {
+    const correction = await fetchJson("/api/tts/subtitle/correct-before-handoff", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ id: job.id }),
+    });
+    handoffJob = correction.job || job;
+    corrected = correction.corrected === true;
+    correctionWarning = String(correction.warning || "").trim();
+  } catch (error) {
+    correctionWarning = `字幕文字校正失败：${error instanceof Error ? error.message : String(error)}；已采用原字幕继续发送。`;
+    handoffJob = job;
+  }
+  const payload = confirmedTtsAudioPayload(handoffJob) || originalPayload;
+  activeTtsRailJob = handoffJob;
   await window.videoProjects?.linkCurrent?.("tts", payload.id, ttsHandoffTitle(payload), payload);
   const sent = await sendTtsPayloadToTargets(payload, targets);
-  setTtsHandoffStatus(container, `已发送三件套到：${sent.join("、")}。`);
+  const correctionStatus = corrected
+    ? "字幕错字和标点已校正，时间戳已按字词边界微调；"
+    : `${correctionWarning || "字幕未校正，已采用原字幕继续发送。"}`;
+  setTtsHandoffStatus(container, `${correctionStatus}已发送三件套到：${sent.join("、")}。`);
 }
 
 async function deleteTtsJob(id) {
