@@ -4965,7 +4965,6 @@ async function generateMomentsPostJsonV2(body = {}, { onProgress = () => {} } = 
         role: "user",
         content: [
           originalImageConstraints,
-          originalImageConstraints ? "" : "",
           imageSkill,
           "",
           "视觉方向：",
