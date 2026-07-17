@@ -1808,8 +1808,10 @@ function saveUnifiedProvider(settings, body) {
 
   if (MPT_MATERIAL_IDS.has(id)) {
     const raw = String(body.apiKey || "").trim();
-    const keys = raw ? raw.split(/[\r\n,，]+/).map((item) => item.trim()).filter(Boolean) : [];
-    writeMptMaterialKeys(id, keys);
+    if (raw) {
+      const keys = raw.split(/[\r\n,，]+/).map((item) => item.trim()).filter(Boolean);
+      writeMptMaterialKeys(id, keys);
+    }
     return;
   }
 
