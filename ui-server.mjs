@@ -229,7 +229,7 @@ function readMptMaterialKeys() {
   const result = {};
   for (const id of MPT_MATERIAL_IDS) {
     const key = `${id}_api_keys`;
-    const match = new RegExp(`^\\s*${key}\\s*=\\s*\\[([^\\]]*)\\]`, "m").exec(text);
+    const match = new RegExp(`^${key}\\s*=\\s*\\[([^\\]]*)\\]`, "m").exec(text);
     const raw = match ? match[1] : "";
     const keys = (raw.match(/"((?:[^"\\\\]|\\\\.)*)"/g) || [])
       .map((item) => item.slice(1, -1))
@@ -248,7 +248,7 @@ function writeMptMaterialKeys(providerId, keys) {
   const escaped = keys.map((key) => `"${String(key).replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`);
   const line = `${tomKey} = [${escaped.join(", ")}]`;
   let text = fs.readFileSync(configPath, "utf8");
-  const regex = new RegExp(`^\\s*${tomKey}\\s*=\\s*\\[[^\\]]*\\]\\s*$`, "m");
+  const regex = new RegExp(`^${tomKey}\\s*=\\s*\\[[^\\]]*\\]\\s*$`, "m");
   if (regex.test(text)) {
     text = text.replace(regex, line);
   } else {
