@@ -5158,16 +5158,27 @@ async function repairRewriteWordCounts(provider, versions, specs, signal) {
     const versionIndex = repaired.findIndex((item) => item.key === spec.key);
     if (versionIndex < 0) continue;
     let version = repaired[versionIndex];
+    let bestVersion = { ...version };
+    const softMax = rewriteSoftMaximum(range);
     for (let attempt = 0; attempt < 4; attempt += 1) {
       const count = rewriteCharacterCount(version.content);
-      if (count >= range.min && count <= range.max) break;
+      const hasNaturalEnding = rewriteHasNaturalEnding(version.content);
+      if (hasNaturalEnding && count >= range.min && count <= softMax) {
+        bestVersion = { ...version };
+        break;
+      }
       const target = Number.isFinite(range.max)
         ? Math.round((range.min + range.max) / 2)
         : Math.max(range.min, count + Math.max(100, range.min - count));
+      const correctionInstruction = !hasNaturalEnding
+        ? "当前文案结尾不完整。必须补全最后一句和最后一段，让全文自然收束；不得删除前文后按字符截断。"
+        : count < range.min
+          ? `当前少 ${range.min - count} 字。请补充原文能够支持的具体细节和完整收尾，不得编造事实。`
+          : `当前超过允许上限 ${count - softMax} 字。请智能压缩重复内容，但必须保留核心观点、行动号召和完整结尾。`;
       const correctedContent = await chatCompletion(provider, [
         {
           role: "system",
-          content: "你是中文文案字数校准器。只输出 JSON，不要 Markdown，不要解释。",
+          content: "你是中文文案字数与完整性校准器。只输出 JSON，不要 Markdown，不要解释。",
         },
         {
           role: "user",
@@ -5175,14 +5186,14 @@ async function repairRewriteWordCounts(provider, versions, specs, signal) {
             `只修正 key 为 ${spec.key} 的这一篇文案。`,
             `改写方向：${spec.direction}`,
             `用户要求：${spec.wordCount}`,
-            `硬性合格范围：${range.min}-${Number.isFinite(range.max) ? range.max : "不限"} 字`,
+            `建议字数范围：${range.min}-${Number.isFinite(range.max) ? range.max : "不限"} 字`,
+            `完整收尾允许范围：${range.min}-${Number.isFinite(softMax) ? softMax : "不限"} 字（最多允许超过建议上限 20%）`,
             `本次目标：${target} 字`,
             `当前实际字数：${count} 字`,
             "字数按删除空格和换行后的字符数计算。",
-            count < range.min
-              ? `当前少 ${range.min - count} 字。必须补充具体细节、场景、痛点、解决办法和行动号召，不能只改几个词。`
-              : `当前多 ${count - range.max} 字。必须压缩重复内容，但保留核心观点和行动号召。`,
-            "返回前必须自行重新计数，不在合格范围内就继续调整。",
+            correctionInstruction,
+            "绝对禁止用 substring、slice 或按字符数量直接截断。最后一句必须完整，最后一段必须自然结束。",
+            "返回前必须自行重新计数并检查结尾；优先落在建议范围，必要时可在 20% 浮动范围内完整收尾。",
             `原文：\n${version.content}`,
             `输出格式：{"versions":{"${spec.key}":"修正后的完整文案"}}`,
           ].join("\n\n"),
@@ -5192,19 +5203,24 @@ async function repairRewriteWordCounts(provider, versions, specs, signal) {
       const replacement = normalizeRewriteVersionContent(
         readVersionValue({ versions: corrected.versions || corrected }, spec)
       );
-      if (replacement) version = { ...version, content: replacement };
+      if (replacement) {
+        version = { ...version, content: replacement };
+        if (rewriteCandidateScore(version.content, range) < rewriteCandidateScore(bestVersion.content, range)) {
+          bestVersion = { ...version };
+        }
+      }
     }
-    if (Number.isFinite(range.max) && rewriteCharacterCount(version.content) > range.max) {
-      version = { ...version, content: truncateRewriteToLimit(version.content, range.max) };
-    }
-    if (rewriteCharacterCount(version.content) < range.min && Number.isFinite(range.max)) {
-      version = { ...version, content: padRewriteToMinimum(version.content, range.min, range.max) };
-    }
+    version = bestVersion;
     const finalCount = rewriteCharacterCount(version.content);
-    if (finalCount < range.min || finalCount > range.max) {
-      throw new Error(`${spec.name || spec.key} 字数校验失败：要求 ${spec.wordCount}，实际 ${finalCount} 字，请重新生成`);
+    if (!rewriteHasNaturalEnding(version.content)) {
+      throw new Error(`${spec.name || spec.key} 结尾仍不完整。系统没有截断或输出残缺文案，请重新生成。`);
     }
-    repaired[versionIndex] = version;
+    repaired[versionIndex] = {
+      ...version,
+      characterCount: finalCount,
+      wordCountSoftMax: Number.isFinite(softMax) ? softMax : null,
+      wordCountWarning: rewriteWordCountWarning(version.content, range, spec.wordCount),
+    };
   }
   return repaired;
 }
