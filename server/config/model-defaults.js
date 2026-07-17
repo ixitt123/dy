@@ -5,6 +5,7 @@ export const DEFAULT_MODEL_MAPPING = {
   director: { provider: "deepseek", model: "deepseek-chat" },
   storyboard: { provider: "deepseek", model: "deepseek-chat" },
   image_prompt: { provider: "deepseek", model: "deepseek-chat" },
+  image: { provider: "volcengine_ark", model: DEFAULT_VOLCENGINE_ARK_IMAGE_MODEL },
   video: { provider: "kling", model: "kling" },
   tts: { provider: "aliyun_bailian", model: "cosyvoice-v2" },
 };
@@ -33,6 +34,11 @@ export const SETTINGS_TASKS = {
     label: "图片提示词",
     purpose: "把文案改成画面提示词、风格参考和构图要求。",
     route: "使用文本模型 Provider。",
+  },
+  image: {
+    label: "图片生成",
+    purpose: "按已经确认的分镜提示词生成并保存图片素材。",
+    route: "使用设置中心当前图片生成 Provider，默认火山方舟 Seedream。",
   },
   tts: {
     label: "TTS 语音",

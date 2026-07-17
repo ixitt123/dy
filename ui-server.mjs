@@ -36,7 +36,7 @@ import { formatOriginalMomentsPost } from "./server/core/moments-original.js";
 import { createPageLifecycle } from "./server/core/page-lifecycle.js";
 import { HttpBodyError, readBody, readJsonBody } from "./server/utils/http-body.js";
 import { DEFAULT_REWRITE_REFERENCE, REWRITE_DIRECTIONS, REWRITE_STYLES, REWRITE_VERSION_DEFS, REWRITE_VERSION_DEFAULTS } from "./server/config/rewrite-presets.js";
-import { DEFAULT_MODEL_MAPPING, SETTINGS_TASKS } from "./server/config/model-defaults.js";
+import { DEFAULT_MODEL_MAPPING, DEFAULT_VOLCENGINE_ARK_IMAGE_MODEL, SETTINGS_TASKS } from "./server/config/model-defaults.js";
 import { AUTO_MODEL_VALUE, REWRITE_PROVIDER_ORDER, REWRITE_PROVIDER_PRESETS } from "./server/config/provider-presets.js";
 
 const runtimeSourcePath = fileURLToPath(import.meta.url);
@@ -1111,6 +1111,7 @@ function normalizeSettings(settings) {
   const legacyKey = next.dashscopeApiKey || "";
   const batch = next.batch && typeof next.batch === "object" ? { ...next.batch } : {};
   const tts = next.tts && typeof next.tts === "object" ? { ...next.tts } : {};
+  const imageProviders = next.imageProviders && typeof next.imageProviders === "object" ? { ...next.imageProviders } : {};
   const bgmProviders = next.bgmProviders && typeof next.bgmProviders === "object" ? { ...next.bgmProviders } : {};
   const jianying = next.jianying && typeof next.jianying === "object" ? { ...next.jianying } : {};
   const modelMapping = next.modelMap && typeof next.modelMap === "object"
@@ -1234,12 +1235,30 @@ function normalizeSettings(settings) {
     default_speed: clampDecimal(tts.default_speed, 0.5, 2, 1),
     default_format: tts.default_format === "wav" ? "wav" : "mp3",
   };
-  delete next.imageProviders;
+  next.imageProviders = {
+    volcengine_ark: {
+      label: "火山方舟 Seedream",
+      baseUrl: String(imageProviders.volcengine_ark?.baseUrl || "https://ark.cn-beijing.volces.com/api/v3").trim(),
+      apiKey: String(imageProviders.volcengine_ark?.apiKey || "").trim(),
+      model: normalizeVolcengineArkImageModel(imageProviders.volcengine_ark?.model),
+    },
+    jimeng: {
+      label: "即梦 AI",
+      baseUrl: String(imageProviders.jimeng?.baseUrl || "https://api.jimeng.io/v1").trim(),
+      apiKey: String(imageProviders.jimeng?.apiKey || "").trim(),
+      model: String(imageProviders.jimeng?.model || "flux-dev").trim() || "flux-dev",
+    },
+  };
   next.bgmProviders = normalizeBgmProviders(bgmProviders);
   next.modelMap = { ...DEFAULT_MODEL_MAPPING, ...modelMapping };
-  delete next.modelMap.image;
+  if (next.modelMap.image?.provider === "volcengine_ark") {
+    next.modelMap.image = {
+      ...next.modelMap.image,
+      model: normalizeVolcengineArkImageModel(next.modelMap.image.model),
+    };
+  }
   next.modelMapping = next.modelMap;
-  delete migrations.imageDefaultVolcengineArk;
+  migrations.imageDefaultVolcengineArk = true;
   next.migrations = migrations;
   return next;
 }
@@ -1393,9 +1412,7 @@ function publicRewriteSettings(settings = readSettings()) {
 
 function publicModelMapping(settings = readSettings()) {
   const mapping = settings.modelMap || settings.modelMapping || {};
-  const result = { ...DEFAULT_MODEL_MAPPING, ...mapping };
-  delete result.image;
-  return result;
+  return { ...DEFAULT_MODEL_MAPPING, ...mapping };
 }
 
 function rewriteProviderIdFromMapping(providerId) {
@@ -1526,6 +1543,50 @@ function publicUnifiedProviders(settings = readSettings()) {
       applyUrl: provider.applyUrl || "",
       balanceUrl: provider.balanceUrl || provider.applyUrl || "",
       activeDefault: settings.rewrite?.defaultProvider === id,
+      supportsBaseUrl: true,
+      supportsModel: true,
+      enabled: true,
+    });
+  }
+
+  const imageProviderDefs = [
+    {
+      id: "volcengine_ark",
+      label: "火山方舟 Seedream",
+      description: "按提示词生成本地图片素材，供小黑分镜和视频生产线直接使用。",
+      baseUrl: "https://ark.cn-beijing.volces.com/api/v3",
+      model: DEFAULT_VOLCENGINE_ARK_IMAGE_MODEL,
+      models: [DEFAULT_VOLCENGINE_ARK_IMAGE_MODEL, "doubao-seedream-5-0-260128"],
+      applyUrl: "https://console.volcengine.com/ark/region:ark+cn-beijing/apiKey",
+      balanceUrl: "https://console.volcengine.com/finance",
+    },
+    {
+      id: "jimeng",
+      label: "即梦 AI",
+      description: "备用图片生成 Provider，生成结果同样保存为项目图片素材。",
+      baseUrl: "https://api.jimeng.io/v1",
+      model: "flux-dev",
+      models: ["flux-dev", "flux-pro", "sdxl"],
+      applyUrl: "",
+      balanceUrl: "",
+    },
+  ];
+  for (const def of imageProviderDefs) {
+    const config = settings.imageProviders?.[def.id] || {};
+    providers.push({
+      id: def.id,
+      label: config.label || def.label,
+      group: "图片生成",
+      feature: "一键生成分镜图片并自动绑定素材位",
+      description: def.description,
+      configured: Boolean(config.apiKey),
+      apiKeyMask: maskApiKey(config.apiKey || ""),
+      baseUrl: config.baseUrl || def.baseUrl,
+      model: config.model || def.model,
+      models: def.models,
+      applyUrl: def.applyUrl,
+      balanceUrl: def.balanceUrl,
+      activeDefault: publicModelMapping(settings).image?.provider === def.id,
       supportsBaseUrl: true,
       supportsModel: true,
       enabled: true,
@@ -2362,6 +2423,17 @@ function stopChildProcess(child) {
   } catch {
     try { child.kill(); } catch {}
   }
+}
+
+function normalizeVolcengineArkImageModel(model) {
+  const value = String(model || "").trim().toLowerCase();
+  if (!value || ["doubao-seedream-5.0-lite", "doubao-seedream-5-0-lite"].includes(value)) {
+    return DEFAULT_VOLCENGINE_ARK_IMAGE_MODEL;
+  }
+  if (["doubao-seedream-5.0", "doubao-seedream-5-0"].includes(value)) {
+    return "doubao-seedream-5-0-260128";
+  }
+  return String(model || "").trim();
 }
 
 function shutdownNow() {
