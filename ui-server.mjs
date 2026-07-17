@@ -5234,6 +5234,90 @@ async function repairRewriteWordCounts(provider, versions, specs, signal) {
   return repaired;
 }
 
+async function ensureRewriteCoherence(provider, versions, specs, sourceText, signal) {
+  let current = versions.map((item) => ({ ...item }));
+  let lastIssues = [];
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const reviewInput = specs.map((spec) => {
+      const version = current.find((item) => item.key === spec.key) || { ...spec, content: "" };
+      const range = requestedWordCountRange(spec.wordCount);
+      return {
+        key: spec.key,
+        name: spec.name,
+        rewrite_plan: version.params?.rewriteStylePreset || version.style || "",
+        direction: spec.direction,
+        word_count: spec.wordCount,
+        completion_soft_max: Number.isFinite(rewriteSoftMaximum(range)) ? rewriteSoftMaximum(range) : null,
+        content: version.content,
+      };
+    });
+    const reviewContent = await chatCompletion(provider, [
+      {
+        role: "system",
+        content: "你是中文文章连贯性质检与修复器。只输出严格 JSON，不要 Markdown，不要解释。",
+      },
+      {
+        role: "user",
+        content: [
+          "检查并修复下面所有改写成品。无论使用哪种改写方案，最终都必须是一篇完整文章。",
+          "最高优先级：忠于原文事实，主题统一，前后不矛盾，指代清楚，句子有承接，段落有过渡，开头自然进入主题，结尾完整收束。",
+          "禁止输出句子拼接、提纲、半句话、孤立口号或互相断裂的段落。强钩子、冲突、短句、情绪和转化要求只能在不破坏连贯性的前提下保留。",
+          "字数以用户范围为目标，完整收尾最多可超过建议上限 20%；过长时智能压缩重复意思，绝不能按字符硬截断。",
+          "如果文章已经合格，保持原文不动并返回 pass=true；如果不合格，先重写修复，再对修复稿重新检查。只有确认全部规则都满足时才能返回 pass=true。",
+          "每个 key 都必须返回，content 必须始终是可直接发布的最终完整文章。",
+          `用户原文：\n${String(sourceText || "").slice(0, 12000)}`,
+          `待检查成品：\n${JSON.stringify(reviewInput, null, 2)}`,
+          "输出格式：",
+          '{"versions":{"版本key":{"pass":true,"issues":[],"content":"检查或修复后的完整文章"}}}',
+        ].join("\n\n"),
+      },
+    ], signal, { temperature: 0.2 });
+    const review = parseJsonFromModelText(reviewContent);
+    const next = current.map((item) => ({ ...item }));
+    let allPassed = true;
+    lastIssues = [];
+    for (const spec of specs) {
+      const versionIndex = next.findIndex((item) => item.key === spec.key);
+      if (versionIndex < 0) {
+        allPassed = false;
+        lastIssues.push(`${spec.name || spec.key} 缺少输出`);
+        continue;
+      }
+      const row = review.versions?.[spec.key] ?? review[spec.key];
+      const rowContent = row && typeof row === "object"
+        ? row.content ?? row.text
+        : row;
+      const replacement = normalizeRewriteVersionContent(rowContent);
+      if (replacement) next[versionIndex] = { ...next[versionIndex], content: replacement };
+      const issues = Array.isArray(row?.issues)
+        ? row.issues.map((item) => String(item || "").trim()).filter(Boolean)
+        : [];
+      const locallyComplete = rewriteHasNaturalEnding(next[versionIndex].content);
+      const passed = row?.pass === true && locallyComplete;
+      if (!passed) {
+        allPassed = false;
+        lastIssues.push(...(issues.length ? issues.map((item) => `${spec.name || spec.key}：${item}`) : [`${spec.name || spec.key} 连贯性未确认`]));
+      }
+    }
+    current = next;
+    if (allPassed) {
+      return current.map((version) => {
+        const spec = specs.find((item) => item.key === version.key) || version;
+        const range = requestedWordCountRange(spec.wordCount);
+        return {
+          ...version,
+          characterCount: rewriteCharacterCount(version.content),
+          wordCountSoftMax: Number.isFinite(rewriteSoftMaximum(range)) ? rewriteSoftMaximum(range) : null,
+          wordCountWarning: rewriteWordCountWarning(version.content, range, spec.wordCount),
+          coherencePassed: true,
+        };
+      });
+    }
+  }
+  const details = lastIssues.slice(0, 4).join("；");
+  throw new Error(`文章连贯性检查未通过${details ? `：${details}` : ""}。系统未显示不完整成品，请重新生成。`);
+}
+
 async function rewriteTranscriptWithProvider({ providerId, transcriptText, analysis, direction, style, referenceStyle, params = {}, humanizeLevel: requestedHumanizeLevel = "", referenceExamples: inputReferenceExamples = [], versionSpecs: inputVersionSpecs = [], revisionInstruction = "", task, signal }) {
   const provider = await getRewriteProvider(providerId);
   const safeDirection = REWRITE_DIRECTIONS.includes(direction) ? direction : "短视频口播";
