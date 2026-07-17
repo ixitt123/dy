@@ -791,10 +791,16 @@ button:disabled {
 
 .rewrite-version-foot {
   display: flex;
+  align-items: center;
+  gap: 10px;
   justify-content: flex-end;
   margin-top: 7px;
   color: var(--muted);
   font-size: 12px;
+}
+
+.rewrite-word-count-warning {
+  color: #c66a12;
 }
 
 .rewrite-empty {

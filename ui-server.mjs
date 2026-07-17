@@ -3490,14 +3490,23 @@ function normalizeRewrite(raw, meta = {}) {
   const versionSpecs = normalizeVersionSpecs(meta.versionSpecs, meta.direction || "保留原意优化");
   const versions = versionSpecs.map((spec) => {
     const value = readVersionValue(source, spec);
+    const sourceVersion = Array.isArray(source.versions)
+      ? source.versions.find((item) => item?.key === spec.key || item?.name === spec.name)
+      : null;
+    const content = normalizeRewriteVersionContent(value);
+    const range = requestedWordCountRange(spec.wordCount);
+    const characterCount = rewriteCharacterCount(content);
       return {
         ...spec,
-        content: normalizeRewriteVersionContent(value),
-        provider: spec.provider || source.versions?.find?.((item) => item?.key === spec.key)?.provider || meta.provider || "",
-        style: spec.style || source.versions?.find?.((item) => item?.key === spec.key)?.style || meta.style || "",
-        referenceStyle: spec.referenceStyle || source.versions?.find?.((item) => item?.key === spec.key)?.referenceStyle || meta.referenceStyle || "",
-        params: Object.keys(spec.params || {}).length ? spec.params : source.versions?.find?.((item) => item?.key === spec.key)?.params || meta.params || {},
-        humanizeLevel: spec.humanizeLevel || source.versions?.find?.((item) => item?.key === spec.key)?.humanizeLevel || meta.humanizeLevel || "",
+        content,
+        characterCount,
+        wordCountSoftMax: sourceVersion?.wordCountSoftMax ?? (Number.isFinite(rewriteSoftMaximum(range)) ? rewriteSoftMaximum(range) : null),
+        wordCountWarning: String(sourceVersion?.wordCountWarning || rewriteWordCountWarning(content, range, spec.wordCount)).trim(),
+        provider: spec.provider || sourceVersion?.provider || meta.provider || "",
+        style: spec.style || sourceVersion?.style || meta.style || "",
+        referenceStyle: spec.referenceStyle || sourceVersion?.referenceStyle || meta.referenceStyle || "",
+        params: Object.keys(spec.params || {}).length ? spec.params : sourceVersion?.params || meta.params || {},
+        humanizeLevel: spec.humanizeLevel || sourceVersion?.humanizeLevel || meta.humanizeLevel || "",
       };
     });
 

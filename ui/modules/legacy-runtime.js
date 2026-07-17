@@ -1103,6 +1103,9 @@ function normalizeRewriteVersions(rewrite = {}, allowDefaults = true) {
       direction: item.direction || cached.direction || base.direction || rewriteDirection.value || "短视频口播",
       wordCount: item.wordCount || cached.wordCount || base.wordCount || "160字左右",
       content: typeof item.content === "string" ? item.content : cached.content || "",
+      characterCount: Number(item.characterCount || cached.characterCount || 0),
+      wordCountSoftMax: Number(item.wordCountSoftMax || cached.wordCountSoftMax || 0) || null,
+      wordCountWarning: String(item.wordCountWarning || cached.wordCountWarning || "").trim(),
       revisionInstruction: item.revisionInstruction || cached.revisionInstruction || "",
       provider: item.provider || cached.provider || defaults.provider,
       style: item.style || cached.style || defaults.style,
@@ -1208,6 +1211,7 @@ function renderRewriteVersions(rewrite = {}, { allowDefaults = true } = {}) {
           <button class="ghost small rewrite-revise-one" type="button" data-version-key="${escapeHtml(version.key)}">按建议二次改写</button>
         </div>
         <div class="rewrite-version-foot">
+          ${version.wordCountWarning ? `<span class="rewrite-word-count-warning">${escapeHtml(version.wordCountWarning)}</span>` : ""}
           <span class="rewrite-char-count">当前 ${countRewriteCharacters(version.content)} 字</span>
         </div>
       </div>
@@ -7721,8 +7725,11 @@ loadRewritePresetSettings();
 rewriteVersions.addEventListener("input", (event) => {
   const textarea = event.target.closest(".rewrite-version-text");
   if (textarea) {
-    const count = textarea.closest(".rewrite-version")?.querySelector(".rewrite-char-count");
+    const card = textarea.closest(".rewrite-version");
+    const count = card?.querySelector(".rewrite-char-count");
     if (count) count.textContent = `当前 ${countRewriteCharacters(textarea.value)} 字`;
+    const warning = card?.querySelector(".rewrite-word-count-warning");
+    if (warning) warning.remove();
     return;
   }
   const range = event.target.closest(".rewrite-version-tone-level, .rewrite-version-conflict-level, .rewrite-version-emotion-level, .rewrite-version-sales-level");

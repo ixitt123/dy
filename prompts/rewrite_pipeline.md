@@ -96,11 +96,13 @@ Step 7: Run a fidelity check before output.
 
 Step 8: Output exactly the selected versions in Output boxes.
 - Use each selected version key exactly.
-- Follow each selected version's direction and wordCount.
-- Treat wordCount as a hard delivery requirement, not a suggestion.
+- Follow each selected version's direction and wordCount as the target range.
+- A complete article is more important than stopping at the exact upper limit. You may exceed the selected maximum by up to 20% only when needed to finish the final sentence and paragraph naturally.
+- If the draft exceeds that 20% allowance, rewrite and compress repeated ideas intelligently. Never cut, slice, or truncate text at a character boundary.
+- Every version must end with a complete sentence, a complete final paragraph, and a natural conclusion or call to action.
 - Count Chinese characters after removing spaces and line breaks.
 - For "N字左右", keep the final text within N +/- 5%, with a minimum tolerance of 8 characters.
-- For a numeric range, keep the final text inside that range.
+- For a numeric range, aim to stay inside that range; the 20% completion allowance applies to its maximum.
 - Do not create unselected versions.
 
 ## Output Format
