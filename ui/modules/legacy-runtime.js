@@ -625,7 +625,7 @@ const taskActionLabels = {
   subtitle: "提取字幕",
   audio: "提取音频",
 };
-const defaultRewriteReference = "忠于原文主题、事实、人物和事件；只优化表达、结构、节奏、钩子和口播感；不要凭空换行业、换对象、换场景，不要强行改成教育招生或家长话题；不要像AI作文。";
+const defaultRewriteReference = "忠于原文主题、事实、人物和事件；输出必须是一篇通顺、连贯、有自然开头和完整结尾的文章；只优化表达、结构、节奏、钩子和口播感；不要凭空换行业、换对象、换场景，不要强行改成教育招生或家长话题；不要像AI作文。";
 const rewriteDirectionOptions = ["保留原意优化", "短视频口播", "短视频开场钩子", "完整口播脚本", "知识解释", "痛点共鸣", "评论区引导", "朋友圈文案", "短视频口播稿", "成交转化", "招生引流"];
 const rewriteStyleOptions = ["保留原意强化表达", "小黑漫画解释类", "爆款口播重构", "知识拆解型", "痛点共鸣型", "转化引导型", "朋友圈叙事型", "成片旁白型"];
 const rewriteHumanizeOptions = ["关闭", "普通", "强", "极强"];
@@ -637,6 +637,7 @@ const rewriteVersionOptions = [
 const defaultRewriteVersionCount = 3;
 const maxRewriteVersionCount = 50;
 const rewritePresetStorageKey = "video-factory:rewrite-preset-v2";
+const rewriteCoherenceContract = "无论选择哪种改写方案，都必须输出一篇完整文章：主题始终一致，事实不矛盾，指代清楚，句子之间有承接，段落之间有过渡，开头自然进入主题，结尾完整收束。禁止输出句子拼接、提纲、半句话、互相断裂的段落。强钩子、冲突、短句、情绪和转化风格不得破坏文章的通顺、连贯与事实完整。";
 const rewritePlanPresets = {
   "保留原意强化表达": {
     direction: "保留原意优化",
@@ -758,8 +759,8 @@ function startRewriteProgress(versionCount = currentRewriteSpecs.length || 1) {
     [0, 8, "正在提交改写任务"],
     [1200, 20, "正在连接大模型"],
     [3200, 45, `正在生成 ${versionCount} 个版本`],
-    [7000, 68, "正在润色招生转化表达"],
-    [12000, 84, "正在等待模型返回"],
+    [7000, 68, "正在润色表达和段落衔接"],
+    [12000, 84, "正在检查文章连贯性"],
   ];
   setRewriteProgress(5, stages[0][2]);
   rewriteProgressTimer = setInterval(() => {
@@ -1066,6 +1067,7 @@ function buildRewriteReferenceStyle() {
     `- 结构目标：${plan.structure}`,
     `- 必须看得出的差异：${plan.mustShow}`,
     `- 禁止事项：${plan.avoid}`,
+    `- 全方案连贯性合同：${rewriteCoherenceContract}`,
     `- 绑定参数：平台=${preset.platform}；字数=${preset.wordRange}；语气=${preset.tone}；人设=${preset.persona}；用途=${preset.purpose}。`,
     "",
     "生成基础参考 dbskill 方法，但只输出可直接发布的中文文案：",
@@ -1073,8 +1075,8 @@ function buildRewriteReferenceStyle() {
     "2. 钩子设计：开头要有话题、悬念或反差，不要第一句就把答案讲完。",
     "3. 共鸣机制：优先解除用户不敢说的沉默、点出真实动机和立场框架。",
     "4. 口播流畅：短句、强节奏、少书面语，每一段只讲一个意思。",
-    "5. 去AI味检查：避免过度完整、空泛排比和万能鸡汤，保留人话里的锋利和停顿。",
-    "最终自检：同一原文切换不同方案时，结构和口吻必须明显不同；但主题、事实和核心意思必须仍能逐句对回原文。",
+    "5. 去AI味检查：避免机械工整、空泛排比和万能鸡汤，保留人话里的锋利和停顿，但不能牺牲文章完整性。",
+    "最终自检：同一原文切换不同方案时，结构和口吻必须明显不同；但主题、事实和核心意思必须仍能逐句对回原文，并且全文通顺连贯、自然收尾。",
   ].join("\n");
 }
 
@@ -1296,6 +1298,7 @@ function rewriteParams() {
     structureGoal: plan.structure,
     visibleDifference: plan.mustShow,
     forbiddenInventions: plan.avoid,
+    coherenceContract: rewriteCoherenceContract,
   };
 }
 
