@@ -56,6 +56,8 @@ export function initCs1VideoModule() {
   const progressStage = document.getElementById("cs1VideoProgressStage");
   const progressPercent = document.getElementById("cs1VideoProgressPercent");
   const progressFill = document.getElementById("cs1VideoProgressFill");
+  const timelineContainer = document.getElementById("cs1SubtitleTimeline");
+  const timelineStatus = document.getElementById("cs1TimelineStatus");
   const progressTrack = progressPanel?.querySelector(".cs1-progress-track");
   let lastResult = null;
   let styleCatalog = [];
@@ -63,7 +65,6 @@ export function initCs1VideoModule() {
   let progressTimer = null;
   let progressValue = 0;
   let currentTtsHandoff = null;
-  let ttsEditTimer = 0;
 
   if (beatCountSelect && !beatCountSelect.querySelector('option[value="auto"]')) {
     beatCountSelect.insertAdjacentHTML("afterbegin", [
@@ -80,6 +81,40 @@ export function initCs1VideoModule() {
 
   const ttsText = (payload = {}) => String(payload.text || payload.final_text || payload.tts_prepared_text || payload.original_text || "").trim();
 
+  const timelineRows = (payload = currentTtsHandoff) => {
+    const rows = Array.isArray(payload?.sentence_timeline) && payload.sentence_timeline.length
+      ? payload.sentence_timeline
+      : Array.isArray(payload?.subtitle_timeline)
+        ? payload.subtitle_timeline
+        : [];
+    return rows.map((row, index) => ({
+      ...row,
+      index,
+      start: Number(row.start || 0),
+      end: Number(row.end || 0),
+      text: String(row.text || ""),
+    })).filter((row) => row.text && row.end > row.start);
+  };
+
+  const renderTimeline = () => {
+    if (!timelineContainer) return;
+    const rows = timelineRows();
+    if (!rows.length) {
+      timelineContainer.innerHTML = '<p class="shared-subtitle-empty">请先从 TTS 语音页发送已确认的字幕时间轴。</p>';
+      if (timelineStatus) timelineStatus.textContent = "等待 TTS 字幕";
+      return;
+    }
+    timelineContainer.innerHTML = rows.map((row, index) => `
+      <div class="shared-subtitle-timeline-row" data-row-index="${index}">
+        <span>${index + 1}</span>
+        <input value="${row.start.toFixed(2)}" readonly aria-readonly="true" />
+        <input value="${row.end.toFixed(2)}" readonly aria-readonly="true" />
+        <textarea data-field="text" rows="2">${escapeHtml(row.text)}</textarea>
+      </div>
+    `).join("");
+    if (timelineStatus) timelineStatus.textContent = `共 ${rows.length} 段 · 文字失去焦点自动保存`;
+  };
+
   const receiveTts = (payload = {}, { navigate = false } = {}) => {
     if (!payload?.id) return null;
     currentTtsHandoff = payload;
@@ -89,6 +124,7 @@ export function initCs1VideoModule() {
     if (titleInput && !titleInput.value.trim()) titleInput.value = payload.title || payload.seo_title || payload.publish_title || `配音 #${payload.display_number || payload.id}`;
     if (bgmPathInput && payload.audio_path) bgmPathInput.value = payload.audio_path;
     if (bgmModeSelect && payload.audio_path) bgmModeSelect.value = "local";
+    renderTimeline();
     setStatus("已接收 TTS 三件套", "CS1 正在使用公共文案、音频和时间戳字幕。");
     if (navigate) window.workbenchNavigate?.("cs1-video");
     return currentTtsHandoff;
