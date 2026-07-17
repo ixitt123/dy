@@ -282,6 +282,7 @@ export function createIanXiaoheiRoutes({
   ffmpegPath = "",
   ffprobePath = "",
   transcribeLocalMedia = null,
+  downloadsDir = "",
 }) {
   const outputRoot = path.join(baseDir, "image-assets", "ian-xiaohei");
   const uploadRoot = path.join(outputRoot, "_uploaded-audio");
@@ -297,6 +298,34 @@ export function createIanXiaoheiRoutes({
   fs.mkdirSync(musicOutputRoot, { recursive: true });
   fs.mkdirSync(localMusicRoot, { recursive: true });
   fs.mkdirSync(referenceAudioRoot, { recursive: true });
+
+  // 统一下载目录：与 MoneyPrinter 共用同一下载地址体系
+  const resolvedDownloadsDir = path.resolve(downloadsDir || baseDir);
+  const xiaoheiRenderedFiles = new Map();
+
+  function copyToDownloadsDir(srcPath, title) {
+    if (!fs.existsSync(srcPath) || !resolvedDownloadsDir || resolvedDownloadsDir === path.resolve(baseDir)) return null;
+    try {
+      fs.mkdirSync(resolvedDownloadsDir, { recursive: true });
+      const base = (title || "小黑视频").replace(/[<>:"/\\|?*\u0000-\u001f]+/g, "-").trim().slice(0, 100) || "小黑视频";
+      let dest = path.join(resolvedDownloadsDir, `${base}.mp4`);
+      let counter = 1;
+      while (fs.existsSync(dest)) {
+        dest = path.join(resolvedDownloadsDir, `${base}_${counter}.mp4`);
+        counter++;
+      }
+      fs.copyFileSync(srcPath, dest);
+      return dest;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function registerXiaoheiFile(filePath, downloadName) {
+    const id = `xiaohei-${Date.now()}-${randomUUID().slice(0, 6)}`;
+    xiaoheiRenderedFiles.set(id, { filePath, createdAt: new Date().toISOString(), downloadName });
+    return id;
+  }
 
   return async function handleIanXiaoheiRoutes(req, res, url) {
     if (!url.pathname.startsWith("/api/ian-xiaohei/")) return false;
@@ -1151,13 +1180,18 @@ export function createIanXiaoheiRoutes({
             created_at: new Date().toISOString(),
           },
         });
+        // 复制到统一下载目录，与 MoneyPrinter 保持一致
+        const downloadName = xiaoheiVideoDownloadName(plan.title);
+        const unifiedPath = copyToDownloadsDir(outputPath, plan.title) || outputPath;
+        const fileId = registerXiaoheiFile(unifiedPath, downloadName);
         sendJson(res, 200, {
           ok: true,
           batchId: plan.batchId,
           videoPath: outputPath,
           videoUrl: `/api/ian-xiaohei/video-file?batch_id=${encodeURIComponent(plan.batchId)}`,
-          downloadUrl: `/api/ian-xiaohei/video-file?batch_id=${encodeURIComponent(plan.batchId)}&download=1`,
-          downloadName: xiaoheiVideoDownloadName(plan.title),
+          downloadUrl: `/api/ian-xiaohei/file?id=${encodeURIComponent(fileId)}&download=1`,
+          downloadName,
+          unifiedOutputPath: unifiedPath !== outputPath ? unifiedPath : "",
           transitionMode,
           width: rendered.width,
           height: rendered.height,

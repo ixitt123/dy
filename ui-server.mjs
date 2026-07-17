@@ -269,6 +269,7 @@ const handleIanXiaoheiRoutes = createIanXiaoheiRoutes({
   ffmpegPath,
   ffprobePath,
   transcribeLocalMedia: transcribeLocalMediaWithDashScope,
+  downloadsDir,
 });
 const handleKineticTextRoutes = createKineticTextRoutes({
   baseDir: __dirname,
