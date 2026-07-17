@@ -114,7 +114,7 @@ const runningBatchTasks = new Set();
 const activeBatchControllers = new Map();
 const pageLifecycle = createPageLifecycle({
   enabled: autoClose,
-  graceMs: 120_000,
+  graceMs: 30_000,
   heartbeatStaleMs: 12_000,
   onShutdown: () => shutdownNow(),
 });
@@ -2365,7 +2365,7 @@ function stopChildProcess(child) {
 function shutdownNow() {
   for (const controller of activeBatchControllers.values()) {
     try {
-      controller.abort(new Error("软件页面已关闭超过 120 秒，后台任务已停止。"));
+      controller.abort(new Error("软件页面已关闭超过 30 秒，后台任务已停止。"));
     } catch {
       // Best effort only.
     }
@@ -2390,8 +2390,8 @@ function touchPageSession(id) {
   pageLifecycle.touch(id);
 }
 
-function closePageSession(id) {
-  pageLifecycle.close(id);
+function closePageSession(id, options = {}) {
+  pageLifecycle.close(id, options);
 }
 
 setInterval(() => {
@@ -7888,7 +7888,7 @@ const server = http.createServer(async (req, res) => {
 
     if (req.method === "POST" && url.pathname === "/api/page-close") {
       const body = await readJsonBody(req);
-      closePageSession(String(body.sessionId || ""));
+      closePageSession(String(body.sessionId || ""), { isReload: body.reason === "reload" });
       sendJson(res, 200, { ok: true, lifecycle: pageLifecycle.status() });
       return;
     }

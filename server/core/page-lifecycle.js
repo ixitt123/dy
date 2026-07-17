@@ -1,6 +1,6 @@
 export function createPageLifecycle({
   enabled = true,
-  graceMs = 120_000,
+  graceMs = 30_000,
   heartbeatStaleMs = 12_000,
   onShutdown = () => {},
   now = () => Date.now(),
@@ -44,8 +44,9 @@ export function createPageLifecycle({
     cancelShutdown();
   }
 
-  function close(id) {
+  function close(id, { isReload = false } = {}) {
     const sessionId = String(id || "").trim();
+    if (isReload) return;
     if (sessionId) sessions.delete(sessionId);
     if (sessions.size === 0) scheduleIfDisconnected(now());
   }
