@@ -803,6 +803,10 @@ button:disabled {
   color: #c66a12;
 }
 
+.rewrite-coherence-passed {
+  color: #16835d;
+}
+
 .rewrite-empty {
   grid-column: 1 / -1;
   border: 1px dashed #cbd5d9;

@@ -1108,6 +1108,7 @@ function normalizeRewriteVersions(rewrite = {}, allowDefaults = true) {
       characterCount: Number(item.characterCount || cached.characterCount || 0),
       wordCountSoftMax: Number(item.wordCountSoftMax || cached.wordCountSoftMax || 0) || null,
       wordCountWarning: String(item.wordCountWarning || cached.wordCountWarning || "").trim(),
+      coherencePassed: item.coherencePassed === true || cached.coherencePassed === true,
       revisionInstruction: item.revisionInstruction || cached.revisionInstruction || "",
       provider: item.provider || cached.provider || defaults.provider,
       style: item.style || cached.style || defaults.style,
@@ -1214,6 +1215,7 @@ function renderRewriteVersions(rewrite = {}, { allowDefaults = true } = {}) {
         </div>
         <div class="rewrite-version-foot">
           ${version.wordCountWarning ? `<span class="rewrite-word-count-warning">${escapeHtml(version.wordCountWarning)}</span>` : ""}
+          ${version.coherencePassed ? '<span class="rewrite-coherence-passed">已检查连贯性</span>' : ""}
           <span class="rewrite-char-count">当前 ${countRewriteCharacters(version.content)} 字</span>
         </div>
       </div>
@@ -7733,6 +7735,8 @@ rewriteVersions.addEventListener("input", (event) => {
     if (count) count.textContent = `当前 ${countRewriteCharacters(textarea.value)} 字`;
     const warning = card?.querySelector(".rewrite-word-count-warning");
     if (warning) warning.remove();
+    const coherencePassed = card?.querySelector(".rewrite-coherence-passed");
+    if (coherencePassed) coherencePassed.remove();
     return;
   }
   const range = event.target.closest(".rewrite-version-tone-level, .rewrite-version-conflict-level, .rewrite-version-emotion-level, .rewrite-version-sales-level");

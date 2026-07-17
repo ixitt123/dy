@@ -14,8 +14,17 @@ assert.match(server, /count <= softMax/u);
 assert.match(server, /绝对禁止用 substring、slice 或按字符数量直接截断/u);
 assert.match(server, /结尾仍不完整。系统没有截断或输出残缺文案/u);
 assert.match(server, /字数略超：[\s\S]*已优先保留完整表达/u);
+assert.match(server, /async function ensureRewriteCoherence/u);
+assert.match(server, /文章连贯性检查未通过[\s\S]*系统未显示不完整成品/u);
+assert.match(server, /const coherentVersions = await ensureRewriteCoherence/u);
 assert.match(runtime, /rewrite-word-count-warning/u);
+assert.match(runtime, /const rewriteCoherenceContract = /u);
+assert.match(runtime, /rewrite-coherence-passed/u);
+assert.doesNotMatch(runtime, /避免过度完整/u);
 assert.match(pipelinePrompt, /exceed the selected maximum by up to 20%/u);
+assert.match(pipelinePrompt, /Coherence contract: \{\{coherence_contract\}\}/u);
+assert.match(pipelinePrompt, /factual accuracy and a complete, coherent article come first/u);
 assert.match(humanizePrompt, /Never cut or truncate at a character boundary/u);
+assert.match(humanizePrompt, /Do not turn paragraphs into disconnected punchlines/u);
 
 console.log("Rewrite completeness: OK");

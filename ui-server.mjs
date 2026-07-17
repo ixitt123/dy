@@ -3502,6 +3502,7 @@ function normalizeRewrite(raw, meta = {}) {
         characterCount,
         wordCountSoftMax: sourceVersion?.wordCountSoftMax ?? (Number.isFinite(rewriteSoftMaximum(range)) ? rewriteSoftMaximum(range) : null),
         wordCountWarning: String(sourceVersion?.wordCountWarning || rewriteWordCountWarning(content, range, spec.wordCount)).trim(),
+        coherencePassed: sourceVersion?.coherencePassed === true,
         provider: spec.provider || sourceVersion?.provider || meta.provider || "",
         style: spec.style || sourceVersion?.style || meta.style || "",
         referenceStyle: spec.referenceStyle || sourceVersion?.referenceStyle || meta.referenceStyle || "",
@@ -5447,7 +5448,8 @@ async function rewriteTranscriptWithProvider({ providerId, transcriptText, analy
     }
 
     const repairedVersions = await repairRewriteWordCounts(provider, batchRewrite.versions, specBatch, signal);
-    generatedVersions.push(...repairedVersions);
+    const coherentVersions = await ensureRewriteCoherence(provider, repairedVersions, specBatch, transcriptText, signal);
+    generatedVersions.push(...coherentVersions);
   }
 
   const rewrite = normalizeRewrite({ versions: generatedVersions }, {
