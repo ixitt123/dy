@@ -2346,14 +2346,19 @@ function isInsideManagedFilePath(filePath) {
   return roots.some((root) => resolved === root || resolved.startsWith(`${root}${path.sep}`));
 }
 
-function cancelShutdown() {
-  if (shutdownTimer) {
-    clearTimeout(shutdownTimer);
-    shutdownTimer = null;
-  }
-}
-
 function shutdownNow() {
+  for (const controller of activeBatchControllers.values()) {
+    try {
+      controller.abort(new Error("软件页面已关闭超过 120 秒，后台任务已停止。"));
+    } catch {
+      // Best effort only.
+    }
+  }
+  try {
+    handleMoneyPrinterRoutes.shutdown?.();
+  } catch {
+    // Best effort only.
+  }
   for (const child of activeChildProcesses) {
     try {
       child.kill();
@@ -2365,53 +2370,20 @@ function shutdownNow() {
   process.exit(0);
 }
 
-function serviceIsBusy(service) {
-  try {
-    return typeof service?.isBusy === "function" && service.isBusy();
-  } catch {
-    return false;
-  }
-}
-
 function scheduleShutdownIfIdle() {
-  const hasRunningJobs = [...downloadJobs.values(), ...transcriptJobs.values()].some((job) => job.status === "running");
-  if (
-    !autoClose
-    || pageSessions.size > 0
-    || hasRunningJobs
-    || activeChildProcesses.size > 0
-    || runningBatchTasks.size > 0
-    || taskStore.hasPendingWork()
-    || serviceIsBusy(ttsService)
-    || serviceIsBusy(imageService)
-    || directorService.isBusy()
-    || vfoService.isBusy()
-    || serviceIsBusy(handleKineticTextRoutes)
-  ) {
-    return;
-  }
-  cancelShutdown();
-  shutdownTimer = setTimeout(shutdownNow, 5000);
+  pageLifecycle.scheduleIfDisconnected();
 }
 
 function touchPageSession(id) {
-  if (!id) return;
-  pageSessions.set(id, Date.now());
-  cancelShutdown();
+  pageLifecycle.touch(id);
 }
 
 function closePageSession(id) {
-  if (id) pageSessions.delete(id);
-  scheduleShutdownIfIdle();
+  pageLifecycle.close(id);
 }
 
 setInterval(() => {
-  if (!autoClose) return;
-  const now = Date.now();
-  for (const [id, lastSeen] of pageSessions) {
-    if (now - lastSeen > 12000) pageSessions.delete(id);
-  }
-  scheduleShutdownIfIdle();
+  pageLifecycle.sweep();
 }, 5000).unref();
 
 function runMcpTool(name, shareLink, onProgress = () => {}, options = {}) {
@@ -6165,7 +6137,6 @@ async function processBatchTask(task, signal) {
 }
 
 function startTaskQueue() {
-  cancelShutdown();
   const concurrency = getBatchSettings().concurrency;
   while (runningBatchTasks.size < concurrency) {
     const task = taskStore.claimNextTask();
