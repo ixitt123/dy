@@ -118,6 +118,7 @@ const pageLifecycle = createPageLifecycle({
   heartbeatStaleMs: 12_000,
   onShutdown: () => shutdownNow(),
 });
+let ownsRuntimeLock = false;
 let downloadsDir = defaultDownloadsDir;
 downloadsDir = setDownloadsDir(readSettings().downloadsDir);
 fs.mkdirSync(downloadsDir, { recursive: true });
@@ -8610,7 +8611,77 @@ function listen(port) {
   });
 }
 
+function runtimeOwnerPid() {
+  try {
+    return Number(fs.readFileSync(pidPath, "utf8").trim() || 0);
+  } catch {
+    return 0;
+  }
+}
+
+function processIsRunning(pid) {
+  if (!Number.isInteger(pid) || pid <= 0) return false;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function acquireRuntimeLock() {
+  const existingPid = runtimeOwnerPid();
+  if (existingPid && existingPid !== process.pid && processIsRunning(existingPid)) {
+    return { acquired: false, existingPid };
+  }
+  for (const filePath of [pidPath, urlPath]) {
+    try {
+      if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+    } catch {
+      // The exclusive create below remains the final lock authority.
+    }
+  }
+  try {
+    const handle = fs.openSync(pidPath, "wx");
+    fs.writeFileSync(handle, String(process.pid), "utf8");
+    fs.closeSync(handle);
+    ownsRuntimeLock = true;
+    return { acquired: true, existingPid: 0 };
+  } catch (error) {
+    if (error?.code !== "EEXIST") throw error;
+    return { acquired: false, existingPid: runtimeOwnerPid() };
+  }
+}
+
+async function waitForExistingRuntimeUrl() {
+  for (let attempt = 0; attempt < 30; attempt += 1) {
+    try {
+      const url = fs.readFileSync(urlPath, "utf8").trim();
+      if (url) {
+        const response = await fetch(`${url}/api/status`);
+        if (response.ok) return url;
+      }
+    } catch {
+      // The first process may still be starting and writing its URL file.
+    }
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  return "";
+}
+
 async function start() {
+  const runtimeLock = acquireRuntimeLock();
+  if (!runtimeLock.acquired) {
+    const existingUrl = await waitForExistingRuntimeUrl();
+    if (process.argv.includes("--open") && existingUrl) {
+      spawn("cmd", ["/c", "start", "", existingUrl], { detached: true, stdio: "ignore" }).unref();
+    }
+    console.log(existingUrl
+      ? `Douyin page already running: ${existingUrl}`
+      : `Douyin backend is already starting (PID ${runtimeLock.existingPid || "unknown"}).`);
+    process.exit(0);
+    return;
+  }
   // The selected download directory belongs to the user. Never scan or move
   // unrelated loose files when the service starts.
 
@@ -8626,7 +8697,6 @@ async function start() {
   }
 
   const url = `http://127.0.0.1:${port}`;
-  fs.writeFileSync(pidPath, String(process.pid), "utf8");
   fs.writeFileSync(urlPath, url, "utf8");
   console.log(`Douyin page: ${url}`);
   console.log(`Download folder: ${downloadsDir}`);
@@ -8639,6 +8709,9 @@ async function start() {
 }
 
 function cleanupRuntimeFiles() {
+  if (!ownsRuntimeLock) return;
+  const ownerPid = runtimeOwnerPid();
+  if (ownerPid && ownerPid !== process.pid) return;
   for (const filePath of [pidPath, urlPath]) {
     try {
       if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
