@@ -32,6 +32,7 @@ import { createMoneyPrinterRoutes } from "./server/routes/money-printer-routes.j
 import { createKineticTextRoutes } from "./server/routes/kinetic-text-routes.js";
 import { createYtDlpService } from "./server/core/yt-dlp-service.js";
 import { formatOriginalMomentsPost } from "./server/core/moments-original.js";
+import { createPageLifecycle } from "./server/core/page-lifecycle.js";
 import { HttpBodyError, readBody, readJsonBody } from "./server/utils/http-body.js";
 import { DEFAULT_REWRITE_REFERENCE, REWRITE_DIRECTIONS, REWRITE_STYLES, REWRITE_VERSION_DEFS, REWRITE_VERSION_DEFAULTS } from "./server/config/rewrite-presets.js";
 import { DEFAULT_MODEL_MAPPING, SETTINGS_TASKS } from "./server/config/model-defaults.js";
@@ -108,11 +109,15 @@ const MINIMAX_TEXT_BASE_ALIASES = new Set([
   "https://api.minimax.chat/v1",
 ]);
 const autoClose = !process.argv.includes("--no-auto-close");
-const pageSessions = new Map();
 const activeChildProcesses = new Set();
 const runningBatchTasks = new Set();
 const activeBatchControllers = new Map();
-let shutdownTimer = null;
+const pageLifecycle = createPageLifecycle({
+  enabled: autoClose,
+  graceMs: 120_000,
+  heartbeatStaleMs: 12_000,
+  onShutdown: () => shutdownNow(),
+});
 let downloadsDir = defaultDownloadsDir;
 downloadsDir = setDownloadsDir(readSettings().downloadsDir);
 fs.mkdirSync(downloadsDir, { recursive: true });
