@@ -12,7 +12,6 @@ const DEFAULT_MODEL_MAP = {
   storyboard: { provider: "deepseek", model: "deepseek-chat" },
   image_prompt: { provider: "deepseek", model: "deepseek-chat" },
   image: { provider: "volcengine_ark", model: "doubao-seedream-5-0-lite-260128" }, // 图片通过 ImageService 调用
-  video: { provider: "kling", model: "kling" },       // Kling 为外部视频服务
   tts: { provider: "ali-bailian", model: "cosyvoice-v2" },
 };
 

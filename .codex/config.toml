@@ -1,0 +1,11 @@
+# Codex 项目级 hooks 配置
+# 约定见 AGENTS.md (L14-18) 与 SETUP_SYNC.md。
+# 本文件与 .codex/hooks/* 应随仓库分发;首次加载时 Codex 会提示"信任"这些 hook,请信任。
+# 注意:SessionStart 钩子 (session-start-sync.mjs) 尚未纳入仓库,此处仅配置 Stop 钩子 (P0-4)。
+
+[hooks]
+enable = true
+
+# 编辑停止时:先跑离线测试闸门,通过才自动提交并推送(详见 .codex/hooks/stop-sync.mjs)
+[hooks.Stop]
+command = "node .codex/hooks/stop-sync.mjs"

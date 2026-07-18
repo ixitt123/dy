@@ -6,8 +6,7 @@ export const DEFAULT_MODEL_MAPPING = {
   storyboard: { provider: "deepseek", model: "deepseek-chat" },
   image_prompt: { provider: "deepseek", model: "deepseek-chat" },
   image: { provider: "volcengine_ark", model: DEFAULT_VOLCENGINE_ARK_IMAGE_MODEL },
-  video: { provider: "kling", model: "kling" },
-  tts: { provider: "aliyun_bailian", model: "cosyvoice-v2" },
+  tts: { provider: "ali-bailian", model: "cosyvoice-v2" },
 };
 export const SETTINGS_TASKS = {
   analyze: {
