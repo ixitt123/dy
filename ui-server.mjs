@@ -3966,6 +3966,7 @@ async function correctMusicSubtitleBeforeHandoff(job, signal) {
       ? `原文约束修复已完成，${merged.lowConfidenceRows.length} 行置信度偏低，已使用最接近的配音文案片段继续发送。`
       : "",
   };
+  {
   const provider = await getRewriteProvider("");
   const responseText = await chatCompletion(provider, [
     {
@@ -4023,6 +4024,7 @@ async function correctMusicSubtitleBeforeHandoff(job, signal) {
     fallbackCount: merged.fallbackCount,
     warning: merged.partial ? `原文约束修复已完成，${merged.fallbackCount} 行未能可靠对应，已保留原识别文字继续发送。` : "",
   };
+  }
 }
 
 function createModelRequestError(message, { code = "MODEL_REQUEST_FAILED", status = 0 } = {}) {
