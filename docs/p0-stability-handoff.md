@@ -495,3 +495,27 @@ Verification:
 - `npm.cmd run test:tts-handoff-subtitle-correction` passed.
 - `npm.cmd run check:syntax` passed.
 - `npm.cmd run check:gate` passed.
+
+## 2026-07-19 23:20 +08:00
+
+Branch: `fix/p0-stability`
+
+Completed item:
+
+- Removed the duplicate inner TTS page heading `语音生成与发送`.
+
+User-visible behavior:
+
+- The TTS page now keeps only the top page title `TTS语音`.
+- The redundant inner title/description block `语音生成与发送 / 选择项目文案和声音...` is removed.
+- The TTS workbench now mounts before `.tts-settings`, so the layout remains stable after removing `.tts-head`.
+
+Regression coverage:
+
+- `test-tts-handoff-subtitle-correction.mjs` asserts the removed `.tts-head` block does not contain `语音生成与发送`, and that `setupTtsStudio()` inserts the studio before `.tts-settings`.
+
+Verification:
+
+- `npm.cmd run test:tts-handoff-subtitle-correction` passed.
+- `npm.cmd run check:syntax` passed.
+- `npm.cmd run check:gate` passed.

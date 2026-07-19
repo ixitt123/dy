@@ -792,7 +792,7 @@ function setupTtsStudio() {
 
   oldWorkbench.remove();
   studio.append(inputLane, timelineLane, settingsLane, resultLane);
-  lab.querySelector(".tts-head")?.after(studio);
+  lab.querySelector(".tts-settings")?.before(studio);
 
   const projectSource = document.createElement("div");
   projectSource.className = "tts-project-source";

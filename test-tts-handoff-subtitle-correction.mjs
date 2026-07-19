@@ -52,6 +52,7 @@ assert.doesNotMatch(runtime, /tts-job-calibrate/u);
 assert.doesNotMatch(runtime, /校对字幕|查看字幕详情/u);
 
 assert.match(html, /id="cs1SubtitleTimeline"/u);
+assert.doesNotMatch(html, /class="result-head tts-head"[\s\S]*语音生成与发送/u);
 assert.match(html, /id="ttsTimelineColumn"[\s\S]*字幕时间轴/u);
 assert.match(html, /id="ttsCentralTimeline"/u);
 assert.match(html, /id="ttsSaveTimeline"[\s\S]*确定修改并发送到：/u);
@@ -59,6 +60,7 @@ assert.match(html, /id="ttsCentralHandoff"[\s\S]*CS1生成器[\s\S]*小黑视频
 assert.match(workbench, /const timelineColumn = oldWorkbench\.querySelector\("#ttsTimelineColumn"\)/u);
 assert.match(workbench, /timelineLane\.appendChild\(timelineColumn\)/u);
 assert.match(workbench, /studio\.append\(inputLane, timelineLane, settingsLane, resultLane\)/u);
+assert.match(workbench, /lab\.querySelector\("\.tts-settings"\)\?\.before\(studio\)/u);
 assert.doesNotMatch(workbench, /addLaneHeading\(timelineLane,\s*"字幕时间轴"/u);
 assert.doesNotMatch(workbench, /addLaneHeading\(resultLane,\s*"试听与发送"/u);
 assert.match(cs1, /readonly aria-readonly="true"/u);
