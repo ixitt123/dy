@@ -472,3 +472,26 @@ Verification:
 - `npm.cmd run test:tts-handoff-subtitle-correction` passed.
 - `npm.cmd run check:syntax` passed.
 - `npm.cmd run check:gate` passed.
+
+## 2026-07-19 23:10 +08:00
+
+Branch: `fix/p0-stability`
+
+Completed item:
+
+- Removed the duplicate outer `字幕时间轴` lane heading from the TTS workbench.
+
+User-visible behavior:
+
+- The TTS subtitle timeline area now shows only the inner numbered `字幕时间轴` module title.
+- The surrounding layout, timeline editing, checkbox selection, and send behavior are unchanged.
+
+Regression coverage:
+
+- `test-tts-handoff-subtitle-correction.mjs` asserts `setupTtsStudio()` does not add `addLaneHeading(timelineLane, "字幕时间轴", ...)`.
+
+Verification:
+
+- `npm.cmd run test:tts-handoff-subtitle-correction` passed.
+- `npm.cmd run check:syntax` passed.
+- `npm.cmd run check:gate` passed.
