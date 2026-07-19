@@ -603,3 +603,32 @@ Verification:
   - all four central production-line choices were checked;
   - button status became `已采用 TTS 页面确认过的字幕时间轴；已发送三件套到：CS1生成器、小黑视频风格生成、MoneyPrinter、动态大字视频。`;
   - `dy:handoff:cs1-video:audio`, `dy:handoff:xiaohei-video:audio`, `dy:handoff:money-printer:audio`, `dy:handoff:kinetic-text:audio`, and matching `video-factory-handoff:*` keys all contained job `#28`, audio path, subtitle path, text, and 12 timeline rows.
+
+## 2026-07-19 21:58 +08:00
+
+Branch: `fix/p0-stability`
+
+Completed item:
+
+- Changed the TTS history `音频 / 文案 / 带时间戳字幕` controls from external file links into workspace loaders.
+
+User-visible behavior:
+
+- Clicking `音频` loads that TTS job into the upper audio preview player.
+- Clicking `文案` fills the upper `项目文案 / 配音文案` textarea with the confirmed script.
+- Clicking `带时间戳字幕` fills the upper central `字幕时间轴` editor with the job's timestamped subtitle rows.
+- These buttons only load files into the workspace; sending still requires `确定修改并发送到：`.
+
+Regression coverage:
+
+- `test-tts-handoff-subtitle-correction.mjs` asserts the history controls render `data-tts-load-file` buttons and that the handler loads script, audio, and timestamped subtitles into the correct workspace areas.
+
+Verification:
+
+- `npm.cmd run test:tts-handoff-subtitle-correction` passed.
+- `npm.cmd run check:syntax` passed.
+- Browser E2E against `http://127.0.0.1:8787/#tts` passed using TTS job `#28`:
+  - `音频` made `#ttsPreview` visible and loaded `/api/tts/audio?id=28`;
+  - `文案` filled `#ttsText` with 176 characters;
+  - `带时间戳字幕` rendered 12 central timeline rows, first row `你学习慢，是不是从头翻到尾？`;
+  - no console errors were observed.

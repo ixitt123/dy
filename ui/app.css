@@ -2745,13 +2745,16 @@ pre {
   font-size: 12px;
 }
 
-.tts-history-files a {
+.tts-history-files a,
+.tts-history-files button {
   border: 1px solid var(--line);
   border-radius: 6px;
   padding: 4px 7px;
   color: var(--primary);
   text-decoration: none;
   background: color-mix(in srgb, var(--panel) 92%, var(--primary) 8%);
+  font: inherit;
+  cursor: pointer;
 }
 
 .tts-history-actions {

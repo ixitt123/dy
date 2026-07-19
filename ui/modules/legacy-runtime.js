@@ -3860,9 +3860,9 @@ function renderTtsJobsEnhanced(jobs = []) {
     const title = ttsJobTitle(job);
     const timedSubtitleUrl = job.timestamped_text_url || job.subtitle_url || "";
     const fileLinks = [
-      job.audio_url ? `<a href="${escapeHtml(job.audio_url)}" target="_blank" rel="noreferrer">音频</a>` : "",
-      job.script_url ? `<a href="${escapeHtml(job.script_url)}" target="_blank" rel="noreferrer">文案</a>` : "",
-      timedSubtitleUrl ? `<a href="${escapeHtml(timedSubtitleUrl)}" target="_blank" rel="noreferrer">带时间戳字幕</a>` : "",
+      job.audio_url ? `<button type="button" data-tts-load-file="audio">音频</button>` : "",
+      job.script_url ? `<button type="button" data-tts-load-file="script">文案</button>` : "",
+      timedSubtitleUrl ? `<button type="button" data-tts-load-file="timestamped-subtitle">带时间戳字幕</button>` : "",
     ].filter(Boolean).join("");
     const rawAlignmentStatus = String(job.alignment_status || job.metadata?.alignment_status || "");
     const alignmentStatus = ttsAlignmentDisplayStatus(job);
@@ -4892,6 +4892,55 @@ function showTtsPreview(job) {
     }
   }
   renderTtsAlignmentEditor(job);
+}
+
+function showTtsAudioFile(job) {
+  if (!job?.id) return;
+  activeTtsRailJob = job;
+  if (ttsPreview) ttsPreview.hidden = false;
+  const isMusicJob = ttsIsMusicJob(job);
+  if (ttsPreviewTitle) ttsPreviewTitle.textContent = ttsJobTitle(job) || `${isMusicJob ? "音频" : "语音"} #${job.id}`;
+  if (ttsPreviewMeta) {
+    ttsPreviewMeta.textContent = isMusicJob
+      ? `${job.voice_name || job.voice_id || "MiniMax Music"} · ${String(job.format || "").toUpperCase()}`
+      : `${job.voice_name || job.voice_id || "音色"} · ${job.speed}x · ${String(job.format || "").toUpperCase()}`;
+  }
+  if (ttsAudio && job.audio_url) {
+    const separator = job.audio_url.includes("?") ? "&" : "?";
+    ttsAudio.src = `${job.audio_url}${separator}t=${Date.now()}`;
+    ttsAudio.load();
+  }
+  ttsPreview?.scrollIntoView?.({ behavior: "smooth", block: "center" });
+}
+
+async function loadTtsHistoryFileToWorkspace(jobId, kind = "audio", row = null) {
+  const data = await fetchJson(`/api/tts/job?id=${encodeURIComponent(jobId)}`);
+  const job = data.job || {};
+  if (!job?.id) throw new Error("没有找到这条 TTS 记录。");
+  activeTtsRailJob = job;
+  renderTtsRail(job);
+  updateTtsMainProgressFromJob(job);
+  if (kind === "script") {
+    const text = String(job.final_text || job.metadata?.final_text || job.original_text || job.metadata?.original_text || job.text || "").trim();
+    if (!text) throw new Error("这条记录没有可加载的文案。");
+    setTextareaValue(ttsText, text);
+    if (ttsCharacterCount) ttsCharacterCount.textContent = `${ttsText.value.replace(/\s/g, "").length} 字`;
+    if (ttsStatus) ttsStatus.textContent = `文案已加载到项目文案：#${job.display_number || job.sequence_number || job.id}`;
+    ttsText?.scrollIntoView?.({ behavior: "smooth", block: "center" });
+    return job;
+  }
+  if (kind === "timestamped-subtitle") {
+    const synced = await syncGeneratedTtsJobToCentralTimeline(job, { preserveDraft: false });
+    if (ttsTimelineStatus) ttsTimelineStatus.textContent = `带时间戳字幕已加载：#${job.display_number || job.sequence_number || job.id}`;
+    ttsTimelineColumn?.scrollIntoView?.({ behavior: "smooth", block: "center" });
+    return synced || job;
+  }
+  if (!job.audio_url) throw new Error("这条记录没有可试听的音频。");
+  renderTtsCentralTimeline(job, { preserveDraft: false });
+  showTtsAudioFile(job);
+  const status = row?.querySelector?.(".tts-job-handoff-status") || ttsStatus;
+  if (status) status.textContent = `音频已加载到试听播放器：#${job.display_number || job.sequence_number || job.id}`;
+  return job;
 }
 
 async function waitForTtsJob(jobId) {
@@ -7458,6 +7507,7 @@ document.querySelector("#clearTtsJobs")?.addEventListener("click", () => {
 });
 
 ttsHistory?.addEventListener("click", (event) => {
+  const fileButton = event.target.closest("[data-tts-load-file]");
   const sendButton = event.target.closest(".tts-job-send");
   const alignmentRetryButton = event.target.closest(".tts-job-alignment-retry");
   const confirmAnywayButton = event.target.closest(".tts-job-confirm-anyway");
@@ -7469,6 +7519,15 @@ ttsHistory?.addEventListener("click", (event) => {
   const row = event.target.closest("[data-tts-job-id]");
   if (!row) return;
   const jobId = Number(row.dataset.ttsJobId || 0);
+  if (fileButton) {
+    fileButton.disabled = true;
+    loadTtsHistoryFileToWorkspace(jobId, fileButton.dataset.ttsLoadFile || "audio", row).catch((error) => {
+      setTtsHandoffStatus(row, error instanceof Error ? error.message : String(error));
+    }).finally(() => {
+      fileButton.disabled = false;
+    });
+    return;
+  }
   if (confirmAnywayButton) {
     (async () => {
       const data = await fetchJson("/api/tts/alignment/confirm", {
