@@ -201,3 +201,42 @@ Behavior now covered:
 - Homophones, wrong characters, and badly matched ASR rows are corrected against the voice script.
 - The dynamic big text video line continues even when a row is not a clean match.
 - The user can still manually fix subtitle text in the timeline after preview.
+
+## 2026-07-19 19:50 +08:00
+
+Branch: `fix/p0-stability`
+
+Completed item:
+
+- Dynamic big text video local contaminated project repair for `kinetic-1784432037932-32ff99`.
+
+User-visible failure:
+
+- The project used `tts-2.mp3` / `tts-2-timestamped.txt`, but the subtitle timeline UI showed stale text from an older topic in `segments`.
+- `sentenceTimeline` still pointed at the current TTS timing, while `segments` had been polluted, so the frontend displayed old text even though the current audio/source belonged to `你学习慢，是不是从头翻到尾`.
+
+Rules reinforced:
+
+- `originalText` is the only authoritative correction source for this line.
+- Keep subtitle row count and each row's `start` / `end` unchanged.
+- Replace only row text.
+- Preserve punctuation from the voice script when proportional fallback is needed.
+- Clear stale word-level ASR timing for repaired rows so old highlights cannot override corrected sentence text.
+
+Local data repair:
+
+- Backed up the polluted project to `.data/kinetic-text/projects/kinetic-1784432037932-32ff99/project.before-fix-20260719-194319.json`.
+- Rebuilt `segments`, `sentenceTimeline`, and `subtitleTimeline` from the project's existing timing rows plus `originalText`.
+- Set project `text` back to `originalText`.
+- Cleared `wordTimeline`.
+
+Code changes:
+
+- `proportionalVoiceScriptRows()` now slices compact voice script text while preserving punctuation instead of stripping punctuation.
+- New dynamic big text projects persist `final_text` as `originalText` when no explicit `original_text` is supplied.
+- `test-kinetic-timeline-stability.mjs` now asserts punctuation-preserving reconstruction and persisted correction source.
+
+Verification:
+
+- `npm.cmd run test:kinetic-timeline-stability` passed.
+- `npm.cmd run check:gate` passed.

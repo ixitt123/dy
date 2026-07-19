@@ -520,8 +520,12 @@ function kineticPlainText(value = "") {
   return normalizeText(value).replace(/[^\p{L}\p{N}]/gu, "");
 }
 
+function compactVoiceScriptText(value = "") {
+  return normalizeText(value).replace(/\s+/g, "");
+}
+
 function proportionalVoiceScriptRows(timeline = [], sourceText = "") {
-  const chars = [...kineticPlainText(sourceText)];
+  const chars = [...compactVoiceScriptText(sourceText)];
   if (!chars.length) return timeline.map((row) => ({ ...row }));
   const weights = timeline.map((row) => {
     const textWeight = [...kineticPlainText(row?.text || "")].length;
@@ -1480,7 +1484,7 @@ export function createKineticTextService({
       subtitlePath,
       timestampedTextPath,
       text: finalText,
-      originalText: String(tts.original_text || ""),
+      originalText: String(tts.original_text || tts.final_text || tts.finalText || finalText || ""),
       recognizedText: String(tts.recognized_text || ""),
       wordTimeline: Array.isArray(tts.word_timeline) ? tts.word_timeline : [],
       sentenceTimeline: payloadTimeline.length ? constrainedTimeline : [],

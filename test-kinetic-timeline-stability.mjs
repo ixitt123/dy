@@ -8,6 +8,10 @@ function plainText(value = "") {
   return String(value).replace(/[^\p{L}\p{N}]/gu, "");
 }
 
+function compactText(value = "") {
+  return String(value).replace(/\s+/g, "");
+}
+
 const voiceScript = "你不是学不进去，而是掉进了一个认知陷阱，叫过度求源主义。";
 const asrTimeline = [
   { id: "asr-1", start: 0, end: 1.15, text: "你不是学习不进去", words: [{ text: "学习", start: 0.2, end: 0.6 }] },
@@ -52,6 +56,7 @@ try {
   assert.equal(project.segments.length, asrTimeline.length);
   assert.deepEqual(project.segments.map((row) => [row.start, row.end]), asrTimeline.map((row) => [row.start, row.end]));
   assert.equal(plainText(project.segments.map((row) => row.text).join("")), plainText(voiceScript));
+  assert.equal(project.originalText, voiceScript, "final TTS script must be persisted as the correction source");
 
   const noisySharedRows = [
     { start: 0, end: 1.15, text: "离题很远也要继续" },
@@ -67,6 +72,7 @@ try {
   });
   assert.deepEqual(shared.segments.map((row) => [row.start, row.end]), noisySharedRows.map((row) => [row.start, row.end]));
   assert.equal(plainText(shared.segments.map((row) => row.text).join("")), plainText(revisedVoiceScript));
+  assert.equal(compactText(shared.segments.map((row) => row.text).join("")), compactText(revisedVoiceScript));
 
   const manualText = "我手工在字幕时间轴里修改";
   const manual = service.update(project.id, {
