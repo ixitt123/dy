@@ -13,18 +13,17 @@ const kinetic = fs.readFileSync(new URL("./ui/modules/kinetic-text.js", import.m
 
 assert.match(server, /function validateStrictSubtitleCorrection/u);
 assert.match(server, /original\.length !== corrected\.length/u);
-assert.match(server, /严格禁止增加、删除、调换字词/u);
 assert.match(server, /isMusic26FreeJob\(job\)/u);
 assert.match(server, /correctMusicSubtitleBeforeHandoff/u);
 assert.match(server, /buildFixedAsrRows\(\{ fixedRows, recognizedWords \}\)/u);
-assert.doesNotMatch(server, /overlapping\.map\(\(row\)[\s\S]*recognizedText/u);
-assert.match(server, /句子级、短语级、拼音级、音节级、语义级/u);
-assert.match(server, /禁止只做机械错别字替换/u);
+assert.match(server, /source-text-dp-aligner/u);
+assert.match(server, /lowConfidenceRows/u);
 assert.match(server, /mergeSourceConstrainedRows/u);
 assert.match(server, /syncSourceConstrainedRows/u);
 assert.match(server, /\/api\/tts\/subtitle\/correct-before-handoff/u);
-assert.match(server, /const warning = `字幕文字校正失败：[\s\S]*已保留原字幕继续发送/u);
 assert.match(server, /corrected: false,[\s\S]*fallback: true,[\s\S]*warning,/u);
+assert.match(server, /已使用最接近的配音文案片段继续发送/u);
+
 assert.match(service, /async function alignCorrectedText/u);
 assert.match(service, /async function syncSourceConstrainedRows/u);
 assert.match(service, /rows\.length !== currentTimeline\.length/u);
@@ -32,6 +31,8 @@ assert.match(service, /const preservedWordTimeline = Array\.isArray\(metadata\.w
 assert.match(service, /wordTimeline: preservedWordTimeline/u);
 assert.match(service, /preserveTimelineValues: true/u);
 assert.match(service, /input\.preserveTimelineValues === true[\s\S]*providedTimeline\.map\(\(row\) => \(\{ \.\.\.row \}\)\)/u);
+assert.match(service, /correctionScore/u);
+assert.match(service, /lowConfidenceRows/u);
 const musicSyncFunction = service.slice(
   service.indexOf("async function syncSourceConstrainedRows"),
   service.indexOf("async function confirmAlignment"),
@@ -40,14 +41,13 @@ assert.doesNotMatch(musicSyncFunction, /estimatedWordTimelineFromSentences/u);
 assert.match(service, /recognized_word_timeline[\s\S]*word_timeline/u);
 assert.match(service, /aligned\.matchRatio < ALIGNMENT_AUTO_APPROVE_RATIO/u);
 assert.match(service, /confirmationMode: "ai_corrected_before_handoff"/u);
-assert.match(runtime, /正在用当前大模型校正错字和标点/u);
-assert.match(runtime, /实际歌唱识别稿做句子、短语和拼音对齐修复/u);
+
 assert.match(runtime, /source_constrained_music_asr_repair/u);
-assert.match(runtime, /已采用原字幕继续发送/u);
 assert.match(runtime, /const payload = confirmedTtsAudioPayload\(handoffJob\) \|\| originalPayload/u);
 assert.match(runtime, /async function syncSharedTtsTimeline/u);
 assert.match(runtime, /start: source\.start,[\s\S]*end: source\.end/u);
 assert.match(runtime, /syncTimeline: syncSharedTtsTimeline/u);
+
 assert.match(html, /id="cs1SubtitleTimeline"/u);
 assert.match(cs1, /readonly aria-readonly="true"/u);
 assert.match(cs1, /focusout[\s\S]*publishTimelineEdit/u);
