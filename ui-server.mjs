@@ -3489,6 +3489,7 @@ function normalizeAnalysis(value, fallbackText = "") {
 }
 
 function parseJsonFromModelText(text) {
+  return parseStructuredJsonFromModelText(text);
   const value = String(text || "").trim();
   try {
     return JSON.parse(value);
