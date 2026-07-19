@@ -280,6 +280,9 @@ export function mergeSourceConstrainedRows({ sourceText = "", asrRows = [], mode
   const source = String(sourceText || "").trim();
   if (!source) throw new Error("缺少配音前文案，无法执行原文约束修复。");
   if (!Array.isArray(asrRows) || !asrRows.length) throw new Error("缺少带时间戳的语音识别稿。");
+  const deterministic = repairSourceConstrainedRows({ sourceText: source, asrRows });
+  return deterministic;
+  if (!Array.isArray(modelRows) || !modelRows.length) return deterministic;
   const candidates = new Map();
   for (const row of Array.isArray(modelRows) ? modelRows : []) {
     const index = Number(row?.index || row?.row_index || row?.rowIndex || 0);

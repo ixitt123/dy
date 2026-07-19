@@ -3943,6 +3943,29 @@ async function correctMusicSubtitleBeforeHandoff(job, signal) {
   const sourceText = String(job.original_text || job.tts_prepared_text || job.text || "").trim();
   if (!sourceText) throw new Error("缺少生成歌唱音频前的文案。");
   const asrRows = musicAsrRowsForFixedTimeline(job);
+  const merged = mergeSourceConstrainedRows({ sourceText, asrRows });
+  const synced = await ttsService.syncSourceConstrainedRows(job.id, merged.rows, {
+    source: "source_constrained_music_asr_repair",
+    provider: "local",
+    model: "source-text-dp-aligner",
+    changedCharacters: merged.changedCharacters,
+    partial: merged.partial,
+    correctionScore: merged.correctionScore,
+    lowConfidenceRows: merged.lowConfidenceRows,
+  });
+  if (synced.error) throw new Error(synced.error);
+  return {
+    job: synced.job,
+    provider: "local",
+    model: "source-text-dp-aligner",
+    mode: "source_constrained_music_asr_repair",
+    changedCharacters: merged.changedCharacters,
+    partial: merged.lowConfidenceRows?.length > 0,
+    fallbackCount: merged.lowConfidenceRows?.length || 0,
+    warning: merged.lowConfidenceRows?.length
+      ? `原文约束修复已完成，${merged.lowConfidenceRows.length} 行置信度偏低，已使用最接近的配音文案片段继续发送。`
+      : "",
+  };
   const provider = await getRewriteProvider("");
   const responseText = await chatCompletion(provider, [
     {

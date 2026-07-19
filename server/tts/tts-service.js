@@ -1288,6 +1288,8 @@ export function createTtsService({
       correctionProvider: String(input.provider || ""),
       correctionModel: String(input.model || ""),
       correctionChangedCharacters: Number(input.changedCharacters || 0),
+      correctionScore: Number(input.correctionScore || 0),
+      lowConfidenceRows: Array.isArray(input.lowConfidenceRows) ? input.lowConfidenceRows : [],
       correctionAt: new Date().toISOString(),
       title: metadata.title || metadata.seo_title || "",
     });
@@ -1425,6 +1427,8 @@ export function createTtsService({
       subtitle_correction_provider: String(input.correctionProvider || metadata.subtitle_correction_provider || ""),
       subtitle_correction_model: String(input.correctionModel || metadata.subtitle_correction_model || ""),
       subtitle_correction_changed_characters: Number(input.correctionChangedCharacters || 0),
+      subtitle_correction_score: Number(input.correctionScore || metadata.subtitle_correction_score || 0),
+      subtitle_correction_low_confidence_rows_json: JSON.stringify(Array.isArray(input.lowConfidenceRows) ? input.lowConfidenceRows : []),
       subtitle_correction_at: String(input.correctionAt || metadata.subtitle_correction_at || ""),
     }, { status: "completed", error: "" });
     return { job: publicJob(synced) };
