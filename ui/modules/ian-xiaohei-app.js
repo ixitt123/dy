@@ -261,6 +261,7 @@ const els = {
   generateImages: document.querySelector("#generateImages"),
   planPrompts: document.querySelector("#planPrompts"),
   copyPrompts: document.querySelector("#copyPrompts"),
+  exportExternalPrompts: document.querySelector("#exportExternalPrompts"),
   openOutputDir: document.querySelector("#openOutputDir"),
   refreshOutputs: document.querySelector("#refreshOutputs"),
   statusLabel: document.querySelector("#statusLabel"),
@@ -634,6 +635,7 @@ function bindEvents() {
     resetVisualWorkflow("视觉模板已改变，请重新生成分镜计划。");
   });
   els.copyPrompts.addEventListener("click", () => copyAllPrompts());
+  els.exportExternalPrompts?.addEventListener("click", () => exportExternalPrompts());
   els.openOutputDir.addEventListener("click", () => openOutputDir());
   els.refreshOutputs.addEventListener("click", () => loadOutputs());
   els.audioJobs.addEventListener("click", handleAudioJobAction);
@@ -2276,6 +2278,35 @@ function promptClipboardText() {
   const shots = Array.isArray(state.plan?.shots) ? state.plan.shots : [];
   const shot = firstPromptCopyShot() || shots[0];
   return shot ? shotPromptBlock(shot, state.plan) : String(state.promptsText || "").trim();
+}
+
+async function exportExternalPrompts() {
+  setButtonFeedback(els.exportExternalPrompts, "loading", "正在导出");
+  if (!state.plan?.shots?.length) await createPlan();
+  if (!state.plan?.shots?.length) {
+    setButtonFeedback(els.exportExternalPrompts, "error", "没有提示词");
+    return;
+  }
+  try {
+    const data = await fetchJson("/api/ian-xiaohei/export-external-prompts", {
+      method: "POST",
+      body: JSON.stringify({
+        batchId: state.plan.batchId,
+        plan: state.plan,
+      }),
+    });
+    setStatus(
+      "外部生图包已导出",
+      `已生成 ${data.count || state.plan.shots.length} 个独立 txt：${data.promptDir || ""}`,
+      100,
+      false,
+      "外部生图",
+    );
+    setButtonFeedback(els.exportExternalPrompts, "success", "已导出");
+  } catch (error) {
+    setStatus("导出外部生图包失败", error.payload?.message || error.message || String(error), 100, true);
+    setButtonFeedback(els.exportExternalPrompts, "error", "导出失败");
+  }
 }
 
 function syncVideoPreview() {

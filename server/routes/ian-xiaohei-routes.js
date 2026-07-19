@@ -1236,6 +1236,33 @@ export function createIanXiaoheiRoutes({
       return true;
     }
 
+    if (req.method === "POST" && route === "export-external-prompts") {
+      try {
+        const body = await readJsonBody(req, { maxBytes: 512 * 1024 });
+        const plan = body.plan && typeof body.plan === "object" ? body.plan : null;
+        if (!plan?.shots?.length) throw new Error("请先生成小黑分镜提示词。");
+        const batchId = safeBatchId(body.batchId || plan.batchId || `xiaohei-${Date.now()}`);
+        const batchDir = path.join(outputRoot, batchId);
+        fs.mkdirSync(batchDir, { recursive: true });
+        savePlanFiles(batchDir, plan);
+        const promptDir = exportExternalPromptFiles(batchDir, plan);
+        openFolder(promptDir);
+        sendJson(res, 200, {
+          ok: true,
+          batchId,
+          outputDir: batchDir,
+          promptDir,
+          count: plan.shots.length,
+        });
+      } catch (error) {
+        sendJson(res, error instanceof HttpBodyError ? error.statusCode : 400, {
+          ok: false,
+          message: error instanceof Error ? error.message : String(error),
+        });
+      }
+      return true;
+    }
+
     if (req.method === "POST" && route === "generate-shot") {
       try {
         const body = await readJsonBody(req, { maxBytes: 512 * 1024 });
@@ -2363,6 +2390,71 @@ function savePlanFiles(batchDir, plan) {
   const promptsPath = path.join(batchDir, "prompts.md");
   if (!fs.existsSync(planPath)) fs.writeFileSync(planPath, JSON.stringify(plan, null, 2), "utf8");
   if (!fs.existsSync(promptsPath)) fs.writeFileSync(promptsPath, promptsMarkdown(plan), "utf8");
+}
+
+function exportExternalPromptFiles(batchDir, plan) {
+  const promptDir = path.join(batchDir, "external-image-prompts");
+  fs.rmSync(promptDir, { recursive: true, force: true });
+  fs.mkdirSync(promptDir, { recursive: true });
+  const aspectRatio = normalizeAspectRatio(plan.aspectRatio);
+  const files = [];
+  for (const shot of plan.shots || []) {
+    const index = clamp(Number(shot.index) || files.length + 1, 1, 99);
+    const prompt = externalSingleImagePrompt(shot, { plan, aspectRatio });
+    const fileName = `scene-${String(index).padStart(2, "0")}.txt`;
+    fs.writeFileSync(path.join(promptDir, fileName), prompt, "utf8");
+    files.push({ index, fileName, topic: shot.topic || "", sourceText: shot.sourceText || "" });
+  }
+  fs.writeFileSync(path.join(promptDir, "manifest.json"), JSON.stringify({
+    createdAt: new Date().toISOString(),
+    batchId: plan.batchId || "",
+    aspectRatio,
+    count: files.length,
+    usage: "每个 txt 是一个独立生图任务。外部软件批量导入时必须按文件拆成多条任务，不要把所有 txt 内容合并成一个提示词。",
+    files,
+  }, null, 2), "utf8");
+  fs.writeFileSync(path.join(promptDir, "README.txt"), [
+    "外部生图提示词包",
+    "",
+    "用法：",
+    "1. 每个 scene-XX.txt 对应一张独立图片。",
+    "2. 外部软件如果支持批量导入，请按文件导入，让它每个文件生成一张图。",
+    "3. 不要把所有 txt 内容合并粘贴到同一个生图对话框，否则模型容易生成九宫格/组图。",
+    "4. 本包不调用本软件图片 API。",
+  ].join("\n"), "utf8");
+  return promptDir;
+}
+
+function externalSingleImagePrompt(shot = {}, { plan = {}, aspectRatio = "16:9" } = {}) {
+  const purpose = String(shot.skillId || plan.purpose || "article").trim() || "article";
+  const labels = Array.isArray(shot.labels) ? shot.labels : [];
+  const elements = Array.isArray(shot.elements) ? shot.elements : [];
+  return buildPrompt({
+    purpose,
+    topic: shot.topic || "小黑单张配图",
+    seriesRole: shot.role || "单张配图",
+    structureType: shot.structureType || "概念隐喻",
+    coreIdea: shot.coreIdea || shot.topic || shot.sourceText || "当前段落核心意思",
+    sourceText: shot.sourceText || shot.topic || "",
+    visualSubject: shot.visualSubject || shot.coreIdea || shot.topic || "",
+    xiaoheiAction: shot.xiaoheiAction || "",
+    visualMetaphor: shot.visualMetaphor || "",
+    composition: stripExternalPromptGroupCues(shot.composition || ""),
+    elements: elements.length ? elements : ["当前段落主体", "关键动作", "低科技物件"],
+    labels: labels.length ? labels : inferLabels(shot.sourceText || shot.topic || "", purpose, getRoleDefinition(shot.roleId)),
+    aspectRatio,
+  });
+}
+
+function stripExternalPromptGroupCues(value) {
+  return String(value || "")
+    .replace(/Scene\s*\d+\s*\/\s*\d+/gi, "")
+    .replace(/分镜编号[:：]?\s*\d+\s*\/\s*\d+/g, "")
+    .replace(/第\s*\d+\s*\/\s*\d+\s*张/g, "")
+    .replace(/共\s*\d+\s*个\s*Scene/gi, "")
+    .replace(/其他张/g, "其他画面")
+    .replace(/\d+\s*\/\s*\d+/g, "")
+    .trim();
 }
 
 function updateResultFile(batchDir, { image = null, error = null, output = null } = {}) {

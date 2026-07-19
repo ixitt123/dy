@@ -4,6 +4,11 @@ import fs from "node:fs";
 const source = fs.readFileSync(new URL("./ui/modules/ian-xiaohei-app.js", import.meta.url), "utf8");
 const css = fs.readFileSync(new URL("./ui/xiaohei-illustrations.css", import.meta.url), "utf8");
 const html = fs.readFileSync(new URL("./ui/xiaohei-illustrations.html", import.meta.url), "utf8");
+const routes = fs.readFileSync(new URL("./server/routes/ian-xiaohei-routes.js", import.meta.url), "utf8");
+const exportRoute = routes.slice(
+  routes.indexOf('route === "export-external-prompts"'),
+  routes.indexOf('route === "generate-shot"'),
+);
 
 assert.match(
   source,
@@ -43,6 +48,18 @@ assert.match(
 
 assert.match(
   source,
+  /async function exportExternalPrompts\(/,
+  "Xiaohei must provide an external-software prompt export workflow.",
+);
+
+assert.match(
+  source,
+  /\/api\/ian-xiaohei\/export-external-prompts/,
+  "The external prompt export workflow must call the export endpoint, not the image API.",
+);
+
+assert.match(
+  source,
   /保留当前 Skill 原本允许的少量中文手写标注/,
   "Xiaohei prompt format must preserve the selected Skill's handwritten Chinese label style.",
 );
@@ -61,14 +78,44 @@ assert.match(
 
 assert.match(
   html,
-  /复制第一张提示词/,
-  "The toolbar copy button must not advertise copying all prompts.",
+  /复制下一张提示词/,
+  "The toolbar copy button must advertise single-shot copying.",
 );
 
 assert.doesNotMatch(
   html,
   /复制全部提示词/,
   "The Xiaohei page must not keep a copy-all prompt entry point that encourages grouped images.",
+);
+
+assert.match(
+  html,
+  /导出外部生图包/,
+  "The Xiaohei page must expose a one-click external prompt package export button.",
+);
+
+assert.match(
+  exportRoute,
+  /exportExternalPromptFiles/,
+  "The external prompt export route must write a local prompt package.",
+);
+
+assert.doesNotMatch(
+  exportRoute,
+  /generateImage|imageService/,
+  "The external prompt export route must not call the in-app image generation API.",
+);
+
+assert.match(
+  routes,
+  /external-image-prompts/,
+  "The external prompt package must use a dedicated folder.",
+);
+
+assert.match(
+  routes,
+  /scene-\$\{String\(index\)\.padStart\(2, "0"\)\}\.txt/,
+  "The external prompt package must write one txt file per image.",
 );
 
 assert.match(

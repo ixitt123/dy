@@ -712,3 +712,25 @@ Regression coverage:
 
 - `test-xiaohei-prompt-copy.mjs` now asserts the toolbar copy action writes only `shotPromptBlock(shot, state.plan)`, the page no longer advertises `复制全部提示词`, and grouped-image trigger wording is absent.
 - `test-xiaohei-skill-routing.mjs` now asserts generated Skill prompts do not contain `1/1` or `其他张` grouping language.
+
+## 2026-07-19 22:58 +08:00
+
+Branch: `fix/p0-stability`
+
+Correction / completed item:
+
+- Clarified and implemented the intended Xiaohei workflow: the user wants to generate images in external software for now, not through the local image API, and does not want to manually copy prompts one by one.
+
+User-visible behavior:
+
+- Added `导出外部生图包` to the Xiaohei prompt actions.
+- Clicking it writes `external-image-prompts/scene-01.txt`, `scene-02.txt`, etc. under the current Xiaohei output batch and opens that folder.
+- Each txt file is a standalone single-image task, preserving the selected Skill content and Xiaohei Chinese handwritten-label style.
+- The package also writes `manifest.json` and `README.txt` explaining that external software must import each txt as a separate generation task and must not merge all prompts into one chat prompt.
+- The existing in-app `一键生成图片（N）` API button was intentionally left alone per user direction.
+- The old all-in-one copy entry was renamed to `复制下一张提示词` so it cannot accidentally encourage a collage/group-image prompt.
+
+Regression coverage:
+
+- `test-xiaohei-prompt-copy.mjs` asserts the external export button and route exist, the export route writes a local prompt package, and that route does not call `imageService.generateImage`.
+- Existing Xiaohei routing and one-click image tests still pass; one-click API behavior remains covered but unchanged for this task.
