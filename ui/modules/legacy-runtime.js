@@ -4276,7 +4276,9 @@ async function applyTtsToXiaohei(payload = {}) {
     text: payload.text || "",
     ttsJob: job,
     files: payload.files || [],
-    sentAt: new Date().toISOString(),
+    sentAt: payload.sent_at || payload.sentAt || payload.sharedUpdatedAt || new Date().toISOString(),
+    handoffId: payload.handoff_id || "",
+    handoffRevision: payload.handoff_revision || "",
   };
   localStorage.setItem("video-factory-xiaohei-handoff", JSON.stringify(handoff));
   document.querySelector("#xiaoheiProductionFrame")?.contentWindow?.postMessage({ type: "video-factory:xiaohei-handoff", handoff }, window.location.origin);

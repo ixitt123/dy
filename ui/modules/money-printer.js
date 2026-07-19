@@ -216,7 +216,6 @@ function receiveTts(payload = {}, { navigate = true } = {}) {
   state.segments = normalizeSegments(payload.subtitle_timeline?.length ? payload.subtitle_timeline : payload.sentence_timeline, payload)
     .map((segment, index) => ({ ...(previousSegments[index] || {}), ...segment }));
   if (els.subject) els.subject.value = payload.title || payload.seo_title || payload.publish_title || `TTS #${payload.display_number || payload.id}`;
-  if (!els.subject.value.trim()) els.subject.value = payload.title || payload.seo_title || payload.publish_title || "MoneyPrinter 视频";
   if (payload.audio_url) els.sourceAudio.src = payload.audio_url;
   else els.sourceAudio.removeAttribute("src");
   if (navigate) window.workbenchNavigate?.("money-printer");

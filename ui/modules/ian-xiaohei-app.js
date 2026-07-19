@@ -345,7 +345,7 @@ async function handleParentHandoff(event) {
     syncTtsSource(data.job, { title: handoffTitle, text: handoffText });
     resetVisualWorkflow();
     await loadAudioJobs();
-    const restored = restorePromptPlanCache();
+    const restored = false;
     setStatus(
       restored ? "已恢复提示词计划" : "已接收 TTS 资产",
       restored

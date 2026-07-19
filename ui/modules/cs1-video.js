@@ -124,9 +124,6 @@ export function initCs1VideoModule() {
     if (titleInput) titleInput.value = payload.title || payload.seo_title || payload.publish_title || `TTS #${payload.display_number || payload.id}`;
     if (bgmPathInput) bgmPathInput.value = payload.audio_path || "";
     if (bgmModeSelect) bgmModeSelect.value = payload.audio_path ? "local" : "auto";
-    if (titleInput && !titleInput.value.trim()) titleInput.value = payload.title || payload.seo_title || payload.publish_title || `配音 #${payload.display_number || payload.id}`;
-    if (bgmPathInput && payload.audio_path) bgmPathInput.value = payload.audio_path;
-    if (bgmModeSelect && payload.audio_path) bgmModeSelect.value = "local";
     renderTimeline();
     setStatus("已接收 TTS 三件套", "CS1 正在使用公共文案、音频和时间戳字幕。");
     if (navigate) window.workbenchNavigate?.("cs1-video");

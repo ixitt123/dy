@@ -1776,9 +1776,26 @@ async function applySharedTimelineToKineticProject(payload = {}) {
     ...row,
     id: project.segments?.[index]?.id || row.id || `segment-${index + 1}`,
   }));
+  const finalText = String(payload.final_text || payload.text || segments.map((item) => item.text || "").join("") || project.text || "");
   const data = await postJson("/api/kinetic-text/update", {
     projectId: project.id,
     changes: {
+      title: payload.title || payload.seo_title || payload.publish_title || project.title,
+      text: finalText,
+      audioPath: String(payload.audio_path || ""),
+      audioUrl: String(payload.audio_url || ""),
+      scriptPath: String(payload.script_path || ""),
+      subtitlePath: String(payload.subtitle_path || payload.timed_subtitle_path || ""),
+      timestampedTextPath: String(payload.timestamped_text_path || payload.timed_subtitle_path || ""),
+      originalText: String(payload.original_text || ""),
+      recognizedText: String(payload.recognized_text || ""),
+      wordTimeline: Array.isArray(payload.word_timeline) ? payload.word_timeline : [],
+      sentenceTimeline: rows,
+      alignmentStatus: String(payload.alignment_status || ""),
+      alignmentConfirmedAt: String(payload.alignment_confirmed_at || ""),
+      ttsHandoffId: String(payload.handoff_id || ""),
+      ttsHandoffRevision: String(payload.handoff_revision || ""),
+      ttsSharedUpdatedAt: String(payload.sharedUpdatedAt || payload.sent_at || payload.sentAt || ""),
       segments,
       duration: Math.max(...segments.map((item) => Number(item.end || 0)), project.duration || 0),
       subtitleSource: "shared-production-timeline",
@@ -1880,10 +1897,11 @@ async function receiveTts(payload) {
   if (!payload?.id) throw new Error("没有可用的 TTS 音频。");
   const existing = state.projects.find((project) => String(project.ttsJobId) === String(payload.id));
   if (existing) {
-    state.project = existing;
+    state.project = await applySharedTimelineToKineticProject(payload) || existing;
+    await refreshProjects(state.project.id);
     renderProject();
     window.workbenchNavigate?.("kinetic-text");
-    return existing;
+    return state.project;
   }
   const preferences = readPreferences();
   const data = await postJson("/api/kinetic-text/create", {
@@ -2208,7 +2226,7 @@ export async function initKineticTextModule() {
   await refreshProjects();
   try {
     const payload = JSON.parse(localStorage.getItem(HANDOFF_KEY) || "null");
-    if (payload?.id && !state.projects.some((project) => String(project.ttsJobId) === String(payload.id))) await receiveTts(payload);
+    if (payload?.id) await receiveTts(payload);
   } catch {}
   try {
     const payload = JSON.parse(localStorage.getItem(TEXT_HANDOFF_KEY) || "null");
