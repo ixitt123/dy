@@ -270,3 +270,22 @@ Verification:
 
 - `npm.cmd run test:tts-handoff-subtitle-correction` passed.
 - `npm.cmd run check:syntax` passed.
+
+## 2026-07-19 20:45 +08:00
+
+Branch: `fix/p0-stability`
+
+Completed item:
+
+- Removed the right status rail from the main workbench layout.
+
+User-visible behavior:
+
+- The right-side blocks `任务线程`, `最近生成`, `错误提示`, and `快捷操作` are no longer rendered.
+- The main workspace now uses the former right rail width.
+- Queue controls that were previously moved into the rail are retained in the settings/batch area when the rail is absent.
+
+Verification:
+
+- `npm.cmd run test:page-lifecycle` passed.
+- `npm.cmd run check:syntax` passed.

@@ -3797,7 +3797,7 @@ a {
 .workbench-body {
   display: grid;
   min-width: 0;
-  grid-template-columns: minmax(0, 1fr) 340px;
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .shell {
@@ -7370,10 +7370,6 @@ audio {
 
   .product-ready-panel {
     grid-template-columns: 1fr;
-  }
-
-  .status-rail {
-    display: none;
   }
 
   .workbench-body {

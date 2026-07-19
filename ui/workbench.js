@@ -903,6 +903,7 @@ function setupCodexTaskWorkbench(settingsPage) {
     settingsCard.appendChild(batchHead);
   }
   if (batchControls) settingsCard.appendChild(batchControls);
+  if (!rail && batchActions) settingsCard.appendChild(batchActions);
   settingsPage.appendChild(settingsCard);
 
   if (rail) {
