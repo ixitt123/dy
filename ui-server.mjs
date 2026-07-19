@@ -3490,17 +3490,6 @@ function normalizeAnalysis(value, fallbackText = "") {
 
 function parseJsonFromModelText(text) {
   return parseStructuredJsonFromModelText(text);
-  const value = String(text || "").trim();
-  try {
-    return JSON.parse(value);
-  } catch {
-    const start = value.indexOf("{");
-    const end = value.lastIndexOf("}");
-    if (start >= 0 && end > start) {
-      return JSON.parse(value.slice(start, end + 1));
-    }
-    throw new Error("AI 分析没有返回 JSON");
-  }
 }
 
 async function analyzeTranscriptWithProvider(provider, transcriptText, videoInfo, signal) {
