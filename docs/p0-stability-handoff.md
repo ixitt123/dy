@@ -129,3 +129,44 @@ Verification:
 Next item:
 
 - Recommended order item 4: H5 image asset DOM XSS. Remove data-driven inline handlers and make image asset rendering use DOM/textContent instead of unsafe HTML string injection.
+
+## 2026-07-19 19:16 +08:00
+
+Branch: `fix/p0-stability`
+
+Mode change:
+
+- User changed the immediate repair strategy from audit-order P0 work to production-line repair.
+- New line-by-line workflow: inspect first, analyze second, repair last.
+- First production line selected: dynamic big text video (`kinetic-text`).
+
+Completed item:
+
+- Dynamic big text video minimal runability guard.
+
+Findings:
+
+- Existing kinetic focused tests passed:
+  - `node test-kinetic-preview-seek.mjs`
+  - `node test-kinetic-overlay-position.mjs`
+  - `node test-kinetic-illustration-toggle.mjs`
+- A direct service-level smoke run successfully created a kinetic text project and rendered a short MP4 through ffmpeg/libass.
+- The main gap was that `check:gate` did not include a real MP4 render smoke test, so a future break in ffmpeg path wiring, subtitle generation, or render completion could slip through until manual use.
+
+Changes:
+
+- Added `test-kinetic-text-render-smoke.mjs`.
+- Added `test:kinetic-render-smoke` script.
+- Wired `test-kinetic-text-render-smoke.mjs` into `npm.cmd run check:gate`.
+
+Behavior now covered:
+
+- Kinetic text service can create a project from text without external model calls.
+- Sentence segments are created for the dynamic text project.
+- Render job completes.
+- ASS and SRT subtitle files are generated.
+- Final MP4 exists, is non-empty, and has an MP4 `ftyp` header.
+
+Next recommended production-line step:
+
+- If the user reports a specific dynamic big text UI failure, inspect that screen flow next. Otherwise continue production-line smoke coverage for the next line the user chooses.
