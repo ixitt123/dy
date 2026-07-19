@@ -80,3 +80,52 @@ Verification:
 Next item:
 
 - Recommended order item 3: H1 local API trust boundary. Delete or desensitize `/api/settings/all`, restrict image asset paths, and add Host/Origin/session token checks.
+
+## 2026-07-19 18:28 +08:00
+
+Branch: `fix/p0-stability`
+
+Base state:
+
+- Started from `35f67a0` (`fix(security): harden moneyprinter open targets`).
+- Synced with `origin/fix/p0-stability` using `git fetch --prune origin` and `git pull --ff-only`.
+- Working tree was clean before H1 work.
+
+Completed item:
+
+- Recommended order item 3: H1 local API trust boundary.
+
+Changes:
+
+- Added a per-start random local API session token in `ui-server.mjs`.
+- Static HTML responses now set a strict HttpOnly local session cookie.
+- All HTTP requests validate local Host before routing.
+- All `/api/*` requests require allowed Host, allowed Origin for unsafe methods, a valid local session token, and JSON content type for write bodies with payloads.
+- WebSocket `/ws/progress` upgrades now validate path, Host, Origin, and local session token.
+- `/api/settings/all` is disabled and no longer returns `readSettings()`.
+- Image file and thumbnail routes now resolve paths through a managed image resolver.
+- Image routes prefer asset `id` / `assetId`; legacy `path` fallback is constrained to managed directories and image extensions.
+- Image assets now expose id-based thumbnail URLs.
+- Workbench image previews now prefer id-based file/thumbnail URLs.
+- E2E test setup now establishes a local session cookie and expects the settings dump endpoint to remain disabled.
+- Added `test-local-api-trust-boundary.mjs` and wired it into `npm.cmd run check:gate`.
+
+Security behavior now covered:
+
+- Bad Host is rejected before routing.
+- Bad Origin is rejected for protected API writes and WebSocket upgrades.
+- Missing local session token is rejected.
+- Non-JSON write bodies with payloads are rejected.
+- `/api/settings/all` cannot expose API keys through the old settings dump.
+- `/api/image/file` and `/api/image/thumbnail` cannot read arbitrary local files outside managed image roots.
+- WebSocket progress clients must come from the local page session.
+
+Verification:
+
+- `node test-local-api-trust-boundary.mjs`: passed.
+- `node --check ui-server.mjs; node --check server/image/image-service.js; node --check ui/workbench.js; node --check test-e2e.mjs; node --check test-local-api-trust-boundary.mjs`: passed.
+- `npm.cmd run check:gate`: passed.
+
+Next item:
+
+- Recommended order item 4: H5 image asset DOM XSS. Remove data-driven inline handlers and make image asset rendering use DOM/textContent instead of unsafe HTML string injection.

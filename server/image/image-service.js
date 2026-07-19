@@ -296,7 +296,7 @@ export function createImageService({ baseDir, getSettings, taskStore = null, ffm
       ratio: row.aspect_ratio || "",
       scene_index: Number(row.scene_index || 0),
       asset_order: Number(row.asset_order || 0),
-      thumbnail_url: `/api/image/thumbnail?path=${encodeURIComponent(row.file_path || row.original_path || "")}`,
+      thumbnail_url: `/api/image/thumbnail?id=${encodeURIComponent(row.id || "")}`,
     };
   }
 
@@ -552,7 +552,7 @@ export function createImageService({ baseDir, getSettings, taskStore = null, ffm
           filename,
           imagePath: localPath,
           file_path: localPath,
-          thumbnailUrl: `/api/image/thumbnail?path=${encodeURIComponent(localPath)}`,
+          thumbnailUrl: `/api/image/thumbnail?id=${encodeURIComponent(assetId)}`,
           provider: selected.provider,
           model: result.model || selected.model,
           source_url: result.sourceUrl || result.imageUrl || "",
@@ -746,6 +746,10 @@ export function createImageService({ baseDir, getSettings, taskStore = null, ffm
     return db.prepare("SELECT * FROM image_assets ORDER BY created_at DESC LIMIT ? OFFSET ?").all(limit, offset).map(publicAsset);
   }
 
+  function getAsset(assetId) {
+    return publicAsset(db.prepare("SELECT * FROM image_assets WHERE id=?").get(String(assetId || "")));
+  }
+
   function deleteAsset(assetId) {
     const asset = db.prepare("SELECT original_path FROM image_assets WHERE id=?").get(assetId);
     if (asset?.original_path && fs.existsSync(asset.original_path)) fs.unlinkSync(asset.original_path);
@@ -777,6 +781,7 @@ export function createImageService({ baseDir, getSettings, taskStore = null, ffm
     getJobs,
     getJob,
     getAssets,
+    getAsset,
     deleteAsset,
     getStats,
     isBusy,

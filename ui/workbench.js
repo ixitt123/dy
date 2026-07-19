@@ -1515,7 +1515,8 @@ function initWorkbench() {
 
   // WebSocket 进度监听
   try {
-    const ws = new WebSocket(`ws://127.0.0.1:${location.port}/ws/progress`);
+    const wsProtocol = location.protocol === "https:" ? "wss:" : "ws:";
+    const ws = new WebSocket(`${wsProtocol}//${location.host}/ws/progress`);
     ws.onmessage = (e) => {
       const data = JSON.parse(e.data);
       if (data.taskId) {
@@ -1547,6 +1548,22 @@ function setupImageStudio() {
 
   function imageAssetPath(asset = {}) {
     return asset.original_path || asset.file_path || asset.path || "";
+  }
+
+  function imageAssetId(asset = {}) {
+    return asset.assetId || asset.asset_id || asset.id || "";
+  }
+
+  function imageFileUrl(asset = {}) {
+    const id = imageAssetId(asset);
+    if (id) return `/api/image/file?id=${encodeURIComponent(id)}`;
+    return `/api/image/file?path=${encodeURIComponent(imageAssetPath(asset))}`;
+  }
+
+  function imageThumbnailUrl(asset = {}, width = 360) {
+    const id = imageAssetId(asset);
+    if (id) return `/api/image/thumbnail?width=${encodeURIComponent(width)}&id=${encodeURIComponent(id)}`;
+    return `/api/image/thumbnail?width=${encodeURIComponent(width)}&path=${encodeURIComponent(imageAssetPath(asset))}`;
   }
 
   function closeImageAssetPreview() {
@@ -1599,8 +1616,7 @@ function setupImageStudio() {
     activeImagePreview = { groupId, index };
     const modal = ensureImagePreviewModal();
     const asset = rows[index];
-    const filePath = imageAssetPath(asset);
-    const url = `/api/image/file?path=${encodeURIComponent(filePath)}`;
+    const url = imageFileUrl(asset);
     modal.querySelector("#imagePreviewTitle").textContent = asset.folder_name || asset.filename || `图片 ${index + 1}`;
     modal.querySelector("#imagePreviewFull").src = url;
     modal.querySelector("#imagePreviewCounter").textContent = `${index + 1} / ${rows.length}`;
@@ -1978,8 +1994,8 @@ function setupImageStudio() {
           <button class="btn-sm" type="button" onclick="document.getElementById('imagePrompt').value='${safePrompt}';document.getElementById('imageGenerateBtn').click()">重新生成</button>
         </div>
       </div>`;
-      const originalUrl = `/api/image/file?path=${encodeURIComponent(r.imagePath || "")}`;
-      const thumbUrl = r.thumbnailUrl || `/api/image/thumbnail?width=360&path=${encodeURIComponent(r.imagePath || "")}`;
+      const originalUrl = imageFileUrl(r);
+      const thumbUrl = r.thumbnailUrl || imageThumbnailUrl(r);
       return `<div class="img-card" data-asset-id="${r.assetId || ""}">
         <button class="img-preview" type="button" onclick="window.open('${originalUrl}')">
           <img src="${thumbUrl}" alt="生成图片缩略图" loading="lazy" />
@@ -2023,7 +2039,7 @@ function setupImageStudio() {
             ${sortedRows.map((a, assetIndex) => `
               <div class="img-card">
                 <button class="img-preview" type="button" data-image-preview-group="${groupId}" data-image-preview-index="${assetIndex}">
-                  <img src="${a.thumbnail_url || `/api/image/thumbnail?width=360&path=${encodeURIComponent(imageAssetPath(a))}`}" alt="图片资产缩略图" loading="lazy" />
+                  <img src="${a.thumbnail_url || imageThumbnailUrl(a)}" alt="图片资产缩略图" loading="lazy" />
                 </button>
                 <div class="img-meta">
                   <span>#${Number(a.scene_index || 0) || "-"} ${(a.prompt || "").slice(0, 30)}</span>

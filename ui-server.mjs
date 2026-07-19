@@ -2,7 +2,7 @@ import http from "node:http";
 import fs from "node:fs";
 import path from "node:path";
 import { spawn, spawnSync } from "node:child_process";
-import { createHash, randomUUID } from "node:crypto";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { once } from "node:events";
 import { fileURLToPath } from "node:url";
 import * as XLSX from "xlsx";
@@ -36,7 +36,7 @@ import { formatOriginalMomentsPost } from "./server/core/moments-original.js";
 import { parseJsonFromModelText as parseStructuredJsonFromModelText } from "./server/core/structured-json.js";
 import { createPageLifecycle } from "./server/core/page-lifecycle.js";
 import { HttpBodyError, readBody, readJsonBody } from "./server/utils/http-body.js";
-import { resolveStaticRequestPath } from "./server/core/static-path-safety.js";
+import { isPathInsideRoot, resolveStaticRequestPath } from "./server/core/static-path-safety.js";
 import { DEFAULT_REWRITE_REFERENCE, REWRITE_DIRECTIONS, REWRITE_STYLES, REWRITE_VERSION_DEFS, REWRITE_VERSION_DEFAULTS } from "./server/config/rewrite-presets.js";
 import { DEFAULT_MODEL_MAPPING, DEFAULT_VOLCENGINE_ARK_IMAGE_MODEL, SETTINGS_TASKS, normalizeModelMapping } from "./server/config/model-defaults.js";
 import { AUTO_MODEL_VALUE, REWRITE_PROVIDER_ORDER, REWRITE_PROVIDER_PRESETS } from "./server/config/provider-presets.js";
@@ -60,6 +60,9 @@ const pidPath = path.join(__dirname, "ui-server.pid");
 const urlPath = path.join(__dirname, "ui-server.url");
 const settingsPath = path.join(__dirname, "settings.json");
 const ffprobePath = ffprobeStatic?.path || "";
+const localApiCookieName = "__dy_local_api";
+const localApiSessionToken = randomBytes(32).toString("base64url");
+const localImageExtensions = new Set([".png", ".jpg", ".jpeg", ".gif", ".webp"]);
 const mcpEntry = path.join(
   __dirname,
   "node_modules",
@@ -382,6 +385,120 @@ function sendBuffer(res, status, buffer, contentType, fileName = "") {
   }
   res.writeHead(status, headers);
   res.end(buffer);
+}
+
+function localApiPort() {
+  const address = server.address();
+  return address && typeof address === "object" ? Number(address.port || 0) : 0;
+}
+
+function parseLocalHostHeader(value = "") {
+  const host = String(value || "").trim().toLowerCase();
+  const bracketed = host.match(/^\[([^\]]+)\]:(\d+)$/);
+  if (bracketed) return { hostname: bracketed[1], port: Number(bracketed[2] || 0) };
+  const match = host.match(/^([^:\s]+):(\d+)$/);
+  if (!match) return null;
+  return { hostname: match[1], port: Number(match[2] || 0) };
+}
+
+function isAllowedLocalHostname(hostname = "") {
+  return ["127.0.0.1", "localhost", "::1"].includes(String(hostname || "").trim().toLowerCase());
+}
+
+function isAllowedLocalHostHeader(hostHeader = "") {
+  const parsed = parseLocalHostHeader(hostHeader);
+  const port = localApiPort();
+  return Boolean(parsed && port && parsed.port === port && isAllowedLocalHostname(parsed.hostname));
+}
+
+function isAllowedLocalOriginHeader(originHeader = "") {
+  const value = String(originHeader || "").trim();
+  if (!value) return false;
+  try {
+    const origin = new URL(value);
+    return origin.protocol === "http:"
+      && Number(origin.port || 80) === localApiPort()
+      && isAllowedLocalHostname(origin.hostname);
+  } catch {
+    return false;
+  }
+}
+
+function parseCookies(header = "") {
+  const cookies = new Map();
+  for (const part of String(header || "").split(";")) {
+    const index = part.indexOf("=");
+    if (index <= 0) continue;
+    const name = part.slice(0, index).trim();
+    const value = part.slice(index + 1).trim();
+    if (!name) continue;
+    try {
+      cookies.set(name, decodeURIComponent(value));
+    } catch {
+      cookies.set(name, value);
+    }
+  }
+  return cookies;
+}
+
+function requestLocalApiToken(req) {
+  const headerToken = String(req.headers["x-local-api-token"] || "").trim();
+  if (headerToken) return headerToken;
+  return parseCookies(req.headers.cookie || "").get(localApiCookieName) || "";
+}
+
+function hasValidLocalApiToken(req) {
+  return requestLocalApiToken(req) === localApiSessionToken;
+}
+
+function requestHasBody(req) {
+  return Boolean(req.headers["transfer-encoding"]) || Number(req.headers["content-length"] || 0) > 0;
+}
+
+function requestHasJsonContentType(req) {
+  return String(req.headers["content-type"] || "").toLowerCase().split(";")[0].trim() === "application/json";
+}
+
+function isUnsafeHttpMethod(method = "") {
+  return ["POST", "PUT", "PATCH", "DELETE"].includes(String(method || "").toUpperCase());
+}
+
+function setLocalApiCookie(headers = {}) {
+  return {
+    ...headers,
+    "set-cookie": `${localApiCookieName}=${encodeURIComponent(localApiSessionToken)}; Path=/; HttpOnly; SameSite=Strict`,
+  };
+}
+
+function rejectLocalApiRequest(req, res) {
+  if (!isAllowedLocalHostHeader(req.headers.host || "")) {
+    sendJson(res, 403, { ok: false, message: "Forbidden host" });
+    return true;
+  }
+  const origin = String(req.headers.origin || "").trim();
+  if (origin && !isAllowedLocalOriginHeader(origin)) {
+    sendJson(res, 403, { ok: false, message: "Forbidden origin" });
+    return true;
+  }
+  if (isUnsafeHttpMethod(req.method) && !isAllowedLocalOriginHeader(origin)) {
+    sendJson(res, 403, { ok: false, message: "Missing or invalid origin" });
+    return true;
+  }
+  if (!hasValidLocalApiToken(req)) {
+    sendJson(res, 401, { ok: false, message: "Missing or invalid local session token" });
+    return true;
+  }
+  if (isUnsafeHttpMethod(req.method) && requestHasBody(req) && !requestHasJsonContentType(req)) {
+    sendJson(res, 415, { ok: false, message: "Content-Type must be application/json" });
+    return true;
+  }
+  return false;
+}
+
+function rejectHttpHost(req, res) {
+  if (isAllowedLocalHostHeader(req.headers.host || "")) return false;
+  sendJson(res, 403, { ok: false, message: "Forbidden host" });
+  return true;
 }
 
 function getFirstUrl(text) {
@@ -2563,7 +2680,27 @@ function isInsideManagedFilePath(filePath) {
     path.join(__dirname, "jianying-exports"),
     path.join(__dirname, ".data", "cs1-video-maker"),
   ].map((item) => path.resolve(item));
-  return roots.some((root) => resolved === root || resolved.startsWith(`${root}${path.sep}`));
+  return roots.some((root) => isPathInsideRoot(root, resolved));
+}
+
+function resolveSafeManagedImagePath(filePath) {
+  const resolved = path.resolve(String(filePath || "").trim());
+  if (!resolved || !fs.existsSync(resolved)) throw new Error("Image file not found");
+  const stat = fs.statSync(resolved);
+  if (!stat.isFile()) throw new Error("Image file not found");
+  if (!localImageExtensions.has(path.extname(resolved).toLowerCase())) throw new Error("Unsupported image file type");
+  if (!isInsideManagedFilePath(resolved)) throw new Error("Image file is outside managed directories");
+  return resolved;
+}
+
+function resolveImageRequestPath(url) {
+  const assetId = String(url.searchParams.get("id") || url.searchParams.get("assetId") || "").trim();
+  if (assetId) {
+    const asset = imageService.getAsset(assetId);
+    const assetPath = asset?.file_path || asset?.original_path || "";
+    return resolveSafeManagedImagePath(assetPath);
+  }
+  return resolveSafeManagedImagePath(url.searchParams.get("path") || "");
 }
 
 function stopChildProcess(child) {
@@ -7005,10 +7142,11 @@ function serveStatic(req, res) {
       .includes(extension)
       ? "public, max-age=86400"
       : "no-store";
-    res.writeHead(200, {
+    const headers = {
       "content-type": type,
       "cache-control": cacheControl,
-    });
+    };
+    res.writeHead(200, extension === ".html" ? setLocalApiCookie(headers) : headers);
     res.end(data);
   });
 }
@@ -7029,6 +7167,9 @@ const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, "http://127.0.0.1");
 
   try {
+    if (rejectHttpHost(req, res)) return;
+    if (url.pathname.startsWith("/api/") && rejectLocalApiRequest(req, res)) return;
+
     if (req.method === "GET" && url.pathname === "/api/status") {
       sendJson(res, 200, {
         ok: true,
@@ -8913,7 +9054,7 @@ const server = http.createServer(async (req, res) => {
       const route = url.pathname.replace("/api/settings/", "");
 
       if (req.method === "GET" && route === "all") {
-        sendJson(res, 200, { ok: true, settings: readSettings() });
+        sendJson(res, 404, { ok: false, message: "Settings dump is disabled" });
         return;
       }
 
@@ -9059,7 +9200,13 @@ const server = http.createServer(async (req, res) => {
       }
 
       if (req.method === "GET" && route === "file") {
-        const filePath = url.searchParams.get("path") || "";
+        let filePath = "";
+        try {
+          filePath = resolveImageRequestPath(url);
+        } catch (error) {
+          sendJson(res, 404, { ok: false, message: error instanceof Error ? error.message : "Image file not found" });
+          return;
+        }
         if (!filePath || !fs.existsSync(filePath)) {
           sendJson(res, 404, { ok: false, message: "文件不存在" });
           return;
@@ -9067,13 +9214,14 @@ const server = http.createServer(async (req, res) => {
         const ext = path.extname(filePath).toLowerCase();
         const mime = { ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".gif": "image/gif", ".webp": "image/webp" };
         const data = fs.readFileSync(filePath);
-        sendBuffer(res, 200, data, mime[ext] || "application/octet-stream");
+        sendBuffer(res, 200, data, mime[ext] || "image/png");
         return;
       }
 
       if (req.method === "GET" && route === "thumbnail") {
-        const filePath = url.searchParams.get("path") || "";
+        let filePath = "";
         try {
+          filePath = resolveImageRequestPath(url);
           const thumbPath = await imageService.thumbnailForImage(filePath, { width: Number(url.searchParams.get("width")) || 360 });
           const ext = path.extname(thumbPath).toLowerCase();
           const mime = { ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".gif": "image/gif", ".webp": "image/webp" };
@@ -9104,7 +9252,15 @@ const server = http.createServer(async (req, res) => {
 });
 
 server.on("upgrade", (request, socket, head) => {
-  if (request.url === "/ws/progress") {
+  const url = new URL(request.url || "/", "http://127.0.0.1");
+  if (url.pathname !== "/ws/progress"
+    || !isAllowedLocalHostHeader(request.headers.host || "")
+    || !isAllowedLocalOriginHeader(request.headers.origin || "")
+    || !hasValidLocalApiToken(request)) {
+    socket.destroy();
+    return;
+  }
+  if (url.pathname === "/ws/progress") {
     wss.handleUpgrade(request, socket, head, (ws) => {
       wsClients.add(ws);
       ws.on("close", () => wsClients.delete(ws));
@@ -9178,7 +9334,7 @@ async function waitForExistingRuntimeUrl() {
     try {
       const url = fs.readFileSync(urlPath, "utf8").trim();
       if (url) {
-        const response = await fetch(`${url}/api/status`);
+        const response = await fetch(url);
         if (response.ok) return url;
       }
     } catch {

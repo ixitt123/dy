@@ -5,8 +5,27 @@ import { readFile } from "node:fs/promises";
 
 const BASE = "http://127.0.0.1:8787";
 const tests = [];
+const nativeFetch = globalThis.fetch.bind(globalThis);
+let localApiCookie = "";
 
 function test(name, fn) { tests.push({ name, fn }); }
+
+async function establishLocalSession() {
+  const response = await nativeFetch(`${BASE}/`);
+  localApiCookie = String(response.headers.get("set-cookie") || "").split(";")[0];
+  if (!response.ok || !localApiCookie) throw new Error("Unable to establish local API session");
+}
+
+globalThis.fetch = async (input, options = {}) => {
+  const url = typeof input === "string" ? input : input?.url || "";
+  if (!String(url).startsWith(`${BASE}/api/`)) return nativeFetch(input, options);
+  const headers = new Headers(options.headers || {});
+  headers.set("cookie", localApiCookie);
+  if (!headers.has("origin")) headers.set("origin", BASE);
+  return nativeFetch(input, { ...options, headers });
+};
+
+await establishLocalSession();
 
 test("Status API", async () => {
   const r = await fetch(`${BASE}/api/status`);
@@ -20,10 +39,12 @@ test("Provider List", async () => {
   if (!d.providers?.length) throw new Error("No providers");
 });
 
-test("Settings API", async () => {
+test("Settings dump disabled", async () => {
   const r = await fetch(`${BASE}/api/settings/all`);
   const d = await r.json();
-  if (!d.ok) throw new Error("Settings not OK");
+  if (r.status !== 404 || d.ok !== false || JSON.stringify(d).includes("api_key")) {
+    throw new Error("Settings dump endpoint must stay disabled and must not expose secrets");
+  }
 });
 
 test("Model Mapping", async () => {
