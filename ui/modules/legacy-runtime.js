@@ -4373,6 +4373,22 @@ async function sendTtsPayloadToTargets(payload, targets = []) {
   return sent;
 }
 
+async function refreshSentTtsRecord(job = activeTtsRailJob) {
+  if (job?.id) {
+    try {
+      const data = await fetchJson(`/api/tts/job?id=${encodeURIComponent(job.id)}`);
+      if (data.job) {
+        activeTtsRailJob = data.job;
+        renderTtsRail(data.job);
+        renderTtsCentralTimeline(data.job, { preserveDraft: false });
+      }
+    } catch (_) {
+      activeTtsRailJob = job;
+    }
+  }
+  await refreshTtsJobs();
+}
+
 async function sendConfirmedTtsAudio(container = document, job = activeTtsRailJob) {
   const originalPayload = confirmedTtsAudioPayload(job);
   if (!originalPayload) {
@@ -4417,6 +4433,7 @@ async function sendConfirmedTtsAudio(container = document, job = activeTtsRailJo
   activeTtsRailJob = handoffJob;
   await window.videoProjects?.linkCurrent?.("tts", payload.id, ttsHandoffTitle(payload), payload);
   const sent = await sendTtsPayloadToTargets(payload, targets);
+  await refreshSentTtsRecord(handoffJob);
   const correctionStatus = corrected && correctionMode === "source_constrained_music_asr_repair"
     ? partialCorrection
       ? `${correctionWarning || "已完成原文约束修复，未确定内容保留原识别文字；"}`

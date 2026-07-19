@@ -425,3 +425,27 @@ Verification:
 - `npm.cmd run test:tts-handoff-subtitle-correction` passed.
 - `npm.cmd run check:syntax` passed.
 - `npm.cmd run check:gate` passed.
+
+## 2026-07-19 22:45 +08:00
+
+Branch: `fix/p0-stability`
+
+Completed item:
+
+- Ensured the generated-record subtitle data reflects the subtitle timeline confirmed and sent from the TTS page.
+
+User-visible behavior:
+
+- After `确定修改并发送到：` saves the central subtitle timeline and sends the TTS triplet, the generated-record list is refreshed from the latest persisted TTS job.
+- The generated record's script/subtitle/timestamped subtitle links now point at the files rewritten by the page confirmation step.
+- The central timeline also reloads from the same confirmed job after send, so the page and generated record stay on the same subtitle data.
+
+Regression coverage:
+
+- `test-tts-handoff-subtitle-correction.mjs` asserts `refreshSentTtsRecord()` exists, re-renders the central timeline from `/api/tts/job`, and is called after sending `handoffJob`.
+
+Verification:
+
+- `npm.cmd run test:tts-handoff-subtitle-correction` passed.
+- `npm.cmd run check:syntax` passed.
+- `npm.cmd run check:gate` passed.
