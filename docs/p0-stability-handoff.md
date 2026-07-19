@@ -399,3 +399,29 @@ Verification:
 - `npm.cmd run test:tts-handoff-subtitle-correction` passed.
 - `npm.cmd run check:syntax` passed.
 - `npm.cmd run check:gate` passed.
+
+## 2026-07-19 22:30 +08:00
+
+Branch: `fix/p0-stability`
+
+Completed item:
+
+- Removed the generated-record `校对字幕` / `查看字幕详情` entry points and restored per-record production-line checkbox sending.
+
+User-visible behavior:
+
+- TTS generated records no longer show `校对字幕` or `查看字幕详情` buttons.
+- Completed confirmed generated records again show production-line checkboxes plus `发送所选`.
+- Sending from a generated record still sends the TTS triplet: `文案 + 音频 + 带时间戳字幕`.
+- The TTS page remembers the last selected production-line targets in localStorage key `dy:tts:handoff-targets`.
+- Central timeline checkboxes and generated-record checkboxes both default to the last-used selection; first use defaults to all four production lines.
+
+Regression coverage:
+
+- `test-tts-handoff-subtitle-correction.mjs` asserts no `tts-job-calibrate` / `校对字幕` / `查看字幕详情` remains in the runtime, verifies generated records render handoff checkboxes and `发送所选`, and verifies last-used target persistence helpers exist.
+
+Verification:
+
+- `npm.cmd run test:tts-handoff-subtitle-correction` passed.
+- `npm.cmd run check:syntax` passed.
+- `npm.cmd run check:gate` passed.

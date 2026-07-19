@@ -48,6 +48,8 @@ assert.match(runtime, /const payload = confirmedTtsAudioPayload\(handoffJob\) \|
 assert.match(runtime, /async function syncSharedTtsTimeline/u);
 assert.match(runtime, /start: source\.start,[\s\S]*end: source\.end/u);
 assert.match(runtime, /syncTimeline: syncSharedTtsTimeline/u);
+assert.doesNotMatch(runtime, /tts-job-calibrate/u);
+assert.doesNotMatch(runtime, /校对字幕|查看字幕详情/u);
 
 assert.match(html, /id="cs1SubtitleTimeline"/u);
 assert.match(html, /id="ttsTimelineColumn"[\s\S]*字幕时间轴/u);
@@ -67,6 +69,12 @@ assert.match(kinetic, /function confirmTimelineChanges/u);
 assert.match(kinetic, /kineticConfirmTimeline"\)\.addEventListener\("click", \(\) => confirmTimelineChanges\(\)\)/u);
 assert.doesNotMatch(kinetic, /focusout[\s\S]*syncKineticSubtitleText/u);
 assert.match(runtime, /function saveTtsCentralTimeline/u);
+assert.match(runtime, /const TTS_HANDOFF_TARGETS_KEY = "dy:tts:handoff-targets"/u);
+assert.match(runtime, /function renderTtsHandoffTargetOptions/u);
+assert.match(runtime, /function syncTtsHandoffTargetInputs/u);
+assert.match(runtime, /writeTtsHandoffTargetSet\(targets\)/u);
+assert.match(runtime, /<div class="tts-job-handoff-options">\$\{renderTtsHandoffTargetOptions\("tts-job-handoff-choice"\)\}<\/div>/u);
+assert.match(runtime, /<button class="primary small tts-job-send" type="button">发送所选<\/button>/u);
 assert.match(runtime, /async function confirmAndSendTtsCentralTimeline/u);
 assert.match(runtime, /const targets = selectedTtsHandoffTargets\(ttsCentralHandoff \|\| ttsTimelineColumn \|\| document\)/u);
 assert.match(runtime, /const confirmedJob = await saveTtsCentralTimeline\(\)/u);

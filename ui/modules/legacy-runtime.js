@@ -3726,6 +3726,13 @@ function renderTtsJobs(jobs = []) {
 
 const TTS_HIDDEN_JOBS_KEY = "dy:tts:hidden-jobs";
 const TTS_MINIMIZED_JOBS_KEY = "dy:tts:minimized-jobs";
+const TTS_HANDOFF_TARGETS_KEY = "dy:tts:handoff-targets";
+const TTS_HANDOFF_TARGETS = [
+  ["cs1-video", "CS1生成器"],
+  ["xiaohei-video", "小黑视频风格生成"],
+  ["money-printer", "MoneyPrinter"],
+  ["kinetic-text", "动态大字视频"],
+];
 
 function readTtsJobDisplaySet(key) {
   try {
@@ -3760,6 +3767,46 @@ function isTtsJobHidden(id) {
 
 function isTtsJobMinimized(id) {
   return readTtsJobDisplaySet(TTS_MINIMIZED_JOBS_KEY).has(String(id || ""));
+}
+
+function readTtsHandoffTargetSet() {
+  try {
+    const raw = globalThis.localStorage?.getItem(TTS_HANDOFF_TARGETS_KEY);
+    if (raw === null || raw === undefined) return new Set(TTS_HANDOFF_TARGETS.map(([target]) => target));
+    const values = JSON.parse(raw);
+    const allowed = new Set(TTS_HANDOFF_TARGETS.map(([target]) => target));
+    const selected = Array.isArray(values) ? values.map(String).filter((target) => allowed.has(target)) : [];
+    return new Set(selected);
+  } catch (_) {
+    return new Set(TTS_HANDOFF_TARGETS.map(([target]) => target));
+  }
+}
+
+function writeTtsHandoffTargetSet(targets = []) {
+  try {
+    const allowed = new Set(TTS_HANDOFF_TARGETS.map(([target]) => target));
+    const selected = Array.from(new Set(targets.map(String).filter((target) => allowed.has(target))));
+    globalThis.localStorage?.setItem(TTS_HANDOFF_TARGETS_KEY, JSON.stringify(selected));
+  } catch (_) {
+    // Last-used UI choices are optional; generated files and handoffs are not affected.
+  }
+}
+
+function renderTtsHandoffTargetOptions(className = "tts-job-handoff-choice") {
+  const selected = readTtsHandoffTargetSet();
+  return TTS_HANDOFF_TARGETS.map(([target, label]) => `
+    <label>
+      <input class="${className}" type="checkbox" data-target="${target}" ${selected.has(target) ? "checked" : ""} />
+      ${label}
+    </label>
+  `).join("");
+}
+
+function syncTtsHandoffTargetInputs(container = document) {
+  const selected = readTtsHandoffTargetSet();
+  container.querySelectorAll?.(".tts-job-handoff-choice, .tts-audio-handoff-choice").forEach((input) => {
+    input.checked = selected.has(input.dataset.target);
+  });
 }
 
 function ttsJobAudioFileName(job = {}) {
@@ -3845,10 +3892,11 @@ function renderTtsJobsEnhanced(jobs = []) {
         <div class="tts-job-handoff">
           <div class="tts-job-handoff-head">
             <strong>已生成三件套</strong>
-            <span>${escapeHtml(matchPassedText)}；发送请使用上方“确定修改并发送到：”。</span>
+            <span>${escapeHtml(matchPassedText)}</span>
           </div>
+          <div class="tts-job-handoff-options">${renderTtsHandoffTargetOptions("tts-job-handoff-choice")}</div>
           <div class="tts-history-actions">
-            <button class="ghost small tts-job-calibrate" type="button">校对字幕</button>
+            <button class="primary small tts-job-send" type="button">发送所选</button>
             <button class="ghost small danger-action tts-job-delete" type="button">不满意，删除</button>
             <button class="ghost small tts-job-hide" type="button">隐藏</button>
             <button class="ghost small tts-job-minimize" type="button">最小化</button>
@@ -3867,13 +3915,11 @@ function renderTtsJobsEnhanced(jobs = []) {
               ${rewriteRequired
                 ? `
                   <button class="primary small tts-job-change-script" type="button">换文案生成</button>
-                  <button class="ghost small tts-job-calibrate" type="button">查看字幕详情</button>
                 `
                 : rawAlignmentStatus === "review_required"
                   ? `
                     <button class="primary small tts-job-alignment-retry" type="button">自动重新识别</button>
                     <button class="ghost small tts-job-regenerate" type="button">重新生成音频</button>
-                    <button class="ghost small tts-job-calibrate" type="button">查看字幕详情</button>
                   `
                   : '<button class="primary small tts-job-alignment-retry" type="button">重新识别音频</button>'}
               <button class="ghost small danger-action tts-job-delete" type="button">不满意，删除</button>
@@ -4288,9 +4334,11 @@ async function applyTtsToXiaohei(payload = {}) {
 }
 
 function selectedTtsHandoffTargets(container = document) {
-  return [...container.querySelectorAll(".tts-job-handoff-choice:checked, .tts-audio-handoff-choice:checked")]
+  const targets = [...container.querySelectorAll(".tts-job-handoff-choice:checked, .tts-audio-handoff-choice:checked")]
     .map((input) => input.dataset.target)
     .filter(Boolean);
+  writeTtsHandoffTargetSet(targets);
+  return targets;
 }
 
 function setTtsHandoffStatus(container = document, message = "") {
@@ -7357,6 +7405,18 @@ ttsReloadTimelineBtn?.addEventListener("click", () => {
   renderTtsCentralTimeline(activeTtsRailJob);
 });
 
+document.addEventListener("change", (event) => {
+  if (!event.target?.matches?.(".tts-job-handoff-choice, .tts-audio-handoff-choice")) return;
+  const source = event.target.closest(".tts-job-handoff, .tts-central-handoff, #ttsAudioHandoff") || document;
+  const targets = [...source.querySelectorAll(".tts-job-handoff-choice:checked, .tts-audio-handoff-choice:checked")]
+    .map((input) => input.dataset.target)
+    .filter(Boolean);
+  writeTtsHandoffTargetSet(targets);
+  syncTtsHandoffTargetInputs(document);
+});
+
+syncTtsHandoffTargetInputs(document);
+
 sendConfirmedTtsAudioBtn?.addEventListener("click", () => {
   sendConfirmedTtsAudio().catch((error) => {
     ttsAudioHandoffStatus.textContent = error instanceof Error ? error.message : String(error);
@@ -7379,7 +7439,6 @@ document.querySelector("#clearTtsJobs")?.addEventListener("click", () => {
 
 ttsHistory?.addEventListener("click", (event) => {
   const sendButton = event.target.closest(".tts-job-send");
-  const calibrateButton = event.target.closest(".tts-job-calibrate");
   const alignmentRetryButton = event.target.closest(".tts-job-alignment-retry");
   const confirmAnywayButton = event.target.closest(".tts-job-confirm-anyway");
   const regenerateButton = event.target.closest(".tts-job-regenerate");
@@ -7442,7 +7501,7 @@ ttsHistory?.addEventListener("click", (event) => {
     });
     return;
   }
-  if (calibrateButton || alignmentRetryButton) {
+  if (alignmentRetryButton) {
     (async () => {
       const data = await fetchJson(`/api/tts/job?id=${encodeURIComponent(jobId)}`);
       activeTtsRailJob = data.job;
