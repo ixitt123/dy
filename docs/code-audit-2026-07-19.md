@@ -1,9 +1,10 @@
-# douyin-mcp-local 全面代码审查报告
+# douyin-mcp-local 全面代码审查报告（合并施工版 v2）
 
 - 审查日期：2026-07-19
 - 审查分支：`fix/p0-stability`
 - 项目：`douyin-mcp-local`
 - 审查性质：静态代码审查、依赖审计、现有测试验证；本报告不包含修复代码
+- 修订说明：以首轮实读审查为主线，合并第二轮行号复核和施工建议；纠正“命令注入/路径穿越已防住”“未捕获异常后继续保活”“图片/TTS 会降级到文本 Provider”等错误判断
 - 第三方边界：`integrations/moneyprinterturbo` 作为 Git 子模块，仅审查本项目对它的集成层，不把第三方源码计入本项目质量统计
 
 ## 一、结论摘要
@@ -18,6 +19,8 @@
 - 确认存在 6 类高优先级问题：本地 API 缺少身份/来源校验、设置与任意本地图片文件可被读取、静态文件目录校验可绕过、MoneyPrinter 打开链接存在命令注入面、网页分析存在 SSRF 与无上限读取、图片素材页面存在存储型 DOM XSS。
 - 生产依赖审计返回 8 项已知漏洞：4 高危、4 中危。
 - 最大的维护风险是 `ui-server.mjs`、`legacy-runtime.js` 和 `app.css` 继续膨胀，以及新旧模块并行维护导致同一业务规则出现多个实现。
+
+施工必须遵守：每个问题先增加能够复现漏洞或失败条件的测试，再修改实现；每项独立提交，禁止把安全修复、结构重构和依赖升级混入同一个提交。任何重构必须保持现有 TTS、字幕、小黑、CS1 和 MoneyPrinter 生产线合同不变。
 
 ## 二、审查范围与规模
 
@@ -155,11 +158,12 @@ const inside = relative === "" || (!relative.startsWith(`..${path.sep}`) && rela
 
 **具体修改建议**
 
-1. 只保留一个 `SettingsRepository`，所有设置读写经过同一入口。
-2. 写入同目录临时文件，flush/fsync 后原子 rename；保留最近 3 个带时间戳备份。
-3. 用 schema 校验和单进程写锁；已有文件解析失败时禁止保存，并在 UI 明确提示“配置损坏，可从备份恢复”，不能静默采用默认值。
-4. 启动时检测并自动提供备份恢复，但恢复前保留损坏原件。
-5. 保持 `settings.json` 不入库；本次确认 `.gitignore` 已忽略，现有秘密安全测试通过。
+1. 只保留一个 `SettingsRepository`，所有设置读写经过同一入口；当前 `server/core/settings-center.js` 是已实例化但未真正接管运行时的重复实现，应删除或完成接管，不能继续形成潜在第二真相源。
+2. 启动时读取、校验并建立内存缓存；请求路径读取缓存，不再反复同步读盘。`writeSettings()` 成功后同步更新缓存，并用 mtime/文件监听处理外部修改，避免永久读取旧配置。
+3. 写入同目录临时文件，flush/fsync 后原子 rename；保留最近 3 个带时间戳备份。
+4. 用 schema 校验和单进程写锁；已有文件解析失败时禁止保存，并在 UI 明确提示“配置损坏，可从备份恢复”，不能静默采用默认值。
+5. 启动时检测并自动提供备份恢复，但恢复前保留损坏原件。
+6. 保持 `settings.json` 不入库；本次确认 `.gitignore` 已忽略，现有秘密安全测试通过。
 
 **理由**：这是功能“随机复发”最可能的基础设施原因之一，修复收益覆盖所有依赖配置的模块。
 
@@ -170,8 +174,8 @@ const inside = relative === "" || (!relative.startsWith(`..${path.sep}`) && rela
 `pnpm audit --prod` 检查 196 个生产依赖，报告：
 
 - `xlsx@0.18.5`：原型污染、ReDoS 两项高危。当前代码只用于导出，没有发现读取任意 XLSX，因此现有可利用面较低，但该 npm 包版本已长期停更。
-- `form-data@4.0.5`：CRLF/ multipart 字段注入，高危，经 `@yc-w-cn/douyin-mcp-server -> axios` 引入，可升级到 `4.0.6+`。
-- `hono@4.12.23`：1 项高危、4 项中危，经 `@modelcontextprotocol/sdk` 引入；当前项目不是 AWS Lambda 部署，部分条目与现运行路径不匹配，但 Windows 静态路径和 CORS 类问题值得升级处理。
+- `form-data@4.0.5`：CRLF/ multipart 字段注入，高危，经 `@yc-w-cn/douyin-mcp-server -> axios` 引入，可升级到 `4.0.6+`；实际利用要求不可信字段名或文件名进入 multipart，应核查调用路径但不能忽略升级。
+- `hono@4.12.23`：1 项高危、4 项中危，经 `@modelcontextprotocol/sdk` 引入；当前项目不是 AWS Lambda 部署，部分条目与现运行路径不匹配，但 Windows 静态路径和 CORS 类问题值得升级处理。依赖审计严重度不能直接等同于本项目当前可利用性。
 
 **具体修改建议**
 
@@ -201,7 +205,7 @@ const inside = relative === "" || (!relative.startsWith(`..${path.sep}`) && rela
 
 ### M3. 同步 I/O 和同步子进程会阻塞整个服务
 
-**问题**：`ui-server.mjs` 内约 135 次同步文件调用；图片接口整文件 `readFileSync`；TTS 使用同步 ffprobe（`server/tts/tts-service.js:757`），CS1 使用同步 ffmpeg（`server/routes/cs1-video-routes.js:488`）。SQLite 也使用 `DatabaseSync`。
+**问题**：`ui-server.mjs` 内约有 135 处同步文件调用（包含启动、配置和请求路径，并非全部都是热点）；图片接口整文件 `readFileSync`，导演/VFO 导出在 `ui-server.mjs:7521,7585` 整文件读取，字幕文本在 `ui-server.mjs:8008` 同步读取；TTS 使用同步 ffprobe（`server/tts/tts-service.js:757`），CS1 使用同步 ffmpeg（`server/routes/cs1-video-routes.js:488`）。SQLite 也使用 `DatabaseSync`。音频接口 `ui-server.mjs:7983-7989,8040-8046` 已正确使用流式响应，不应重复改写。
 
 **建议**：请求热路径改 `fs.promises` 或 `createReadStream`；FFmpeg/FFprobe 改异步 `spawn` 并带超时/取消；大型媒体和 CPU 工作放入有并发上限的 worker/子进程。SQLite 暂可保留同步 API，但把长事务和全表统计移出高频请求，并记录事件循环延迟。
 
@@ -217,9 +221,9 @@ const inside = relative === "" || (!relative.startsWith(`..${path.sep}`) && rela
 
 ### M5. 多个 JSON 状态文件直接覆盖，错误被吞掉
 
-**证据**：`PipelineState` 读写异常均为空 `catch`，并直接 `writeFileSync`（`server/core/pipeline-bus/PipelineState.js:25-40`）；动态大字、声音资产、导演/VFO 等也存在独立 JSON 写入实现。
+**证据**：`PipelineState` 读写异常均为空 `catch`，并直接 `writeFileSync`（`server/core/pipeline-bus/PipelineState.js:25-40`）；动态大字、声音资产、导演/VFO 等也存在独立 JSON 写入实现。按当前正则复核，`ui-server.mjs` 约 11 处、`legacy-runtime.js` 约 13 处空 `catch`，不是此前估算的 30+/27+。
 
-**建议**：抽取 `atomicWriteJson()`、`readJsonWithBackup()` 和统一错误日志；状态保存失败应标记任务为“保存失败”而不是假装成功。临时文件必须与目标同盘以保证 rename 原子性。
+**建议**：抽取 `atomicWriteJson()`、`readJsonWithBackup()` 和统一错误日志；状态保存失败应标记任务为“保存失败”而不是假装成功。临时文件必须与目标同盘以保证 rename 原子性。配置、数据库、任务状态、文件持久化失败必须记录并反馈；临时文件清理、媒体暂停等 best-effort 操作可以静默，但应有明确注释，禁止机械地给所有空 `catch` 增加噪声日志。
 
 **理由**：这类问题不会总是立即报错，却会在第二次启动时表现为记录丢失或功能失效。
 
@@ -246,6 +250,32 @@ const inside = relative === "" || (!relative.startsWith(`..${path.sep}`) && rela
 **建议**：为任务、进度、临时媒体和日志制定可配置保留期；定时 WAL checkpoint、清理已完成的旧任务、压缩/轮转日志；清理前保留用户项目和最终成品，UI 提供“预计释放空间”与确认。
 
 **理由**：当前不是内存泄漏，但长期运行会产生磁盘增长和查询变慢。
+
+### M9. 模型路由存在多源配置漂移和能力缺口
+
+**证据**：`server/config/model-defaults.js:2-10` 定义默认任务映射；`server/core/model-router/model-router.js:70-84` 又维护 Provider 别名，存在 `fish-audio`/`fish_audio`；同文件 `:12-25` 单独维护成本表；`server/core/provider-registry.js:4-10` 的 fallback 只覆盖部分文本 Provider；`server/core/settings-center.js:20-27` 和 `ui-server.mjs` 继续兼容并双写 `modelMap`/`modelMapping`。图片侧还存在 `volcengine_ark`/`volcengine`，TTS 侧存在 `ali-bailian`/`aliyun_bailian` 等边界名称。
+
+**正确行为说明**：`getFallback()` 使用 `FALLBACK_CHAIN[providerId] || []`。image/tts 的首选 Provider 不在链中时会“没有降级目标并失败”，不会自动跳到 DeepSeek。真正问题是缺少按任务能力划分的降级链，以及 Provider ID 在不同子系统不统一；同时 `unknown` 健康状态会被视为可尝试，可能在未做真实健康检查时选择候选。
+
+**建议**：默认任务映射只保留在 `model-defaults.js`；建立 canonical Provider ID 和 `text/image/tts/asr/video` 能力声明；fallback 按 `taskType + capability` 配置，禁止跨能力降级；`modelMapping` 只保留读取兼容，迁移后只写 `modelMap`；成本、别名、能力和 fallback 集中由一个注册表维护。
+
+**理由**：消除同一 Provider 在不同页面名称和行为不一致，以及图片/TTS 无法正确降级的问题。
+
+### M10. `task-store.mjs` 重复 CRUD 和状态契约增加维护成本
+
+**证据**：`task-store.mjs:1051,1270,1358,1539,1669,1813,1954` 等多处重复“列白名单 + `Object.entries(changes)` + 动态 UPDATE”模板；task 主状态使用中文枚举，而 TTS、声音和其他表又使用英文状态，前端被迫同时兼容“失败”/`failed`/`error`。
+
+**建议**：第一阶段只抽取 `filterWritableColumns()`、`buildUpdateStatement()`、`normalizePagination()`、`runInTransaction()` 等基础构件，各实体继续保留明确 Repository 接口和业务校验；不要直接创建包办所有实体的万能 `makeCrudStore()`。内部状态统一英文枚举，中文只做 UI label；SQLite 可以正常索引 Unicode，统一状态的理由是合同一致性而不是索引性能。
+
+**理由**：降低复制修改遗漏，同时避免过度抽象掩盖不同实体的事务、关联清理和默认值差异。
+
+### M11. 缺少进程级最后防线，但不能在未知异常后强行保活
+
+**证据**：项目当前没有 `uncaughtException`/`unhandledRejection` 监听器。`startTaskQueue()` 调用的 `processBatchTask()` 已有顶层 `try/catch`，普通任务错误会标记失败；但若错误处理、数据库更新或清理本身再次抛错，Promise 仍可能成为未处理拒绝。
+
+**建议**：先补任务级 Promise 链，确保“执行失败标记任务 → 清理控制器和运行集合 → 清理失败也被捕获”；进程级监听器只做脱敏日志、停止接收新任务、尝试保存状态、关闭 HTTP/WebSocket/数据库并退出，由单实例启动器/看门狗重启。禁止仅打印 `uncaughtException` 后继续运行，因为未知异常后进程状态不再可靠。
+
+**理由**：既防止单个任务异常拖垮服务，也避免在可能损坏的状态下继续处理新任务。
 
 ## 五、低优先级改进项
 
@@ -297,24 +327,25 @@ const inside = relative === "" || (!relative.startsWith(`..${path.sep}`) && rela
 
 ### 5. 错误处理
 
-已有不少局部 try/catch 和降级，例如模型路由初始化失败会只停用 AI 路由（`ui-server.mjs:290-302`），这是合理的隔离。但空 catch、配置静默回退、错误格式不一和关闭顺序仍需修复。不要采用“`uncaughtException` 后记录但继续运行”的策略；未知异常后进程状态不再可靠。正确做法是记录脱敏诊断、优雅关闭并由单实例启动器/看门狗自动重启。
+已有不少局部 try/catch 和降级，例如模型路由初始化失败会只停用 AI 路由（`ui-server.mjs:290-302`），这是合理的隔离。但空 catch、配置静默回退、错误格式不一和关闭顺序仍需修复。不要采用“`uncaughtException` 后记录但继续运行”的策略；未知异常后进程状态不再可靠。正确顺序是先保证任务 Promise 自己捕获并标记失败，再由进程级最后防线记录脱敏诊断、优雅关闭并交给单实例启动器/看门狗自动重启。
 
 ## 七、推荐落地顺序
 
 ### 第一批：安全止血（预计 1–2 个工作日）
 
-1. H2 静态路径校验与回归测试。
-2. H3 移除 `cmd /c`，严格 URL 校验。
-3. H1 删除 `/api/settings/all`、限制图片资产路径、加入 Host/Origin/会话令牌。
-4. H5 修复已确认的图片素材 XSS 点。
-5. 将上述测试加入 `check:gate`。
+1. H2 静态路径校验与 `%5c`/`%2f` 回归测试（预计 30–45 分钟）。
+2. H3 移除 `cmd /c`，严格 URL 校验并补 shell 元字符测试（预计 30–45 分钟）。
+3. H1 删除 `/api/settings/all`、限制图片资产路径、加入 Host/Origin/会话令牌（预计 1 个工作日）。
+4. H5 整体移除数据驱动的内联事件并修复图片素材 XSS，不只修 `ui/workbench.js:2044`（预计 1–2 小时）。
+5. 先建立独立 `check:security`，稳定后并入 `check:gate`。
 
 ### 第二批：防止“隔天失效”（预计 1–2 个工作日）
 
-1. H6 单一设置仓库、原子写入、备份恢复、损坏时拒绝覆盖。
+1. H6 单一设置仓库、内存缓存、原子写入、备份恢复、损坏时拒绝覆盖。
 2. M5 共享 JSON 原子持久化。
 3. M6 正确的队列关闭协议。
 4. M7 统一错误模型和请求 ID。
+5. M11 任务级异常收口、进程优雅退出和单实例看门狗重启。
 
 ### 第三批：依赖与性能（预计 1–2 个工作日）
 
@@ -328,7 +359,9 @@ const inside = relative === "" || (!relative.startsWith(`..${path.sep}`) && rela
 1. 为现有 API 建合同测试。
 2. 每次迁移一个路由域离开 `ui-server.mjs`。
 3. 建立功能唯一所有者，逐步缩减 `legacy-runtime.js`。
-4. 统一状态、provider ID 和共享工具。
+4. M9 建立单一模型映射、canonical Provider ID、能力声明和同能力 fallback。
+5. M10 先抽取 task-store 的安全更新构件，再按证据决定是否需要有限 CRUD 工厂。
+6. 统一状态、共享工具和边界字段转换。
 
 ## 八、验收标准
 
@@ -339,9 +372,12 @@ const inside = relative === "" || (!relative.startsWith(`..${path.sep}`) && rela
 - 网页抓取拒绝私网/回环地址，并在字节上限处中止。
 - 模型提示词、错误文本等不可信字符串无法执行 HTML/脚本。
 - 配置写入中断后能从备份恢复，且损坏配置不会被默认值覆盖。
+- 请求路径读取设置缓存；外部合法修改可通过 mtime/监听安全刷新，不会永久读取旧值。
 - 定向依赖升级后 `pnpm audit --prod` 不含未豁免高危项。
+- image/tts 只能降级到具备相同能力的 Provider；无候选时明确失败，不得调用文本 Provider 代替。
 - `npm run check:gate` 持续通过，并增加上述安全回归。
 - 关闭服务时等待/取消运行任务后再关闭数据库，无未处理异常。
+- 模拟任务处理、失败标记或清理阶段抛错时，当前任务有明确失败记录；未知进程异常会优雅退出并由单实例机制恢复，不会出现第二个后台进程。
 
 ## 九、本次验证记录
 
@@ -349,7 +385,7 @@ const inside = relative === "" || (!relative.startsWith(`..${path.sep}`) && rela
 - JavaScript 语法：162 个文件全部通过。
 - 下载安全、小黑一键图片、MoneyPrinter 单实例与素材回退、朋友圈原文、结构化 JSON、原文约束字幕修复、改写完整性、音乐 ASR 修复、TTS 字幕校正、页面生命周期、ProviderRegistry、流水线失败策略、TTS 对齐、字幕渲染、模型映射、安全同步、设置秘密安全：全部通过。
 - `pnpm.cmd audit --prod --json`：4 高危、4 中危、0 严重、0 低危。
-- Git 状态：审查开始时工作树干净；报告将作为单独文件提交，未修改业务源码。
+- Git 状态：首版报告提交为 `17ac22e`；合并施工版 v2 仍只修改本报告，未修改业务源码。
 
 ## 十、给非技术使用者的操作建议
 
