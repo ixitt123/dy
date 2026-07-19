@@ -77,7 +77,7 @@ for (const skillId of expectedSkillIds) {
 
   assert.doesNotMatch(
     prompt,
-    /multi-image set|This image belongs to a multi-image set/u,
+    /multi-image set|This image belongs to a multi-image set|1\/1|其他张/u,
     `${skillId} prompt must not contain wording that encourages grouped image generation`,
   );
 }

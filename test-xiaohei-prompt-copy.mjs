@@ -19,7 +19,7 @@ assert.match(
 
 assert.match(
   source,
-  /本次只生成 Scene \$\{shot\.index\}\/\$\{total\} 这一张独立的 \$\{ratio\} 图片素材/,
+  /本次只生成当前这一张独立的 \$\{ratio\} 图片素材/,
   "Each Xiaohei scene prompt must restrict generation to the current scene.",
 );
 
@@ -37,8 +37,8 @@ assert.match(
 
 assert.match(
   source,
-  /不要把整份内容一次性发给生图工具/,
-  "Copy-all prompt text must tell the user not to send the whole director package at once.",
+  /function firstPromptCopyShot\(/,
+  "The toolbar copy action must select one shot instead of copying the whole prompt package.",
 );
 
 assert.match(
@@ -49,14 +49,26 @@ assert.match(
 
 assert.doesNotMatch(
   source,
-  /批量任务协议|multi-image set|NEXT INDEPENDENT JOB/,
+  /批量任务协议|multi-image set|NEXT INDEPENDENT JOB|本次只生成 Scene|分镜编号：\$\{shot\.index\}\/\$\{total\}|共 \$\{imageCount\} 个 Scene|shots\.slice\(0, imageCount\)/,
   "Xiaohei prompt text must not use wording that makes image models produce grouped images.",
 );
 
 assert.match(
   source,
-  /shots\.slice\(0, imageCount\)/,
-  "Copy-all must cap copied Xiaohei image jobs to the requested maximum.",
+  /await navigator\.clipboard\.writeText\(shotPromptBlock\(shot, state\.plan\)\)/,
+  "The toolbar copy action must copy exactly one shot prompt.",
+);
+
+assert.match(
+  html,
+  /复制第一张提示词/,
+  "The toolbar copy button must not advertise copying all prompts.",
+);
+
+assert.doesNotMatch(
+  html,
+  /复制全部提示词/,
+  "The Xiaohei page must not keep a copy-all prompt entry point that encourages grouped images.",
 );
 
 assert.match(

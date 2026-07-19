@@ -2038,22 +2038,21 @@ function promptAspectRatio(plan = state.plan) {
 
 function shotPromptBlock(shot = {}, plan = state.plan) {
   const ratio = promptAspectRatio(plan);
-  const total = Number(plan?.shots?.length || 0) || "?";
   const skillName = shot.skillName || plan?.skillName || shot.skillId || "";
   return [
-    `Scene ${shot.index}/${total}`,
+    "单张图片素材生成任务",
     "",
     "复制下面整段到生图工具：",
     "",
     "请直接生成一张图片素材。",
     "不要解释，不要分析，不要复述提示词，不要给优化建议，直接出图。",
     "只生成一张图，不要拼图，不要多宫格，不要组图，不要缩略图合集。",
-    `本次只生成 Scene ${shot.index}/${total} 这一张独立的 ${ratio} 图片素材。`,
-    "不要把多个 Scene、多个编号、多个镜头合并到同一张画布。",
+    `本次只生成当前这一张独立的 ${ratio} 图片素材。`,
+    "不要把多个画面、多个编号、多个镜头合并到同一张画布。",
+    "图片里不要出现数字编号角标，不要出现分格边框。",
     "",
     "项目：小黑视频风格生成",
     `锁定 Skill：${skillName}`,
-    `分镜编号：${shot.index}/${total}`,
     `本镜头任务：${shot.topic || ""}`,
     `本镜头角色：${shot.role || ""}`,
     `结构类型（只作为理解，不写进画面）：${shot.structureType || ""}`,
@@ -2063,7 +2062,7 @@ function shotPromptBlock(shot = {}, plan = state.plan) {
     `构图：${shot.composition || ""}`,
     `对应原文：${shot.sourceText || ""}`,
     "",
-    "画面文字规则：保留当前 Skill 原本允许的少量中文手写标注；不要把整段原文、标题、Scene 编号或说明文字写进画面。",
+    "画面文字规则：保留当前 Skill 原本允许的少量中文手写标注；不要把整段原文、标题、编号或说明文字写进画面。",
     "单张约束：只输出一张高质量图片；禁止 Collage（拼贴图）、Contact Sheet（缩略图合集）、九宫格、拼图、组图、分屏故事板。",
     "",
     String(shot.prompt || "").trim(),
@@ -2073,7 +2072,7 @@ function shotPromptBlock(shot = {}, plan = state.plan) {
 }
 
 function promptPlanText(shots = [], plan = state.plan) {
-  return shots.map((shot) => shotPromptBlock(shot, plan)).join("\n\n--- 下一个 Scene：不要和上一段一起发送 ---\n\n");
+  return shots.map((shot) => shotPromptBlock(shot, plan)).join("\n\n--- 下一张图片：必须单独复制这一段，不要和上一段一起发送 ---\n\n");
 }
 
 function pendingUploadIndexes(plan = state.plan) {
@@ -2248,14 +2247,15 @@ async function handleOutputHistoryAction(event) {
 
 async function copyAllPrompts() {
   setButtonFeedback(els.copyPrompts, "loading", "正在复制");
-  if (!state.promptsText) await createPlan();
-  if (!state.promptsText) {
+  if (!state.plan?.shots?.length) await createPlan();
+  const shot = firstPromptCopyShot();
+  if (!shot) {
     setButtonFeedback(els.copyPrompts, "error", "没有可复制内容");
     return;
   }
   try {
-    await navigator.clipboard.writeText(promptClipboardText());
-    setStatus("已复制提示词", "已按独立 Job 格式复制，生图时应逐个编号生成。", 100);
+    await navigator.clipboard.writeText(shotPromptBlock(shot, state.plan));
+    setStatus("已复制单张提示词", `已复制 #${shot.index}。每次只粘贴这一张，不会再复制整组。`, 100);
     setButtonFeedback(els.copyPrompts, "success", "已复制");
   } catch (error) {
     setStatus("复制失败", error.message || String(error), 0, true);
@@ -2263,28 +2263,19 @@ async function copyAllPrompts() {
   }
 }
 
+function firstPromptCopyShot() {
+  const shots = Array.isArray(state.plan?.shots) ? state.plan.shots : [];
+  if (!shots.length) return null;
+  const generated = new Set((state.images || [])
+    .filter((image) => image?.assetId)
+    .map((image) => Number(image.index)));
+  return shots.find((shot) => !generated.has(Number(shot.index))) || shots[0];
+}
+
 function promptClipboardText() {
   const shots = Array.isArray(state.plan?.shots) ? state.plan.shots : [];
-  const fallbackPromptText = String(state.promptsText || "").trim();
-  const parsedCount = (fallbackPromptText.match(/^#\d+/gm) || []).length;
-  const totalCount = shots.length > 0 ? shots.length : parsedCount;
-  const imageCount = Math.min(Math.max(totalCount || 1, 1), 10);
-  const ratio = promptAspectRatio(state.plan);
-  const promptText = shots.length
-    ? promptPlanText(shots.slice(0, imageCount), state.plan)
-    : fallbackPromptText;
-  return [
-    "小黑视频风格生成 - 单张 Scene 生图版",
-    "",
-    "重要：不要把整份内容一次性发给生图工具。每次只复制一个 Scene 里的整段提示词。",
-    "每段都已经写成直接生图命令：生图工具应该直接生成图片，不要先解释、不要总结、不要给建议。",
-    "统一要求：每个 Scene 只生成一张独立图片素材；禁止把多个 Scene 合并成一张图、组图、拼图、九宫格或缩略图合集。",
-    "文字规则：保留对应 Skill 允许的少量中文手写标注；不要把整段原文、标题、Scene 编号或说明文字画进图片。",
-    "",
-    promptText,
-    "",
-    `共 ${imageCount} 个 Scene。请逐段复制、逐张生成；每次只生成 1 张独立的 ${ratio} 图片。`,
-  ].join("\n");
+  const shot = firstPromptCopyShot() || shots[0];
+  return shot ? shotPromptBlock(shot, state.plan) : String(state.promptsText || "").trim();
 }
 
 function syncVideoPreview() {

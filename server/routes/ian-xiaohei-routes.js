@@ -2417,7 +2417,7 @@ function buildShot({ index, total, title, anchor, purpose, aspectRatio = "16:9",
   const prompt = buildPrompt({
     purpose,
     topic,
-    seriesRole: `${index}/${total} ${shotRole.label}`,
+    seriesRole: shotRole.label,
     structureType,
     coreIdea,
     sourceText: segment,
@@ -2480,7 +2480,7 @@ export function buildPrompt({
     `画幅：${formatDescription}.`,
     "",
     "项目：小黑视频风格生成",
-    "统一要求：每个 Scene 必须只生成一张独立图片素材，主体明确，可直接用于短视频剪辑。",
+    "统一要求：当前任务必须只生成一张独立图片素材，主体明确，可直接用于短视频剪辑。",
     "画面文字规则：保留当前 Skill 允许的少量中文手写标注；不要把整段原文、标题、编号、结构类型或说明文字写进画面。",
     "",
     "锁定模板 / Skill（不要替换成其他风格）：",
@@ -2497,7 +2497,7 @@ export function buildPrompt({
     styleProfile.compositionRule,
     "",
     `分镜任务：${topic}`,
-    `本镜头角色：${seriesRole}. 这是单张独立图片任务，只画当前 Scene，不画其他 Scene，不画预览合集。`,
+    `本张图片用途：${String(seriesRole || "").replace(/^\s*\d+\s*\/\s*\d+\s*/, "")}. 这是单张独立图片任务，只画当前这一个画面，不画其他画面，不画预览合集。`,
     `对应原文：${sourceText}`,
     `结构类型（只作为理解，不写进画面）：${structureType}`,
     `核心意思：${coreIdea}`,
@@ -2515,7 +2515,7 @@ export function buildPrompt({
     styleProfile.avoid,
     "",
     "硬性约束：",
-    "当前提示词就是一个独立生图任务，只输出这一张图片。禁止合并多个编号，禁止一张图里出现多个分镜框，禁止 collage，禁止 contact sheet，禁止九宫格，禁止组图。",
+    "当前提示词就是一个独立生图任务，只输出这一张图片。禁止合并多个编号，禁止一张图里出现多个分镜框，禁止 collage，禁止 contact sheet，禁止九宫格，禁止组图。画面里不要出现编号角标。",
     `Skill 锁定：所有视觉决策必须匹配 SKILL_ID=${purpose}（${styleProfile.name}）。除非 SKILL_ID=article，否则不要退回默认小黑正文配图风格。`,
     "画面必须解释上方这一段原文，而不是泛化成整篇文章主题。保留原文里的主体、动作、方向、对比和结果。不要替换成通用学习、职场、AI、商业场景。一张图只解释一个核心结构。主体约占画面 40%-60%。最多使用 5-8 个短中文手写标注，标注必须来自当前原文语义。不要在图里写结构类型。不要复制旧案例构图；必须围绕当前段落发明新的视觉隐喻，并严格遵守所选 Skill。",
   ].join("\n");
@@ -2531,7 +2531,7 @@ function buildMetaphor(segment, structureType, { index, total, title, shotRole, 
   const semanticBase = anchor.visualMetaphor && anchor.xiaoheiAction
     ? `核心隐喻是“${anchor.visualMetaphor}”。${styleProfile.actorName}正在${anchor.xiaoheiAction}。`
     : adaptCompositionToProfile(shotRole?.composition || fallbackCompositionFor(structureType), styleProfile);
-  const composition = `${styleProfile.compositionRule} ${semanticBase} 画面只翻译当前原文“${trimText(segment, 80)}”，不扩写成全文主题；围绕“${anchor.visualSubject || inferTopic(segment, title, index)}”选择具体物件，可参考${domain.elements.join("、")}，但不允许用通用图标替代原文动作。保持第 ${index}/${total} 张与其他张的主物件和主体动作不同。`;
+  const composition = `${styleProfile.compositionRule} ${semanticBase} 画面只翻译当前原文“${trimText(segment, 80)}”，不扩写成全文主题；围绕“${anchor.visualSubject || inferTopic(segment, title, index)}”选择具体物件，可参考${domain.elements.join("、")}，但不允许用通用图标替代原文动作。当前画面必须像一张独立成品图，不做分镜合集。`;
   return {
     composition,
     elements: uniqueList([

@@ -687,3 +687,28 @@ Verification:
 - `node test-xiaohei-skill-routing.mjs` passed.
 - `node test-xiaohei-one-click-images.mjs` passed.
 - `npm.cmd run check:gate` passed.
+
+## 2026-07-19 22:43 +08:00
+
+Branch: `fix/p0-stability`
+
+Completed item:
+
+- Tightened Xiaohei manual image prompt copying after the user still received a numbered 1-10 collage/group image from the image model.
+
+Root cause:
+
+- The previous prompt wrapper still exposed sequence cues such as `Scene 1/10`, `分镜编号 1/10`, copy-all text, and whole-package wording. Image models can interpret that as a storyboard/contact-sheet request even when the prompt also says "do not collage".
+- Per user direction, the one-click image generation API path was left unchanged for now.
+
+User-visible behavior:
+
+- The toolbar button is now `复制第一张提示词`, not `复制全部提示词`.
+- Clicking that toolbar button copies exactly one shot prompt: the first missing image shot, or the first shot if all are already bound.
+- Each copied shot prompt no longer includes total-count markers like `1/10`, `共 10 个 Scene`, or `分镜编号`.
+- Single-shot prompts now explicitly forbid numbered corner labels and split-panel/grid frames while preserving the selected Xiaohei Skill and the original Chinese handwritten-label style.
+
+Regression coverage:
+
+- `test-xiaohei-prompt-copy.mjs` now asserts the toolbar copy action writes only `shotPromptBlock(shot, state.plan)`, the page no longer advertises `复制全部提示词`, and grouped-image trigger wording is absent.
+- `test-xiaohei-skill-routing.mjs` now asserts generated Skill prompts do not contain `1/1` or `其他张` grouping language.
