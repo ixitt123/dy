@@ -2038,24 +2038,42 @@ function promptAspectRatio(plan = state.plan) {
 
 function shotPromptBlock(shot = {}, plan = state.plan) {
   const ratio = promptAspectRatio(plan);
+  const total = Number(plan?.shots?.length || 0) || "?";
+  const skillName = shot.skillName || plan?.skillName || shot.skillId || "";
   return [
-    `#${shot.index} ${shot.topic || ""}`,
-    `锁定 Skill：${shot.skillName || plan?.skillName || shot.skillId || ""}`,
+    `Scene ${shot.index}/${total}`,
+    "",
+    "复制下面整段到生图工具：",
+    "",
+    "请直接生成一张图片素材。",
+    "不要解释，不要分析，不要复述提示词，不要给优化建议，直接出图。",
+    "只生成一张图，不要拼图，不要多宫格，不要组图，不要缩略图合集。",
+    `本次只生成 Scene ${shot.index}/${total} 这一张独立的 ${ratio} 图片素材。`,
+    "不要把多个 Scene、多个编号、多个镜头合并到同一张画布。",
+    "",
+    "项目：小黑视频风格生成",
+    `锁定 Skill：${skillName}`,
+    `分镜编号：${shot.index}/${total}`,
+    `本镜头任务：${shot.topic || ""}`,
+    `本镜头角色：${shot.role || ""}`,
+    `结构类型（只作为理解，不写进画面）：${shot.structureType || ""}`,
+    `核心意思：${shot.coreIdea || ""}`,
+    `主体动作：${shot.xiaoheiAction || ""}`,
+    `视觉隐喻：${shot.visualMetaphor || ""}`,
+    `构图：${shot.composition || ""}`,
     `对应原文：${shot.sourceText || ""}`,
+    "",
+    "画面文字规则：保留当前 Skill 原本允许的少量中文手写标注；不要把整段原文、标题、Scene 编号或说明文字写进画面。",
+    "单张约束：只输出一张高质量图片；禁止 Collage（拼贴图）、Contact Sheet（缩略图合集）、九宫格、拼图、组图、分屏故事板。",
+    "",
     String(shot.prompt || "").trim(),
-    [
-      `本编号 #${shot.index} 是一个独立任务(Job)。`,
-      `只生成编号 #${shot.index} 这一张独立的 ${ratio} 图片素材。`,
-      "禁止将多个编号合并到同一张画布。",
-      "禁止自动创建 Collage（拼贴图）。",
-      "禁止自动创建 Contact Sheet（缩略图合集）。",
-      "禁止九宫格、缩略图合集、拼图、组图。",
-    ].join("\n"),
+    "",
+    "输出要求：单张高质量图片素材，主体明确，风格统一，符合锁定 Skill；画面可以直接用于短视频剪辑。",
   ].filter(Boolean).join("\n");
 }
 
 function promptPlanText(shots = [], plan = state.plan) {
-  return shots.map((shot) => shotPromptBlock(shot, plan)).join("\n\n--- NEXT INDEPENDENT JOB ---\n\n");
+  return shots.map((shot) => shotPromptBlock(shot, plan)).join("\n\n--- 下一个 Scene：不要和上一段一起发送 ---\n\n");
 }
 
 function pendingUploadIndexes(plan = state.plan) {
@@ -2256,15 +2274,16 @@ function promptClipboardText() {
     ? promptPlanText(shots.slice(0, imageCount), state.plan)
     : fallbackPromptText;
   return [
-    "批量任务协议：每一个编号就是一个独立任务(Job)。",
-    "禁止将多个编号合并到同一张画布。",
-    "禁止自动创建 Collage（拼贴图）。",
-    "禁止自动创建 Contact Sheet（缩略图合集）。",
-    "禁止九宫格、缩略图合集、拼图、组图。",
+    "小黑视频风格生成 - 单张 Scene 生图版",
+    "",
+    "重要：不要把整份内容一次性发给生图工具。每次只复制一个 Scene 里的整段提示词。",
+    "每段都已经写成直接生图命令：生图工具应该直接生成图片，不要先解释、不要总结、不要给建议。",
+    "统一要求：每个 Scene 只生成一张独立图片素材；禁止把多个 Scene 合并成一张图、组图、拼图、九宫格或缩略图合集。",
+    "文字规则：保留对应 Skill 允许的少量中文手写标注；不要把整段原文、标题、Scene 编号或说明文字画进图片。",
     "",
     promptText,
     "",
-    `请按编号逐张生成，共生成${imageCount}次；每次只生成1张独立的${ratio}图片，不要拼图，不要组图。`,
+    `共 ${imageCount} 个 Scene。请逐段复制、逐张生成；每次只生成 1 张独立的 ${ratio} 图片。`,
   ].join("\n");
 }
 

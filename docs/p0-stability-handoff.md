@@ -660,3 +660,30 @@ Verification:
   - `.tts-history-audio` count was 0;
   - `音频 / 文案 / 带时间戳字幕` buttons were still present;
   - clicking `音频` loaded `/api/tts/audio?id=28` into the upper `#ttsAudio` preview.
+
+## 2026-07-19 22:21 +08:00
+
+Branch: `fix/p0-stability`
+
+Completed item:
+
+- Rewrote the Xiaohei image prompt wrapper into a director-script single-Scene format for all Xiaohei production templates / Skills.
+
+User-visible behavior:
+
+- Every copied or auto-generated Xiaohei image prompt now starts with a direct single-image command: generate one image, do not explain, do not summarize, do not produce a collage, contact sheet, grid, grouped image, or multi-scene canvas.
+- Copy-all output now warns not to send the whole director package at once; users should copy one Scene block per image.
+- Existing Skill content is preserved: selected Skill name, visual DNA, character rules, composition rules, color rules, avoid rules, source paragraph, core idea, action, metaphor, elements, and handwritten Chinese labels are still included.
+- Xiaohei-style Chinese handwritten labels are retained; only long source text, Scene number, structure type, and explanatory text are forbidden from appearing inside the image.
+
+Regression coverage:
+
+- `test-xiaohei-prompt-copy.mjs` asserts single-Scene direct generation wording, collage/contact-sheet bans, the copy-all warning, and preservation of Skill handwritten-label style.
+- `test-xiaohei-skill-routing.mjs` asserts all 12 Skills still include their independent profile fields and no longer include `multi-image set` wording.
+
+Verification:
+
+- `node test-xiaohei-prompt-copy.mjs` passed.
+- `node test-xiaohei-skill-routing.mjs` passed.
+- `node test-xiaohei-one-click-images.mjs` passed.
+- `npm.cmd run check:gate` passed.

@@ -13,20 +13,44 @@ assert.match(
 
 assert.match(
   source,
-  /本编号 #[\s\S]*是一个独立任务\(Job\)/,
-  "Each Xiaohei image prompt must mark the numbered shot as an independent job.",
+  /请直接生成一张图片素材/,
+  "Each Xiaohei image prompt must be a direct single-image generation command.",
 );
 
 assert.match(
   source,
-  /禁止自动创建 Collage/,
+  /本次只生成 Scene \$\{shot\.index\}\/\$\{total\} 这一张独立的 \$\{ratio\} 图片素材/,
+  "Each Xiaohei scene prompt must restrict generation to the current scene.",
+);
+
+assert.match(
+  source,
+  /禁止 Collage（拼贴图）/,
   "Xiaohei prompt copy must explicitly forbid collage output.",
 );
 
 assert.match(
   source,
-  /禁止自动创建 Contact Sheet/,
+  /Contact Sheet（缩略图合集）/,
   "Xiaohei prompt copy must explicitly forbid contact-sheet output.",
+);
+
+assert.match(
+  source,
+  /不要把整份内容一次性发给生图工具/,
+  "Copy-all prompt text must tell the user not to send the whole director package at once.",
+);
+
+assert.match(
+  source,
+  /保留当前 Skill 原本允许的少量中文手写标注/,
+  "Xiaohei prompt format must preserve the selected Skill's handwritten Chinese label style.",
+);
+
+assert.doesNotMatch(
+  source,
+  /批量任务协议|multi-image set|NEXT INDEPENDENT JOB/,
+  "Xiaohei prompt text must not use wording that makes image models produce grouped images.",
 );
 
 assert.match(
