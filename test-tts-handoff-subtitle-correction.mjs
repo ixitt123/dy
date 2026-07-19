@@ -83,6 +83,8 @@ assert.doesNotMatch(kinetic, /focusout[\s\S]*syncKineticSubtitleText/u);
 assert.match(runtime, /function saveTtsCentralTimeline/u);
 assert.match(runtime, /const TTS_HANDOFF_TARGETS_KEY = "dy:tts:handoff-targets"/u);
 assert.match(runtime, /data-tts-load-file="audio"[\s\S]*data-tts-load-file="script"[\s\S]*data-tts-load-file="timestamped-subtitle"/u);
+assert.doesNotMatch(runtime, /tts-history-audio/u);
+assert.doesNotMatch(runtime, /<audio controls preload="none" src="\$\{escapeHtml\(job\.audio_url\)\}"><\/audio>/u);
 assert.match(runtime, /async function loadTtsHistoryFileToWorkspace\(jobId, kind = "audio", row = null\)/u);
 assert.match(runtime, /kind === "script"[\s\S]*setTextareaValue\(ttsText, text\)/u);
 assert.match(runtime, /kind === "timestamped-subtitle"[\s\S]*syncGeneratedTtsJobToCentralTimeline\(job, \{ preserveDraft: false \}\)/u);

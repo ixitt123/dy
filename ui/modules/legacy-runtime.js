@@ -3701,32 +3701,6 @@ function renderTtsRailLists(jobs = []) {
   }
 }
 
-function renderTtsJobs(jobs = []) {
-  if (!jobs.length) {
-    ttsHistory.innerHTML = '<div class="tts-empty">还没有生成记录。</div>';
-    return;
-  }
-  const labels = Object.fromEntries(ttsProviderConfigs.map((provider) => [provider.id, provider.label]));
-  ttsHistory.innerHTML = jobs
-    .map((job) => {
-      const audio = job.audio_url
-        ? `<audio controls preload="none" src="${escapeHtml(job.audio_url)}"></audio>`
-        : `<span title="${escapeHtml(job.error || "")}">${escapeHtml(job.error || "等待生成")}</span>`;
-      return `
-        <div class="tts-history-row" data-tts-job-id="${job.id}">
-          <strong>#${job.id}</strong>
-          <span>${escapeHtml(labels[job.provider] || job.provider)}</span>
-          <span class="tts-history-text" title="${escapeHtml(job.text)}">${escapeHtml(job.text)}</span>
-          <span>${escapeHtml(job.voice_name || job.voice_id || "-")}</span>
-          <span class="tts-job-status ${escapeHtml(job.status)}">${escapeHtml(ttsStatusLabel(job.status))}</span>
-          ${audio}
-          <button class="ghost small danger-action tts-job-delete" type="button" ${["waiting", "processing"].includes(job.status) ? "disabled" : ""}>删除</button>
-        </div>
-      `;
-    })
-    .join("");
-}
-
 const TTS_HIDDEN_JOBS_KEY = "dy:tts:hidden-jobs";
 const TTS_MINIMIZED_JOBS_KEY = "dy:tts:minimized-jobs";
 const TTS_HANDOFF_TARGETS_KEY = "dy:tts:handoff-targets";
@@ -3853,9 +3827,6 @@ function renderTtsJobsEnhanced(jobs = []) {
         </div>
       `;
     }
-    const audio = job.audio_url
-      ? `<audio controls preload="none" src="${escapeHtml(job.audio_url)}"></audio>`
-      : `<span title="${escapeHtml(job.error || "")}">${escapeHtml(job.error || "等待生成")}</span>`;
     const displayNumber = Number(job.display_number || job.sequence_number || job.id || 0);
     const title = ttsJobTitle(job);
     const timedSubtitleUrl = job.timestamped_text_url || job.subtitle_url || "";
@@ -3950,7 +3921,6 @@ function renderTtsJobsEnhanced(jobs = []) {
         </div>
         <div class="tts-history-text" title="${escapeHtml(job.final_text || job.recognized_text || job.text)}">${escapeHtml(job.final_text || job.recognized_text || job.text)}</div>
         <div class="tts-history-meta">${escapeHtml(job.voice_name || job.voice_id || "-")} · ${escapeHtml(labels[job.provider] || job.provider)} · ${escapeHtml(String(job.format || "mp3").toUpperCase())}</div>
-        <div class="tts-history-audio">${audio}</div>
         <span class="tts-history-files">${fileLinks}</span>
         ${handoffPanel}
       </div>

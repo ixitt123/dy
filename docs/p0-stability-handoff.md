@@ -632,3 +632,31 @@ Verification:
   - `文案` filled `#ttsText` with 176 characters;
   - `带时间戳字幕` rendered 12 central timeline rows, first row `你学习慢，是不是从头翻到尾？`;
   - no console errors were observed.
+
+## 2026-07-19 22:03 +08:00
+
+Branch: `fix/p0-stability`
+
+Completed item:
+
+- Removed the duplicate inline audio player from TTS generation history rows.
+
+User-visible behavior:
+
+- TTS generation history no longer shows a full-width audio player inside each record.
+- The `音频 / 文案 / 带时间戳字幕` workspace loader buttons remain.
+- Clicking `音频` still loads the selected record into the upper preview player.
+
+Regression coverage:
+
+- `test-tts-handoff-subtitle-correction.mjs` now asserts history rows do not render `.tts-history-audio` or the old inline `job.audio_url` audio element.
+
+Verification:
+
+- `npm.cmd run test:tts-handoff-subtitle-correction` passed.
+- `npm.cmd run check:syntax` passed.
+- Browser E2E against `http://127.0.0.1:8787/#tts` passed using TTS job `#28`:
+  - `#ttsHistory .tts-history-row audio` count was 0;
+  - `.tts-history-audio` count was 0;
+  - `音频 / 文案 / 带时间戳字幕` buttons were still present;
+  - clicking `音频` loaded `/api/tts/audio?id=28` into the upper `#ttsAudio` preview.
