@@ -18,6 +18,7 @@ const ALLOWED_TRANSITIONS = new Set(["", "Shuffle", "FadeIn", "FadeOut", "SlideI
 const TASK_STATE_FAILED = -1;
 const TASK_STATE_COMPLETE = 1;
 const TASK_STATE_PROCESSING = 4;
+const MAX_OPEN_URL_LENGTH = 2048;
 
 let apiProcess = null;
 let apiStartPromise = null;
@@ -672,23 +673,38 @@ function pythonVersion() {
   return (result.stdout || result.stderr || "").trim();
 }
 
-function openTarget(target, status, body = {}) {
+export function sanitizeMoneyPrinterTaskVideoUrl(value) {
+  const raw = String(value || "").trim();
+  if (!raw || raw.length > MAX_OPEN_URL_LENGTH) return "";
+  if (/[\u0000-\u001f\u007f\s\\`"'<>|;]/.test(raw)) return "";
+  try {
+    const parsed = new URL(raw);
+    if (!["http:", "https:"].includes(parsed.protocol)) return "";
+    if (parsed.username || parsed.password) return "";
+    return parsed.href;
+  } catch {
+    return "";
+  }
+}
+
+export function openTarget(target, status, body = {}) {
   if (target === "root") return status.root;
   if (target === "docs") return status.api.docsUrl;
   if (target === "api") return status.api.baseUrl;
   if (target === "webui") return status.webui.baseUrl;
-  if (target === "task-video") return String(body.url || "").startsWith("http") ? String(body.url) : "";
+  if (target === "task-video") return sanitizeMoneyPrinterTaskVideoUrl(body.url);
   if (target === "tasks") return path.join(status.root, "storage", "tasks");
   return "";
 }
 
+export function openExternalCommand(target, platform = process.platform) {
+  if (platform === "win32") return { command: "explorer.exe", args: [target] };
+  return { command: platform === "darwin" ? "open" : "xdg-open", args: [target] };
+}
+
 function openExternal(target) {
-  if (process.platform === "win32") {
-    spawn("cmd", ["/c", "start", "", target], { windowsHide: true, detached: true, stdio: "ignore" }).unref();
-    return;
-  }
-  const command = process.platform === "darwin" ? "open" : "xdg-open";
-  spawn(command, [target], { detached: true, stdio: "ignore" }).unref();
+  const { command, args } = openExternalCommand(target);
+  spawn(command, args, { windowsHide: true, detached: true, stdio: "ignore", shell: false }).unref();
 }
 
 function clampInteger(value, min, max, fallback) {

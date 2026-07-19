@@ -39,3 +39,44 @@ Verification:
 Next item:
 
 - Recommended order item 2: H3 MoneyPrinter open target hardening. Remove `cmd /c`, strictly validate URLs, and add shell metacharacter negative tests.
+
+## 2026-07-19 18:05 +08:00
+
+Branch: `fix/p0-stability`
+
+Base state:
+
+- Started from `e41915a` (`fix(security): harden static path resolution`).
+- Synced with `origin/fix/p0-stability` using `git fetch --prune origin` and `git pull --ff-only`.
+- Working tree was clean before changes.
+
+Completed item:
+
+- Recommended order item 2: H3 MoneyPrinter open target hardening.
+
+Changes:
+
+- Added `sanitizeMoneyPrinterTaskVideoUrl()` in `server/routes/money-printer-routes.js`.
+- Changed `task-video` open target resolution to accept only sanitized `http:` / `https:` URLs.
+- Rejected usernames/passwords, control characters, whitespace, backslashes, quotes, pipes, semicolons, angle brackets, and URLs longer than 2048 characters.
+- Removed Windows `cmd /c start` from `openExternal()`.
+- Added `openExternalCommand()` so Windows opens external targets through `explorer.exe` with direct args and `shell: false`.
+- Extended `test-money-printer-production.mjs` with H3 regressions.
+
+Security behavior now covered:
+
+- `file:` and `javascript:` URLs are rejected.
+- URLs with userinfo are rejected.
+- Shell metacharacter cases such as `& calc`, pipe, quote, newline, and backslash are rejected.
+- Windows opener command is `explorer.exe`, not `cmd.exe`.
+- Fixed directory targets remain server-enumerated (`root`, `tasks`) instead of accepting arbitrary client paths.
+
+Verification:
+
+- `node test-money-printer-production.mjs`: passed.
+- `node --check server/routes/money-printer-routes.js; node --check test-money-printer-production.mjs`: passed.
+- `npm.cmd run check:gate`: passed.
+
+Next item:
+
+- Recommended order item 3: H1 local API trust boundary. Delete or desensitize `/api/settings/all`, restrict image asset paths, and add Host/Origin/session token checks.
