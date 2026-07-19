@@ -790,7 +790,6 @@ function setupTtsStudio() {
   addLaneHeading(inputLane, "项目文案", "手动输入或从当前项目的最佳改写带入");
   addLaneHeading(timelineLane, "字幕时间轴", "核对音频对应的带时间戳字幕");
   addLaneHeading(settingsLane, "选择声音", "我的克隆音色、平台预设和最近使用");
-  addLaneHeading(resultLane, "试听与发送", "确认语音后发送到保留生产线");
 
   oldWorkbench.remove();
   studio.append(inputLane, timelineLane, settingsLane, resultLane);

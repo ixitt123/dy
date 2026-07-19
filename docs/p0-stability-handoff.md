@@ -449,3 +449,26 @@ Verification:
 - `npm.cmd run test:tts-handoff-subtitle-correction` passed.
 - `npm.cmd run check:syntax` passed.
 - `npm.cmd run check:gate` passed.
+
+## 2026-07-19 23:00 +08:00
+
+Branch: `fix/p0-stability`
+
+Completed item:
+
+- Removed the redundant generated-record lane heading `试听与发送 / 确认语音后发送到保留生产线`.
+
+User-visible behavior:
+
+- The generated-record area no longer shows the extra `试听与发送` header above the records.
+- Record content, file links, production-line checkboxes, and `发送所选` behavior are unchanged.
+
+Regression coverage:
+
+- `test-tts-handoff-subtitle-correction.mjs` now asserts the TTS workbench setup does not add `addLaneHeading(resultLane, "试听与发送", ...)`.
+
+Verification:
+
+- `npm.cmd run test:tts-handoff-subtitle-correction` passed.
+- `npm.cmd run check:syntax` passed.
+- `npm.cmd run check:gate` passed.
