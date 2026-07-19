@@ -4009,8 +4009,35 @@ function readStoredJson(key, fallback = null) {
   }
 }
 
+function ttsHandoffRevision(payload = {}, sentAt = new Date().toISOString()) {
+  return [
+    payload.id || "",
+    payload.alignment_revision || 0,
+    payload.audio_path || payload.audio_url || "",
+    Array.isArray(payload.sentence_timeline) ? payload.sentence_timeline.length : 0,
+    sentAt,
+  ].join(":");
+}
+
+function clearProductionTtsHandoffStorage() {
+  const staleKeys = [
+    SHARED_TTS_HANDOFF_KEY,
+    "video-factory-last-handoff",
+    "video-factory-xiaohei-handoff",
+    "dy:handoff:kinetic-text:text",
+    "dy:kinetic-text:last-text-handoff",
+  ];
+  for (const target of PRODUCTION_TTS_TARGETS) {
+    staleKeys.push(`dy:handoff:${target}:audio`, `video-factory-handoff:${target}`);
+  }
+  for (const key of staleKeys) {
+    try { localStorage.removeItem(key); } catch {}
+  }
+}
+
 function writeTtsTargetHandoff(target, payload) {
   const key = `dy:handoff:${target}:audio`;
+  const sentAt = payload.sent_at || payload.sentAt || payload.sharedUpdatedAt || new Date().toISOString();
   localStorage.setItem(key, JSON.stringify(payload));
   localStorage.setItem(`video-factory-handoff:${target}`, JSON.stringify({
     target,
@@ -4019,17 +4046,25 @@ function writeTtsTargetHandoff(target, payload) {
     text: payload.text || "",
     tts: payload,
     files: payload.files || [],
-    sentAt: new Date().toISOString(),
+    sentAt,
+    handoffId: payload.handoff_id || "",
+    handoffRevision: payload.handoff_revision || "",
   }));
 }
 
 function saveSharedTtsHandoff(payload = {}, { sourceTarget = "" } = {}) {
   if (!payload?.id) return payload;
+  const sentAt = payload.sent_at || payload.sentAt || new Date().toISOString();
+  clearProductionTtsHandoffStorage();
   const sharedPayload = {
     ...payload,
+    handoff_id: payload.handoff_id || `tts-${payload.id}-${Date.now()}`,
+    handoff_revision: payload.handoff_revision || ttsHandoffRevision(payload, sentAt),
+    sent_at: sentAt,
+    sentAt,
     handoffType: payload.handoffType || "音频",
     shared: true,
-    sharedUpdatedAt: new Date().toISOString(),
+    sharedUpdatedAt: sentAt,
   };
   localStorage.setItem(SHARED_TTS_HANDOFF_KEY, JSON.stringify(sharedPayload));
   localStorage.setItem("video-factory-last-handoff", JSON.stringify({
@@ -4039,7 +4074,9 @@ function saveSharedTtsHandoff(payload = {}, { sourceTarget = "" } = {}) {
     text: sharedPayload.text || "",
     tts: sharedPayload,
     files: sharedPayload.files || [],
-    sentAt: new Date().toISOString(),
+    sentAt,
+    handoffId: sharedPayload.handoff_id || "",
+    handoffRevision: sharedPayload.handoff_revision || "",
   }));
   for (const target of PRODUCTION_TTS_TARGETS) {
     writeTtsTargetHandoff(target, sharedPayload);
@@ -4259,34 +4296,28 @@ function setTtsHandoffStatus(container = document, message = "") {
 }
 
 async function sendTtsPayloadToTargets(payload, targets = []) {
+  const sharedPayload = saveSharedTtsHandoff(payload, { sourceTarget: "send-selected" });
   const sent = [];
   if (targets.includes("cs1-video")) {
-    applyTtsToCs1(payload);
-    saveTtsAudioHandoff("cs1-video", payload);
-    markProductionTargetReceived("cs1-video", payload);
+    applyTtsToCs1(sharedPayload);
+    markProductionTargetReceived("cs1-video", sharedPayload);
     sent.push("CS1生成器");
   }
   if (targets.includes("xiaohei-video")) {
-    await applyTtsToXiaohei(payload);
-    saveTtsAudioHandoff("xiaohei-video", payload);
-    markProductionTargetReceived("xiaohei-video", payload);
+    await applyTtsToXiaohei(sharedPayload);
+    markProductionTargetReceived("xiaohei-video", sharedPayload);
     sent.push("小黑视频风格生成");
   }
   if (targets.includes("money-printer")) {
-    applyTtsToMoneyPrinter(payload);
-    saveTtsAudioHandoff("money-printer", payload);
-    markProductionTargetReceived("money-printer", payload);
+    applyTtsToMoneyPrinter(sharedPayload);
+    markProductionTargetReceived("money-printer", sharedPayload);
     sent.push("MoneyPrinter");
   }
   if (targets.includes("kinetic-text")) {
-    saveTtsAudioHandoff("kinetic-text", payload);
-    markProductionTargetReceived("kinetic-text", payload);
-    if (window.kineticTextProduction?.receiveTts) await window.kineticTextProduction.receiveTts(payload);
-    else window.dispatchEvent(new CustomEvent("kinetic-text-handoff", { detail: payload }));
+    markProductionTargetReceived("kinetic-text", sharedPayload);
+    if (window.kineticTextProduction?.receiveTts) await window.kineticTextProduction.receiveTts(sharedPayload);
+    else window.dispatchEvent(new CustomEvent("kinetic-text-handoff", { detail: sharedPayload }));
     sent.push("动态大字视频");
-  }
-  for (const target of targets) {
-    saveTtsAudioHandoff(target, payload);
   }
   return sent;
 }
