@@ -36,6 +36,7 @@ import { formatOriginalMomentsPost } from "./server/core/moments-original.js";
 import { parseJsonFromModelText as parseStructuredJsonFromModelText } from "./server/core/structured-json.js";
 import { createPageLifecycle } from "./server/core/page-lifecycle.js";
 import { HttpBodyError, readBody, readJsonBody } from "./server/utils/http-body.js";
+import { resolveStaticRequestPath } from "./server/core/static-path-safety.js";
 import { DEFAULT_REWRITE_REFERENCE, REWRITE_DIRECTIONS, REWRITE_STYLES, REWRITE_VERSION_DEFS, REWRITE_VERSION_DEFAULTS } from "./server/config/rewrite-presets.js";
 import { DEFAULT_MODEL_MAPPING, DEFAULT_VOLCENGINE_ARK_IMAGE_MODEL, SETTINGS_TASKS, normalizeModelMapping } from "./server/config/model-defaults.js";
 import { AUTO_MODEL_VALUE, REWRITE_PROVIDER_ORDER, REWRITE_PROVIDER_PRESETS } from "./server/config/provider-presets.js";
@@ -6984,10 +6985,9 @@ function tasksToXlsx(rows) {
 
 function serveStatic(req, res) {
   const url = new URL(req.url, "http://127.0.0.1");
-  const pathname = decodeURIComponent(url.pathname === "/" ? "/index.html" : url.pathname);
-  const requested = path.normalize(path.join(uiDir, pathname));
+  const requested = resolveStaticRequestPath(uiDir, url.pathname);
 
-  if (!requested.startsWith(uiDir)) {
+  if (!requested) {
     res.writeHead(403);
     res.end("Forbidden");
     return;
