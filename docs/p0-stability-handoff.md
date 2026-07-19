@@ -170,3 +170,34 @@ Behavior now covered:
 Next recommended production-line step:
 
 - If the user reports a specific dynamic big text UI failure, inspect that screen flow next. Otherwise continue production-line smoke coverage for the next line the user chooses.
+
+## 2026-07-19 19:38 +08:00
+
+Branch: `fix/p0-stability`
+
+Completed item:
+
+- Dynamic big text video stable subtitle handoff rules for `voice audio + timestamped subtitles + voice script`.
+
+Rules now enforced:
+
+- TTS/shared production-line subtitle rows keep the original row count.
+- Each subtitle row keeps its original `start` and `end` time exactly.
+- Only subtitle text is replaced, using the closest matching text from the voice script.
+- Low-confidence or imperfect matches do not block dynamic big text video generation.
+- Stale ASR word rows are cleared after sentence-level correction so they cannot override corrected sentence text in rolling focus rendering.
+- Manual edits made directly in the dynamic big text subtitle timeline remain editable and are not forcibly rewritten by the server.
+
+Changes:
+
+- Reused the existing source-constrained subtitle repair engine in `server/kinetic-text/kinetic-text-service.js`.
+- Added `constrainKineticTimelineToVoiceScript()` for the dynamic big text production line.
+- Applied the rule during TTS project creation and shared production timeline updates.
+- Added `test-kinetic-timeline-stability.mjs`.
+- Wired `test:kinetic-timeline-stability` into `npm.cmd run check:gate`.
+
+Behavior now covered:
+
+- Homophones, wrong characters, and badly matched ASR rows are corrected against the voice script.
+- The dynamic big text video line continues even when a row is not a clean match.
+- The user can still manually fix subtitle text in the timeline after preview.
