@@ -9334,9 +9334,9 @@ audio {
 
 .tts-project-source {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) minmax(118px, auto);
   align-items: end;
-  gap: 8px;
+  gap: 10px;
   border-bottom: 1px solid #29313d;
   padding-bottom: 12px;
 }
@@ -9344,6 +9344,33 @@ audio {
 .tts-project-source label {
   display: grid;
   gap: 6px;
+  min-width: 0;
+  margin: 0;
+  color: #dce5f2;
+  font-size: 12px;
+}
+
+.tts-project-source select {
+  min-height: 40px;
+  margin: 0;
+  border-radius: 7px;
+}
+
+.tts-project-source button {
+  min-height: 40px;
+  margin: 0;
+  padding: 0 14px;
+  white-space: nowrap;
+}
+
+@media (max-width: 720px) {
+  .tts-project-source {
+    grid-template-columns: 1fr;
+  }
+
+  .tts-project-source button {
+    width: 100%;
+  }
 }
 
 @media (max-width: 1580px) {

@@ -519,3 +519,28 @@ Verification:
 - `npm.cmd run test:tts-handoff-subtitle-correction` passed.
 - `npm.cmd run check:syntax` passed.
 - `npm.cmd run check:gate` passed.
+
+## 2026-07-19 23:30 +08:00
+
+Branch: `fix/p0-stability`
+
+Completed item:
+
+- Reworked the TTS `项目文案` source selector row layout.
+
+User-visible behavior:
+
+- `选择项目文案` select and `载入项目文案` button now align on one clean row.
+- The select takes the remaining width and the button keeps a stable fixed command width.
+- Global `label` / `select` margins no longer push the button downward in this compact module.
+- On narrow screens, the button wraps to a full-width row.
+
+Regression coverage:
+
+- `test-tts-handoff-subtitle-correction.mjs` asserts `.tts-project-source` has the dedicated two-column grid, zero label/select margins, and nowrap button styling.
+
+Verification:
+
+- `npm.cmd run test:tts-handoff-subtitle-correction` passed.
+- `npm.cmd run check:syntax` passed.
+- `npm.cmd run check:gate` passed.

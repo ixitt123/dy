@@ -11,6 +11,7 @@ const xiaohei = fs.readFileSync(new URL("./ui/modules/ian-xiaohei-app.js", impor
 const xiaoheiParent = fs.readFileSync(new URL("./ui/modules/xiaohei-production.js", import.meta.url), "utf8");
 const moneyPrinter = fs.readFileSync(new URL("./ui/modules/money-printer.js", import.meta.url), "utf8");
 const kinetic = fs.readFileSync(new URL("./ui/modules/kinetic-text.js", import.meta.url), "utf8");
+const css = fs.readFileSync(new URL("./ui/app.css", import.meta.url), "utf8");
 
 assert.match(server, /function validateStrictSubtitleCorrection/u);
 assert.match(server, /original\.length !== corrected\.length/u);
@@ -63,6 +64,10 @@ assert.match(workbench, /studio\.append\(inputLane, timelineLane, settingsLane, 
 assert.match(workbench, /lab\.querySelector\("\.tts-settings"\)\?\.before\(studio\)/u);
 assert.doesNotMatch(workbench, /addLaneHeading\(timelineLane,\s*"字幕时间轴"/u);
 assert.doesNotMatch(workbench, /addLaneHeading\(resultLane,\s*"试听与发送"/u);
+assert.match(css, /\.tts-project-source\s*\{[\s\S]*grid-template-columns:\s*minmax\(0,\s*1fr\)\s*minmax\(118px,\s*auto\)/u);
+assert.match(css, /\.tts-project-source label\s*\{[\s\S]*margin:\s*0/u);
+assert.match(css, /\.tts-project-source select\s*\{[\s\S]*margin:\s*0/u);
+assert.match(css, /\.tts-project-source button\s*\{[\s\S]*white-space:\s*nowrap/u);
 assert.match(cs1, /readonly aria-readonly="true"/u);
 assert.match(cs1, /focusout[\s\S]*publishTimelineEdit/u);
 assert.match(moneyPrinter, /money-printer-timeline-row" data-segment-index/u);
