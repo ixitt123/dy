@@ -3,6 +3,7 @@ import fs from "node:fs";
 
 const server = fs.readFileSync(new URL("./ui-server.mjs", import.meta.url), "utf8");
 const runtime = fs.readFileSync(new URL("./ui/modules/legacy-runtime.js", import.meta.url), "utf8");
+const workbench = fs.readFileSync(new URL("./ui/workbench.js", import.meta.url), "utf8");
 const service = fs.readFileSync(new URL("./server/tts/tts-service.js", import.meta.url), "utf8");
 const html = fs.readFileSync(new URL("./ui/index.html", import.meta.url), "utf8");
 const cs1 = fs.readFileSync(new URL("./ui/modules/cs1-video.js", import.meta.url), "utf8");
@@ -52,6 +53,9 @@ assert.match(html, /id="cs1SubtitleTimeline"/u);
 assert.match(html, /id="ttsTimelineColumn"[\s\S]*字幕时间轴/u);
 assert.match(html, /id="ttsCentralTimeline"/u);
 assert.match(html, /id="ttsSaveTimeline"[\s\S]*确定修改/u);
+assert.match(workbench, /const timelineColumn = oldWorkbench\.querySelector\("#ttsTimelineColumn"\)/u);
+assert.match(workbench, /timelineLane\.appendChild\(timelineColumn\)/u);
+assert.match(workbench, /studio\.append\(inputLane, timelineLane, settingsLane, resultLane\)/u);
 assert.match(cs1, /readonly aria-readonly="true"/u);
 assert.match(cs1, /focusout[\s\S]*publishTimelineEdit/u);
 assert.match(moneyPrinter, /money-printer-timeline-row" data-segment-index/u);

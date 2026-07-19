@@ -314,3 +314,32 @@ Verification:
 - `npm.cmd run test:tts-alignment-service` passed.
 - `npm.cmd run test:tts-handoff-subtitle-correction` passed.
 - `npm.cmd run check:syntax` passed.
+
+## 2026-07-19 21:35 +08:00
+
+Branch: `fix/p0-stability`
+
+Completed item:
+
+- Fixed the missing TTS `字幕时间轴` module in the actual rendered 2026 workbench.
+
+Root cause:
+
+- `ui/index.html` already contained `#ttsTimelineColumn`, but `ui/workbench.js` rebuilds the TTS page from the legacy `.tts-workbench` into `.tts-studio-grid`.
+- That rebuild moved only the script, voice settings, preview/alignment, handoff, and history areas, then removed the old workbench. Because `#ttsTimelineColumn` was not moved first, the browser deleted it during startup.
+
+User-visible behavior:
+
+- The TTS workbench now renders four lanes in order: `项目文案 | 字幕时间轴 | 选择声音 | 试听与发送`.
+- The `字幕时间轴` lane is immediately to the right of `项目文案`.
+- The generated-record send flow is unchanged.
+
+Regression coverage:
+
+- `test-tts-handoff-subtitle-correction.mjs` now asserts that `workbench.js` moves `#ttsTimelineColumn` into a `tts-timeline-lane` and appends it between `inputLane` and `settingsLane`.
+
+Verification:
+
+- `npm.cmd run test:tts-handoff-subtitle-correction` passed.
+- `npm.cmd run check:syntax` passed.
+- `npm.cmd run check:gate` passed.

@@ -755,6 +755,7 @@ function setupTtsStudio() {
   if (!lab || !oldWorkbench || lab.querySelector(".tts-studio-grid")) return;
 
   const scriptColumn = oldWorkbench.querySelector(".tts-script-column");
+  const timelineColumn = oldWorkbench.querySelector("#ttsTimelineColumn");
   const controlColumn = oldWorkbench.querySelector(".tts-control-column");
   const settings = lab.querySelector(".tts-settings");
   const preview = lab.querySelector(".tts-preview");
@@ -768,12 +769,15 @@ function setupTtsStudio() {
 
   const inputLane = document.createElement("section");
   inputLane.className = "studio-lane tts-input-lane";
+  const timelineLane = document.createElement("section");
+  timelineLane.className = "studio-lane tts-timeline-lane";
   const settingsLane = document.createElement("section");
   settingsLane.className = "studio-lane tts-settings-lane";
   const resultLane = document.createElement("section");
   resultLane.className = "studio-lane tts-result-lane";
 
   if (scriptColumn) inputLane.appendChild(scriptColumn);
+  if (timelineColumn) timelineLane.appendChild(timelineColumn);
   if (settings) settingsLane.appendChild(settings);
   if (controlColumn) settingsLane.appendChild(controlColumn);
   if (preview) resultLane.appendChild(preview);
@@ -784,11 +788,12 @@ function setupTtsStudio() {
   if (historyPanel && historyPanel.children.length === 0) historyPanel.remove();
 
   addLaneHeading(inputLane, "项目文案", "手动输入或从当前项目的最佳改写带入");
+  addLaneHeading(timelineLane, "字幕时间轴", "核对音频对应的带时间戳字幕");
   addLaneHeading(settingsLane, "选择声音", "我的克隆音色、平台预设和最近使用");
   addLaneHeading(resultLane, "试听与发送", "确认语音后发送到保留生产线");
 
   oldWorkbench.remove();
-  studio.append(inputLane, settingsLane, resultLane);
+  studio.append(inputLane, timelineLane, settingsLane, resultLane);
   lab.querySelector(".tts-head")?.after(studio);
 
   const projectSource = document.createElement("div");
