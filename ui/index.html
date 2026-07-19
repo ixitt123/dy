@@ -845,8 +845,18 @@
               </div>
               <div class="tts-central-timeline-actions">
                 <button class="ghost small" id="ttsReloadTimeline" type="button" disabled>重载</button>
-                <button class="primary small" id="ttsSaveTimeline" type="button" disabled>确定修改</button>
+                <button class="primary small" id="ttsSaveTimeline" type="button" disabled>确定修改并发送到：</button>
               </div>
+            </div>
+            <div class="tts-central-handoff" id="ttsCentralHandoff">
+              <strong>选择生产线</strong>
+              <div class="tts-central-handoff-options">
+                <label><input class="tts-audio-handoff-choice" type="checkbox" data-target="cs1-video" checked />CS1生成器</label>
+                <label><input class="tts-audio-handoff-choice" type="checkbox" data-target="xiaohei-video" checked />小黑视频风格生成</label>
+                <label><input class="tts-audio-handoff-choice" type="checkbox" data-target="money-printer" checked />MoneyPrinter</label>
+                <label><input class="tts-audio-handoff-choice" type="checkbox" data-target="kinetic-text" checked />动态大字视频</label>
+              </div>
+              <small class="tts-job-handoff-status" id="ttsCentralHandoffStatus">点“确定修改”后发送当前三件套。</small>
             </div>
             <div class="tts-central-timeline-labels">
               <span>序号</span><span>开始</span><span>结束</span><span>字幕文字</span>

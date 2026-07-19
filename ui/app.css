@@ -2653,6 +2653,10 @@ pre {
     display: none;
   }
 
+  .tts-central-handoff-options {
+    grid-template-columns: 1fr;
+  }
+
   .tts-central-timeline-row {
     grid-template-columns: 38px 1fr 1fr;
   }
@@ -5810,7 +5814,7 @@ a {
 }
 
 .tts-studio-grid {
-  grid-template-columns: minmax(260px, 0.72fr) minmax(360px, 1.08fr) minmax(320px, 0.92fr) minmax(340px, 0.98fr);
+  grid-template-columns: minmax(260px, 0.8fr) minmax(360px, 1.08fr) minmax(320px, 0.95fr);
   padding: 14px;
 }
 
@@ -6349,7 +6353,8 @@ a {
 }
 
 .tts-result-lane {
-  max-height: calc(100vh - 150px);
+  grid-column: 1 / -1;
+  max-height: none;
   overflow-y: auto;
 }
 
@@ -6445,6 +6450,50 @@ a {
 .tts-central-timeline-actions {
   grid-template-columns: repeat(2, auto);
   justify-content: end;
+}
+
+.tts-central-handoff {
+  display: grid;
+  gap: 9px;
+  margin: 10px 0 12px;
+  border: 1px solid #303846;
+  border-radius: 8px;
+  padding: 10px;
+  background: #10151d;
+}
+
+.tts-central-handoff > strong {
+  color: #eef3fb;
+  font-size: 13px;
+}
+
+.tts-central-handoff-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.tts-central-handoff-options label {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 34px;
+  margin: 0;
+  border: 1px solid #303846;
+  border-radius: 7px;
+  padding: 0 10px;
+  background: #111722;
+  color: #dce2eb;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.tts-central-handoff-options input {
+  width: 14px;
+  min-height: 14px;
+  height: 14px;
+  padding: 0;
+  accent-color: var(--primary);
 }
 
 .tts-central-timeline-labels,
@@ -7434,7 +7483,7 @@ audio {
   }
 
   .tts-studio-grid {
-    grid-template-columns: minmax(220px, 0.72fr) minmax(320px, 1fr) minmax(260px, 0.9fr) minmax(300px, 1fr);
+    grid-template-columns: minmax(220px, 0.78fr) minmax(320px, 1fr) minmax(260px, 0.92fr);
   }
 
   .director-studio-grid {

@@ -495,6 +495,7 @@ const ttsTimelineStatus = document.querySelector("#ttsTimelineStatus");
 const ttsCentralTimeline = document.querySelector("#ttsCentralTimeline");
 const ttsSaveTimelineBtn = document.querySelector("#ttsSaveTimeline");
 const ttsReloadTimelineBtn = document.querySelector("#ttsReloadTimeline");
+const ttsCentralHandoff = document.querySelector("#ttsCentralHandoff");
 const ttsAudioHandoff = document.querySelector("#ttsAudioHandoff");
 const sendConfirmedTtsAudioBtn = document.querySelector("#sendConfirmedTtsAudio");
 const ttsAudioHandoffStatus = document.querySelector("#ttsAudioHandoffStatus");
@@ -3813,17 +3814,6 @@ function renderTtsJobsEnhanced(jobs = []) {
       job.script_url ? `<a href="${escapeHtml(job.script_url)}" target="_blank" rel="noreferrer">文案</a>` : "",
       timedSubtitleUrl ? `<a href="${escapeHtml(timedSubtitleUrl)}" target="_blank" rel="noreferrer">带时间戳字幕</a>` : "",
     ].filter(Boolean).join("");
-    const handoffTargets = [
-      ["cs1-video", "CS1生成器", false],
-      ["xiaohei-video", "小黑视频风格生成", false],
-      ["money-printer", "MoneyPrinter", false],
-      ["kinetic-text", "动态大字视频", false],
-    ].map(([target, label, checked]) => `
-      <label>
-        <input class="tts-job-handoff-choice" type="checkbox" data-target="${target}" ${checked ? "checked" : ""} />
-        ${label}
-      </label>
-    `).join("");
     const rawAlignmentStatus = String(job.alignment_status || job.metadata?.alignment_status || "");
     const alignmentStatus = ttsAlignmentDisplayStatus(job);
     const rewriteRequired = ttsAlignmentRewriteRequired(job);
@@ -3854,13 +3844,11 @@ function renderTtsJobsEnhanced(jobs = []) {
       ? `
         <div class="tts-job-handoff">
           <div class="tts-job-handoff-head">
-            <strong>试听满意后发送</strong>
-            <span>${escapeHtml(matchPassedText)}</span>
+            <strong>已生成三件套</strong>
+            <span>${escapeHtml(matchPassedText)}；发送请使用上方“确定修改并发送到：”。</span>
           </div>
-          <div class="tts-job-handoff-options">${handoffTargets}</div>
           <div class="tts-history-actions">
             <button class="ghost small tts-job-calibrate" type="button">校对字幕</button>
-            <button class="primary small tts-job-send" type="button">发送所选</button>
             <button class="ghost small danger-action tts-job-delete" type="button">不满意，删除</button>
             <button class="ghost small tts-job-hide" type="button">隐藏</button>
             <button class="ghost small tts-job-minimize" type="button">最小化</button>
@@ -4453,7 +4441,7 @@ function ttsTimelineRows(job = {}) {
 
 function setTtsTimelineDirty(dirty) {
   ttsTimelineDirty = Boolean(dirty);
-  if (ttsSaveTimelineBtn) ttsSaveTimelineBtn.disabled = !ttsTimelineDirty;
+  if (ttsSaveTimelineBtn) ttsSaveTimelineBtn.disabled = !activeTtsRailJob?.id || !ttsTimelineDraftRows.length;
   if (ttsTimelineStatus && activeTtsRailJob?.id) {
     ttsTimelineStatus.textContent = ttsTimelineDirty
       ? "字幕已修改，点击“确定修改”后写入这条 TTS 三件套。"
@@ -4520,7 +4508,7 @@ function renderTtsCentralTimeline(job = activeTtsRailJob, { preserveDraft = fals
       ? "字幕已修改，点击“确定修改”后写入这条 TTS 三件套。"
       : "字幕时间轴已加载，可直接核对或修改。";
   }
-  if (ttsSaveTimelineBtn) ttsSaveTimelineBtn.disabled = !ttsTimelineDirty;
+  if (ttsSaveTimelineBtn) ttsSaveTimelineBtn.disabled = false;
   ttsCentralTimeline.dataset.jobId = jobId;
   ttsCentralTimeline.innerHTML = ttsTimelineDraftRows.map((row, index) => `
     <div class="tts-central-timeline-row" data-tts-timeline-index="${index}">
@@ -4601,6 +4589,17 @@ async function saveTtsCentralTimeline() {
   if (ttsStatus) ttsStatus.textContent = "字幕时间轴已保存到 TTS 三件套。";
   await refreshTtsJobs();
   return data.job;
+}
+
+async function confirmAndSendTtsCentralTimeline() {
+  if (!activeTtsRailJob?.id) throw new Error("请先生成或选择一条 TTS 音频。");
+  if (!ttsTimelineDraftRows.length) throw new Error("当前没有可确认的字幕时间轴。");
+  const targets = selectedTtsHandoffTargets(ttsCentralHandoff || ttsTimelineColumn || document);
+  if (!targets.length) throw new Error("请至少勾选一个要发送的生产线。");
+  if (ttsTimelineStatus) ttsTimelineStatus.textContent = "正在保存字幕时间轴并发送...";
+  const confirmedJob = await saveTtsCentralTimeline();
+  await sendConfirmedTtsAudio(ttsCentralHandoff || ttsTimelineColumn || document, confirmedJob);
+  return confirmedJob;
 }
 
 function ttsTopIssuePanelShouldShow(job = activeTtsRailJob) {
@@ -7345,10 +7344,12 @@ ttsCentralTimeline?.addEventListener("input", (event) => {
 
 ttsSaveTimelineBtn?.addEventListener("click", () => {
   ttsSaveTimelineBtn.disabled = true;
-  if (ttsTimelineStatus) ttsTimelineStatus.textContent = "正在保存字幕时间轴...";
-  saveTtsCentralTimeline().catch((error) => {
+  if (ttsTimelineStatus) ttsTimelineStatus.textContent = "正在保存字幕时间轴并发送...";
+  confirmAndSendTtsCentralTimeline().catch((error) => {
     setTtsTimelineDirty(true);
     if (ttsTimelineStatus) ttsTimelineStatus.textContent = error instanceof Error ? error.message : String(error);
+  }).finally(() => {
+    if (ttsSaveTimelineBtn) ttsSaveTimelineBtn.disabled = !activeTtsRailJob?.id || !ttsTimelineDraftRows.length;
   });
 });
 

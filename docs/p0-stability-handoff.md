@@ -372,3 +372,30 @@ Verification:
 - `npm.cmd run test:tts-handoff-subtitle-correction` passed.
 - `npm.cmd run check:syntax` passed.
 - `npm.cmd run check:gate` passed.
+
+## 2026-07-19 22:10 +08:00
+
+Branch: `fix/p0-stability`
+
+Completed item:
+
+- Moved the TTS production-line selection and send action into the central `字幕时间轴` workflow.
+
+User-visible behavior:
+
+- The central timeline button is now labeled `确定修改并发送到：`.
+- The production-line checkboxes now live inside the TTS `字幕时间轴` card, directly under the confirm/send action area.
+- The button is enabled whenever the current TTS job has a subtitle timeline, even if the user has not edited text.
+- Clicking it saves the current timeline text into the TTS triplet, then sends `文案 + 音频 + 带时间戳字幕` to the checked production lines.
+- The TTS workbench layout is now top-row `项目文案 | 字幕时间轴 | 选择声音`; the generated-record lane spans the full row underneath those three modules instead of occupying the right side.
+- Generated records no longer show their own production-line checkbox/send entry; sending is centralized through the timeline confirm flow.
+
+Regression coverage:
+
+- `test-tts-handoff-subtitle-correction.mjs` asserts the new button label, central production-line checkboxes, `confirmAndSendTtsCentralTimeline()`, save-before-send order, and central handoff target lookup.
+
+Verification:
+
+- `npm.cmd run test:tts-handoff-subtitle-correction` passed.
+- `npm.cmd run check:syntax` passed.
+- `npm.cmd run check:gate` passed.
