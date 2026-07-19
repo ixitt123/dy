@@ -830,9 +830,35 @@
             </div>
           </div>
 
-          <div class="tts-control-column tts-step-card">
+          <div class="tts-timeline-column tts-step-card" id="ttsTimelineColumn">
             <div class="tts-step-heading">
               <span>2</span>
+              <div>
+                <strong>字幕时间轴</strong>
+                <small>在这里核对音频对应的带时间戳字幕</small>
+              </div>
+            </div>
+            <div class="tts-central-timeline-head">
+              <div>
+                <strong id="ttsTimelineJobTitle">等待生成音频</strong>
+                <span id="ttsTimelineStatus">生成音频后会显示可编辑字幕。</span>
+              </div>
+              <div class="tts-central-timeline-actions">
+                <button class="ghost small" id="ttsReloadTimeline" type="button" disabled>重载</button>
+                <button class="primary small" id="ttsSaveTimeline" type="button" disabled>确定修改</button>
+              </div>
+            </div>
+            <div class="tts-central-timeline-labels">
+              <span>序号</span><span>开始</span><span>结束</span><span>字幕文字</span>
+            </div>
+            <div class="tts-central-timeline" id="ttsCentralTimeline">
+              <div class="tts-empty">还没有可校对的字幕时间轴。</div>
+            </div>
+          </div>
+
+          <div class="tts-control-column tts-step-card">
+            <div class="tts-step-heading">
+              <span>3</span>
               <div>
                 <strong>选声音</strong>
                 <small>平台、分类、音色和克隆声音</small>

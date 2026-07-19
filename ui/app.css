@@ -2250,13 +2250,14 @@ pre {
 
 .tts-workbench {
   display: grid;
-  grid-template-columns: minmax(280px, 0.92fr) minmax(360px, 1.05fr) minmax(300px, 0.9fr);
+  grid-template-columns: minmax(280px, 0.9fr) minmax(360px, 1.08fr) minmax(320px, 0.98fr);
   align-items: start;
   gap: 12px;
   padding: 18px 0;
 }
 
 .tts-script-column,
+.tts-timeline-column,
 .tts-control-column,
 .tts-output-column {
   min-width: 0;
@@ -2646,6 +2647,18 @@ pre {
 
   .tts-alignment-row {
     grid-template-columns: 1fr;
+  }
+
+  .tts-central-timeline-labels {
+    display: none;
+  }
+
+  .tts-central-timeline-row {
+    grid-template-columns: 38px 1fr 1fr;
+  }
+
+  .tts-central-timeline-row textarea {
+    grid-column: 1 / -1;
   }
 }
 
@@ -6397,6 +6410,99 @@ a {
 .tts-audio-handoff > .primary {
   justify-self: start;
   min-height: 30px;
+}
+
+.tts-central-timeline-head,
+.tts-central-timeline-actions,
+.tts-central-timeline-labels,
+.tts-central-timeline-row {
+  display: grid;
+  align-items: center;
+  gap: 8px;
+}
+
+.tts-central-timeline-head {
+  grid-template-columns: minmax(0, 1fr) auto;
+  margin-bottom: 10px;
+}
+
+.tts-central-timeline-head strong,
+.tts-central-timeline-head span {
+  display: block;
+}
+
+.tts-central-timeline-head strong {
+  color: #eef3fb;
+  font-size: 13px;
+}
+
+.tts-central-timeline-head span {
+  margin-top: 3px;
+  color: #8f9bad;
+  font-size: 12px;
+}
+
+.tts-central-timeline-actions {
+  grid-template-columns: repeat(2, auto);
+  justify-content: end;
+}
+
+.tts-central-timeline-labels,
+.tts-central-timeline-row {
+  grid-template-columns: 42px 70px 70px minmax(0, 1fr);
+}
+
+.tts-central-timeline-labels {
+  margin-bottom: 6px;
+  padding: 0 8px;
+  color: #7f8da5;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.tts-central-timeline {
+  display: grid;
+  gap: 7px;
+  max-height: 430px;
+  overflow: auto;
+}
+
+.tts-central-timeline-row {
+  border: 1px solid #27303c;
+  border-radius: 7px;
+  padding: 7px;
+  background: #10151d;
+}
+
+.tts-central-timeline-row span {
+  color: #82baff;
+  font-size: 12px;
+  font-weight: 800;
+  text-align: center;
+}
+
+.tts-central-timeline-row input,
+.tts-central-timeline-row textarea {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid #303846;
+  border-radius: 6px;
+  padding: 6px 8px;
+  color: #edf2f7;
+  background: #090e15;
+  font-size: 12px;
+}
+
+.tts-central-timeline-row input[readonly] {
+  color: #8da0bd;
+  background: #0a0f17;
+  cursor: default;
+}
+
+.tts-central-timeline-row textarea {
+  min-height: 40px;
+  resize: vertical;
+  line-height: 1.35;
 }
 
 .tts-output-column .tts-preview {

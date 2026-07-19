@@ -289,3 +289,28 @@ Verification:
 
 - `npm.cmd run test:page-lifecycle` passed.
 - `npm.cmd run check:syntax` passed.
+
+## 2026-07-19 21:15 +08:00
+
+Branch: `fix/p0-stability`
+
+Completed item:
+
+- Added a central TTS subtitle timeline editor inside `语音生成与发送`.
+
+User-visible behavior:
+
+- A new `字幕时间轴` module now appears to the right of `项目文案`.
+- After audio generation, the selected/latest TTS job's sentence timeline is shown there.
+- Start/end times are read-only; only subtitle text is editable.
+- Edits remain local until `确定修改` is clicked.
+- `确定修改` writes the edited text back into the TTS job's script, SRT/VTT, timestamped text, sentence timeline, and word timeline.
+- `发送所选` still uses the same send flow and target checkboxes as before.
+- If a TTS job was confirmed from the new TTS timeline editor, send uses that confirmed TTS triplet directly instead of running another send-time correction over the user's manual edit.
+- CS1, Xiaohei, MoneyPrinter, and kinetic text pages keep their own editable subtitle timelines; those edits remain page-local and do not become the shared TTS source.
+
+Verification:
+
+- `npm.cmd run test:tts-alignment-service` passed.
+- `npm.cmd run test:tts-handoff-subtitle-correction` passed.
+- `npm.cmd run check:syntax` passed.

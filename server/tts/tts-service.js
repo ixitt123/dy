@@ -839,6 +839,7 @@ export function createTtsService({
       alignment_max_attempts: Number(metadata.alignment_max_attempts || 0),
       alignment_failure_action: String(metadata.alignment_failure_action || ""),
       alignment_confirmation_mode: String(metadata.alignment_confirmation_mode || ""),
+      shared_sync_source: String(metadata.shared_sync_source || ""),
       alignment_fallback_reason: String(metadata.alignment_fallback_reason || ""),
       estimated_count: Number(metadata.estimated_count || 0),
       low_confidence_count: Number(metadata.low_confidence_count || 0),
