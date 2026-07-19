@@ -343,3 +343,32 @@ Verification:
 - `npm.cmd run test:tts-handoff-subtitle-correction` passed.
 - `npm.cmd run check:syntax` passed.
 - `npm.cmd run check:gate` passed.
+
+## 2026-07-19 21:50 +08:00
+
+Branch: `fix/p0-stability`
+
+Completed item:
+
+- Ensured newly generated TTS audio immediately syncs its timestamped subtitle timeline into the central TTS `字幕时间轴` module.
+
+Root cause:
+
+- The central timeline could render from the latest selected job, but the generation completion flow still relied on the just-returned object in some paths.
+- MiniMax Music generation first creates audio through `/api/voice-assets/preview`, then registers it through `/api/tts/import-generated`; the UI now forces a fresh `/api/tts/job?id=...` read after registration so the page uses the fully persisted subtitle timeline.
+
+User-visible behavior:
+
+- After clicking `根据文案生成音频`, when the job reaches completed state, the TTS page automatically loads that job into the central `字幕时间轴`.
+- This applies to both normal TTS generation and MiniMax Music preset generation.
+- Users no longer need to click the history row's `校对字幕` button just to populate the central timeline.
+
+Regression coverage:
+
+- `test-tts-handoff-subtitle-correction.mjs` now asserts the shared `syncGeneratedTtsJobToCentralTimeline()` function exists, fetches `/api/tts/job`, renders `renderTtsCentralTimeline(...)`, and is called from both normal and music generation completion paths.
+
+Verification:
+
+- `npm.cmd run test:tts-handoff-subtitle-correction` passed.
+- `npm.cmd run check:syntax` passed.
+- `npm.cmd run check:gate` passed.

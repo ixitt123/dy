@@ -4532,6 +4532,27 @@ function renderTtsCentralTimeline(job = activeTtsRailJob, { preserveDraft = fals
   `).join("");
 }
 
+async function syncGeneratedTtsJobToCentralTimeline(jobOrId, { preserveDraft = false } = {}) {
+  const fallbackJob = typeof jobOrId === "object" && jobOrId ? jobOrId : null;
+  const jobId = typeof jobOrId === "object" ? jobOrId?.id : jobOrId;
+  let job = fallbackJob;
+  if (jobId) {
+    try {
+      const data = await fetchJson(`/api/tts/job?id=${encodeURIComponent(jobId)}`);
+      job = data.job || fallbackJob;
+    } catch (_) {
+      job = fallbackJob;
+    }
+  }
+  if (!job) return null;
+  activeTtsRailJob = job;
+  renderTtsRail(job);
+  renderTtsAlignmentEditor(job);
+  renderTtsCentralTimeline(job, { preserveDraft });
+  updateTtsMainProgressFromJob(job);
+  return job;
+}
+
 function applyTtsTimelineInput(input) {
   const index = Number(input?.dataset?.ttsTimelineText);
   if (!Number.isInteger(index) || !ttsTimelineDraftRows[index]) return;
@@ -4815,16 +4836,17 @@ async function waitForTtsJob(jobId) {
   updateTtsMainProgressFromJob(job);
   if (job.status === "completed") {
     generateTtsButton.disabled = false;
-    const alignmentStatus = ttsAlignmentDisplayStatus(job);
+    const completedJob = await syncGeneratedTtsJobToCentralTimeline(job);
+    const displayJob = completedJob || job;
+    const alignmentStatus = ttsAlignmentDisplayStatus(displayJob);
     ttsStatus.textContent = alignmentStatus === "confirmed"
       ? "音频和字幕已确认，可以发送到生产线。"
       : alignmentStatus === "review_required"
         ? "音频与时间轴已生成，请试听、校对并确认字幕。"
-        : job.alignment_status === "failed"
-          ? `音频已生成，但字幕校准失败：${job.alignment_error || "请重试。"}`
+        : displayJob.alignment_status === "failed"
+          ? `音频已生成，但字幕校准失败：${displayJob.alignment_error || "请重试。"}`
           : "音频生成完成。";
-    updateTtsMainProgressFromJob(job);
-    showTtsPreview(job);
+    showTtsPreview(displayJob);
     await refreshTtsJobs();
     return;
   }
@@ -5448,9 +5470,9 @@ generateTts = async function generateTtsUnified() {
         }),
       });
       const musicJob = registered.job || ttsMusicJobFromPreview(voiceAsset, data, text);
-      renderTtsRail(musicJob);
+      const completedMusicJob = await syncGeneratedTtsJobToCentralTimeline(musicJob);
       setTtsMainProgress(100, "生成完成");
-      showTtsPreview(musicJob);
+      showTtsPreview(completedMusicJob || musicJob);
       renderTtsVoiceQuickPanel(voiceAsset, { refreshAudio: true, previewMessage: "音乐音频已生成。" });
       await loadVoiceAssets();
       await refreshTtsJobs();
