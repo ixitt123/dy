@@ -89,6 +89,51 @@ function proportionalSourceSegments(sourceChars = [], rowCharsList = []) {
   });
 }
 
+function bestSourceWindowForRow(sourceChars = [], rowChars = [], minStart = 0) {
+  if (!sourceChars.length || !rowChars.length) {
+    return { start: minStart, end: minStart, chars: [], score: Number.POSITIVE_INFINITY, matched: false };
+  }
+  const targetLength = rowChars.length;
+  const minLength = Math.max(1, Math.floor(targetLength * 0.62) - 2);
+  const maxLength = Math.min(sourceChars.length, Math.ceil(targetLength * 1.45) + 4);
+  const startAt = Math.max(0, Math.min(sourceChars.length - 1, Number(minStart) || 0));
+  let best = null;
+  for (let start = startAt; start < sourceChars.length; start += 1) {
+    for (let length = minLength; length <= maxLength && start + length <= sourceChars.length; length += 1) {
+      const chars = sourceChars.slice(start, start + length);
+      const skipPenalty = (start - startAt) / Math.max(80, sourceChars.length) * 0.03;
+      const score = sourceSegmentCost(rowChars, chars, targetLength) + skipPenalty;
+      if (!best || score < best.score) {
+        best = { start, end: start + length, chars, score, matched: true };
+      }
+    }
+  }
+  return best || { start: startAt, end: startAt, chars: [], score: Number.POSITIVE_INFINITY, matched: false };
+}
+
+function sourceRowsByAsrWindows(sourceChars = [], rowCharsList = []) {
+  let cursor = 0;
+  return rowCharsList.map((rowChars) => {
+    const best = bestSourceWindowForRow(sourceChars, rowChars, cursor);
+    const acceptable = best.matched && best.score <= 0.82;
+    if (!acceptable) {
+      return {
+        start: cursor,
+        end: cursor,
+        chars: rowChars,
+        score: 0,
+        matched: false,
+      };
+    }
+    cursor = Math.max(cursor, best.end);
+    return {
+      ...best,
+      score: Math.max(0, 1 - editRatio(rowChars, best.chars)),
+      matched: true,
+    };
+  });
+}
+
 function segmentSourceByAsrRows(sourceChars = [], rowCharsList = []) {
   if (!sourceChars.length) return rowCharsList.map(() => []);
   if (!rowCharsList.length) return [];
