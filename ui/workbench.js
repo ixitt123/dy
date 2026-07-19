@@ -790,9 +790,9 @@ function setupTtsStudio() {
   addLaneHeading(inputLane, "项目文案", "手动输入或从当前项目的最佳改写带入");
   addLaneHeading(settingsLane, "选择声音", "我的克隆音色、平台预设和最近使用");
 
-  oldWorkbench.remove();
   studio.append(inputLane, timelineLane, settingsLane, resultLane);
-  lab.querySelector(".tts-settings")?.before(studio);
+  oldWorkbench.before(studio);
+  oldWorkbench.remove();
 
   const projectSource = document.createElement("div");
   projectSource.className = "tts-project-source";

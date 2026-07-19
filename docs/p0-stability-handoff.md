@@ -570,3 +570,36 @@ Verification:
 - `node test-local-api-trust-boundary.mjs` passed.
 - `npm.cmd run check:syntax` passed.
 - `npm.cmd run check:gate` passed.
+
+## 2026-07-19 21:35 +08:00
+
+Branch: `fix/p0-stability`
+
+Completed item:
+
+- Fixed the TTS workbench mount order so the central `字幕时间轴` and `确定修改并发送到：` controls stay attached to the page after layout reflow.
+
+Root cause:
+
+- `setupTtsStudio()` moved `.tts-settings` into the detached studio container, then tried to insert the studio before `lab.querySelector(".tts-settings")`.
+- After the move, the anchor was no longer a child of `#ttsLab`, so the new TTS studio could be left detached; the central timeline and production-line checkboxes were missing or non-functional.
+
+User-visible behavior:
+
+- The TTS page now reliably shows `项目文案 / 字幕时间轴 / 选择声音 / 生成记录`.
+- Loading generated TTS audio populates the central timeline.
+- Clicking `确定修改并发送到：` can save the current timeline and send the confirmed audio, text, and timestamped subtitles to selected production lines.
+
+Regression coverage:
+
+- `test-tts-handoff-subtitle-correction.mjs` now asserts `setupTtsStudio()` inserts the new studio with `oldWorkbench.before(studio)` before removing the old workbench.
+
+Verification:
+
+- `npm.cmd run test:tts-handoff-subtitle-correction` passed.
+- `npm.cmd run check:syntax` passed.
+- Browser E2E against `http://127.0.0.1:8787/#tts` passed using TTS job `#28`:
+  - central timeline rendered 12 editable rows;
+  - all four central production-line choices were checked;
+  - button status became `已采用 TTS 页面确认过的字幕时间轴；已发送三件套到：CS1生成器、小黑视频风格生成、MoneyPrinter、动态大字视频。`;
+  - `dy:handoff:cs1-video:audio`, `dy:handoff:xiaohei-video:audio`, `dy:handoff:money-printer:audio`, `dy:handoff:kinetic-text:audio`, and matching `video-factory-handoff:*` keys all contained job `#28`, audio path, subtitle path, text, and 12 timeline rows.

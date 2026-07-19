@@ -64,7 +64,7 @@ assert.match(html, /id="ttsCentralHandoff"[\s\S]*CS1生成器[\s\S]*小黑视频
 assert.match(workbench, /const timelineColumn = oldWorkbench\.querySelector\("#ttsTimelineColumn"\)/u);
 assert.match(workbench, /timelineLane\.appendChild\(timelineColumn\)/u);
 assert.match(workbench, /studio\.append\(inputLane, timelineLane, settingsLane, resultLane\)/u);
-assert.match(workbench, /lab\.querySelector\("\.tts-settings"\)\?\.before\(studio\)/u);
+assert.match(workbench, /oldWorkbench\.before\(studio\)[\s\S]*oldWorkbench\.remove\(\)/u);
 assert.doesNotMatch(workbench, /addLaneHeading\(timelineLane,\s*"字幕时间轴"/u);
 assert.doesNotMatch(workbench, /addLaneHeading\(resultLane,\s*"试听与发送"/u);
 assert.match(css, /\.tts-project-source\s*\{[\s\S]*grid-template-columns:\s*minmax\(0,\s*1fr\)\s*minmax\(118px,\s*auto\)/u);
