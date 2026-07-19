@@ -244,21 +244,23 @@ export function repairSourceConstrainedRows({ sourceText = "", asrRows = [] } = 
   if (!Array.isArray(asrRows) || !asrRows.length) throw new Error("timestamped ASR rows are required for subtitle repair");
 
   const rowCharsList = asrRows.map((row) => coreCharacters(row?.text || ""));
-  const sourceSegments = segmentSourceByAsrRows(sourceChars, rowCharsList);
+  const sourceAlignments = sourceRowsByAsrWindows(sourceChars, rowCharsList);
   let changedCharacters = 0;
   let totalScore = 0;
   const lowConfidenceRows = [];
   const rows = asrRows.map((row, offset) => {
     const index = offset + 1;
     const originalChars = rowCharsList[offset] || [];
-    const segmentChars = sourceSegments[offset] || [];
+    const alignment = sourceAlignments[offset] || { chars: originalChars, score: 0, matched: false };
+    const segmentChars = alignment.chars || [];
     const text = applySubtitlePunctuationTemplate(row?.text || "", segmentChars);
-    const score = 1 - editRatio(originalChars, segmentChars);
+    const score = alignment.matched ? alignment.score : 0;
     totalScore += score;
-    if (score < 0.58) {
+    if (!alignment.matched || score < 0.58) {
       lowConfidenceRows.push({
         index,
         score: Number(Math.max(0, score).toFixed(3)),
+        matched: alignment.matched === true,
         asrText: String(row?.text || "").trim(),
         correctedText: text,
       });
