@@ -2,22 +2,12 @@ import fs from "node:fs";
 import path from "node:path";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { runSync } from "./sync-project.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const urlPath = path.join(__dirname, "ui-server.url");
 
 function openUrl(url) {
   spawn("cmd.exe", ["/c", "start", "", url], {
-    detached: true,
-    stdio: "ignore",
-    windowsHide: true,
-  }).unref();
-}
-
-function startSyncWatcher() {
-  spawn(process.execPath, ["sync-project.mjs", "watch", "--quiet"], {
-    cwd: __dirname,
     detached: true,
     stdio: "ignore",
     windowsHide: true,
@@ -35,14 +25,6 @@ async function existingServerUrl() {
   }
   return "";
 }
-
-try {
-  await runSync({ mode: "startup", quiet: true });
-} catch {
-  // A sync failure must not create a second backend process.
-}
-
-startSyncWatcher();
 
 const url = await existingServerUrl();
 if (url) {

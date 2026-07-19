@@ -8,6 +8,24 @@ export const DEFAULT_MODEL_MAPPING = {
   image: { provider: "volcengine_ark", model: DEFAULT_VOLCENGINE_ARK_IMAGE_MODEL },
   tts: { provider: "ali-bailian", model: "cosyvoice-v2" },
 };
+
+export function normalizeModelMapping(mapping = {}) {
+  const source = mapping && typeof mapping === "object" ? mapping : {};
+  const normalized = Object.fromEntries(
+    Object.entries({ ...DEFAULT_MODEL_MAPPING, ...source }).map(([taskType, value]) => [
+      taskType,
+      value && typeof value === "object" ? { ...value } : value,
+    ]),
+  );
+
+  if (normalized.tts?.provider === "aliyun_bailian") {
+    normalized.tts.provider = "ali-bailian";
+  }
+  if (normalized.video?.provider === "kling") {
+    delete normalized.video;
+  }
+  return normalized;
+}
 export const SETTINGS_TASKS = {
   analyze: {
     label: "内容分析",

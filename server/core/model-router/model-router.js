@@ -1,19 +1,12 @@
 import { createProvider, PROVIDER_REGISTRY } from "./providers/index.js";
+import { DEFAULT_MODEL_MAPPING, normalizeModelMapping } from "../../config/model-defaults.js";
 
 // ============================================================================
 // 模型映射配置
 // Key: 任务类型 (taskType)
 // Value: { provider, model } — 自动路由到的提供者和模型
 // ============================================================================
-const DEFAULT_MODEL_MAP = {
-  analyze: { provider: "deepseek", model: "deepseek-chat" },
-  rewrite: { provider: "deepseek", model: "deepseek-chat" },
-  director: { provider: "deepseek", model: "deepseek-chat" },
-  storyboard: { provider: "deepseek", model: "deepseek-chat" },
-  image_prompt: { provider: "deepseek", model: "deepseek-chat" },
-  image: { provider: "volcengine_ark", model: "doubao-seedream-5-0-lite-260128" }, // 图片通过 ImageService 调用
-  tts: { provider: "ali-bailian", model: "cosyvoice-v2" },
-};
+const DEFAULT_MODEL_MAP = DEFAULT_MODEL_MAPPING;
 
 // 成本估算：每百万 token 的美元价格（仅供参考）
 const COST_PER_MILLION_TOKENS = {
@@ -114,7 +107,7 @@ class ModelRouter {
         ? settings.modelMapping
         : {};
     if (Object.keys(customMap).length > 0) {
-      this._modelMap = { ...DEFAULT_MODEL_MAP, ...customMap };
+      this._modelMap = normalizeModelMapping(customMap);
     }
 
     this._initialized = true;
@@ -138,7 +131,7 @@ class ModelRouter {
    * 设置/更新模型映射
    */
   setModelMap(map) {
-    this._modelMap = { ...this._modelMap, ...map };
+    this._modelMap = normalizeModelMapping({ ...this._modelMap, ...map });
   }
 
   /**

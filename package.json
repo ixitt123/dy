@@ -2,13 +2,19 @@
   "name": "douyin-mcp-local-runner",
   "private": true,
   "type": "module",
+  "packageManager": "pnpm@10.33.0",
+  "engines": {
+    "node": ">=24 <25",
+    "pnpm": ">=10.33.0 <11"
+  },
   "scripts": {
     "start": "node ui-server.mjs",
     "start:hidden": "wscript.exe start-ui-hidden.vbs",
     "start:mcp": "node node_modules/@yc-w-cn/douyin-mcp-server/dist/index.js",
     "dev": "node ui-server.mjs --open",
     "check": "node check-install.mjs && node test-download-safety.mjs && node test-xiaohei-prompt-copy.mjs && node test-xiaohei-one-click-images.mjs && node test-money-printer-production.mjs && node test-moments-original-mode.mjs && node test-structured-json-parser.mjs && node test-source-constrained-repair.mjs && node test-rewrite-completeness.mjs && node test-source-constrained-music-repair.mjs && node test-tts-handoff-subtitle-correction.mjs && node test-page-lifecycle.mjs",
-    "check:gate": "node check-install.mjs && node test-download-safety.mjs && node test-provider-registry.mjs && node test-pipeline-runner-fail-policy.mjs && node test-tts-alignment.mjs && node test-subtitle-render.mjs",
+    "check:syntax": "node scripts/check-js-syntax.mjs",
+    "check:gate": "npm run check:syntax && npm run check && node test-provider-registry.mjs && node test-pipeline-runner-fail-policy.mjs && node test-tts-alignment.mjs && node test-subtitle-render.mjs && node test-model-mapping-normalization.mjs && node test-safe-sync-policy.mjs && node test-settings-secret-safety.mjs",
     "test:e2e": "node test-e2e.mjs",
     "test:pipeline": "node test-pipeline.mjs",
     "test:pipeline:fail-policy": "node test-pipeline-runner-fail-policy.mjs",

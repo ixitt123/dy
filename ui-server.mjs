@@ -37,7 +37,7 @@ import { parseJsonFromModelText as parseStructuredJsonFromModelText } from "./se
 import { createPageLifecycle } from "./server/core/page-lifecycle.js";
 import { HttpBodyError, readBody, readJsonBody } from "./server/utils/http-body.js";
 import { DEFAULT_REWRITE_REFERENCE, REWRITE_DIRECTIONS, REWRITE_STYLES, REWRITE_VERSION_DEFS, REWRITE_VERSION_DEFAULTS } from "./server/config/rewrite-presets.js";
-import { DEFAULT_MODEL_MAPPING, DEFAULT_VOLCENGINE_ARK_IMAGE_MODEL, SETTINGS_TASKS } from "./server/config/model-defaults.js";
+import { DEFAULT_MODEL_MAPPING, DEFAULT_VOLCENGINE_ARK_IMAGE_MODEL, SETTINGS_TASKS, normalizeModelMapping } from "./server/config/model-defaults.js";
 import { AUTO_MODEL_VALUE, REWRITE_PROVIDER_ORDER, REWRITE_PROVIDER_PRESETS } from "./server/config/provider-presets.js";
 
 const runtimeSourcePath = fileURLToPath(import.meta.url);
@@ -284,11 +284,26 @@ const handleKineticTextRoutes = createKineticTextRoutes({
   projectCenter,
 });
 
-// ModelRouter 统一模型路由
-modelRouter.init(readSettings());
+// ModelRouter 统一模型路由。失败时只降级 AI 路由，其他本地功能继续可用。
+let modelRouterReady = false;
+let modelRouterStartupError = "";
 
-// ProviderRegistry 同步
-providerRegistry.initFromModelRouter();
+function initializeModelRuntime(settings) {
+  try {
+    modelRouter.init(settings);
+    providerRegistry.initFromModelRouter();
+    modelRouterReady = true;
+    modelRouterStartupError = "";
+    return true;
+  } catch (error) {
+    modelRouterReady = false;
+    modelRouterStartupError = error instanceof Error ? error.message : String(error);
+    console.error("[startup] 模型路由初始化失败，AI 路由已降级停用：", modelRouterStartupError);
+    return false;
+  }
+}
+
+initializeModelRuntime(readSettings());
 
 // 统一设置中心
 const settingsCenter = createSettingsCenter(__dirname, settingsPath);
@@ -1316,7 +1331,7 @@ function normalizeSettings(settings) {
     },
   };
   next.bgmProviders = normalizeBgmProviders(bgmProviders);
-  next.modelMap = { ...DEFAULT_MODEL_MAPPING, ...modelMapping };
+  next.modelMap = normalizeModelMapping(modelMapping);
   if (next.modelMap.image?.provider === "volcengine_ark") {
     next.modelMap.image = {
       ...next.modelMap.image,
@@ -1478,7 +1493,7 @@ function publicRewriteSettings(settings = readSettings()) {
 
 function publicModelMapping(settings = readSettings()) {
   const mapping = settings.modelMap || settings.modelMapping || {};
-  return { ...DEFAULT_MODEL_MAPPING, ...mapping };
+  return normalizeModelMapping(mapping);
 }
 
 function rewriteProviderIdFromMapping(providerId) {
@@ -2031,7 +2046,7 @@ function applyLocalProviderConfig(settings, providerId) {
 }
 
 function applyModelMapping(settings, mapping) {
-  const normalized = { ...DEFAULT_MODEL_MAPPING, ...(mapping || {}) };
+  const normalized = normalizeModelMapping(mapping);
   if (normalized.image?.provider === "volcengine_ark") {
     normalized.image = { ...normalized.image, model: normalizeVolcengineArkImageModel(normalized.image.model) };
   }
@@ -2054,7 +2069,8 @@ function applyModelMapping(settings, mapping) {
     }
   }
 
-  const ttsProvider = String(normalized.tts?.provider || "");
+  const routedTtsProvider = String(normalized.tts?.provider || "");
+  const ttsProvider = routedTtsProvider === "ali-bailian" ? "aliyun_bailian" : routedTtsProvider;
   if (TTS_PROVIDER_LABELS[ttsProvider]) {
     settings.tts.default_provider = ttsProvider;
     if (normalized.tts?.model) {
@@ -2070,8 +2086,7 @@ function applyModelMapping(settings, mapping) {
 function reloadModelRuntime(settings) {
   writeSettings(settings);
   const normalized = readSettings();
-  modelRouter.init(normalized);
-  providerRegistry.initFromModelRouter();
+  initializeModelRuntime(normalized);
   return normalized;
 }
 
@@ -7015,7 +7030,16 @@ const server = http.createServer(async (req, res) => {
 
   try {
     if (req.method === "GET" && url.pathname === "/api/status") {
-      sendJson(res, 200, { ok: true, downloadsDir, tasks: queueState(), lifecycle: pageLifecycle.status() });
+      sendJson(res, 200, {
+        ok: true,
+        downloadsDir,
+        tasks: queueState(),
+        lifecycle: pageLifecycle.status(),
+        modelRouter: {
+          ready: modelRouterReady,
+          error: modelRouterStartupError,
+        },
+      });
       return;
     }
 
@@ -8546,6 +8570,14 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname.startsWith("/api/router/")) {
       const route = url.pathname.replace("/api/router/", "");
 
+      if (!modelRouterReady) {
+        sendJson(res, 503, {
+          ok: false,
+          error: modelRouterStartupError || "模型路由尚未就绪，请到系统设置检查模型配置。",
+        });
+        return;
+      }
+
       // 统一生成（带自动降级）
       if (req.method === "POST" && route === "generate") {
         const body = await readJsonBody(req);
@@ -8828,7 +8860,20 @@ const server = http.createServer(async (req, res) => {
       const route = url.pathname.replace("/api/providers/", "");
 
       if (req.method === "GET" && route === "list") {
-        sendJson(res, 200, { ok: true, providers: providerRegistry.getAll() });
+        sendJson(res, 200, {
+          ok: true,
+          ready: modelRouterReady,
+          error: modelRouterStartupError,
+          providers: providerRegistry.getAll(),
+        });
+        return;
+      }
+
+      if (!modelRouterReady) {
+        sendJson(res, 503, {
+          ok: false,
+          error: modelRouterStartupError || "模型路由尚未就绪，请到系统设置检查模型配置。",
+        });
         return;
       }
 
