@@ -5,10 +5,6 @@ const source = fs.readFileSync(new URL("./ui/modules/ian-xiaohei-app.js", import
 const css = fs.readFileSync(new URL("./ui/xiaohei-illustrations.css", import.meta.url), "utf8");
 const html = fs.readFileSync(new URL("./ui/xiaohei-illustrations.html", import.meta.url), "utf8");
 const routes = fs.readFileSync(new URL("./server/routes/ian-xiaohei-routes.js", import.meta.url), "utf8");
-const exportRoute = routes.slice(
-  routes.indexOf('route === "export-external-prompts"'),
-  routes.indexOf('route === "generate-shot"'),
-);
 
 assert.match(
   source,
@@ -42,86 +38,32 @@ assert.match(
 
 assert.match(
   source,
-  /function firstPromptCopyShot\(/,
-  "The toolbar copy action must select one shot instead of copying the whole prompt package.",
-);
-
-assert.match(
-  source,
-  /async function exportExternalPrompts\(/,
-  "Xiaohei must provide an external-software prompt export workflow.",
-);
-
-assert.match(
-  source,
-  /\/api\/ian-xiaohei\/export-external-prompts/,
-  "The external prompt export workflow must call the export endpoint, not the image API.",
-);
-
-assert.match(
-  source,
   /保留当前 Skill 原本允许的少量中文手写标注/,
   "Xiaohei prompt format must preserve the selected Skill's handwritten Chinese label style.",
 );
 
 assert.doesNotMatch(
   source,
-  /批量任务协议|multi-image set|NEXT INDEPENDENT JOB|本次只生成 Scene|分镜编号：\$\{shot\.index\}\/\$\{total\}|共 \$\{imageCount\} 个 Scene|shots\.slice\(0, imageCount\)/,
+  /批量任务协议|multi-image set|NEXT INDEPENDENT JOB|本次只生成 Scene|分镜编号：\$\{shot\.index\}\/\$\{total\}/,
   "Xiaohei prompt text must not use wording that makes image models produce grouped images.",
 );
 
 assert.match(
   source,
-  /await navigator\.clipboard\.writeText\(shotPromptBlock\(shot, state\.plan\)\)/,
-  "The toolbar copy action must copy exactly one shot prompt.",
+  /await navigator\.clipboard\.writeText\(promptClipboardText\(\)\)/,
+  "The toolbar copy action must copy the full prompt package.",
 );
 
 assert.match(
-  html,
-  /复制下一张提示词/,
-  "The toolbar copy button must advertise single-shot copying.",
-);
-
-assert.doesNotMatch(
   html,
   /复制全部提示词/,
-  "The Xiaohei page must not keep a copy-all prompt entry point that encourages grouped images.",
+  "The toolbar copy button must advertise copying all prompts.",
 );
 
-assert.match(
+assert.doesNotMatch(
   html,
-  /打开 ChatGPT 生图队列/,
-  "The Xiaohei page must expose a ChatGPT web queue button.",
-);
-
-assert.match(
-  exportRoute,
-  /exportChatGptPromptQueue/,
-  "The external prompt export route must write a ChatGPT queue page.",
-);
-
-assert.doesNotMatch(
-  exportRoute,
-  /generateImage|imageService/,
-  "The external prompt export route must not call the in-app image generation API.",
-);
-
-assert.match(
-  routes,
-  /chatgpt-image-queue/,
-  "The external prompt package must use a dedicated ChatGPT queue folder.",
-);
-
-assert.match(
-  routes,
-  /chatgpt-image-queue\.html/,
-  "The external prompt package must write one queue html page instead of separate txt attachments.",
-);
-
-assert.doesNotMatch(
-  routes,
-  /scene-\$\{String\(index\)\.padStart\(2, "0"\)\}\.txt|scene-XX\.txt/,
-  "The ChatGPT web workflow must not ask the user to upload many txt files at once.",
+  /打开 ChatGPT 生图队列|export-external-prompts|chatgpt-image-queue/,
+  "The Xiaohei page must not keep the ChatGPT queue export entry point after rollback.",
 );
 
 assert.match(

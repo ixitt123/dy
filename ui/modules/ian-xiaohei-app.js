@@ -261,7 +261,6 @@ const els = {
   generateImages: document.querySelector("#generateImages"),
   planPrompts: document.querySelector("#planPrompts"),
   copyPrompts: document.querySelector("#copyPrompts"),
-  exportExternalPrompts: document.querySelector("#exportExternalPrompts"),
   openOutputDir: document.querySelector("#openOutputDir"),
   refreshOutputs: document.querySelector("#refreshOutputs"),
   statusLabel: document.querySelector("#statusLabel"),
@@ -635,7 +634,6 @@ function bindEvents() {
     resetVisualWorkflow("视觉模板已改变，请重新生成分镜计划。");
   });
   els.copyPrompts.addEventListener("click", () => copyAllPrompts());
-  els.exportExternalPrompts?.addEventListener("click", () => exportExternalPrompts());
   els.openOutputDir.addEventListener("click", () => openOutputDir());
   els.refreshOutputs.addEventListener("click", () => loadOutputs());
   els.audioJobs.addEventListener("click", handleAudioJobAction);
@@ -2249,15 +2247,14 @@ async function handleOutputHistoryAction(event) {
 
 async function copyAllPrompts() {
   setButtonFeedback(els.copyPrompts, "loading", "正在复制");
-  if (!state.plan?.shots?.length) await createPlan();
-  const shot = firstPromptCopyShot();
-  if (!shot) {
+  if (!state.promptsText) await createPlan();
+  if (!state.promptsText) {
     setButtonFeedback(els.copyPrompts, "error", "没有可复制内容");
     return;
   }
   try {
-    await navigator.clipboard.writeText(shotPromptBlock(shot, state.plan));
-    setStatus("已复制单张提示词", `已复制 #${shot.index}。每次只粘贴这一张，不会再复制整组。`, 100);
+    await navigator.clipboard.writeText(promptClipboardText());
+    setStatus("已复制全部提示词", "已一次性复制当前全部生图提示词。", 100);
     setButtonFeedback(els.copyPrompts, "success", "已复制");
   } catch (error) {
     setStatus("复制失败", error.message || String(error), 0, true);
@@ -2265,48 +2262,28 @@ async function copyAllPrompts() {
   }
 }
 
-function firstPromptCopyShot() {
-  const shots = Array.isArray(state.plan?.shots) ? state.plan.shots : [];
-  if (!shots.length) return null;
-  const generated = new Set((state.images || [])
-    .filter((image) => image?.assetId)
-    .map((image) => Number(image.index)));
-  return shots.find((shot) => !generated.has(Number(shot.index))) || shots[0];
-}
-
 function promptClipboardText() {
   const shots = Array.isArray(state.plan?.shots) ? state.plan.shots : [];
-  const shot = firstPromptCopyShot() || shots[0];
-  return shot ? shotPromptBlock(shot, state.plan) : String(state.promptsText || "").trim();
-}
-
-async function exportExternalPrompts() {
-  setButtonFeedback(els.exportExternalPrompts, "loading", "正在导出");
-  if (!state.plan?.shots?.length) await createPlan();
-  if (!state.plan?.shots?.length) {
-    setButtonFeedback(els.exportExternalPrompts, "error", "没有提示词");
-    return;
-  }
-  try {
-    const data = await fetchJson("/api/ian-xiaohei/export-external-prompts", {
-      method: "POST",
-      body: JSON.stringify({
-        batchId: state.plan.batchId,
-        plan: state.plan,
-      }),
-    });
-    setStatus(
-      "ChatGPT 生图队列已打开",
-      `共 ${data.count || state.plan.shots.length} 条独立任务：${data.queuePath || ""}`,
-      100,
-      false,
-      "ChatGPT 网页",
-    );
-    setButtonFeedback(els.exportExternalPrompts, "success", "已打开");
-  } catch (error) {
-    setStatus("打开 ChatGPT 生图队列失败", error.payload?.message || error.message || String(error), 100, true);
-    setButtonFeedback(els.exportExternalPrompts, "error", "打开失败");
-  }
+  const fallbackPromptText = String(state.promptsText || "").trim();
+  const parsedCount = (fallbackPromptText.match(/^#\d+/gm) || []).length;
+  const totalCount = shots.length > 0 ? shots.length : parsedCount;
+  const imageCount = Math.min(Math.max(totalCount || 1, 1), 10);
+  const ratio = promptAspectRatio(state.plan);
+  const promptText = shots.length
+    ? promptPlanText(shots.slice(0, imageCount), state.plan)
+    : fallbackPromptText;
+  return [
+    "小黑视频风格生成 - 单张 Scene 生图版",
+    "",
+    "重要：以下是多张图片提示词。每一段对应一张独立图片。",
+    "每段都已经写成直接生图命令：生图工具应该直接生成图片，不要先解释、不要总结、不要给建议。",
+    "统一要求：每个 Scene 只生成一张独立图片素材；禁止把多个 Scene 合并成一张图、组图、拼图、九宫格或缩略图合集。",
+    "文字规则：保留对应 Skill 允许的少量中文手写标注；不要把整段原文、标题、编号或说明文字画进图片。",
+    "",
+    promptText,
+    "",
+    `共 ${imageCount} 个 Scene。`,
+  ].join("\n");
 }
 
 function syncVideoPreview() {

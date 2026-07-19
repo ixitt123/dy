@@ -758,3 +758,22 @@ User-visible behavior:
 Regression coverage:
 
 - `test-xiaohei-prompt-copy.mjs` now asserts the ChatGPT queue button exists, the export route writes `chatgpt-image-queue.html`, the route does not call `imageService.generateImage`, and the ChatGPT workflow no longer instructs users to upload many txt files.
+
+## 2026-07-20 00:18 +08:00
+
+Branch: `fix/p0-stability`
+
+Completed item:
+
+- Rolled Xiaohei prompt toolbar back to the previous one-click `复制全部提示词` workflow per user request.
+
+User-visible behavior:
+
+- The Xiaohei prompt actions now show `根据 TTS 时间轴分析分镜配图` and `复制全部提示词`.
+- `打开 ChatGPT 生图队列` has been removed.
+- Clicking `复制全部提示词` copies the current full prompt package to the clipboard in one action.
+- The generated prompt text still keeps the single-image instructions inside each block, but the toolbar behavior is back to copying all blocks together.
+
+Regression coverage:
+
+- `test-xiaohei-prompt-copy.mjs` now asserts the toolbar advertises `复制全部提示词`, the copy handler writes `promptClipboardText()` to the clipboard, and ChatGPT queue/export entry points are absent.
