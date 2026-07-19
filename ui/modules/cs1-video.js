@@ -121,6 +121,9 @@ export function initCs1VideoModule() {
     localStorage.setItem(HANDOFF_KEY, JSON.stringify(payload));
     const text = ttsText(payload);
     if (text) textInput.value = text;
+    if (titleInput) titleInput.value = payload.title || payload.seo_title || payload.publish_title || `TTS #${payload.display_number || payload.id}`;
+    if (bgmPathInput) bgmPathInput.value = payload.audio_path || "";
+    if (bgmModeSelect) bgmModeSelect.value = payload.audio_path ? "local" : "auto";
     if (titleInput && !titleInput.value.trim()) titleInput.value = payload.title || payload.seo_title || payload.publish_title || `配音 #${payload.display_number || payload.id}`;
     if (bgmPathInput && payload.audio_path) bgmPathInput.value = payload.audio_path;
     if (bgmModeSelect && payload.audio_path) bgmModeSelect.value = "local";

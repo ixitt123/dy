@@ -4242,11 +4242,11 @@ function applyTtsToCs1(payload = {}) {
   }
   setTextareaValue(document.querySelector("#cs1VideoText"), payload.text || "");
   const titleInput = document.querySelector("#cs1VideoTitle");
-  if (titleInput && !titleInput.value.trim()) titleInput.value = ttsHandoffTitle(payload);
+  if (titleInput) titleInput.value = ttsHandoffTitle(payload);
   const bgmPathInput = document.querySelector("#cs1VideoBgmPath");
   const bgmModeSelect = document.querySelector("#cs1VideoBgmMode");
-  if (bgmPathInput && payload.audio_path) bgmPathInput.value = payload.audio_path;
-  if (bgmModeSelect && payload.audio_path) bgmModeSelect.value = "local";
+  if (bgmPathInput) bgmPathInput.value = payload.audio_path || "";
+  if (bgmModeSelect) bgmModeSelect.value = payload.audio_path ? "local" : "auto";
   const status = document.querySelector("#cs1VideoStatus");
   const message = document.querySelector("#cs1VideoMessage");
   if (status) status.textContent = "已接收 TTS 三件套";
@@ -4256,7 +4256,7 @@ function applyTtsToCs1(payload = {}) {
 function applyTtsToMoneyPrinter(payload = {}) {
   setTextareaValue(document.querySelector("#moneyPrinterScript"), payload.text || "");
   const subject = document.querySelector("#moneyPrinterSubject");
-  if (subject && !subject.value.trim()) subject.value = ttsHandoffTitle(payload);
+  if (subject) subject.value = ttsHandoffTitle(payload);
   const status = document.querySelector("#moneyPrinterStatus");
   const detail = document.querySelector("#moneyPrinterDetail");
   if (status) status.textContent = "已接收 TTS 三件套";
