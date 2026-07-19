@@ -1753,7 +1753,11 @@
               <section class="kinetic-card kinetic-timeline-card">
                 <div class="kinetic-card-head">
                   <strong>字幕时间轴</strong>
-                  <button id="kineticAnalyze" class="ghost" type="button">本地重新识别关键词</button>
+                  <div class="kinetic-timeline-actions">
+                    <span id="kineticTimelineDraftStatus" class="kinetic-draft-status" hidden></span>
+                    <button id="kineticConfirmTimeline" class="primary small" type="button" disabled>确定修改</button>
+                    <button id="kineticAnalyze" class="ghost" type="button">本地重新识别关键词</button>
+                  </div>
                 </div>
                 <div id="kineticTimelineRuleStatus" class="kinetic-rule-status" hidden></div>
                 <div class="kinetic-timeline-head">

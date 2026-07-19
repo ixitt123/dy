@@ -245,3 +245,28 @@ Verification:
 
 - `npm.cmd run test:kinetic-timeline-stability` passed.
 - `npm.cmd run check:gate` passed.
+
+## 2026-07-19 20:25 +08:00
+
+Branch: `fix/p0-stability`
+
+Completed item:
+
+- Dynamic big text subtitle timeline edits now require explicit confirmation.
+
+User-visible behavior:
+
+- Editing rows in `字幕时间轴` no longer writes to disk immediately.
+- The UI shows `有未确定修改` after a timeline edit.
+- The new `确定修改` button is enabled only while timeline edits are pending.
+- Only clicking `确定修改` saves timeline `segments` / `duration`.
+- Focus-out no longer syncs or saves kinetic subtitle text automatically.
+
+Stability note:
+
+- Non-timeline saves, uploads, and local keyword analysis preserve the unsaved timeline draft in the page without writing it to the project file.
+
+Verification:
+
+- `npm.cmd run test:tts-handoff-subtitle-correction` passed.
+- `npm.cmd run check:syntax` passed.

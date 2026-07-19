@@ -10208,6 +10208,24 @@ audio {
   font-size: 11px;
 }
 
+.kinetic-timeline-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.kinetic-draft-status {
+  border: 1px solid rgba(240, 207, 99, .38);
+  border-radius: 6px;
+  padding: 5px 7px;
+  color: #f4d879;
+  background: rgba(240, 207, 99, .08);
+  font-size: 11px;
+  line-height: 1;
+}
+
 .kinetic-timeline {
   display: grid;
   gap: 7px;
