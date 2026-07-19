@@ -33,6 +33,7 @@ import { createMoneyPrinterRoutes } from "./server/routes/money-printer-routes.j
 import { createKineticTextRoutes } from "./server/routes/kinetic-text-routes.js";
 import { createYtDlpService } from "./server/core/yt-dlp-service.js";
 import { formatOriginalMomentsPost } from "./server/core/moments-original.js";
+import { parseJsonFromModelText as parseStructuredJsonFromModelText } from "./server/core/structured-json.js";
 import { createPageLifecycle } from "./server/core/page-lifecycle.js";
 import { HttpBodyError, readBody, readJsonBody } from "./server/utils/http-body.js";
 import { DEFAULT_REWRITE_REFERENCE, REWRITE_DIRECTIONS, REWRITE_STYLES, REWRITE_VERSION_DEFS, REWRITE_VERSION_DEFAULTS } from "./server/config/rewrite-presets.js";
