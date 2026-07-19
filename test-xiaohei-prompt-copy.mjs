@@ -90,14 +90,14 @@ assert.doesNotMatch(
 
 assert.match(
   html,
-  /导出外部生图包/,
-  "The Xiaohei page must expose a one-click external prompt package export button.",
+  /打开 ChatGPT 生图队列/,
+  "The Xiaohei page must expose a ChatGPT web queue button.",
 );
 
 assert.match(
   exportRoute,
-  /exportExternalPromptFiles/,
-  "The external prompt export route must write a local prompt package.",
+  /exportChatGptPromptQueue/,
+  "The external prompt export route must write a ChatGPT queue page.",
 );
 
 assert.doesNotMatch(
@@ -108,14 +108,20 @@ assert.doesNotMatch(
 
 assert.match(
   routes,
-  /external-image-prompts/,
-  "The external prompt package must use a dedicated folder.",
+  /chatgpt-image-queue/,
+  "The external prompt package must use a dedicated ChatGPT queue folder.",
 );
 
 assert.match(
   routes,
-  /scene-\$\{String\(index\)\.padStart\(2, "0"\)\}\.txt/,
-  "The external prompt package must write one txt file per image.",
+  /chatgpt-image-queue\.html/,
+  "The external prompt package must write one queue html page instead of separate txt attachments.",
+);
+
+assert.doesNotMatch(
+  routes,
+  /scene-\$\{String\(index\)\.padStart\(2, "0"\)\}\.txt|scene-XX\.txt/,
+  "The ChatGPT web workflow must not ask the user to upload many txt files at once.",
 );
 
 assert.match(

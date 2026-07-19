@@ -734,3 +734,27 @@ Regression coverage:
 
 - `test-xiaohei-prompt-copy.mjs` asserts the external export button and route exist, the export route writes a local prompt package, and that route does not call `imageService.generateImage`.
 - Existing Xiaohei routing and one-click image tests still pass; one-click API behavior remains covered but unchanged for this task.
+
+## 2026-07-19 23:08 +08:00
+
+Branch: `fix/p0-stability`
+
+Correction / completed item:
+
+- Reworked the Xiaohei external image workflow specifically for ChatGPT web after confirming that uploading many `scene-XX.txt` files to ChatGPT still creates one combined image task.
+
+Root cause:
+
+- ChatGPT web treats multiple uploaded txt files as context for one message, not as separate image-generation jobs. A folder of txt files therefore still encourages one final image or a grouped interpretation.
+
+User-visible behavior:
+
+- Replaced the old external txt-package behavior with `打开 ChatGPT 生图队列`.
+- The route now opens a generated `chatgpt-image-queue.html` page instead of producing separate `scene-XX.txt` files.
+- The queue page shows one prompt at a time, has `复制当前提示词`, `上一张`, `下一张`, and `标记已完成`, and includes a direct link to ChatGPT.
+- The queue page warns not to upload multiple txt files or paste multiple prompts into one ChatGPT message.
+- The local image API button remains intentionally unchanged.
+
+Regression coverage:
+
+- `test-xiaohei-prompt-copy.mjs` now asserts the ChatGPT queue button exists, the export route writes `chatgpt-image-queue.html`, the route does not call `imageService.generateImage`, and the ChatGPT workflow no longer instructs users to upload many txt files.

@@ -2296,16 +2296,16 @@ async function exportExternalPrompts() {
       }),
     });
     setStatus(
-      "外部生图包已导出",
-      `已生成 ${data.count || state.plan.shots.length} 个独立 txt：${data.promptDir || ""}`,
+      "ChatGPT 生图队列已打开",
+      `共 ${data.count || state.plan.shots.length} 条独立任务：${data.queuePath || ""}`,
       100,
       false,
-      "外部生图",
+      "ChatGPT 网页",
     );
-    setButtonFeedback(els.exportExternalPrompts, "success", "已导出");
+    setButtonFeedback(els.exportExternalPrompts, "success", "已打开");
   } catch (error) {
-    setStatus("导出外部生图包失败", error.payload?.message || error.message || String(error), 100, true);
-    setButtonFeedback(els.exportExternalPrompts, "error", "导出失败");
+    setStatus("打开 ChatGPT 生图队列失败", error.payload?.message || error.message || String(error), 100, true);
+    setButtonFeedback(els.exportExternalPrompts, "error", "打开失败");
   }
 }
 
