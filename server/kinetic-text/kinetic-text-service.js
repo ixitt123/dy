@@ -516,6 +516,20 @@ function kineticVoiceScriptText(input = {}, tts = {}, fallback = "") {
   );
 }
 
+function kineticProjectVoiceScriptText(project = {}) {
+  return normalizeText(
+    project.originalText
+    || project.original_text
+    || project.finalText
+    || project.final_text
+    || project.ttsPreparedText
+    || project.tts_prepared_text
+    || project.voiceScript
+    || project.voice_script
+    || project.text
+  );
+}
+
 function kineticPlainText(value = "") {
   return normalizeText(value).replace(/[^\p{L}\p{N}]/gu, "");
 }
@@ -570,7 +584,38 @@ export function constrainKineticTimelineToVoiceScript(timeline = [], sourceText 
   return rows;
 }
 
+function repairSharedVoiceScriptTimeline(project = {}) {
+  if (String(project.subtitleSource || project.subtitle_source || "") !== "shared-production-timeline") return project;
+  const source = kineticProjectVoiceScriptText(project);
+  if (!source) return project;
+  const sourcePlain = kineticPlainText(source);
+  const manualSourcePlain = kineticPlainText(project.timelineManualSourceText || "");
+  if ((project.timelineManualEditedAt || project.manualTimelineEditedAt) && manualSourcePlain && manualSourcePlain === sourcePlain) return project;
+  const segments = Array.isArray(project.segments) ? project.segments : [];
+  if (kineticPlainText(segments.map((row) => row?.text || "").join("")) === sourcePlain) return project;
+  const baseTimeline = Array.isArray(project.sentenceTimeline) && project.sentenceTimeline.length
+    ? project.sentenceTimeline
+    : segments;
+  if (!baseTimeline.length) return project;
+  const repaired = constrainKineticTimelineToVoiceScript(baseTimeline, source);
+  const rows = repaired.map((row, index) => ({
+    ...row,
+    id: row.id || `segment-${index + 1}`,
+    index: index + 1,
+    words: [],
+  }));
+  return {
+    ...project,
+    text: source,
+    segments: rows,
+    sentenceTimeline: rows.map(({ id, index, start, end, text }) => ({ id, index, start, end, text })),
+    subtitleTimeline: rows.map(({ id, index, start, end, text }) => ({ id, index, start, end, text })),
+    wordTimeline: [],
+  };
+}
+
 function normalizeProject(project) {
+  project = repairSharedVoiceScriptTimeline(project);
   const effectId = normalizeEffectId(project.effectId);
   const duration = safeNumber(project.duration, 0, 0);
   const wordTimeline = normalizeWordRows(project.wordTimeline || project.word_timeline);
@@ -1515,11 +1560,29 @@ export function createKineticTextService({
     if (!current) throw new Error("动态大字项目不存在。");
     const normalizedChanges = { ...changes };
     if (
+      Array.isArray(normalizedChanges.segments)
+      && normalizedChanges.segments.length
+      && !Object.hasOwn(normalizedChanges, "subtitleSource")
+    ) {
+      normalizedChanges.timelineManualEditedAt = nowIso();
+      normalizedChanges.timelineManualSourceText = kineticProjectVoiceScriptText(current);
+    }
+    if (
       normalizedChanges.subtitleSource === "shared-production-timeline"
       && Array.isArray(normalizedChanges.segments)
       && normalizedChanges.segments.length
     ) {
-      const sourceText = kineticVoiceScriptText(current, normalizedChanges, current.text);
+      const incomingSourceText = kineticVoiceScriptText(normalizedChanges, normalizedChanges, kineticProjectVoiceScriptText(current));
+      const currentSourceText = kineticProjectVoiceScriptText(current);
+      const incomingRowsText = normalizedChanges.segments.map((row) => row?.text || "").join("");
+      const incomingLooksLikeRowEcho = kineticPlainText(incomingSourceText) === kineticPlainText(incomingRowsText);
+      const sourceText = currentSourceText
+        && incomingLooksLikeRowEcho
+        && kineticPlainText(currentSourceText) !== kineticPlainText(incomingSourceText)
+          ? currentSourceText
+          : incomingSourceText;
+      normalizedChanges.text = sourceText;
+      normalizedChanges.originalText = sourceText;
       normalizedChanges.segments = constrainKineticTimelineToVoiceScript(normalizedChanges.segments, sourceText);
       if (Array.isArray(normalizedChanges.sentenceTimeline) && normalizedChanges.sentenceTimeline.length) {
         normalizedChanges.sentenceTimeline = constrainKineticTimelineToVoiceScript(normalizedChanges.sentenceTimeline, sourceText);

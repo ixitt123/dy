@@ -58,6 +58,37 @@ try {
   assert.equal(plainText(project.segments.map((row) => row.text).join("")), plainText(voiceScript));
   assert.equal(project.originalText, voiceScript, "final TTS script must be persisted as the correction source");
 
+  const pollutedId = "legacy-shared-polluted";
+  const pollutedDir = path.join(root, ".data", "kinetic-text", "projects", pollutedId);
+  fs.mkdirSync(pollutedDir, { recursive: true });
+  fs.writeFileSync(path.join(pollutedDir, "project.json"), JSON.stringify({
+    ...project,
+    id: pollutedId,
+    subtitleSource: "shared-production-timeline",
+    originalText: voiceScript,
+    text: "旧的 ASR 脏文本",
+    segments: asrTimeline.map((row) => ({ ...row, text: "上一条任务的旧字幕" })),
+    sentenceTimeline: asrTimeline,
+    wordTimeline: [{ text: "旧字幕", start: 0, end: 1 }],
+    timelineManualEditedAt: "2026-07-19T00:00:00.000Z",
+  }, null, 2));
+  const healed = service.get(pollutedId);
+  assert.equal(plainText(healed.segments.map((row) => row.text).join("")), plainText(voiceScript));
+  assert.deepEqual(healed.segments.map((row) => [row.start, row.end]), asrTimeline.map((row) => [row.start, row.end]));
+  assert.deepEqual(healed.segments.map((row) => row.words), [[], [], []], "legacy stale word rows must be ignored after self-heal");
+
+  const staleEchoRows = asrTimeline.map((row) => ({ ...row, text: "上一条任务的旧字幕" }));
+  const staleEchoText = staleEchoRows.map((row) => row.text).join("");
+  const staleEcho = service.update(project.id, {
+    text: staleEchoText,
+    originalText: "",
+    segments: staleEchoRows,
+    sentenceTimeline: staleEchoRows,
+    subtitleSource: "shared-production-timeline",
+  });
+  assert.equal(staleEcho.originalText, voiceScript, "row-echo shared updates must not downgrade the authoritative voice script");
+  assert.equal(plainText(staleEcho.segments.map((row) => row.text).join("")), plainText(voiceScript));
+
   const noisySharedRows = [
     { start: 0, end: 1.15, text: "离题很远也要继续" },
     { start: 1.15, end: 3.45, text: "完全不匹配也不能阻断" },
@@ -79,6 +110,7 @@ try {
     segments: [{ ...shared.segments[0], text: manualText }],
   });
   assert.equal(manual.segments[0].text, manualText, "manual timeline edits must remain editable");
+  assert.equal(manual.timelineManualSourceText, revisedVoiceScript, "manual edit guard must be tied to the current voice script");
 } finally {
   fs.rmSync(root, { recursive: true, force: true });
 }

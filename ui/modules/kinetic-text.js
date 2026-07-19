@@ -1777,6 +1777,7 @@ async function applySharedTimelineToKineticProject(payload = {}) {
     id: project.segments?.[index]?.id || row.id || `segment-${index + 1}`,
   }));
   const finalText = String(payload.final_text || payload.text || segments.map((item) => item.text || "").join("") || project.text || "");
+  const sourceText = String(payload.original_text || payload.final_text || project.originalText || finalText || "");
   const data = await postJson("/api/kinetic-text/update", {
     projectId: project.id,
     changes: {
@@ -1787,7 +1788,7 @@ async function applySharedTimelineToKineticProject(payload = {}) {
       scriptPath: String(payload.script_path || ""),
       subtitlePath: String(payload.subtitle_path || payload.timed_subtitle_path || ""),
       timestampedTextPath: String(payload.timestamped_text_path || payload.timed_subtitle_path || ""),
-      originalText: String(payload.original_text || ""),
+      originalText: sourceText,
       recognizedText: String(payload.recognized_text || ""),
       wordTimeline: Array.isArray(payload.word_timeline) ? payload.word_timeline : [],
       sentenceTimeline: rows,

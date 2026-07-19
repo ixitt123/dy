@@ -222,6 +222,9 @@ Rules reinforced:
 - Replace only row text.
 - Preserve punctuation from the voice script when proportional fallback is needed.
 - Clear stale word-level ASR timing for repaired rows so old highlights cannot override corrected sentence text.
+- Legacy shared-timeline projects self-heal on read/save when `segments` no longer match `originalText`, unless the timeline has been manually edited.
+- Manual subtitle timeline edits are marked with `timelineManualEditedAt` so the self-heal rule will not overwrite the user's hand correction.
+- Shared updates that only echo current subtitle rows cannot downgrade an existing authoritative `originalText`.
 
 Local data repair:
 
@@ -234,7 +237,9 @@ Code changes:
 
 - `proportionalVoiceScriptRows()` now slices compact voice script text while preserving punctuation instead of stripping punctuation.
 - New dynamic big text projects persist `final_text` as `originalText` when no explicit `original_text` is supplied.
-- `test-kinetic-timeline-stability.mjs` now asserts punctuation-preserving reconstruction and persisted correction source.
+- Shared production-line updates refresh `text` and `originalText` together before saving.
+- `ui/modules/kinetic-text.js` keeps `project.originalText` when the shared TTS payload lacks `original_text`, instead of writing an empty source.
+- `test-kinetic-timeline-stability.mjs` now asserts punctuation-preserving reconstruction, persisted correction source, legacy pollution self-heal, and manual edit preservation.
 
 Verification:
 
