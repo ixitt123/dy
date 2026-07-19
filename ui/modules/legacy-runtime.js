@@ -3931,6 +3931,18 @@ function confirmedTtsAudioPayload(job = activeTtsRailJob) {
   const hashtags = Array.isArray(job.hashtags) ? job.hashtags : Array.isArray(job.metadata?.hashtags) ? job.metadata.hashtags : [];
   const timedSubtitleUrl = job.timestamped_text_url || job.subtitle_url || "";
   const timedSubtitlePath = job.timestamped_text_path || job.subtitle_path || "";
+  const finalText = String(job.final_text || job.metadata?.final_text || job.original_text || job.metadata?.original_text || job.text || job.recognized_text || "").trim();
+  const sentenceTimeline = Array.isArray(job.sentence_timeline) ? job.sentence_timeline : Array.isArray(job.metadata?.sentence_timeline) ? job.metadata.sentence_timeline : [];
+  const subtitleTimeline = Array.isArray(job.sentence_timeline)
+    ? job.sentence_timeline
+    : Array.isArray(job.subtitle_timeline)
+      ? job.subtitle_timeline
+      : Array.isArray(job.metadata?.subtitle_timeline)
+        ? job.metadata.subtitle_timeline
+        : [];
+  const hasAudio = Boolean(job.audio_url || job.audio_path);
+  const hasTimedSubtitle = Boolean(timedSubtitleUrl || timedSubtitlePath || sentenceTimeline.length || subtitleTimeline.length);
+  if (!hasAudio || !finalText || !hasTimedSubtitle) return null;
   const files = [
     { type: "audio", label: "音频", title, url: job.audio_url || "", path: job.audio_path || "" },
     { type: "script", label: "最终确认文案", title, url: job.script_url || "", path: job.script_path || "" },
@@ -3962,16 +3974,10 @@ function confirmedTtsAudioPayload(job = activeTtsRailJob) {
     timestamped_text_path: job.timestamped_text_path || timedSubtitlePath,
     original_text: job.original_text || job.metadata?.original_text || job.text || "",
     recognized_text: job.recognized_text || job.metadata?.recognized_text || "",
-    final_text: job.final_text || job.metadata?.final_text || "",
+    final_text: finalText,
     word_timeline: Array.isArray(job.word_timeline) ? job.word_timeline : Array.isArray(job.metadata?.word_timeline) ? job.metadata.word_timeline : [],
-    sentence_timeline: Array.isArray(job.sentence_timeline) ? job.sentence_timeline : Array.isArray(job.metadata?.sentence_timeline) ? job.metadata.sentence_timeline : [],
-    subtitle_timeline: Array.isArray(job.sentence_timeline)
-      ? job.sentence_timeline
-      : Array.isArray(job.subtitle_timeline)
-        ? job.subtitle_timeline
-        : Array.isArray(job.metadata?.subtitle_timeline)
-          ? job.metadata.subtitle_timeline
-          : [],
+    sentence_timeline: sentenceTimeline,
+    subtitle_timeline: subtitleTimeline,
     subtitle_source: job.subtitle_source || job.subtitleSource || job.metadata?.subtitle_source || "",
     subtitleSource: job.subtitle_source || job.subtitleSource || job.metadata?.subtitle_source || "",
     duration: Number(job.duration || job.audio_duration || job.metadata?.audio_duration || job.metadata?.duration || 0),
@@ -3985,7 +3991,7 @@ function confirmedTtsAudioPayload(job = activeTtsRailJob) {
     voice_id: job.voice_id || "",
     voice_name: job.voice_name || "",
     format: job.format || ttsFormat?.value || "mp3",
-    text: job.final_text || job.metadata?.final_text || job.recognized_text || "",
+    text: finalText,
     source: "ai_generated",
     status: "ready",
     created_at: new Date().toISOString(),
