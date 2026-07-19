@@ -45,6 +45,9 @@ assert.match(service, /aligned\.matchRatio < ALIGNMENT_AUTO_APPROVE_RATIO/u);
 assert.match(service, /confirmationMode: "ai_corrected_before_handoff"/u);
 
 assert.match(runtime, /source_constrained_music_asr_repair/u);
+assert.match(runtime, /async function fetchJson\(url, options = \{\}, retryLocalSession = true\)/u);
+assert.match(runtime, /fetch\(url,\s*\{\s*credentials:\s*"same-origin",\s*\.\.\.options\s*\}\)/u);
+assert.match(runtime, /response\.status === 401[\s\S]*local session token[\s\S]*return fetchJson\(url, options, false\)/u);
 assert.match(runtime, /const payload = confirmedTtsAudioPayload\(handoffJob\) \|\| originalPayload/u);
 assert.match(runtime, /async function syncSharedTtsTimeline/u);
 assert.match(runtime, /start: source\.start,[\s\S]*end: source\.end/u);

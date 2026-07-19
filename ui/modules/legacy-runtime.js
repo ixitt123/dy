@@ -893,9 +893,12 @@ function renderFiles(files) {
   updateSelectionControls();
 }
 
-async function fetchJson(url, options = {}) {
-  const response = await fetch(url, options);
+async function fetchJson(url, options = {}, retryLocalSession = true) {
+  const response = await fetch(url, { credentials: "same-origin", ...options });
   const data = await response.json();
+  if (response.status === 401 && retryLocalSession && /local session token/i.test(String(data.message || data.error || ""))) {
+    return fetchJson(url, options, false);
+  }
   if (!response.ok || data.ok === false) {
     const error = new Error(data.message || data.error || data.text || "操作失败");
     error.data = data;

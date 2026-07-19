@@ -544,3 +544,29 @@ Verification:
 - `npm.cmd run test:tts-handoff-subtitle-correction` passed.
 - `npm.cmd run check:syntax` passed.
 - `npm.cmd run check:gate` passed.
+
+## 2026-07-19 21:26 +08:00
+
+Branch: `fix/p0-stability`
+
+Completed item:
+
+- Fixed stale local session token recovery for TTS timeline confirmation and send.
+
+User-visible behavior:
+
+- If the TTS page is left open across a server restart or an old local API cookie becomes invalid, clicking `确定修改并发送到：` no longer leaves the selected production lines with no data.
+- The server refreshes the strict local API cookie on the invalid-token 401 response.
+- The shared frontend `fetchJson` helper sends same-origin credentials and retries once after `Missing or invalid local session token`, so the original save/send request can continue automatically.
+
+Regression coverage:
+
+- `test-local-api-trust-boundary.mjs` asserts invalid-token responses refresh the strict cookie.
+- `test-tts-handoff-subtitle-correction.mjs` asserts `fetchJson` uses same-origin credentials and retries the stale local session-token failure once.
+
+Verification:
+
+- `npm.cmd run test:tts-handoff-subtitle-correction` passed.
+- `node test-local-api-trust-boundary.mjs` passed.
+- `npm.cmd run check:syntax` passed.
+- `npm.cmd run check:gate` passed.

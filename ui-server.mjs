@@ -353,12 +353,13 @@ const mimeTypes = new Map([
 const downloadJobs = new Map();
 const transcriptJobs = new Map();
 
-function sendJson(res, status, value) {
+function sendJson(res, status, value, headers = {}) {
   const body = JSON.stringify(value);
   res.writeHead(status, {
     "content-type": "application/json; charset=utf-8",
     "content-length": Buffer.byteLength(body),
     "cache-control": "no-store",
+    ...headers,
   });
   res.end(body);
 }
@@ -485,7 +486,7 @@ function rejectLocalApiRequest(req, res) {
     return true;
   }
   if (!hasValidLocalApiToken(req)) {
-    sendJson(res, 401, { ok: false, message: "Missing or invalid local session token" });
+    sendJson(res, 401, { ok: false, message: "Missing or invalid local session token" }, setLocalApiCookie());
     return true;
   }
   if (isUnsafeHttpMethod(req.method) && requestHasBody(req) && !requestHasJsonContentType(req)) {

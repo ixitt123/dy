@@ -12,6 +12,7 @@ assert.match(serverSource, /setLocalApiCookie\(headers = \{\}\)[\s\S]*HttpOnly; 
 assert.match(serverSource, /if \(rejectHttpHost\(req, res\)\) return;/, "HTTP requests must validate local Host before routing");
 assert.match(serverSource, /url\.pathname\.startsWith\("\/api\/"\) && rejectLocalApiRequest\(req, res\)/, "API requests must pass the local trust-boundary guard");
 assert.match(serverSource, /function rejectLocalApiRequest\(req, res\)[\s\S]*Forbidden host[\s\S]*Forbidden origin[\s\S]*Missing or invalid origin[\s\S]*Missing or invalid local session token[\s\S]*Content-Type must be application\/json/, "API guard must cover Host, Origin, session token, and JSON write bodies");
+assert.match(serverSource, /sendJson\(res,\s*401,\s*\{ ok: false, message: "Missing or invalid local session token" \},\s*setLocalApiCookie\(\)\)/, "stale local API token responses must refresh the strict cookie");
 assert.match(serverSource, /server\.on\("upgrade"[\s\S]*url\.pathname !== "\/ws\/progress"[\s\S]*!isAllowedLocalHostHeader[\s\S]*!isAllowedLocalOriginHeader[\s\S]*!hasValidLocalApiToken/, "WebSocket upgrades must validate path, Host, Origin, and session token");
 
 assert.doesNotMatch(serverSource, /route === "all"[\s\S]{0,120}settings: readSettings\(\)/, "/api/settings/all must not return full settings");
