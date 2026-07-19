@@ -276,47 +276,10 @@ export function buildFixedAsrRows({ fixedRows = [], recognizedWords = [] } = {})
   }));
 }
 
-export function mergeSourceConstrainedRows({ sourceText = "", asrRows = [], modelRows = [] } = {}) {
+export function mergeSourceConstrainedRows({ sourceText = "", asrRows = [] } = {}) {
   const source = String(sourceText || "").trim();
-  if (!source) throw new Error("缺少配音前文案，无法执行原文约束修复。");
-  if (!Array.isArray(asrRows) || !asrRows.length) throw new Error("缺少带时间戳的语音识别稿。");
-  const deterministic = repairSourceConstrainedRows({ sourceText: source, asrRows });
-  return deterministic;
-  if (!Array.isArray(modelRows) || !modelRows.length) return deterministic;
-  const candidates = new Map();
-  for (const row of Array.isArray(modelRows) ? modelRows : []) {
-    const index = Number(row?.index || row?.row_index || row?.rowIndex || 0);
-    if (index > 0 && !candidates.has(index)) candidates.set(index, String(row?.text || row?.corrected_text || "").trim());
-  }
-  let changedCharacters = 0;
-  let fallbackCount = 0;
-  const warnings = [];
-  const rows = asrRows.map((row, offset) => {
-    const index = offset + 1;
-    const originalText = String(row?.text || "").trim();
-    const candidateText = candidates.get(index) || "";
-    const validation = validateCandidate({ sourceText: source, asrText: originalText, candidateText });
-    if (!validation.valid) {
-      fallbackCount += 1;
-      warnings.push(`第 ${index} 行${validation.reason || "未返回可用结果"}，已保留原识别文字`);
-      return { ...row, index, text: originalText };
-    }
-    changedCharacters += validation.changedCharacters;
-    return { ...row, index, text: candidateText };
-  });
-  const correctedCore = coreCharacters(rows.map((row) => row.text).join(""));
-  const asrCore = coreCharacters(asrRows.map((row) => row.text).join(""));
-  const sourceCore = coreCharacters(source);
-  if (correctedCore.join("") === sourceCore.join("") && asrCore.join("") !== sourceCore.join("")) {
-    throw new Error("模型直接返回了完整配音前文案，未保留实际演唱内容选择。");
-  }
-  return {
-    rows,
-    changedCharacters,
-    fallbackCount,
-    partial: fallbackCount > 0,
-    warnings,
-  };
+  if (!source) throw new Error("source text is required for subtitle repair");
+  if (!Array.isArray(asrRows) || !asrRows.length) throw new Error("timestamped ASR rows are required for subtitle repair");
+  return repairSourceConstrainedRows({ sourceText: source, asrRows });
 }
-
 export const SOURCE_CONSTRAINED_MUSIC_MODEL = MUSIC_REPAIR_MODEL;

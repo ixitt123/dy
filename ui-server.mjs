@@ -3966,65 +3966,6 @@ async function correctMusicSubtitleBeforeHandoff(job, signal) {
       ? `原文约束修复已完成，${merged.lowConfidenceRows.length} 行置信度偏低，已使用最接近的配音文案片段继续发送。`
       : "",
   };
-  {
-  const provider = await getRewriteProvider("");
-  const responseText = await chatCompletion(provider, [
-    {
-      role: "system",
-      content: [
-        "你是基于原文约束的中文歌唱/说唱语音识别稿修复器。",
-        "必须在内部完成原文理解、句子/短语切分、拼音与音节对齐、上下文语义对齐和逐行来源审计。",
-        "不要输出思考、分析、改动说明或 Markdown，只输出严格 JSON。",
-      ].join(""),
-    },
-    {
-      role: "user",
-      content: [
-        "【唯一依据】配音前文案内容完整且文字正确，是正确字词、固定表达和数字的唯一依据。",
-        "【待修复内容】带时间戳的 ASR 字幕来自实际歌唱/说唱，可能相对配音前文案发生删减、改词或调整顺序，也可能有同音字、近音词、连续严重误识别、漏字、多字、重复字、数字和断句错误。",
-        "请先在内部理解并切分配音前文案，再把每一行 ASR 与原文做句子级、短语级、拼音级、音节级、语义级和相邻行上下文对齐，最后按原文约束修复；禁止只做机械错别字替换。",
-        "保留实际 ASR 已经演唱的内容范围和大致顺序；原文里有但 ASR 没有唱出的内容不得补回，禁止直接返回完整原文。",
-        "修复后的实质性字词、短语、固定表达和数字必须能从配音前文案追溯。不得按常识润色、续写、增加观点、开头、总结或结尾。",
-        "遇到连续严重误识别时，允许用原文中发音、音节、上下文和语义最匹配的短语或句段整体恢复。无法可靠对应时保持该行 ASR 原文字，不要编造。",
-        "字幕行数、index 和先后顺序必须与输入完全一致；每行只允许微量增删、替换和标点调整，不得合并、拆分或移动字幕行。时间戳只用于理解边界，不得输出或修改时间戳。",
-        "返回前在内部逐行审计：内容选择来自 ASR，正确用词来自配音前文案，数字与原文一致，没有把未演唱段落补回来。",
-        `配音前文案：\n${sourceText.slice(0, 16000)}`,
-        `带时间戳的 ASR 字幕行：\n${JSON.stringify(asrRows).slice(0, 24000)}`,
-        `必须返回恰好 ${asrRows.length} 行，格式：{"corrected_rows":[{"index":1,"text":"修复后的第1行"}],"partial":false}`,
-      ].join("\n\n"),
-    },
-  ], signal, {
-    temperature: 0.05,
-    requestName: "歌唱字幕原文约束修复",
-    maxTokens: 10000,
-    jsonMode: true,
-    timeoutMs: 60000,
-  });
-  const response = parseJsonFromModelText(responseText);
-  const merged = mergeSourceConstrainedRows({
-    sourceText,
-    asrRows,
-    modelRows: response.corrected_rows || response.correctedRows || response.rows || [],
-  });
-  const synced = await ttsService.syncSourceConstrainedRows(job.id, merged.rows, {
-    source: "source_constrained_music_asr_repair",
-    provider: provider.id,
-    model: provider.model,
-    changedCharacters: merged.changedCharacters,
-    partial: merged.partial,
-  });
-  if (synced.error) throw new Error(synced.error);
-  return {
-    job: synced.job,
-    provider: provider.id,
-    model: provider.model,
-    mode: "source_constrained_music_asr_repair",
-    changedCharacters: merged.changedCharacters,
-    partial: merged.partial,
-    fallbackCount: merged.fallbackCount,
-    warning: merged.partial ? `原文约束修复已完成，${merged.fallbackCount} 行未能可靠对应，已保留原识别文字继续发送。` : "",
-  };
-  }
 }
 
 function createModelRequestError(message, { code = "MODEL_REQUEST_FAILED", status = 0 } = {}) {
