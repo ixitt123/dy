@@ -4601,6 +4601,31 @@ function renderTtsAlignmentEditor(job = activeTtsRailJob) {
     : Array.isArray(job.subtitle_timeline)
       ? job.subtitle_timeline
       : [];
+  // 文案与字幕时间轴一致性校验：检测"新文案 + 旧字幕"污染
+  const textTimelineMatchRatio = Number(job.text_timeline_match_ratio ?? 1);
+  const timelineText = sentenceTimeline.map((row) => String(row?.text || "")).join("");
+  const hasMismatch = finalText && timelineText && textTimelineMatchRatio < 0.6;
+  let mismatchWarning = ttsAlignmentEditor.querySelector(".tts-timeline-mismatch-warning");
+  if (hasMismatch && !mismatchWarning) {
+    mismatchWarning = document.createElement("div");
+    mismatchWarning.className = "tts-timeline-mismatch-warning";
+    mismatchWarning.style.cssText = "background:#fef3c7;border:1px solid #f59e0b;border-radius:8px;padding:12px 16px;margin:12px 0;color:#92400e;font-size:14px;line-height:1.5;";
+    const summaryParent = ttsAlignmentSummary?.parentElement || ttsAlignmentEditor;
+    summaryParent.insertBefore(mismatchWarning, ttsAlignmentSummary || summaryParent.firstChild);
+  }
+  if (mismatchWarning) {
+    if (hasMismatch) {
+      mismatchWarning.innerHTML = `
+        <strong>⚠️ 文案与字幕不匹配</strong><br>
+        当前文案与音频字幕内容不一致（匹配率 ${(textTimelineMatchRatio * 100).toFixed(0)}%）。<br>
+        这通常是因为<strong>更换了文案但音频未重新生成</strong>，导致字幕仍显示旧文案内容。<br>
+        <strong>建议：</strong>点击「重新生成配音」按新文案生成音频，系统将自动重新对齐字幕时间轴。
+      `;
+      mismatchWarning.style.display = "block";
+    } else {
+      mismatchWarning.style.display = "none";
+    }
+  }
   if (ttsAlignmentSummary) {
     ttsAlignmentSummary.textContent = status === "confirmed"
       ? syncedBySingingLyrics

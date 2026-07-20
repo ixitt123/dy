@@ -19,6 +19,34 @@ function safeJson(value, fallback = {}) {
   }
 }
 
+function normalizeComparableText(value) {
+  return String(value || "").toLowerCase().replace(/[^\u4e00-\u9fa5a-z0-9]/g, "");
+}
+
+function textSimilarity(left, right) {
+  const a = normalizeComparableText(left);
+  const b = normalizeComparableText(right);
+  if (!a || !b) return 0;
+  if (a === b) return 1;
+  const bigrams = (value) => {
+    const output = [];
+    for (let index = 0; index < value.length - 1; index += 1) output.push(value.slice(index, index + 2));
+    return output.length ? output : [value];
+  };
+  const aPairs = bigrams(a);
+  const counts = new Map();
+  for (const pair of bigrams(b)) counts.set(pair, (counts.get(pair) || 0) + 1);
+  let overlap = 0;
+  for (const pair of aPairs) {
+    const count = counts.get(pair) || 0;
+    if (count > 0) {
+      overlap += 1;
+      counts.set(pair, count - 1);
+    }
+  }
+  return (2 * overlap) / (aPairs.length + bigrams(b).length);
+}
+
 function cleanTtsText(value) {
   return String(value || "")
     .replace(/```[\s\S]*?```/g, " ")
@@ -830,6 +858,16 @@ export function createTtsService({
       tts_prepared_text: String(metadata.tts_prepared_text || metadata.prepared_text || job.text || ""),
       recognized_text: String(metadata.recognized_text || ""),
       final_text: String(metadata.final_text || metadata.recognized_text || ""),
+      // 文案与字幕时间轴一致性校验：检测"新文案 + 旧字幕"污染
+      text_timeline_match_ratio: (() => {
+        const finalText = String(metadata.final_text || metadata.recognized_text || "");
+        const timeline = Array.isArray(metadata.sentence_timeline) && metadata.sentence_timeline.length
+          ? metadata.sentence_timeline
+          : Array.isArray(metadata.subtitle_timeline) ? metadata.subtitle_timeline : [];
+        if (!finalText || !timeline.length) return 1; // 无数据时不报警
+        const timelineText = timeline.map((row) => String(row?.text || "")).join("");
+        return textSimilarity(finalText, timelineText);
+      })(),
       alignment_status: String(metadata.alignment_status || ""),
       alignment_confirmed: metadata.alignment_status === "confirmed",
       alignment_confirmed_at: String(metadata.alignment_confirmed_at || ""),
