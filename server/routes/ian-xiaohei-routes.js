@@ -887,7 +887,7 @@ export function createIanXiaoheiRoutes({
       sendJson(res, 200, {
         ok: true,
         outputDir: outputRoot,
-        batches: listOutputBatches(outputRoot),
+        batches: listOutputBatches(outputRoot, { resolvedDownloadsDir, xiaoheiRenderedFiles, registerXiaoheiFile }),
       });
       return true;
     }
@@ -3038,7 +3038,8 @@ function promptsMarkdown(plan) {
   ].join("\n");
 }
 
-function listOutputBatches(outputRoot) {
+function listOutputBatches(outputRoot, deps = {}) {
+  const { resolvedDownloadsDir = null, xiaoheiRenderedFiles = null, registerXiaoheiFile = null } = deps;
   if (!fs.existsSync(outputRoot)) return [];
   return fs.readdirSync(outputRoot, { withFileTypes: true })
     .filter((entry) => entry.isDirectory() && !entry.name.startsWith("_"))
@@ -3088,7 +3089,7 @@ function listOutputBatches(outputRoot) {
       // 历史批次也注册到统一下载体系，保证下载地址一致
       let unifiedDownloadUrl = "";
       let unifiedDownloadId = "";
-      if (hasFinalMp4 && resolvedDownloadsDir) {
+      if (hasFinalMp4 && resolvedDownloadsDir && xiaoheiRenderedFiles && registerXiaoheiFile) {
         // 查找是否已注册（避免重复注册）
         let existingId = null;
         for (const [fid, frec] of xiaoheiRenderedFiles.entries()) {
