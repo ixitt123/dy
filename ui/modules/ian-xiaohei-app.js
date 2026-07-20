@@ -26,6 +26,7 @@ const state = {
   previewFrame: 0,
   renderedVideo: null,
   backgroundAudio: null,
+  timelineDraftRows: null,
   projectId: localStorage.getItem("ian-xiaohei-project-id") || `xiaohei-${Date.now()}`,
 };
 const embeddedMode = new URLSearchParams(window.location.search).get("embedded") === "1";
@@ -287,7 +288,8 @@ const els = {
   videoTransitionMode: document.querySelector("#videoTransitionMode"),
   videoRenderStatus: document.querySelector("#videoRenderStatus"),
   downloadXiaoheiVideo: document.querySelector("#downloadXiaoheiVideo"),
-  timelineRefresh: document.querySelector("#xiaoheiTimelineRefresh"),
+  timelineConfirm: document.querySelector("#xiaoheiConfirmTimeline"),
+  timelineDraftStatus: document.querySelector("#xiaoheiTimelineDraftStatus"),
   timelineRuleStatus: document.querySelector("#xiaoheiTimelineRuleStatus"),
   subtitleTimeline: document.querySelector("#xiaoheiSubtitleTimeline"),
   timelineStatus: document.querySelector("#xiaoheiTimelineStatus"),
@@ -324,7 +326,8 @@ async function handleParentHandoff(event) {
   if (event.origin !== window.location.origin || event.data?.type !== "video-factory:xiaohei-handoff") return;
   const handoff = event.data.handoff || {};
   const job = handoff.ttsJob || {};
-  if (!job.id || job.status !== "completed" || !isTtsAlignmentConfirmed(job)) {
+  clearTtsTimelineState();
+  if (!job.id || job.status !== "completed" || !isTtsAlignmentConfirmed(job) || !timelineRows(job).length) {
     setStatus("缺少已确认音频", "请先在 TTS 语音页检查并确认最终文案和字幕时间轴。", 0, true);
     return;
   }
@@ -342,6 +345,11 @@ async function handleParentHandoff(event) {
     });
     state.selectedTtsJob = data.job;
     state.ttsJob = data.job;
+    if (!timelineRows(data.job).length) {
+      clearTtsTimelineState();
+      setStatus("TTS 参数无效", "已清空小黑字幕时间轴，请从 TTS 页面重新发送已确认参数。", 0, true);
+      return;
+    }
     syncTtsSource(data.job, { title: handoffTitle, text: handoffText });
     resetVisualWorkflow();
     await loadAudioJobs();
@@ -422,7 +430,19 @@ function normalizeTimelineRow(item = {}, index = 0) {
 }
 
 function timelineRows(job = state.selectedTtsJob || state.ttsJob) {
-  return timelineSource(job).map((item, index) => normalizeTimelineRow(item, index));
+  return timelineSource(job)
+    .map((item, index) => normalizeTimelineRow(item, index))
+    .filter((row) => row.text.trim() && row.end > row.start);
+}
+
+function clearTtsTimelineState() {
+  state.ttsJob = null;
+  state.selectedTtsJob = null;
+  state.timelineDraftRows = null;
+  if (els.copyInput) els.copyInput.value = "";
+  if (els.timelineConfirm) els.timelineConfirm.disabled = true;
+  if (els.timelineDraftStatus) els.timelineDraftStatus.hidden = true;
+  syncTtsSource(null);
 }
 
 function formatTimelineValue(value) {
@@ -438,6 +458,8 @@ function renderSubtitleTimeline(job = state.selectedTtsJob || state.ttsJob) {
     els.subtitleTimeline.textContent = "等待 TTS 语音页发送已确认的字幕时间轴。";
     if (els.timelineStatus) els.timelineStatus.textContent = "小黑页面只接收 TTS 语音页发送的最终文案、音频和同步时间戳。";
     if (els.timelineRuleStatus) els.timelineRuleStatus.hidden = true;
+    if (els.timelineConfirm) els.timelineConfirm.disabled = true;
+    if (els.timelineDraftStatus) els.timelineDraftStatus.hidden = true;
     return;
   }
   if (!rows.length) {
@@ -462,6 +484,9 @@ function renderSubtitleTimeline(job = state.selectedTtsJob || state.ttsJob) {
   `).join("");
   const duration = Math.max(0, ...rows.map((row) => Number(row.end || 0)));
   if (els.timelineStatus) els.timelineStatus.textContent = `共 ${rows.length} 段字幕 / ${duration.toFixed(1)} 秒，修改字幕文字后会同步小黑文案和分镜输入。`;
+  if (els.timelineConfirm) els.timelineConfirm.disabled = true;
+  if (els.timelineDraftStatus) els.timelineDraftStatus.hidden = true;
+  state.timelineDraftRows = null;
   updateTimelineRuleStatus(rows);
 }
 
@@ -525,70 +550,24 @@ function applySubtitleTimelineRows(rows = []) {
 
 function handleSubtitleTimelineInput(event) {
   if (!event.target.closest("[data-field]")) return;
-  const rows = collectSubtitleTimelineRows();
-  applySubtitleTimelineRows(rows);
-  if (els.timelineStatus) els.timelineStatus.textContent = `已同步 ${rows.length} 段字幕到小黑当前文案。`;
+  state.timelineDraftRows = collectSubtitleTimelineRows();
+  if (els.timelineConfirm) els.timelineConfirm.disabled = false;
+  if (els.timelineDraftStatus) els.timelineDraftStatus.hidden = false;
+  if (els.timelineStatus) els.timelineStatus.textContent = "有未确定修改";
 }
 
-async function persistSharedSubtitleText() {
+function confirmSubtitleTimelineChanges() {
   const job = state.selectedTtsJob || state.ttsJob;
-  const rows = collectSubtitleTimelineRows();
+  const rows = state.timelineDraftRows || [];
   if (!job?.id || !rows.length) return;
-  if (els.timelineStatus) els.timelineStatus.textContent = "正在自动保存字幕...";
-  try {
-    const timeline = rows.map((row) => ({
-      start: row.start,
-      end: row.end,
-      text: row.text.trim(),
-    }));
-    const finalText = timeline.map((row) => row.text).join("");
-    const data = await fetchJson("/api/tts/alignment/sync", {
-      method: "POST",
-      body: JSON.stringify({
-        id: job.id,
-        title: els.titleInput?.value || job.title || "",
-        text: finalText,
-        sentenceTimeline: timeline,
-        subtitleTimeline: timeline,
-        duration: Number(job.audio_duration || job.duration || 0),
-        source: "xiaohei-video",
-        confirmationMode: "shared_production_timeline",
-      }),
-    });
-    state.selectedTtsJob = data.job;
-    state.ttsJob = data.job;
-    syncTtsSource(data.job, { title: els.titleInput?.value || "", text: data.job?.final_text || finalText });
-    if (embeddedMode) {
-      window.parent.postMessage({
-        type: "video-factory:xiaohei-shared-timeline-updated",
-        payload: data.job,
-      }, window.location.origin);
-    }
-    if (els.timelineStatus) els.timelineStatus.textContent = `已自动保存 ${timeline.length} 段字幕，原时间戳保持不变。`;
-  } catch (error) {
-    if (els.timelineStatus) els.timelineStatus.textContent = `自动保存失败：${error.payload?.message || error.message || error}`;
-  }
-}
-
-async function refreshSubtitleTimelineFromTts() {
-  const job = state.selectedTtsJob || state.ttsJob;
-  if (!job?.id) {
-    setStatus("缺少 TTS 资产", "请先从 TTS 语音页发送已确认的文案、音频和字幕时间轴。", 0, true);
-    setButtonFeedback(els.timelineRefresh, "error", "缺少 TTS");
+  if (rows.some((row) => !row.text.trim())) {
+    if (els.timelineStatus) els.timelineStatus.textContent = "字幕文字不能为空";
     return;
   }
-  setButtonFeedback(els.timelineRefresh, "loading", "同步中");
-  try {
-    const data = await fetchJson(`/api/ian-xiaohei/tts-job?id=${encodeURIComponent(job.id)}`);
-    state.selectedTtsJob = data.job;
-    state.ttsJob = data.job;
-    syncTtsSource(data.job, { title: els.titleInput?.value || "", text: confirmedTtsText(data.job) });
-    resetVisualWorkflow("已同步最新字幕时间轴，请重新分析分镜配图。");
-    setButtonFeedback(els.timelineRefresh, "success", "已同步");
-  } catch (error) {
-    setStatus("同步时间轴失败", error.payload?.message || error.message || String(error), 0, true);
-    setButtonFeedback(els.timelineRefresh, "error", "同步失败");
-  }
+  applySubtitleTimelineRows(rows);
+  state.timelineDraftRows = null;
+  renderSubtitleTimeline(job);
+  if (els.timelineStatus) els.timelineStatus.textContent = `已确定 ${rows.length} 段字幕修改；仅应用于小黑生产线。`;
 }
 
 function bindEvents() {
@@ -597,11 +576,8 @@ function bindEvents() {
   els.testMinimaxSettings.addEventListener("click", () => testMinimaxSettings());
   els.deleteMinimaxApi.addEventListener("click", () => deleteMinimaxApi());
   els.generateImages.addEventListener("click", () => generateCompleteWorkflow());
-  els.timelineRefresh?.addEventListener("click", () => refreshSubtitleTimelineFromTts());
   els.subtitleTimeline?.addEventListener("input", handleSubtitleTimelineInput);
-  els.subtitleTimeline?.addEventListener("focusout", (event) => {
-    if (event.target.matches('[data-field="text"]')) persistSharedSubtitleText();
-  });
+  els.timelineConfirm?.addEventListener("click", confirmSubtitleTimelineChanges);
   els.generateAudio.addEventListener("click", () => generateAudioOnly());
   els.confirmAudio.addEventListener("click", () => confirmCurrentAudio());
   els.generateMusic.addEventListener("click", () => generateMusicMaterial());
@@ -1527,10 +1503,7 @@ async function uploadAndValidateAudio(payload) {
 async function loadAudioJobs() {
   const data = await fetchJson(`/api/ian-xiaohei/audio-jobs?project_id=${encodeURIComponent(state.projectId)}`);
   state.audioJobs = data.jobs || [];
-  state.selectedTtsJob = data.selected || null;
-  if (!state.ttsJob && state.selectedTtsJob) state.ttsJob = state.selectedTtsJob;
-  if (state.selectedTtsJob) syncTtsSource(state.selectedTtsJob, { title: els.titleInput?.value || "" });
-  else if (!state.ttsJob) syncTtsSource(null);
+  if (!state.selectedTtsJob && !state.ttsJob) syncTtsSource(null);
   renderAudioJobs();
 }
 
@@ -2617,7 +2590,6 @@ function setBusy(busy) {
     els.confirmAudio,
     els.planPrompts,
     els.copyPrompts,
-    els.timelineRefresh,
     els.previewVoice,
     els.setDefaultVoice,
     els.deleteVoice,

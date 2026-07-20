@@ -143,7 +143,10 @@
           <section class="panel xiaohei-timeline-card">
             <div class="panel-head xiaohei-timeline-title">
               <h2>字幕时间轴</h2>
-              <button id="xiaoheiTimelineRefresh" type="button">同步时间轴</button>
+              <div class="xiaohei-timeline-actions">
+                <span id="xiaoheiTimelineDraftStatus" hidden>有未确定修改</span>
+                <button id="xiaoheiConfirmTimeline" type="button" disabled>确定修改</button>
+              </div>
             </div>
             <div id="xiaoheiTimelineRuleStatus" class="xiaohei-rule-status" hidden></div>
             <div class="xiaohei-timeline-head">

@@ -1,4 +1,4 @@
-const XIAOHEI_HANDOFF_KEY = "video-factory-xiaohei-handoff";
+let productionReceiver = null;
 
 function activeProject() {
   return window.videoProjects?.current?.() || null;
@@ -33,30 +33,32 @@ function handoffFromPayload(payload = {}, project = activeProject()) {
   };
 }
 
-function readHandoff() {
-  try {
-    const shared = window.sharedTtsHandoff?.read?.();
-    if (shared?.id) return handoffFromPayload(shared);
-    return JSON.parse(localStorage.getItem(XIAOHEI_HANDOFF_KEY) || "null");
-  } catch {
-    return null;
-  }
+function hasUsableTimeline(payload = {}) {
+  const rows = Array.isArray(payload.subtitle_timeline) && payload.subtitle_timeline.length
+    ? payload.subtitle_timeline
+    : Array.isArray(payload.sentence_timeline)
+      ? payload.sentence_timeline
+      : [];
+  return rows.some((row) => String(row?.text || "").trim() && Number(row?.end || 0) > Number(row?.start || 0));
 }
 
-function postHandoff(frame, handoff = readHandoff()) {
-  if (!frame?.contentWindow || !handoff) return;
+function postHandoff(frame, handoff = null) {
+  if (!frame?.contentWindow) return;
   frame.contentWindow.postMessage({ type: "video-factory:xiaohei-handoff", handoff }, window.location.origin);
 }
 
 export function sendConfirmedTtsToXiaohei(job, project = activeProject()) {
-  if (!job?.id || job.status !== "completed" || String(job.alignment_status || job.metadata?.alignment_status || "") !== "confirmed") {
+  if (!job?.id || job.status !== "completed" || String(job.alignment_status || job.metadata?.alignment_status || "") !== "confirmed" || !hasUsableTimeline(job)) {
+    productionReceiver?.(null);
     throw new Error("请先生成语音，并检查确认最终文案和字幕时间轴。");
   }
   const handoff = handoffFromPayload(job, project);
-  if (!handoff.text) throw new Error("已确认音频缺少最终识别文案，无法发送到小黑生产线。");
-  localStorage.setItem(XIAOHEI_HANDOFF_KEY, JSON.stringify(handoff));
+  if (!handoff.text) {
+    productionReceiver?.(null);
+    throw new Error("已确认音频缺少最终识别文案，无法发送到小黑生产线。");
+  }
+  productionReceiver?.(handoff);
   window.appNavigate?.("xiaohei-video");
-  postHandoff(document.querySelector("#xiaoheiProductionFrame"), handoff);
   return handoff;
 }
 
@@ -86,40 +88,41 @@ export function initXiaoheiProductionModule() {
   const frame = page.querySelector("#xiaoheiProductionFrame");
   const status = page.querySelector("#xiaoheiHandoffStatus");
   const refresh = page.querySelector("#refreshXiaoheiProduction");
+  let currentHandoff = null;
+  let routeActive = false;
   const refreshStatus = () => {
-    const handoff = readHandoff();
+    const handoff = currentHandoff;
     status.textContent = handoff
       ? `已接收音频 #${handoff.ttsJob?.id || "-"}：${handoff.title || "未命名项目"}`
       : "请先在 TTS 语音页确认文案、音频和同步时间戳，再发送到这里。";
     postHandoff(frame, handoff);
   };
 
+  const receiveHandoff = (handoff) => {
+    currentHandoff = handoff?.ttsJob?.id && hasUsableTimeline(handoff.ttsJob) ? handoff : null;
+    refreshStatus();
+    return currentHandoff;
+  };
+
+  const receiveTts = (payload = {}) => receiveHandoff(handoffFromPayload(payload));
+  productionReceiver = receiveHandoff;
+  window.xiaoheiProduction = { receiveHandoff, receiveTts };
+
   frame.addEventListener("load", refreshStatus);
-  window.addEventListener("message", (event) => {
-    if (event.origin !== window.location.origin || event.source !== frame.contentWindow) return;
-    if (event.data?.type !== "video-factory:xiaohei-shared-timeline-updated" || !event.data.payload?.id) return;
-    const latestText = String(event.data.payload.final_text || event.data.payload.text || "").trim();
-    const normalizedPayload = {
-      ...event.data.payload,
-      text: latestText,
-      final_text: latestText,
-    };
-    const payload = window.sharedTtsHandoff?.save?.(normalizedPayload, { sourceTarget: "xiaohei-video" }) || normalizedPayload;
-    const handoff = handoffFromPayload(payload);
-    if (handoff) localStorage.setItem(XIAOHEI_HANDOFF_KEY, JSON.stringify(handoff));
-    status.textContent = `字幕已自动保存并同步到四条生产线 · 音频 #${payload.id}`;
-  });
   refresh.addEventListener("click", () => {
+    currentHandoff = null;
     frame.src = `/xiaohei-illustrations.html?embedded=1&t=${Date.now()}`;
+    refreshStatus();
   });
   document.addEventListener("workbench:route", (event) => {
-    if (event.detail?.page === "xiaohei-video") refreshStatus();
-  });
-  window.addEventListener("tts-shared-handoff-updated", (event) => {
-    if (event.detail?.sourceTarget === "xiaohei-video") return;
-    const handoff = handoffFromPayload(event.detail?.payload);
-    if (handoff) localStorage.setItem(XIAOHEI_HANDOFF_KEY, JSON.stringify(handoff));
-    refreshStatus();
+    const nextActive = event.detail?.page === "xiaohei-video";
+    if (!nextActive && routeActive) {
+      currentHandoff = null;
+      frame.src = `/xiaohei-illustrations.html?embedded=1&t=${Date.now()}`;
+    } else if (nextActive) {
+      refreshStatus();
+    }
+    routeActive = nextActive;
   });
   window.videoFactorySendToXiaohei = sendConfirmedTtsToXiaohei;
   refreshStatus();

@@ -810,6 +810,17 @@ button.danger {
   overflow-x: auto;
 }
 
+.xiaohei-timeline-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.xiaohei-timeline-actions span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
 .xiaohei-timeline-title button {
   padding: 8px 12px;
 }

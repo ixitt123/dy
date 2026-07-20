@@ -359,7 +359,7 @@ test("Kinetic text production line", async () => {
     || !page.includes('id="kineticPreviewCanvas"')
     || !page.includes('aria-label="点击画面播放或暂停"')
     || !page.includes('id="kineticTimeline"')
-    || !page.includes('id="kineticAnalyze"')
+    || page.includes('id="kineticAnalyze"')
     || !page.includes('id="kineticChooseDownloadDir"')
     || !page.includes('id="kineticRenderFinal" class="primary" type="button">下载视频</button>')
     || renderButtonIndex <= previewToolbarIndex
@@ -378,7 +378,7 @@ test("Kinetic text production line", async () => {
     || !moduleSource.includes("receiveTts")
     || !moduleSource.includes("pollJob")
     || !moduleSource.includes('data-field="lineBreaks"')
-    || !moduleSource.includes("keywordsOnly: true")
+    || moduleSource.includes("keywordsOnly: true")
     || !moduleSource.includes("renderOnComplete: true")
     || !moduleSource.includes("视频已保存：")
     || !kineticServiceSource.includes("normalizeSegmentKeywords")

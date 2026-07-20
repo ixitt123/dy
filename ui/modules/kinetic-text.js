@@ -8,8 +8,6 @@ import {
 
 const PREF_KEY = "dy:kinetic-text:preferences";
 const FAVORITES_KEY = "dy:subtitle-template:favorites";
-const HANDOFF_KEY = "dy:handoff:kinetic-text:audio";
-const TEXT_HANDOFF_KEY = "dy:handoff:kinetic-text:text";
 const BOOKEND_MIN_SECONDS = 0.18;
 const BOOKEND_PRESET_TEXT = {
   intro: {
@@ -55,6 +53,7 @@ const state = {
   draggingOverlay: null,
   suppressCanvasClick: false,
   illustrationPlan: null,
+  routeActive: false,
 };
 
 function $(selector, root = state.page || document) {
@@ -302,10 +301,10 @@ function setProgress(progress = 0, stage = "等待开始") {
 function renderProjects() {
   const select = $("#kineticTextProjectSelect");
   if (!select) return;
-  select.innerHTML = state.projects.length
-    ? state.projects.map((project) => `<option value="${escapeHtml(project.id)}">${escapeHtml(project.title)} · ${escapeHtml(project.effect?.name || "")}</option>`).join("")
+  select.innerHTML = state.project
+    ? `<option value="${escapeHtml(state.project.id)}">${escapeHtml(state.project.title)} · ${escapeHtml(state.project.effect?.name || "")}</option>`
     : '<option value="">等待 TTS 发送</option>';
-  if (state.project) select.value = state.project.id;
+  select.disabled = true;
 }
 
 function renderEffects() {
@@ -343,7 +342,8 @@ function renderTimeline() {
     renderTimelineDraftStatus();
     return;
   }
-  container.innerHTML = state.project.segments.map((segment, index) => {
+  const segments = hasTimelineDraft() ? state.pendingTimelineChanges.segments : state.project.segments;
+  container.innerHTML = segments.map((segment, index) => {
     const overrides = segment.overrides || {};
     const x = Number(overrides.x ?? state.project.effectParams?.x ?? 50);
     const y = Number(overrides.y ?? state.project.effectParams?.y ?? 50);
@@ -1731,11 +1731,28 @@ function renderProject() {
 async function refreshProjects(preferredId = "") {
   const data = await jsonFetch("/api/kinetic-text/projects");
   state.projects = data.projects || [];
-  const id = preferredId || state.project?.id || localStorage.getItem("dy:kinetic-text:project-id") || state.projects[0]?.id;
-  state.project = state.projects.find((project) => project.id === id) || state.projects[0] || null;
+  const id = preferredId || state.project?.id || "";
+  state.project = id ? state.projects.find((project) => project.id === id) || null : null;
   state.pendingTimelineChanges = {};
-  if (state.project) localStorage.setItem("dy:kinetic-text:project-id", state.project.id);
+  localStorage.removeItem("dy:kinetic-text:project-id");
   renderProject();
+}
+
+function clearTimelineState(message = "等待 TTS 发送已确认字幕时间轴") {
+  clearTimeout(state.saveTimer);
+  state.saveTimer = 0;
+  state.project = null;
+  state.pendingTimelineChanges = {};
+  state.pendingSaveChanges = {};
+  state.currentTime = 0;
+  state.playing = false;
+  localStorage.removeItem("dy:kinetic-text:project-id");
+  localStorage.removeItem("dy:handoff:kinetic-text:audio");
+  localStorage.removeItem("dy:handoff:kinetic-text:text");
+  localStorage.removeItem("dy:kinetic-text:last-text-handoff");
+  syncAudio();
+  renderProject();
+  setProgress(0, message);
 }
 
 function scheduleSave(changes = {}) {
@@ -1766,7 +1783,8 @@ function applyTimelineInput(input) {
   const index = Number(row?.dataset.segmentIndex);
   if (!Number.isInteger(index) || !state.project?.segments[index]) return;
   const field = input.dataset.field;
-  const segments = state.project.segments.map((segment, segmentIndex) => {
+  const baseSegments = hasTimelineDraft() ? state.pendingTimelineChanges.segments : state.project.segments;
+  const segments = baseSegments.map((segment, segmentIndex) => {
     if (segmentIndex !== index) return segment;
     if (field === "keywords") return { ...segment, keywords: input.value.split(/[、,，]/).map((item) => item.trim()).filter(Boolean) };
     if (field === "lineBreaks") return { ...segment, lineBreaks: [...new Set(input.value.split(/[,，、\s]+/).map(Number).filter((value) => Number.isInteger(value) && value > 0 && value < String(segment.text || "").length))].sort((a, b) => a - b) };
@@ -1775,13 +1793,8 @@ function applyTimelineInput(input) {
     return { ...segment, [field]: input.value };
   });
   const changes = { segments, duration: Math.max(...segments.map((item) => Number(item.end || 0)), state.project.duration || 0) };
-  state.project = mergeProjectChanges(state.project, changes);
   state.pendingTimelineChanges = mergeProjectChanges(state.pendingTimelineChanges, changes);
-  renderEffects();
-  renderBookendAvailability();
-  renderTimelineRuleStatus();
   renderTimelineDraftStatus();
-  drawPreview();
   setProgress(state.project.progress || 0, "字幕已修改，点击“确定修改”后保存");
 }
 
@@ -1796,7 +1809,7 @@ function sharedTimelineFromPayload(payload = {}) {
     index,
     start: Number(row.start || 0),
     end: Number(row.end || 0),
-    text: String(row.text || ""),
+    text: String(row.text || "").trim(),
   })).filter((row) => row.text && row.end > row.start);
 }
 
@@ -1805,9 +1818,11 @@ async function applySharedTimelineToKineticProject(payload = {}) {
   const rows = sharedTimelineFromPayload(payload);
   if (!project || !rows.length) return null;
   const segments = rows.map((row, index) => ({
-    ...(project.segments?.[index] || {}),
     ...row,
-    id: project.segments?.[index]?.id || row.id || `segment-${index + 1}`,
+    id: row.id || `segment-${index + 1}`,
+    keywords: Array.isArray(row.keywords) ? row.keywords : [],
+    lineBreaks: Array.isArray(row.lineBreaks) ? row.lineBreaks : [],
+    overrides: {},
   }));
   const finalText = String(payload.final_text || payload.text || segments.map((item) => item.text || "").join("") || project.text || "");
   const sourceText = String(payload.original_text || payload.final_text || project.originalText || finalText || "");
@@ -1831,7 +1846,7 @@ async function applySharedTimelineToKineticProject(payload = {}) {
       ttsHandoffRevision: String(payload.handoff_revision || ""),
       ttsSharedUpdatedAt: String(payload.sharedUpdatedAt || payload.sent_at || payload.sentAt || ""),
       segments,
-      duration: Math.max(...segments.map((item) => Number(item.end || 0)), project.duration || 0),
+      duration: Math.max(...segments.map((item) => Number(item.end || 0)), Number(payload.audio_duration || payload.duration || 0)),
       subtitleSource: "shared-production-timeline",
     },
   });
@@ -1932,14 +1947,20 @@ async function saveProjectImmediately() {
   return state.project;
 }
 
-async function receiveTts(payload) {
-  if (!payload?.id) throw new Error("没有可用的 TTS 音频。");
+async function receiveTts(payload, { navigate = true } = {}) {
+  const rows = sharedTimelineFromPayload(payload || {});
+  const confirmed = String(payload?.alignment_status || payload?.metadata?.alignment_status || "") === "confirmed";
+  if (!payload?.id || !confirmed || !rows.length) {
+    clearTimelineState("TTS 参数为空或无效，字幕时间轴已清空");
+    return null;
+  }
   const existing = state.projects.find((project) => String(project.ttsJobId) === String(payload.id));
+  clearTimelineState("正在接收新的 TTS 参数");
   if (existing) {
     state.project = await applySharedTimelineToKineticProject(payload) || existing;
     await refreshProjects(state.project.id);
     renderProject();
-    window.workbenchNavigate?.("kinetic-text");
+    if (navigate) window.workbenchNavigate?.("kinetic-text");
     return state.project;
   }
   const preferences = readPreferences();
@@ -1953,29 +1974,14 @@ async function receiveTts(payload) {
   state.pendingTimelineChanges = {};
   state.project = data.project;
   await refreshProjects(state.project.id);
-  window.workbenchNavigate?.("kinetic-text");
+  if (navigate) window.workbenchNavigate?.("kinetic-text");
   return state.project;
 }
 
 async function receiveText(payload = {}) {
-  const text = String(payload.text || "").trim();
-  if (!text) throw new Error("没有可用的文案。");
-  const preferences = readPreferences();
-  const data = await postJson("/api/kinetic-text/create", {
-    title: payload.title || "文案动态大字视频",
-    text,
-    source: payload.source || "rewrite",
-    effectId: preferences.effectId,
-    aspectRatio: preferences.aspectRatio || "9:16",
-    frameRate: Number(preferences.frameRate) === 60 ? 60 : 30,
-    videoProjectId: payload.videoProjectId || window.videoProjects?.current?.()?.id || localStorage.getItem("active-video-project-id") || "",
-  });
-  state.pendingTimelineChanges = {};
-  state.project = data.project;
-  await refreshProjects(state.project.id);
-  if (payload.sentAt) localStorage.setItem("dy:kinetic-text:last-text-handoff", String(payload.sentAt));
+  clearTimelineState("文案直传不会生成字幕时间轴，请从 TTS 页面发送已确认参数");
   window.workbenchNavigate?.("kinetic-text");
-  return state.project;
+  return null;
 }
 
 function bindBookendControl(kind) {
@@ -1999,13 +2005,6 @@ function bindEvents() {
   bindBookendControl("intro");
   bindBookendControl("outro");
   $("#kineticTextRefresh").addEventListener("click", () => refreshProjects().catch((error) => setProgress(0, error.message)));
-  $("#kineticTextProjectSelect").addEventListener("change", (event) => {
-    state.project = state.projects.find((item) => item.id === event.target.value) || null;
-    state.pendingTimelineChanges = {};
-    if (state.project) localStorage.setItem("dy:kinetic-text:project-id", state.project.id);
-    state.currentTime = 0;
-    renderProject();
-  });
   $("#kineticEffectGrid").addEventListener("click", (event) => {
     const card = event.target.closest("[data-effect-id]");
     if (!card || !state.project) return;
@@ -2148,26 +2147,6 @@ function bindEvents() {
   $("#kineticChooseBgm").addEventListener("click", () => $("#kineticBgmFile").click());
   $("#kineticBackgroundFile").addEventListener("change", (event) => uploadFile("background", event.target.files?.[0]).catch((error) => setProgress(0, error.message)));
   $("#kineticBgmFile").addEventListener("change", (event) => uploadFile("bgm", event.target.files?.[0]).catch((error) => setProgress(0, error.message)));
-  $("#kineticAnalyze").addEventListener("click", async () => {
-    if (!state.project) return;
-    const button = $("#kineticAnalyze");
-    button.disabled = true;
-    setProgress(5, "正在本地识别每句关键词（不调用 API）");
-    try {
-      const data = await postJson("/api/kinetic-text/analyze", {
-        projectId: state.project.id,
-        provider: $("#kineticTextProvider").value,
-        keywordsOnly: true,
-      });
-      acceptServerProject(data.project);
-      renderProject();
-      setProgress(100, data.aiUsed ? `关键词识别完成 · ${data.provider}` : "关键词识别完成 · 本地规则");
-    } catch (error) {
-      setProgress(0, error.message);
-    } finally {
-      button.disabled = false;
-    }
-  });
   $("#kineticPreviewPlay").addEventListener("click", playPreview);
   $("#kineticPreviewCanvas").addEventListener("pointerdown", beginOverlayDrag);
   $("#kineticPreviewCanvas").addEventListener("pointermove", moveOverlayDrag);
@@ -2240,9 +2219,10 @@ function bindEvents() {
   });
   window.addEventListener("kinetic-text-handoff", (event) => receiveTts(event.detail).catch((error) => setProgress(0, error.message)));
   window.addEventListener("kinetic-text-text-handoff", (event) => receiveText(event.detail).catch((error) => setProgress(0, error.message)));
-  window.addEventListener("tts-shared-handoff-updated", (event) => {
-    if (event.detail?.sourceTarget === "kinetic-text") return;
-    applySharedTimelineToKineticProject(event.detail?.payload).catch((error) => setProgress(state.project?.progress || 0, `字幕同步失败：${error.message}`));
+  document.addEventListener("workbench:route", (event) => {
+    const nextActive = event.detail?.page === "kinetic-text";
+    if (!nextActive && state.routeActive) clearTimelineState();
+    state.routeActive = nextActive;
   });
 }
 
@@ -2264,15 +2244,4 @@ export async function initKineticTextModule() {
   bindEvents();
   window.kineticTextProduction = { receiveTts, receiveText, refresh: refreshProjects };
   await refreshProjects();
-  try {
-    const payload = JSON.parse(localStorage.getItem(HANDOFF_KEY) || "null");
-    if (payload?.id) await receiveTts(payload);
-  } catch {}
-  try {
-    const payload = JSON.parse(localStorage.getItem(TEXT_HANDOFF_KEY) || "null");
-    if (payload?.text && String(payload.sentAt || "") !== localStorage.getItem("dy:kinetic-text:last-text-handoff")) {
-      await receiveText(payload);
-      if (payload.sentAt) localStorage.setItem("dy:kinetic-text:last-text-handoff", String(payload.sentAt));
-    }
-  } catch {}
 }

@@ -9496,6 +9496,19 @@ audio {
   font-weight: 600;
 }
 
+.production-timeline-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.production-timeline-actions button {
+  flex: 0 0 auto;
+  width: auto;
+  white-space: nowrap;
+}
+
 .shared-subtitle-timeline-head,
 .shared-subtitle-timeline-row {
   display: grid;

@@ -1185,10 +1185,13 @@
               <section class="cs1-shared-timeline-card">
                 <div class="cs1-shared-timeline-title">
                   <strong>字幕时间轴</strong>
-                  <span id="cs1TimelineStatus">等待 TTS 字幕</span>
+                  <div class="production-timeline-actions">
+                    <span id="cs1TimelineStatus">等待 TTS 字幕</span>
+                    <button id="cs1ConfirmTimeline" class="primary small" type="button" disabled>确定修改</button>
+                  </div>
                 </div>
                 <div class="shared-subtitle-timeline-head">
-                  <span>序号</span><span>开始</span><span>结束</span><span>字幕文字（失去焦点自动保存）</span>
+                  <span>序号</span><span>开始</span><span>结束</span><span>字幕文字</span>
                 </div>
                 <div id="cs1SubtitleTimeline" class="shared-subtitle-timeline"></div>
               </section>
@@ -1583,7 +1586,10 @@
               <section class="kinetic-card money-printer-card money-printer-timeline-card">
                 <div class="kinetic-card-head">
                   <strong>字幕时间轴 / 素材检查</strong>
-                  <span id="moneyPrinterTimelineSummary">等待 TTS</span>
+                  <div class="production-timeline-actions">
+                    <span id="moneyPrinterTimelineSummary">等待 TTS</span>
+                    <button id="moneyPrinterConfirmTimeline" class="primary small" type="button" disabled>确定修改</button>
+                  </div>
                 </div>
                 <div class="money-printer-timeline-head">
                   <span>序号</span><span>开始</span><span>结束</span><span>字幕文案</span><span>检索词</span><span>素材 / 来源</span><span>转场</span>
@@ -1785,7 +1791,6 @@
                   <div class="kinetic-timeline-actions">
                     <span id="kineticTimelineDraftStatus" class="kinetic-draft-status" hidden></span>
                     <button id="kineticConfirmTimeline" class="primary small" type="button" disabled>确定修改</button>
-                    <button id="kineticAnalyze" class="ghost" type="button">本地重新识别关键词</button>
                   </div>
                 </div>
                 <div id="kineticTimelineRuleStatus" class="kinetic-rule-status" hidden></div>

@@ -1,6 +1,5 @@
 import { postJson } from "./api.js";
 
-const HANDOFF_KEY = "dy:handoff:money-printer:audio";
 const PREF_KEY = "dy:money-printer:preferences";
 const POLL_INTERVAL_MS = 2500;
 
@@ -10,6 +9,7 @@ const state = {
   status: null,
   handoff: null,
   segments: [],
+  timelineDraftSegments: null,
   task: null,
   pollTimer: 0,
   raf: 0,
@@ -19,6 +19,7 @@ const state = {
   startTime: 0,
   previewReady: false,
   apiStartPromise: null,
+  routeActive: false,
 };
 
 function $(selector) {
@@ -84,6 +85,7 @@ function cacheElements() {
     materialSummary: $("#moneyPrinterMaterialSummary"),
     taskVideos: $("#moneyPrinterTaskVideos"),
     timelineSummary: $("#moneyPrinterTimelineSummary"),
+    confirmTimeline: $("#moneyPrinterConfirmTimeline"),
     timeline: $("#moneyPrinterTimeline"),
     assets: $("#moneyPrinterAssets"),
     apiLogs: $("#moneyPrinterApiLogs"),
@@ -98,7 +100,6 @@ async function initialize() {
   state.effects = effectsData.effects || [];
   renderEffectOptions();
   await applyDefaultPreferences();
-  loadStoredHandoff();
   renderAll();
   if (state.page.classList.contains("active") || document.body.dataset.activeModule === "money-printer") {
     await ensureApiReady().catch(() => null);
@@ -131,27 +132,28 @@ function bindEvents() {
   els.sourceVideo?.addEventListener("seeked", drawPreview);
   els.sourceAudio?.addEventListener("ended", pausePreview);
   window.addEventListener("money-printer-handoff", (event) => receiveTts(event.detail));
-  window.addEventListener("tts-shared-handoff-updated", (event) => {
-    if (event.detail?.sourceTarget === "money-printer") return;
-    receiveTts(event.detail?.payload, { navigate: false });
-  });
   els.timeline?.addEventListener("input", (event) => {
     const textarea = event.target.closest('[data-field="text"]');
     const row = textarea?.closest(".money-printer-timeline-row");
     const index = Number(row?.dataset.segmentIndex);
     if (!textarea || !Number.isInteger(index) || !state.segments[index]) return;
-    state.segments[index] = { ...state.segments[index], text: textarea.value };
-    drawPreview();
+    if (!Array.isArray(state.timelineDraftSegments)) {
+      state.timelineDraftSegments = state.segments.map((segment) => ({ ...segment }));
+    }
+    state.timelineDraftSegments[index] = { ...state.timelineDraftSegments[index], text: textarea.value };
+    els.confirmTimeline.disabled = false;
+    els.timelineSummary.textContent = "有未确定修改";
   });
-  els.timeline?.addEventListener("focusout", (event) => {
-    if (event.target.matches('[data-field="text"]')) syncTimelineText();
-  });
+  els.confirmTimeline?.addEventListener("click", confirmTimelineChanges);
   document.addEventListener("workbench:route", (event) => {
-    if (event.detail?.page === "money-printer") {
-      loadStoredHandoff();
+    const nextActive = event.detail?.page === "money-printer";
+    if (nextActive) {
       renderAll();
       ensureApiReady().catch((error) => setStatus("API 自动启动失败", error.message, true));
+    } else if (state.routeActive) {
+      clearTimelineState();
     }
+    state.routeActive = nextActive;
   });
 }
 
@@ -196,47 +198,72 @@ async function applyDefaultPreferences() {
   updateSettingOutputs();
 }
 
-function loadStoredHandoff() {
-  const stored = window.sharedTtsHandoff?.read?.() || readJsonStorage(HANDOFF_KEY, null);
-  if (stored?.id && (!state.handoff || String(stored.id) !== String(state.handoff.id) || stored.sharedUpdatedAt !== state.handoff.sharedUpdatedAt)) {
-    receiveTts(stored, { navigate: false });
-  }
-}
-
 function receiveTts(payload = {}, { navigate = true } = {}) {
-  if (!payload?.id) return;
-  const sameJob = String(state.handoff?.id || "") === String(payload.id);
-  const previousSegments = sameJob ? state.segments : [];
-  state.handoff = payload;
-  if (!sameJob) {
-    state.task = null;
-    state.previewReady = false;
-    state.currentTime = 0;
+  const timeline = Array.isArray(payload?.subtitle_timeline) && payload.subtitle_timeline.length
+    ? payload.subtitle_timeline
+    : Array.isArray(payload?.sentence_timeline)
+      ? payload.sentence_timeline
+      : [];
+  const segments = normalizeSegments(timeline, payload);
+  const confirmed = String(payload?.alignment_status || payload?.metadata?.alignment_status || "") === "confirmed";
+  if (!payload?.id || !confirmed || !timeline.length || !segments.length) {
+    clearTimelineState();
+    setStatus("TTS 参数无效", "已清空 MoneyPrinter 字幕时间轴，请从 TTS 页面重新发送已确认参数。", true);
+    return null;
   }
-  state.segments = normalizeSegments(payload.subtitle_timeline?.length ? payload.subtitle_timeline : payload.sentence_timeline, payload)
-    .map((segment, index) => ({ ...(previousSegments[index] || {}), ...segment }));
+  state.handoff = payload;
+  state.segments = segments;
+  state.timelineDraftSegments = null;
+  state.task = null;
+  state.previewReady = false;
+  state.currentTime = 0;
   if (els.subject) els.subject.value = payload.title || payload.seo_title || payload.publish_title || `TTS #${payload.display_number || payload.id}`;
   if (payload.audio_url) els.sourceAudio.src = payload.audio_url;
   else els.sourceAudio.removeAttribute("src");
   if (navigate) window.workbenchNavigate?.("money-printer");
   renderAll();
   savePreferences();
+  return state.handoff;
 }
 
-async function syncTimelineText() {
-  if (!state.handoff?.id || !state.segments.length) return;
-  els.timelineSummary.textContent = "正在自动保存字幕...";
-  try {
-    const payload = await window.sharedTtsHandoff.syncTimeline(state.segments, {
-      sourceTarget: "money-printer",
-      title: els.subject.value.trim() || state.handoff.title,
-    });
-    receiveTts(payload, { navigate: false });
-    setStatus("字幕已同步", "原时间戳已保留，原字幕文件和其他三条生产线已更新。");
-  } catch (error) {
-    els.timelineSummary.textContent = `自动保存失败：${error.message || error}`;
-    setStatus("字幕保存失败", error.message || String(error), true);
+function clearTimelineState() {
+  stopPolling();
+  pausePreview();
+  state.handoff = null;
+  state.segments = [];
+  state.timelineDraftSegments = null;
+  state.task = null;
+  state.previewReady = false;
+  state.currentTime = 0;
+  els.sourceAudio?.removeAttribute("src");
+  els.sourceVideo?.removeAttribute("src");
+  renderAll();
+}
+
+function confirmTimelineChanges() {
+  if (!state.handoff?.id || !Array.isArray(state.timelineDraftSegments)) return;
+  if (state.timelineDraftSegments.some((segment) => !String(segment.text || "").trim())) {
+    els.timelineSummary.textContent = "字幕文字不能为空";
+    return;
   }
+  state.segments = state.timelineDraftSegments.map((segment) => ({
+    ...segment,
+    text: String(segment.text || "").trim(),
+    searchTerm: automaticSearchTerm(segment.text, state.handoff),
+    keywords: inferKeywords(segment.text),
+  }));
+  state.timelineDraftSegments = null;
+  const finalText = state.segments.map((segment) => segment.text).join("");
+  state.handoff = {
+    ...state.handoff,
+    text: finalText,
+    final_text: finalText,
+    sentence_timeline: state.segments,
+    subtitle_timeline: state.segments,
+  };
+  if (els.confirmTimeline) els.confirmTimeline.disabled = true;
+  renderAll();
+  setStatus("字幕修改已确定", "本次修改只应用于 MoneyPrinter，不会同步到其他生产线或 TTS 历史任务。");
 }
 
 function normalizeSegments(timeline = [], payload = {}) {
@@ -285,14 +312,18 @@ function renderHandoff() {
 
 function renderTimeline() {
   if (!els.timeline) return;
-  if (!state.segments.length) {
+  const displaySegments = Array.isArray(state.timelineDraftSegments) ? state.timelineDraftSegments : state.segments;
+  if (!displaySegments.length) {
     els.timelineSummary.textContent = "等待 TTS";
     els.timeline.innerHTML = '<p class="money-printer-empty">尚未接收已确认字幕时间轴。</p>';
+    if (els.confirmTimeline) els.confirmTimeline.disabled = true;
     return;
   }
   const source = els.source?.value || "pexels";
-  els.timelineSummary.textContent = `共 ${state.segments.length} 段字幕 / ${matchedMaterialCount()} 段素材 / 转场${transitionLabel(els.transition.value)}`;
-  els.timeline.innerHTML = state.segments.map((segment, index) => `
+  els.timelineSummary.textContent = state.timelineDraftSegments
+    ? "有未确定修改"
+    : `共 ${state.segments.length} 段字幕 / ${matchedMaterialCount()} 段素材 / 转场${transitionLabel(els.transition.value)}`;
+  els.timeline.innerHTML = displaySegments.map((segment, index) => `
     <article class="money-printer-timeline-row" data-segment-index="${index}">
       <span class="money-printer-segment-index">${String(index + 1).padStart(2, "0")}</span>
       <span>${formatTime(segment.start)}</span>
@@ -306,6 +337,7 @@ function renderTimeline() {
       <span>${escapeHtml(segment.transition || transitionLabel(els.transition.value))}</span>
     </article>
   `).join("");
+  if (els.confirmTimeline) els.confirmTimeline.disabled = !state.timelineDraftSegments;
 }
 
 function renderTask() {
