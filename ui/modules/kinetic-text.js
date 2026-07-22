@@ -8,6 +8,7 @@ import {
 
 const PREF_KEY = "dy:kinetic-text:preferences";
 const FAVORITES_KEY = "dy:subtitle-template:favorites";
+const ACTIVE_JOB_KEY = "dy:kinetic-text:active-job";
 const BOOKEND_MIN_SECONDS = 0.18;
 const BOOKEND_PRESET_TEXT = {
   intro: {
@@ -1653,6 +1654,7 @@ async function generateIllustration(force = false, sourceMode = "api") {
   setProgress(2, "准备官方动态插画工作流");
   try {
     const data = await postJson("/api/kinetic-text/illustration", { projectId: state.project.id, config: { ...config, sourceMode }, force });
+    saveActiveJob(data.job);
     pollJob(data.job.id, {
       onComplete: () => {
         button.disabled = false;
@@ -1915,6 +1917,7 @@ async function pollJob(jobId, options = {}) {
   const job = data.job;
   setProgress(job.progress, job.stage);
   if (job.status === "completed") {
+    clearActiveJob(job.id);
     await refreshProjects(job.projectId);
     if (options.renderOnComplete && job.type === "render") {
       const videoPath = job.result?.videoPath || state.project?.outputs?.finalVideo || kineticDownloadDirectory();
@@ -1925,6 +1928,7 @@ async function pollJob(jobId, options = {}) {
     return job;
   }
   if (job.status === "failed") {
+    clearActiveJob(job.id);
     setProgress(job.progress || 0, `${job.stage}：${job.error}`);
     if (options.renderOnComplete) setRenderButtonBusy(false);
     if (typeof options.onFailed === "function") options.onFailed(job);
@@ -1934,6 +1938,56 @@ async function pollJob(jobId, options = {}) {
     setProgress(job.progress, error.message);
     if (options.renderOnComplete) setRenderButtonBusy(false);
   }), 1000);
+}
+
+function saveActiveJob(job, options = {}) {
+  try {
+    if (!job?.id) return;
+    localStorage.setItem(ACTIVE_JOB_KEY, JSON.stringify({
+      id: String(job.id),
+      type: String(job.type || ""),
+      renderOnComplete: options.renderOnComplete === true,
+    }));
+  } catch {}
+}
+
+function clearActiveJob(jobId = "") {
+  try {
+    // 用户可叠加多个任务（如 materials 与 render 并发），先完成的 job
+    // 不能清掉后启动 job 的持久化 ID，否则刷新后后者无法恢复。
+    if (jobId) {
+      const saved = readActiveJob();
+      if (saved?.id && String(saved.id) !== String(jobId)) return;
+    }
+    localStorage.removeItem(ACTIVE_JOB_KEY);
+  } catch {}
+}
+
+function readActiveJob() {
+  try { return JSON.parse(localStorage.getItem(ACTIVE_JOB_KEY) || "null"); } catch { return null; }
+}
+
+async function restoreActiveJob() {
+  const saved = readActiveJob();
+  if (!saved?.id) return;
+  try {
+    const data = await jsonFetch(`/api/kinetic-text/job?id=${encodeURIComponent(saved.id)}`);
+    const job = data.job;
+    if (!job || job.status === "completed" || job.status === "failed") {
+      clearActiveJob();
+      return;
+    }
+    if (saved.renderOnComplete && job.type === "render") setRenderButtonBusy(true);
+    setProgress(job.progress || 0, job.stage || "已恢复上次任务");
+    state.pollTimer = setTimeout(() => pollJob(job.id, { renderOnComplete: saved.renderOnComplete && job.type === "render" }).catch((error) => {
+      setProgress(0, error.message);
+      if (saved.renderOnComplete) setRenderButtonBusy(false);
+    }), 1000);
+  } catch (error) {
+    // 同上：只有任务明确不存在才清除；服务暂时不可达时保留 ID。
+    const message = String(error?.message || "");
+    if (/不存在|没有|not.?found|404/i.test(message)) clearActiveJob();
+  }
 }
 
 async function saveProjectImmediately() {
@@ -2190,6 +2244,7 @@ function bindEvents() {
   $("#kineticGenerateMaterials").addEventListener("click", async () => {
     if (!state.project) return;
     const data = await postJson("/api/kinetic-text/materials", { projectId: state.project.id });
+    saveActiveJob(data.job);
     pollJob(data.job.id).catch((error) => setProgress(0, error.message));
   });
   $("#kineticChooseDownloadDir").addEventListener("click", () => {
@@ -2208,6 +2263,7 @@ function bindEvents() {
     try {
       await saveProjectImmediately();
       const data = await postJson("/api/kinetic-text/render", { projectId: state.project.id });
+      saveActiveJob(data.job, { renderOnComplete: true });
       pollJob(data.job.id, { renderOnComplete: true }).catch((error) => {
         setRenderButtonBusy(false);
         setProgress(0, error.message);
@@ -2244,4 +2300,5 @@ export async function initKineticTextModule() {
   bindEvents();
   window.kineticTextProduction = { receiveTts, receiveText, refresh: refreshProjects };
   await refreshProjects();
+  await restoreActiveJob();
 }

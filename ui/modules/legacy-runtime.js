@@ -571,6 +571,8 @@ let currentTaskPage = 1;
 let tasksPollTimer = 0;
 let rewriteProgressTimer = 0;
 let momentsProgressTimer = 0;
+let momentsActiveProgressIsOwn = false;
+let momentsActiveProgressSeen = false;
 let lastFinishedTaskCount = 0;
 let activeResultAction = "";
 let activeResultTaskIds = new Set();
@@ -583,6 +585,7 @@ const MOMENTS_PERSONAS_KEY = "video-factory:moments-personas-v1";
 const MOMENTS_ACTIVE_PERSONA_KEY = "video-factory:moments-active-persona-v1";
 const MOMENTS_DRAFT_KEY = "video-factory:moments-draft-v1";
 const MOMENTS_PROVIDER_KEY = "video-factory:moments-provider-v1";
+const MOMENTS_ACTIVE_PROGRESS_KEY = "video-factory:moments-active-progress-v1";
 const ANALYSIS_PROVIDER_KEY = "video-factory:analysis-provider-v1";
 const defaultMomentsPersona = {
   id: "academic-planner",
@@ -1984,26 +1987,85 @@ function stopMomentsProgress(label = "", percent = 100) {
     momentsProgressTimer = 0;
   }
   if (label) setMomentsProgress(percent, label);
+  try { localStorage.removeItem(MOMENTS_ACTIVE_PROGRESS_KEY); } catch {}
+}
+
+function applyMomentsRecoveredResult(result, { fallbackUsed = false } = {}) {
+  if (!result || typeof result !== "object") return false;
+  currentMomentsResult = result;
+  if (momentsPostOutput) momentsPostOutput.value = result.post || "";
+  renderMomentsResult(result);
+  saveMomentsDraft();
+  const fallbackNotice = fallbackUsed ? "本次已自动切换到备用 API。" : "";
+  setMomentsStatus(`页面刷新前的生成已完成，结果已自动恢复。${fallbackNotice}`, "success");
+  return true;
 }
 
 async function refreshMomentsProgress(progressId) {
   if (!progressId) return;
   try {
     const data = await fetchJson(`/api/moments/progress?id=${encodeURIComponent(progressId)}`, { cache: "no-store" });
+    momentsActiveProgressSeen = true;
     setMomentsProgress(data.progress, data.label);
-    if (data.status !== "running") stopMomentsProgress(data.label, data.progress);
-  } catch {
-    // 请求刚发出时服务端尚未登记进度任务，下一轮轮询会继续读取。
+    if (data.status !== "running") {
+      stopMomentsProgress(data.label, data.progress);
+      // 本次页面内发起的生成，结果由 POST 响应直接应用（见 generateMomentsPost），
+      // 这里不再重复应用；只有恢复场景（刷新后接管的轮询）才走恢复渲染。
+      if (data.status === "completed" && data.result && !momentsActiveProgressIsOwn) {
+        applyMomentsRecoveredResult(data.result, { fallbackUsed: data.fallbackUsed === true });
+      }
+      momentsActiveProgressIsOwn = false;
+    }
+  } catch (error) {
+    // 请求刚发出时服务端尚未登记进度任务，下一轮轮询会继续读取；
+    // 只有任务曾经查到、后来又 404（服务重启或 TTL 过期）才停止轮询，
+    // 避免启动初期的正常等待被误判成「任务已过期」。
+    const message = String(error?.data?.message || error?.message || "");
+    if (momentsActiveProgressSeen && /不存在|已过期|not.?found/i.test(message)) {
+      momentsActiveProgressSeen = false;
+      stopMomentsProgress("任务已过期，请重新生成", 0);
+    }
   }
 }
 
-function startMomentsProgress(progressId) {
+function startMomentsProgress(progressId, { own = true } = {}) {
   if (momentsProgressTimer) clearInterval(momentsProgressTimer);
+  momentsActiveProgressIsOwn = own === true;
+  momentsActiveProgressSeen = false;
+  try { localStorage.setItem(MOMENTS_ACTIVE_PROGRESS_KEY, String(progressId)); } catch {}
   setMomentsProgress(3, "正在提交生成任务");
   void refreshMomentsProgress(progressId);
   momentsProgressTimer = setInterval(() => {
     void refreshMomentsProgress(progressId);
   }, 700);
+}
+
+function restoreMomentsActiveProgress() {
+  let progressId = "";
+  try { progressId = String(localStorage.getItem(MOMENTS_ACTIVE_PROGRESS_KEY) || "").trim(); } catch {}
+  if (!progressId) return;
+  fetchJson(`/api/moments/progress?id=${encodeURIComponent(progressId)}`, { cache: "no-store" })
+    .then((data) => {
+      if (data.status === "running") {
+        startMomentsProgress(progressId, { own: false });
+        // 恢复场景下任务刚被查到存在，标记为已见，后续 404 才能判定为过期
+        momentsActiveProgressSeen = true;
+        setMomentsStatus("已恢复页面刷新前的生成任务，继续显示进度。");
+        return;
+      }
+      try { localStorage.removeItem(MOMENTS_ACTIVE_PROGRESS_KEY); } catch {}
+      if (data.status === "completed" && data.result) {
+        setMomentsProgress(data.progress || 100, data.label || "生成完成");
+        applyMomentsRecoveredResult(data.result, { fallbackUsed: data.fallbackUsed === true });
+      }
+    })
+    .catch((error) => {
+      // 只有任务明确不存在/已过期才清除；服务暂时不可达时保留 ID 下次再试。
+      const message = String(error?.data?.message || error?.message || "");
+      if (/不存在|已过期|not.?found|404/i.test(message)) {
+        try { localStorage.removeItem(MOMENTS_ACTIVE_PROGRESS_KEY); } catch {}
+      }
+    });
 }
 
 function setMomentsPersonaStatus(message) {
@@ -8602,6 +8664,7 @@ async function init() {
     restoreUiDraftValues({ dispatch: true });
     await loadMomentsPersonas();
     loadMomentsDraft();
+    restoreMomentsActiveProgress();
     updateTtsVoiceSource();
     updateTtsEmotionField();
     updateTtsRangeLabels();

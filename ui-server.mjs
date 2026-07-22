@@ -197,6 +197,7 @@ const handleMoneyPrinterRoutes = createMoneyPrinterRoutes({
   ffmpegPath,
   ffprobePath,
   getDownloadsDir: () => downloadsDir,
+  modelRouter,
 });
 
 // -----------------------------------------------------------------------------
@@ -4978,13 +4979,17 @@ function createMomentsProgressJob(progressId) {
   return id;
 }
 
-function updateMomentsProgressJob(progressId, progress, label, status = "running") {
+function updateMomentsProgressJob(progressId, progress, label, status = "running", extra = null) {
   const id = normalizeMomentsProgressId(progressId);
   const job = id ? momentsProgressJobs.get(id) : null;
   if (!job) return;
   job.progress = Math.max(0, Math.min(100, Math.round(Number(progress) || 0)));
   job.label = String(label || job.label || "正在生成");
   job.status = status;
+  if (extra && typeof extra === "object") {
+    if (extra.result !== undefined) job.result = extra.result;
+    if (extra.fallbackUsed !== undefined) job.fallbackUsed = extra.fallbackUsed === true;
+  }
   job.updatedAt = Date.now();
 }
 
@@ -7448,7 +7453,7 @@ const server = http.createServer(async (req, res) => {
         progressId = createMomentsProgressJob(body.progressId);
         const reportProgress = (progress, label) => updateMomentsProgressJob(progressId, progress, label);
         const result = await generateMomentsPostJsonV2(body, { onProgress: reportProgress });
-        updateMomentsProgressJob(progressId, 100, "朋友圈文案和图片提示词生成完成", "completed");
+        updateMomentsProgressJob(progressId, 100, "朋友圈文案和图片提示词生成完成", "completed", { result: result?.result ?? null, fallbackUsed: result?.fallbackUsed === true });
         sendJson(res, 200, result);
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);

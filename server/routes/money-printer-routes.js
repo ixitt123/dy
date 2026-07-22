@@ -26,7 +26,7 @@ const apiLogs = [];
 const renderedFiles = new Map();
 const managedTasks = new Map();
 
-export function createMoneyPrinterRoutes({ baseDir, sendJson, ffmpegPath, ffprobePath, getDownloadsDir }) {
+export function createMoneyPrinterRoutes({ baseDir, sendJson, ffmpegPath, ffprobePath, getDownloadsDir, modelRouter }) {
   const defaultRoot = path.resolve(process.env.MONEY_PRINTER_TURBO_ROOT || path.join(baseDir, "integrations", "moneyprinterturbo"));
   const workflowDir = path.join(baseDir, ".data", "money-printer");
 
@@ -114,6 +114,21 @@ export function createMoneyPrinterRoutes({ baseDir, sendJson, ffmpegPath, ffprob
         if (!status.api.online) throw new Error("MoneyPrinterTurbo API 未运行，请先点击“启动 API”。");
         const materialSources = resolveMaterialSourceOrder(body.video_source, status.materials);
         const payload = buildGeneratePayload({ ...body, video_source: materialSources[0] });
+        if (shouldRefineTerms(payload.video_terms)) {
+          try {
+            const refined = await refineVideoTermsWithLlm({
+              modelRouter,
+              terms: payload.video_terms,
+              script: payload.video_script,
+              subject: payload.video_subject,
+              termTexts: Array.isArray(body.video_term_texts) ? body.video_term_texts : null,
+            });
+            if (refined) payload.video_terms = refined;
+          } catch (refineError) {
+            // 关键词提炼失败不阻塞生成，继续用前端正则映射的原词
+            console.warn(`[MoneyPrinter] LLM 关键词提炼失败，沿用原始搜索词: ${refineError instanceof Error ? refineError.message : String(refineError)}`);
+          }
+        }
         const managed = await createManagedTask(status, payload, materialSources);
         sendJson(res, 202, {
           ok: true,
@@ -537,6 +552,69 @@ function parseTerms(value) {
   const text = String(value || "").trim();
   if (!text) return null;
   return text.split(/[,，\n]/).map((item) => item.trim()).filter(Boolean);
+}
+
+// 前端 automaticSearchTerm 用 9 条中文正则把字幕映射到固定英文词组，
+// 命中不了就统一兜底 "daily life people"，导致大量段落撞同一关键词、
+// 素材雷同且与文案语义无关。这里在提交 MPT 前用 LLM 逐段提炼 2-4 词的
+// 英文搜索词；LLM 不可用时回退前端原词，不阻塞生成流程。
+const FALLBACK_SEARCH_TERMS = new Set([
+  "daily life people",
+  "city daily life people",
+]);
+
+function shouldRefineTerms(terms) {
+  if (!Array.isArray(terms) || !terms.length) return false;
+  const unique = new Set(terms.map((item) => String(item).toLowerCase()));
+  const fallbackCount = terms.filter((item) => FALLBACK_SEARCH_TERMS.has(String(item).toLowerCase())).length;
+  // 去重后种类过少，或超过 1/4 段落撞兜底词，都说明关键词区分度不够
+  return unique.size <= Math.max(2, Math.ceil(terms.length / 3)) || fallbackCount >= Math.ceil(terms.length / 4);
+}
+
+async function refineVideoTermsWithLlm({ modelRouter, terms, script, subject, termTexts }) {
+  if (!modelRouter || typeof modelRouter.generate !== "function") return null;
+  if (!Array.isArray(terms) || !terms.length) return null;
+  // 优先用前端按字幕时间轴切好的段文本（与 terms 严格同序对齐）；
+  // 没有时再退化为按标点断句（段数可能与 terms 不一致，靠下标兜底）。
+  const sentences = (Array.isArray(termTexts) && termTexts.length
+    ? termTexts
+    : String(script || "").split(/[\n。！？!?.；;]+/)
+  )
+    .map((item) => String(item || "").trim())
+    .filter(Boolean);
+  if (!sentences.length) return null;
+
+  const prompt = [
+    subject ? `视频主题：${subject}` : "",
+    `以下是短视频口播文案的 ${sentences.length} 个字幕段落：`,
+    ...sentences.map((sentence, index) => `${index + 1}. ${sentence}`),
+    "",
+    "请为每个段落提炼一条英文视频素材搜索词（用于 Pexels 素材库检索）。要求：",
+    "1. 每条 2-4 个英文单词，描述与该段文案语义相关的画面；",
+    "2. 必须是 Pexels 上真实常见素材类别（人物、场景、动作、物品），避免抽象概念；",
+    "3. 段落之间搜索词尽量不重复，体现叙事推进；",
+    "4. 只输出 JSON 数组，不要输出其他内容。数组长度必须与段落数一致。",
+    '示例输出：["mother helping child homework","frustrated student desk","teacher explaining math"]',
+  ].filter(Boolean).join("\n");
+
+  const result = await modelRouter.generate({
+    taskType: "director",
+    messages: [{ role: "user", content: prompt }],
+    options: { temperature: 0.3 },
+  });
+  const content = String(result?.content || "").trim();
+  const jsonMatch = content.match(/\[[\s\S]*\]/);
+  if (!jsonMatch) throw new Error("LLM 未返回 JSON 数组");
+  const parsed = JSON.parse(jsonMatch[0]);
+  if (!Array.isArray(parsed) || !parsed.length) throw new Error("LLM 返回空关键词数组");
+
+  const refined = parsed
+    .map((item) => String(item || "").trim().toLowerCase().replace(/[^a-z0-9 ]/g, "").replace(/\s+/g, " ").trim())
+    .map((item) => (item.split(" ").length > 6 ? item.split(" ").slice(0, 6).join(" ") : item));
+
+  // LLM 返回条数与字幕段数可能不一致：以原 terms 为底，逐段覆盖有效提炼词，
+  // 保证最终数组长度与段落数严格一致（MPT 按段序匹配素材）。
+  return terms.map((original, index) => refined[index] || original);
 }
 
 function parseLocalMaterials(value) {

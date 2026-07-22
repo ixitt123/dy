@@ -1,6 +1,7 @@
 import { postJson } from "./api.js";
 
 const PREF_KEY = "dy:money-printer:preferences";
+const ACTIVE_TASK_KEY = "dy:money-printer:active-task-id";
 const POLL_INTERVAL_MS = 2500;
 
 const state = {
@@ -101,8 +102,54 @@ async function initialize() {
   renderEffectOptions();
   await applyDefaultPreferences();
   renderAll();
+  await restoreActiveTask();
   if (state.page.classList.contains("active") || document.body.dataset.activeModule === "money-printer") {
     await ensureApiReady().catch(() => null);
+  }
+}
+
+function saveActiveTaskId(taskId) {
+  try {
+    if (taskId) localStorage.setItem(ACTIVE_TASK_KEY, String(taskId));
+  } catch {}
+}
+
+function clearActiveTaskId() {
+  try { localStorage.removeItem(ACTIVE_TASK_KEY); } catch {}
+}
+
+function readActiveTaskId() {
+  try { return String(localStorage.getItem(ACTIVE_TASK_KEY) || "").trim(); } catch { return ""; }
+}
+
+async function restoreActiveTask() {
+  const taskId = readActiveTaskId();
+  if (!taskId) return;
+  try {
+    const data = await fetchJson(`/api/money-printer/task?id=${encodeURIComponent(taskId)}`);
+    const task = data.task;
+    if (!task?.task_id) throw new Error("任务不存在");
+    state.task = task;
+    renderTask();
+    if (Number(task.state) === 1) {
+      clearActiveTaskId();
+      setProgress(100, "素材匹配完成，可以预览");
+      setStatus("上次任务已完成", "页面刷新前创建的素材任务已完成，可重新发送 TTS 参数后预览合成。");
+    } else if (Number(task.state) === -1) {
+      clearActiveTaskId();
+      setStatus("MoneyPrinterTurbo 任务失败", task.error || "任务失败。", true);
+    } else {
+      setProgress(task.progress || 0, task.stateLabel || "生成中");
+      setStatus("已恢复上次任务", `页面刷新前的任务 ${task.task_id} 仍在运行，继续自动刷新进度。`);
+      state.pollTimer = window.setInterval(() => pollTask(state.task?.task_id), POLL_INTERVAL_MS);
+    }
+  } catch (error) {
+    // 只有任务明确不存在才清除持久化 ID；服务重启中/网络抖动导致的
+    // 一次性失败保留 ID，下次打开页面仍可恢复仍在后台运行的任务。
+    const message = String(error?.message || "");
+    if (/不存在|没有|not.?found|404/i.test(message)) clearActiveTaskId();
+  } finally {
+    updateButtons();
   }
 }
 
@@ -437,6 +484,7 @@ async function submitForPreview() {
     const payload = buildMptPayload();
     const data = await postJson("/api/money-printer/generate", payload);
     state.task = data.task;
+    saveActiveTaskId(state.task?.task_id);
     setProgress(10, `任务已创建：${state.task?.task_id || "-"}`);
     pollTask(state.task?.task_id);
     state.pollTimer = window.setInterval(() => pollTask(state.task?.task_id), POLL_INTERVAL_MS);
@@ -455,6 +503,7 @@ function buildMptPayload() {
     video_subject: els.subject.value.trim() || state.handoff.title || "MoneyPrinter 视频",
     video_script: state.handoff.text || state.handoff.final_text || state.segments.map((item) => item.text).join("\n"),
     video_terms: state.segments.map((item) => item.searchTerm).filter(Boolean),
+    video_term_texts: state.segments.map((item) => item.text).filter(Boolean),
     video_source: els.source.value,
     video_materials: els.localMaterials.value.trim(),
     video_aspect: els.aspect.value,
@@ -481,12 +530,14 @@ async function pollTask(taskId) {
     renderTask();
     if (Number(state.task.state) === 1) {
       stopPolling();
+      clearActiveTaskId();
       applyTaskMaterials(state.task);
       bindPreviewVideo(state.task);
       setProgress(100, "素材匹配完成，可以预览");
       setStatus("预览已就绪", "当前预览使用 MoneyPrinterTurbo 混剪素材、已确认 TTS 音频和动态大字字幕模板。");
     } else if (Number(state.task.state) === -1) {
       stopPolling();
+      clearActiveTaskId();
       setStatus("MoneyPrinterTurbo 任务失败", state.task.error || "全部素材 API 均失败，请检查后台配置。", true);
     }
   } catch (error) {
