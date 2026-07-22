@@ -111,7 +111,7 @@ export function initCs1VideoModule() {
         <span>${index + 1}</span>
         <input value="${row.start.toFixed(2)}" readonly aria-readonly="true" />
         <input value="${row.end.toFixed(2)}" readonly aria-readonly="true" />
-        <textarea data-field="text" rows="2">${escapeHtml(row.text)}</textarea>
+        <textarea data-field="text" rows="2" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-1p-ignore="true">${escapeHtml(row.text)}</textarea>
       </div>
     `).join("");
     if (timelineStatus) timelineStatus.textContent = `共 ${rows.length} 段 · 修改后点击“确定修改”`;

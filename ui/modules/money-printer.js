@@ -375,7 +375,7 @@ function renderTimeline() {
       <span class="money-printer-segment-index">${String(index + 1).padStart(2, "0")}</span>
       <span>${formatTime(segment.start)}</span>
       <span>${formatTime(segment.end)}</span>
-      <textarea data-field="text" rows="2">${escapeHtml(segment.text)}</textarea>
+      <textarea data-field="text" rows="2" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-1p-ignore="true">${escapeHtml(segment.text)}</textarea>
       <strong>${escapeHtml(segment.searchTerm || automaticSearchTerm(segment.text, state.handoff))}</strong>
       <div class="money-printer-material-cell">
         ${segment.thumbnail ? `<img src="${escapeAttr(segment.thumbnail)}" alt="" loading="lazy" />` : ""}

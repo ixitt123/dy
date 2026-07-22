@@ -475,7 +475,7 @@ function renderSubtitleTimeline(job = state.selectedTtsJob || state.ttsJob) {
       <span class="xiaohei-row-index">${row.index + 1}</span>
       <input data-field="start" inputmode="decimal" value="${escapeAttr(formatTimelineValue(row.start))}" readonly aria-readonly="true" />
       <input data-field="end" inputmode="decimal" value="${escapeAttr(formatTimelineValue(row.end))}" readonly aria-readonly="true" />
-      <textarea data-field="text" rows="2">${escapeHtml(row.text)}</textarea>
+      <textarea data-field="text" rows="2" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-1p-ignore="true">${escapeHtml(row.text)}</textarea>
       <input data-field="keywords" value="${escapeAttr(row.keywords)}" />
       <input data-field="breakAt" placeholder="如 6,12" value="${escapeAttr(row.breakAt)}" />
       <input data-field="position" placeholder="如 5,88" value="${escapeAttr(row.position)}" />
