@@ -4517,7 +4517,7 @@ function renderTtsCentralTimeline(job = activeTtsRailJob, { preserveDraft = fals
       <span>${index + 1}</span>
       <input type="number" value="${Number(row.start || 0).toFixed(2)}" readonly aria-readonly="true" />
       <input type="number" value="${Number(row.end || 0).toFixed(2)}" readonly aria-readonly="true" />
-      <textarea rows="2" data-tts-timeline-text="${index}">${escapeHtml(row.text || "")}</textarea>
+      <textarea rows="2" data-tts-timeline-text="${index}" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-1p-ignore="true">${escapeHtml(row.text || "")}</textarea>
     </div>
   `).join("");
 }

@@ -816,7 +816,7 @@
               </div>
             </div>
             <label for="ttsText">配音文案</label>
-            <textarea id="ttsText" rows="12" placeholder="输入或粘贴文案。系统会先清洗、切句、处理情绪和停顿，再交给语音平台。"></textarea>
+            <textarea id="ttsText" rows="12" placeholder="输入或粘贴文案。系统会先清洗、切句、处理情绪和停顿，再交给语音平台。" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-1p-ignore="true"></textarea>
             <div class="tts-script-foot">
               <span id="ttsCharacterCount">0 字</span>
               <span>支持 mp3 / wav</span>
@@ -1000,7 +1000,7 @@
                   </details>
                   <label class="tts-final-transcript-field" for="ttsFinalTranscript">
                     发送时使用的最终文案
-                    <textarea id="ttsFinalTranscript" rows="7" placeholder="如有错字或断句问题，可在这里修改后重新对齐。"></textarea>
+                    <textarea id="ttsFinalTranscript" rows="7" placeholder="如有错字或断句问题，可在这里修改后重新对齐。" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-1p-ignore="true"></textarea>
                   </label>
                   <div class="tts-alignment-actions">
                     <button class="ghost small" id="retryTtsAlignment" type="button">重新检查音频</button>
