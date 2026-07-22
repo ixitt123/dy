@@ -115,14 +115,9 @@ export function initXiaoheiProductionModule() {
     refreshStatus();
   });
   document.addEventListener("workbench:route", (event) => {
-    const nextActive = event.detail?.page === "xiaohei-video";
-    if (!nextActive && routeActive) {
-      currentHandoff = null;
-      frame.src = `/xiaohei-illustrations.html?embedded=1&t=${Date.now()}`;
-    } else if (nextActive) {
-      refreshStatus();
-    }
-    routeActive = nextActive;
+    // 切换页面保留生产线状态：不清空 handoff、不重载 iframe，避免已接收的音频资产和工作内容丢失。
+    // 只有手动点击"刷新工作台"或从 TTS 页重新发送时才重置。
+    routeActive = event.detail?.page === "xiaohei-video";
   });
   window.videoFactorySendToXiaohei = sendConfirmedTtsToXiaohei;
   refreshStatus();
