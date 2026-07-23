@@ -262,6 +262,8 @@ const els = {
   generateImages: document.querySelector("#generateImages"),
   planPrompts: document.querySelector("#planPrompts"),
   copyPrompts: document.querySelector("#copyPrompts"),
+  copyImageConstraint1: document.querySelector("#copyImageConstraint1"),
+  copyImageConstraint2: document.querySelector("#copyImageConstraint2"),
   openOutputDir: document.querySelector("#openOutputDir"),
   refreshOutputs: document.querySelector("#refreshOutputs"),
   statusLabel: document.querySelector("#statusLabel"),
@@ -309,6 +311,7 @@ async function init() {
   renderPurposeTemplates();
   bindEvents();
   restoreComposeSettings();
+  syncImageConstraintButtons();
   window.addEventListener("message", handleParentHandoff);
   window.addEventListener("focus", () => {
     if (state.localImagePickerActive) setTimeout(() => { state.localImagePickerActive = false; }, 250);
@@ -610,6 +613,8 @@ function bindEvents() {
     resetVisualWorkflow("视觉模板已改变，请重新生成分镜计划。");
   });
   els.copyPrompts.addEventListener("click", () => copyAllPrompts());
+  els.copyImageConstraint1.addEventListener("click", () => copyImageConstraint(1));
+  els.copyImageConstraint2.addEventListener("click", () => copyImageConstraint(2));
   els.openOutputDir.addEventListener("click", () => openOutputDir());
   els.refreshOutputs.addEventListener("click", () => loadOutputs());
   els.audioJobs.addEventListener("click", handleAudioJobAction);
@@ -2079,6 +2084,7 @@ function promptBatchActionMarkup(plan = state.plan) {
 function renderPlan(plan) {
   const shots = plan?.shots || [];
   els.planCount.textContent = String(shots.length);
+  syncImageConstraintButtons();
   state.promptsText = promptPlanText(shots, plan);
   if (!shots.length) {
     els.promptResults.className = "prompt-list empty";
@@ -2257,6 +2263,63 @@ function promptClipboardText() {
     "",
     `共 ${imageCount} 个 Scene。`,
   ].join("\n");
+}
+
+function imageConstraintCounts() {
+  const shots = Array.isArray(state.plan?.shots) ? state.plan.shots : [];
+  const parsedCount = (String(state.promptsText || "").match(/^#\d+/gm) || []).length;
+  const total = shots.length > 0 ? shots.length : parsedCount;
+  return {
+    total,
+    first: total > 10 ? 10 : total,
+    rest: total > 10 ? total - 10 : 0,
+  };
+}
+
+function imageConstraintText(which, { first, rest }) {
+  const segment = which === 2 ? `后${rest}` : `${first}`;
+  return `请按提示词生成分镜图片素材，${segment}张，逐步一张一张地给我，一张都不要少，不要组图或者一张图。`;
+}
+
+async function copyImageConstraint(which) {
+  const button = which === 1 ? els.copyImageConstraint1 : els.copyImageConstraint2;
+  setButtonFeedback(button, "loading", "正在复制");
+  if (!state.promptsText) await createPlan();
+  const counts = imageConstraintCounts();
+  const available = which === 1 ? counts.first > 0 : counts.rest > 0;
+  if (!available) {
+    setButtonFeedback(button, "error", which === 1 ? "请先生成分镜" : "没有剩余分镜");
+    if (which === 1) setStatus("图片约束词1不可用", "请先点击“根据 TTS 时间轴分析分镜配图”生成分镜计划。", 0, true);
+    else setStatus("图片约束词2不可用", "当前分镜数量不超过 10 个，用图片约束词1即可。", 0, true);
+    return;
+  }
+  try {
+    await navigator.clipboard.writeText(imageConstraintText(which, counts));
+    const copiedCount = which === 1 ? counts.first : counts.rest;
+    const segment = which === 2 ? `后${copiedCount}` : `${copiedCount}`;
+    setStatus(
+      `已复制图片约束词${which}`,
+      `已复制：请按提示词生成分镜图片素材，${segment}张……（当前共 ${counts.total} 个分镜）`,
+      100,
+    );
+    setButtonFeedback(button, "success", "已复制");
+  } catch (error) {
+    setStatus("复制失败", error.message || String(error), 0, true);
+    setButtonFeedback(button, "error", "复制失败");
+  }
+}
+
+function syncImageConstraintButtons() {
+  if (!els.copyImageConstraint1 || !els.copyImageConstraint2) return;
+  const { total, first, rest } = imageConstraintCounts();
+  els.copyImageConstraint1.disabled = total <= 0;
+  els.copyImageConstraint1.title = total > 0
+    ? `复制“${first}张”约束词（当前共 ${total} 个分镜）`
+    : "请先生成分镜提示词";
+  els.copyImageConstraint2.disabled = rest <= 0;
+  els.copyImageConstraint2.title = rest > 0
+    ? `复制“后${rest}张”约束词（当前共 ${total} 个分镜）`
+    : "分镜不超过 10 个时无需约束词2";
 }
 
 function syncVideoPreview() {
