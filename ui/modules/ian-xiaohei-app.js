@@ -1,3 +1,5 @@
+import { resolveFolderNameSelection } from "./desktop-folder-selection.js";
+
 const state = {
   config: null,
   plan: null,
@@ -15,6 +17,10 @@ const state = {
   referenceCloneDraft: null,
   referenceStylePresets: [],
   pendingUploads: new Map(),
+  localMaterialPool: [],
+  materialBindings: new Map(),
+  desktopFolderPath: "",
+  desktopFolderName: "",
   confirmingUploads: new Set(),
   generatingImages: new Set(),
   imageBatchGenerating: false,
@@ -36,6 +42,9 @@ const PROMPT_PLAN_CACHE_PREFIX = "ian-xiaohei-prompt-plan";
 const PROMPT_PLAN_LATEST_KEY = `${PROMPT_PLAN_CACHE_PREFIX}:latest`;
 const PURPOSE_STORAGE_KEY = "ian-xiaohei-selected-purpose";
 const COMPOSE_SETTINGS_KEY = "ian-xiaohei-compose-settings-v1";
+const FOLDER_NAMES_API = "/api/folder-names";
+const FOLDER_CREATE_API = "/api/desktop-folder-named";
+let folderNames = [];
 
 function startStandalonePageSession() {
   if (embeddedMode) return;
@@ -319,7 +328,7 @@ async function init() {
   window.addEventListener("focus", () => {
     if (state.localImagePickerActive) setTimeout(() => { state.localImagePickerActive = false; }, 250);
   });
-  await Promise.all([loadConfig(), loadAudioJobs()]);
+  await Promise.all([loadConfig(), loadAudioJobs(), loadFolderNames()]);
   restoreComposeSettings();
   const restored = restorePromptPlanCache();
   if (restored) {
@@ -622,7 +631,10 @@ function bindEvents() {
   els.copyImageConstraint1.addEventListener("click", () => copyImageConstraint(1));
   els.copyImageConstraint2.addEventListener("click", () => copyImageConstraint(2));
   els.createDesktopFolder.addEventListener("click", () => createDesktopFolder());
-  els.folderNameSelect.addEventListener("change", () => syncFolderNameButtons());
+  els.folderNameSelect.addEventListener("change", () => {
+    onFolderNameSelectChange();
+    syncFolderNameButtons();
+  });
   els.editFolderName.addEventListener("click", () => editFolderName());
   els.deleteFolderName.addEventListener("click", () => deleteFolderName());
   els.openOutputDir.addEventListener("click", () => openOutputDir());
@@ -1317,6 +1329,8 @@ async function createPlan() {
     state.previewImageCache.clear();
     state.renderedVideo = null;
     state.pendingUploads.clear();
+    state.localMaterialPool = [];
+    state.materialBindings.clear();
     renderPlan(data);
     renderImages([], []);
     savePromptPlanCache(data, payload);
@@ -1633,6 +1647,16 @@ async function handlePromptAction(event) {
     await generateAllMissingShotImages(button);
     return;
   }
+  if (action === "add-folder-images") {
+    if (!ensurePromptPlanAvailable()) return;
+    await addLatestFolderImages(button);
+    return;
+  }
+  if (action === "bind-folder-images") {
+    if (!ensurePromptPlanAvailable()) return;
+    await bindConfirmedFolderImages(button);
+    return;
+  }
   if (action === "choose-image") {
     if (!ensurePromptPlanAvailable()) return;
     savePromptPlanCache(state.plan);
@@ -1818,23 +1842,28 @@ async function generateAllMissingShotImages(button) {
 
 async function uploadAllPendingShotImages(button) {
   const indexes = pendingUploadIndexes(state.plan);
-  if (!indexes.length) {
+  const pendingMaterials = state.localMaterialPool.filter((item) => !item.confirmed);
+  if (!indexes.length && !pendingMaterials.length) {
     setButtonFeedback(button, "success", "全部已确认");
     setStatus("全部图片已确认", "当前没有待确认的图片。", 100);
     return;
   }
-  setButtonFeedback(button, "loading", `确认中 0/${indexes.length}`);
-  let successCount = 0;
+  const total = indexes.length + pendingMaterials.length;
+  setButtonFeedback(button, "loading", `确认中 0/${total}`);
+  for (const item of pendingMaterials) item.confirmed = true;
+  let successCount = pendingMaterials.length;
   const failed = [];
   for (const [position, index] of indexes.entries()) {
-    setButtonFeedback(button, "loading", `确认中 ${position + 1}/${indexes.length}`);
-    setStatus("正在批量确认图片", `正在确认分镜 #${index}（${position + 1}/${indexes.length}）。`, Math.round(((position + 1) / indexes.length) * 90), false, "本地图片");
+    const current = pendingMaterials.length + position + 1;
+    setButtonFeedback(button, "loading", `确认中 ${current}/${total}`);
+    setStatus("正在批量确认图片", `正在确认分镜 #${index}（${current}/${total}）。`, Math.round((current / total) * 90), false, "本地图片");
     const ok = await uploadShotImage(index, { render: false, silent: true });
     if (ok) successCount += 1;
     else failed.push(index);
   }
   renderPlan(state.plan);
   renderImages(state.images, []);
+  savePromptPlanCache(state.plan);
   const latestButton = els.promptResults.querySelector('[data-prompt-action="confirm-all-images"]') || button;
   if (failed.length) {
     setStatus("部分图片确认失败", `已确认 ${successCount} 张，失败：#${failed.join("、#")}。`, 100, true);
@@ -1843,6 +1872,143 @@ async function uploadAllPendingShotImages(button) {
   }
   setStatus("全部图片已确认", `已确认 ${successCount} 张本地图片，后续生成视频会使用这些图片。`, 100, false, "完成");
   setButtonFeedback(latestButton, "success", "全部已确认", 2400);
+}
+
+async function addLatestFolderImages(button) {
+  const suffix = resolveFolderNameSelection({
+    names: folderNames,
+    currentValue: els.folderNameSelect?.value,
+    cachedValue: state.desktopFolderName,
+  });
+  if (!suffix) {
+    setStatus("请先选择文件夹名称", "存在多个名称时，请先选择保存图片的文件夹名称。", 0, true);
+    setButtonFeedback(button, "error", "未选文件夹");
+    return;
+  }
+  state.desktopFolderName = suffix;
+  if (els.folderNameSelect) els.folderNameSelect.value = suffix;
+  syncFolderNameButtons();
+  setButtonFeedback(button, "loading", "扫描中");
+  try {
+    const data = await fetchJson("/api/desktop-folder-latest-images", {
+      method: "POST",
+      body: JSON.stringify({
+        suffix,
+        folderPath: state.desktopFolderPath,
+      }),
+    });
+    const existing = new Map(state.localMaterialPool.map((item) => [String(item.path), item]));
+    const retainedBound = state.localMaterialPool.filter((item) => item.boundShotIndex);
+    const latest = (data.images || []).map((item) => ({
+      ...item,
+      confirmed: Boolean(existing.get(String(item.path))?.confirmed),
+      boundShotIndex: Number(existing.get(String(item.path))?.boundShotIndex || 0),
+    }));
+    const latestPaths = new Set(latest.map((item) => String(item.path)));
+    state.localMaterialPool = [
+      ...retainedBound.filter((item) => !latestPaths.has(String(item.path))),
+      ...latest,
+    ];
+    state.desktopFolderPath = data.folderPath || state.desktopFolderPath;
+    renderPlan(state.plan);
+    savePromptPlanCache(state.plan);
+    if (!latest.length) {
+      setStatus("没有找到可确定的最新图片", "只识别 10 秒内、文件名末尾从 (1) 开始连续编号的 PNG、JPG、WEBP 图片。", 0, true);
+      setButtonFeedback(button, "error", "没有图片");
+      return;
+    }
+    setStatus("图片素材已加入", `已从最新一轮加入 ${latest.length} 张图片，请点击“全部确认使用”。`, 100, false, "等待确认");
+    setButtonFeedback(button, "success", `已添加 ${latest.length} 张`);
+  } catch (error) {
+    setStatus("添加图片素材失败", error.payload?.message || error.message || String(error), 0, true);
+    setButtonFeedback(button, "error", "添加失败");
+  }
+}
+
+function shotImageMaterialCount(shot = {}) {
+  const explicit = Number(shot.imageCount || shot.image_count || shot.materialCount || 0);
+  if (Number.isInteger(explicit) && explicit >= 1 && explicit <= 3) return explicit;
+  const text = [
+    shot.materialInstruction,
+    shot.prompt,
+    shot.topic,
+    shot.sourceText,
+  ].filter(Boolean).join("\n");
+  const match = /图\s*([1-3])(?!\d)/u.exec(text);
+  return match ? Number(match[1]) : 0;
+}
+
+async function bindConfirmedFolderImages(button) {
+  const available = state.localMaterialPool
+    .filter((item) => item.confirmed && !item.boundShotIndex)
+    .sort((left, right) => Number(left.sequence) - Number(right.sequence));
+  if (!available.length) {
+    setStatus("没有可绑定素材", "请先一键添加图片素材，再点击“全部确认使用”。", 0, true);
+    setButtonFeedback(button, "error", "没有已确认素材");
+    return;
+  }
+  const shots = [...(state.plan?.shots || [])].sort((left, right) => Number(left.index) - Number(right.index));
+  let boundCount = 0;
+  let skippedCount = 0;
+  let cursor = 0;
+  setButtonFeedback(button, "loading", "绑定中");
+  for (const shot of shots) {
+    const shotIndex = Number(shot.index);
+    if (state.images.some((image) => Number(image.index) === shotIndex && image.assetId)) continue;
+    const required = shotImageMaterialCount(shot);
+    if (!required) {
+      skippedCount += 1;
+      continue;
+    }
+    if (cursor + required > available.length) {
+      skippedCount += 1;
+      break;
+    }
+    const selected = available.slice(cursor, cursor + required);
+    try {
+      const data = await fetchJson("/api/ian-xiaohei/bind-local-materials", {
+        method: "POST",
+        body: JSON.stringify({
+          batchId: state.plan.batchId,
+          plan: state.plan,
+          shot,
+          aspectRatio: state.plan.aspectRatio,
+          folder_path: state.desktopFolderPath,
+          material_paths: selected.map((item) => item.path),
+        }),
+      });
+      state.images = [
+        ...state.images.filter((image) => Number(image.index) !== shotIndex),
+        data.image,
+      ].sort((left, right) => Number(left.index) - Number(right.index));
+      state.materialBindings.set(shotIndex, data.image.materials || []);
+      for (const [materialIndex, item] of selected.entries()) {
+        item.boundShotIndex = shotIndex;
+        item.imageUrl = data.image.materials?.[materialIndex]?.imageUrl || item.imageUrl;
+      }
+      cursor += required;
+      boundCount += required;
+    } catch (error) {
+      setStatus("绑定图片素材失败", `分镜 #${shotIndex}：${error.payload?.message || error.message || String(error)}`, 100, true);
+      setButtonFeedback(button, "error", "绑定失败");
+      renderPlan(state.plan);
+      savePromptPlanCache(state.plan);
+      return;
+    }
+  }
+  state.renderedVideo = null;
+  renderPlan(state.plan);
+  renderImages(state.images, []);
+  savePromptPlanCache(state.plan);
+  const unusedCount = available.length - cursor;
+  setStatus(
+    "图片素材绑定完成",
+    `已绑定 ${boundCount} 张；已有绑定已跳过；${skippedCount} 条未识别“图 n”或素材不足，保持空白；${unusedCount} 张多余素材保留未绑定。`,
+    100,
+    false,
+    "完成",
+  );
+  setButtonFeedback(button, "success", `已绑定 ${boundCount} 张`);
 }
 
 async function loadOutputs() {
@@ -1927,6 +2093,17 @@ function savePromptPlanCache(plan, payload = formPayload()) {
       signature: promptPlanCacheSignature(payload),
       plan,
       boundImages: cacheableBoundImages(state.images),
+      localMaterialPool: state.localMaterialPool.map((item) => ({
+        name: String(item.name || ""),
+        path: String(item.path || ""),
+        imageUrl: String(item.imageUrl || ""),
+        sequence: Number(item.sequence || 0),
+        capturedAt: Number(item.capturedAt || 0),
+        confirmed: Boolean(item.confirmed),
+        boundShotIndex: Number(item.boundShotIndex || 0),
+      })),
+      desktopFolderPath: state.desktopFolderPath,
+      desktopFolderName: state.desktopFolderName,
     }));
     localStorage.setItem(PROMPT_PLAN_LATEST_KEY, key);
     removeOlderPromptPlanCaches(key);
@@ -1960,6 +2137,15 @@ function cacheableBoundImages(images = []) {
       source: String(image.source || "local_upload"),
       aspectRatio: String(image.aspectRatio || ""),
       confirmed: true,
+      materials: Array.isArray(image.materials)
+        ? image.materials.map((material) => ({
+          assetId: String(material.assetId || ""),
+          name: String(material.name || ""),
+          imagePath: String(material.imagePath || ""),
+          imageUrl: String(material.imageUrl || ""),
+          sequence: Number(material.sequence || 0),
+        }))
+        : [],
     }))
     .sort((left, right) => left.index - right.index);
 }
@@ -1993,6 +2179,15 @@ function restorePromptPlanCache() {
     if (els.titleInput && !els.titleInput.value.trim()) els.titleInput.value = cached.plan.title || "";
     if (els.copyInput && !els.copyInput.value.trim()) els.copyInput.value = cached.plan.sourceText || "";
     state.images = cacheableBoundImages(cached.boundImages || []);
+    state.localMaterialPool = Array.isArray(cached.localMaterialPool) ? cached.localMaterialPool : [];
+    state.desktopFolderPath = String(cached.desktopFolderPath || "");
+    state.desktopFolderName = String(cached.desktopFolderName || "");
+    renderFolderNameSelect();
+    state.materialBindings = new Map(
+      state.images
+        .filter((image) => Array.isArray(image.materials) && image.materials.length)
+        .map((image) => [Number(image.index), image.materials]),
+    );
     state.pendingUploads.clear();
     renderPlan(state.plan);
     renderImages(state.images, []);
@@ -2073,12 +2268,20 @@ function pendingUploadIndexes(plan = state.plan) {
 
 function promptBatchActionMarkup(plan = state.plan) {
   const shots = plan?.shots || [];
-  const pendingCount = pendingUploadIndexes(plan).length;
+  const pendingCount = pendingUploadIndexes(plan).length
+    + state.localMaterialPool.filter((item) => !item.confirmed).length;
+  const confirmedFolderCount = state.localMaterialPool.filter((item) => item.confirmed && !item.boundShotIndex).length;
   const generationCount = missingImageGenerationIndexes(plan).length;
   const allConfirmed = Boolean(shots.length && pendingCount === 0 && !missingShotImages(plan, state.images).length);
-  const label = pendingCount > 0 ? `全部确认使用（${pendingCount}）` : allConfirmed ? "全部已确认" : "等待添加图片";
+  const label = pendingCount > 0
+    ? `全部确认使用（${pendingCount}）`
+    : confirmedFolderCount > 0
+      ? `已确认素材（${confirmedFolderCount}）`
+      : allConfirmed ? "全部已确认" : "等待添加图片";
   const hint = pendingCount > 0
     ? "会按编号逐张确认当前已添加的本地图片。"
+    : confirmedFolderCount > 0
+      ? "素材已确认，请点击“绑定图片素材”。"
     : allConfirmed
       ? "所有分镜图片都已绑定。"
       : "添加本地图片素材后可批量确认。";
@@ -2086,8 +2289,23 @@ function promptBatchActionMarkup(plan = state.plan) {
     <div class="prompt-batch-actions">
       <button type="button" data-prompt-action="confirm-all-images" ${pendingCount > 0 ? "" : "disabled"} class="${allConfirmed ? "is-confirmed action-feedback is-success" : ""}">${label}</button>
       <button type="button" class="primary" data-prompt-action="generate-all-images" ${generationCount > 0 && !state.imageBatchGenerating ? "" : "disabled"}>${state.imageBatchGenerating ? `正在生成 ${state.imageBatchProgress?.current || 0}/${state.imageBatchProgress?.total || generationCount}` : generationCount > 0 ? `一键生成图片（${generationCount}）` : "图片已齐全"}</button>
+      <button type="button" data-prompt-action="add-folder-images">一键添加图片素材</button>
+      <button type="button" data-prompt-action="bind-folder-images" ${confirmedFolderCount > 0 ? "" : "disabled"}>绑定图片素材${confirmedFolderCount ? `（${confirmedFolderCount}）` : ""}</button>
       <span>${hint}</span>
     </div>
+    ${state.localMaterialPool.length ? `
+      <div class="local-material-pool" aria-label="本地图片素材">
+        ${state.localMaterialPool.map((item) => `
+          <figure class="${item.confirmed ? "is-confirmed" : "is-pending"}">
+            <img src="${escapeAttr(item.imageUrl || "")}" alt="${escapeAttr(item.name || "图片素材")}" />
+            <figcaption>
+              <strong>(${Number(item.sequence) || "-"})</strong>
+              ${item.boundShotIndex ? `已绑定 #${Number(item.boundShotIndex)}` : item.confirmed ? "已确认" : "待确认"}
+            </figcaption>
+          </figure>
+        `).join("")}
+      </div>
+    ` : ""}
   `;
 }
 
@@ -2135,8 +2353,15 @@ function renderPlan(plan) {
         </div>
         ${image ? `
           <div class="shot-image-state">
-            <strong>本分镜当前使用图片</strong>
-            <img style="${ratioStyle}" src="${escapeAttr(image.imageUrl || image.thumbnailUrl || "")}" alt="${escapeAttr(shot.topic)}" />
+            <strong>本分镜已绑定图片${image.materials?.length > 1 ? `（${image.materials.length} 张，视频只使用第 1 张）` : ""}</strong>
+            <div class="bound-material-grid">
+              ${(image.materials?.length ? image.materials : [image]).map((material, materialIndex) => `
+                <figure>
+                  <img style="${ratioStyle}" src="${escapeAttr(material.imageUrl || material.thumbnailUrl || image.imageUrl || image.thumbnailUrl || "")}" alt="${escapeAttr(shot.topic)}" />
+                  <figcaption>${materialIndex === 0 ? "第 1 张 · 视频使用" : `第 ${materialIndex + 1} 张 · 参考素材`}</figcaption>
+                </figure>
+              `).join("")}
+            </div>
             <span class="path">${escapeHtml(image.imagePath || "")}</span>
           </div>
         ` : ""}
@@ -2334,12 +2559,6 @@ function syncImageConstraintButtons() {
 
 /* ── 新建文件夹（桌面日期文件夹） ── */
 
-const FOLDER_NAMES_API = "/api/folder-names";
-const FOLDER_NAMES_FILE = "folder-names.json";
-const FOLDER_CREATE_API = "/api/desktop-folder-named";
-
-let folderNames = [];
-
 async function loadFolderNames() {
   try {
     const res = await fetch(FOLDER_NAMES_API);
@@ -2354,16 +2573,17 @@ async function loadFolderNames() {
 function renderFolderNameSelect() {
   const sel = els.folderNameSelect;
   if (!sel) return;
+  const selectedName = resolveFolderNameSelection({
+    names: folderNames,
+    currentValue: sel.value,
+    cachedValue: state.desktopFolderName,
+  });
   sel.innerHTML = "";
-  if (folderNames.length === 0) {
-    const opt = document.createElement("option");
-    opt.value = "";
-    opt.textContent = "＋ 新建名称…";
-    sel.appendChild(opt);
-    els.createDesktopFolder.disabled = true;
-    syncFolderNameButtons();
-    return;
-  }
+  const placeholder = document.createElement("option");
+  placeholder.value = "";
+  placeholder.textContent = folderNames.length ? "选择文件夹名称" : "请选择“＋ 添加名称…”";
+  placeholder.selected = !selectedName;
+  sel.appendChild(placeholder);
   for (const name of folderNames) {
     const opt = document.createElement("option");
     opt.value = name;
@@ -2372,69 +2592,92 @@ function renderFolderNameSelect() {
   }
   const newOpt = document.createElement("option");
   newOpt.value = "__new__";
-  newOpt.textContent = "＋ 新建名称…";
+  newOpt.textContent = "＋ 添加名称…";
   sel.appendChild(newOpt);
-  els.createDesktopFolder.disabled = false;
+  if (selectedName) {
+    sel.value = selectedName;
+    state.desktopFolderName = selectedName;
+  }
   syncFolderNameButtons();
-
-  // 监听选了"新建名称"
-  sel.removeEventListener("change", onFolderNameSelectChange);
-  sel.addEventListener("change", onFolderNameSelectChange);
 }
 
 function onFolderNameSelectChange() {
-  if (els.folderNameSelect?.value === "__new__") {
-    promptNewFolderName();
+  const selected = String(els.folderNameSelect?.value || "");
+  if (selected === "__new__") {
+    state.desktopFolderName = "";
+    state.desktopFolderPath = "";
+    void promptNewFolderName();
+    return;
   }
+  if (selected !== state.desktopFolderName) state.desktopFolderPath = "";
+  state.desktopFolderName = selected;
+  if (state.plan) savePromptPlanCache(state.plan);
 }
 
-function promptNewFolderName(defaultValue = "") {
+async function promptNewFolderName(defaultValue = "") {
   const input = prompt(
     defaultValue
       ? `编辑文件夹名称：`
       : `输入新文件夹名称（将创建为 日期-名称）：`,
     defaultValue,
   );
-  if (input === null) return; // 取消
+  if (input === null) {
+    els.folderNameSelect.value = defaultValue || "";
+    syncFolderNameButtons();
+    return;
+  }
   const trimmed = input.trim();
-  if (!trimmed) { setStatus("名称不能为空", "请输入有效的文件夹名称。", 0, true); return; }
-
-  // 更新或添加
-  if (defaultValue !== "") {
-    const idx = folderNames.indexOf(defaultValue);
-    if (idx >= 0) folderNames[idx] = trimmed;
-    else folderNames.push(trimmed);
-  } else {
-    if (!folderNames.includes(trimmed)) folderNames.push(trimmed);
+  if (!trimmed) {
+    els.folderNameSelect.value = defaultValue || "";
+    setStatus("名称不能为空", "请输入有效的文件夹名称。", 0, true);
+    syncFolderNameButtons();
+    return;
   }
 
-  saveFolderNames().then(() => {
+  const nextNames = [...folderNames];
+  if (defaultValue !== "") {
+    const idx = nextNames.indexOf(defaultValue);
+    if (idx >= 0) nextNames[idx] = trimmed;
+    else nextNames.push(trimmed);
+  } else if (!nextNames.includes(trimmed)) {
+    nextNames.push(trimmed);
+  }
+
+  try {
+    const data = await saveFolderNames(nextNames);
+    folderNames = Array.isArray(data.names) ? data.names : nextNames;
+    state.desktopFolderName = trimmed;
+    state.desktopFolderPath = "";
     renderFolderNameSelect();
-    // 自动选中刚保存的名称
-    for (let i = 0; i < els.folderNameSelect.options.length; i++) {
-      if (els.folderNameSelect.options[i].value === trimmed) {
-        els.folderNameSelect.selectedIndex = i;
-        break;
-      }
-    }
+    els.folderNameSelect.value = trimmed;
     syncFolderNameButtons();
-  });
+    setStatus(
+      defaultValue ? "名称已更新" : "名称已添加",
+      `已选择“${trimmed}”，现在可以点击“新建文件夹”。`,
+      100,
+    );
+  } catch (error) {
+    renderFolderNameSelect();
+    setStatus("保存名称失败", error.message || String(error), 0, true);
+  }
 }
 
-async function saveFolderNames() {
-  try {
-    await fetch(FOLDER_NAMES_API, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ names: folderNames }),
-    });
-  } catch (e) {
-    setStatus("保存失败", String(e.message || e), 0, true);
+async function saveFolderNames(names) {
+  const response = await fetch(FOLDER_NAMES_API, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ names }),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok || data.ok === false) {
+    throw new Error(data.message || `保存失败 ${response.status}`);
   }
+  return data;
 }
 
 function syncFolderNameButtons() {
   const hasSelection = els.folderNameSelect && els.folderNameSelect.value && els.folderNameSelect.value !== "__new__";
+  if (els.createDesktopFolder) els.createDesktopFolder.disabled = !hasSelection;
   if (els.editFolderName) els.editFolderName.disabled = !hasSelection;
   if (els.deleteFolderName) els.deleteFolderName.disabled = !hasSelection;
 }
@@ -2442,19 +2685,25 @@ function syncFolderNameButtons() {
 function editFolderName() {
   const current = els.folderNameSelect?.value;
   if (!current || current === "__new__") return;
-  promptNewFolderName(current);
+  void promptNewFolderName(current);
 }
 
-function deleteFolderName() {
+async function deleteFolderName() {
   const current = els.folderNameSelect?.value;
   if (!current || current === "__new__") return;
   if (!confirm(`确定删除名称"${current}"吗？\n（不会删除桌面上已创建的文件夹）`)) return;
 
-  folderNames = folderNames.filter(n => n !== current);
-  saveFolderNames().then(() => {
+  try {
+    const nextNames = folderNames.filter((name) => name !== current);
+    const data = await saveFolderNames(nextNames);
+    folderNames = Array.isArray(data.names) ? data.names : nextNames;
+    state.desktopFolderName = "";
+    state.desktopFolderPath = "";
     renderFolderNameSelect();
     setStatus(`已删除名称`, `"${current}"已从列表移除。`, 100);
-  });
+  } catch (error) {
+    setStatus("删除名称失败", error.message || String(error), 0, true);
+  }
 }
 
 async function createDesktopFolder() {
@@ -2480,6 +2729,9 @@ async function createDesktopFolder() {
     }
 
     const data = await res.json();
+    state.desktopFolderPath = String(data.folderPath || "");
+    state.desktopFolderName = name;
+    if (state.plan) savePromptPlanCache(state.plan);
     setStatus(`文件夹已创建`, `${data.folderName} → ${data.folderPath}`, 100);
     setButtonFeedback(btn, "success", "已创建");
   } catch (error) {
@@ -2783,6 +3035,8 @@ function resetVisualWorkflow(message = "") {
   state.previewImageCache.clear();
   state.renderedVideo = null;
   state.pendingUploads.clear();
+  state.localMaterialPool = [];
+  state.materialBindings.clear();
   state.promptsText = "";
   renderPlan(null);
   renderImages([], []);

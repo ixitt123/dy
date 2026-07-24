@@ -1,5 +1,6 @@
 import http from "node:http";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { spawn, spawnSync } from "node:child_process";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
@@ -32,7 +33,13 @@ import { createIanXiaoheiRoutes } from "./server/routes/ian-xiaohei-routes.js";
 import { createMoneyPrinterRoutes } from "./server/routes/money-printer-routes.js";
 import { createKineticTextRoutes } from "./server/routes/kinetic-text-routes.js";
 import { createYtDlpService } from "./server/core/yt-dlp-service.js";
-import { createDesktopDateFolder } from "./server/core/desktop-date-folder.js";
+import {
+  createDesktopDateFolder,
+  findLatestDesktopNamedFolder,
+  formatLocalDate,
+  listLatestDesktopImageBatch,
+  normalizeDesktopFolderName,
+} from "./server/core/desktop-date-folder.js";
 import { formatOriginalMomentsPost } from "./server/core/moments-original.js";
 import { parseJsonFromModelText as parseStructuredJsonFromModelText } from "./server/core/structured-json.js";
 import { createPageLifecycle } from "./server/core/page-lifecycle.js";
@@ -53,6 +60,8 @@ const personasDir = path.join(__dirname, "personas");
 const momentsPersonasPath = path.join(personasDir, "moments-personas.json");
 const momentsMaterialsDir = path.join(__dirname, "assets", "moments-materials");
 const momentsPublishDir = path.join(__dirname, ".data", "moments-publish");
+const folderNamesPath = path.join(__dirname, ".data", "folder-names.json");
+const desktopFolderImageTokens = new Map();
 const wechatMomentsPublisherScript = path.join(__dirname, "scripts", "wechat_moments_publish.py");
 const referenceExamplesPath = path.join(__dirname, "reference_examples.json");
 const defaultDownloadsDir = path.join(__dirname, "downloads");
@@ -638,6 +647,45 @@ function readSettings() {
 
 function writeSettings(settings) {
   fs.writeFileSync(settingsPath, JSON.stringify(normalizeSettings(settings), null, 2), "utf8");
+}
+
+function normalizeFolderNames(value) {
+  if (!Array.isArray(value)) throw new TypeError("文件夹名称列表格式无效");
+  if (value.length > 50) throw new TypeError("最多保存 50 个文件夹名称");
+  const names = [];
+  const seen = new Set();
+  for (const item of value) {
+    const name = normalizeDesktopFolderName(item);
+    const key = name.toLocaleLowerCase("zh-CN");
+    if (seen.has(key)) continue;
+    seen.add(key);
+    names.push(name);
+  }
+  return names;
+}
+
+function readFolderNames() {
+  if (!fs.existsSync(folderNamesPath)) return [];
+  try {
+    const parsed = JSON.parse(fs.readFileSync(folderNamesPath, "utf8"));
+    return normalizeFolderNames(Array.isArray(parsed) ? parsed : parsed?.names);
+  } catch (error) {
+    console.warn("[folder-names] 读取失败，将显示空列表：", error.message || String(error));
+    return [];
+  }
+}
+
+function writeFolderNames(value) {
+  const names = normalizeFolderNames(value);
+  fs.mkdirSync(path.dirname(folderNamesPath), { recursive: true });
+  const tempPath = `${folderNamesPath}.${process.pid}.${Date.now()}.tmp`;
+  try {
+    fs.writeFileSync(tempPath, JSON.stringify({ names }, null, 2), "utf8");
+    fs.renameSync(tempPath, folderNamesPath);
+  } finally {
+    if (fs.existsSync(tempPath)) fs.rmSync(tempPath, { force: true });
+  }
+  return names;
 }
 
 const DEFAULT_MOMENTS_PERSONA = {
@@ -2723,11 +2771,32 @@ function resolveSafeManagedImagePath(filePath) {
   return resolved;
 }
 
+function resolveSafeDesktopLinkedImagePath(filePath) {
+  const desktopRoot = path.resolve(path.join(os.homedir(), "Desktop"));
+  const resolved = path.resolve(String(filePath || "").trim());
+  if (!resolved || !fs.existsSync(resolved) || !fs.statSync(resolved).isFile()) {
+    throw new Error("Image file not found");
+  }
+  if (!isPathInsideRoot(desktopRoot, resolved) || path.dirname(resolved) === desktopRoot) {
+    throw new Error("Image file is outside a desktop project folder");
+  }
+  if (!/^\d{4}-\d{2}-\d{2}-.+/u.test(path.basename(path.dirname(resolved)))) {
+    throw new Error("Image file is outside a dated desktop project folder");
+  }
+  if (!localImageExtensions.has(path.extname(resolved).toLowerCase())) {
+    throw new Error("Unsupported image file type");
+  }
+  return resolved;
+}
+
 function resolveImageRequestPath(url) {
   const assetId = String(url.searchParams.get("id") || url.searchParams.get("assetId") || "").trim();
   if (assetId) {
     const asset = imageService.getAsset(assetId);
     const assetPath = asset?.file_path || asset?.original_path || "";
+    if (asset?.source_type === "ian-xiaohei-local-linked") {
+      return resolveSafeDesktopLinkedImagePath(assetPath);
+    }
     return resolveSafeManagedImagePath(assetPath);
   }
   return resolveSafeManagedImagePath(url.searchParams.get("path") || "");
@@ -7232,6 +7301,105 @@ const server = http.createServer(async (req, res) => {
     if (req.method === "POST" && url.pathname === "/api/desktop-date-folder") {
       const created = createDesktopDateFolder();
       sendJson(res, 200, { ok: true, ...created });
+      return;
+    }
+
+    if (req.method === "GET" && url.pathname === "/api/folder-names") {
+      sendJson(res, 200, { ok: true, names: readFolderNames() });
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/folder-names") {
+      try {
+        const body = await readJsonBody(req, { maxBytes: 32 * 1024 });
+        const names = writeFolderNames(body.names);
+        sendJson(res, 200, { ok: true, names });
+      } catch (error) {
+        sendJson(res, 400, { ok: false, message: error.message || "保存文件夹名称失败" });
+      }
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/desktop-folder-named") {
+      try {
+        const body = await readJsonBody(req, { maxBytes: 8 * 1024 });
+        const suffix = normalizeDesktopFolderName(body.suffix);
+        const created = createDesktopDateFolder({ suffix });
+        sendJson(res, 200, { ok: true, ...created });
+      } catch (error) {
+        sendJson(res, 400, { ok: false, message: error.message || "创建文件夹失败" });
+      }
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/desktop-folder-latest-images") {
+      try {
+        const body = await readJsonBody(req, { maxBytes: 8 * 1024 });
+        const suffix = normalizeDesktopFolderName(body.suffix);
+        const desktopDir = path.resolve(path.join(os.homedir(), "Desktop"));
+        const expectedBaseName = `${formatLocalDate()}-${suffix}`;
+        let folderPath = String(body.folderPath || "").trim();
+        if (folderPath) {
+          folderPath = path.resolve(folderPath);
+          const folderName = path.basename(folderPath);
+          const validName = folderName === expectedBaseName
+            || new RegExp(`^${expectedBaseName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}-\\d+$`, "u").test(folderName);
+          if (!isPathInsideRoot(desktopDir, folderPath) || !validName) {
+            throw new Error("只能扫描当前名称对应的桌面新建文件夹");
+          }
+        } else {
+          folderPath = findLatestDesktopNamedFolder({ desktopDir, suffix });
+        }
+        if (!folderPath || !fs.existsSync(folderPath)) {
+          throw new Error("未找到当前名称对应的桌面新建文件夹，请先点击“新建文件夹”");
+        }
+        const now = Date.now();
+        for (const [token, record] of desktopFolderImageTokens) {
+          if (record.expiresAt <= now) desktopFolderImageTokens.delete(token);
+        }
+        const images = listLatestDesktopImageBatch(folderPath).map((item) => {
+          const token = randomUUID();
+          desktopFolderImageTokens.set(token, {
+            filePath: item.path,
+            expiresAt: now + (60 * 60 * 1000),
+          });
+          return {
+            ...item,
+            imageUrl: `/api/desktop-folder-image?id=${encodeURIComponent(token)}`,
+          };
+        });
+        sendJson(res, 200, {
+          ok: true,
+          folderPath,
+          images,
+          message: images.length ? `找到最新一轮 ${images.length} 张图片` : "最新一轮没有可确定的连续编号图片",
+        });
+      } catch (error) {
+        sendJson(res, 400, { ok: false, message: error.message || "扫描图片素材失败" });
+      }
+      return;
+    }
+
+    if (req.method === "GET" && url.pathname === "/api/desktop-folder-image") {
+      const token = String(url.searchParams.get("id") || "");
+      const record = desktopFolderImageTokens.get(token);
+      if (!record || record.expiresAt <= Date.now()) {
+        desktopFolderImageTokens.delete(token);
+        sendJson(res, 404, { ok: false, message: "图片预览已过期，请重新添加图片素材" });
+        return;
+      }
+      try {
+        const filePath = resolveSafeDesktopLinkedImagePath(record.filePath);
+        const mime = {
+          ".png": "image/png",
+          ".jpg": "image/jpeg",
+          ".jpeg": "image/jpeg",
+          ".webp": "image/webp",
+        }[path.extname(filePath).toLowerCase()] || "application/octet-stream";
+        sendBuffer(res, 200, fs.readFileSync(filePath), mime);
+      } catch (error) {
+        sendJson(res, 404, { ok: false, message: error.message || "图片不存在" });
+      }
       return;
     }
 

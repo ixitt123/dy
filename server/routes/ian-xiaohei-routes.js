@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { spawn } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
@@ -1362,6 +1363,100 @@ export function createIanXiaoheiRoutes({
         updateResultFile(batchDir, { image });
         sendJson(res, 201, { ok: true, batchId, outputDir: batchDir, image });
       } catch (error) {
+        sendJson(res, error instanceof HttpBodyError ? error.statusCode : 400, {
+          ok: false,
+          message: error instanceof Error ? error.message : String(error),
+        });
+      }
+      return true;
+    }
+
+    if (req.method === "POST" && route === "bind-local-materials") {
+      const linkedAssetIds = [];
+      try {
+        const body = await readJsonBody(req, { maxBytes: 128 * 1024 });
+        const plan = body.plan && typeof body.plan === "object" ? body.plan : null;
+        const shot = normalizeShotInput(body.shot);
+        const batchId = safeBatchId(body.batchId || plan?.batchId);
+        if (!batchId || !plan) throw new Error("缺少当前提示词计划。");
+        if (!shot.index || !(plan.shots || []).some((item) => Number(item.index) === Number(shot.index))) {
+          throw new Error("当前图片没有对应的分镜。");
+        }
+        const requestedPaths = Array.isArray(body.material_paths)
+          ? body.material_paths.map((item) => String(item || "").trim()).filter(Boolean)
+          : [];
+        if (!requestedPaths.length || requestedPaths.length > 3) {
+          throw new Error("每条提示词只能绑定 1 至 3 张图片素材。");
+        }
+        const desktopRoot = fs.realpathSync(path.join(os.homedir(), "Desktop"));
+        const folderPath = fs.realpathSync(String(body.folder_path || ""));
+        const folderRelative = path.relative(desktopRoot, folderPath);
+        if (!folderRelative || folderRelative === ".." || folderRelative.startsWith(`..${path.sep}`) || path.isAbsolute(folderRelative)) {
+          throw new Error("素材文件夹必须是桌面新建文件夹。");
+        }
+        if (!/^\d{4}-\d{2}-\d{2}-.+/u.test(path.basename(folderPath))) {
+          throw new Error("素材文件夹名称必须是“日期-名称”格式。");
+        }
+        const materialPaths = requestedPaths.map((item) => {
+          const resolved = fs.realpathSync(item);
+          const relative = path.relative(folderPath, resolved);
+          if (!relative || relative === ".." || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) {
+            throw new Error("图片素材必须直接来自当前桌面新建文件夹。");
+          }
+          if (path.dirname(resolved) !== folderPath || !/\.(png|jpe?g|webp)$/iu.test(resolved)) {
+            throw new Error("图片素材必须是当前文件夹根目录中的 PNG、JPG 或 WEBP 文件。");
+          }
+          if (!fs.statSync(resolved).isFile()) throw new Error("图片素材文件不存在。");
+          return resolved;
+        });
+        const aspectRatio = normalizeAspectRatio(body.aspectRatio || plan.aspectRatio);
+        const sourceId = plan?.directorProjectId
+          ? `${plan.directorProjectId}:${shot.index}`
+          : `${batchId}:${shot.index}`;
+        const materials = materialPaths.map((filePath, materialIndex) => {
+          const asset = imageService.linkLocalImageAsset({
+            filePath,
+            prompt: shot.prompt,
+            aspectRatio,
+            sourceId,
+            sourceType: "ian-xiaohei-local-linked",
+            directorProjectId: Number(plan?.directorProjectId || 0),
+            sceneIndex: Number(shot.index),
+            assetOrder: materialIndex + 1,
+          });
+          linkedAssetIds.push(asset.id);
+          return {
+            assetId: asset.id,
+            name: path.basename(filePath),
+            imagePath: filePath,
+            imageUrl: `/api/image/file?id=${encodeURIComponent(asset.id)}`,
+            sequence: materialIndex + 1,
+          };
+        });
+        const primary = materials[0];
+        const batchDir = path.join(outputRoot, batchId);
+        fs.mkdirSync(batchDir, { recursive: true });
+        savePlanFiles(batchDir, plan);
+        const image = {
+          index: shot.index,
+          topic: shot.topic,
+          purpose: shot.purpose,
+          prompt: shot.prompt,
+          imagePath: primary.imagePath,
+          imageUrl: primary.imageUrl,
+          thumbnailUrl: primary.imageUrl,
+          assetId: primary.assetId,
+          provider: "local",
+          model: "local-file-reference",
+          source: "local_folder_binding",
+          aspectRatio,
+          confirmed: true,
+          materials,
+        };
+        updateResultFile(batchDir, { image });
+        sendJson(res, 201, { ok: true, batchId, outputDir: batchDir, image });
+      } catch (error) {
+        for (const assetId of linkedAssetIds) imageService.deleteAsset(assetId);
         sendJson(res, error instanceof HttpBodyError ? error.statusCode : 400, {
           ok: false,
           message: error instanceof Error ? error.message : String(error),
@@ -3067,6 +3162,15 @@ function listOutputBatches(outputRoot, deps = {}) {
         source: String(image.source || "local_upload"),
         aspectRatio: String(image.aspectRatio || ""),
         confirmed: image.confirmed !== false,
+        materials: Array.isArray(image.materials)
+          ? image.materials.map((material) => ({
+            assetId: String(material.assetId || ""),
+            name: String(material.name || ""),
+            imagePath: String(material.imagePath || ""),
+            imageUrl: material.imageUrl || (material.imagePath ? `/api/image/file?path=${encodeURIComponent(material.imagePath)}` : ""),
+            sequence: Number(material.sequence || 0),
+          }))
+          : [],
       })).filter((image) => image.index > 0 && (image.imagePath || image.assetId));
       const directFiles = fs.readdirSync(folderPath, { withFileTypes: true })
         .filter((file) => file.isFile() && /\.(png|jpe?g|webp)$/i.test(file.name))

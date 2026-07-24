@@ -366,6 +366,49 @@ textarea:focus {
   font-size: 13px;
 }
 
+.local-material-pool,
+.bound-material-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(116px, 1fr));
+  gap: 10px;
+  margin: 0 0 12px;
+}
+
+.local-material-pool figure,
+.bound-material-grid figure {
+  min-width: 0;
+  margin: 0;
+  padding: 7px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #0d1420;
+}
+
+.local-material-pool figure.is-pending {
+  border-color: #f0bd69;
+}
+
+.local-material-pool figure.is-confirmed {
+  border-color: #72d5b7;
+}
+
+.local-material-pool img,
+.bound-material-grid img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: contain;
+  border-radius: 4px;
+  background: #05080d;
+}
+
+.local-material-pool figcaption,
+.bound-material-grid figcaption {
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
 .voice-actions span {
   flex: 1;
   min-width: 220px;
@@ -1051,6 +1094,15 @@ button.danger {
   margin: 8px 0;
   border: 1px solid var(--line);
   background: #05080d;
+}
+
+.shot-image-state .bound-material-grid {
+  margin: 8px 0;
+}
+
+.shot-image-state .bound-material-grid img {
+  width: 100%;
+  margin: 0;
 }
 
 .manual-preview {

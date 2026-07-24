@@ -241,7 +241,7 @@ test("Xiaohei fast preview and cache restore", async () => {
   if (!assetResponse.ok
     || !assetResponse.headers.get("cache-control")?.includes("max-age=86400")
     || !source.includes("hydratePurposeSelect();")
-    || !source.includes("await Promise.all([loadConfig(), loadAudioJobs()]);")
+    || !source.includes("await Promise.all([loadConfig(), loadAudioJobs(), loadFolderNames()]);")
     || !source.includes("void loadOutputs().catch(() => {});")
     || !source.includes('decoding="async"')
     || !css.includes("content-visibility: auto")) {
