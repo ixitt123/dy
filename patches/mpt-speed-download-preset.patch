@@ -144,7 +144,7 @@ index caf4a95..7e1f68a 100644
      logger.success(f"downloaded {len(video_paths)} ordered videos")
      return video_paths
 diff --git a/app/services/video.py b/app/services/video.py
-index 548ffc5..a115b39 100644
+index dcca632..861134c 100644
 --- a/app/services/video.py
 +++ b/app/services/video.py
 @@ -187,6 +187,25 @@ def _get_configured_video_codec() -> str:
@@ -236,3 +236,16 @@ index d5bd113..f4f53bb 100644
  
  
  class TestCoverrProvider(unittest.TestCase):
+diff --git a/test/services/test_webui_task.py b/test/services/test_webui_task.py
+index d17c794..0ac59f0 100644
+--- a/test/services/test_webui_task.py
++++ b/test/services/test_webui_task.py
+@@ -152,7 +152,7 @@ def test_worker_logs_are_available_without_streamlit_session_state():
+     assert len(records) == 1
+     assert re.fullmatch(
+         r"\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} \| INFO \| "
+-        r'"\./test/services/test_webui_task\.py:\d+": logged_start '
++        r'"\./test[\\/]services[\\/]test_webui_task\.py:\d+": logged_start '
+         r"- unique background task log",
+         records[0],
+     )
