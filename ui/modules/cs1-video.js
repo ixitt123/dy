@@ -93,8 +93,8 @@ export function initCs1VideoModule() {
       index,
       start: Number(row.start || 0),
       end: Number(row.end || 0),
-      text: String(row.text || "").trim(),
-    })).filter((row) => row.text && row.end > row.start);
+      text: String(row.text || ""),
+    })).filter((row) => row.text.trim() && row.end > row.start);
   };
 
   const renderTimeline = () => {
@@ -111,16 +111,17 @@ export function initCs1VideoModule() {
         <span>${index + 1}</span>
         <input value="${row.start.toFixed(2)}" readonly aria-readonly="true" />
         <input value="${row.end.toFixed(2)}" readonly aria-readonly="true" />
-        <textarea data-field="text" rows="2" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-1p-ignore="true">${escapeHtml(row.text)}</textarea>
+        <textarea data-field="text" rows="2" data-no-draft-persist readonly aria-readonly="true" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-1p-ignore="true">${escapeHtml(row.text)}</textarea>
       </div>
     `).join("");
-    if (timelineStatus) timelineStatus.textContent = `共 ${rows.length} 段 · 修改后点击“确定修改”`;
-    if (confirmTimelineButton) confirmTimelineButton.disabled = true;
+    if (timelineStatus) timelineStatus.textContent = `共 ${rows.length} 段 · 严格使用 TTS 已确认字幕`;
+    if (confirmTimelineButton) confirmTimelineButton.hidden = true;
   };
 
   const clearTimelineState = () => {
     currentTtsHandoff = null;
     if (textInput) textInput.value = "";
+    if (textInput) textInput.readOnly = false;
     if (bgmPathInput) bgmPathInput.value = "";
     if (bgmModeSelect) bgmModeSelect.value = "auto";
     renderTimeline();
@@ -143,6 +144,7 @@ export function initCs1VideoModule() {
     currentTtsHandoff.text = text;
     currentTtsHandoff.final_text = text;
     textInput.value = text;
+    textInput.readOnly = true;
     if (titleInput) titleInput.value = payload.title || payload.seo_title || payload.publish_title || `TTS #${payload.display_number || payload.id}`;
     if (bgmPathInput) bgmPathInput.value = payload.audio_path || "";
     if (bgmModeSelect) bgmModeSelect.value = payload.audio_path ? "local" : "auto";
@@ -150,29 +152,6 @@ export function initCs1VideoModule() {
     setStatus("已接收 TTS 三件套", "CS1 正在使用公共文案、音频和时间戳字幕。");
     if (navigate) window.workbenchNavigate?.("cs1-video");
     return currentTtsHandoff;
-  };
-
-  const confirmTimelineEdit = () => {
-    if (!currentTtsHandoff?.id || !timelineContainer) return;
-    const rows = timelineRows().map((row, index) => ({
-      ...row,
-      text: timelineContainer.querySelector(`[data-row-index="${index}"] [data-field="text"]`)?.value.trim() || "",
-    }));
-    if (rows.some((row) => !row.text.trim())) {
-      if (timelineStatus) timelineStatus.textContent = "字幕文字不能为空";
-      return;
-    }
-    const finalText = rows.map((row) => row.text.trim()).join("");
-    currentTtsHandoff = {
-      ...currentTtsHandoff,
-      text: finalText,
-      final_text: finalText,
-      sentence_timeline: rows,
-      subtitle_timeline: rows,
-    };
-    textInput.value = finalText;
-    renderTimeline();
-    setStatus("字幕修改已确定", "本次修改只应用于 CS1，不会同步到其他生产线或 TTS 历史任务。");
   };
 
   const setProgress = (value, stage = "") => {
@@ -273,11 +252,18 @@ export function initCs1VideoModule() {
     });
   });
 
-  window.cs1VideoProduction = { receiveTts };
+  const restoreStoredTtsHandoff = () => {
+    const payload = globalThis.ttsHandoffStore?.read("cs1-video");
+    return payload?.id ? receiveTts(payload, { navigate: false }) : null;
+  };
+
+  window.cs1VideoProduction = { receiveTts, restoreStoredTtsHandoff };
+  restoreStoredTtsHandoff();
   window.addEventListener("cs1-video-handoff", (event) => receiveTts(event.detail, { navigate: true }));
   document.addEventListener("workbench:route", (event) => {
     const nextActive = event.detail?.page === "cs1-video";
-    if (!nextActive && routeActive) clearTimelineState();
+    if (nextActive) restoreStoredTtsHandoff();
+    else if (routeActive) clearTimelineState();
     routeActive = nextActive;
   });
 
@@ -364,13 +350,6 @@ export function initCs1VideoModule() {
     textInput.value = EXAMPLE_TEXT;
     textInput.focus();
   });
-  timelineContainer?.addEventListener("input", (event) => {
-    if (!event.target.matches('[data-field="text"]') || !currentTtsHandoff?.id) return;
-    if (confirmTimelineButton) confirmTimelineButton.disabled = false;
-    if (timelineStatus) timelineStatus.textContent = "有未确定修改";
-  });
-  confirmTimelineButton?.addEventListener("click", () => confirmTimelineEdit());
-
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
     resultPanel.hidden = true;

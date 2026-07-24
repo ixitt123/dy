@@ -283,6 +283,7 @@ export function createIanXiaoheiRoutes({
   ffprobePath = "",
   transcribeLocalMedia = null,
   downloadsDir = "",
+  getDownloadsDir = () => downloadsDir,
 }) {
   const outputRoot = path.join(baseDir, "image-assets", "ian-xiaohei");
   const uploadRoot = path.join(outputRoot, "_uploaded-audio");
@@ -300,10 +301,11 @@ export function createIanXiaoheiRoutes({
   fs.mkdirSync(referenceAudioRoot, { recursive: true });
 
   // 统一下载目录：与 MoneyPrinter 共用同一下载地址体系
-  const resolvedDownloadsDir = path.resolve(downloadsDir || baseDir);
+  const currentDownloadsDir = () => path.resolve(getDownloadsDir() || downloadsDir || baseDir);
   const xiaoheiRenderedFiles = new Map();
 
   function copyToDownloadsDir(srcPath, title) {
+    const resolvedDownloadsDir = currentDownloadsDir();
     if (!fs.existsSync(srcPath) || !resolvedDownloadsDir || resolvedDownloadsDir === path.resolve(baseDir)) return null;
     try {
       fs.mkdirSync(resolvedDownloadsDir, { recursive: true });
@@ -887,7 +889,11 @@ export function createIanXiaoheiRoutes({
       sendJson(res, 200, {
         ok: true,
         outputDir: outputRoot,
-        batches: listOutputBatches(outputRoot, { resolvedDownloadsDir, xiaoheiRenderedFiles, registerXiaoheiFile }),
+        batches: listOutputBatches(outputRoot, {
+          resolvedDownloadsDir: currentDownloadsDir(),
+          xiaoheiRenderedFiles,
+          registerXiaoheiFile,
+        }),
       });
       return true;
     }

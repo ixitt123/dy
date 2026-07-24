@@ -771,7 +771,15 @@ export function openTarget(target, status, body = {}) {
   if (target === "api") return status.api.baseUrl;
   if (target === "webui") return status.webui.baseUrl;
   if (target === "task-video") return sanitizeMoneyPrinterTaskVideoUrl(body.url);
-  if (target === "tasks") return path.join(status.root, "storage", "tasks");
+  if (target === "tasks") {
+    const root = String(status.root || "");
+    const pathApi = /^[a-z]:[\\/]/i.test(root)
+      ? path.win32
+      : root.startsWith("/")
+        ? path.posix
+        : path;
+    return pathApi.join(root, "storage", "tasks");
+  }
   return "";
 }
 

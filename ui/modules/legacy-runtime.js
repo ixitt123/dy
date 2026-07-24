@@ -292,6 +292,7 @@ const deleteSelectedBtn = document.querySelector("#deleteSelected");
 const downloadDirInput = document.querySelector("#downloadDirInput");
 const chooseDownloadDirBtn = document.querySelector("#chooseDownloadDir");
 const saveDownloadDirBtn = document.querySelector("#saveDownloadDir");
+const createDesktopDateFolderBtn = document.querySelector("#createDesktopDateFolder");
 const localVideoPath = document.querySelector("#localVideoPath");
 const chooseLocalVideoBtn = document.querySelector("#chooseLocalVideo");
 const extractLocalVideoTranscriptBtn = document.querySelector("#extractLocalVideoTranscript");
@@ -529,6 +530,7 @@ const momentsProgressPercent = document.querySelector("#momentsProgressPercent")
 const momentsProgressBar = document.querySelector("#momentsProgressBar");
 const copyMomentsPostBtn = document.querySelector("#copyMomentsPost");
 const copyMomentsPromptsBtn = document.querySelector("#copyMomentsPrompts");
+const copyMomentsImageInstructionBtn = document.querySelector("#copyMomentsImageInstruction");
 const publishMomentsWechatBtn = document.querySelector("#publishMomentsWechat");
 const momentsPublishStatus = document.querySelector("#momentsPublishStatus");
 const momentsPostOutput = document.querySelector("#momentsPostOutput");
@@ -579,6 +581,8 @@ let activeResultTaskIds = new Set();
 let activeResultFilePath = "";
 let activeResultRewriteTaskId = "";
 let autoRewriteResultTaskIds = new Set();
+let browserDefaultDownloads = true;
+let pendingBrowserDownloadTaskIds = new Set();
 let rewriteProviderConfigs = {};
 let currentRewriteSpecs = [];
 const MOMENTS_PERSONAS_KEY = "video-factory:moments-personas-v1";
@@ -866,6 +870,7 @@ function renderFiles(files) {
       <div>大小 / 生产时间</div>
       <div></div>
       <div></div>
+      <div></div>
     </div>
     ${pageFiles
       .map((file, index) => {
@@ -881,6 +886,7 @@ function renderFiles(files) {
           <div><span class="file-action">${getFileAction(file.name)}</span></div>
           <div class="file-name" title="${name}">${name}</div>
           <div class="file-meta">${formatSize(file.size)} · ${date}</div>
+          <button class="ghost small file-download" type="button" data-file-name="${name}">下载</button>
           <button class="ghost small file-open" type="button" data-file-name="${name}">打开</button>
           <button class="ghost small danger-action file-delete" type="button" data-file-name="${name}">删除</button>
         </div>
@@ -2442,6 +2448,28 @@ async function copyAllMomentsPrompts() {
   setMomentsStatus(`已复制 ${prompts.length} 条图片提示词。`, "success");
 }
 
+async function copyMomentsImageInstruction() {
+  const prompts = [...document.querySelectorAll(".moments-prompt-card")];
+  if (!prompts.length) {
+    setMomentsStatus("还没有可用的配图提示词。", "warning");
+    return;
+  }
+  const instruction = globalThis.buildMomentsImageInstruction(prompts.length);
+  await navigator.clipboard.writeText(instruction);
+  setMomentsStatus(`图片生成指令已复制，本轮共 ${prompts.length} 张。`, "success");
+}
+
+async function createDesktopDateFolder() {
+  if (!createDesktopDateFolderBtn) return;
+  createDesktopDateFolderBtn.disabled = true;
+  try {
+    const data = await fetchJson("/api/desktop-date-folder", { method: "POST" });
+    window.alert(`文件夹已创建：${data.folderName}`);
+  } finally {
+    createDesktopDateFolderBtn.disabled = false;
+  }
+}
+
 async function copyMomentsPost() {
   const post = (momentsPostOutput?.value || "").trim();
   if (!post) {
@@ -2581,6 +2609,9 @@ function trackImportedTasks(action, imported = {}) {
   activeResultFilePath = "";
   activeResultRewriteTaskId = "";
   autoRewriteResultTaskIds = new Set();
+  pendingBrowserDownloadTaskIds = browserDefaultDownloads && ["download", "audio", "subtitle"].includes(action)
+    ? new Set(activeResultTaskIds)
+    : new Set();
   if (openResultLocationBtn) openResultLocationBtn.hidden = true;
   if (sendResultRewriteBtn) sendResultRewriteBtn.hidden = true;
 }
@@ -2598,6 +2629,15 @@ async function openManagedPath(filePath) {
   });
 }
 
+function startBrowserDownload(url) {
+  const link = document.createElement("a");
+  link.href = url;
+  link.style.display = "none";
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+}
+
 function updateResultActionButtons(rows = []) {
   const latestWithFile = [...rows].reverse().find((task) => primaryTaskFilePath(task));
   activeResultFilePath = latestWithFile ? primaryTaskFilePath(latestWithFile) : "";
@@ -2612,6 +2652,11 @@ function handleFinishedResultWorkflow(rows = []) {
   for (const task of rows) {
     const id = String(task.id || "");
     if (!id || task.status !== "完成") continue;
+
+    if (browserDefaultDownloads && pendingBrowserDownloadTaskIds.has(id) && primaryTaskFilePath(task)) {
+      pendingBrowserDownloadTaskIds.delete(id);
+      startBrowserDownload(`/api/task-file/download?id=${encodeURIComponent(id)}`);
+    }
 
     if (task.txt_path && !autoRewriteResultTaskIds.has(id)) {
       autoRewriteResultTaskIds.add(id);
@@ -2721,6 +2766,9 @@ function renderTasks(tasks) {
         const canPause = task.status === "下载中" || task.status === "提取中";
         const canDelete = !canPause;
         const primaryPath = primaryTaskFilePath(task);
+        const downloadButton = primaryPath && task.status === "完成"
+          ? `<button class="ghost small task-download" type="button" data-task-id="${task.id}">浏览器下载</button>`
+          : "";
         const openButton = primaryPath
           ? `<button class="ghost small task-open-location" type="button" data-task-id="${task.id}">打开位置</button>`
           : "";
@@ -2730,7 +2778,7 @@ function renderTasks(tasks) {
         const manageButton = canPause
           ? `<button class="ghost small task-pause" type="button" data-task-id="${task.id}">暂停</button>`
           : `<button class="ghost small danger-action task-delete" type="button" data-task-id="${task.id}" ${canDelete ? "" : "disabled"}>删除</button>`;
-        const actionButton = [openButton, rewriteButton, manageButton].filter(Boolean).join("");
+        const actionButton = [downloadButton, openButton, rewriteButton, manageButton].filter(Boolean).join("");
         return `
           <div class="task-row">
             <div class="task-id">#${task.id}</div>
@@ -2862,6 +2910,7 @@ async function setDownloadDir(path) {
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ path }),
   });
+  browserDefaultDownloads = false;
   downloadDirInput.value = data.downloadsDir || path;
   savePath.textContent = `下载位置：${data.downloadsDir}`;
   renderFiles(data.files);
@@ -2870,6 +2919,8 @@ async function setDownloadDir(path) {
 
 async function chooseDownloadDir() {
   const data = await fetchJson("/api/downloads-dir/choose", { method: "POST" });
+  if (!data.ok) return data;
+  browserDefaultDownloads = false;
   downloadDirInput.value = data.downloadsDir || "";
   savePath.textContent = `下载位置：${data.downloadsDir}`;
   renderFiles(data.files);
@@ -4109,12 +4160,10 @@ function clearProductionTtsHandoffStorage() {
   }
 }
 
-clearProductionTtsHandoffStorage();
-
-function saveSharedTtsHandoff(payload = {}, { sourceTarget = "" } = {}) {
+function saveSharedTtsHandoff(payload = {}, { sourceTarget = "", targets = [] } = {}) {
   if (!payload?.id) return payload;
   const sentAt = payload.sent_at || payload.sentAt || new Date().toISOString();
-  return {
+  const sharedPayload = {
     ...payload,
     handoff_id: payload.handoff_id || `tts-${payload.id}-${Date.now()}`,
     handoff_revision: payload.handoff_revision || ttsHandoffRevision(payload, sentAt),
@@ -4125,6 +4174,8 @@ function saveSharedTtsHandoff(payload = {}, { sourceTarget = "" } = {}) {
     sharedUpdatedAt: sentAt,
     sourceTarget,
   };
+  globalThis.ttsHandoffStore?.save(sharedPayload, targets);
+  return sharedPayload;
 }
 
 function sharedTimelineRows(payload = {}) {
@@ -4144,12 +4195,17 @@ function sharedTimelineRows(payload = {}) {
 }
 
 function restoreProductionTtsBadges() {
-  clearProductionTtsHandoffStorage();
+  for (const target of PRODUCTION_TTS_TARGETS) {
+    const payload = globalThis.ttsHandoffStore?.read(target);
+    if (payload?.id && globalThis.ttsHandoffStore?.isPending(target)) {
+      markProductionTargetReceived(target, payload);
+    }
+  }
 }
 
 window.sharedTtsHandoff = {
   targets: PRODUCTION_TTS_TARGETS,
-  read: () => null,
+  read: (target) => globalThis.ttsHandoffStore?.read(target) || null,
   timelineRows: sharedTimelineRows,
   restoreBadges: restoreProductionTtsBadges,
 };
@@ -4208,7 +4264,19 @@ async function ensureVideoProjectForTts(payload = {}) {
   return window.videoProjects?.current?.() || project || null;
 }
 
+function productionTargetIsOpen(target) {
+  const normalizedTarget = String(target || "");
+  if (!PRODUCTION_TTS_TARGETS.includes(normalizedTarget)) return false;
+  if (document.body?.dataset.activeModule === normalizedTarget) return true;
+  if (document.querySelector(`.workbench-page.active[data-page="${normalizedTarget}"]`)) return true;
+  return document.querySelector(`.nav-item.active[data-nav="${normalizedTarget}"]`) !== null;
+}
+
 function markProductionTargetReceived(target, payload = {}) {
+  if (productionTargetIsOpen(target)) {
+    acknowledgeProductionTarget(target);
+    return;
+  }
   const button = document.querySelector(`.nav-item[data-nav="${target}"]`);
   if (!button) return;
   const kind = payload.handoffType || (payload.audio_path || payload.audio_url ? "音频" : "");
@@ -4218,6 +4286,25 @@ function markProductionTargetReceived(target, payload = {}) {
     ? `已收${kind || ""} #${marker}`
     : (kind ? `已收${kind}` : "已接收");
 }
+
+function acknowledgeProductionTarget(target) {
+  const normalizedTarget = String(target || "");
+  if (!normalizedTarget) return;
+  globalThis.ttsHandoffStore?.acknowledge(normalizedTarget);
+  const button = document.querySelector(`.nav-item[data-nav="${normalizedTarget}"]`);
+  if (!button) return;
+  button.classList.remove("handoff-ready");
+  button.removeAttribute("data-handoff-label");
+}
+
+document.addEventListener("workbench:route", (event) => {
+  acknowledgeProductionTarget(event.detail?.page);
+});
+
+document.addEventListener("click", (event) => {
+  const button = event.target?.closest?.(".nav-item[data-nav]");
+  if (button?.dataset.nav) acknowledgeProductionTarget(button.dataset.nav);
+}, true);
 
 function applyTtsToCs1(payload = {}) {
   if (window.cs1VideoProduction?.receiveTts) {
@@ -4283,28 +4370,51 @@ function setTtsHandoffStatus(container = document, message = "") {
   if (node) node.textContent = message;
 }
 
+async function deliverTtsPayloadToTarget(target, sharedPayload) {
+  if (target === "cs1-video" && window.cs1VideoProduction?.receiveTts) {
+    return applyTtsToCs1(sharedPayload);
+  }
+  if (target === "xiaohei-video" && window.xiaoheiProduction?.receiveTts) {
+    return applyTtsToXiaohei(sharedPayload);
+  }
+  if (target === "money-printer" && window.moneyPrinterProduction?.receiveTts) {
+    return applyTtsToMoneyPrinter(sharedPayload);
+  }
+  if (target === "kinetic-text" && window.kineticTextProduction?.receiveTts) {
+    return window.kineticTextProduction.receiveTts(sharedPayload, { navigate: false });
+  }
+  return null;
+}
+
+function scheduleTtsTargetDelivery(target, sharedPayload) {
+  Promise.resolve()
+    .then(() => deliverTtsPayloadToTarget(target, sharedPayload))
+    .catch((error) => {
+      console.error(`TTS 后台交接失败：${target}`, error);
+    });
+}
+
 async function sendTtsPayloadToTargets(payload, targets = []) {
-  const sharedPayload = saveSharedTtsHandoff(payload, { sourceTarget: "send-selected" });
+  const sharedPayload = saveSharedTtsHandoff(payload, { sourceTarget: "send-selected", targets });
   const sent = [];
   if (targets.includes("cs1-video")) {
-    applyTtsToCs1(sharedPayload);
+    scheduleTtsTargetDelivery("cs1-video", sharedPayload);
     markProductionTargetReceived("cs1-video", sharedPayload);
     sent.push("CS1生成器");
   }
   if (targets.includes("xiaohei-video")) {
-    await applyTtsToXiaohei(sharedPayload);
+    scheduleTtsTargetDelivery("xiaohei-video", sharedPayload);
     markProductionTargetReceived("xiaohei-video", sharedPayload);
     sent.push("小黑视频风格生成");
   }
   if (targets.includes("money-printer")) {
-    applyTtsToMoneyPrinter(sharedPayload);
+    scheduleTtsTargetDelivery("money-printer", sharedPayload);
     markProductionTargetReceived("money-printer", sharedPayload);
     sent.push("MoneyPrinter");
   }
   if (targets.includes("kinetic-text")) {
+    scheduleTtsTargetDelivery("kinetic-text", sharedPayload);
     markProductionTargetReceived("kinetic-text", sharedPayload);
-    if (window.kineticTextProduction?.receiveTts) await window.kineticTextProduction.receiveTts(sharedPayload, { navigate: false });
-    else window.dispatchEvent(new CustomEvent("kinetic-text-handoff", { detail: sharedPayload }));
     sent.push("动态大字视频");
   }
   return sent;
@@ -4368,9 +4478,10 @@ async function sendConfirmedTtsAudio(container = document, job = activeTtsRailJo
   }
   const payload = confirmedTtsAudioPayload(handoffJob) || originalPayload;
   activeTtsRailJob = handoffJob;
-  await window.videoProjects?.linkCurrent?.("tts", payload.id, ttsHandoffTitle(payload), payload);
+  Promise.resolve(window.videoProjects?.linkCurrent?.("tts", payload.id, ttsHandoffTitle(payload), payload))
+    .catch((error) => console.error("TTS 项目关联失败", error));
   const sent = await sendTtsPayloadToTargets(payload, targets);
-  await refreshSentTtsRecord(handoffJob);
+  refreshSentTtsRecord(handoffJob).catch(() => {});
   const correctionStatus = corrected && correctionMode === "source_constrained_music_asr_repair"
     ? partialCorrection
       ? `${correctionWarning || "已完成原文约束修复，未确定内容保留原识别文字；"}`
@@ -4380,7 +4491,9 @@ async function sendConfirmedTtsAudio(container = document, job = activeTtsRailJo
     : corrected
       ? "字幕错字和标点已校正，时间戳已按字词边界微调；"
     : `${correctionWarning || "字幕未校正，已采用原字幕继续发送。"}`;
-  setTtsHandoffStatus(container, `${correctionStatus}已发送三件套到：${sent.join("、")}。`);
+  const sentMessage = `${correctionStatus}已发送三件套到：${sent.join("、")}。`;
+  setTtsHandoffStatus(container, sentMessage);
+  if (ttsTimelineStatus) ttsTimelineStatus.textContent = `字幕已保存并发送：${sent.join("、")}。`;
 }
 
 async function deleteTtsJob(id) {
@@ -4517,7 +4630,7 @@ function renderTtsCentralTimeline(job = activeTtsRailJob, { preserveDraft = fals
       <span>${index + 1}</span>
       <input type="number" value="${Number(row.start || 0).toFixed(2)}" readonly aria-readonly="true" />
       <input type="number" value="${Number(row.end || 0).toFixed(2)}" readonly aria-readonly="true" />
-      <textarea rows="2" data-tts-timeline-text="${index}" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-1p-ignore="true">${escapeHtml(row.text || "")}</textarea>
+      <textarea rows="2" data-tts-timeline-text="${index}" data-no-draft-persist autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-1p-ignore="true">${escapeHtml(row.text || "")}</textarea>
     </div>
   `).join("");
 }
@@ -4589,7 +4702,7 @@ async function saveTtsCentralTimeline() {
   renderTtsCentralTimeline(data.job);
   updateTtsMainProgressFromJob(data.job);
   if (ttsStatus) ttsStatus.textContent = "字幕时间轴已保存到 TTS 三件套。";
-  await refreshTtsJobs();
+  refreshTtsJobs().catch(() => {});
   return data.job;
 }
 
@@ -4600,6 +4713,7 @@ async function confirmAndSendTtsCentralTimeline() {
   if (!targets.length) throw new Error("请至少勾选一个要发送的生产线。");
   if (ttsTimelineStatus) ttsTimelineStatus.textContent = "正在保存字幕时间轴并发送...";
   const confirmedJob = await saveTtsCentralTimeline();
+  if (ttsTimelineStatus) ttsTimelineStatus.textContent = "字幕已保存，正在发送到所选生产线...";
   await sendConfirmedTtsAudio(ttsCentralHandoff || ttsTimelineColumn || document, confirmedJob);
   return confirmedJob;
 }
@@ -6634,10 +6748,11 @@ async function loadSettings() {
     batchLimit.value = String(data.batch.limit || 10);
     skipDownloaded.checked = data.batch.skipDownloaded !== false;
   }
-  if (data.downloadsDir) {
-    downloadDirInput.value = data.downloadsDir;
-    savePath.textContent = `下载位置：${data.downloadsDir}`;
-  }
+  browserDefaultDownloads = !data.downloadsDir;
+  downloadDirInput.value = data.downloadsDir || "";
+  savePath.textContent = data.downloadsDir
+    ? `下载位置：${data.downloadsDir}`
+    : "下载位置：浏览器默认下载位置";
   if (data.rewrite) {
     const rewrite = data.rewrite;
     const providers = rewrite.providers || {};
@@ -7808,6 +7923,12 @@ chooseDownloadDirBtn.addEventListener("click", () => {
   });
 });
 
+createDesktopDateFolderBtn?.addEventListener("click", () => {
+  createDesktopDateFolder().catch((error) => {
+    window.alert(error instanceof Error ? error.message : String(error));
+  });
+});
+
 chooseLocalVideoBtn?.addEventListener("click", () => {
   chooseLocalVideo().catch((error) => {
     resultBox.textContent = error instanceof Error ? error.message : String(error);
@@ -7910,9 +8031,15 @@ nextPageBtn.addEventListener("click", () => {
 filesList.addEventListener("click", async (event) => {
   const button = event.target.closest(".file-open");
   const deleteButton = event.target.closest(".file-delete");
+  const downloadButton = event.target.closest(".file-download");
 
   if (deleteButton) {
     deleteFiles([deleteButton.dataset.fileName]);
+    return;
+  }
+
+  if (downloadButton) {
+    startBrowserDownload(`/api/files/download?name=${encodeURIComponent(downloadButton.dataset.fileName || "")}`);
     return;
   }
 
@@ -7934,7 +8061,12 @@ tasksTable.addEventListener("click", (event) => {
   const pauseButton = event.target.closest(".task-pause");
   const deleteButton = event.target.closest(".task-delete");
   const openButton = event.target.closest(".task-open-location");
+  const downloadButton = event.target.closest(".task-download");
   const rewriteButton = event.target.closest(".task-send-rewrite");
+  if (downloadButton) {
+    startBrowserDownload(`/api/task-file/download?id=${encodeURIComponent(downloadButton.dataset.taskId || "")}`);
+    return;
+  }
   if (openButton) {
     const task = allTasks.find((item) => String(item.id) === String(openButton.dataset.taskId));
     openManagedPath(primaryTaskFilePath(task || {})).catch((error) => {
@@ -8298,6 +8430,12 @@ copyMomentsPromptsBtn?.addEventListener("click", () => {
   });
 });
 
+copyMomentsImageInstructionBtn?.addEventListener("click", () => {
+  copyMomentsImageInstruction().catch((error) => {
+    setMomentsStatus(error instanceof Error ? error.message : String(error), "error");
+  });
+});
+
 publishMomentsWechatBtn?.addEventListener("click", () => {
   publishMomentsToWechat();
 });
@@ -8655,7 +8793,10 @@ async function init() {
   try {
     startPageSession();
     const status = await fetchJson("/api/status");
-    savePath.textContent = `下载位置：${status.downloadsDir}`;
+    browserDefaultDownloads = !status.downloadsDir;
+    savePath.textContent = status.downloadsDir
+      ? `下载位置：${status.downloadsDir}`
+      : "下载位置：浏览器默认下载位置";
     downloadDirInput.value = status.downloadsDir || "";
     await loadSettings();
     await loadTtsMusicPresets();

@@ -32,6 +32,7 @@ import { createIanXiaoheiRoutes } from "./server/routes/ian-xiaohei-routes.js";
 import { createMoneyPrinterRoutes } from "./server/routes/money-printer-routes.js";
 import { createKineticTextRoutes } from "./server/routes/kinetic-text-routes.js";
 import { createYtDlpService } from "./server/core/yt-dlp-service.js";
+import { createDesktopDateFolder } from "./server/core/desktop-date-folder.js";
 import { formatOriginalMomentsPost } from "./server/core/moments-original.js";
 import { parseJsonFromModelText as parseStructuredJsonFromModelText } from "./server/core/structured-json.js";
 import { createPageLifecycle } from "./server/core/page-lifecycle.js";
@@ -55,6 +56,8 @@ const momentsPublishDir = path.join(__dirname, ".data", "moments-publish");
 const wechatMomentsPublisherScript = path.join(__dirname, "scripts", "wechat_moments_publish.py");
 const referenceExamplesPath = path.join(__dirname, "reference_examples.json");
 const defaultDownloadsDir = path.join(__dirname, "downloads");
+const browserDownloadsRoot = path.join(__dirname, ".data", "browser-downloads");
+const browserDownloadsDir = path.join(browserDownloadsRoot, `session-${process.pid}-${Date.now()}`);
 const localMediaDir = path.join(__dirname, "local-media");
 const pidPath = path.join(__dirname, "ui-server.pid");
 const urlPath = path.join(__dirname, "ui-server.url");
@@ -125,8 +128,8 @@ const pageLifecycle = createPageLifecycle({
   onShutdown: () => shutdownNow(),
 });
 let ownsRuntimeLock = false;
-let downloadsDir = defaultDownloadsDir;
-downloadsDir = setDownloadsDir(readSettings().downloadsDir);
+let selectedDownloadsDir = "";
+let downloadsDir = setDownloadsDir(browserDownloadsDir);
 fs.mkdirSync(downloadsDir, { recursive: true });
 fs.mkdirSync(rewritesDir, { recursive: true });
 const ytDlpService = createYtDlpService({
@@ -276,6 +279,7 @@ const handleIanXiaoheiRoutes = createIanXiaoheiRoutes({
   ffprobePath,
   transcribeLocalMedia: transcribeLocalMediaWithDashScope,
   downloadsDir,
+  getDownloadsDir: () => downloadsDir,
 });
 const handleKineticTextRoutes = createKineticTextRoutes({
   baseDir: __dirname,
@@ -387,6 +391,18 @@ function sendBuffer(res, status, buffer, contentType, fileName = "") {
   }
   res.writeHead(status, headers);
   res.end(buffer);
+}
+
+function sendFileAttachment(res, filePath, fileName = path.basename(filePath)) {
+  const stat = fs.statSync(filePath);
+  const type = mimeTypes.get(path.extname(filePath).toLowerCase()) || "application/octet-stream";
+  res.writeHead(200, {
+    "content-type": type,
+    "content-length": stat.size,
+    "content-disposition": `attachment; filename*=UTF-8''${encodeURIComponent(fileName)}`,
+    "cache-control": "no-store",
+  });
+  fs.createReadStream(filePath).pipe(res);
 }
 
 function localApiPort() {
@@ -875,9 +891,7 @@ async function publishWechatMomentWithPython({ text = "", imagePaths = [], authC
 
 function saveDownloadsDir(nextDir) {
   const resolved = setDownloadsDir(nextDir);
-  const settings = readSettings();
-  settings.downloadsDir = resolved;
-  writeSettings(settings);
+  selectedDownloadsDir = resolved;
   downloadsDir = resolved;
   return downloadsDir;
 }
@@ -938,7 +952,7 @@ function chooseDownloadDir() {
       "-File",
       scriptPath,
       outputPath,
-      downloadsDir,
+      selectedDownloadsDir,
     ], {
       windowsHide: true,
       stdio: ["ignore", "ignore", "pipe"],
@@ -1347,7 +1361,7 @@ function normalizeSettings(settings) {
   }
 
   delete next.dashscopeApiKey;
-  next.downloadsDir = setDownloadsDir(next.downloadsDir || defaultDownloadsDir);
+  delete next.downloadsDir;
   next.jianyingAppPath = String(next.jianyingAppPath || next.jianying_app_path || jianying.appPath || "").trim();
   next.jianyingDraftDir = String(next.jianyingDraftDir || next.jianying_draft_dir || jianying.draftDir || "").trim();
   next.jianying = {
@@ -2666,6 +2680,20 @@ function resolveDownloadFilePath(fileName) {
   return isInsideDownloads(filePath) ? filePath : "";
 }
 
+function primaryTaskDownloadPath(task = {}) {
+  const action = String(task.task_action || "").trim();
+  if (action === "audio") {
+    return task.audio_path || task.video_path || "";
+  }
+  if (action === "subtitle") {
+    return task.subtitle_path || task.txt_path || task.video_path || "";
+  }
+  if (action === "transcript") {
+    return task.txt_path || task.subtitle_path || "";
+  }
+  return task.video_path || task.audio_path || task.subtitle_path || task.txt_path || "";
+}
+
 function isInsideManagedFilePath(filePath) {
   const resolved = path.resolve(filePath);
   const roots = [
@@ -2749,6 +2777,16 @@ function shutdownNow() {
     stopChildProcess(child);
   }
   cleanupRuntimeFiles();
+  if (
+    path.dirname(browserDownloadsDir) === path.resolve(browserDownloadsRoot)
+    && path.basename(browserDownloadsDir).startsWith("session-")
+  ) {
+    try {
+      fs.rmSync(browserDownloadsDir, { recursive: true, force: true });
+    } catch {
+      // Best effort cleanup only.
+    }
+  }
   process.exit(0);
 }
 
@@ -7179,7 +7217,8 @@ const server = http.createServer(async (req, res) => {
     if (req.method === "GET" && url.pathname === "/api/status") {
       sendJson(res, 200, {
         ok: true,
-        downloadsDir,
+        downloadsDir: selectedDownloadsDir,
+        browserDefaultDownloads: !selectedDownloadsDir,
         tasks: queueState(),
         lifecycle: pageLifecycle.status(),
         modelRouter: {
@@ -7187,6 +7226,12 @@ const server = http.createServer(async (req, res) => {
           error: modelRouterStartupError,
         },
       });
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/desktop-date-folder") {
+      const created = createDesktopDateFolder();
+      sendJson(res, 200, { ok: true, ...created });
       return;
     }
 
@@ -7215,6 +7260,28 @@ const server = http.createServer(async (req, res) => {
 
     if (req.method === "GET" && url.pathname === "/api/files") {
       sendJson(res, 200, { files: listDownloads() });
+      return;
+    }
+
+    if (req.method === "GET" && url.pathname === "/api/files/download") {
+      const fileName = String(url.searchParams.get("name") || "").trim();
+      const filePath = resolveDownloadFilePath(fileName);
+      if (!filePath || !fs.existsSync(filePath) || !fs.statSync(filePath).isFile()) {
+        sendJson(res, 404, { ok: false, message: "没有找到可下载的文件" });
+        return;
+      }
+      sendFileAttachment(res, filePath, path.basename(filePath));
+      return;
+    }
+
+    if (req.method === "GET" && url.pathname === "/api/task-file/download") {
+      const task = taskStore.getTask(Number(url.searchParams.get("id") || 0));
+      const filePath = primaryTaskDownloadPath(task || {});
+      if (!filePath || !isInsideDownloads(filePath) || !fs.existsSync(filePath) || !fs.statSync(filePath).isFile()) {
+        sendJson(res, 404, { ok: false, message: "没有找到该任务的可下载文件" });
+        return;
+      }
+      sendFileAttachment(res, filePath, path.basename(filePath));
       return;
     }
 
@@ -7897,7 +7964,8 @@ const server = http.createServer(async (req, res) => {
         jianying: settings.jianying,
         jianyingAppPath: settings.jianyingAppPath,
         jianyingDraftDir: settings.jianyingDraftDir,
-        downloadsDir,
+        downloadsDir: selectedDownloadsDir,
+        browserDefaultDownloads: !selectedDownloadsDir,
       });
       return;
     }

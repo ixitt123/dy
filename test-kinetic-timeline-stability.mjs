@@ -8,10 +8,6 @@ function plainText(value = "") {
   return String(value).replace(/[^\p{L}\p{N}]/gu, "");
 }
 
-function compactText(value = "") {
-  return String(value).replace(/\s+/g, "");
-}
-
 const voiceScript = "你不是学不进去，而是掉进了一个认知陷阱，叫过度求源主义。";
 const asrTimeline = [
   { id: "asr-1", start: 0, end: 1.15, text: "你不是学习不进去", words: [{ text: "学习", start: 0.2, end: 0.6 }] },
@@ -55,39 +51,12 @@ try {
 
   assert.equal(project.segments.length, asrTimeline.length);
   assert.deepEqual(project.segments.map((row) => [row.start, row.end]), asrTimeline.map((row) => [row.start, row.end]));
-  assert.equal(plainText(project.segments.map((row) => row.text).join("")), plainText(voiceScript));
+  assert.deepEqual(
+    project.segments.map((row) => row.text),
+    asrTimeline.map((row) => row.text),
+    "confirmed TTS rows are authoritative and must not be corrected inside a production line",
+  );
   assert.equal(project.originalText, voiceScript, "final TTS script must be persisted as the correction source");
-
-  const pollutedId = "legacy-shared-polluted";
-  const pollutedDir = path.join(root, ".data", "kinetic-text", "projects", pollutedId);
-  fs.mkdirSync(pollutedDir, { recursive: true });
-  fs.writeFileSync(path.join(pollutedDir, "project.json"), JSON.stringify({
-    ...project,
-    id: pollutedId,
-    subtitleSource: "shared-production-timeline",
-    originalText: voiceScript,
-    text: "旧的 ASR 脏文本",
-    segments: asrTimeline.map((row) => ({ ...row, text: "上一条任务的旧字幕" })),
-    sentenceTimeline: asrTimeline,
-    wordTimeline: [{ text: "旧字幕", start: 0, end: 1 }],
-    timelineManualEditedAt: "2026-07-19T00:00:00.000Z",
-  }, null, 2));
-  const healed = service.get(pollutedId);
-  assert.equal(plainText(healed.segments.map((row) => row.text).join("")), plainText(voiceScript));
-  assert.deepEqual(healed.segments.map((row) => [row.start, row.end]), asrTimeline.map((row) => [row.start, row.end]));
-  assert.deepEqual(healed.segments.map((row) => row.words), [[], [], []], "legacy stale word rows must be ignored after self-heal");
-
-  const staleEchoRows = asrTimeline.map((row) => ({ ...row, text: "上一条任务的旧字幕" }));
-  const staleEchoText = staleEchoRows.map((row) => row.text).join("");
-  const staleEcho = service.update(project.id, {
-    text: staleEchoText,
-    originalText: "",
-    segments: staleEchoRows,
-    sentenceTimeline: staleEchoRows,
-    subtitleSource: "shared-production-timeline",
-  });
-  assert.equal(staleEcho.originalText, voiceScript, "row-echo shared updates must not downgrade the authoritative voice script");
-  assert.equal(plainText(staleEcho.segments.map((row) => row.text).join("")), plainText(voiceScript));
 
   const noisySharedRows = [
     { start: 0, end: 1.15, text: "离题很远也要继续" },
@@ -102,15 +71,17 @@ try {
     subtitleSource: "shared-production-timeline",
   });
   assert.deepEqual(shared.segments.map((row) => [row.start, row.end]), noisySharedRows.map((row) => [row.start, row.end]));
-  assert.equal(plainText(shared.segments.map((row) => row.text).join("")), plainText(revisedVoiceScript));
-  assert.equal(compactText(shared.segments.map((row) => row.text).join("")), compactText(revisedVoiceScript));
+  assert.deepEqual(
+    shared.segments.map((row) => row.text),
+    noisySharedRows.map((row) => row.text),
+    "a confirmed TTS resend must be stored exactly as delivered",
+  );
 
   const manualText = "我手工在字幕时间轴里修改";
   const manual = service.update(project.id, {
     segments: [{ ...shared.segments[0], text: manualText }],
   });
-  assert.equal(manual.segments[0].text, manualText, "manual timeline edits must remain editable");
-  assert.equal(manual.timelineManualSourceText, revisedVoiceScript, "manual edit guard must be tied to the current voice script");
+  assert.equal(manual.segments[0].text, noisySharedRows[0].text, "production pages must not edit locked TTS text");
 } finally {
   fs.rmSync(root, { recursive: true, force: true });
 }

@@ -586,6 +586,13 @@ export function constrainKineticTimelineToVoiceScript(timeline = [], sourceText 
 
 function repairSharedVoiceScriptTimeline(project = {}) {
   if (String(project.subtitleSource || project.subtitle_source || "") !== "shared-production-timeline") return project;
+  if (
+    String(project.timelineAuthority || "") === "tts-confirmed"
+    || project.timelineLocked === true
+    || String(project.ttsHandoffRevision || "")
+  ) {
+    return project;
+  }
   const source = kineticProjectVoiceScriptText(project);
   if (!source) return project;
   const sourcePlain = kineticPlainText(source);
@@ -1512,9 +1519,16 @@ export function createKineticTextService({
     );
     const effectId = normalizeEffectId(input.effectId);
     const finalText = kineticVoiceScriptText(input, tts);
-    const constrainedTimeline = hasTimedTimeline
-      ? constrainKineticTimelineToVoiceScript(timeline, finalText)
-      : timeline;
+    const confirmedTtsTimeline = Boolean(
+      tts.id
+      && String(tts.alignment_status || tts.metadata?.alignment_status || "") === "confirmed"
+      && payloadTimeline.length,
+    );
+    const productionTimeline = confirmedTtsTimeline
+      ? payloadTimeline.map((row) => ({ ...row }))
+      : hasTimedTimeline
+        ? constrainKineticTimelineToVoiceScript(timeline, finalText)
+        : timeline;
     return save({
       id,
       title: input.title || tts.title || `动态大字视频 ${new Date().toLocaleString("zh-CN", { hour12: false })}`,
@@ -1532,12 +1546,18 @@ export function createKineticTextService({
       originalText: String(tts.original_text || tts.final_text || tts.finalText || finalText || ""),
       recognizedText: String(tts.recognized_text || ""),
       wordTimeline: Array.isArray(tts.word_timeline) ? tts.word_timeline : [],
-      sentenceTimeline: payloadTimeline.length ? constrainedTimeline : [],
+      sentenceTimeline: payloadTimeline.length ? productionTimeline : [],
+      subtitleTimeline: payloadTimeline.length ? productionTimeline : [],
       alignmentStatus: String(tts.alignment_status || ""),
       alignmentConfirmedAt: String(tts.alignment_confirmed_at || ""),
       duration,
-      subtitleSource,
-      segments: normalizeSegments(constrainedTimeline, finalText, duration),
+      subtitleSource: confirmedTtsTimeline ? "shared-production-timeline" : subtitleSource,
+      timelineAuthority: confirmedTtsTimeline ? "tts-confirmed" : "",
+      timelineLocked: confirmedTtsTimeline,
+      ttsHandoffId: String(tts.handoff_id || ""),
+      ttsHandoffRevision: String(tts.handoff_revision || ""),
+      ttsSharedUpdatedAt: String(tts.sharedUpdatedAt || tts.sent_at || tts.sentAt || ""),
+      segments: normalizeSegments(productionTimeline, finalText, duration),
       effectId,
       effectParams: defaultEffectParams(effectId),
       aspectRatio: Object.hasOwn(OUTPUT_SIZES, input.aspectRatio) ? input.aspectRatio : "9:16",
@@ -1559,36 +1579,60 @@ export function createKineticTextService({
     const current = get(id);
     if (!current) throw new Error("动态大字项目不存在。");
     const normalizedChanges = { ...changes };
+    const incomingConfirmedTtsTimeline = (
+      normalizedChanges.subtitleSource === "shared-production-timeline"
+      && Array.isArray(normalizedChanges.segments)
+      && normalizedChanges.segments.length
+    );
     if (
       Array.isArray(normalizedChanges.segments)
       && normalizedChanges.segments.length
       && !Object.hasOwn(normalizedChanges, "subtitleSource")
+      && String(current.timelineAuthority || "") !== "tts-confirmed"
+      && current.timelineLocked !== true
     ) {
       normalizedChanges.timelineManualEditedAt = nowIso();
       normalizedChanges.timelineManualSourceText = kineticProjectVoiceScriptText(current);
     }
-    if (
-      normalizedChanges.subtitleSource === "shared-production-timeline"
-      && Array.isArray(normalizedChanges.segments)
-      && normalizedChanges.segments.length
-    ) {
-      const incomingSourceText = kineticVoiceScriptText(normalizedChanges, normalizedChanges, kineticProjectVoiceScriptText(current));
-      const currentSourceText = kineticProjectVoiceScriptText(current);
-      const incomingRowsText = normalizedChanges.segments.map((row) => row?.text || "").join("");
-      const incomingLooksLikeRowEcho = kineticPlainText(incomingSourceText) === kineticPlainText(incomingRowsText);
-      const sourceText = currentSourceText
-        && incomingLooksLikeRowEcho
-        && kineticPlainText(currentSourceText) !== kineticPlainText(incomingSourceText)
-          ? currentSourceText
-          : incomingSourceText;
+    if (incomingConfirmedTtsTimeline) {
+      const sourceText = kineticVoiceScriptText(normalizedChanges, normalizedChanges, kineticProjectVoiceScriptText(current));
       normalizedChanges.text = sourceText;
-      normalizedChanges.originalText = sourceText;
-      normalizedChanges.segments = constrainKineticTimelineToVoiceScript(normalizedChanges.segments, sourceText);
-      if (Array.isArray(normalizedChanges.sentenceTimeline) && normalizedChanges.sentenceTimeline.length) {
-        normalizedChanges.sentenceTimeline = constrainKineticTimelineToVoiceScript(normalizedChanges.sentenceTimeline, sourceText);
+      normalizedChanges.originalText = normalizeText(normalizedChanges.originalText || sourceText);
+      normalizedChanges.timelineAuthority = "tts-confirmed";
+      normalizedChanges.timelineLocked = true;
+      if (!Array.isArray(normalizedChanges.sentenceTimeline) || !normalizedChanges.sentenceTimeline.length) {
+        normalizedChanges.sentenceTimeline = normalizedChanges.segments.map((row) => ({ ...row }));
       }
-      if (Array.isArray(normalizedChanges.subtitleTimeline) && normalizedChanges.subtitleTimeline.length) {
-        normalizedChanges.subtitleTimeline = constrainKineticTimelineToVoiceScript(normalizedChanges.subtitleTimeline, sourceText);
+      if (!Array.isArray(normalizedChanges.subtitleTimeline) || !normalizedChanges.subtitleTimeline.length) {
+        normalizedChanges.subtitleTimeline = normalizedChanges.segments.map((row) => ({ ...row }));
+      }
+    } else if (
+      String(current.timelineAuthority || "") === "tts-confirmed"
+      || current.timelineLocked === true
+    ) {
+      delete normalizedChanges.text;
+      delete normalizedChanges.originalText;
+      delete normalizedChanges.finalText;
+      delete normalizedChanges.final_text;
+      delete normalizedChanges.sentenceTimeline;
+      delete normalizedChanges.subtitleTimeline;
+      delete normalizedChanges.wordTimeline;
+      if (Array.isArray(normalizedChanges.segments) && normalizedChanges.segments.length) {
+        normalizedChanges.segments = current.segments.map((currentRow, index) => {
+          const incomingRow = normalizedChanges.segments.find((row) => String(row?.id || "") === String(currentRow.id || ""))
+            || normalizedChanges.segments[index]
+            || {};
+          return {
+            ...currentRow,
+            ...incomingRow,
+            id: currentRow.id,
+            index: currentRow.index,
+            start: currentRow.start,
+            end: currentRow.end,
+            text: currentRow.text,
+            words: currentRow.words,
+          };
+        });
       }
     }
     const shouldInvalidateOutputs = [

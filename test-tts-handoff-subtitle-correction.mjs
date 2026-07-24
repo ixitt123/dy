@@ -51,7 +51,7 @@ assert.match(runtime, /fetch\(url,\s*\{\s*credentials:\s*"same-origin",\s*\.\.\.
 assert.match(runtime, /response\.status === 401[\s\S]*local session token[\s\S]*return fetchJson\(url, options, false\)/u);
 assert.match(runtime, /const payload = confirmedTtsAudioPayload\(handoffJob\) \|\| originalPayload/u);
 assert.match(runtime, /function clearProductionTtsHandoffStorage/u);
-assert.match(runtime, /clearProductionTtsHandoffStorage\(\);/u);
+assert.doesNotMatch(runtime, /\nclearProductionTtsHandoffStorage\(\);\n/u);
 assert.doesNotMatch(runtime, /function syncSharedTtsTimeline/u);
 assert.doesNotMatch(runtime, /syncTimeline: syncSharedTtsTimeline/u);
 const prepareHandoffFunction = runtime.slice(
@@ -59,12 +59,13 @@ const prepareHandoffFunction = runtime.slice(
   runtime.indexOf("function sharedTimelineRows"),
 );
 assert.doesNotMatch(prepareHandoffFunction, /localStorage\.setItem|tts-shared-handoff-updated/u);
+assert.match(prepareHandoffFunction, /ttsHandoffStore\?\.save\(sharedPayload,\s*targets\)/u);
 assert.doesNotMatch(runtime, /tts-job-calibrate/u);
 assert.doesNotMatch(runtime, /校对字幕|查看字幕详情/u);
 
 assert.match(html, /id="cs1SubtitleTimeline"/u);
-assert.match(html, /id="cs1ConfirmTimeline"[\s\S]*确定修改/u);
-assert.match(html, /id="moneyPrinterConfirmTimeline"[\s\S]*确定修改/u);
+assert.doesNotMatch(html, /id="cs1ConfirmTimeline"/u);
+assert.doesNotMatch(html, /id="moneyPrinterConfirmTimeline"/u);
 assert.doesNotMatch(html, /class="result-head tts-head"[\s\S]*语音生成与发送/u);
 assert.match(html, /id="ttsTimelineColumn"[\s\S]*字幕时间轴/u);
 assert.match(html, /id="ttsCentralTimeline"/u);
@@ -82,21 +83,21 @@ assert.match(css, /\.tts-project-source select\s*\{[\s\S]*margin:\s*0/u);
 assert.match(css, /\.tts-project-source button\s*\{[\s\S]*white-space:\s*nowrap/u);
 assert.match(cs1, /readonly aria-readonly="true"/u);
 assert.match(cs1, /function clearTimelineState|const clearTimelineState/u);
-assert.match(cs1, /confirmTimelineButton\?\.addEventListener\("click"/u);
-assert.match(cs1, /if \(!nextActive && routeActive\) clearTimelineState\(\)/u);
+assert.doesNotMatch(cs1, /confirmTimelineButton\?\.addEventListener\("click"/u);
+assert.match(cs1, /if \(nextActive\) restoreStoredTtsHandoff\(\)[\s\S]*else if \(routeActive\) clearTimelineState\(\)/u);
 assert.doesNotMatch(cs1, /focusout[\s\S]*publishTimelineEdit|localStorage\.getItem\([^\n]*handoff/iu);
 assert.match(moneyPrinter, /money-printer-timeline-row" data-segment-index/u);
-assert.match(moneyPrinter, /function confirmTimelineChanges/u);
-assert.match(moneyPrinter, /confirmTimeline\?\.addEventListener\("click", confirmTimelineChanges\)/u);
+assert.doesNotMatch(moneyPrinter, /function confirmTimelineChanges/u);
+assert.doesNotMatch(moneyPrinter, /confirmTimeline\?\.addEventListener\("click", confirmTimelineChanges\)/u);
 assert.match(moneyPrinter, /else if \(state\.routeActive\)[\s\S]*clearTimelineState\(\)/u);
 assert.doesNotMatch(moneyPrinter, /focusout[\s\S]*syncTimelineText|loadStoredHandoff/u);
 assert.match(kinetic, /data-field="start"[\s\S]*readonly aria-readonly="true"/u);
-assert.match(html, /id="kineticConfirmTimeline"[\s\S]*确定修改/u);
+assert.match(html, /id="kineticConfirmTimeline"/u);
 assert.match(kinetic, /function confirmTimelineChanges/u);
 assert.match(kinetic, /kineticConfirmTimeline"\)\.addEventListener\("click", \(\) => confirmTimelineChanges\(\)\)/u);
 assert.doesNotMatch(kinetic, /focusout[\s\S]*syncKineticSubtitleText/u);
 assert.doesNotMatch(kinetic, /localStorage\.getItem\("dy:kinetic-text:project-id"\)|localStorage\.getItem\(HANDOFF_KEY\)/u);
-assert.match(kinetic, /if \(!nextActive && state\.routeActive\) clearTimelineState\(\)/u);
+assert.match(kinetic, /if \(nextActive\)[\s\S]*restoreStoredTtsHandoff\(\)[\s\S]*else if \(state\.routeActive\)[\s\S]*clearTimelineState\(\)/u);
 assert.match(runtime, /function saveTtsCentralTimeline/u);
 assert.match(runtime, /const TTS_HANDOFF_TARGETS_KEY = "dy:tts:handoff-targets"/u);
 assert.match(runtime, /data-tts-load-file="audio"[\s\S]*data-tts-load-file="script"[\s\S]*data-tts-load-file="timestamped-subtitle"/u);
@@ -114,7 +115,8 @@ assert.match(runtime, /<div class="tts-job-handoff-options">\$\{renderTtsHandoff
 assert.match(runtime, /<button class="primary small tts-job-send" type="button">发送所选<\/button>/u);
 assert.match(runtime, /async function refreshSentTtsRecord/u);
 assert.match(runtime, /renderTtsCentralTimeline\(data\.job, \{ preserveDraft: false \}\)/u);
-assert.match(runtime, /await refreshSentTtsRecord\(handoffJob\)/u);
+assert.match(runtime, /refreshSentTtsRecord\(handoffJob\)\.catch/u);
+assert.doesNotMatch(runtime, /await refreshSentTtsRecord\(handoffJob\)/u);
 assert.match(runtime, /async function confirmAndSendTtsCentralTimeline/u);
 assert.match(runtime, /const targets = selectedTtsHandoffTargets\(ttsCentralHandoff \|\| ttsTimelineColumn \|\| document\)/u);
 assert.match(runtime, /const confirmedJob = await saveTtsCentralTimeline\(\)/u);
@@ -133,7 +135,7 @@ assert.match(runtime, /manuallyConfirmedInTtsPage[\s\S]*已使用 TTS 页面确�
 assert.match(runtime, /function renderTtsRail\(job = activeTtsRailJob\) \{[\s\S]*if \(!job\) return;[\s\S]*activeTtsRailJob = job;[\s\S]*renderTtsCentralTimeline/u);
 assert.match(xiaohei, /data-field="start"[\s\S]*readonly aria-readonly="true"/u);
 assert.match(xiaohei, /timelineConfirm\?\.addEventListener\("click", confirmSubtitleTimelineChanges\)/u);
-assert.match(xiaoheiHtml, /id="xiaoheiConfirmTimeline"[\s\S]*确定修改/u);
+assert.match(xiaoheiHtml, /id="xiaoheiConfirmTimeline"/u);
 assert.doesNotMatch(xiaoheiHtml, /xiaoheiTimelineRefresh|同步时间轴/u);
 assert.doesNotMatch(xiaohei, /focusout[\s\S]*persistSharedSubtitleText|refreshSubtitleTimelineFromTts/u);
 assert.doesNotMatch(xiaohei, /state\.selectedTtsJob = data\.selected/u);

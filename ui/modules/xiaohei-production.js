@@ -105,8 +105,13 @@ export function initXiaoheiProductionModule() {
   };
 
   const receiveTts = (payload = {}) => receiveHandoff(handoffFromPayload(payload));
+  const restoreStoredTtsHandoff = () => {
+    const payload = globalThis.ttsHandoffStore?.read("xiaohei-video");
+    return payload?.id ? receiveTts(payload) : null;
+  };
   productionReceiver = receiveHandoff;
-  window.xiaoheiProduction = { receiveHandoff, receiveTts };
+  window.xiaoheiProduction = { receiveHandoff, receiveTts, restoreStoredTtsHandoff };
+  restoreStoredTtsHandoff();
 
   frame.addEventListener("load", refreshStatus);
   refresh.addEventListener("click", () => {
@@ -118,6 +123,7 @@ export function initXiaoheiProductionModule() {
     // 切换页面保留生产线状态：不清空 handoff、不重载 iframe，避免已接收的音频资产和工作内容丢失。
     // 只有手动点击"刷新工作台"或从 TTS 页重新发送时才重置。
     routeActive = event.detail?.page === "xiaohei-video";
+    if (routeActive) restoreStoredTtsHandoff();
   });
   window.videoFactorySendToXiaohei = sendConfirmedTtsToXiaohei;
   refreshStatus();

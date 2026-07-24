@@ -34,8 +34,10 @@ export function initMoneyPrinterModule() {
   if (!state.page) return;
   cacheElements();
   bindEvents();
-  initialize().catch((error) => setStatus("初始化失败", error.message, true));
-  window.moneyPrinterProduction = { receiveTts, refresh: refreshStatus };
+  window.moneyPrinterProduction = { receiveTts, refresh: refreshStatus, restoreStoredTtsHandoff };
+  initialize()
+    .then(() => restoreStoredTtsHandoff())
+    .catch((error) => setStatus("初始化失败", error.message, true));
 }
 
 function cacheElements() {
@@ -179,22 +181,11 @@ function bindEvents() {
   els.sourceVideo?.addEventListener("seeked", drawPreview);
   els.sourceAudio?.addEventListener("ended", pausePreview);
   window.addEventListener("money-printer-handoff", (event) => receiveTts(event.detail));
-  els.timeline?.addEventListener("input", (event) => {
-    const textarea = event.target.closest('[data-field="text"]');
-    const row = textarea?.closest(".money-printer-timeline-row");
-    const index = Number(row?.dataset.segmentIndex);
-    if (!textarea || !Number.isInteger(index) || !state.segments[index]) return;
-    if (!Array.isArray(state.timelineDraftSegments)) {
-      state.timelineDraftSegments = state.segments.map((segment) => ({ ...segment }));
-    }
-    state.timelineDraftSegments[index] = { ...state.timelineDraftSegments[index], text: textarea.value };
-    els.confirmTimeline.disabled = false;
-    els.timelineSummary.textContent = "有未确定修改";
-  });
-  els.confirmTimeline?.addEventListener("click", confirmTimelineChanges);
+  if (els.confirmTimeline) els.confirmTimeline.hidden = true;
   document.addEventListener("workbench:route", (event) => {
     const nextActive = event.detail?.page === "money-printer";
     if (nextActive) {
+      restoreStoredTtsHandoff();
       renderAll();
       ensureApiReady().catch((error) => setStatus("API 自动启动失败", error.message, true));
     } else if (state.routeActive) {
@@ -273,6 +264,11 @@ function receiveTts(payload = {}, { navigate = true } = {}) {
   return state.handoff;
 }
 
+function restoreStoredTtsHandoff() {
+  const payload = globalThis.ttsHandoffStore?.read("money-printer");
+  return payload?.id ? receiveTts(payload, { navigate: false }) : null;
+}
+
 function clearTimelineState() {
   stopPolling();
   pausePreview();
@@ -287,32 +283,6 @@ function clearTimelineState() {
   renderAll();
 }
 
-function confirmTimelineChanges() {
-  if (!state.handoff?.id || !Array.isArray(state.timelineDraftSegments)) return;
-  if (state.timelineDraftSegments.some((segment) => !String(segment.text || "").trim())) {
-    els.timelineSummary.textContent = "字幕文字不能为空";
-    return;
-  }
-  state.segments = state.timelineDraftSegments.map((segment) => ({
-    ...segment,
-    text: String(segment.text || "").trim(),
-    searchTerm: automaticSearchTerm(segment.text, state.handoff),
-    keywords: inferKeywords(segment.text),
-  }));
-  state.timelineDraftSegments = null;
-  const finalText = state.segments.map((segment) => segment.text).join("");
-  state.handoff = {
-    ...state.handoff,
-    text: finalText,
-    final_text: finalText,
-    sentence_timeline: state.segments,
-    subtitle_timeline: state.segments,
-  };
-  if (els.confirmTimeline) els.confirmTimeline.disabled = true;
-  renderAll();
-  setStatus("字幕修改已确定", "本次修改只应用于 MoneyPrinter，不会同步到其他生产线或 TTS 历史任务。");
-}
-
 function normalizeSegments(timeline = [], payload = {}) {
   const rows = Array.isArray(timeline) ? timeline : [];
   const fallbackText = String(payload.text || payload.final_text || "").trim();
@@ -323,7 +293,7 @@ function normalizeSegments(timeline = [], payload = {}) {
   return rows.map((item, index) => {
     const start = Number(item.start ?? item.start_time ?? item.startTime ?? 0);
     const end = Number(item.end ?? item.end_time ?? item.endTime ?? start + 1);
-    const text = String(item.text || item.sentence || item.subtitle || "").trim();
+    const text = String(item.text || item.sentence || item.subtitle || "");
     return {
       id: String(item.id || `mpt-segment-${index + 1}`),
       start,
@@ -359,7 +329,7 @@ function renderHandoff() {
 
 function renderTimeline() {
   if (!els.timeline) return;
-  const displaySegments = Array.isArray(state.timelineDraftSegments) ? state.timelineDraftSegments : state.segments;
+  const displaySegments = state.segments;
   if (!displaySegments.length) {
     els.timelineSummary.textContent = "等待 TTS";
     els.timeline.innerHTML = '<p class="money-printer-empty">尚未接收已确认字幕时间轴。</p>';
@@ -367,15 +337,13 @@ function renderTimeline() {
     return;
   }
   const source = els.source?.value || "pexels";
-  els.timelineSummary.textContent = state.timelineDraftSegments
-    ? "有未确定修改"
-    : `共 ${state.segments.length} 段字幕 / ${matchedMaterialCount()} 段素材 / 转场${transitionLabel(els.transition.value)}`;
+  els.timelineSummary.textContent = `共 ${state.segments.length} 段 TTS 字幕 / ${matchedMaterialCount()} 段素材 / 转场${transitionLabel(els.transition.value)}`;
   els.timeline.innerHTML = displaySegments.map((segment, index) => `
     <article class="money-printer-timeline-row" data-segment-index="${index}">
       <span class="money-printer-segment-index">${String(index + 1).padStart(2, "0")}</span>
       <span>${formatTime(segment.start)}</span>
       <span>${formatTime(segment.end)}</span>
-      <textarea data-field="text" rows="2" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-1p-ignore="true">${escapeHtml(segment.text)}</textarea>
+      <textarea data-field="text" rows="2" data-no-draft-persist readonly aria-readonly="true" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-1p-ignore="true">${escapeHtml(segment.text)}</textarea>
       <strong>${escapeHtml(segment.searchTerm || automaticSearchTerm(segment.text, state.handoff))}</strong>
       <div class="money-printer-material-cell">
         ${segment.thumbnail ? `<img src="${escapeAttr(segment.thumbnail)}" alt="" loading="lazy" />` : ""}

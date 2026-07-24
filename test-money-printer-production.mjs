@@ -51,6 +51,11 @@ const openStatus = {
 };
 assert.equal(openTarget("root", openStatus), openStatus.root);
 assert.equal(openTarget("tasks", openStatus), "D:\\tools\\moneyprinterturbo\\storage\\tasks");
+assert.equal(
+  openTarget("tasks", { ...openStatus, root: "/opt/moneyprinterturbo" }),
+  "/opt/moneyprinterturbo/storage/tasks",
+  "task directory joining must preserve the root path platform instead of the CI host platform",
+);
 assert.equal(openTarget("task-video", openStatus, { url: "https://example.com/output.mp4?clip=1&format=mp4" }), "https://example.com/output.mp4?clip=1&format=mp4");
 
 const rejectedUrls = [

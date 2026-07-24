@@ -339,7 +339,7 @@ function renderTimeline() {
   const container = $("#kineticTimeline");
   if (!container) return;
   if (!state.project?.segments?.length) {
-    container.innerHTML = '<p class="kinetic-empty">发送已确认的 TTS 后，这里会显示可编辑字幕时间轴。</p>';
+    container.innerHTML = '<p class="kinetic-empty">发送已确认的 TTS 后，这里会显示只读字幕和可调视觉参数。</p>';
     renderTimelineDraftStatus();
     return;
   }
@@ -354,7 +354,7 @@ function renderTimeline() {
         <span class="kinetic-segment-index">${index + 1}</span>
         <input data-field="start" type="number" min="0" step="0.01" value="${Number(segment.start).toFixed(2)}" readonly aria-readonly="true" />
         <input data-field="end" type="number" min="0" step="0.01" value="${Number(segment.end).toFixed(2)}" readonly aria-readonly="true" />
-        <textarea data-field="text" rows="2" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-1p-ignore="true">${escapeHtml(segment.text)}</textarea>
+        <textarea data-field="text" rows="2" data-no-draft-persist readonly aria-readonly="true" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-1p-ignore="true">${escapeHtml(segment.text)}</textarea>
         <input data-field="keywords" type="text" value="${escapeHtml((segment.keywords || []).join("、"))}" placeholder="每段1-2个，关键词不相邻" />
         <input data-field="lineBreaks" type="text" value="${escapeHtml((segment.lineBreaks || []).join(","))}" placeholder="如 6,12" title="按字符序号设置换行位置" />
         <div class="kinetic-position-inputs"><input data-field="x" type="number" min="5" max="95" value="${x}" /><input data-field="y" type="number" min="5" max="95" value="${y}" /></div>
@@ -404,6 +404,18 @@ function mediaUrl(kind, { download = false } = {}) {
   return `/api/kinetic-text/file?id=${encodeURIComponent(state.project.id)}&kind=${encodeURIComponent(kind)}&v=${encodeURIComponent(state.project.updatedAt || Date.now())}${suffix}`;
 }
 
+function triggerKineticVideoDownload() {
+  if (!state.project?.outputs?.finalVideo) return false;
+  const link = document.createElement("a");
+  link.href = mediaUrl("video", { download: true });
+  link.download = shortFileName(state.project.outputs.finalVideo) || "dynamic-text-video.mp4";
+  link.hidden = true;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  return true;
+}
+
 function kineticDownloadDirectory() {
   return String(state.downloadsDir || "").replace(/[\\/]+$/, "");
 }
@@ -412,7 +424,7 @@ function renderDownloadDirectory() {
   const container = $("#kineticDownloadPath");
   if (!container) return;
   const directory = kineticDownloadDirectory();
-  container.textContent = directory ? `下载地址：${directory}` : "尚未选择下载地址";
+  container.textContent = directory ? `下载地址：${directory}` : "下载地址：浏览器默认下载位置";
   container.title = directory;
 }
 
@@ -421,7 +433,9 @@ function syncGlobalDownloadDirectory(directory) {
   const input = document.querySelector("#downloadDirInput");
   const label = document.querySelector("#savePath");
   if (input) input.value = state.downloadsDir;
-  if (label) label.textContent = `下载位置：${state.downloadsDir}`;
+  if (label) label.textContent = state.downloadsDir
+    ? `下载位置：${state.downloadsDir}`
+    : "下载位置：浏览器默认下载位置";
   renderDownloadDirectory();
 }
 
@@ -1785,6 +1799,7 @@ function applyTimelineInput(input) {
   const index = Number(row?.dataset.segmentIndex);
   if (!Number.isInteger(index) || !state.project?.segments[index]) return;
   const field = input.dataset.field;
+  if (field === "text") return;
   const baseSegments = hasTimelineDraft() ? state.pendingTimelineChanges.segments : state.project.segments;
   const segments = baseSegments.map((segment, segmentIndex) => {
     if (segmentIndex !== index) return segment;
@@ -1811,8 +1826,19 @@ function sharedTimelineFromPayload(payload = {}) {
     index,
     start: Number(row.start || 0),
     end: Number(row.end || 0),
-    text: String(row.text || "").trim(),
-  })).filter((row) => row.text && row.end > row.start);
+    text: String(row.text || ""),
+  })).filter((row) => row.text.trim() && row.end > row.start);
+}
+
+function projectMatchesSharedTimeline(project = {}, rows = []) {
+  const segments = Array.isArray(project.segments) ? project.segments : [];
+  if (segments.length !== rows.length) return false;
+  return rows.every((row, index) => {
+    const segment = segments[index] || {};
+    return Math.abs(Number(segment.start || 0) - Number(row.start || 0)) < 0.001
+      && Math.abs(Number(segment.end || 0) - Number(row.end || 0)) < 0.001
+      && String(segment.text || "") === String(row.text || "");
+  });
 }
 
 async function applySharedTimelineToKineticProject(payload = {}) {
@@ -1842,6 +1868,7 @@ async function applySharedTimelineToKineticProject(payload = {}) {
       recognizedText: String(payload.recognized_text || ""),
       wordTimeline: Array.isArray(payload.word_timeline) ? payload.word_timeline : [],
       sentenceTimeline: rows,
+      subtitleTimeline: rows,
       alignmentStatus: String(payload.alignment_status || ""),
       alignmentConfirmedAt: String(payload.alignment_confirmed_at || ""),
       ttsHandoffId: String(payload.handoff_id || ""),
@@ -1850,6 +1877,8 @@ async function applySharedTimelineToKineticProject(payload = {}) {
       segments,
       duration: Math.max(...segments.map((item) => Number(item.end || 0)), Number(payload.audio_duration || payload.duration || 0)),
       subtitleSource: "shared-production-timeline",
+      timelineAuthority: "tts-confirmed",
+      timelineLocked: true,
     },
   });
   const projectIndex = state.projects.findIndex((item) => item.id === data.project.id);
@@ -1921,7 +1950,8 @@ async function pollJob(jobId, options = {}) {
     await refreshProjects(job.projectId);
     if (options.renderOnComplete && job.type === "render") {
       const videoPath = job.result?.videoPath || state.project?.outputs?.finalVideo || kineticDownloadDirectory();
-      setProgress(100, `视频已保存：${videoPath}`);
+      const downloadStarted = options.downloadOnComplete && triggerKineticVideoDownload();
+      setProgress(100, downloadStarted ? "成片完成，浏览器下载已开始" : `视频已保存：${videoPath}`);
       setRenderButtonBusy(false);
     }
     if (typeof options.onComplete === "function") options.onComplete(job);
@@ -1947,6 +1977,7 @@ function saveActiveJob(job, options = {}) {
       id: String(job.id),
       type: String(job.type || ""),
       renderOnComplete: options.renderOnComplete === true,
+      downloadOnComplete: options.downloadOnComplete === true,
     }));
   } catch {}
 }
@@ -1979,7 +2010,10 @@ async function restoreActiveJob() {
     }
     if (saved.renderOnComplete && job.type === "render") setRenderButtonBusy(true);
     setProgress(job.progress || 0, job.stage || "已恢复上次任务");
-    state.pollTimer = setTimeout(() => pollJob(job.id, { renderOnComplete: saved.renderOnComplete && job.type === "render" }).catch((error) => {
+    state.pollTimer = setTimeout(() => pollJob(job.id, {
+      renderOnComplete: saved.renderOnComplete && job.type === "render",
+      downloadOnComplete: saved.downloadOnComplete === true && job.type === "render",
+    }).catch((error) => {
       setProgress(0, error.message);
       if (saved.renderOnComplete) setRenderButtonBusy(false);
     }), 1000);
@@ -2009,6 +2043,18 @@ async function receiveTts(payload, { navigate = true } = {}) {
     return null;
   }
   const existing = state.projects.find((project) => String(project.ttsJobId) === String(payload.id));
+  const handoffRevision = String(payload.handoff_revision || "");
+  if (
+    existing
+    && handoffRevision
+    && String(existing.ttsHandoffRevision || "") === handoffRevision
+    && projectMatchesSharedTimeline(existing, rows)
+  ) {
+    state.project = existing;
+    renderProject();
+    if (navigate) window.workbenchNavigate?.("kinetic-text");
+    return state.project;
+  }
   clearTimelineState("正在接收新的 TTS 参数");
   if (existing) {
     state.project = await applySharedTimelineToKineticProject(payload) || existing;
@@ -2030,6 +2076,11 @@ async function receiveTts(payload, { navigate = true } = {}) {
   await refreshProjects(state.project.id);
   if (navigate) window.workbenchNavigate?.("kinetic-text");
   return state.project;
+}
+
+async function restoreStoredTtsHandoff() {
+  const payload = globalThis.ttsHandoffStore?.read("kinetic-text");
+  return payload?.id ? receiveTts(payload, { navigate: false }) : null;
 }
 
 async function receiveText(payload = {}) {
@@ -2258,13 +2309,17 @@ function bindEvents() {
   });
   $("#kineticRenderFinal").addEventListener("click", async () => {
     if (!state.project) return;
+    if (state.project?.outputs?.finalVideo) {
+      if (triggerKineticVideoDownload()) setProgress(100, "已使用现有成片，浏览器下载已开始");
+      return;
+    }
     setRenderButtonBusy(true);
     setProgress(3, "保存当前编辑");
     try {
       await saveProjectImmediately();
       const data = await postJson("/api/kinetic-text/render", { projectId: state.project.id });
-      saveActiveJob(data.job, { renderOnComplete: true });
-      pollJob(data.job.id, { renderOnComplete: true }).catch((error) => {
+      saveActiveJob(data.job, { renderOnComplete: true, downloadOnComplete: true });
+      pollJob(data.job.id, { renderOnComplete: true, downloadOnComplete: true }).catch((error) => {
         setRenderButtonBusy(false);
         setProgress(0, error.message);
       });
@@ -2277,7 +2332,11 @@ function bindEvents() {
   window.addEventListener("kinetic-text-text-handoff", (event) => receiveText(event.detail).catch((error) => setProgress(0, error.message)));
   document.addEventListener("workbench:route", (event) => {
     const nextActive = event.detail?.page === "kinetic-text";
-    if (!nextActive && state.routeActive) clearTimelineState();
+    if (nextActive) {
+      restoreStoredTtsHandoff().catch((error) => setProgress(0, error.message));
+    } else if (state.routeActive) {
+      clearTimelineState();
+    }
     state.routeActive = nextActive;
   });
 }
@@ -2298,7 +2357,8 @@ export async function initKineticTextModule() {
   if ([...providerSelect.options].some((option) => option.value === preferences.provider)) providerSelect.value = preferences.provider;
   providerSelect.addEventListener("change", () => savePreferences({ provider: providerSelect.value }));
   bindEvents();
-  window.kineticTextProduction = { receiveTts, receiveText, refresh: refreshProjects };
+  window.kineticTextProduction = { receiveTts, receiveText, refresh: refreshProjects, restoreStoredTtsHandoff };
   await refreshProjects();
   await restoreActiveJob();
+  await restoreStoredTtsHandoff();
 }
