@@ -106,4 +106,3 @@ Finish with:
 - Commands run and exact results.
 - Remaining risks or unverified paths.
 - Current branch plus commit, push, PR, and CI status, using `not performed` when the user did not authorize them.
-
