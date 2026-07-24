@@ -4,6 +4,7 @@ import fs from "node:fs";
 const source = fs.readFileSync(new URL("./ui/modules/ian-xiaohei-app.js", import.meta.url), "utf8");
 const css = fs.readFileSync(new URL("./ui/xiaohei-illustrations.css", import.meta.url), "utf8");
 const html = fs.readFileSync(new URL("./ui/xiaohei-illustrations.html", import.meta.url), "utf8");
+const routes = fs.readFileSync(new URL("./server/routes/ian-xiaohei-routes.js", import.meta.url), "utf8");
 
 assert.match(
   source,
@@ -13,26 +14,56 @@ assert.match(
 
 assert.match(
   source,
-  /本编号 #[\s\S]*是一个独立任务\(Job\)/,
-  "Each Xiaohei image prompt must mark the numbered shot as an independent job.",
+  /请直接生成一张图片素材/,
+  "Each Xiaohei image prompt must be a direct single-image generation command.",
 );
 
 assert.match(
   source,
-  /禁止自动创建 Collage/,
+  /本次只生成当前这一张独立的 \$\{ratio\} 图片素材/,
+  "Each Xiaohei scene prompt must restrict generation to the current scene.",
+);
+
+assert.match(
+  source,
+  /禁止 Collage（拼贴图）/,
   "Xiaohei prompt copy must explicitly forbid collage output.",
 );
 
 assert.match(
   source,
-  /禁止自动创建 Contact Sheet/,
+  /Contact Sheet（缩略图合集）/,
   "Xiaohei prompt copy must explicitly forbid contact-sheet output.",
 );
 
 assert.match(
   source,
-  /shots\.slice\(0, imageCount\)/,
-  "Copy-all must cap copied Xiaohei image jobs to the requested maximum.",
+  /保留当前 Skill 原本允许的少量中文手写标注/,
+  "Xiaohei prompt format must preserve the selected Skill's handwritten Chinese label style.",
+);
+
+assert.doesNotMatch(
+  source,
+  /批量任务协议|multi-image set|NEXT INDEPENDENT JOB|本次只生成 Scene|分镜编号：\$\{shot\.index\}\/\$\{total\}/,
+  "Xiaohei prompt text must not use wording that makes image models produce grouped images.",
+);
+
+assert.match(
+  source,
+  /await navigator\.clipboard\.writeText\(promptClipboardText\(\)\)/,
+  "The toolbar copy action must copy the full prompt package.",
+);
+
+assert.match(
+  html,
+  /复制全部提示词/,
+  "The toolbar copy button must advertise copying all prompts.",
+);
+
+assert.doesNotMatch(
+  html,
+  /打开 ChatGPT 生图队列|export-external-prompts|chatgpt-image-queue/,
+  "The Xiaohei page must not keep the ChatGPT queue export entry point after rollback.",
 );
 
 assert.match(

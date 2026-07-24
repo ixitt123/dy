@@ -1,7 +1,7 @@
 import { postJson } from "./api.js";
 
-const HANDOFF_KEY = "dy:handoff:money-printer:audio";
 const PREF_KEY = "dy:money-printer:preferences";
+const ACTIVE_TASK_KEY = "dy:money-printer:active-task-id";
 const POLL_INTERVAL_MS = 2500;
 
 const state = {
@@ -10,6 +10,7 @@ const state = {
   status: null,
   handoff: null,
   segments: [],
+  timelineDraftSegments: null,
   task: null,
   pollTimer: 0,
   raf: 0,
@@ -19,6 +20,7 @@ const state = {
   startTime: 0,
   previewReady: false,
   apiStartPromise: null,
+  routeActive: false,
 };
 
 function $(selector) {
@@ -32,8 +34,10 @@ export function initMoneyPrinterModule() {
   if (!state.page) return;
   cacheElements();
   bindEvents();
-  initialize().catch((error) => setStatus("初始化失败", error.message, true));
-  window.moneyPrinterProduction = { receiveTts, refresh: refreshStatus };
+  window.moneyPrinterProduction = { receiveTts, refresh: refreshStatus, restoreStoredTtsHandoff };
+  initialize()
+    .then(() => restoreStoredTtsHandoff())
+    .catch((error) => setStatus("初始化失败", error.message, true));
 }
 
 function cacheElements() {
@@ -84,6 +88,7 @@ function cacheElements() {
     materialSummary: $("#moneyPrinterMaterialSummary"),
     taskVideos: $("#moneyPrinterTaskVideos"),
     timelineSummary: $("#moneyPrinterTimelineSummary"),
+    confirmTimeline: $("#moneyPrinterConfirmTimeline"),
     timeline: $("#moneyPrinterTimeline"),
     assets: $("#moneyPrinterAssets"),
     apiLogs: $("#moneyPrinterApiLogs"),
@@ -98,10 +103,55 @@ async function initialize() {
   state.effects = effectsData.effects || [];
   renderEffectOptions();
   await applyDefaultPreferences();
-  loadStoredHandoff();
   renderAll();
+  await restoreActiveTask();
   if (state.page.classList.contains("active") || document.body.dataset.activeModule === "money-printer") {
     await ensureApiReady().catch(() => null);
+  }
+}
+
+function saveActiveTaskId(taskId) {
+  try {
+    if (taskId) localStorage.setItem(ACTIVE_TASK_KEY, String(taskId));
+  } catch {}
+}
+
+function clearActiveTaskId() {
+  try { localStorage.removeItem(ACTIVE_TASK_KEY); } catch {}
+}
+
+function readActiveTaskId() {
+  try { return String(localStorage.getItem(ACTIVE_TASK_KEY) || "").trim(); } catch { return ""; }
+}
+
+async function restoreActiveTask() {
+  const taskId = readActiveTaskId();
+  if (!taskId) return;
+  try {
+    const data = await fetchJson(`/api/money-printer/task?id=${encodeURIComponent(taskId)}`);
+    const task = data.task;
+    if (!task?.task_id) throw new Error("任务不存在");
+    state.task = task;
+    renderTask();
+    if (Number(task.state) === 1) {
+      clearActiveTaskId();
+      setProgress(100, "素材匹配完成，可以预览");
+      setStatus("上次任务已完成", "页面刷新前创建的素材任务已完成，可重新发送 TTS 参数后预览合成。");
+    } else if (Number(task.state) === -1) {
+      clearActiveTaskId();
+      setStatus("MoneyPrinterTurbo 任务失败", task.error || "任务失败。", true);
+    } else {
+      setProgress(task.progress || 0, task.stateLabel || "生成中");
+      setStatus("已恢复上次任务", `页面刷新前的任务 ${task.task_id} 仍在运行，继续自动刷新进度。`);
+      state.pollTimer = window.setInterval(() => pollTask(state.task?.task_id), POLL_INTERVAL_MS);
+    }
+  } catch (error) {
+    // 只有任务明确不存在才清除持久化 ID；服务重启中/网络抖动导致的
+    // 一次性失败保留 ID，下次打开页面仍可恢复仍在后台运行的任务。
+    const message = String(error?.message || "");
+    if (/不存在|没有|not.?found|404/i.test(message)) clearActiveTaskId();
+  } finally {
+    updateButtons();
   }
 }
 
@@ -131,27 +181,17 @@ function bindEvents() {
   els.sourceVideo?.addEventListener("seeked", drawPreview);
   els.sourceAudio?.addEventListener("ended", pausePreview);
   window.addEventListener("money-printer-handoff", (event) => receiveTts(event.detail));
-  window.addEventListener("tts-shared-handoff-updated", (event) => {
-    if (event.detail?.sourceTarget === "money-printer") return;
-    receiveTts(event.detail?.payload, { navigate: false });
-  });
-  els.timeline?.addEventListener("input", (event) => {
-    const textarea = event.target.closest('[data-field="text"]');
-    const row = textarea?.closest(".money-printer-timeline-row");
-    const index = Number(row?.dataset.segmentIndex);
-    if (!textarea || !Number.isInteger(index) || !state.segments[index]) return;
-    state.segments[index] = { ...state.segments[index], text: textarea.value };
-    drawPreview();
-  });
-  els.timeline?.addEventListener("focusout", (event) => {
-    if (event.target.matches('[data-field="text"]')) syncTimelineText();
-  });
+  if (els.confirmTimeline) els.confirmTimeline.hidden = true;
   document.addEventListener("workbench:route", (event) => {
-    if (event.detail?.page === "money-printer") {
-      loadStoredHandoff();
+    const nextActive = event.detail?.page === "money-printer";
+    if (nextActive) {
+      restoreStoredTtsHandoff();
       renderAll();
       ensureApiReady().catch((error) => setStatus("API 自动启动失败", error.message, true));
+    } else if (state.routeActive) {
+      clearTimelineState();
     }
+    state.routeActive = nextActive;
   });
 }
 
@@ -196,47 +236,51 @@ async function applyDefaultPreferences() {
   updateSettingOutputs();
 }
 
-function loadStoredHandoff() {
-  const stored = window.sharedTtsHandoff?.read?.() || readJsonStorage(HANDOFF_KEY, null);
-  if (stored?.id && (!state.handoff || String(stored.id) !== String(state.handoff.id) || stored.sharedUpdatedAt !== state.handoff.sharedUpdatedAt)) {
-    receiveTts(stored, { navigate: false });
-  }
-}
-
 function receiveTts(payload = {}, { navigate = true } = {}) {
-  if (!payload?.id) return;
-  const sameJob = String(state.handoff?.id || "") === String(payload.id);
-  const previousSegments = sameJob ? state.segments : [];
-  state.handoff = payload;
-  if (!sameJob) {
-    state.task = null;
-    state.previewReady = false;
-    state.currentTime = 0;
+  const timeline = Array.isArray(payload?.subtitle_timeline) && payload.subtitle_timeline.length
+    ? payload.subtitle_timeline
+    : Array.isArray(payload?.sentence_timeline)
+      ? payload.sentence_timeline
+      : [];
+  const segments = normalizeSegments(timeline, payload);
+  const confirmed = String(payload?.alignment_status || payload?.metadata?.alignment_status || "") === "confirmed";
+  if (!payload?.id || !confirmed || !timeline.length || !segments.length) {
+    clearTimelineState();
+    setStatus("TTS 参数无效", "已清空 MoneyPrinter 字幕时间轴，请从 TTS 页面重新发送已确认参数。", true);
+    return null;
   }
-  state.segments = normalizeSegments(payload.subtitle_timeline?.length ? payload.subtitle_timeline : payload.sentence_timeline, payload)
-    .map((segment, index) => ({ ...(previousSegments[index] || {}), ...segment }));
+  state.handoff = payload;
+  state.segments = segments;
+  state.timelineDraftSegments = null;
+  state.task = null;
+  state.previewReady = false;
+  state.currentTime = 0;
   if (els.subject) els.subject.value = payload.title || payload.seo_title || payload.publish_title || `TTS #${payload.display_number || payload.id}`;
   if (payload.audio_url) els.sourceAudio.src = payload.audio_url;
   else els.sourceAudio.removeAttribute("src");
   if (navigate) window.workbenchNavigate?.("money-printer");
   renderAll();
   savePreferences();
+  return state.handoff;
 }
 
-async function syncTimelineText() {
-  if (!state.handoff?.id || !state.segments.length) return;
-  els.timelineSummary.textContent = "正在自动保存字幕...";
-  try {
-    const payload = await window.sharedTtsHandoff.syncTimeline(state.segments, {
-      sourceTarget: "money-printer",
-      title: els.subject.value.trim() || state.handoff.title,
-    });
-    receiveTts(payload, { navigate: false });
-    setStatus("字幕已同步", "原时间戳已保留，原字幕文件和其他三条生产线已更新。");
-  } catch (error) {
-    els.timelineSummary.textContent = `自动保存失败：${error.message || error}`;
-    setStatus("字幕保存失败", error.message || String(error), true);
-  }
+function restoreStoredTtsHandoff() {
+  const payload = globalThis.ttsHandoffStore?.read("money-printer");
+  return payload?.id ? receiveTts(payload, { navigate: false }) : null;
+}
+
+function clearTimelineState() {
+  stopPolling();
+  pausePreview();
+  state.handoff = null;
+  state.segments = [];
+  state.timelineDraftSegments = null;
+  state.task = null;
+  state.previewReady = false;
+  state.currentTime = 0;
+  els.sourceAudio?.removeAttribute("src");
+  els.sourceVideo?.removeAttribute("src");
+  renderAll();
 }
 
 function normalizeSegments(timeline = [], payload = {}) {
@@ -249,7 +293,7 @@ function normalizeSegments(timeline = [], payload = {}) {
   return rows.map((item, index) => {
     const start = Number(item.start ?? item.start_time ?? item.startTime ?? 0);
     const end = Number(item.end ?? item.end_time ?? item.endTime ?? start + 1);
-    const text = String(item.text || item.sentence || item.subtitle || "").trim();
+    const text = String(item.text || item.sentence || item.subtitle || "");
     return {
       id: String(item.id || `mpt-segment-${index + 1}`),
       start,
@@ -285,19 +329,21 @@ function renderHandoff() {
 
 function renderTimeline() {
   if (!els.timeline) return;
-  if (!state.segments.length) {
+  const displaySegments = state.segments;
+  if (!displaySegments.length) {
     els.timelineSummary.textContent = "等待 TTS";
     els.timeline.innerHTML = '<p class="money-printer-empty">尚未接收已确认字幕时间轴。</p>';
+    if (els.confirmTimeline) els.confirmTimeline.disabled = true;
     return;
   }
   const source = els.source?.value || "pexels";
-  els.timelineSummary.textContent = `共 ${state.segments.length} 段字幕 / ${matchedMaterialCount()} 段素材 / 转场${transitionLabel(els.transition.value)}`;
-  els.timeline.innerHTML = state.segments.map((segment, index) => `
+  els.timelineSummary.textContent = `共 ${state.segments.length} 段 TTS 字幕 / ${matchedMaterialCount()} 段素材 / 转场${transitionLabel(els.transition.value)}`;
+  els.timeline.innerHTML = displaySegments.map((segment, index) => `
     <article class="money-printer-timeline-row" data-segment-index="${index}">
       <span class="money-printer-segment-index">${String(index + 1).padStart(2, "0")}</span>
       <span>${formatTime(segment.start)}</span>
       <span>${formatTime(segment.end)}</span>
-      <textarea data-field="text" rows="2">${escapeHtml(segment.text)}</textarea>
+      <textarea data-field="text" rows="2" data-no-draft-persist readonly aria-readonly="true" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-1p-ignore="true">${escapeHtml(segment.text)}</textarea>
       <strong>${escapeHtml(segment.searchTerm || automaticSearchTerm(segment.text, state.handoff))}</strong>
       <div class="money-printer-material-cell">
         ${segment.thumbnail ? `<img src="${escapeAttr(segment.thumbnail)}" alt="" loading="lazy" />` : ""}
@@ -306,6 +352,7 @@ function renderTimeline() {
       <span>${escapeHtml(segment.transition || transitionLabel(els.transition.value))}</span>
     </article>
   `).join("");
+  if (els.confirmTimeline) els.confirmTimeline.disabled = !state.timelineDraftSegments;
 }
 
 function renderTask() {
@@ -405,6 +452,7 @@ async function submitForPreview() {
     const payload = buildMptPayload();
     const data = await postJson("/api/money-printer/generate", payload);
     state.task = data.task;
+    saveActiveTaskId(state.task?.task_id);
     setProgress(10, `任务已创建：${state.task?.task_id || "-"}`);
     pollTask(state.task?.task_id);
     state.pollTimer = window.setInterval(() => pollTask(state.task?.task_id), POLL_INTERVAL_MS);
@@ -423,6 +471,7 @@ function buildMptPayload() {
     video_subject: els.subject.value.trim() || state.handoff.title || "MoneyPrinter 视频",
     video_script: state.handoff.text || state.handoff.final_text || state.segments.map((item) => item.text).join("\n"),
     video_terms: state.segments.map((item) => item.searchTerm).filter(Boolean),
+    video_term_texts: state.segments.map((item) => item.text).filter(Boolean),
     video_source: els.source.value,
     video_materials: els.localMaterials.value.trim(),
     video_aspect: els.aspect.value,
@@ -449,12 +498,14 @@ async function pollTask(taskId) {
     renderTask();
     if (Number(state.task.state) === 1) {
       stopPolling();
+      clearActiveTaskId();
       applyTaskMaterials(state.task);
       bindPreviewVideo(state.task);
       setProgress(100, "素材匹配完成，可以预览");
       setStatus("预览已就绪", "当前预览使用 MoneyPrinterTurbo 混剪素材、已确认 TTS 音频和动态大字字幕模板。");
     } else if (Number(state.task.state) === -1) {
       stopPolling();
+      clearActiveTaskId();
       setStatus("MoneyPrinterTurbo 任务失败", state.task.error || "全部素材 API 均失败，请检查后台配置。", true);
     }
   } catch (error) {

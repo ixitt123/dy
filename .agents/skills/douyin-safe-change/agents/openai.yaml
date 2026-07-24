@@ -1,0 +1,4 @@
+interface:
+  display_name: "抖音项目安全改动"
+  short_description: "先复现问题、分析影响、补回归测试，再进行小步修改和完整验证"
+  default_prompt: "Use $douyin-safe-change to make a safe, regression-tested change in this repository."

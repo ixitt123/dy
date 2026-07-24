@@ -1,3 +1,5 @@
+import { resolveFolderNameSelection } from "./desktop-folder-selection.js";
+
 const state = {
   config: null,
   plan: null,
@@ -15,6 +17,10 @@ const state = {
   referenceCloneDraft: null,
   referenceStylePresets: [],
   pendingUploads: new Map(),
+  localMaterialPool: [],
+  materialBindings: new Map(),
+  desktopFolderPath: "",
+  desktopFolderName: "",
   confirmingUploads: new Set(),
   generatingImages: new Set(),
   imageBatchGenerating: false,
@@ -26,6 +32,7 @@ const state = {
   previewFrame: 0,
   renderedVideo: null,
   backgroundAudio: null,
+  timelineDraftRows: null,
   projectId: localStorage.getItem("ian-xiaohei-project-id") || `xiaohei-${Date.now()}`,
 };
 const embeddedMode = new URLSearchParams(window.location.search).get("embedded") === "1";
@@ -35,6 +42,9 @@ const PROMPT_PLAN_CACHE_PREFIX = "ian-xiaohei-prompt-plan";
 const PROMPT_PLAN_LATEST_KEY = `${PROMPT_PLAN_CACHE_PREFIX}:latest`;
 const PURPOSE_STORAGE_KEY = "ian-xiaohei-selected-purpose";
 const COMPOSE_SETTINGS_KEY = "ian-xiaohei-compose-settings-v1";
+const FOLDER_NAMES_API = "/api/folder-names";
+const FOLDER_CREATE_API = "/api/desktop-folder-named";
+let folderNames = [];
 
 function startStandalonePageSession() {
   if (embeddedMode) return;
@@ -261,6 +271,12 @@ const els = {
   generateImages: document.querySelector("#generateImages"),
   planPrompts: document.querySelector("#planPrompts"),
   copyPrompts: document.querySelector("#copyPrompts"),
+  copyImageConstraint1: document.querySelector("#copyImageConstraint1"),
+  copyImageConstraint2: document.querySelector("#copyImageConstraint2"),
+  createDesktopFolder: document.querySelector("#createDesktopFolder"),
+  folderNameSelect: document.querySelector("#folderNameSelect"),
+  editFolderName: document.querySelector("#editFolderName"),
+  deleteFolderName: document.querySelector("#deleteFolderName"),
   openOutputDir: document.querySelector("#openOutputDir"),
   refreshOutputs: document.querySelector("#refreshOutputs"),
   statusLabel: document.querySelector("#statusLabel"),
@@ -287,7 +303,8 @@ const els = {
   videoTransitionMode: document.querySelector("#videoTransitionMode"),
   videoRenderStatus: document.querySelector("#videoRenderStatus"),
   downloadXiaoheiVideo: document.querySelector("#downloadXiaoheiVideo"),
-  timelineRefresh: document.querySelector("#xiaoheiTimelineRefresh"),
+  timelineConfirm: document.querySelector("#xiaoheiConfirmTimeline"),
+  timelineDraftStatus: document.querySelector("#xiaoheiTimelineDraftStatus"),
   timelineRuleStatus: document.querySelector("#xiaoheiTimelineRuleStatus"),
   subtitleTimeline: document.querySelector("#xiaoheiSubtitleTimeline"),
   timelineStatus: document.querySelector("#xiaoheiTimelineStatus"),
@@ -306,12 +323,13 @@ async function init() {
   hydratePurposeSelect();
   renderPurposeTemplates();
   bindEvents();
-  restoreComposeSettings();
+  syncImageConstraintButtons();
   window.addEventListener("message", handleParentHandoff);
   window.addEventListener("focus", () => {
     if (state.localImagePickerActive) setTimeout(() => { state.localImagePickerActive = false; }, 250);
   });
-  await Promise.all([loadConfig(), loadAudioJobs()]);
+  await Promise.all([loadConfig(), loadAudioJobs(), loadFolderNames()]);
+  restoreComposeSettings();
   const restored = restorePromptPlanCache();
   if (restored) {
     setStatus("已恢复提示词计划", `刷新前生成的 ${state.plan?.shots?.length || 0} 个分镜提示词已恢复。`, 100, false, "本地缓存");
@@ -324,7 +342,8 @@ async function handleParentHandoff(event) {
   if (event.origin !== window.location.origin || event.data?.type !== "video-factory:xiaohei-handoff") return;
   const handoff = event.data.handoff || {};
   const job = handoff.ttsJob || {};
-  if (!job.id || job.status !== "completed" || !isTtsAlignmentConfirmed(job)) {
+  clearTtsTimelineState();
+  if (!job.id || job.status !== "completed" || !isTtsAlignmentConfirmed(job) || !timelineRows(job).length) {
     setStatus("缺少已确认音频", "请先在 TTS 语音页检查并确认最终文案和字幕时间轴。", 0, true);
     return;
   }
@@ -342,6 +361,11 @@ async function handleParentHandoff(event) {
     });
     state.selectedTtsJob = data.job;
     state.ttsJob = data.job;
+    if (!timelineRows(data.job).length) {
+      clearTtsTimelineState();
+      setStatus("TTS 参数无效", "已清空小黑字幕时间轴，请从 TTS 页面重新发送已确认参数。", 0, true);
+      return;
+    }
     syncTtsSource(data.job, { title: handoffTitle, text: handoffText });
     resetVisualWorkflow();
     await loadAudioJobs();
@@ -422,7 +446,19 @@ function normalizeTimelineRow(item = {}, index = 0) {
 }
 
 function timelineRows(job = state.selectedTtsJob || state.ttsJob) {
-  return timelineSource(job).map((item, index) => normalizeTimelineRow(item, index));
+  return timelineSource(job)
+    .map((item, index) => normalizeTimelineRow(item, index))
+    .filter((row) => row.text.trim() && row.end > row.start);
+}
+
+function clearTtsTimelineState() {
+  state.ttsJob = null;
+  state.selectedTtsJob = null;
+  state.timelineDraftRows = null;
+  if (els.copyInput) els.copyInput.value = "";
+  if (els.timelineConfirm) els.timelineConfirm.disabled = true;
+  if (els.timelineDraftStatus) els.timelineDraftStatus.hidden = true;
+  syncTtsSource(null);
 }
 
 function formatTimelineValue(value) {
@@ -438,6 +474,8 @@ function renderSubtitleTimeline(job = state.selectedTtsJob || state.ttsJob) {
     els.subtitleTimeline.textContent = "等待 TTS 语音页发送已确认的字幕时间轴。";
     if (els.timelineStatus) els.timelineStatus.textContent = "小黑页面只接收 TTS 语音页发送的最终文案、音频和同步时间戳。";
     if (els.timelineRuleStatus) els.timelineRuleStatus.hidden = true;
+    if (els.timelineConfirm) els.timelineConfirm.disabled = true;
+    if (els.timelineDraftStatus) els.timelineDraftStatus.hidden = true;
     return;
   }
   if (!rows.length) {
@@ -453,7 +491,7 @@ function renderSubtitleTimeline(job = state.selectedTtsJob || state.ttsJob) {
       <span class="xiaohei-row-index">${row.index + 1}</span>
       <input data-field="start" inputmode="decimal" value="${escapeAttr(formatTimelineValue(row.start))}" readonly aria-readonly="true" />
       <input data-field="end" inputmode="decimal" value="${escapeAttr(formatTimelineValue(row.end))}" readonly aria-readonly="true" />
-      <textarea data-field="text" rows="2">${escapeHtml(row.text)}</textarea>
+      <textarea data-field="text" rows="2" data-no-draft-persist readonly aria-readonly="true" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-1p-ignore="true">${escapeHtml(row.text)}</textarea>
       <input data-field="keywords" value="${escapeAttr(row.keywords)}" />
       <input data-field="breakAt" placeholder="如 6,12" value="${escapeAttr(row.breakAt)}" />
       <input data-field="position" placeholder="如 5,88" value="${escapeAttr(row.position)}" />
@@ -461,7 +499,10 @@ function renderSubtitleTimeline(job = state.selectedTtsJob || state.ttsJob) {
     </div>
   `).join("");
   const duration = Math.max(0, ...rows.map((row) => Number(row.end || 0)));
-  if (els.timelineStatus) els.timelineStatus.textContent = `共 ${rows.length} 段字幕 / ${duration.toFixed(1)} 秒，修改字幕文字后会同步小黑文案和分镜输入。`;
+  if (els.timelineStatus) els.timelineStatus.textContent = `共 ${rows.length} 段 TTS 字幕 / ${duration.toFixed(1)} 秒；字幕文字只读，可调整重点词和视觉参数。`;
+  if (els.timelineConfirm) els.timelineConfirm.disabled = true;
+  if (els.timelineDraftStatus) els.timelineDraftStatus.hidden = true;
+  state.timelineDraftRows = null;
   updateTimelineRuleStatus(rows);
 }
 
@@ -480,12 +521,13 @@ function updateTimelineRuleStatus(rows = timelineRows()) {
 }
 
 function collectSubtitleTimelineRows() {
+  const sourceRows = timelineRows();
   return [...(els.subtitleTimeline?.querySelectorAll(".xiaohei-timeline-row") || [])].map((row, index) => {
     const value = (field) => row.querySelector(`[data-field="${field}"]`)?.value || "";
     return normalizeTimelineRow({
       start: value("start"),
       end: value("end"),
-      text: value("text"),
+      text: sourceRows[index]?.text || "",
       keywords: value("keywords"),
       breakAt: value("breakAt"),
       position: value("position"),
@@ -525,70 +567,25 @@ function applySubtitleTimelineRows(rows = []) {
 
 function handleSubtitleTimelineInput(event) {
   if (!event.target.closest("[data-field]")) return;
-  const rows = collectSubtitleTimelineRows();
-  applySubtitleTimelineRows(rows);
-  if (els.timelineStatus) els.timelineStatus.textContent = `已同步 ${rows.length} 段字幕到小黑当前文案。`;
+  if (event.target.dataset.field === "text") return;
+  state.timelineDraftRows = collectSubtitleTimelineRows();
+  if (els.timelineConfirm) els.timelineConfirm.disabled = false;
+  if (els.timelineDraftStatus) els.timelineDraftStatus.hidden = false;
+  if (els.timelineStatus) els.timelineStatus.textContent = "有未确定修改";
 }
 
-async function persistSharedSubtitleText() {
+function confirmSubtitleTimelineChanges() {
   const job = state.selectedTtsJob || state.ttsJob;
-  const rows = collectSubtitleTimelineRows();
+  const rows = state.timelineDraftRows || [];
   if (!job?.id || !rows.length) return;
-  if (els.timelineStatus) els.timelineStatus.textContent = "正在自动保存字幕...";
-  try {
-    const timeline = rows.map((row) => ({
-      start: row.start,
-      end: row.end,
-      text: row.text.trim(),
-    }));
-    const finalText = timeline.map((row) => row.text).join("");
-    const data = await fetchJson("/api/tts/alignment/sync", {
-      method: "POST",
-      body: JSON.stringify({
-        id: job.id,
-        title: els.titleInput?.value || job.title || "",
-        text: finalText,
-        sentenceTimeline: timeline,
-        subtitleTimeline: timeline,
-        duration: Number(job.audio_duration || job.duration || 0),
-        source: "xiaohei-video",
-        confirmationMode: "shared_production_timeline",
-      }),
-    });
-    state.selectedTtsJob = data.job;
-    state.ttsJob = data.job;
-    syncTtsSource(data.job, { title: els.titleInput?.value || "", text: data.job?.final_text || finalText });
-    if (embeddedMode) {
-      window.parent.postMessage({
-        type: "video-factory:xiaohei-shared-timeline-updated",
-        payload: data.job,
-      }, window.location.origin);
-    }
-    if (els.timelineStatus) els.timelineStatus.textContent = `已自动保存 ${timeline.length} 段字幕，原时间戳保持不变。`;
-  } catch (error) {
-    if (els.timelineStatus) els.timelineStatus.textContent = `自动保存失败：${error.payload?.message || error.message || error}`;
-  }
-}
-
-async function refreshSubtitleTimelineFromTts() {
-  const job = state.selectedTtsJob || state.ttsJob;
-  if (!job?.id) {
-    setStatus("缺少 TTS 资产", "请先从 TTS 语音页发送已确认的文案、音频和字幕时间轴。", 0, true);
-    setButtonFeedback(els.timelineRefresh, "error", "缺少 TTS");
+  if (rows.some((row) => !row.text.trim())) {
+    if (els.timelineStatus) els.timelineStatus.textContent = "字幕文字不能为空";
     return;
   }
-  setButtonFeedback(els.timelineRefresh, "loading", "同步中");
-  try {
-    const data = await fetchJson(`/api/ian-xiaohei/tts-job?id=${encodeURIComponent(job.id)}`);
-    state.selectedTtsJob = data.job;
-    state.ttsJob = data.job;
-    syncTtsSource(data.job, { title: els.titleInput?.value || "", text: confirmedTtsText(data.job) });
-    resetVisualWorkflow("已同步最新字幕时间轴，请重新分析分镜配图。");
-    setButtonFeedback(els.timelineRefresh, "success", "已同步");
-  } catch (error) {
-    setStatus("同步时间轴失败", error.payload?.message || error.message || String(error), 0, true);
-    setButtonFeedback(els.timelineRefresh, "error", "同步失败");
-  }
+  applySubtitleTimelineRows(rows);
+  state.timelineDraftRows = null;
+  renderSubtitleTimeline(job);
+  if (els.timelineStatus) els.timelineStatus.textContent = `已确定 ${rows.length} 段字幕修改；仅应用于小黑生产线。`;
 }
 
 function bindEvents() {
@@ -597,11 +594,8 @@ function bindEvents() {
   els.testMinimaxSettings.addEventListener("click", () => testMinimaxSettings());
   els.deleteMinimaxApi.addEventListener("click", () => deleteMinimaxApi());
   els.generateImages.addEventListener("click", () => generateCompleteWorkflow());
-  els.timelineRefresh?.addEventListener("click", () => refreshSubtitleTimelineFromTts());
   els.subtitleTimeline?.addEventListener("input", handleSubtitleTimelineInput);
-  els.subtitleTimeline?.addEventListener("focusout", (event) => {
-    if (event.target.matches('[data-field="text"]')) persistSharedSubtitleText();
-  });
+  els.timelineConfirm?.addEventListener("click", confirmSubtitleTimelineChanges);
   els.generateAudio.addEventListener("click", () => generateAudioOnly());
   els.confirmAudio.addEventListener("click", () => confirmCurrentAudio());
   els.generateMusic.addEventListener("click", () => generateMusicMaterial());
@@ -634,6 +628,15 @@ function bindEvents() {
     resetVisualWorkflow("视觉模板已改变，请重新生成分镜计划。");
   });
   els.copyPrompts.addEventListener("click", () => copyAllPrompts());
+  els.copyImageConstraint1.addEventListener("click", () => copyImageConstraint(1));
+  els.copyImageConstraint2.addEventListener("click", () => copyImageConstraint(2));
+  els.createDesktopFolder.addEventListener("click", () => createDesktopFolder());
+  els.folderNameSelect.addEventListener("change", () => {
+    onFolderNameSelectChange();
+    syncFolderNameButtons();
+  });
+  els.editFolderName.addEventListener("click", () => editFolderName());
+  els.deleteFolderName.addEventListener("click", () => deleteFolderName());
   els.openOutputDir.addEventListener("click", () => openOutputDir());
   els.refreshOutputs.addEventListener("click", () => loadOutputs());
   els.audioJobs.addEventListener("click", handleAudioJobAction);
@@ -1326,6 +1329,8 @@ async function createPlan() {
     state.previewImageCache.clear();
     state.renderedVideo = null;
     state.pendingUploads.clear();
+    state.localMaterialPool = [];
+    state.materialBindings.clear();
     renderPlan(data);
     renderImages([], []);
     savePromptPlanCache(data, payload);
@@ -1527,10 +1532,7 @@ async function uploadAndValidateAudio(payload) {
 async function loadAudioJobs() {
   const data = await fetchJson(`/api/ian-xiaohei/audio-jobs?project_id=${encodeURIComponent(state.projectId)}`);
   state.audioJobs = data.jobs || [];
-  state.selectedTtsJob = data.selected || null;
-  if (!state.ttsJob && state.selectedTtsJob) state.ttsJob = state.selectedTtsJob;
-  if (state.selectedTtsJob) syncTtsSource(state.selectedTtsJob, { title: els.titleInput?.value || "" });
-  else if (!state.ttsJob) syncTtsSource(null);
+  if (!state.selectedTtsJob && !state.ttsJob) syncTtsSource(null);
   renderAudioJobs();
 }
 
@@ -1643,6 +1645,16 @@ async function handlePromptAction(event) {
   if (action === "generate-all-images") {
     if (!ensurePromptPlanAvailable()) return;
     await generateAllMissingShotImages(button);
+    return;
+  }
+  if (action === "add-folder-images") {
+    if (!ensurePromptPlanAvailable()) return;
+    await addLatestFolderImages(button);
+    return;
+  }
+  if (action === "bind-folder-images") {
+    if (!ensurePromptPlanAvailable()) return;
+    await bindConfirmedFolderImages(button);
     return;
   }
   if (action === "choose-image") {
@@ -1830,23 +1842,28 @@ async function generateAllMissingShotImages(button) {
 
 async function uploadAllPendingShotImages(button) {
   const indexes = pendingUploadIndexes(state.plan);
-  if (!indexes.length) {
+  const pendingMaterials = state.localMaterialPool.filter((item) => !item.confirmed);
+  if (!indexes.length && !pendingMaterials.length) {
     setButtonFeedback(button, "success", "全部已确认");
     setStatus("全部图片已确认", "当前没有待确认的图片。", 100);
     return;
   }
-  setButtonFeedback(button, "loading", `确认中 0/${indexes.length}`);
-  let successCount = 0;
+  const total = indexes.length + pendingMaterials.length;
+  setButtonFeedback(button, "loading", `确认中 0/${total}`);
+  for (const item of pendingMaterials) item.confirmed = true;
+  let successCount = pendingMaterials.length;
   const failed = [];
   for (const [position, index] of indexes.entries()) {
-    setButtonFeedback(button, "loading", `确认中 ${position + 1}/${indexes.length}`);
-    setStatus("正在批量确认图片", `正在确认分镜 #${index}（${position + 1}/${indexes.length}）。`, Math.round(((position + 1) / indexes.length) * 90), false, "本地图片");
+    const current = pendingMaterials.length + position + 1;
+    setButtonFeedback(button, "loading", `确认中 ${current}/${total}`);
+    setStatus("正在批量确认图片", `正在确认分镜 #${index}（${current}/${total}）。`, Math.round((current / total) * 90), false, "本地图片");
     const ok = await uploadShotImage(index, { render: false, silent: true });
     if (ok) successCount += 1;
     else failed.push(index);
   }
   renderPlan(state.plan);
   renderImages(state.images, []);
+  savePromptPlanCache(state.plan);
   const latestButton = els.promptResults.querySelector('[data-prompt-action="confirm-all-images"]') || button;
   if (failed.length) {
     setStatus("部分图片确认失败", `已确认 ${successCount} 张，失败：#${failed.join("、#")}。`, 100, true);
@@ -1855,6 +1872,143 @@ async function uploadAllPendingShotImages(button) {
   }
   setStatus("全部图片已确认", `已确认 ${successCount} 张本地图片，后续生成视频会使用这些图片。`, 100, false, "完成");
   setButtonFeedback(latestButton, "success", "全部已确认", 2400);
+}
+
+async function addLatestFolderImages(button) {
+  const suffix = resolveFolderNameSelection({
+    names: folderNames,
+    currentValue: els.folderNameSelect?.value,
+    cachedValue: state.desktopFolderName,
+  });
+  if (!suffix) {
+    setStatus("请先选择文件夹名称", "存在多个名称时，请先选择保存图片的文件夹名称。", 0, true);
+    setButtonFeedback(button, "error", "未选文件夹");
+    return;
+  }
+  state.desktopFolderName = suffix;
+  if (els.folderNameSelect) els.folderNameSelect.value = suffix;
+  syncFolderNameButtons();
+  setButtonFeedback(button, "loading", "扫描中");
+  try {
+    const data = await fetchJson("/api/desktop-folder-latest-images", {
+      method: "POST",
+      body: JSON.stringify({
+        suffix,
+        folderPath: state.desktopFolderPath,
+      }),
+    });
+    const existing = new Map(state.localMaterialPool.map((item) => [String(item.path), item]));
+    const retainedBound = state.localMaterialPool.filter((item) => item.boundShotIndex);
+    const latest = (data.images || []).map((item) => ({
+      ...item,
+      confirmed: Boolean(existing.get(String(item.path))?.confirmed),
+      boundShotIndex: Number(existing.get(String(item.path))?.boundShotIndex || 0),
+    }));
+    const latestPaths = new Set(latest.map((item) => String(item.path)));
+    state.localMaterialPool = [
+      ...retainedBound.filter((item) => !latestPaths.has(String(item.path))),
+      ...latest,
+    ];
+    state.desktopFolderPath = data.folderPath || state.desktopFolderPath;
+    renderPlan(state.plan);
+    savePromptPlanCache(state.plan);
+    if (!latest.length) {
+      setStatus("没有找到可确定的最新图片", "只识别 10 秒内、文件名末尾从 (1) 开始连续编号的 PNG、JPG、WEBP 图片。", 0, true);
+      setButtonFeedback(button, "error", "没有图片");
+      return;
+    }
+    setStatus("图片素材已加入", `已从最新一轮加入 ${latest.length} 张图片，请点击“全部确认使用”。`, 100, false, "等待确认");
+    setButtonFeedback(button, "success", `已添加 ${latest.length} 张`);
+  } catch (error) {
+    setStatus("添加图片素材失败", error.payload?.message || error.message || String(error), 0, true);
+    setButtonFeedback(button, "error", "添加失败");
+  }
+}
+
+function shotImageMaterialCount(shot = {}) {
+  const explicit = Number(shot.imageCount || shot.image_count || shot.materialCount || 0);
+  if (Number.isInteger(explicit) && explicit >= 1 && explicit <= 3) return explicit;
+  const text = [
+    shot.materialInstruction,
+    shot.prompt,
+    shot.topic,
+    shot.sourceText,
+  ].filter(Boolean).join("\n");
+  const match = /图\s*([1-3])(?!\d)/u.exec(text);
+  return match ? Number(match[1]) : 0;
+}
+
+async function bindConfirmedFolderImages(button) {
+  const available = state.localMaterialPool
+    .filter((item) => item.confirmed && !item.boundShotIndex)
+    .sort((left, right) => Number(left.sequence) - Number(right.sequence));
+  if (!available.length) {
+    setStatus("没有可绑定素材", "请先一键添加图片素材，再点击“全部确认使用”。", 0, true);
+    setButtonFeedback(button, "error", "没有已确认素材");
+    return;
+  }
+  const shots = [...(state.plan?.shots || [])].sort((left, right) => Number(left.index) - Number(right.index));
+  let boundCount = 0;
+  let skippedCount = 0;
+  let cursor = 0;
+  setButtonFeedback(button, "loading", "绑定中");
+  for (const shot of shots) {
+    const shotIndex = Number(shot.index);
+    if (state.images.some((image) => Number(image.index) === shotIndex && image.assetId)) continue;
+    const required = shotImageMaterialCount(shot);
+    if (!required) {
+      skippedCount += 1;
+      continue;
+    }
+    if (cursor + required > available.length) {
+      skippedCount += 1;
+      break;
+    }
+    const selected = available.slice(cursor, cursor + required);
+    try {
+      const data = await fetchJson("/api/ian-xiaohei/bind-local-materials", {
+        method: "POST",
+        body: JSON.stringify({
+          batchId: state.plan.batchId,
+          plan: state.plan,
+          shot,
+          aspectRatio: state.plan.aspectRatio,
+          folder_path: state.desktopFolderPath,
+          material_paths: selected.map((item) => item.path),
+        }),
+      });
+      state.images = [
+        ...state.images.filter((image) => Number(image.index) !== shotIndex),
+        data.image,
+      ].sort((left, right) => Number(left.index) - Number(right.index));
+      state.materialBindings.set(shotIndex, data.image.materials || []);
+      for (const [materialIndex, item] of selected.entries()) {
+        item.boundShotIndex = shotIndex;
+        item.imageUrl = data.image.materials?.[materialIndex]?.imageUrl || item.imageUrl;
+      }
+      cursor += required;
+      boundCount += required;
+    } catch (error) {
+      setStatus("绑定图片素材失败", `分镜 #${shotIndex}：${error.payload?.message || error.message || String(error)}`, 100, true);
+      setButtonFeedback(button, "error", "绑定失败");
+      renderPlan(state.plan);
+      savePromptPlanCache(state.plan);
+      return;
+    }
+  }
+  state.renderedVideo = null;
+  renderPlan(state.plan);
+  renderImages(state.images, []);
+  savePromptPlanCache(state.plan);
+  const unusedCount = available.length - cursor;
+  setStatus(
+    "图片素材绑定完成",
+    `已绑定 ${boundCount} 张；已有绑定已跳过；${skippedCount} 条未识别“图 n”或素材不足，保持空白；${unusedCount} 张多余素材保留未绑定。`,
+    100,
+    false,
+    "完成",
+  );
+  setButtonFeedback(button, "success", `已绑定 ${boundCount} 张`);
 }
 
 async function loadOutputs() {
@@ -1939,6 +2093,17 @@ function savePromptPlanCache(plan, payload = formPayload()) {
       signature: promptPlanCacheSignature(payload),
       plan,
       boundImages: cacheableBoundImages(state.images),
+      localMaterialPool: state.localMaterialPool.map((item) => ({
+        name: String(item.name || ""),
+        path: String(item.path || ""),
+        imageUrl: String(item.imageUrl || ""),
+        sequence: Number(item.sequence || 0),
+        capturedAt: Number(item.capturedAt || 0),
+        confirmed: Boolean(item.confirmed),
+        boundShotIndex: Number(item.boundShotIndex || 0),
+      })),
+      desktopFolderPath: state.desktopFolderPath,
+      desktopFolderName: state.desktopFolderName,
     }));
     localStorage.setItem(PROMPT_PLAN_LATEST_KEY, key);
     removeOlderPromptPlanCaches(key);
@@ -1972,6 +2137,15 @@ function cacheableBoundImages(images = []) {
       source: String(image.source || "local_upload"),
       aspectRatio: String(image.aspectRatio || ""),
       confirmed: true,
+      materials: Array.isArray(image.materials)
+        ? image.materials.map((material) => ({
+          assetId: String(material.assetId || ""),
+          name: String(material.name || ""),
+          imagePath: String(material.imagePath || ""),
+          imageUrl: String(material.imageUrl || ""),
+          sequence: Number(material.sequence || 0),
+        }))
+        : [],
     }))
     .sort((left, right) => left.index - right.index);
 }
@@ -2005,6 +2179,15 @@ function restorePromptPlanCache() {
     if (els.titleInput && !els.titleInput.value.trim()) els.titleInput.value = cached.plan.title || "";
     if (els.copyInput && !els.copyInput.value.trim()) els.copyInput.value = cached.plan.sourceText || "";
     state.images = cacheableBoundImages(cached.boundImages || []);
+    state.localMaterialPool = Array.isArray(cached.localMaterialPool) ? cached.localMaterialPool : [];
+    state.desktopFolderPath = String(cached.desktopFolderPath || "");
+    state.desktopFolderName = String(cached.desktopFolderName || "");
+    renderFolderNameSelect();
+    state.materialBindings = new Map(
+      state.images
+        .filter((image) => Array.isArray(image.materials) && image.materials.length)
+        .map((image) => [Number(image.index), image.materials]),
+    );
     state.pendingUploads.clear();
     renderPlan(state.plan);
     renderImages(state.images, []);
@@ -2038,24 +2221,41 @@ function promptAspectRatio(plan = state.plan) {
 
 function shotPromptBlock(shot = {}, plan = state.plan) {
   const ratio = promptAspectRatio(plan);
+  const skillName = shot.skillName || plan?.skillName || shot.skillId || "";
   return [
-    `#${shot.index} ${shot.topic || ""}`,
-    `锁定 Skill：${shot.skillName || plan?.skillName || shot.skillId || ""}`,
+    "单张图片素材生成任务",
+    "",
+    "复制下面整段到生图工具：",
+    "",
+    "请直接生成一张图片素材。",
+    "不要解释，不要分析，不要复述提示词，不要给优化建议，直接出图。",
+    "只生成一张图，不要拼图，不要多宫格，不要组图，不要缩略图合集。",
+    `本次只生成当前这一张独立的 ${ratio} 图片素材。`,
+    "不要把多个画面、多个编号、多个镜头合并到同一张画布。",
+    "图片里不要出现数字编号角标，不要出现分格边框。",
+    "",
+    "项目：小黑视频风格生成",
+    `锁定 Skill：${skillName}`,
+    `本镜头任务：${shot.topic || ""}`,
+    `本镜头角色：${shot.role || ""}`,
+    `结构类型（只作为理解，不写进画面）：${shot.structureType || ""}`,
+    `核心意思：${shot.coreIdea || ""}`,
+    `主体动作：${shot.xiaoheiAction || ""}`,
+    `视觉隐喻：${shot.visualMetaphor || ""}`,
+    `构图：${shot.composition || ""}`,
     `对应原文：${shot.sourceText || ""}`,
+    "",
+    "画面文字规则：保留当前 Skill 原本允许的少量中文手写标注；不要把整段原文、标题、编号或说明文字写进画面。",
+    "单张约束：只输出一张高质量图片；禁止 Collage（拼贴图）、Contact Sheet（缩略图合集）、九宫格、拼图、组图、分屏故事板。",
+    "",
     String(shot.prompt || "").trim(),
-    [
-      `本编号 #${shot.index} 是一个独立任务(Job)。`,
-      `只生成编号 #${shot.index} 这一张独立的 ${ratio} 图片素材。`,
-      "禁止将多个编号合并到同一张画布。",
-      "禁止自动创建 Collage（拼贴图）。",
-      "禁止自动创建 Contact Sheet（缩略图合集）。",
-      "禁止九宫格、缩略图合集、拼图、组图。",
-    ].join("\n"),
+    "",
+    "输出要求：单张高质量图片素材，主体明确，风格统一，符合锁定 Skill；画面可以直接用于短视频剪辑。",
   ].filter(Boolean).join("\n");
 }
 
 function promptPlanText(shots = [], plan = state.plan) {
-  return shots.map((shot) => shotPromptBlock(shot, plan)).join("\n\n--- NEXT INDEPENDENT JOB ---\n\n");
+  return shots.map((shot) => shotPromptBlock(shot, plan)).join("\n\n--- 下一张图片：必须单独复制这一段，不要和上一段一起发送 ---\n\n");
 }
 
 function pendingUploadIndexes(plan = state.plan) {
@@ -2068,12 +2268,20 @@ function pendingUploadIndexes(plan = state.plan) {
 
 function promptBatchActionMarkup(plan = state.plan) {
   const shots = plan?.shots || [];
-  const pendingCount = pendingUploadIndexes(plan).length;
+  const pendingCount = pendingUploadIndexes(plan).length
+    + state.localMaterialPool.filter((item) => !item.confirmed).length;
+  const confirmedFolderCount = state.localMaterialPool.filter((item) => item.confirmed && !item.boundShotIndex).length;
   const generationCount = missingImageGenerationIndexes(plan).length;
   const allConfirmed = Boolean(shots.length && pendingCount === 0 && !missingShotImages(plan, state.images).length);
-  const label = pendingCount > 0 ? `全部确认使用（${pendingCount}）` : allConfirmed ? "全部已确认" : "等待添加图片";
+  const label = pendingCount > 0
+    ? `全部确认使用（${pendingCount}）`
+    : confirmedFolderCount > 0
+      ? `已确认素材（${confirmedFolderCount}）`
+      : allConfirmed ? "全部已确认" : "等待添加图片";
   const hint = pendingCount > 0
     ? "会按编号逐张确认当前已添加的本地图片。"
+    : confirmedFolderCount > 0
+      ? "素材已确认，请点击“绑定图片素材”。"
     : allConfirmed
       ? "所有分镜图片都已绑定。"
       : "添加本地图片素材后可批量确认。";
@@ -2081,14 +2289,30 @@ function promptBatchActionMarkup(plan = state.plan) {
     <div class="prompt-batch-actions">
       <button type="button" data-prompt-action="confirm-all-images" ${pendingCount > 0 ? "" : "disabled"} class="${allConfirmed ? "is-confirmed action-feedback is-success" : ""}">${label}</button>
       <button type="button" class="primary" data-prompt-action="generate-all-images" ${generationCount > 0 && !state.imageBatchGenerating ? "" : "disabled"}>${state.imageBatchGenerating ? `正在生成 ${state.imageBatchProgress?.current || 0}/${state.imageBatchProgress?.total || generationCount}` : generationCount > 0 ? `一键生成图片（${generationCount}）` : "图片已齐全"}</button>
+      <button type="button" data-prompt-action="add-folder-images">一键添加图片素材</button>
+      <button type="button" data-prompt-action="bind-folder-images" ${confirmedFolderCount > 0 ? "" : "disabled"}>绑定图片素材${confirmedFolderCount ? `（${confirmedFolderCount}）` : ""}</button>
       <span>${hint}</span>
     </div>
+    ${state.localMaterialPool.length ? `
+      <div class="local-material-pool" aria-label="本地图片素材">
+        ${state.localMaterialPool.map((item) => `
+          <figure class="${item.confirmed ? "is-confirmed" : "is-pending"}">
+            <img src="${escapeAttr(item.imageUrl || "")}" alt="${escapeAttr(item.name || "图片素材")}" />
+            <figcaption>
+              <strong>(${Number(item.sequence) || "-"})</strong>
+              ${item.boundShotIndex ? `已绑定 #${Number(item.boundShotIndex)}` : item.confirmed ? "已确认" : "待确认"}
+            </figcaption>
+          </figure>
+        `).join("")}
+      </div>
+    ` : ""}
   `;
 }
 
 function renderPlan(plan) {
   const shots = plan?.shots || [];
   els.planCount.textContent = String(shots.length);
+  syncImageConstraintButtons();
   state.promptsText = promptPlanText(shots, plan);
   if (!shots.length) {
     els.promptResults.className = "prompt-list empty";
@@ -2129,8 +2353,15 @@ function renderPlan(plan) {
         </div>
         ${image ? `
           <div class="shot-image-state">
-            <strong>本分镜当前使用图片</strong>
-            <img style="${ratioStyle}" src="${escapeAttr(image.imageUrl || image.thumbnailUrl || "")}" alt="${escapeAttr(shot.topic)}" />
+            <strong>本分镜已绑定图片${image.materials?.length > 1 ? `（${image.materials.length} 张，视频只使用第 1 张）` : ""}</strong>
+            <div class="bound-material-grid">
+              ${(image.materials?.length ? image.materials : [image]).map((material, materialIndex) => `
+                <figure>
+                  <img style="${ratioStyle}" src="${escapeAttr(material.imageUrl || material.thumbnailUrl || image.imageUrl || image.thumbnailUrl || "")}" alt="${escapeAttr(shot.topic)}" />
+                  <figcaption>${materialIndex === 0 ? "第 1 张 · 视频使用" : `第 ${materialIndex + 1} 张 · 参考素材`}</figcaption>
+                </figure>
+              `).join("")}
+            </div>
             <span class="path">${escapeHtml(image.imagePath || "")}</span>
           </div>
         ` : ""}
@@ -2237,7 +2468,7 @@ async function copyAllPrompts() {
   }
   try {
     await navigator.clipboard.writeText(promptClipboardText());
-    setStatus("已复制提示词", "已按独立 Job 格式复制，生图时应逐个编号生成。", 100);
+    setStatus("已复制全部提示词", "已一次性复制当前全部生图提示词。", 100);
     setButtonFeedback(els.copyPrompts, "success", "已复制");
   } catch (error) {
     setStatus("复制失败", error.message || String(error), 0, true);
@@ -2256,16 +2487,257 @@ function promptClipboardText() {
     ? promptPlanText(shots.slice(0, imageCount), state.plan)
     : fallbackPromptText;
   return [
-    "批量任务协议：每一个编号就是一个独立任务(Job)。",
-    "禁止将多个编号合并到同一张画布。",
-    "禁止自动创建 Collage（拼贴图）。",
-    "禁止自动创建 Contact Sheet（缩略图合集）。",
-    "禁止九宫格、缩略图合集、拼图、组图。",
+    "小黑视频风格生成 - 单张 Scene 生图版",
+    "",
+    "重要：以下是多张图片提示词。每一段对应一张独立图片。",
+    "每段都已经写成直接生图命令：生图工具应该直接生成图片，不要先解释、不要总结、不要给建议。",
+    "统一要求：每个 Scene 只生成一张独立图片素材；禁止把多个 Scene 合并成一张图、组图、拼图、九宫格或缩略图合集。",
+    "文字规则：保留对应 Skill 允许的少量中文手写标注；不要把整段原文、标题、编号或说明文字画进图片。",
     "",
     promptText,
     "",
-    `请按编号逐张生成，共生成${imageCount}次；每次只生成1张独立的${ratio}图片，不要拼图，不要组图。`,
+    `共 ${imageCount} 个 Scene。`,
   ].join("\n");
+}
+
+function imageConstraintCounts() {
+  const shots = Array.isArray(state.plan?.shots) ? state.plan.shots : [];
+  const parsedCount = (String(state.promptsText || "").match(/^#\d+/gm) || []).length;
+  const total = shots.length > 0 ? shots.length : parsedCount;
+  return {
+    total,
+    first: total > 10 ? 10 : total,
+    rest: total > 10 ? total - 10 : 0,
+  };
+}
+
+function imageConstraintText(which, { first, rest }) {
+  const segment = which === 2 ? `后${rest}` : `${first}`;
+  return `请按提示词生成分镜图片素材，${segment}张，逐步一张一张地给我，一张都不要少，不要组图或者一张图。`;
+}
+
+async function copyImageConstraint(which) {
+  const button = which === 1 ? els.copyImageConstraint1 : els.copyImageConstraint2;
+  setButtonFeedback(button, "loading", "正在复制");
+  if (!state.promptsText) await createPlan();
+  const counts = imageConstraintCounts();
+  const available = which === 1 ? counts.first > 0 : counts.rest > 0;
+  if (!available) {
+    setButtonFeedback(button, "error", which === 1 ? "请先生成分镜" : "没有剩余分镜");
+    if (which === 1) setStatus("图片约束词1不可用", "请先点击“根据 TTS 时间轴分析分镜配图”生成分镜计划。", 0, true);
+    else setStatus("图片约束词2不可用", "当前分镜数量不超过 10 个，用图片约束词1即可。", 0, true);
+    return;
+  }
+  try {
+    await navigator.clipboard.writeText(imageConstraintText(which, counts));
+    const copiedCount = which === 1 ? counts.first : counts.rest;
+    const segment = which === 2 ? `后${copiedCount}` : `${copiedCount}`;
+    setStatus(
+      `已复制图片约束词${which}`,
+      `已复制：请按提示词生成分镜图片素材，${segment}张……（当前共 ${counts.total} 个分镜）`,
+      100,
+    );
+    setButtonFeedback(button, "success", "已复制");
+  } catch (error) {
+    setStatus("复制失败", error.message || String(error), 0, true);
+    setButtonFeedback(button, "error", "复制失败");
+  }
+}
+
+function syncImageConstraintButtons() {
+  if (!els.copyImageConstraint1 || !els.copyImageConstraint2) return;
+  const { total, first, rest } = imageConstraintCounts();
+  els.copyImageConstraint1.disabled = total <= 0;
+  els.copyImageConstraint1.title = total > 0
+    ? `复制“${first}张”约束词（当前共 ${total} 个分镜）`
+    : "请先生成分镜提示词";
+  els.copyImageConstraint2.disabled = rest <= 0;
+  els.copyImageConstraint2.title = rest > 0
+    ? `复制"后${rest}张"约束词（当前共 ${total} 个分镜）`
+    : "分镜不超过 10 个时无需约束词2";
+}
+
+/* ── 新建文件夹（桌面日期文件夹） ── */
+
+async function loadFolderNames() {
+  try {
+    const res = await fetch(FOLDER_NAMES_API);
+    if (res.ok) {
+      const data = await res.json();
+      folderNames = Array.isArray(data.names) ? data.names : [];
+    }
+  } catch { /* 首次使用或服务不可用时忽略 */ }
+  renderFolderNameSelect();
+}
+
+function renderFolderNameSelect() {
+  const sel = els.folderNameSelect;
+  if (!sel) return;
+  const selectedName = resolveFolderNameSelection({
+    names: folderNames,
+    currentValue: sel.value,
+    cachedValue: state.desktopFolderName,
+  });
+  sel.innerHTML = "";
+  const placeholder = document.createElement("option");
+  placeholder.value = "";
+  placeholder.textContent = folderNames.length ? "选择文件夹名称" : "请选择“＋ 添加名称…”";
+  placeholder.selected = !selectedName;
+  sel.appendChild(placeholder);
+  for (const name of folderNames) {
+    const opt = document.createElement("option");
+    opt.value = name;
+    opt.textContent = name;
+    sel.appendChild(opt);
+  }
+  const newOpt = document.createElement("option");
+  newOpt.value = "__new__";
+  newOpt.textContent = "＋ 添加名称…";
+  sel.appendChild(newOpt);
+  if (selectedName) {
+    sel.value = selectedName;
+    state.desktopFolderName = selectedName;
+  }
+  syncFolderNameButtons();
+}
+
+function onFolderNameSelectChange() {
+  const selected = String(els.folderNameSelect?.value || "");
+  if (selected === "__new__") {
+    state.desktopFolderName = "";
+    state.desktopFolderPath = "";
+    void promptNewFolderName();
+    return;
+  }
+  if (selected !== state.desktopFolderName) state.desktopFolderPath = "";
+  state.desktopFolderName = selected;
+  if (state.plan) savePromptPlanCache(state.plan);
+}
+
+async function promptNewFolderName(defaultValue = "") {
+  const input = prompt(
+    defaultValue
+      ? `编辑文件夹名称：`
+      : `输入新文件夹名称（将创建为 日期-名称）：`,
+    defaultValue,
+  );
+  if (input === null) {
+    els.folderNameSelect.value = defaultValue || "";
+    syncFolderNameButtons();
+    return;
+  }
+  const trimmed = input.trim();
+  if (!trimmed) {
+    els.folderNameSelect.value = defaultValue || "";
+    setStatus("名称不能为空", "请输入有效的文件夹名称。", 0, true);
+    syncFolderNameButtons();
+    return;
+  }
+
+  const nextNames = [...folderNames];
+  if (defaultValue !== "") {
+    const idx = nextNames.indexOf(defaultValue);
+    if (idx >= 0) nextNames[idx] = trimmed;
+    else nextNames.push(trimmed);
+  } else if (!nextNames.includes(trimmed)) {
+    nextNames.push(trimmed);
+  }
+
+  try {
+    const data = await saveFolderNames(nextNames);
+    folderNames = Array.isArray(data.names) ? data.names : nextNames;
+    state.desktopFolderName = trimmed;
+    state.desktopFolderPath = "";
+    renderFolderNameSelect();
+    els.folderNameSelect.value = trimmed;
+    syncFolderNameButtons();
+    setStatus(
+      defaultValue ? "名称已更新" : "名称已添加",
+      `已选择“${trimmed}”，现在可以点击“新建文件夹”。`,
+      100,
+    );
+  } catch (error) {
+    renderFolderNameSelect();
+    setStatus("保存名称失败", error.message || String(error), 0, true);
+  }
+}
+
+async function saveFolderNames(names) {
+  const response = await fetch(FOLDER_NAMES_API, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ names }),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok || data.ok === false) {
+    throw new Error(data.message || `保存失败 ${response.status}`);
+  }
+  return data;
+}
+
+function syncFolderNameButtons() {
+  const hasSelection = els.folderNameSelect && els.folderNameSelect.value && els.folderNameSelect.value !== "__new__";
+  if (els.createDesktopFolder) els.createDesktopFolder.disabled = !hasSelection;
+  if (els.editFolderName) els.editFolderName.disabled = !hasSelection;
+  if (els.deleteFolderName) els.deleteFolderName.disabled = !hasSelection;
+}
+
+function editFolderName() {
+  const current = els.folderNameSelect?.value;
+  if (!current || current === "__new__") return;
+  void promptNewFolderName(current);
+}
+
+async function deleteFolderName() {
+  const current = els.folderNameSelect?.value;
+  if (!current || current === "__new__") return;
+  if (!confirm(`确定删除名称"${current}"吗？\n（不会删除桌面上已创建的文件夹）`)) return;
+
+  try {
+    const nextNames = folderNames.filter((name) => name !== current);
+    const data = await saveFolderNames(nextNames);
+    folderNames = Array.isArray(data.names) ? data.names : nextNames;
+    state.desktopFolderName = "";
+    state.desktopFolderPath = "";
+    renderFolderNameSelect();
+    setStatus(`已删除名称`, `"${current}"已从列表移除。`, 100);
+  } catch (error) {
+    setStatus("删除名称失败", error.message || String(error), 0, true);
+  }
+}
+
+async function createDesktopFolder() {
+  const name = els.folderNameSelect?.value;
+  if (!name || name === "__new__") {
+    setStatus("请先选择或新建名称", "从下拉框选择一个文件夹名称，或点击「＋ 新建名称」。", 0, true);
+    return;
+  }
+
+  const btn = els.createDesktopFolder;
+  setButtonFeedback(btn, "loading", "创建中");
+
+  try {
+    const res = await fetch(FOLDER_CREATE_API, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ suffix: name }),
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ message: "请求失败" }));
+      throw new Error(err.message || `HTTP ${res.status}`);
+    }
+
+    const data = await res.json();
+    state.desktopFolderPath = String(data.folderPath || "");
+    state.desktopFolderName = name;
+    if (state.plan) savePromptPlanCache(state.plan);
+    setStatus(`文件夹已创建`, `${data.folderName} → ${data.folderPath}`, 100);
+    setButtonFeedback(btn, "success", "已创建");
+  } catch (error) {
+    setStatus("创建失败", error.message || String(error), 0, true);
+    setButtonFeedback(btn, "error", "失败");
+  }
 }
 
 function syncVideoPreview() {
@@ -2563,6 +3035,8 @@ function resetVisualWorkflow(message = "") {
   state.previewImageCache.clear();
   state.renderedVideo = null;
   state.pendingUploads.clear();
+  state.localMaterialPool = [];
+  state.materialBindings.clear();
   state.promptsText = "";
   renderPlan(null);
   renderImages([], []);
@@ -2599,7 +3073,6 @@ function setBusy(busy) {
     els.confirmAudio,
     els.planPrompts,
     els.copyPrompts,
-    els.timelineRefresh,
     els.previewVoice,
     els.setDefaultVoice,
     els.deleteVoice,
@@ -2628,6 +3101,8 @@ function composeSettings() {
     animationSpeed: Number(els.subtitleSpeed.value || 100) / 100,
     outline: els.subtitleOutline.checked,
     shadow: els.subtitleShadow.checked,
+    introPreset: els.introPreset?.value || "custom",
+    outroPreset: els.outroPreset?.value || "custom",
     intro: { enabled: els.introEnabled.checked, text: resolvedBookendText("intro") },
     outro: { enabled: els.outroEnabled.checked, text: resolvedBookendText("outro") },
   };
@@ -2656,21 +3131,31 @@ function handleComposeSettingsChange() {
 function restoreComposeSettings() {
   try {
     const saved = JSON.parse(localStorage.getItem(COMPOSE_SETTINGS_KEY) || "{}");
-    if (saved.fps) els.frameRate.value = String(saved.fps);
-    if (saved.imageFit) els.imageFit.value = saved.imageFit;
-    if (saved.ttsVolume !== undefined) els.ttsVolume.value = String(saved.ttsVolume);
-    if (saved.bgmVolume !== undefined) els.bgmVolume.value = String(saved.bgmVolume);
-    if (saved.showSubtitles !== undefined) els.showSubtitles.checked = Boolean(saved.showSubtitles);
-    if (saved.subtitleSize) els.subtitleSize.value = String(saved.subtitleSize);
-    if (saved.subtitleColor) els.subtitleColor.value = saved.subtitleColor;
-    if (saved.keywordColor) els.keywordColor.value = saved.keywordColor;
-    if (saved.maxLines) els.subtitleLines.value = String(saved.maxLines);
-    if (saved.animationSpeed) els.subtitleSpeed.value = String(Math.round(saved.animationSpeed * 100));
-    if (saved.outline !== undefined) els.subtitleOutline.checked = Boolean(saved.outline);
-    if (saved.shadow !== undefined) els.subtitleShadow.checked = Boolean(saved.shadow);
-    if (saved.intro) { els.introEnabled.checked = Boolean(saved.intro.enabled); els.introText.value = saved.intro.text || ""; }
-    if (saved.outro) { els.outroEnabled.checked = Boolean(saved.outro.enabled); els.outroText.value = saved.outro.text || ""; }
-  } catch {}
+    if (saved.fps && els.frameRate) els.frameRate.value = String(saved.fps);
+    if (saved.imageFit && els.imageFit) els.imageFit.value = saved.imageFit;
+    if (saved.ttsVolume !== undefined && els.ttsVolume) els.ttsVolume.value = String(saved.ttsVolume);
+    if (saved.bgmVolume !== undefined && els.bgmVolume) els.bgmVolume.value = String(saved.bgmVolume);
+    if (saved.showSubtitles !== undefined && els.showSubtitles) els.showSubtitles.checked = Boolean(saved.showSubtitles);
+    if (saved.subtitleSize && els.subtitleSize) els.subtitleSize.value = String(saved.subtitleSize);
+    if (saved.subtitleColor && els.subtitleColor) els.subtitleColor.value = saved.subtitleColor;
+    if (saved.keywordColor && els.keywordColor) els.keywordColor.value = saved.keywordColor;
+    if (saved.maxLines && els.subtitleLines) els.subtitleLines.value = String(saved.maxLines);
+    if (saved.animationSpeed && els.subtitleSpeed) els.subtitleSpeed.value = String(Math.round(saved.animationSpeed * 100));
+    if (saved.outline !== undefined && els.subtitleOutline) els.subtitleOutline.checked = Boolean(saved.outline);
+    if (saved.shadow !== undefined && els.subtitleShadow) els.subtitleShadow.checked = Boolean(saved.shadow);
+    if (saved.introPreset && els.introPreset) els.introPreset.value = saved.introPreset;
+    if (saved.outroPreset && els.outroPreset) els.outroPreset.value = saved.outroPreset;
+    if (saved.intro) {
+      if (els.introEnabled) els.introEnabled.checked = Boolean(saved.intro.enabled);
+      if (els.introText) els.introText.value = saved.intro.text || "";
+    }
+    if (saved.outro) {
+      if (els.outroEnabled) els.outroEnabled.checked = Boolean(saved.outro.enabled);
+      if (els.outroText) els.outroText.value = saved.outro.text || "";
+    }
+  } catch (e) {
+    console.warn("[xiaohei] restoreComposeSettings failed:", e);
+  }
   handleComposeSettingsChange();
 }
 

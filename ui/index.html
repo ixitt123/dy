@@ -215,6 +215,7 @@
             <button type="button" data-collector-tab="local">本地视频</button>
             <button type="button" data-collector-tab="copybank">文案库</button>
             <button type="button" data-collector-tab="batch">批量任务</button>
+            <button id="createDesktopDateFolder" type="button">新建文件夹</button>
           </div>
 
           <section class="collector-panel active" data-collector-panel="link">
@@ -766,6 +767,7 @@
                 <div class="moments-heading-actions">
                   <h2>图片素材区</h2>
                   <button id="copyMomentsPrompts" class="ghost small" type="button">复制提示词</button>
+                  <button id="copyMomentsImageInstruction" class="ghost small" type="button">图片提示词</button>
                 </div>
               </div>
             </div>
@@ -784,13 +786,6 @@
 
       <section class="workbench-page" data-page="tts" id="ttsPage">
       <section class="tts-area" id="ttsLab">
-        <div class="result-head tts-head">
-          <div>
-            <h2>语音生成与发送</h2>
-            <p>选择项目文案和声音，生成、试听后直接发送到保留生产线。</p>
-          </div>
-        </div>
-
         <div class="tts-settings tts-settings-summary tts-provider-only">
           <label class="tts-provider-picker">
             语音平台
@@ -823,16 +818,52 @@
               </div>
             </div>
             <label for="ttsText">配音文案</label>
-            <textarea id="ttsText" rows="12" placeholder="输入或粘贴文案。系统会先清洗、切句、处理情绪和停顿，再交给语音平台。"></textarea>
+            <textarea id="ttsText" rows="12" placeholder="输入或粘贴文案。系统会先清洗、切句、处理情绪和停顿，再交给语音平台。" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-1p-ignore="true"></textarea>
             <div class="tts-script-foot">
               <span id="ttsCharacterCount">0 字</span>
               <span>支持 mp3 / wav</span>
             </div>
           </div>
 
-          <div class="tts-control-column tts-step-card">
+          <div class="tts-timeline-column tts-step-card" id="ttsTimelineColumn">
             <div class="tts-step-heading">
               <span>2</span>
+              <div>
+                <strong>字幕时间轴</strong>
+                <small>在这里核对音频对应的带时间戳字幕</small>
+              </div>
+            </div>
+            <div class="tts-central-timeline-head">
+              <div>
+                <strong id="ttsTimelineJobTitle">等待生成音频</strong>
+                <span id="ttsTimelineStatus">生成音频后会显示可编辑字幕。</span>
+              </div>
+              <div class="tts-central-timeline-actions">
+                <button class="ghost small" id="ttsReloadTimeline" type="button" disabled>重载</button>
+                <button class="primary small" id="ttsSaveTimeline" type="button" disabled>确定修改并发送到：</button>
+              </div>
+            </div>
+            <div class="tts-central-handoff" id="ttsCentralHandoff">
+              <strong>选择生产线</strong>
+              <div class="tts-central-handoff-options">
+                <label><input class="tts-audio-handoff-choice" type="checkbox" data-target="cs1-video" checked />CS1生成器</label>
+                <label><input class="tts-audio-handoff-choice" type="checkbox" data-target="xiaohei-video" checked />小黑视频风格生成</label>
+                <label><input class="tts-audio-handoff-choice" type="checkbox" data-target="money-printer" checked />MoneyPrinter</label>
+                <label><input class="tts-audio-handoff-choice" type="checkbox" data-target="kinetic-text" checked />动态大字视频</label>
+              </div>
+              <small class="tts-job-handoff-status" id="ttsCentralHandoffStatus">点“确定修改”后发送当前三件套。</small>
+            </div>
+            <div class="tts-central-timeline-labels">
+              <span>序号</span><span>开始</span><span>结束</span><span>字幕文字</span>
+            </div>
+            <div class="tts-central-timeline" id="ttsCentralTimeline">
+              <div class="tts-empty">还没有可校对的字幕时间轴。</div>
+            </div>
+          </div>
+
+          <div class="tts-control-column tts-step-card">
+            <div class="tts-step-heading">
+              <span>3</span>
               <div>
                 <strong>选声音</strong>
                 <small>平台、分类、音色和克隆声音</small>
@@ -971,7 +1002,7 @@
                   </details>
                   <label class="tts-final-transcript-field" for="ttsFinalTranscript">
                     发送时使用的最终文案
-                    <textarea id="ttsFinalTranscript" rows="7" placeholder="如有错字或断句问题，可在这里修改后重新对齐。"></textarea>
+                    <textarea id="ttsFinalTranscript" rows="7" placeholder="如有错字或断句问题，可在这里修改后重新对齐。" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-1p-ignore="true"></textarea>
                   </label>
                   <div class="tts-alignment-actions">
                     <button class="ghost small" id="retryTtsAlignment" type="button">重新检查音频</button>
@@ -1156,10 +1187,12 @@
               <section class="cs1-shared-timeline-card">
                 <div class="cs1-shared-timeline-title">
                   <strong>字幕时间轴</strong>
-                  <span id="cs1TimelineStatus">等待 TTS 字幕</span>
+                  <div class="production-timeline-actions">
+                    <span id="cs1TimelineStatus">等待 TTS 字幕</span>
+                  </div>
                 </div>
                 <div class="shared-subtitle-timeline-head">
-                  <span>序号</span><span>开始</span><span>结束</span><span>字幕文字（失去焦点自动保存）</span>
+                  <span>序号</span><span>开始</span><span>结束</span><span>字幕文字</span>
                 </div>
                 <div id="cs1SubtitleTimeline" class="shared-subtitle-timeline"></div>
               </section>
@@ -1554,7 +1587,9 @@
               <section class="kinetic-card money-printer-card money-printer-timeline-card">
                 <div class="kinetic-card-head">
                   <strong>字幕时间轴 / 素材检查</strong>
-                  <span id="moneyPrinterTimelineSummary">等待 TTS</span>
+                  <div class="production-timeline-actions">
+                    <span id="moneyPrinterTimelineSummary">等待 TTS</span>
+                  </div>
                 </div>
                 <div class="money-printer-timeline-head">
                   <span>序号</span><span>开始</span><span>结束</span><span>字幕文案</span><span>检索词</span><span>素材 / 来源</span><span>转场</span>
@@ -1753,7 +1788,10 @@
               <section class="kinetic-card kinetic-timeline-card">
                 <div class="kinetic-card-head">
                   <strong>字幕时间轴</strong>
-                  <button id="kineticAnalyze" class="ghost" type="button">本地重新识别关键词</button>
+                  <div class="kinetic-timeline-actions">
+                    <span id="kineticTimelineDraftStatus" class="kinetic-draft-status" hidden></span>
+                    <button id="kineticConfirmTimeline" class="primary small" type="button" disabled>确定视觉参数</button>
+                  </div>
                 </div>
                 <div id="kineticTimelineRuleStatus" class="kinetic-rule-status" hidden></div>
                 <div class="kinetic-timeline-head">
@@ -1906,46 +1944,12 @@
       </section>
           </main>
 
-          <aside class="status-rail" aria-label="状态面板">
-            <section class="rail-section">
-              <div class="rail-heading">
-                <span>任务线程</span>
-                <i class="live-dot"></i>
-              </div>
-              <div id="railCurrentTask" class="rail-content">
-                <strong>暂无运行任务</strong>
-                <small>队列进度和最近任务会显示在这里</small>
-              </div>
-            </section>
-
-            <section class="rail-section">
-              <div class="rail-heading"><span>最近生成</span></div>
-              <div id="railRecentOutput" class="rail-list">
-                <div class="rail-empty">还没有生成记录</div>
-              </div>
-            </section>
-
-            <section class="rail-section">
-              <div class="rail-heading"><span>错误提示</span></div>
-              <div id="railErrors" class="rail-list">
-                <div class="rail-empty success-text">当前没有错误</div>
-              </div>
-            </section>
-
-            <section class="rail-section">
-              <div class="rail-heading"><span>快捷操作</span></div>
-              <div class="rail-actions">
-                <button type="button" data-nav="collector">新建采集</button>
-                <button type="button" data-nav="rewrite">定制改写</button>
-                <button type="button" data-nav="tts">生成语音</button>
-</div>
-            </section>
-          </aside>
-
         </div>
       </div>
     </div>
 
+    <script src="/modules/tts-handoff-store.js"></script>
+    <script src="/modules/moments-image-instruction.js"></script>
     <script src="/modules/legacy-runtime.js"></script>
     <script src="/workbench.js"></script>
     <script src="/modules/tts-voice-clone.js"></script>

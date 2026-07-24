@@ -296,7 +296,7 @@ export function createImageService({ baseDir, getSettings, taskStore = null, ffm
       ratio: row.aspect_ratio || "",
       scene_index: Number(row.scene_index || 0),
       asset_order: Number(row.asset_order || 0),
-      thumbnail_url: `/api/image/thumbnail?path=${encodeURIComponent(row.file_path || row.original_path || "")}`,
+      thumbnail_url: `/api/image/thumbnail?id=${encodeURIComponent(row.id || "")}`,
     };
   }
 
@@ -352,6 +352,56 @@ export function createImageService({ baseDir, getSettings, taskStore = null, ffm
       cleanSourceType,
       cleanSourceId,
       folderName,
+      folderPath,
+      parsedSceneIndex,
+      cleanAssetOrder,
+    );
+
+    return publicAsset(db.prepare("SELECT * FROM image_assets WHERE id=?").get(assetId));
+  }
+
+  function linkLocalImageAsset({ filePath, prompt = "", aspectRatio = "9:16", sourceId = "", sourceType = "local-linked", directorProjectId = 0, sceneIndex = 0, assetOrder = 0 } = {}) {
+    const resolved = path.resolve(String(filePath || "").trim());
+    if (!resolved || !fs.existsSync(resolved) || !fs.statSync(resolved).isFile()) {
+      throw new Error("请选择存在的本地图片文件。");
+    }
+    const ext = path.extname(resolved).toLowerCase();
+    const supported = new Set([".png", ".jpg", ".jpeg", ".webp"]);
+    if (!supported.has(ext)) throw new Error("暂只支持 PNG、JPG、WEBP 图片素材。");
+
+    const assetId = randomUUID();
+    const assetPrompt = String(prompt || "").trim() || `本地图片素材：${path.basename(resolved)}`;
+    const parsedSceneIndex = Number(sceneIndex || parseSceneIndexFromFilename(resolved) || sceneIndexFromSourceId(sourceId) || 0);
+    const cleanSourceId = String(sourceId || (directorProjectId && parsedSceneIndex ? `${directorProjectId}:${parsedSceneIndex}` : "")).trim();
+    const cleanAssetOrder = Number(assetOrder || parsedSceneIndex || 0);
+    const size = targetImageSize(aspectRatio);
+    const stats = fs.statSync(resolved);
+    const folderPath = path.dirname(resolved);
+
+    db.prepare(`
+      INSERT INTO image_assets (
+        id, job_id, filename, original_path, file_path, width, height, file_size, provider, model,
+        prompt, revised_prompt, aspect_ratio, source_url, source_type, source_id, folder_name, folder_path, scene_index, asset_order
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      assetId,
+      "",
+      path.basename(resolved),
+      "",
+      resolved,
+      size.width,
+      size.height,
+      stats.size,
+      "local",
+      "local-file-reference",
+      assetPrompt,
+      assetPrompt,
+      aspectRatio,
+      resolved,
+      String(sourceType || "local-linked").trim() || "local-linked",
+      cleanSourceId,
+      path.basename(folderPath),
       folderPath,
       parsedSceneIndex,
       cleanAssetOrder,
@@ -552,7 +602,7 @@ export function createImageService({ baseDir, getSettings, taskStore = null, ffm
           filename,
           imagePath: localPath,
           file_path: localPath,
-          thumbnailUrl: `/api/image/thumbnail?path=${encodeURIComponent(localPath)}`,
+          thumbnailUrl: `/api/image/thumbnail?id=${encodeURIComponent(assetId)}`,
           provider: selected.provider,
           model: result.model || selected.model,
           source_url: result.sourceUrl || result.imageUrl || "",
@@ -746,6 +796,10 @@ export function createImageService({ baseDir, getSettings, taskStore = null, ffm
     return db.prepare("SELECT * FROM image_assets ORDER BY created_at DESC LIMIT ? OFFSET ?").all(limit, offset).map(publicAsset);
   }
 
+  function getAsset(assetId) {
+    return publicAsset(db.prepare("SELECT * FROM image_assets WHERE id=?").get(String(assetId || "")));
+  }
+
   function deleteAsset(assetId) {
     const asset = db.prepare("SELECT original_path FROM image_assets WHERE id=?").get(assetId);
     if (asset?.original_path && fs.existsSync(asset.original_path)) fs.unlinkSync(asset.original_path);
@@ -765,6 +819,10 @@ export function createImageService({ baseDir, getSettings, taskStore = null, ffm
     return Number(row?.count || 0) > 0;
   }
 
+  function close() {
+    db.close();
+  }
+
   return {
     generateImage,
     generateImageAsync,
@@ -772,13 +830,16 @@ export function createImageService({ baseDir, getSettings, taskStore = null, ffm
     generateStoryboardImagesAsync,
     storyboardImagePrompts,
     addLocalImageAsset,
+    linkLocalImageAsset,
     thumbnailForImage,
     testProviderConnection,
     getJobs,
     getJob,
     getAssets,
+    getAsset,
     deleteAsset,
     getStats,
     isBusy,
+    close,
   };
 }

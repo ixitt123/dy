@@ -93,6 +93,8 @@ const runtime = fs.readFileSync(new URL("./ui/modules/legacy-runtime.js", import
 const server = fs.readFileSync(new URL("./ui-server.mjs", import.meta.url), "utf8");
 const workbench = fs.readFileSync(new URL("./ui/workbench.js", import.meta.url), "utf8");
 const launcher = fs.readFileSync(new URL("./launch-ui.mjs", import.meta.url), "utf8");
+const html = fs.readFileSync(new URL("./ui/index.html", import.meta.url), "utf8");
+const css = fs.readFileSync(new URL("./ui/app.css", import.meta.url), "utf8");
 assert.match(runtime, /pagehide[\s\S]*\/api\/page-close/u, "Page close and refresh must notify the lifecycle endpoint.");
 assert.match(server, /graceMs:\s*30_000/u, "Production lifecycle grace period must remain 30 seconds.");
 assert.match(runtime, /navigationType === "reload"[\s\S]*reason: pageExitReason/u, "Refresh and close must be reported separately when the browser exposes navigation intent.");
@@ -103,5 +105,8 @@ assert.match(workbench, /short-video-workbench-page/u, "The active feature page 
 assert.match(launcher, /const url = await existingServerUrl\(\)/u, "The launcher must always reuse an existing backend.");
 assert.doesNotMatch(launcher, /syncChanged\s*\?\s*""\s*:\s*await existingServerUrl/u, "A repository sync must never bypass single-instance reuse.");
 assert.match(server, /fs\.openSync\(pidPath, "wx"\)/u, "The backend must use an exclusive single-instance lock.");
+assert.doesNotMatch(html, /class="status-rail"|id="railCurrentTask"|id="railRecentOutput"|id="railErrors"/u, "The right status rail must stay removed from the main page.");
+assert.doesNotMatch(html, />任务线程<|>最近生成<|>错误提示<|>快捷操作</u, "Removed right rail blocks must not reappear in the main page.");
+assert.match(css, /\.workbench-body\s*\{[\s\S]*grid-template-columns:\s*minmax\(0,\s*1fr\);/u, "The workbench body must let the main workspace take the former rail width.");
 
 console.log("Page lifecycle: OK");

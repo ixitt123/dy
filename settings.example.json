@@ -116,7 +116,7 @@
     }
   },
   "modelMap": {
-    "tts": { "provider": "aliyun_bailian", "model": "cosyvoice-v2" }
+    "tts": { "provider": "ali-bailian", "model": "cosyvoice-v2" }
   },
   "downloadsDir": ""
 }

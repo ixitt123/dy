@@ -3,8 +3,7 @@
     "rewrite": { "provider": "deepseek", "model": "deepseek-chat" },
     "director": { "provider": "deepseek", "model": "deepseek-chat" },
     "storyboard": { "provider": "deepseek", "model": "deepseek-chat" },
-    "video": { "provider": "kling", "model": "" },
-    "tts": { "provider": "aliyun_bailian", "model": "cosyvoice-v2" }
+    "tts": { "provider": "ali-bailian", "model": "cosyvoice-v2" }
   },
   "providers": {
     "deepseek": { "apiKey": "", "baseUrl": "https://api.deepseek.com/v1" },

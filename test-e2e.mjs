@@ -5,8 +5,27 @@ import { readFile } from "node:fs/promises";
 
 const BASE = "http://127.0.0.1:8787";
 const tests = [];
+const nativeFetch = globalThis.fetch.bind(globalThis);
+let localApiCookie = "";
 
 function test(name, fn) { tests.push({ name, fn }); }
+
+async function establishLocalSession() {
+  const response = await nativeFetch(`${BASE}/`);
+  localApiCookie = String(response.headers.get("set-cookie") || "").split(";")[0];
+  if (!response.ok || !localApiCookie) throw new Error("Unable to establish local API session");
+}
+
+globalThis.fetch = async (input, options = {}) => {
+  const url = typeof input === "string" ? input : input?.url || "";
+  if (!String(url).startsWith(`${BASE}/api/`)) return nativeFetch(input, options);
+  const headers = new Headers(options.headers || {});
+  headers.set("cookie", localApiCookie);
+  if (!headers.has("origin")) headers.set("origin", BASE);
+  return nativeFetch(input, { ...options, headers });
+};
+
+await establishLocalSession();
 
 test("Status API", async () => {
   const r = await fetch(`${BASE}/api/status`);
@@ -20,10 +39,12 @@ test("Provider List", async () => {
   if (!d.providers?.length) throw new Error("No providers");
 });
 
-test("Settings API", async () => {
+test("Settings dump disabled", async () => {
   const r = await fetch(`${BASE}/api/settings/all`);
   const d = await r.json();
-  if (!d.ok) throw new Error("Settings not OK");
+  if (r.status !== 404 || d.ok !== false || JSON.stringify(d).includes("api_key")) {
+    throw new Error("Settings dump endpoint must stay disabled and must not expose secrets");
+  }
 });
 
 test("Model Mapping", async () => {
@@ -220,7 +241,7 @@ test("Xiaohei fast preview and cache restore", async () => {
   if (!assetResponse.ok
     || !assetResponse.headers.get("cache-control")?.includes("max-age=86400")
     || !source.includes("hydratePurposeSelect();")
-    || !source.includes("await Promise.all([loadConfig(), loadAudioJobs()]);")
+    || !source.includes("await Promise.all([loadConfig(), loadAudioJobs(), loadFolderNames()]);")
     || !source.includes("void loadOutputs().catch(() => {});")
     || !source.includes('decoding="async"')
     || !css.includes("content-visibility: auto")) {
@@ -338,7 +359,7 @@ test("Kinetic text production line", async () => {
     || !page.includes('id="kineticPreviewCanvas"')
     || !page.includes('aria-label="点击画面播放或暂停"')
     || !page.includes('id="kineticTimeline"')
-    || !page.includes('id="kineticAnalyze"')
+    || page.includes('id="kineticAnalyze"')
     || !page.includes('id="kineticChooseDownloadDir"')
     || !page.includes('id="kineticRenderFinal" class="primary" type="button">下载视频</button>')
     || renderButtonIndex <= previewToolbarIndex
@@ -357,7 +378,7 @@ test("Kinetic text production line", async () => {
     || !moduleSource.includes("receiveTts")
     || !moduleSource.includes("pollJob")
     || !moduleSource.includes('data-field="lineBreaks"')
-    || !moduleSource.includes("keywordsOnly: true")
+    || moduleSource.includes("keywordsOnly: true")
     || !moduleSource.includes("renderOnComplete: true")
     || !moduleSource.includes("视频已保存：")
     || !kineticServiceSource.includes("normalizeSegmentKeywords")

@@ -180,6 +180,28 @@ const audioLyrics = "你问我 AI 怎么拍成片 我用一段旋律唱给你听
   assert.equal(JSON.parse(fs.readFileSync(corrected.job.timeline_json_path, "utf8"))[0].text, spokenText);
   assert.match(fs.readFileSync(corrected.job.subtitle_vtt_path, "utf8"), /^WEBVTT\n\n/u);
   assert.equal(calls(), 1, "send-time correction must reuse the existing word timeline");
+
+  const manualRows = [
+    { id: "manual-1", index: 1, start: 0, end: 0.8, text: "第一句已经核对。" },
+    { id: "manual-2", index: 2, start: 0.8, end: 1.6, text: "第二句也没问题。" },
+  ];
+  const manualFinalText = manualRows.map((row) => row.text).join("");
+  const synced = await service.syncConfirmedTimeline(corrected.job.id, {
+    title: "TTS 页面字幕核对",
+    text: manualFinalText,
+    sentenceTimeline: manualRows,
+    subtitleTimeline: manualRows,
+    wordTimeline: timedWords(manualFinalText),
+    source: "tts_page_timeline_editor",
+    confirmationMode: "tts_page_timeline_editor",
+    preserveTimelineValues: true,
+  });
+  assert.equal(synced.error, undefined);
+  assert.equal(synced.job.final_text, manualFinalText);
+  assert.equal(synced.job.shared_sync_source, "tts_page_timeline_editor");
+  assert.equal(synced.job.alignment_confirmation_mode, "tts_page_timeline_editor");
+  assert.deepEqual(synced.job.subtitle_timeline.map((row) => [row.start, row.end]), manualRows.map((row) => [row.start, row.end]));
+  assert.equal(JSON.parse(fs.readFileSync(synced.job.timeline_json_path, "utf8"))[1].text, "第二句也没问题。");
 }
 
 {

@@ -55,6 +55,9 @@ for (const skillId of expectedSkillIds) {
 
   for (const expected of [
     `SKILL_ID: ${skillId}`,
+    "请直接生成一张图片素材。",
+    "只生成一张图，不要拼图，不要多宫格，不要组图",
+    "保留当前 Skill 允许的少量中文手写标注",
     profile.name,
     profile.visualDna,
     profile.characterRule,
@@ -71,6 +74,12 @@ for (const skillId of expectedSkillIds) {
       `${skillId} prompt must not inherit the article Skill name`,
     );
   }
+
+  assert.doesNotMatch(
+    prompt,
+    /multi-image set|This image belongs to a multi-image set|1\/1|其他张/u,
+    `${skillId} prompt must not contain wording that encourages grouped image generation`,
+  );
 }
 
 assert.equal(visualDnaValues.size, expectedSkillIds.length, "all 12 Skills need distinct visual DNA");

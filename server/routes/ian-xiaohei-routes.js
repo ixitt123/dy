@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { spawn } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
@@ -283,6 +284,7 @@ export function createIanXiaoheiRoutes({
   ffprobePath = "",
   transcribeLocalMedia = null,
   downloadsDir = "",
+  getDownloadsDir = () => downloadsDir,
 }) {
   const outputRoot = path.join(baseDir, "image-assets", "ian-xiaohei");
   const uploadRoot = path.join(outputRoot, "_uploaded-audio");
@@ -300,10 +302,11 @@ export function createIanXiaoheiRoutes({
   fs.mkdirSync(referenceAudioRoot, { recursive: true });
 
   // 统一下载目录：与 MoneyPrinter 共用同一下载地址体系
-  const resolvedDownloadsDir = path.resolve(downloadsDir || baseDir);
+  const currentDownloadsDir = () => path.resolve(getDownloadsDir() || downloadsDir || baseDir);
   const xiaoheiRenderedFiles = new Map();
 
   function copyToDownloadsDir(srcPath, title) {
+    const resolvedDownloadsDir = currentDownloadsDir();
     if (!fs.existsSync(srcPath) || !resolvedDownloadsDir || resolvedDownloadsDir === path.resolve(baseDir)) return null;
     try {
       fs.mkdirSync(resolvedDownloadsDir, { recursive: true });
@@ -887,7 +890,11 @@ export function createIanXiaoheiRoutes({
       sendJson(res, 200, {
         ok: true,
         outputDir: outputRoot,
-        batches: listOutputBatches(outputRoot),
+        batches: listOutputBatches(outputRoot, {
+          resolvedDownloadsDir: currentDownloadsDir(),
+          xiaoheiRenderedFiles,
+          registerXiaoheiFile,
+        }),
       });
       return true;
     }
@@ -1356,6 +1363,100 @@ export function createIanXiaoheiRoutes({
         updateResultFile(batchDir, { image });
         sendJson(res, 201, { ok: true, batchId, outputDir: batchDir, image });
       } catch (error) {
+        sendJson(res, error instanceof HttpBodyError ? error.statusCode : 400, {
+          ok: false,
+          message: error instanceof Error ? error.message : String(error),
+        });
+      }
+      return true;
+    }
+
+    if (req.method === "POST" && route === "bind-local-materials") {
+      const linkedAssetIds = [];
+      try {
+        const body = await readJsonBody(req, { maxBytes: 128 * 1024 });
+        const plan = body.plan && typeof body.plan === "object" ? body.plan : null;
+        const shot = normalizeShotInput(body.shot);
+        const batchId = safeBatchId(body.batchId || plan?.batchId);
+        if (!batchId || !plan) throw new Error("缺少当前提示词计划。");
+        if (!shot.index || !(plan.shots || []).some((item) => Number(item.index) === Number(shot.index))) {
+          throw new Error("当前图片没有对应的分镜。");
+        }
+        const requestedPaths = Array.isArray(body.material_paths)
+          ? body.material_paths.map((item) => String(item || "").trim()).filter(Boolean)
+          : [];
+        if (!requestedPaths.length || requestedPaths.length > 3) {
+          throw new Error("每条提示词只能绑定 1 至 3 张图片素材。");
+        }
+        const desktopRoot = fs.realpathSync(path.join(os.homedir(), "Desktop"));
+        const folderPath = fs.realpathSync(String(body.folder_path || ""));
+        const folderRelative = path.relative(desktopRoot, folderPath);
+        if (!folderRelative || folderRelative === ".." || folderRelative.startsWith(`..${path.sep}`) || path.isAbsolute(folderRelative)) {
+          throw new Error("素材文件夹必须是桌面新建文件夹。");
+        }
+        if (!/^\d{4}-\d{2}-\d{2}-.+/u.test(path.basename(folderPath))) {
+          throw new Error("素材文件夹名称必须是“日期-名称”格式。");
+        }
+        const materialPaths = requestedPaths.map((item) => {
+          const resolved = fs.realpathSync(item);
+          const relative = path.relative(folderPath, resolved);
+          if (!relative || relative === ".." || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) {
+            throw new Error("图片素材必须直接来自当前桌面新建文件夹。");
+          }
+          if (path.dirname(resolved) !== folderPath || !/\.(png|jpe?g|webp)$/iu.test(resolved)) {
+            throw new Error("图片素材必须是当前文件夹根目录中的 PNG、JPG 或 WEBP 文件。");
+          }
+          if (!fs.statSync(resolved).isFile()) throw new Error("图片素材文件不存在。");
+          return resolved;
+        });
+        const aspectRatio = normalizeAspectRatio(body.aspectRatio || plan.aspectRatio);
+        const sourceId = plan?.directorProjectId
+          ? `${plan.directorProjectId}:${shot.index}`
+          : `${batchId}:${shot.index}`;
+        const materials = materialPaths.map((filePath, materialIndex) => {
+          const asset = imageService.linkLocalImageAsset({
+            filePath,
+            prompt: shot.prompt,
+            aspectRatio,
+            sourceId,
+            sourceType: "ian-xiaohei-local-linked",
+            directorProjectId: Number(plan?.directorProjectId || 0),
+            sceneIndex: Number(shot.index),
+            assetOrder: materialIndex + 1,
+          });
+          linkedAssetIds.push(asset.id);
+          return {
+            assetId: asset.id,
+            name: path.basename(filePath),
+            imagePath: filePath,
+            imageUrl: `/api/image/file?id=${encodeURIComponent(asset.id)}`,
+            sequence: materialIndex + 1,
+          };
+        });
+        const primary = materials[0];
+        const batchDir = path.join(outputRoot, batchId);
+        fs.mkdirSync(batchDir, { recursive: true });
+        savePlanFiles(batchDir, plan);
+        const image = {
+          index: shot.index,
+          topic: shot.topic,
+          purpose: shot.purpose,
+          prompt: shot.prompt,
+          imagePath: primary.imagePath,
+          imageUrl: primary.imageUrl,
+          thumbnailUrl: primary.imageUrl,
+          assetId: primary.assetId,
+          provider: "local",
+          model: "local-file-reference",
+          source: "local_folder_binding",
+          aspectRatio,
+          confirmed: true,
+          materials,
+        };
+        updateResultFile(batchDir, { image });
+        sendJson(res, 201, { ok: true, batchId, outputDir: batchDir, image });
+      } catch (error) {
+        for (const assetId of linkedAssetIds) imageService.deleteAsset(assetId);
         sendJson(res, error instanceof HttpBodyError ? error.statusCode : 400, {
           ok: false,
           message: error instanceof Error ? error.message : String(error),
@@ -2417,7 +2518,7 @@ function buildShot({ index, total, title, anchor, purpose, aspectRatio = "16:9",
   const prompt = buildPrompt({
     purpose,
     topic,
-    seriesRole: `${index}/${total} ${shotRole.label}`,
+    seriesRole: shotRole.label,
     structureType,
     coreIdea,
     sourceText: segment,
@@ -2474,43 +2575,50 @@ export function buildPrompt({
       ? "1:1 square Chinese social-media illustration"
       : "16:9 horizontal Chinese article illustration";
   return [
-    `Generate one standalone ${formatDescription}.`,
+    "请直接生成一张图片素材。",
+    "不要解释，不要分析，不要复述提示词，不要给优化建议，直接出图。",
+    "只生成一张图，不要拼图，不要多宫格，不要组图，不要缩略图合集，不要把多个分镜画在同一张画布里。",
+    `画幅：${formatDescription}.`,
     "",
-    "Mandatory selected template / Skill (do not substitute another style):",
+    "项目：小黑视频风格生成",
+    "统一要求：当前任务必须只生成一张独立图片素材，主体明确，可直接用于短视频剪辑。",
+    "画面文字规则：保留当前 Skill 允许的少量中文手写标注；不要把整段原文、标题、编号、结构类型或说明文字写进画面。",
+    "",
+    "锁定模板 / Skill（不要替换成其他风格）：",
     `SKILL_ID: ${purpose}`,
     `${styleProfile.name}. ${styleProfile.intent}`,
     "",
-    "Visual DNA:",
+    "统一视觉 DNA：",
     styleProfile.visualDna || DEFAULT_VISUAL_DNA,
     "",
-    "Subject / character rule:",
+    "主体 / 角色规则：",
     styleProfile.characterRule || DEFAULT_CHARACTER_RULE,
     "",
-    "Template composition rule:",
+    "构图规则：",
     styleProfile.compositionRule,
     "",
-    `Theme: ${topic}`,
-    `Series role: ${seriesRole}. This image belongs to a multi-image set, so it must use a clearly different metaphor, object set, and composition from the other images in the same set.`,
-    `Exact source paragraph this image must explain: ${sourceText}`,
-    `Structure type: ${structureType}`,
-    `Core idea: ${coreIdea}`,
-    `Visual subject: ${visualSubject || coreIdea}`,
-    `${styleProfile.actorName} action: ${xiaoheiAction || `${styleProfile.actorName}执行当前段落最关键的动作`}`,
-    `Fresh metaphor for this paragraph: ${visualMetaphor || "从当前段落重新发明一个低科技物理隐喻"}`,
-    `Composition: ${composition}`,
-    `Suggested elements: ${elements.join(" / ")}`,
-    `Chinese handwritten labels: ${labels.join(" / ")}`,
+    `分镜任务：${topic}`,
+    `本张图片用途：${String(seriesRole || "").replace(/^\s*\d+\s*\/\s*\d+\s*/, "")}. 这是单张独立图片任务，只画当前这一个画面，不画其他画面，不画预览合集。`,
+    `对应原文：${sourceText}`,
+    `结构类型（只作为理解，不写进画面）：${structureType}`,
+    `核心意思：${coreIdea}`,
+    `画面主体：${visualSubject || coreIdea}`,
+    `${styleProfile.actorName}动作：${xiaoheiAction || `${styleProfile.actorName}执行当前段落最关键的动作`}`,
+    `本镜头视觉隐喻：${visualMetaphor || "从当前段落重新发明一个低科技物理隐喻"}`,
+    `构图：${composition}`,
+    `建议元素：${elements.join(" / ")}`,
+    `中文手写标注：${labels.join(" / ")}`,
     "",
-    "Color use:",
+    "颜色规则：",
     styleProfile.colorRule,
     "",
-    "Template-specific avoid rule:",
+    "当前 Skill 禁止项：",
     styleProfile.avoid,
     "",
-    "Constraints:",
-    "Each numbered storyboard prompt is one independent task (Job). Treat this number as the only image to generate for the current job. Do not merge multiple numbers onto one canvas. Do not create a collage. Do not create a contact sheet or thumbnail collection.",
-    `Template lock: every visual decision must match SKILL_ID=${purpose} (${styleProfile.name}). Never fall back to the default Xiaohei article style unless SKILL_ID is article.`,
-    "The picture must explain the exact source paragraph above, not merely the article's broad topic. Preserve its subject, action, direction, contrast, and result. Do not substitute a generic learning, workplace, AI, or business scene. One image explains only one core structure. Keep the main subject around 40%-60% of the canvas. Use at most 5-8 short Chinese labels derived only from this source paragraph. Do not write the structure type on the image. Do not repeat the same object set or pose across the image set. Invent a fresh visual metaphor for this specific paragraph while obeying the selected template.",
+    "硬性约束：",
+    "当前提示词就是一个独立生图任务，只输出这一张图片。禁止合并多个编号，禁止一张图里出现多个分镜框，禁止 collage，禁止 contact sheet，禁止九宫格，禁止组图。画面里不要出现编号角标。",
+    `Skill 锁定：所有视觉决策必须匹配 SKILL_ID=${purpose}（${styleProfile.name}）。除非 SKILL_ID=article，否则不要退回默认小黑正文配图风格。`,
+    "画面必须解释上方这一段原文，而不是泛化成整篇文章主题。保留原文里的主体、动作、方向、对比和结果。不要替换成通用学习、职场、AI、商业场景。一张图只解释一个核心结构。主体约占画面 40%-60%。最多使用 5-8 个短中文手写标注，标注必须来自当前原文语义。不要在图里写结构类型。不要复制旧案例构图；必须围绕当前段落发明新的视觉隐喻，并严格遵守所选 Skill。",
   ].join("\n");
 }
 
@@ -2524,7 +2632,7 @@ function buildMetaphor(segment, structureType, { index, total, title, shotRole, 
   const semanticBase = anchor.visualMetaphor && anchor.xiaoheiAction
     ? `核心隐喻是“${anchor.visualMetaphor}”。${styleProfile.actorName}正在${anchor.xiaoheiAction}。`
     : adaptCompositionToProfile(shotRole?.composition || fallbackCompositionFor(structureType), styleProfile);
-  const composition = `${styleProfile.compositionRule} ${semanticBase} 画面只翻译当前原文“${trimText(segment, 80)}”，不扩写成全文主题；围绕“${anchor.visualSubject || inferTopic(segment, title, index)}”选择具体物件，可参考${domain.elements.join("、")}，但不允许用通用图标替代原文动作。保持第 ${index}/${total} 张与其他张的主物件和主体动作不同。`;
+  const composition = `${styleProfile.compositionRule} ${semanticBase} 画面只翻译当前原文“${trimText(segment, 80)}”，不扩写成全文主题；围绕“${anchor.visualSubject || inferTopic(segment, title, index)}”选择具体物件，可参考${domain.elements.join("、")}，但不允许用通用图标替代原文动作。当前画面必须像一张独立成品图，不做分镜合集。`;
   return {
     composition,
     elements: uniqueList([
@@ -3031,7 +3139,8 @@ function promptsMarkdown(plan) {
   ].join("\n");
 }
 
-function listOutputBatches(outputRoot) {
+function listOutputBatches(outputRoot, deps = {}) {
+  const { resolvedDownloadsDir = null, xiaoheiRenderedFiles = null, registerXiaoheiFile = null } = deps;
   if (!fs.existsSync(outputRoot)) return [];
   return fs.readdirSync(outputRoot, { withFileTypes: true })
     .filter((entry) => entry.isDirectory() && !entry.name.startsWith("_"))
@@ -3053,6 +3162,15 @@ function listOutputBatches(outputRoot) {
         source: String(image.source || "local_upload"),
         aspectRatio: String(image.aspectRatio || ""),
         confirmed: image.confirmed !== false,
+        materials: Array.isArray(image.materials)
+          ? image.materials.map((material) => ({
+            assetId: String(material.assetId || ""),
+            name: String(material.name || ""),
+            imagePath: String(material.imagePath || ""),
+            imageUrl: material.imageUrl || (material.imagePath ? `/api/image/file?path=${encodeURIComponent(material.imagePath)}` : ""),
+            sequence: Number(material.sequence || 0),
+          }))
+          : [],
       })).filter((image) => image.index > 0 && (image.imagePath || image.assetId));
       const directFiles = fs.readdirSync(folderPath, { withFileTypes: true })
         .filter((file) => file.isFile() && /\.(png|jpe?g|webp)$/i.test(file.name))
@@ -3081,7 +3199,7 @@ function listOutputBatches(outputRoot) {
       // 历史批次也注册到统一下载体系，保证下载地址一致
       let unifiedDownloadUrl = "";
       let unifiedDownloadId = "";
-      if (hasFinalMp4 && resolvedDownloadsDir) {
+      if (hasFinalMp4 && resolvedDownloadsDir && xiaoheiRenderedFiles && registerXiaoheiFile) {
         // 查找是否已注册（避免重复注册）
         let existingId = null;
         for (const [fid, frec] of xiaoheiRenderedFiles.entries()) {

@@ -1,8 +1,9 @@
 import http from "node:http";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { spawn, spawnSync } from "node:child_process";
-import { createHash, randomUUID } from "node:crypto";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { once } from "node:events";
 import { fileURLToPath } from "node:url";
 import * as XLSX from "xlsx";
@@ -32,12 +33,20 @@ import { createIanXiaoheiRoutes } from "./server/routes/ian-xiaohei-routes.js";
 import { createMoneyPrinterRoutes } from "./server/routes/money-printer-routes.js";
 import { createKineticTextRoutes } from "./server/routes/kinetic-text-routes.js";
 import { createYtDlpService } from "./server/core/yt-dlp-service.js";
+import {
+  createDesktopDateFolder,
+  findLatestDesktopNamedFolder,
+  formatLocalDate,
+  listLatestDesktopImageBatch,
+  normalizeDesktopFolderName,
+} from "./server/core/desktop-date-folder.js";
 import { formatOriginalMomentsPost } from "./server/core/moments-original.js";
 import { parseJsonFromModelText as parseStructuredJsonFromModelText } from "./server/core/structured-json.js";
 import { createPageLifecycle } from "./server/core/page-lifecycle.js";
 import { HttpBodyError, readBody, readJsonBody } from "./server/utils/http-body.js";
+import { isPathInsideRoot, resolveStaticRequestPath } from "./server/core/static-path-safety.js";
 import { DEFAULT_REWRITE_REFERENCE, REWRITE_DIRECTIONS, REWRITE_STYLES, REWRITE_VERSION_DEFS, REWRITE_VERSION_DEFAULTS } from "./server/config/rewrite-presets.js";
-import { DEFAULT_MODEL_MAPPING, DEFAULT_VOLCENGINE_ARK_IMAGE_MODEL, SETTINGS_TASKS } from "./server/config/model-defaults.js";
+import { DEFAULT_MODEL_MAPPING, DEFAULT_VOLCENGINE_ARK_IMAGE_MODEL, SETTINGS_TASKS, normalizeModelMapping } from "./server/config/model-defaults.js";
 import { AUTO_MODEL_VALUE, REWRITE_PROVIDER_ORDER, REWRITE_PROVIDER_PRESETS } from "./server/config/provider-presets.js";
 
 const runtimeSourcePath = fileURLToPath(import.meta.url);
@@ -51,14 +60,21 @@ const personasDir = path.join(__dirname, "personas");
 const momentsPersonasPath = path.join(personasDir, "moments-personas.json");
 const momentsMaterialsDir = path.join(__dirname, "assets", "moments-materials");
 const momentsPublishDir = path.join(__dirname, ".data", "moments-publish");
+const folderNamesPath = path.join(__dirname, ".data", "folder-names.json");
+const desktopFolderImageTokens = new Map();
 const wechatMomentsPublisherScript = path.join(__dirname, "scripts", "wechat_moments_publish.py");
 const referenceExamplesPath = path.join(__dirname, "reference_examples.json");
 const defaultDownloadsDir = path.join(__dirname, "downloads");
+const browserDownloadsRoot = path.join(__dirname, ".data", "browser-downloads");
+const browserDownloadsDir = path.join(browserDownloadsRoot, `session-${process.pid}-${Date.now()}`);
 const localMediaDir = path.join(__dirname, "local-media");
 const pidPath = path.join(__dirname, "ui-server.pid");
 const urlPath = path.join(__dirname, "ui-server.url");
 const settingsPath = path.join(__dirname, "settings.json");
 const ffprobePath = ffprobeStatic?.path || "";
+const localApiCookieName = "__dy_local_api";
+const localApiSessionToken = randomBytes(32).toString("base64url");
+const localImageExtensions = new Set([".png", ".jpg", ".jpeg", ".gif", ".webp"]);
 const mcpEntry = path.join(
   __dirname,
   "node_modules",
@@ -121,8 +137,8 @@ const pageLifecycle = createPageLifecycle({
   onShutdown: () => shutdownNow(),
 });
 let ownsRuntimeLock = false;
-let downloadsDir = defaultDownloadsDir;
-downloadsDir = setDownloadsDir(readSettings().downloadsDir);
+let selectedDownloadsDir = "";
+let downloadsDir = setDownloadsDir(browserDownloadsDir);
 fs.mkdirSync(downloadsDir, { recursive: true });
 fs.mkdirSync(rewritesDir, { recursive: true });
 const ytDlpService = createYtDlpService({
@@ -193,6 +209,7 @@ const handleMoneyPrinterRoutes = createMoneyPrinterRoutes({
   ffmpegPath,
   ffprobePath,
   getDownloadsDir: () => downloadsDir,
+  modelRouter,
 });
 
 // -----------------------------------------------------------------------------
@@ -271,6 +288,7 @@ const handleIanXiaoheiRoutes = createIanXiaoheiRoutes({
   ffprobePath,
   transcribeLocalMedia: transcribeLocalMediaWithDashScope,
   downloadsDir,
+  getDownloadsDir: () => downloadsDir,
 });
 const handleKineticTextRoutes = createKineticTextRoutes({
   baseDir: __dirname,
@@ -284,11 +302,26 @@ const handleKineticTextRoutes = createKineticTextRoutes({
   projectCenter,
 });
 
-// ModelRouter 统一模型路由
-modelRouter.init(readSettings());
+// ModelRouter 统一模型路由。失败时只降级 AI 路由，其他本地功能继续可用。
+let modelRouterReady = false;
+let modelRouterStartupError = "";
 
-// ProviderRegistry 同步
-providerRegistry.initFromModelRouter();
+function initializeModelRuntime(settings) {
+  try {
+    modelRouter.init(settings);
+    providerRegistry.initFromModelRouter();
+    modelRouterReady = true;
+    modelRouterStartupError = "";
+    return true;
+  } catch (error) {
+    modelRouterReady = false;
+    modelRouterStartupError = error instanceof Error ? error.message : String(error);
+    console.error("[startup] 模型路由初始化失败，AI 路由已降级停用：", modelRouterStartupError);
+    return false;
+  }
+}
+
+initializeModelRuntime(readSettings());
 
 // 统一设置中心
 const settingsCenter = createSettingsCenter(__dirname, settingsPath);
@@ -334,12 +367,13 @@ const mimeTypes = new Map([
 const downloadJobs = new Map();
 const transcriptJobs = new Map();
 
-function sendJson(res, status, value) {
+function sendJson(res, status, value, headers = {}) {
   const body = JSON.stringify(value);
   res.writeHead(status, {
     "content-type": "application/json; charset=utf-8",
     "content-length": Buffer.byteLength(body),
     "cache-control": "no-store",
+    ...headers,
   });
   res.end(body);
 }
@@ -366,6 +400,132 @@ function sendBuffer(res, status, buffer, contentType, fileName = "") {
   }
   res.writeHead(status, headers);
   res.end(buffer);
+}
+
+function sendFileAttachment(res, filePath, fileName = path.basename(filePath)) {
+  const stat = fs.statSync(filePath);
+  const type = mimeTypes.get(path.extname(filePath).toLowerCase()) || "application/octet-stream";
+  res.writeHead(200, {
+    "content-type": type,
+    "content-length": stat.size,
+    "content-disposition": `attachment; filename*=UTF-8''${encodeURIComponent(fileName)}`,
+    "cache-control": "no-store",
+  });
+  fs.createReadStream(filePath).pipe(res);
+}
+
+function localApiPort() {
+  const address = server.address();
+  return address && typeof address === "object" ? Number(address.port || 0) : 0;
+}
+
+function parseLocalHostHeader(value = "") {
+  const host = String(value || "").trim().toLowerCase();
+  const bracketed = host.match(/^\[([^\]]+)\]:(\d+)$/);
+  if (bracketed) return { hostname: bracketed[1], port: Number(bracketed[2] || 0) };
+  const match = host.match(/^([^:\s]+):(\d+)$/);
+  if (!match) return null;
+  return { hostname: match[1], port: Number(match[2] || 0) };
+}
+
+function isAllowedLocalHostname(hostname = "") {
+  return ["127.0.0.1", "localhost", "::1"].includes(String(hostname || "").trim().toLowerCase());
+}
+
+function isAllowedLocalHostHeader(hostHeader = "") {
+  const parsed = parseLocalHostHeader(hostHeader);
+  const port = localApiPort();
+  return Boolean(parsed && port && parsed.port === port && isAllowedLocalHostname(parsed.hostname));
+}
+
+function isAllowedLocalOriginHeader(originHeader = "") {
+  const value = String(originHeader || "").trim();
+  if (!value) return false;
+  try {
+    const origin = new URL(value);
+    return origin.protocol === "http:"
+      && Number(origin.port || 80) === localApiPort()
+      && isAllowedLocalHostname(origin.hostname);
+  } catch {
+    return false;
+  }
+}
+
+function parseCookies(header = "") {
+  const cookies = new Map();
+  for (const part of String(header || "").split(";")) {
+    const index = part.indexOf("=");
+    if (index <= 0) continue;
+    const name = part.slice(0, index).trim();
+    const value = part.slice(index + 1).trim();
+    if (!name) continue;
+    try {
+      cookies.set(name, decodeURIComponent(value));
+    } catch {
+      cookies.set(name, value);
+    }
+  }
+  return cookies;
+}
+
+function requestLocalApiToken(req) {
+  const headerToken = String(req.headers["x-local-api-token"] || "").trim();
+  if (headerToken) return headerToken;
+  return parseCookies(req.headers.cookie || "").get(localApiCookieName) || "";
+}
+
+function hasValidLocalApiToken(req) {
+  return requestLocalApiToken(req) === localApiSessionToken;
+}
+
+function requestHasBody(req) {
+  return Boolean(req.headers["transfer-encoding"]) || Number(req.headers["content-length"] || 0) > 0;
+}
+
+function requestHasJsonContentType(req) {
+  return String(req.headers["content-type"] || "").toLowerCase().split(";")[0].trim() === "application/json";
+}
+
+function isUnsafeHttpMethod(method = "") {
+  return ["POST", "PUT", "PATCH", "DELETE"].includes(String(method || "").toUpperCase());
+}
+
+function setLocalApiCookie(headers = {}) {
+  return {
+    ...headers,
+    "set-cookie": `${localApiCookieName}=${encodeURIComponent(localApiSessionToken)}; Path=/; HttpOnly; SameSite=Strict`,
+  };
+}
+
+function rejectLocalApiRequest(req, res) {
+  if (!isAllowedLocalHostHeader(req.headers.host || "")) {
+    sendJson(res, 403, { ok: false, message: "Forbidden host" });
+    return true;
+  }
+  const origin = String(req.headers.origin || "").trim();
+  if (origin && !isAllowedLocalOriginHeader(origin)) {
+    sendJson(res, 403, { ok: false, message: "Forbidden origin" });
+    return true;
+  }
+  if (isUnsafeHttpMethod(req.method) && !isAllowedLocalOriginHeader(origin)) {
+    sendJson(res, 403, { ok: false, message: "Missing or invalid origin" });
+    return true;
+  }
+  if (!hasValidLocalApiToken(req)) {
+    sendJson(res, 401, { ok: false, message: "Missing or invalid local session token" }, setLocalApiCookie());
+    return true;
+  }
+  if (isUnsafeHttpMethod(req.method) && requestHasBody(req) && !requestHasJsonContentType(req)) {
+    sendJson(res, 415, { ok: false, message: "Content-Type must be application/json" });
+    return true;
+  }
+  return false;
+}
+
+function rejectHttpHost(req, res) {
+  if (isAllowedLocalHostHeader(req.headers.host || "")) return false;
+  sendJson(res, 403, { ok: false, message: "Forbidden host" });
+  return true;
 }
 
 function getFirstUrl(text) {
@@ -487,6 +647,45 @@ function readSettings() {
 
 function writeSettings(settings) {
   fs.writeFileSync(settingsPath, JSON.stringify(normalizeSettings(settings), null, 2), "utf8");
+}
+
+function normalizeFolderNames(value) {
+  if (!Array.isArray(value)) throw new TypeError("文件夹名称列表格式无效");
+  if (value.length > 50) throw new TypeError("最多保存 50 个文件夹名称");
+  const names = [];
+  const seen = new Set();
+  for (const item of value) {
+    const name = normalizeDesktopFolderName(item);
+    const key = name.toLocaleLowerCase("zh-CN");
+    if (seen.has(key)) continue;
+    seen.add(key);
+    names.push(name);
+  }
+  return names;
+}
+
+function readFolderNames() {
+  if (!fs.existsSync(folderNamesPath)) return [];
+  try {
+    const parsed = JSON.parse(fs.readFileSync(folderNamesPath, "utf8"));
+    return normalizeFolderNames(Array.isArray(parsed) ? parsed : parsed?.names);
+  } catch (error) {
+    console.warn("[folder-names] 读取失败，将显示空列表：", error.message || String(error));
+    return [];
+  }
+}
+
+function writeFolderNames(value) {
+  const names = normalizeFolderNames(value);
+  fs.mkdirSync(path.dirname(folderNamesPath), { recursive: true });
+  const tempPath = `${folderNamesPath}.${process.pid}.${Date.now()}.tmp`;
+  try {
+    fs.writeFileSync(tempPath, JSON.stringify({ names }, null, 2), "utf8");
+    fs.renameSync(tempPath, folderNamesPath);
+  } finally {
+    if (fs.existsSync(tempPath)) fs.rmSync(tempPath, { force: true });
+  }
+  return names;
 }
 
 const DEFAULT_MOMENTS_PERSONA = {
@@ -740,9 +939,7 @@ async function publishWechatMomentWithPython({ text = "", imagePaths = [], authC
 
 function saveDownloadsDir(nextDir) {
   const resolved = setDownloadsDir(nextDir);
-  const settings = readSettings();
-  settings.downloadsDir = resolved;
-  writeSettings(settings);
+  selectedDownloadsDir = resolved;
   downloadsDir = resolved;
   return downloadsDir;
 }
@@ -803,7 +1000,7 @@ function chooseDownloadDir() {
       "-File",
       scriptPath,
       outputPath,
-      downloadsDir,
+      selectedDownloadsDir,
     ], {
       windowsHide: true,
       stdio: ["ignore", "ignore", "pipe"],
@@ -1212,7 +1409,7 @@ function normalizeSettings(settings) {
   }
 
   delete next.dashscopeApiKey;
-  next.downloadsDir = setDownloadsDir(next.downloadsDir || defaultDownloadsDir);
+  delete next.downloadsDir;
   next.jianyingAppPath = String(next.jianyingAppPath || next.jianying_app_path || jianying.appPath || "").trim();
   next.jianyingDraftDir = String(next.jianyingDraftDir || next.jianying_draft_dir || jianying.draftDir || "").trim();
   next.jianying = {
@@ -1316,7 +1513,7 @@ function normalizeSettings(settings) {
     },
   };
   next.bgmProviders = normalizeBgmProviders(bgmProviders);
-  next.modelMap = { ...DEFAULT_MODEL_MAPPING, ...modelMapping };
+  next.modelMap = normalizeModelMapping(modelMapping);
   if (next.modelMap.image?.provider === "volcengine_ark") {
     next.modelMap.image = {
       ...next.modelMap.image,
@@ -1478,7 +1675,7 @@ function publicRewriteSettings(settings = readSettings()) {
 
 function publicModelMapping(settings = readSettings()) {
   const mapping = settings.modelMap || settings.modelMapping || {};
-  return { ...DEFAULT_MODEL_MAPPING, ...mapping };
+  return normalizeModelMapping(mapping);
 }
 
 function rewriteProviderIdFromMapping(providerId) {
@@ -2031,7 +2228,7 @@ function applyLocalProviderConfig(settings, providerId) {
 }
 
 function applyModelMapping(settings, mapping) {
-  const normalized = { ...DEFAULT_MODEL_MAPPING, ...(mapping || {}) };
+  const normalized = normalizeModelMapping(mapping);
   if (normalized.image?.provider === "volcengine_ark") {
     normalized.image = { ...normalized.image, model: normalizeVolcengineArkImageModel(normalized.image.model) };
   }
@@ -2054,7 +2251,8 @@ function applyModelMapping(settings, mapping) {
     }
   }
 
-  const ttsProvider = String(normalized.tts?.provider || "");
+  const routedTtsProvider = String(normalized.tts?.provider || "");
+  const ttsProvider = routedTtsProvider === "ali-bailian" ? "aliyun_bailian" : routedTtsProvider;
   if (TTS_PROVIDER_LABELS[ttsProvider]) {
     settings.tts.default_provider = ttsProvider;
     if (normalized.tts?.model) {
@@ -2070,8 +2268,7 @@ function applyModelMapping(settings, mapping) {
 function reloadModelRuntime(settings) {
   writeSettings(settings);
   const normalized = readSettings();
-  modelRouter.init(normalized);
-  providerRegistry.initFromModelRouter();
+  initializeModelRuntime(normalized);
   return normalized;
 }
 
@@ -2531,6 +2728,20 @@ function resolveDownloadFilePath(fileName) {
   return isInsideDownloads(filePath) ? filePath : "";
 }
 
+function primaryTaskDownloadPath(task = {}) {
+  const action = String(task.task_action || "").trim();
+  if (action === "audio") {
+    return task.audio_path || task.video_path || "";
+  }
+  if (action === "subtitle") {
+    return task.subtitle_path || task.txt_path || task.video_path || "";
+  }
+  if (action === "transcript") {
+    return task.txt_path || task.subtitle_path || "";
+  }
+  return task.video_path || task.audio_path || task.subtitle_path || task.txt_path || "";
+}
+
 function isInsideManagedFilePath(filePath) {
   const resolved = path.resolve(filePath);
   const roots = [
@@ -2547,7 +2758,48 @@ function isInsideManagedFilePath(filePath) {
     path.join(__dirname, "jianying-exports"),
     path.join(__dirname, ".data", "cs1-video-maker"),
   ].map((item) => path.resolve(item));
-  return roots.some((root) => resolved === root || resolved.startsWith(`${root}${path.sep}`));
+  return roots.some((root) => isPathInsideRoot(root, resolved));
+}
+
+function resolveSafeManagedImagePath(filePath) {
+  const resolved = path.resolve(String(filePath || "").trim());
+  if (!resolved || !fs.existsSync(resolved)) throw new Error("Image file not found");
+  const stat = fs.statSync(resolved);
+  if (!stat.isFile()) throw new Error("Image file not found");
+  if (!localImageExtensions.has(path.extname(resolved).toLowerCase())) throw new Error("Unsupported image file type");
+  if (!isInsideManagedFilePath(resolved)) throw new Error("Image file is outside managed directories");
+  return resolved;
+}
+
+function resolveSafeDesktopLinkedImagePath(filePath) {
+  const desktopRoot = path.resolve(path.join(os.homedir(), "Desktop"));
+  const resolved = path.resolve(String(filePath || "").trim());
+  if (!resolved || !fs.existsSync(resolved) || !fs.statSync(resolved).isFile()) {
+    throw new Error("Image file not found");
+  }
+  if (!isPathInsideRoot(desktopRoot, resolved) || path.dirname(resolved) === desktopRoot) {
+    throw new Error("Image file is outside a desktop project folder");
+  }
+  if (!/^\d{4}-\d{2}-\d{2}-.+/u.test(path.basename(path.dirname(resolved)))) {
+    throw new Error("Image file is outside a dated desktop project folder");
+  }
+  if (!localImageExtensions.has(path.extname(resolved).toLowerCase())) {
+    throw new Error("Unsupported image file type");
+  }
+  return resolved;
+}
+
+function resolveImageRequestPath(url) {
+  const assetId = String(url.searchParams.get("id") || url.searchParams.get("assetId") || "").trim();
+  if (assetId) {
+    const asset = imageService.getAsset(assetId);
+    const assetPath = asset?.file_path || asset?.original_path || "";
+    if (asset?.source_type === "ian-xiaohei-local-linked") {
+      return resolveSafeDesktopLinkedImagePath(assetPath);
+    }
+    return resolveSafeManagedImagePath(assetPath);
+  }
+  return resolveSafeManagedImagePath(url.searchParams.get("path") || "");
 }
 
 function stopChildProcess(child) {
@@ -2594,6 +2846,16 @@ function shutdownNow() {
     stopChildProcess(child);
   }
   cleanupRuntimeFiles();
+  if (
+    path.dirname(browserDownloadsDir) === path.resolve(browserDownloadsRoot)
+    && path.basename(browserDownloadsDir).startsWith("session-")
+  ) {
+    try {
+      fs.rmSync(browserDownloadsDir, { recursive: true, force: true });
+    } catch {
+      // Best effort cleanup only.
+    }
+  }
   process.exit(0);
 }
 
@@ -4824,13 +5086,17 @@ function createMomentsProgressJob(progressId) {
   return id;
 }
 
-function updateMomentsProgressJob(progressId, progress, label, status = "running") {
+function updateMomentsProgressJob(progressId, progress, label, status = "running", extra = null) {
   const id = normalizeMomentsProgressId(progressId);
   const job = id ? momentsProgressJobs.get(id) : null;
   if (!job) return;
   job.progress = Math.max(0, Math.min(100, Math.round(Number(progress) || 0)));
   job.label = String(label || job.label || "正在生成");
   job.status = status;
+  if (extra && typeof extra === "object") {
+    if (extra.result !== undefined) job.result = extra.result;
+    if (extra.fallbackUsed !== undefined) job.fallbackUsed = extra.fallbackUsed === true;
+  }
   job.updatedAt = Date.now();
 }
 
@@ -6969,10 +7235,9 @@ function tasksToXlsx(rows) {
 
 function serveStatic(req, res) {
   const url = new URL(req.url, "http://127.0.0.1");
-  const pathname = decodeURIComponent(url.pathname === "/" ? "/index.html" : url.pathname);
-  const requested = path.normalize(path.join(uiDir, pathname));
+  const requested = resolveStaticRequestPath(uiDir, url.pathname);
 
-  if (!requested.startsWith(uiDir)) {
+  if (!requested) {
     res.writeHead(403);
     res.end("Forbidden");
     return;
@@ -6990,10 +7255,11 @@ function serveStatic(req, res) {
       .includes(extension)
       ? "public, max-age=86400"
       : "no-store";
-    res.writeHead(200, {
+    const headers = {
       "content-type": type,
       "cache-control": cacheControl,
-    });
+    };
+    res.writeHead(200, extension === ".html" ? setLocalApiCookie(headers) : headers);
     res.end(data);
   });
 }
@@ -7014,8 +7280,126 @@ const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, "http://127.0.0.1");
 
   try {
+    if (rejectHttpHost(req, res)) return;
+    if (url.pathname.startsWith("/api/") && rejectLocalApiRequest(req, res)) return;
+
     if (req.method === "GET" && url.pathname === "/api/status") {
-      sendJson(res, 200, { ok: true, downloadsDir, tasks: queueState(), lifecycle: pageLifecycle.status() });
+      sendJson(res, 200, {
+        ok: true,
+        downloadsDir: selectedDownloadsDir,
+        browserDefaultDownloads: !selectedDownloadsDir,
+        tasks: queueState(),
+        lifecycle: pageLifecycle.status(),
+        modelRouter: {
+          ready: modelRouterReady,
+          error: modelRouterStartupError,
+        },
+      });
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/desktop-date-folder") {
+      const created = createDesktopDateFolder();
+      sendJson(res, 200, { ok: true, ...created });
+      return;
+    }
+
+    if (req.method === "GET" && url.pathname === "/api/folder-names") {
+      sendJson(res, 200, { ok: true, names: readFolderNames() });
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/folder-names") {
+      try {
+        const body = await readJsonBody(req, { maxBytes: 32 * 1024 });
+        const names = writeFolderNames(body.names);
+        sendJson(res, 200, { ok: true, names });
+      } catch (error) {
+        sendJson(res, 400, { ok: false, message: error.message || "保存文件夹名称失败" });
+      }
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/desktop-folder-named") {
+      try {
+        const body = await readJsonBody(req, { maxBytes: 8 * 1024 });
+        const suffix = normalizeDesktopFolderName(body.suffix);
+        const created = createDesktopDateFolder({ suffix });
+        sendJson(res, 200, { ok: true, ...created });
+      } catch (error) {
+        sendJson(res, 400, { ok: false, message: error.message || "创建文件夹失败" });
+      }
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/desktop-folder-latest-images") {
+      try {
+        const body = await readJsonBody(req, { maxBytes: 8 * 1024 });
+        const suffix = normalizeDesktopFolderName(body.suffix);
+        const desktopDir = path.resolve(path.join(os.homedir(), "Desktop"));
+        const expectedBaseName = `${formatLocalDate()}-${suffix}`;
+        let folderPath = String(body.folderPath || "").trim();
+        if (folderPath) {
+          folderPath = path.resolve(folderPath);
+          const folderName = path.basename(folderPath);
+          const validName = folderName === expectedBaseName
+            || new RegExp(`^${expectedBaseName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}-\\d+$`, "u").test(folderName);
+          if (!isPathInsideRoot(desktopDir, folderPath) || !validName) {
+            throw new Error("只能扫描当前名称对应的桌面新建文件夹");
+          }
+        } else {
+          folderPath = findLatestDesktopNamedFolder({ desktopDir, suffix });
+        }
+        if (!folderPath || !fs.existsSync(folderPath)) {
+          throw new Error("未找到当前名称对应的桌面新建文件夹，请先点击“新建文件夹”");
+        }
+        const now = Date.now();
+        for (const [token, record] of desktopFolderImageTokens) {
+          if (record.expiresAt <= now) desktopFolderImageTokens.delete(token);
+        }
+        const images = listLatestDesktopImageBatch(folderPath).map((item) => {
+          const token = randomUUID();
+          desktopFolderImageTokens.set(token, {
+            filePath: item.path,
+            expiresAt: now + (60 * 60 * 1000),
+          });
+          return {
+            ...item,
+            imageUrl: `/api/desktop-folder-image?id=${encodeURIComponent(token)}`,
+          };
+        });
+        sendJson(res, 200, {
+          ok: true,
+          folderPath,
+          images,
+          message: images.length ? `找到最新一轮 ${images.length} 张图片` : "最新一轮没有可确定的连续编号图片",
+        });
+      } catch (error) {
+        sendJson(res, 400, { ok: false, message: error.message || "扫描图片素材失败" });
+      }
+      return;
+    }
+
+    if (req.method === "GET" && url.pathname === "/api/desktop-folder-image") {
+      const token = String(url.searchParams.get("id") || "");
+      const record = desktopFolderImageTokens.get(token);
+      if (!record || record.expiresAt <= Date.now()) {
+        desktopFolderImageTokens.delete(token);
+        sendJson(res, 404, { ok: false, message: "图片预览已过期，请重新添加图片素材" });
+        return;
+      }
+      try {
+        const filePath = resolveSafeDesktopLinkedImagePath(record.filePath);
+        const mime = {
+          ".png": "image/png",
+          ".jpg": "image/jpeg",
+          ".jpeg": "image/jpeg",
+          ".webp": "image/webp",
+        }[path.extname(filePath).toLowerCase()] || "application/octet-stream";
+        sendBuffer(res, 200, fs.readFileSync(filePath), mime);
+      } catch (error) {
+        sendJson(res, 404, { ok: false, message: error.message || "图片不存在" });
+      }
       return;
     }
 
@@ -7044,6 +7428,28 @@ const server = http.createServer(async (req, res) => {
 
     if (req.method === "GET" && url.pathname === "/api/files") {
       sendJson(res, 200, { files: listDownloads() });
+      return;
+    }
+
+    if (req.method === "GET" && url.pathname === "/api/files/download") {
+      const fileName = String(url.searchParams.get("name") || "").trim();
+      const filePath = resolveDownloadFilePath(fileName);
+      if (!filePath || !fs.existsSync(filePath) || !fs.statSync(filePath).isFile()) {
+        sendJson(res, 404, { ok: false, message: "没有找到可下载的文件" });
+        return;
+      }
+      sendFileAttachment(res, filePath, path.basename(filePath));
+      return;
+    }
+
+    if (req.method === "GET" && url.pathname === "/api/task-file/download") {
+      const task = taskStore.getTask(Number(url.searchParams.get("id") || 0));
+      const filePath = primaryTaskDownloadPath(task || {});
+      if (!filePath || !isInsideDownloads(filePath) || !fs.existsSync(filePath) || !fs.statSync(filePath).isFile()) {
+        sendJson(res, 404, { ok: false, message: "没有找到该任务的可下载文件" });
+        return;
+      }
+      sendFileAttachment(res, filePath, path.basename(filePath));
       return;
     }
 
@@ -7282,7 +7688,7 @@ const server = http.createServer(async (req, res) => {
         progressId = createMomentsProgressJob(body.progressId);
         const reportProgress = (progress, label) => updateMomentsProgressJob(progressId, progress, label);
         const result = await generateMomentsPostJsonV2(body, { onProgress: reportProgress });
-        updateMomentsProgressJob(progressId, 100, "朋友圈文案和图片提示词生成完成", "completed");
+        updateMomentsProgressJob(progressId, 100, "朋友圈文案和图片提示词生成完成", "completed", { result: result?.result ?? null, fallbackUsed: result?.fallbackUsed === true });
         sendJson(res, 200, result);
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
@@ -7726,7 +8132,8 @@ const server = http.createServer(async (req, res) => {
         jianying: settings.jianying,
         jianyingAppPath: settings.jianyingAppPath,
         jianyingDraftDir: settings.jianyingDraftDir,
-        downloadsDir,
+        downloadsDir: selectedDownloadsDir,
+        browserDefaultDownloads: !selectedDownloadsDir,
       });
       return;
     }
@@ -8546,6 +8953,14 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname.startsWith("/api/router/")) {
       const route = url.pathname.replace("/api/router/", "");
 
+      if (!modelRouterReady) {
+        sendJson(res, 503, {
+          ok: false,
+          error: modelRouterStartupError || "模型路由尚未就绪，请到系统设置检查模型配置。",
+        });
+        return;
+      }
+
       // 统一生成（带自动降级）
       if (req.method === "POST" && route === "generate") {
         const body = await readJsonBody(req);
@@ -8828,7 +9243,20 @@ const server = http.createServer(async (req, res) => {
       const route = url.pathname.replace("/api/providers/", "");
 
       if (req.method === "GET" && route === "list") {
-        sendJson(res, 200, { ok: true, providers: providerRegistry.getAll() });
+        sendJson(res, 200, {
+          ok: true,
+          ready: modelRouterReady,
+          error: modelRouterStartupError,
+          providers: providerRegistry.getAll(),
+        });
+        return;
+      }
+
+      if (!modelRouterReady) {
+        sendJson(res, 503, {
+          ok: false,
+          error: modelRouterStartupError || "模型路由尚未就绪，请到系统设置检查模型配置。",
+        });
         return;
       }
 
@@ -8868,7 +9296,7 @@ const server = http.createServer(async (req, res) => {
       const route = url.pathname.replace("/api/settings/", "");
 
       if (req.method === "GET" && route === "all") {
-        sendJson(res, 200, { ok: true, settings: readSettings() });
+        sendJson(res, 404, { ok: false, message: "Settings dump is disabled" });
         return;
       }
 
@@ -9014,7 +9442,13 @@ const server = http.createServer(async (req, res) => {
       }
 
       if (req.method === "GET" && route === "file") {
-        const filePath = url.searchParams.get("path") || "";
+        let filePath = "";
+        try {
+          filePath = resolveImageRequestPath(url);
+        } catch (error) {
+          sendJson(res, 404, { ok: false, message: error instanceof Error ? error.message : "Image file not found" });
+          return;
+        }
         if (!filePath || !fs.existsSync(filePath)) {
           sendJson(res, 404, { ok: false, message: "文件不存在" });
           return;
@@ -9022,13 +9456,14 @@ const server = http.createServer(async (req, res) => {
         const ext = path.extname(filePath).toLowerCase();
         const mime = { ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".gif": "image/gif", ".webp": "image/webp" };
         const data = fs.readFileSync(filePath);
-        sendBuffer(res, 200, data, mime[ext] || "application/octet-stream");
+        sendBuffer(res, 200, data, mime[ext] || "image/png");
         return;
       }
 
       if (req.method === "GET" && route === "thumbnail") {
-        const filePath = url.searchParams.get("path") || "";
+        let filePath = "";
         try {
+          filePath = resolveImageRequestPath(url);
           const thumbPath = await imageService.thumbnailForImage(filePath, { width: Number(url.searchParams.get("width")) || 360 });
           const ext = path.extname(thumbPath).toLowerCase();
           const mime = { ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".gif": "image/gif", ".webp": "image/webp" };
@@ -9059,7 +9494,15 @@ const server = http.createServer(async (req, res) => {
 });
 
 server.on("upgrade", (request, socket, head) => {
-  if (request.url === "/ws/progress") {
+  const url = new URL(request.url || "/", "http://127.0.0.1");
+  if (url.pathname !== "/ws/progress"
+    || !isAllowedLocalHostHeader(request.headers.host || "")
+    || !isAllowedLocalOriginHeader(request.headers.origin || "")
+    || !hasValidLocalApiToken(request)) {
+    socket.destroy();
+    return;
+  }
+  if (url.pathname === "/ws/progress") {
     wss.handleUpgrade(request, socket, head, (ws) => {
       wsClients.add(ws);
       ws.on("close", () => wsClients.delete(ws));
@@ -9133,7 +9576,7 @@ async function waitForExistingRuntimeUrl() {
     try {
       const url = fs.readFileSync(urlPath, "utf8").trim();
       if (url) {
-        const response = await fetch(`${url}/api/status`);
+        const response = await fetch(url);
         if (response.ok) return url;
       }
     } catch {

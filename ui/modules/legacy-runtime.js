@@ -292,6 +292,7 @@ const deleteSelectedBtn = document.querySelector("#deleteSelected");
 const downloadDirInput = document.querySelector("#downloadDirInput");
 const chooseDownloadDirBtn = document.querySelector("#chooseDownloadDir");
 const saveDownloadDirBtn = document.querySelector("#saveDownloadDir");
+const createDesktopDateFolderBtn = document.querySelector("#createDesktopDateFolder");
 const localVideoPath = document.querySelector("#localVideoPath");
 const chooseLocalVideoBtn = document.querySelector("#chooseLocalVideo");
 const extractLocalVideoTranscriptBtn = document.querySelector("#extractLocalVideoTranscript");
@@ -489,6 +490,13 @@ const realignTtsTranscriptBtn = document.querySelector("#realignTtsTranscript");
 const confirmTtsAlignmentBtn = document.querySelector("#confirmTtsAlignment");
 const ttsAlignmentStatus = document.querySelector("#ttsAlignmentStatus");
 const ttsAlignmentTimeline = document.querySelector("#ttsAlignmentTimeline");
+const ttsTimelineColumn = document.querySelector("#ttsTimelineColumn");
+const ttsTimelineJobTitle = document.querySelector("#ttsTimelineJobTitle");
+const ttsTimelineStatus = document.querySelector("#ttsTimelineStatus");
+const ttsCentralTimeline = document.querySelector("#ttsCentralTimeline");
+const ttsSaveTimelineBtn = document.querySelector("#ttsSaveTimeline");
+const ttsReloadTimelineBtn = document.querySelector("#ttsReloadTimeline");
+const ttsCentralHandoff = document.querySelector("#ttsCentralHandoff");
 const ttsAudioHandoff = document.querySelector("#ttsAudioHandoff");
 const sendConfirmedTtsAudioBtn = document.querySelector("#sendConfirmedTtsAudio");
 const ttsAudioHandoffStatus = document.querySelector("#ttsAudioHandoffStatus");
@@ -522,6 +530,7 @@ const momentsProgressPercent = document.querySelector("#momentsProgressPercent")
 const momentsProgressBar = document.querySelector("#momentsProgressBar");
 const copyMomentsPostBtn = document.querySelector("#copyMomentsPost");
 const copyMomentsPromptsBtn = document.querySelector("#copyMomentsPrompts");
+const copyMomentsImageInstructionBtn = document.querySelector("#copyMomentsImageInstruction");
 const publishMomentsWechatBtn = document.querySelector("#publishMomentsWechat");
 const momentsPublishStatus = document.querySelector("#momentsPublishStatus");
 const momentsPostOutput = document.querySelector("#momentsPostOutput");
@@ -564,18 +573,23 @@ let currentTaskPage = 1;
 let tasksPollTimer = 0;
 let rewriteProgressTimer = 0;
 let momentsProgressTimer = 0;
+let momentsActiveProgressIsOwn = false;
+let momentsActiveProgressSeen = false;
 let lastFinishedTaskCount = 0;
 let activeResultAction = "";
 let activeResultTaskIds = new Set();
 let activeResultFilePath = "";
 let activeResultRewriteTaskId = "";
 let autoRewriteResultTaskIds = new Set();
+let browserDefaultDownloads = true;
+let pendingBrowserDownloadTaskIds = new Set();
 let rewriteProviderConfigs = {};
 let currentRewriteSpecs = [];
 const MOMENTS_PERSONAS_KEY = "video-factory:moments-personas-v1";
 const MOMENTS_ACTIVE_PERSONA_KEY = "video-factory:moments-active-persona-v1";
 const MOMENTS_DRAFT_KEY = "video-factory:moments-draft-v1";
 const MOMENTS_PROVIDER_KEY = "video-factory:moments-provider-v1";
+const MOMENTS_ACTIVE_PROGRESS_KEY = "video-factory:moments-active-progress-v1";
 const ANALYSIS_PROVIDER_KEY = "video-factory:analysis-provider-v1";
 const defaultMomentsPersona = {
   id: "academic-planner",
@@ -610,6 +624,9 @@ let ttsMusicPresets = [];
 let ttsPollTimer = 0;
 let ttsRealignTimer = 0;
 let activeTtsRailJob = null;
+let ttsTimelineDraftRows = [];
+let ttsTimelineDraftJobId = "";
+let ttsTimelineDirty = false;
 let voiceAssets = [];
 let defaultVoiceAsset = null;
 let voiceAssetFilter = "preset";
@@ -853,6 +870,7 @@ function renderFiles(files) {
       <div>大小 / 生产时间</div>
       <div></div>
       <div></div>
+      <div></div>
     </div>
     ${pageFiles
       .map((file, index) => {
@@ -868,6 +886,7 @@ function renderFiles(files) {
           <div><span class="file-action">${getFileAction(file.name)}</span></div>
           <div class="file-name" title="${name}">${name}</div>
           <div class="file-meta">${formatSize(file.size)} · ${date}</div>
+          <button class="ghost small file-download" type="button" data-file-name="${name}">下载</button>
           <button class="ghost small file-open" type="button" data-file-name="${name}">打开</button>
           <button class="ghost small danger-action file-delete" type="button" data-file-name="${name}">删除</button>
         </div>
@@ -883,9 +902,12 @@ function renderFiles(files) {
   updateSelectionControls();
 }
 
-async function fetchJson(url, options = {}) {
-  const response = await fetch(url, options);
+async function fetchJson(url, options = {}, retryLocalSession = true) {
+  const response = await fetch(url, { credentials: "same-origin", ...options });
   const data = await response.json();
+  if (response.status === 401 && retryLocalSession && /local session token/i.test(String(data.message || data.error || ""))) {
+    return fetchJson(url, options, false);
+  }
   if (!response.ok || data.ok === false) {
     const error = new Error(data.message || data.error || data.text || "操作失败");
     error.data = data;
@@ -1971,26 +1993,85 @@ function stopMomentsProgress(label = "", percent = 100) {
     momentsProgressTimer = 0;
   }
   if (label) setMomentsProgress(percent, label);
+  try { localStorage.removeItem(MOMENTS_ACTIVE_PROGRESS_KEY); } catch {}
+}
+
+function applyMomentsRecoveredResult(result, { fallbackUsed = false } = {}) {
+  if (!result || typeof result !== "object") return false;
+  currentMomentsResult = result;
+  if (momentsPostOutput) momentsPostOutput.value = result.post || "";
+  renderMomentsResult(result);
+  saveMomentsDraft();
+  const fallbackNotice = fallbackUsed ? "本次已自动切换到备用 API。" : "";
+  setMomentsStatus(`页面刷新前的生成已完成，结果已自动恢复。${fallbackNotice}`, "success");
+  return true;
 }
 
 async function refreshMomentsProgress(progressId) {
   if (!progressId) return;
   try {
     const data = await fetchJson(`/api/moments/progress?id=${encodeURIComponent(progressId)}`, { cache: "no-store" });
+    momentsActiveProgressSeen = true;
     setMomentsProgress(data.progress, data.label);
-    if (data.status !== "running") stopMomentsProgress(data.label, data.progress);
-  } catch {
-    // 请求刚发出时服务端尚未登记进度任务，下一轮轮询会继续读取。
+    if (data.status !== "running") {
+      stopMomentsProgress(data.label, data.progress);
+      // 本次页面内发起的生成，结果由 POST 响应直接应用（见 generateMomentsPost），
+      // 这里不再重复应用；只有恢复场景（刷新后接管的轮询）才走恢复渲染。
+      if (data.status === "completed" && data.result && !momentsActiveProgressIsOwn) {
+        applyMomentsRecoveredResult(data.result, { fallbackUsed: data.fallbackUsed === true });
+      }
+      momentsActiveProgressIsOwn = false;
+    }
+  } catch (error) {
+    // 请求刚发出时服务端尚未登记进度任务，下一轮轮询会继续读取；
+    // 只有任务曾经查到、后来又 404（服务重启或 TTL 过期）才停止轮询，
+    // 避免启动初期的正常等待被误判成「任务已过期」。
+    const message = String(error?.data?.message || error?.message || "");
+    if (momentsActiveProgressSeen && /不存在|已过期|not.?found/i.test(message)) {
+      momentsActiveProgressSeen = false;
+      stopMomentsProgress("任务已过期，请重新生成", 0);
+    }
   }
 }
 
-function startMomentsProgress(progressId) {
+function startMomentsProgress(progressId, { own = true } = {}) {
   if (momentsProgressTimer) clearInterval(momentsProgressTimer);
+  momentsActiveProgressIsOwn = own === true;
+  momentsActiveProgressSeen = false;
+  try { localStorage.setItem(MOMENTS_ACTIVE_PROGRESS_KEY, String(progressId)); } catch {}
   setMomentsProgress(3, "正在提交生成任务");
   void refreshMomentsProgress(progressId);
   momentsProgressTimer = setInterval(() => {
     void refreshMomentsProgress(progressId);
   }, 700);
+}
+
+function restoreMomentsActiveProgress() {
+  let progressId = "";
+  try { progressId = String(localStorage.getItem(MOMENTS_ACTIVE_PROGRESS_KEY) || "").trim(); } catch {}
+  if (!progressId) return;
+  fetchJson(`/api/moments/progress?id=${encodeURIComponent(progressId)}`, { cache: "no-store" })
+    .then((data) => {
+      if (data.status === "running") {
+        startMomentsProgress(progressId, { own: false });
+        // 恢复场景下任务刚被查到存在，标记为已见，后续 404 才能判定为过期
+        momentsActiveProgressSeen = true;
+        setMomentsStatus("已恢复页面刷新前的生成任务，继续显示进度。");
+        return;
+      }
+      try { localStorage.removeItem(MOMENTS_ACTIVE_PROGRESS_KEY); } catch {}
+      if (data.status === "completed" && data.result) {
+        setMomentsProgress(data.progress || 100, data.label || "生成完成");
+        applyMomentsRecoveredResult(data.result, { fallbackUsed: data.fallbackUsed === true });
+      }
+    })
+    .catch((error) => {
+      // 只有任务明确不存在/已过期才清除；服务暂时不可达时保留 ID 下次再试。
+      const message = String(error?.data?.message || error?.message || "");
+      if (/不存在|已过期|not.?found|404/i.test(message)) {
+        try { localStorage.removeItem(MOMENTS_ACTIVE_PROGRESS_KEY); } catch {}
+      }
+    });
 }
 
 function setMomentsPersonaStatus(message) {
@@ -2367,6 +2448,28 @@ async function copyAllMomentsPrompts() {
   setMomentsStatus(`已复制 ${prompts.length} 条图片提示词。`, "success");
 }
 
+async function copyMomentsImageInstruction() {
+  const prompts = [...document.querySelectorAll(".moments-prompt-card")];
+  if (!prompts.length) {
+    setMomentsStatus("还没有可用的配图提示词。", "warning");
+    return;
+  }
+  const instruction = globalThis.buildMomentsImageInstruction(prompts.length);
+  await navigator.clipboard.writeText(instruction);
+  setMomentsStatus(`图片生成指令已复制，本轮共 ${prompts.length} 张。`, "success");
+}
+
+async function createDesktopDateFolder() {
+  if (!createDesktopDateFolderBtn) return;
+  createDesktopDateFolderBtn.disabled = true;
+  try {
+    const data = await fetchJson("/api/desktop-date-folder", { method: "POST" });
+    window.alert(`文件夹已创建：${data.folderName}`);
+  } finally {
+    createDesktopDateFolderBtn.disabled = false;
+  }
+}
+
 async function copyMomentsPost() {
   const post = (momentsPostOutput?.value || "").trim();
   if (!post) {
@@ -2506,6 +2609,9 @@ function trackImportedTasks(action, imported = {}) {
   activeResultFilePath = "";
   activeResultRewriteTaskId = "";
   autoRewriteResultTaskIds = new Set();
+  pendingBrowserDownloadTaskIds = browserDefaultDownloads && ["download", "audio", "subtitle"].includes(action)
+    ? new Set(activeResultTaskIds)
+    : new Set();
   if (openResultLocationBtn) openResultLocationBtn.hidden = true;
   if (sendResultRewriteBtn) sendResultRewriteBtn.hidden = true;
 }
@@ -2523,6 +2629,15 @@ async function openManagedPath(filePath) {
   });
 }
 
+function startBrowserDownload(url) {
+  const link = document.createElement("a");
+  link.href = url;
+  link.style.display = "none";
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+}
+
 function updateResultActionButtons(rows = []) {
   const latestWithFile = [...rows].reverse().find((task) => primaryTaskFilePath(task));
   activeResultFilePath = latestWithFile ? primaryTaskFilePath(latestWithFile) : "";
@@ -2537,6 +2652,11 @@ function handleFinishedResultWorkflow(rows = []) {
   for (const task of rows) {
     const id = String(task.id || "");
     if (!id || task.status !== "完成") continue;
+
+    if (browserDefaultDownloads && pendingBrowserDownloadTaskIds.has(id) && primaryTaskFilePath(task)) {
+      pendingBrowserDownloadTaskIds.delete(id);
+      startBrowserDownload(`/api/task-file/download?id=${encodeURIComponent(id)}`);
+    }
 
     if (task.txt_path && !autoRewriteResultTaskIds.has(id)) {
       autoRewriteResultTaskIds.add(id);
@@ -2646,6 +2766,9 @@ function renderTasks(tasks) {
         const canPause = task.status === "下载中" || task.status === "提取中";
         const canDelete = !canPause;
         const primaryPath = primaryTaskFilePath(task);
+        const downloadButton = primaryPath && task.status === "完成"
+          ? `<button class="ghost small task-download" type="button" data-task-id="${task.id}">浏览器下载</button>`
+          : "";
         const openButton = primaryPath
           ? `<button class="ghost small task-open-location" type="button" data-task-id="${task.id}">打开位置</button>`
           : "";
@@ -2655,7 +2778,7 @@ function renderTasks(tasks) {
         const manageButton = canPause
           ? `<button class="ghost small task-pause" type="button" data-task-id="${task.id}">暂停</button>`
           : `<button class="ghost small danger-action task-delete" type="button" data-task-id="${task.id}" ${canDelete ? "" : "disabled"}>删除</button>`;
-        const actionButton = [openButton, rewriteButton, manageButton].filter(Boolean).join("");
+        const actionButton = [downloadButton, openButton, rewriteButton, manageButton].filter(Boolean).join("");
         return `
           <div class="task-row">
             <div class="task-id">#${task.id}</div>
@@ -2787,6 +2910,7 @@ async function setDownloadDir(path) {
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ path }),
   });
+  browserDefaultDownloads = false;
   downloadDirInput.value = data.downloadsDir || path;
   savePath.textContent = `下载位置：${data.downloadsDir}`;
   renderFiles(data.files);
@@ -2795,6 +2919,8 @@ async function setDownloadDir(path) {
 
 async function chooseDownloadDir() {
   const data = await fetchJson("/api/downloads-dir/choose", { method: "POST" });
+  if (!data.ok) return data;
+  browserDefaultDownloads = false;
   downloadDirInput.value = data.downloadsDir || "";
   savePath.textContent = `下载位置：${data.downloadsDir}`;
   renderFiles(data.files);
@@ -3624,8 +3750,10 @@ function updateTtsMainProgressFromJob(job = {}) {
 }
 
 function renderTtsRail(job = activeTtsRailJob) {
-  if (!railCurrentTask || !job) return;
+  if (!job) return;
   activeTtsRailJob = job;
+  renderTtsCentralTimeline(job, { preserveDraft: true });
+  if (!railCurrentTask) return;
   const progress = Math.max(0, Math.min(100, ttsProgressValue(job)));
   const textPreview = String(job.final_text || job.recognized_text || job.text || ttsText?.value || "").trim().slice(0, 72);
   const title = ttsJobTitle(job);
@@ -3686,34 +3814,15 @@ function renderTtsRailLists(jobs = []) {
   }
 }
 
-function renderTtsJobs(jobs = []) {
-  if (!jobs.length) {
-    ttsHistory.innerHTML = '<div class="tts-empty">还没有生成记录。</div>';
-    return;
-  }
-  const labels = Object.fromEntries(ttsProviderConfigs.map((provider) => [provider.id, provider.label]));
-  ttsHistory.innerHTML = jobs
-    .map((job) => {
-      const audio = job.audio_url
-        ? `<audio controls preload="none" src="${escapeHtml(job.audio_url)}"></audio>`
-        : `<span title="${escapeHtml(job.error || "")}">${escapeHtml(job.error || "等待生成")}</span>`;
-      return `
-        <div class="tts-history-row" data-tts-job-id="${job.id}">
-          <strong>#${job.id}</strong>
-          <span>${escapeHtml(labels[job.provider] || job.provider)}</span>
-          <span class="tts-history-text" title="${escapeHtml(job.text)}">${escapeHtml(job.text)}</span>
-          <span>${escapeHtml(job.voice_name || job.voice_id || "-")}</span>
-          <span class="tts-job-status ${escapeHtml(job.status)}">${escapeHtml(ttsStatusLabel(job.status))}</span>
-          ${audio}
-          <button class="ghost small danger-action tts-job-delete" type="button" ${["waiting", "processing"].includes(job.status) ? "disabled" : ""}>删除</button>
-        </div>
-      `;
-    })
-    .join("");
-}
-
 const TTS_HIDDEN_JOBS_KEY = "dy:tts:hidden-jobs";
 const TTS_MINIMIZED_JOBS_KEY = "dy:tts:minimized-jobs";
+const TTS_HANDOFF_TARGETS_KEY = "dy:tts:handoff-targets";
+const TTS_HANDOFF_TARGETS = [
+  ["cs1-video", "CS1生成器"],
+  ["xiaohei-video", "小黑视频风格生成"],
+  ["money-printer", "MoneyPrinter"],
+  ["kinetic-text", "动态大字视频"],
+];
 
 function readTtsJobDisplaySet(key) {
   try {
@@ -3748,6 +3857,46 @@ function isTtsJobHidden(id) {
 
 function isTtsJobMinimized(id) {
   return readTtsJobDisplaySet(TTS_MINIMIZED_JOBS_KEY).has(String(id || ""));
+}
+
+function readTtsHandoffTargetSet() {
+  try {
+    const raw = globalThis.localStorage?.getItem(TTS_HANDOFF_TARGETS_KEY);
+    if (raw === null || raw === undefined) return new Set(TTS_HANDOFF_TARGETS.map(([target]) => target));
+    const values = JSON.parse(raw);
+    const allowed = new Set(TTS_HANDOFF_TARGETS.map(([target]) => target));
+    const selected = Array.isArray(values) ? values.map(String).filter((target) => allowed.has(target)) : [];
+    return new Set(selected);
+  } catch (_) {
+    return new Set(TTS_HANDOFF_TARGETS.map(([target]) => target));
+  }
+}
+
+function writeTtsHandoffTargetSet(targets = []) {
+  try {
+    const allowed = new Set(TTS_HANDOFF_TARGETS.map(([target]) => target));
+    const selected = Array.from(new Set(targets.map(String).filter((target) => allowed.has(target))));
+    globalThis.localStorage?.setItem(TTS_HANDOFF_TARGETS_KEY, JSON.stringify(selected));
+  } catch (_) {
+    // Last-used UI choices are optional; generated files and handoffs are not affected.
+  }
+}
+
+function renderTtsHandoffTargetOptions(className = "tts-job-handoff-choice") {
+  const selected = readTtsHandoffTargetSet();
+  return TTS_HANDOFF_TARGETS.map(([target, label]) => `
+    <label>
+      <input class="${className}" type="checkbox" data-target="${target}" ${selected.has(target) ? "checked" : ""} />
+      ${label}
+    </label>
+  `).join("");
+}
+
+function syncTtsHandoffTargetInputs(container = document) {
+  const selected = readTtsHandoffTargetSet();
+  container.querySelectorAll?.(".tts-job-handoff-choice, .tts-audio-handoff-choice").forEach((input) => {
+    input.checked = selected.has(input.dataset.target);
+  });
 }
 
 function ttsJobAudioFileName(job = {}) {
@@ -3791,28 +3940,14 @@ function renderTtsJobsEnhanced(jobs = []) {
         </div>
       `;
     }
-    const audio = job.audio_url
-      ? `<audio controls preload="none" src="${escapeHtml(job.audio_url)}"></audio>`
-      : `<span title="${escapeHtml(job.error || "")}">${escapeHtml(job.error || "等待生成")}</span>`;
     const displayNumber = Number(job.display_number || job.sequence_number || job.id || 0);
     const title = ttsJobTitle(job);
     const timedSubtitleUrl = job.timestamped_text_url || job.subtitle_url || "";
     const fileLinks = [
-      job.audio_url ? `<a href="${escapeHtml(job.audio_url)}" target="_blank" rel="noreferrer">音频</a>` : "",
-      job.script_url ? `<a href="${escapeHtml(job.script_url)}" target="_blank" rel="noreferrer">文案</a>` : "",
-      timedSubtitleUrl ? `<a href="${escapeHtml(timedSubtitleUrl)}" target="_blank" rel="noreferrer">带时间戳字幕</a>` : "",
+      job.audio_url ? `<button type="button" data-tts-load-file="audio">音频</button>` : "",
+      job.script_url ? `<button type="button" data-tts-load-file="script">文案</button>` : "",
+      timedSubtitleUrl ? `<button type="button" data-tts-load-file="timestamped-subtitle">带时间戳字幕</button>` : "",
     ].filter(Boolean).join("");
-    const handoffTargets = [
-      ["cs1-video", "CS1生成器", false],
-      ["xiaohei-video", "小黑视频风格生成", false],
-      ["money-printer", "MoneyPrinter", false],
-      ["kinetic-text", "动态大字视频", false],
-    ].map(([target, label, checked]) => `
-      <label>
-        <input class="tts-job-handoff-choice" type="checkbox" data-target="${target}" ${checked ? "checked" : ""} />
-        ${label}
-      </label>
-    `).join("");
     const rawAlignmentStatus = String(job.alignment_status || job.metadata?.alignment_status || "");
     const alignmentStatus = ttsAlignmentDisplayStatus(job);
     const rewriteRequired = ttsAlignmentRewriteRequired(job);
@@ -3843,10 +3978,10 @@ function renderTtsJobsEnhanced(jobs = []) {
       ? `
         <div class="tts-job-handoff">
           <div class="tts-job-handoff-head">
-            <strong>试听满意后发送</strong>
+            <strong>已生成三件套</strong>
             <span>${escapeHtml(matchPassedText)}</span>
           </div>
-          <div class="tts-job-handoff-options">${handoffTargets}</div>
+          <div class="tts-job-handoff-options">${renderTtsHandoffTargetOptions("tts-job-handoff-choice")}</div>
           <div class="tts-history-actions">
             <button class="primary small tts-job-send" type="button">发送所选</button>
             <button class="ghost small danger-action tts-job-delete" type="button">不满意，删除</button>
@@ -3867,13 +4002,11 @@ function renderTtsJobsEnhanced(jobs = []) {
               ${rewriteRequired
                 ? `
                   <button class="primary small tts-job-change-script" type="button">换文案生成</button>
-                  <button class="ghost small tts-job-calibrate" type="button">查看字幕详情</button>
                 `
                 : rawAlignmentStatus === "review_required"
                   ? `
                     <button class="primary small tts-job-alignment-retry" type="button">自动重新识别</button>
                     <button class="ghost small tts-job-regenerate" type="button">重新生成音频</button>
-                    <button class="ghost small tts-job-calibrate" type="button">查看字幕详情</button>
                   `
                   : '<button class="primary small tts-job-alignment-retry" type="button">重新识别音频</button>'}
               <button class="ghost small danger-action tts-job-delete" type="button">不满意，删除</button>
@@ -3901,7 +4034,6 @@ function renderTtsJobsEnhanced(jobs = []) {
         </div>
         <div class="tts-history-text" title="${escapeHtml(job.final_text || job.recognized_text || job.text)}">${escapeHtml(job.final_text || job.recognized_text || job.text)}</div>
         <div class="tts-history-meta">${escapeHtml(job.voice_name || job.voice_id || "-")} · ${escapeHtml(labels[job.provider] || job.provider)} · ${escapeHtml(String(job.format || "mp3").toUpperCase())}</div>
-        <div class="tts-history-audio">${audio}</div>
         <span class="tts-history-files">${fileLinks}</span>
         ${handoffPanel}
       </div>
@@ -3919,6 +4051,7 @@ async function refreshTtsJobs() {
       activeTtsRailJob = latest;
       renderTtsRail(latest);
       renderTtsAlignmentEditor(latest);
+      renderTtsCentralTimeline(latest, { preserveDraft: true });
     }
   }
 }
@@ -4001,14 +4134,6 @@ function confirmedTtsAudioPayload(job = activeTtsRailJob) {
 const PRODUCTION_TTS_TARGETS = ["cs1-video", "xiaohei-video", "money-printer", "kinetic-text"];
 const SHARED_TTS_HANDOFF_KEY = "dy:handoff:shared:audio";
 
-function readStoredJson(key, fallback = null) {
-  try {
-    return JSON.parse(localStorage.getItem(key) || "null") ?? fallback;
-  } catch {
-    return fallback;
-  }
-}
-
 function ttsHandoffRevision(payload = {}, sentAt = new Date().toISOString()) {
   return [
     payload.id || "",
@@ -4035,27 +4160,9 @@ function clearProductionTtsHandoffStorage() {
   }
 }
 
-function writeTtsTargetHandoff(target, payload) {
-  const key = `dy:handoff:${target}:audio`;
-  const sentAt = payload.sent_at || payload.sentAt || payload.sharedUpdatedAt || new Date().toISOString();
-  localStorage.setItem(key, JSON.stringify(payload));
-  localStorage.setItem(`video-factory-handoff:${target}`, JSON.stringify({
-    target,
-    source: "tts",
-    title: ttsHandoffTitle(payload),
-    text: payload.text || "",
-    tts: payload,
-    files: payload.files || [],
-    sentAt,
-    handoffId: payload.handoff_id || "",
-    handoffRevision: payload.handoff_revision || "",
-  }));
-}
-
-function saveSharedTtsHandoff(payload = {}, { sourceTarget = "" } = {}) {
+function saveSharedTtsHandoff(payload = {}, { sourceTarget = "", targets = [] } = {}) {
   if (!payload?.id) return payload;
   const sentAt = payload.sent_at || payload.sentAt || new Date().toISOString();
-  clearProductionTtsHandoffStorage();
   const sharedPayload = {
     ...payload,
     handoff_id: payload.handoff_id || `tts-${payload.id}-${Date.now()}`,
@@ -4065,26 +4172,9 @@ function saveSharedTtsHandoff(payload = {}, { sourceTarget = "" } = {}) {
     handoffType: payload.handoffType || "音频",
     shared: true,
     sharedUpdatedAt: sentAt,
+    sourceTarget,
   };
-  localStorage.setItem(SHARED_TTS_HANDOFF_KEY, JSON.stringify(sharedPayload));
-  localStorage.setItem("video-factory-last-handoff", JSON.stringify({
-    target: sourceTarget || "shared",
-    source: "tts",
-    title: ttsHandoffTitle(sharedPayload),
-    text: sharedPayload.text || "",
-    tts: sharedPayload,
-    files: sharedPayload.files || [],
-    sentAt,
-    handoffId: sharedPayload.handoff_id || "",
-    handoffRevision: sharedPayload.handoff_revision || "",
-  }));
-  for (const target of PRODUCTION_TTS_TARGETS) {
-    writeTtsTargetHandoff(target, sharedPayload);
-    markProductionTargetReceived(target, sharedPayload);
-  }
-  window.dispatchEvent(new CustomEvent("tts-shared-handoff-updated", {
-    detail: { payload: sharedPayload, sourceTarget },
-  }));
+  globalThis.ttsHandoffStore?.save(sharedPayload, targets);
   return sharedPayload;
 }
 
@@ -4104,69 +4194,19 @@ function sharedTimelineRows(payload = {}) {
   })).filter((row) => row.text && row.end > row.start);
 }
 
-async function syncSharedTtsTimeline(rows = [], { sourceTarget = "", title = "" } = {}) {
-  const current = readStoredJson(SHARED_TTS_HANDOFF_KEY, null);
-  if (!current?.id) throw new Error("没有可同步的 TTS 字幕任务。");
-  const sourceRows = sharedTimelineRows(current);
-  if (!Array.isArray(rows) || rows.length !== sourceRows.length) {
-    throw new Error("字幕行数必须与原时间轴保持一致。");
-  }
-  const timeline = sourceRows.map((source, index) => ({
-    ...source,
-    start: source.start,
-    end: source.end,
-    text: String(rows[index]?.text || "").trim(),
-  }));
-  if (timeline.some((row) => !row.text)) throw new Error("字幕文字不能为空。");
-  const finalText = timeline.map((row) => row.text).join("");
-  const data = await fetchJson("/api/tts/alignment/sync", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      id: current.id,
-      title: title || current.title || current.seo_title || "",
-      text: finalText,
-      sentenceTimeline: timeline,
-      subtitleTimeline: timeline,
-      duration: Number(current.audio_duration || current.duration || 0),
-      source: sourceTarget || "shared-production-timeline",
-      confirmationMode: "shared_production_timeline",
-    }),
-  });
-  const job = data.job || {};
-  return saveSharedTtsHandoff({
-    ...current,
-    ...job,
-    title: job.title || current.title || title,
-    text: job.final_text || finalText,
-    final_text: job.final_text || finalText,
-    sentence_timeline: job.sentence_timeline || timeline,
-    subtitle_timeline: job.subtitle_timeline || job.sentence_timeline || timeline,
-  }, { sourceTarget });
-}
-
-function saveTtsAudioHandoff(target, payload) {
-  return saveSharedTtsHandoff(payload, { sourceTarget: target });
-}
-
 function restoreProductionTtsBadges() {
-  const shared = readStoredJson(SHARED_TTS_HANDOFF_KEY, null);
-  if (shared?.id) {
-    for (const target of PRODUCTION_TTS_TARGETS) markProductionTargetReceived(target, shared);
-    return;
-  }
   for (const target of PRODUCTION_TTS_TARGETS) {
-    const payload = readStoredJson(`dy:handoff:${target}:audio`, null);
-    if (payload?.id) markProductionTargetReceived(target, payload);
+    const payload = globalThis.ttsHandoffStore?.read(target);
+    if (payload?.id && globalThis.ttsHandoffStore?.isPending(target)) {
+      markProductionTargetReceived(target, payload);
+    }
   }
 }
 
 window.sharedTtsHandoff = {
   targets: PRODUCTION_TTS_TARGETS,
-  read: () => readStoredJson(SHARED_TTS_HANDOFF_KEY, null),
-  save: saveSharedTtsHandoff,
+  read: (target) => globalThis.ttsHandoffStore?.read(target) || null,
   timelineRows: sharedTimelineRows,
-  syncTimeline: syncSharedTtsTimeline,
   restoreBadges: restoreProductionTtsBadges,
 };
 
@@ -4224,7 +4264,19 @@ async function ensureVideoProjectForTts(payload = {}) {
   return window.videoProjects?.current?.() || project || null;
 }
 
+function productionTargetIsOpen(target) {
+  const normalizedTarget = String(target || "");
+  if (!PRODUCTION_TTS_TARGETS.includes(normalizedTarget)) return false;
+  if (document.body?.dataset.activeModule === normalizedTarget) return true;
+  if (document.querySelector(`.workbench-page.active[data-page="${normalizedTarget}"]`)) return true;
+  return document.querySelector(`.nav-item.active[data-nav="${normalizedTarget}"]`) !== null;
+}
+
 function markProductionTargetReceived(target, payload = {}) {
+  if (productionTargetIsOpen(target)) {
+    acknowledgeProductionTarget(target);
+    return;
+  }
   const button = document.querySelector(`.nav-item[data-nav="${target}"]`);
   if (!button) return;
   const kind = payload.handoffType || (payload.audio_path || payload.audio_url ? "音频" : "");
@@ -4234,6 +4286,25 @@ function markProductionTargetReceived(target, payload = {}) {
     ? `已收${kind || ""} #${marker}`
     : (kind ? `已收${kind}` : "已接收");
 }
+
+function acknowledgeProductionTarget(target) {
+  const normalizedTarget = String(target || "");
+  if (!normalizedTarget) return;
+  globalThis.ttsHandoffStore?.acknowledge(normalizedTarget);
+  const button = document.querySelector(`.nav-item[data-nav="${normalizedTarget}"]`);
+  if (!button) return;
+  button.classList.remove("handoff-ready");
+  button.removeAttribute("data-handoff-label");
+}
+
+document.addEventListener("workbench:route", (event) => {
+  acknowledgeProductionTarget(event.detail?.page);
+});
+
+document.addEventListener("click", (event) => {
+  const button = event.target?.closest?.(".nav-item[data-nav]");
+  if (button?.dataset.nav) acknowledgeProductionTarget(button.dataset.nav);
+}, true);
 
 function applyTtsToCs1(payload = {}) {
   if (window.cs1VideoProduction?.receiveTts) {
@@ -4261,7 +4332,7 @@ function applyTtsToMoneyPrinter(payload = {}) {
   const detail = document.querySelector("#moneyPrinterDetail");
   if (status) status.textContent = "已接收 TTS 三件套";
   if (detail) detail.textContent = "脚本已填入，音频和带时间戳字幕已保存到 MoneyPrinter handoff。";
-  if (window.moneyPrinterProduction?.receiveTts) window.moneyPrinterProduction.receiveTts(payload);
+  if (window.moneyPrinterProduction?.receiveTts) window.moneyPrinterProduction.receiveTts(payload, { navigate: false });
   else window.dispatchEvent(new CustomEvent("money-printer-handoff", { detail: payload }));
 }
 
@@ -4280,16 +4351,18 @@ async function applyTtsToXiaohei(payload = {}) {
     handoffId: payload.handoff_id || "",
     handoffRevision: payload.handoff_revision || "",
   };
-  localStorage.setItem("video-factory-xiaohei-handoff", JSON.stringify(handoff));
-  document.querySelector("#xiaoheiProductionFrame")?.contentWindow?.postMessage({ type: "video-factory:xiaohei-handoff", handoff }, window.location.origin);
+  if (window.xiaoheiProduction?.receiveHandoff) window.xiaoheiProduction.receiveHandoff(handoff);
+  else document.querySelector("#xiaoheiProductionFrame")?.contentWindow?.postMessage({ type: "video-factory:xiaohei-handoff", handoff }, window.location.origin);
   const status = document.querySelector("#xiaoheiHandoffStatus");
   if (status) status.textContent = `已接收音频 #${payload.display_number || payload.id || "-"}：${handoff.title}`;
 }
 
 function selectedTtsHandoffTargets(container = document) {
-  return [...container.querySelectorAll(".tts-job-handoff-choice:checked, .tts-audio-handoff-choice:checked")]
+  const targets = [...container.querySelectorAll(".tts-job-handoff-choice:checked, .tts-audio-handoff-choice:checked")]
     .map((input) => input.dataset.target)
     .filter(Boolean);
+  writeTtsHandoffTargetSet(targets);
+  return targets;
 }
 
 function setTtsHandoffStatus(container = document, message = "") {
@@ -4297,31 +4370,70 @@ function setTtsHandoffStatus(container = document, message = "") {
   if (node) node.textContent = message;
 }
 
+async function deliverTtsPayloadToTarget(target, sharedPayload) {
+  if (target === "cs1-video" && window.cs1VideoProduction?.receiveTts) {
+    return applyTtsToCs1(sharedPayload);
+  }
+  if (target === "xiaohei-video" && window.xiaoheiProduction?.receiveTts) {
+    return applyTtsToXiaohei(sharedPayload);
+  }
+  if (target === "money-printer" && window.moneyPrinterProduction?.receiveTts) {
+    return applyTtsToMoneyPrinter(sharedPayload);
+  }
+  if (target === "kinetic-text" && window.kineticTextProduction?.receiveTts) {
+    return window.kineticTextProduction.receiveTts(sharedPayload, { navigate: false });
+  }
+  return null;
+}
+
+function scheduleTtsTargetDelivery(target, sharedPayload) {
+  Promise.resolve()
+    .then(() => deliverTtsPayloadToTarget(target, sharedPayload))
+    .catch((error) => {
+      console.error(`TTS 后台交接失败：${target}`, error);
+    });
+}
+
 async function sendTtsPayloadToTargets(payload, targets = []) {
-  const sharedPayload = saveSharedTtsHandoff(payload, { sourceTarget: "send-selected" });
+  const sharedPayload = saveSharedTtsHandoff(payload, { sourceTarget: "send-selected", targets });
   const sent = [];
   if (targets.includes("cs1-video")) {
-    applyTtsToCs1(sharedPayload);
+    scheduleTtsTargetDelivery("cs1-video", sharedPayload);
     markProductionTargetReceived("cs1-video", sharedPayload);
     sent.push("CS1生成器");
   }
   if (targets.includes("xiaohei-video")) {
-    await applyTtsToXiaohei(sharedPayload);
+    scheduleTtsTargetDelivery("xiaohei-video", sharedPayload);
     markProductionTargetReceived("xiaohei-video", sharedPayload);
     sent.push("小黑视频风格生成");
   }
   if (targets.includes("money-printer")) {
-    applyTtsToMoneyPrinter(sharedPayload);
+    scheduleTtsTargetDelivery("money-printer", sharedPayload);
     markProductionTargetReceived("money-printer", sharedPayload);
     sent.push("MoneyPrinter");
   }
   if (targets.includes("kinetic-text")) {
+    scheduleTtsTargetDelivery("kinetic-text", sharedPayload);
     markProductionTargetReceived("kinetic-text", sharedPayload);
-    if (window.kineticTextProduction?.receiveTts) await window.kineticTextProduction.receiveTts(sharedPayload);
-    else window.dispatchEvent(new CustomEvent("kinetic-text-handoff", { detail: sharedPayload }));
     sent.push("动态大字视频");
   }
   return sent;
+}
+
+async function refreshSentTtsRecord(job = activeTtsRailJob) {
+  if (job?.id) {
+    try {
+      const data = await fetchJson(`/api/tts/job?id=${encodeURIComponent(job.id)}`);
+      if (data.job) {
+        activeTtsRailJob = data.job;
+        renderTtsRail(data.job);
+        renderTtsCentralTimeline(data.job, { preserveDraft: false });
+      }
+    } catch (_) {
+      activeTtsRailJob = job;
+    }
+  }
+  await refreshTtsJobs();
 }
 
 async function sendConfirmedTtsAudio(container = document, job = activeTtsRailJob) {
@@ -4341,36 +4453,47 @@ async function sendConfirmedTtsAudio(container = document, job = activeTtsRailJo
   let correctionMode = "";
   let partialCorrection = false;
   const isMusicRepair = String(job?.model || job?.metadata?.model || "").toLowerCase() === "music-2.6-free";
-  setTtsHandoffStatus(container, isMusicRepair
-    ? "正在用当前大模型理解配音前文案，并对实际歌唱识别稿做句子、短语和拼音对齐修复..."
-    : "正在用当前大模型校正错字和标点，并按音频字词边界微调字幕时间戳...");
-  try {
-    const correction = await fetchJson("/api/tts/subtitle/correct-before-handoff", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ id: job.id }),
-    });
-    handoffJob = correction.job || job;
-    corrected = correction.corrected === true;
-    correctionMode = String(correction.mode || "");
-    partialCorrection = correction.partial === true;
-    correctionWarning = String(correction.warning || "").trim();
-  } catch (error) {
-    correctionWarning = `字幕文字校正失败：${error instanceof Error ? error.message : String(error)}；已采用原字幕继续发送。`;
-    handoffJob = job;
+  const manuallyConfirmedInTtsPage = String(job?.shared_sync_source || job?.metadata?.shared_sync_source || job?.alignment_confirmation_mode || job?.metadata?.alignment_confirmation_mode || "") === "tts_page_timeline_editor";
+  if (manuallyConfirmedInTtsPage) {
+    setTtsHandoffStatus(container, "已使用 TTS 页面确认过的文案、音频和带时间戳字幕发送...");
+  } else {
+    setTtsHandoffStatus(container, isMusicRepair
+      ? "正在用当前大模型理解配音前文案，并对实际歌唱识别稿做句子、短语和拼音对齐修复..."
+      : "正在用当前大模型校正错字和标点，并按音频字词边界微调字幕时间戳...");
+    try {
+      const correction = await fetchJson("/api/tts/subtitle/correct-before-handoff", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ id: job.id }),
+      });
+      handoffJob = correction.job || job;
+      corrected = correction.corrected === true;
+      correctionMode = String(correction.mode || "");
+      partialCorrection = correction.partial === true;
+      correctionWarning = String(correction.warning || "").trim();
+    } catch (error) {
+      correctionWarning = `字幕文字校正失败：${error instanceof Error ? error.message : String(error)}；已采用原字幕继续发送。`;
+      handoffJob = job;
+    }
   }
   const payload = confirmedTtsAudioPayload(handoffJob) || originalPayload;
   activeTtsRailJob = handoffJob;
-  await window.videoProjects?.linkCurrent?.("tts", payload.id, ttsHandoffTitle(payload), payload);
+  Promise.resolve(window.videoProjects?.linkCurrent?.("tts", payload.id, ttsHandoffTitle(payload), payload))
+    .catch((error) => console.error("TTS 项目关联失败", error));
   const sent = await sendTtsPayloadToTargets(payload, targets);
+  refreshSentTtsRecord(handoffJob).catch(() => {});
   const correctionStatus = corrected && correctionMode === "source_constrained_music_asr_repair"
     ? partialCorrection
       ? `${correctionWarning || "已完成原文约束修复，未确定内容保留原识别文字；"}`
       : "已按配音前文案完成句子、短语和拼音对齐修复；只更新字幕正文，逐行及逐字时间轴保持原样；"
+    : manuallyConfirmedInTtsPage
+      ? "已采用 TTS 页面确认过的字幕时间轴；"
     : corrected
       ? "字幕错字和标点已校正，时间戳已按字词边界微调；"
     : `${correctionWarning || "字幕未校正，已采用原字幕继续发送。"}`;
-  setTtsHandoffStatus(container, `${correctionStatus}已发送三件套到：${sent.join("、")}。`);
+  const sentMessage = `${correctionStatus}已发送三件套到：${sent.join("、")}。`;
+  setTtsHandoffStatus(container, sentMessage);
+  if (ttsTimelineStatus) ttsTimelineStatus.textContent = `字幕已保存并发送：${sent.join("、")}。`;
 }
 
 async function deleteTtsJob(id) {
@@ -4408,6 +4531,191 @@ function formatTtsTimelineTime(value = 0) {
   const minutes = Math.floor(total / 60);
   const seconds = total - minutes * 60;
   return `${String(minutes).padStart(2, "0")}:${seconds.toFixed(3).padStart(6, "0")}`;
+}
+
+function ttsTimelineRows(job = {}) {
+  const metadata = job.metadata && typeof job.metadata === "object" ? job.metadata : {};
+  const rows = Array.isArray(job.sentence_timeline) && job.sentence_timeline.length
+    ? job.sentence_timeline
+    : Array.isArray(job.subtitle_timeline) && job.subtitle_timeline.length
+      ? job.subtitle_timeline
+      : Array.isArray(metadata.sentence_timeline) && metadata.sentence_timeline.length
+        ? metadata.sentence_timeline
+        : Array.isArray(metadata.subtitle_timeline)
+          ? metadata.subtitle_timeline
+          : [];
+  return rows.map((row, index) => ({
+    ...row,
+    id: String(row.id || `tts-sentence-${index + 1}`),
+    index: index + 1,
+    start: Number(row.start || 0),
+    end: Number(row.end || 0),
+    text: String(row.text || ""),
+  })).filter((row) => row.end > row.start);
+}
+
+function setTtsTimelineDirty(dirty) {
+  ttsTimelineDirty = Boolean(dirty);
+  if (ttsSaveTimelineBtn) ttsSaveTimelineBtn.disabled = !activeTtsRailJob?.id || !ttsTimelineDraftRows.length;
+  if (ttsTimelineStatus && activeTtsRailJob?.id) {
+    ttsTimelineStatus.textContent = ttsTimelineDirty
+      ? "字幕已修改，点击“确定修改”后写入这条 TTS 三件套。"
+      : "字幕时间轴已加载，可直接核对或修改。";
+  }
+}
+
+function ttsEstimatedWordTimeline(rows = []) {
+  const words = [];
+  rows.forEach((row) => {
+    const chars = [...String(row.text || "").replace(/\s+/g, "")];
+    const duration = Math.max(0.05, Number(row.end || 0) - Number(row.start || 0));
+    const step = duration / Math.max(1, chars.length);
+    chars.forEach((text, index) => {
+      const start = Number(row.start || 0) + step * index;
+      words.push({
+        text,
+        start,
+        end: Math.min(Number(row.end || start + step), start + step),
+        estimated: true,
+        source: "tts_page_timeline_editor",
+      });
+    });
+  });
+  return words;
+}
+
+function renderTtsCentralTimeline(job = activeTtsRailJob, { preserveDraft = false } = {}) {
+  if (!ttsCentralTimeline) return;
+  const jobId = String(job?.id || "");
+  const rows = ttsTimelineRows(job);
+  const shouldKeepDraft = preserveDraft && ttsTimelineDirty && jobId && jobId === ttsTimelineDraftJobId;
+  if (ttsTimelineJobTitle) {
+    ttsTimelineJobTitle.textContent = job?.id
+      ? `#${job.display_number || job.sequence_number || job.id} ${ttsJobTitle(job) || "已生成音频"}`
+      : "等待生成音频";
+  }
+  if (ttsReloadTimelineBtn) ttsReloadTimelineBtn.disabled = !job?.id || !rows.length;
+  if (!job?.id) {
+    ttsTimelineDraftRows = [];
+    ttsTimelineDraftJobId = "";
+    ttsTimelineDirty = false;
+    if (ttsSaveTimelineBtn) ttsSaveTimelineBtn.disabled = true;
+    if (ttsTimelineStatus) ttsTimelineStatus.textContent = "生成音频后会显示可编辑字幕。";
+    ttsCentralTimeline.innerHTML = '<div class="tts-empty">还没有可校对的字幕时间轴。</div>';
+    return;
+  }
+  if (!rows.length) {
+    ttsTimelineDraftRows = [];
+    ttsTimelineDraftJobId = jobId;
+    ttsTimelineDirty = false;
+    if (ttsSaveTimelineBtn) ttsSaveTimelineBtn.disabled = true;
+    if (ttsTimelineStatus) ttsTimelineStatus.textContent = "这条记录还没有可编辑的句级时间轴。";
+    ttsCentralTimeline.innerHTML = '<div class="tts-empty">等待生成或重新识别字幕时间轴。</div>';
+    return;
+  }
+  if (!shouldKeepDraft) {
+    ttsTimelineDraftRows = rows.map((row) => ({ ...row }));
+    ttsTimelineDraftJobId = jobId;
+    ttsTimelineDirty = false;
+  }
+  if (ttsTimelineStatus) {
+    ttsTimelineStatus.textContent = ttsTimelineDirty
+      ? "字幕已修改，点击“确定修改”后写入这条 TTS 三件套。"
+      : "字幕时间轴已加载，可直接核对或修改。";
+  }
+  if (ttsSaveTimelineBtn) ttsSaveTimelineBtn.disabled = false;
+  ttsCentralTimeline.dataset.jobId = jobId;
+  ttsCentralTimeline.innerHTML = ttsTimelineDraftRows.map((row, index) => `
+    <div class="tts-central-timeline-row" data-tts-timeline-index="${index}">
+      <span>${index + 1}</span>
+      <input type="number" value="${Number(row.start || 0).toFixed(2)}" readonly aria-readonly="true" />
+      <input type="number" value="${Number(row.end || 0).toFixed(2)}" readonly aria-readonly="true" />
+      <textarea rows="2" data-tts-timeline-text="${index}" data-no-draft-persist autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-1p-ignore="true">${escapeHtml(row.text || "")}</textarea>
+    </div>
+  `).join("");
+}
+
+async function syncGeneratedTtsJobToCentralTimeline(jobOrId, { preserveDraft = false } = {}) {
+  const fallbackJob = typeof jobOrId === "object" && jobOrId ? jobOrId : null;
+  const jobId = typeof jobOrId === "object" ? jobOrId?.id : jobOrId;
+  let job = fallbackJob;
+  if (jobId) {
+    try {
+      const data = await fetchJson(`/api/tts/job?id=${encodeURIComponent(jobId)}`);
+      job = data.job || fallbackJob;
+    } catch (_) {
+      job = fallbackJob;
+    }
+  }
+  if (!job) return null;
+  activeTtsRailJob = job;
+  renderTtsRail(job);
+  renderTtsAlignmentEditor(job);
+  renderTtsCentralTimeline(job, { preserveDraft });
+  updateTtsMainProgressFromJob(job);
+  return job;
+}
+
+function applyTtsTimelineInput(input) {
+  const index = Number(input?.dataset?.ttsTimelineText);
+  if (!Number.isInteger(index) || !ttsTimelineDraftRows[index]) return;
+  ttsTimelineDraftRows[index] = { ...ttsTimelineDraftRows[index], text: String(input.value || "") };
+  setTtsTimelineDirty(true);
+}
+
+async function saveTtsCentralTimeline() {
+  const job = activeTtsRailJob;
+  if (!job?.id) throw new Error("请先选择一条已生成的 TTS 音频。");
+  if (!ttsTimelineDraftRows.length) throw new Error("当前没有可保存的字幕时间轴。");
+  const rows = ttsTimelineDraftRows.map((row, index) => ({
+    ...row,
+    id: String(row.id || `tts-sentence-${index + 1}`),
+    index: index + 1,
+    start: Number(row.start || 0),
+    end: Number(row.end || 0),
+    text: String(row.text || "").trim(),
+  }));
+  if (rows.some((row) => !row.text)) throw new Error("字幕文字不能为空。");
+  const finalText = rows.map((row) => row.text).join("");
+  const data = await fetchJson("/api/tts/alignment/sync", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      id: job.id,
+      title: ttsJobTitle(job),
+      text: finalText,
+      sentenceTimeline: rows,
+      subtitleTimeline: rows,
+      wordTimeline: ttsEstimatedWordTimeline(rows),
+      duration: Number(job.audio_duration || job.duration || job.metadata?.audio_duration || job.metadata?.duration || 0),
+      source: "tts_page_timeline_editor",
+      confirmationMode: "tts_page_timeline_editor",
+      preserveTimelineValues: true,
+    }),
+  });
+  activeTtsRailJob = data.job;
+  ttsTimelineDraftRows = ttsTimelineRows(data.job);
+  ttsTimelineDraftJobId = String(data.job?.id || "");
+  setTtsTimelineDirty(false);
+  renderTtsRail(data.job);
+  renderTtsAlignmentEditor(data.job);
+  renderTtsCentralTimeline(data.job);
+  updateTtsMainProgressFromJob(data.job);
+  if (ttsStatus) ttsStatus.textContent = "字幕时间轴已保存到 TTS 三件套。";
+  refreshTtsJobs().catch(() => {});
+  return data.job;
+}
+
+async function confirmAndSendTtsCentralTimeline() {
+  if (!activeTtsRailJob?.id) throw new Error("请先生成或选择一条 TTS 音频。");
+  if (!ttsTimelineDraftRows.length) throw new Error("当前没有可确认的字幕时间轴。");
+  const targets = selectedTtsHandoffTargets(ttsCentralHandoff || ttsTimelineColumn || document);
+  if (!targets.length) throw new Error("请至少勾选一个要发送的生产线。");
+  if (ttsTimelineStatus) ttsTimelineStatus.textContent = "正在保存字幕时间轴并发送...";
+  const confirmedJob = await saveTtsCentralTimeline();
+  if (ttsTimelineStatus) ttsTimelineStatus.textContent = "字幕已保存，正在发送到所选生产线...";
+  await sendConfirmedTtsAudio(ttsCentralHandoff || ttsTimelineColumn || document, confirmedJob);
+  return confirmedJob;
 }
 
 function ttsTopIssuePanelShouldShow(job = activeTtsRailJob) {
@@ -4469,6 +4777,31 @@ function renderTtsAlignmentEditor(job = activeTtsRailJob) {
     : Array.isArray(job.subtitle_timeline)
       ? job.subtitle_timeline
       : [];
+  // 文案与字幕时间轴一致性校验：检测"新文案 + 旧字幕"污染
+  const textTimelineMatchRatio = Number(job.text_timeline_match_ratio ?? 1);
+  const timelineText = sentenceTimeline.map((row) => String(row?.text || "")).join("");
+  const hasMismatch = finalText && timelineText && textTimelineMatchRatio < 0.6;
+  let mismatchWarning = ttsAlignmentEditor.querySelector(".tts-timeline-mismatch-warning");
+  if (hasMismatch && !mismatchWarning) {
+    mismatchWarning = document.createElement("div");
+    mismatchWarning.className = "tts-timeline-mismatch-warning";
+    mismatchWarning.style.cssText = "background:#fef3c7;border:1px solid #f59e0b;border-radius:8px;padding:12px 16px;margin:12px 0;color:#92400e;font-size:14px;line-height:1.5;";
+    const summaryParent = ttsAlignmentSummary?.parentElement || ttsAlignmentEditor;
+    summaryParent.insertBefore(mismatchWarning, ttsAlignmentSummary || summaryParent.firstChild);
+  }
+  if (mismatchWarning) {
+    if (hasMismatch) {
+      mismatchWarning.innerHTML = `
+        <strong>⚠️ 文案与字幕不匹配</strong><br>
+        当前文案与音频字幕内容不一致（匹配率 ${(textTimelineMatchRatio * 100).toFixed(0)}%）。<br>
+        这通常是因为<strong>更换了文案但音频未重新生成</strong>，导致字幕仍显示旧文案内容。<br>
+        <strong>建议：</strong>点击「重新生成配音」按新文案生成音频，系统将自动重新对齐字幕时间轴。
+      `;
+      mismatchWarning.style.display = "block";
+    } else {
+      mismatchWarning.style.display = "none";
+    }
+  }
   if (ttsAlignmentSummary) {
     ttsAlignmentSummary.textContent = status === "confirmed"
       ? syncedBySingingLyrics
@@ -4616,6 +4949,7 @@ async function confirmActiveTtsAlignment() {
 
 function showTtsPreview(job) {
   activeTtsRailJob = job;
+  renderTtsCentralTimeline(job);
   if (!syncTtsTopIssuePanel(job)) return;
   ttsPreview.hidden = false;
   const isMusicJob = ttsIsMusicJob(job);
@@ -4633,6 +4967,55 @@ function showTtsPreview(job) {
   renderTtsAlignmentEditor(job);
 }
 
+function showTtsAudioFile(job) {
+  if (!job?.id) return;
+  activeTtsRailJob = job;
+  if (ttsPreview) ttsPreview.hidden = false;
+  const isMusicJob = ttsIsMusicJob(job);
+  if (ttsPreviewTitle) ttsPreviewTitle.textContent = ttsJobTitle(job) || `${isMusicJob ? "音频" : "语音"} #${job.id}`;
+  if (ttsPreviewMeta) {
+    ttsPreviewMeta.textContent = isMusicJob
+      ? `${job.voice_name || job.voice_id || "MiniMax Music"} · ${String(job.format || "").toUpperCase()}`
+      : `${job.voice_name || job.voice_id || "音色"} · ${job.speed}x · ${String(job.format || "").toUpperCase()}`;
+  }
+  if (ttsAudio && job.audio_url) {
+    const separator = job.audio_url.includes("?") ? "&" : "?";
+    ttsAudio.src = `${job.audio_url}${separator}t=${Date.now()}`;
+    ttsAudio.load();
+  }
+  ttsPreview?.scrollIntoView?.({ behavior: "smooth", block: "center" });
+}
+
+async function loadTtsHistoryFileToWorkspace(jobId, kind = "audio", row = null) {
+  const data = await fetchJson(`/api/tts/job?id=${encodeURIComponent(jobId)}`);
+  const job = data.job || {};
+  if (!job?.id) throw new Error("没有找到这条 TTS 记录。");
+  activeTtsRailJob = job;
+  renderTtsRail(job);
+  updateTtsMainProgressFromJob(job);
+  if (kind === "script") {
+    const text = String(job.final_text || job.metadata?.final_text || job.original_text || job.metadata?.original_text || job.text || "").trim();
+    if (!text) throw new Error("这条记录没有可加载的文案。");
+    setTextareaValue(ttsText, text);
+    if (ttsCharacterCount) ttsCharacterCount.textContent = `${ttsText.value.replace(/\s/g, "").length} 字`;
+    if (ttsStatus) ttsStatus.textContent = `文案已加载到项目文案：#${job.display_number || job.sequence_number || job.id}`;
+    ttsText?.scrollIntoView?.({ behavior: "smooth", block: "center" });
+    return job;
+  }
+  if (kind === "timestamped-subtitle") {
+    const synced = await syncGeneratedTtsJobToCentralTimeline(job, { preserveDraft: false });
+    if (ttsTimelineStatus) ttsTimelineStatus.textContent = `带时间戳字幕已加载：#${job.display_number || job.sequence_number || job.id}`;
+    ttsTimelineColumn?.scrollIntoView?.({ behavior: "smooth", block: "center" });
+    return synced || job;
+  }
+  if (!job.audio_url) throw new Error("这条记录没有可试听的音频。");
+  renderTtsCentralTimeline(job, { preserveDraft: false });
+  showTtsAudioFile(job);
+  const status = row?.querySelector?.(".tts-job-handoff-status") || ttsStatus;
+  if (status) status.textContent = `音频已加载到试听播放器：#${job.display_number || job.sequence_number || job.id}`;
+  return job;
+}
+
 async function waitForTtsJob(jobId) {
   if (ttsPollTimer) clearTimeout(ttsPollTimer);
   const data = await fetchJson(`/api/tts/job?id=${encodeURIComponent(jobId)}`);
@@ -4642,16 +5025,17 @@ async function waitForTtsJob(jobId) {
   updateTtsMainProgressFromJob(job);
   if (job.status === "completed") {
     generateTtsButton.disabled = false;
-    const alignmentStatus = ttsAlignmentDisplayStatus(job);
+    const completedJob = await syncGeneratedTtsJobToCentralTimeline(job);
+    const displayJob = completedJob || job;
+    const alignmentStatus = ttsAlignmentDisplayStatus(displayJob);
     ttsStatus.textContent = alignmentStatus === "confirmed"
       ? "音频和字幕已确认，可以发送到生产线。"
       : alignmentStatus === "review_required"
         ? "音频与时间轴已生成，请试听、校对并确认字幕。"
-        : job.alignment_status === "failed"
-          ? `音频已生成，但字幕校准失败：${job.alignment_error || "请重试。"}`
+        : displayJob.alignment_status === "failed"
+          ? `音频已生成，但字幕校准失败：${displayJob.alignment_error || "请重试。"}`
           : "音频生成完成。";
-    updateTtsMainProgressFromJob(job);
-    showTtsPreview(job);
+    showTtsPreview(displayJob);
     await refreshTtsJobs();
     return;
   }
@@ -5275,9 +5659,9 @@ generateTts = async function generateTtsUnified() {
         }),
       });
       const musicJob = registered.job || ttsMusicJobFromPreview(voiceAsset, data, text);
-      renderTtsRail(musicJob);
+      const completedMusicJob = await syncGeneratedTtsJobToCentralTimeline(musicJob);
       setTtsMainProgress(100, "生成完成");
-      showTtsPreview(musicJob);
+      showTtsPreview(completedMusicJob || musicJob);
       renderTtsVoiceQuickPanel(voiceAsset, { refreshAudio: true, previewMessage: "音乐音频已生成。" });
       await loadVoiceAssets();
       await refreshTtsJobs();
@@ -6364,10 +6748,11 @@ async function loadSettings() {
     batchLimit.value = String(data.batch.limit || 10);
     skipDownloaded.checked = data.batch.skipDownloaded !== false;
   }
-  if (data.downloadsDir) {
-    downloadDirInput.value = data.downloadsDir;
-    savePath.textContent = `下载位置：${data.downloadsDir}`;
-  }
+  browserDefaultDownloads = !data.downloadsDir;
+  downloadDirInput.value = data.downloadsDir || "";
+  savePath.textContent = data.downloadsDir
+    ? `下载位置：${data.downloadsDir}`
+    : "下载位置：浏览器默认下载位置";
   if (data.rewrite) {
     const rewrite = data.rewrite;
     const providers = rewrite.providers || {};
@@ -7143,6 +7528,38 @@ confirmTtsAlignmentBtn?.addEventListener("click", () => {
   });
 });
 
+ttsCentralTimeline?.addEventListener("input", (event) => {
+  const input = event.target.closest("[data-tts-timeline-text]");
+  if (input) applyTtsTimelineInput(input);
+});
+
+ttsSaveTimelineBtn?.addEventListener("click", () => {
+  ttsSaveTimelineBtn.disabled = true;
+  if (ttsTimelineStatus) ttsTimelineStatus.textContent = "正在保存字幕时间轴并发送...";
+  confirmAndSendTtsCentralTimeline().catch((error) => {
+    setTtsTimelineDirty(true);
+    if (ttsTimelineStatus) ttsTimelineStatus.textContent = error instanceof Error ? error.message : String(error);
+  }).finally(() => {
+    if (ttsSaveTimelineBtn) ttsSaveTimelineBtn.disabled = !activeTtsRailJob?.id || !ttsTimelineDraftRows.length;
+  });
+});
+
+ttsReloadTimelineBtn?.addEventListener("click", () => {
+  renderTtsCentralTimeline(activeTtsRailJob);
+});
+
+document.addEventListener("change", (event) => {
+  if (!event.target?.matches?.(".tts-job-handoff-choice, .tts-audio-handoff-choice")) return;
+  const source = event.target.closest(".tts-job-handoff, .tts-central-handoff, #ttsAudioHandoff") || document;
+  const targets = [...source.querySelectorAll(".tts-job-handoff-choice:checked, .tts-audio-handoff-choice:checked")]
+    .map((input) => input.dataset.target)
+    .filter(Boolean);
+  writeTtsHandoffTargetSet(targets);
+  syncTtsHandoffTargetInputs(document);
+});
+
+syncTtsHandoffTargetInputs(document);
+
 sendConfirmedTtsAudioBtn?.addEventListener("click", () => {
   sendConfirmedTtsAudio().catch((error) => {
     ttsAudioHandoffStatus.textContent = error instanceof Error ? error.message : String(error);
@@ -7164,8 +7581,8 @@ document.querySelector("#clearTtsJobs")?.addEventListener("click", () => {
 });
 
 ttsHistory?.addEventListener("click", (event) => {
+  const fileButton = event.target.closest("[data-tts-load-file]");
   const sendButton = event.target.closest(".tts-job-send");
-  const calibrateButton = event.target.closest(".tts-job-calibrate");
   const alignmentRetryButton = event.target.closest(".tts-job-alignment-retry");
   const confirmAnywayButton = event.target.closest(".tts-job-confirm-anyway");
   const regenerateButton = event.target.closest(".tts-job-regenerate");
@@ -7176,6 +7593,15 @@ ttsHistory?.addEventListener("click", (event) => {
   const row = event.target.closest("[data-tts-job-id]");
   if (!row) return;
   const jobId = Number(row.dataset.ttsJobId || 0);
+  if (fileButton) {
+    fileButton.disabled = true;
+    loadTtsHistoryFileToWorkspace(jobId, fileButton.dataset.ttsLoadFile || "audio", row).catch((error) => {
+      setTtsHandoffStatus(row, error instanceof Error ? error.message : String(error));
+    }).finally(() => {
+      fileButton.disabled = false;
+    });
+    return;
+  }
   if (confirmAnywayButton) {
     (async () => {
       const data = await fetchJson("/api/tts/alignment/confirm", {
@@ -7228,13 +7654,14 @@ ttsHistory?.addEventListener("click", (event) => {
     });
     return;
   }
-  if (calibrateButton || alignmentRetryButton) {
+  if (alignmentRetryButton) {
     (async () => {
       const data = await fetchJson(`/api/tts/job?id=${encodeURIComponent(jobId)}`);
       activeTtsRailJob = data.job;
       renderTtsRail(data.job);
       showTtsPreview(data.job);
-      ttsAlignmentEditor?.scrollIntoView({ behavior: "smooth", block: "center" });
+      renderTtsCentralTimeline(data.job);
+      ttsTimelineColumn?.scrollIntoView({ behavior: "smooth", block: "center" });
       if (alignmentRetryButton) await retryActiveTtsAlignment(data.job);
     })().catch((error) => {
       setTtsHandoffStatus(row, error instanceof Error ? error.message : String(error));
@@ -7496,6 +7923,12 @@ chooseDownloadDirBtn.addEventListener("click", () => {
   });
 });
 
+createDesktopDateFolderBtn?.addEventListener("click", () => {
+  createDesktopDateFolder().catch((error) => {
+    window.alert(error instanceof Error ? error.message : String(error));
+  });
+});
+
 chooseLocalVideoBtn?.addEventListener("click", () => {
   chooseLocalVideo().catch((error) => {
     resultBox.textContent = error instanceof Error ? error.message : String(error);
@@ -7598,9 +8031,15 @@ nextPageBtn.addEventListener("click", () => {
 filesList.addEventListener("click", async (event) => {
   const button = event.target.closest(".file-open");
   const deleteButton = event.target.closest(".file-delete");
+  const downloadButton = event.target.closest(".file-download");
 
   if (deleteButton) {
     deleteFiles([deleteButton.dataset.fileName]);
+    return;
+  }
+
+  if (downloadButton) {
+    startBrowserDownload(`/api/files/download?name=${encodeURIComponent(downloadButton.dataset.fileName || "")}`);
     return;
   }
 
@@ -7622,7 +8061,12 @@ tasksTable.addEventListener("click", (event) => {
   const pauseButton = event.target.closest(".task-pause");
   const deleteButton = event.target.closest(".task-delete");
   const openButton = event.target.closest(".task-open-location");
+  const downloadButton = event.target.closest(".task-download");
   const rewriteButton = event.target.closest(".task-send-rewrite");
+  if (downloadButton) {
+    startBrowserDownload(`/api/task-file/download?id=${encodeURIComponent(downloadButton.dataset.taskId || "")}`);
+    return;
+  }
   if (openButton) {
     const task = allTasks.find((item) => String(item.id) === String(openButton.dataset.taskId));
     openManagedPath(primaryTaskFilePath(task || {})).catch((error) => {
@@ -7986,6 +8430,12 @@ copyMomentsPromptsBtn?.addEventListener("click", () => {
   });
 });
 
+copyMomentsImageInstructionBtn?.addEventListener("click", () => {
+  copyMomentsImageInstruction().catch((error) => {
+    setMomentsStatus(error instanceof Error ? error.message : String(error), "error");
+  });
+});
+
 publishMomentsWechatBtn?.addEventListener("click", () => {
   publishMomentsToWechat();
 });
@@ -8343,7 +8793,10 @@ async function init() {
   try {
     startPageSession();
     const status = await fetchJson("/api/status");
-    savePath.textContent = `下载位置：${status.downloadsDir}`;
+    browserDefaultDownloads = !status.downloadsDir;
+    savePath.textContent = status.downloadsDir
+      ? `下载位置：${status.downloadsDir}`
+      : "下载位置：浏览器默认下载位置";
     downloadDirInput.value = status.downloadsDir || "";
     await loadSettings();
     await loadTtsMusicPresets();
@@ -8352,6 +8805,7 @@ async function init() {
     restoreUiDraftValues({ dispatch: true });
     await loadMomentsPersonas();
     loadMomentsDraft();
+    restoreMomentsActiveProgress();
     updateTtsVoiceSource();
     updateTtsEmotionField();
     updateTtsRangeLabels();
