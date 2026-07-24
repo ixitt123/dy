@@ -264,6 +264,10 @@ const els = {
   copyPrompts: document.querySelector("#copyPrompts"),
   copyImageConstraint1: document.querySelector("#copyImageConstraint1"),
   copyImageConstraint2: document.querySelector("#copyImageConstraint2"),
+  createDesktopFolder: document.querySelector("#createDesktopFolder"),
+  folderNameSelect: document.querySelector("#folderNameSelect"),
+  editFolderName: document.querySelector("#editFolderName"),
+  deleteFolderName: document.querySelector("#deleteFolderName"),
   openOutputDir: document.querySelector("#openOutputDir"),
   refreshOutputs: document.querySelector("#refreshOutputs"),
   statusLabel: document.querySelector("#statusLabel"),
@@ -310,13 +314,13 @@ async function init() {
   hydratePurposeSelect();
   renderPurposeTemplates();
   bindEvents();
-  restoreComposeSettings();
   syncImageConstraintButtons();
   window.addEventListener("message", handleParentHandoff);
   window.addEventListener("focus", () => {
     if (state.localImagePickerActive) setTimeout(() => { state.localImagePickerActive = false; }, 250);
   });
   await Promise.all([loadConfig(), loadAudioJobs()]);
+  restoreComposeSettings();
   const restored = restorePromptPlanCache();
   if (restored) {
     setStatus("已恢复提示词计划", `刷新前生成的 ${state.plan?.shots?.length || 0} 个分镜提示词已恢复。`, 100, false, "本地缓存");
@@ -478,7 +482,7 @@ function renderSubtitleTimeline(job = state.selectedTtsJob || state.ttsJob) {
       <span class="xiaohei-row-index">${row.index + 1}</span>
       <input data-field="start" inputmode="decimal" value="${escapeAttr(formatTimelineValue(row.start))}" readonly aria-readonly="true" />
       <input data-field="end" inputmode="decimal" value="${escapeAttr(formatTimelineValue(row.end))}" readonly aria-readonly="true" />
-      <textarea data-field="text" rows="2" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-1p-ignore="true">${escapeHtml(row.text)}</textarea>
+      <textarea data-field="text" rows="2" data-no-draft-persist readonly aria-readonly="true" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-1p-ignore="true">${escapeHtml(row.text)}</textarea>
       <input data-field="keywords" value="${escapeAttr(row.keywords)}" />
       <input data-field="breakAt" placeholder="如 6,12" value="${escapeAttr(row.breakAt)}" />
       <input data-field="position" placeholder="如 5,88" value="${escapeAttr(row.position)}" />
@@ -486,7 +490,7 @@ function renderSubtitleTimeline(job = state.selectedTtsJob || state.ttsJob) {
     </div>
   `).join("");
   const duration = Math.max(0, ...rows.map((row) => Number(row.end || 0)));
-  if (els.timelineStatus) els.timelineStatus.textContent = `共 ${rows.length} 段字幕 / ${duration.toFixed(1)} 秒，修改字幕文字后会同步小黑文案和分镜输入。`;
+  if (els.timelineStatus) els.timelineStatus.textContent = `共 ${rows.length} 段 TTS 字幕 / ${duration.toFixed(1)} 秒；字幕文字只读，可调整重点词和视觉参数。`;
   if (els.timelineConfirm) els.timelineConfirm.disabled = true;
   if (els.timelineDraftStatus) els.timelineDraftStatus.hidden = true;
   state.timelineDraftRows = null;
@@ -508,12 +512,13 @@ function updateTimelineRuleStatus(rows = timelineRows()) {
 }
 
 function collectSubtitleTimelineRows() {
+  const sourceRows = timelineRows();
   return [...(els.subtitleTimeline?.querySelectorAll(".xiaohei-timeline-row") || [])].map((row, index) => {
     const value = (field) => row.querySelector(`[data-field="${field}"]`)?.value || "";
     return normalizeTimelineRow({
       start: value("start"),
       end: value("end"),
-      text: value("text"),
+      text: sourceRows[index]?.text || "",
       keywords: value("keywords"),
       breakAt: value("breakAt"),
       position: value("position"),
@@ -553,6 +558,7 @@ function applySubtitleTimelineRows(rows = []) {
 
 function handleSubtitleTimelineInput(event) {
   if (!event.target.closest("[data-field]")) return;
+  if (event.target.dataset.field === "text") return;
   state.timelineDraftRows = collectSubtitleTimelineRows();
   if (els.timelineConfirm) els.timelineConfirm.disabled = false;
   if (els.timelineDraftStatus) els.timelineDraftStatus.hidden = false;
@@ -615,6 +621,10 @@ function bindEvents() {
   els.copyPrompts.addEventListener("click", () => copyAllPrompts());
   els.copyImageConstraint1.addEventListener("click", () => copyImageConstraint(1));
   els.copyImageConstraint2.addEventListener("click", () => copyImageConstraint(2));
+  els.createDesktopFolder.addEventListener("click", () => createDesktopFolder());
+  els.folderNameSelect.addEventListener("change", () => syncFolderNameButtons());
+  els.editFolderName.addEventListener("click", () => editFolderName());
+  els.deleteFolderName.addEventListener("click", () => deleteFolderName());
   els.openOutputDir.addEventListener("click", () => openOutputDir());
   els.refreshOutputs.addEventListener("click", () => loadOutputs());
   els.audioJobs.addEventListener("click", handleAudioJobAction);
@@ -2318,8 +2328,164 @@ function syncImageConstraintButtons() {
     : "请先生成分镜提示词";
   els.copyImageConstraint2.disabled = rest <= 0;
   els.copyImageConstraint2.title = rest > 0
-    ? `复制“后${rest}张”约束词（当前共 ${total} 个分镜）`
+    ? `复制"后${rest}张"约束词（当前共 ${total} 个分镜）`
     : "分镜不超过 10 个时无需约束词2";
+}
+
+/* ── 新建文件夹（桌面日期文件夹） ── */
+
+const FOLDER_NAMES_API = "/api/folder-names";
+const FOLDER_NAMES_FILE = "folder-names.json";
+const FOLDER_CREATE_API = "/api/desktop-folder-named";
+
+let folderNames = [];
+
+async function loadFolderNames() {
+  try {
+    const res = await fetch(FOLDER_NAMES_API);
+    if (res.ok) {
+      const data = await res.json();
+      folderNames = Array.isArray(data.names) ? data.names : [];
+    }
+  } catch { /* 首次使用或服务不可用时忽略 */ }
+  renderFolderNameSelect();
+}
+
+function renderFolderNameSelect() {
+  const sel = els.folderNameSelect;
+  if (!sel) return;
+  sel.innerHTML = "";
+  if (folderNames.length === 0) {
+    const opt = document.createElement("option");
+    opt.value = "";
+    opt.textContent = "＋ 新建名称…";
+    sel.appendChild(opt);
+    els.createDesktopFolder.disabled = true;
+    syncFolderNameButtons();
+    return;
+  }
+  for (const name of folderNames) {
+    const opt = document.createElement("option");
+    opt.value = name;
+    opt.textContent = name;
+    sel.appendChild(opt);
+  }
+  const newOpt = document.createElement("option");
+  newOpt.value = "__new__";
+  newOpt.textContent = "＋ 新建名称…";
+  sel.appendChild(newOpt);
+  els.createDesktopFolder.disabled = false;
+  syncFolderNameButtons();
+
+  // 监听选了"新建名称"
+  sel.removeEventListener("change", onFolderNameSelectChange);
+  sel.addEventListener("change", onFolderNameSelectChange);
+}
+
+function onFolderNameSelectChange() {
+  if (els.folderNameSelect?.value === "__new__") {
+    promptNewFolderName();
+  }
+}
+
+function promptNewFolderName(defaultValue = "") {
+  const input = prompt(
+    defaultValue
+      ? `编辑文件夹名称：`
+      : `输入新文件夹名称（将创建为 日期-名称）：`,
+    defaultValue,
+  );
+  if (input === null) return; // 取消
+  const trimmed = input.trim();
+  if (!trimmed) { setStatus("名称不能为空", "请输入有效的文件夹名称。", 0, true); return; }
+
+  // 更新或添加
+  if (defaultValue !== "") {
+    const idx = folderNames.indexOf(defaultValue);
+    if (idx >= 0) folderNames[idx] = trimmed;
+    else folderNames.push(trimmed);
+  } else {
+    if (!folderNames.includes(trimmed)) folderNames.push(trimmed);
+  }
+
+  saveFolderNames().then(() => {
+    renderFolderNameSelect();
+    // 自动选中刚保存的名称
+    for (let i = 0; i < els.folderNameSelect.options.length; i++) {
+      if (els.folderNameSelect.options[i].value === trimmed) {
+        els.folderNameSelect.selectedIndex = i;
+        break;
+      }
+    }
+    syncFolderNameButtons();
+  });
+}
+
+async function saveFolderNames() {
+  try {
+    await fetch(FOLDER_NAMES_API, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ names: folderNames }),
+    });
+  } catch (e) {
+    setStatus("保存失败", String(e.message || e), 0, true);
+  }
+}
+
+function syncFolderNameButtons() {
+  const hasSelection = els.folderNameSelect && els.folderNameSelect.value && els.folderNameSelect.value !== "__new__";
+  if (els.editFolderName) els.editFolderName.disabled = !hasSelection;
+  if (els.deleteFolderName) els.deleteFolderName.disabled = !hasSelection;
+}
+
+function editFolderName() {
+  const current = els.folderNameSelect?.value;
+  if (!current || current === "__new__") return;
+  promptNewFolderName(current);
+}
+
+function deleteFolderName() {
+  const current = els.folderNameSelect?.value;
+  if (!current || current === "__new__") return;
+  if (!confirm(`确定删除名称"${current}"吗？\n（不会删除桌面上已创建的文件夹）`)) return;
+
+  folderNames = folderNames.filter(n => n !== current);
+  saveFolderNames().then(() => {
+    renderFolderNameSelect();
+    setStatus(`已删除名称`, `"${current}"已从列表移除。`, 100);
+  });
+}
+
+async function createDesktopFolder() {
+  const name = els.folderNameSelect?.value;
+  if (!name || name === "__new__") {
+    setStatus("请先选择或新建名称", "从下拉框选择一个文件夹名称，或点击「＋ 新建名称」。", 0, true);
+    return;
+  }
+
+  const btn = els.createDesktopFolder;
+  setButtonFeedback(btn, "loading", "创建中");
+
+  try {
+    const res = await fetch(FOLDER_CREATE_API, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ suffix: name }),
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ message: "请求失败" }));
+      throw new Error(err.message || `HTTP ${res.status}`);
+    }
+
+    const data = await res.json();
+    setStatus(`文件夹已创建`, `${data.folderName} → ${data.folderPath}`, 100);
+    setButtonFeedback(btn, "success", "已创建");
+  } catch (error) {
+    setStatus("创建失败", error.message || String(error), 0, true);
+    setButtonFeedback(btn, "error", "失败");
+  }
 }
 
 function syncVideoPreview() {
@@ -2681,6 +2847,8 @@ function composeSettings() {
     animationSpeed: Number(els.subtitleSpeed.value || 100) / 100,
     outline: els.subtitleOutline.checked,
     shadow: els.subtitleShadow.checked,
+    introPreset: els.introPreset?.value || "custom",
+    outroPreset: els.outroPreset?.value || "custom",
     intro: { enabled: els.introEnabled.checked, text: resolvedBookendText("intro") },
     outro: { enabled: els.outroEnabled.checked, text: resolvedBookendText("outro") },
   };
@@ -2709,21 +2877,31 @@ function handleComposeSettingsChange() {
 function restoreComposeSettings() {
   try {
     const saved = JSON.parse(localStorage.getItem(COMPOSE_SETTINGS_KEY) || "{}");
-    if (saved.fps) els.frameRate.value = String(saved.fps);
-    if (saved.imageFit) els.imageFit.value = saved.imageFit;
-    if (saved.ttsVolume !== undefined) els.ttsVolume.value = String(saved.ttsVolume);
-    if (saved.bgmVolume !== undefined) els.bgmVolume.value = String(saved.bgmVolume);
-    if (saved.showSubtitles !== undefined) els.showSubtitles.checked = Boolean(saved.showSubtitles);
-    if (saved.subtitleSize) els.subtitleSize.value = String(saved.subtitleSize);
-    if (saved.subtitleColor) els.subtitleColor.value = saved.subtitleColor;
-    if (saved.keywordColor) els.keywordColor.value = saved.keywordColor;
-    if (saved.maxLines) els.subtitleLines.value = String(saved.maxLines);
-    if (saved.animationSpeed) els.subtitleSpeed.value = String(Math.round(saved.animationSpeed * 100));
-    if (saved.outline !== undefined) els.subtitleOutline.checked = Boolean(saved.outline);
-    if (saved.shadow !== undefined) els.subtitleShadow.checked = Boolean(saved.shadow);
-    if (saved.intro) { els.introEnabled.checked = Boolean(saved.intro.enabled); els.introText.value = saved.intro.text || ""; }
-    if (saved.outro) { els.outroEnabled.checked = Boolean(saved.outro.enabled); els.outroText.value = saved.outro.text || ""; }
-  } catch {}
+    if (saved.fps && els.frameRate) els.frameRate.value = String(saved.fps);
+    if (saved.imageFit && els.imageFit) els.imageFit.value = saved.imageFit;
+    if (saved.ttsVolume !== undefined && els.ttsVolume) els.ttsVolume.value = String(saved.ttsVolume);
+    if (saved.bgmVolume !== undefined && els.bgmVolume) els.bgmVolume.value = String(saved.bgmVolume);
+    if (saved.showSubtitles !== undefined && els.showSubtitles) els.showSubtitles.checked = Boolean(saved.showSubtitles);
+    if (saved.subtitleSize && els.subtitleSize) els.subtitleSize.value = String(saved.subtitleSize);
+    if (saved.subtitleColor && els.subtitleColor) els.subtitleColor.value = saved.subtitleColor;
+    if (saved.keywordColor && els.keywordColor) els.keywordColor.value = saved.keywordColor;
+    if (saved.maxLines && els.subtitleLines) els.subtitleLines.value = String(saved.maxLines);
+    if (saved.animationSpeed && els.subtitleSpeed) els.subtitleSpeed.value = String(Math.round(saved.animationSpeed * 100));
+    if (saved.outline !== undefined && els.subtitleOutline) els.subtitleOutline.checked = Boolean(saved.outline);
+    if (saved.shadow !== undefined && els.subtitleShadow) els.subtitleShadow.checked = Boolean(saved.shadow);
+    if (saved.introPreset && els.introPreset) els.introPreset.value = saved.introPreset;
+    if (saved.outroPreset && els.outroPreset) els.outroPreset.value = saved.outroPreset;
+    if (saved.intro) {
+      if (els.introEnabled) els.introEnabled.checked = Boolean(saved.intro.enabled);
+      if (els.introText) els.introText.value = saved.intro.text || "";
+    }
+    if (saved.outro) {
+      if (els.outroEnabled) els.outroEnabled.checked = Boolean(saved.outro.enabled);
+      if (els.outroText) els.outroText.value = saved.outro.text || "";
+    }
+  } catch (e) {
+    console.warn("[xiaohei] restoreComposeSettings failed:", e);
+  }
   handleComposeSettingsChange();
 }
 
