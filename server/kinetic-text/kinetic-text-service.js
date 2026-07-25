@@ -1212,6 +1212,8 @@ export function buildAss(project, options = {}) {
   const shadow = params.shadowEnabled === false ? 0 : Math.max(1, Math.round(fontSize * 0.02));
   const offset = safeNumber(options.offset, 0);
   const limitToId = options.segmentId ? String(options.segmentId) : "";
+  const includeMainText = options.includeMainText !== false;
+  const includeBookends = options.includeBookends !== false;
   const maxChars = normalized.aspectRatio === "16:9" ? 24 : normalized.aspectRatio === "1:1" ? 16 : 13;
   const maxLines = Math.round(safeNumber(params.maxLines, 2, 1, 3));
   const events = [];
@@ -1236,7 +1238,7 @@ export function buildAss(project, options = {}) {
     const wrappedText = wrapSubtitleText(segment.text, maxChars, maxLines);
     const enterMs = Math.min(220, Math.max(90, Math.round(150 / safeNumber(params.animationSpeed, 1, 0.5, 2))));
 
-    if (template.renderMode === "rolling-focus-left") {
+    if (includeMainText && template.renderMode === "rolling-focus-left") {
       const leadSeconds = safeNumber(params.leadMs, 90, 0, 180) / 1000;
       const transitionMs = Math.round(safeNumber(params.transitionMs, 220, 180, 260) / safeNumber(params.animationSpeed, 1, 0.5, 2));
       const resetGap = safeNumber(params.resetGapMs, 1200, 500, 3000) / 1000;
@@ -1283,7 +1285,7 @@ export function buildAss(project, options = {}) {
           }
         }
       }
-    } else if (template.renderMode === "rolling-focus") {
+    } else if (includeMainText && template.renderMode === "rolling-focus") {
       const lineGapBoost = safeNumber(params.lineGapBoost, 0, 0, 1.2);
       const lineGap = Math.round(fontSize * (1.32 + lineGapBoost));
       const neighbors = [
@@ -1319,7 +1321,7 @@ export function buildAss(project, options = {}) {
     }
   });
 
-  if (!limitToId && offset === 0) {
+  if (includeMainText && includeBookends && !limitToId && offset === 0) {
     events.push(...buildBookendAssEvents({
       project: normalized,
       template,

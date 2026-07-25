@@ -900,8 +900,10 @@ async function renderFinalVideo(body = {}, context = {}) {
   if (!audioPath || !fs.existsSync(audioPath)) throw new Error("缺少已确认 TTS 音频文件，无法合成。");
   const settings = body.settings && typeof body.settings === "object" ? body.settings : {};
   const textEffectEnabled = settings.textEffectEnabled === true;
+  const showBottomSubtitles = settings.showBottomSubtitles !== false;
+  const subtitleTrackEnabled = textEffectEnabled || showBottomSubtitles;
   const segments = normalizeRenderSegments(body.segments || body.timeline || tts.sentence_timeline || tts.subtitle_timeline);
-  if (textEffectEnabled && !segments.length) throw new Error("开启动态大字特效时必须提供已确认时间戳字幕。");
+  if (subtitleTrackEnabled && !segments.length) throw new Error("开启文字或底部字幕时必须提供已确认时间戳字幕。");
   const backgroundPath = resolveMptFilePath(body.background_video || body.backgroundVideo || body.combined_video || firstLocalCombinedVideo(body.task), context.rootDir);
   if (!backgroundPath || !fs.existsSync(backgroundPath)) throw new Error("缺少 MoneyPrinterTurbo 混剪背景视频，请先完成素材匹配预览。");
 
@@ -917,7 +919,7 @@ async function renderFinalVideo(body = {}, context = {}) {
     effectParams: { ...defaultEffectParams(effectId), ...(settings.effectParams || {}) },
     aspectRatio: ALLOWED_ASPECTS.has(String(settings.aspectRatio || "")) ? String(settings.aspectRatio) : "9:16",
     frameRate: Number(settings.frameRate) === 60 ? 60 : 30,
-    showBottomSubtitles: settings.showBottomSubtitles !== false,
+    showBottomSubtitles,
     textEffectEnabled,
     bottomSubtitlePosition: settings.bottomSubtitlePosition || { x: 50, y: 94 },
     bookends: settings.bookends || {},
@@ -926,8 +928,13 @@ async function renderFinalVideo(body = {}, context = {}) {
   const runId = `mpt-${Date.now()}-${randomUUID().slice(0, 6)}`;
   const runDir = path.join(context.workflowDir, runId);
   fs.mkdirSync(runDir, { recursive: true });
-  const assPath = textEffectEnabled ? path.join(runDir, "dynamic-subtitles.ass") : "";
-  if (assPath) fs.writeFileSync(assPath, buildAss(project), "utf8");
+  const assPath = subtitleTrackEnabled ? path.join(runDir, "dynamic-subtitles.ass") : "";
+  if (assPath) {
+    fs.writeFileSync(assPath, buildAss(project, {
+      includeMainText: textEffectEnabled,
+      includeBookends: textEffectEnabled,
+    }), "utf8");
+  }
   fs.writeFileSync(path.join(runDir, "manifest.json"), `${JSON.stringify({ project, backgroundPath, sourceTask: body.task || {} }, null, 2)}\n`, "utf8");
 
   const outputDir = context.downloadsDir || process.cwd();
@@ -941,6 +948,7 @@ async function renderFinalVideo(body = {}, context = {}) {
     height,
     frameRate: project.frameRate,
     textEffectEnabled,
+    showBottomSubtitles,
     assPath,
   });
   const args = [
@@ -977,10 +985,11 @@ export function buildMoneyPrinterVideoFilter({
   height,
   frameRate,
   textEffectEnabled = false,
+  showBottomSubtitles = false,
   assPath = "",
 } = {}) {
   const base = `[0:v]scale=${width}:${height}:force_original_aspect_ratio=increase,crop=${width}:${height},fps=${frameRate}`;
-  return textEffectEnabled && assPath
+  return (textEffectEnabled || showBottomSubtitles) && assPath
     ? `${base},subtitles='${escapeFilterPath(assPath)}'[v]`
     : `${base}[v]`;
 }

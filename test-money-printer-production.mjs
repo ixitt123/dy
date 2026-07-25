@@ -10,6 +10,7 @@ import {
   sanitizeMoneyPrinterTaskVideoUrl,
   shouldTryNextMaterialSource,
 } from "./server/routes/money-printer-routes.js";
+import { buildAss } from "./server/kinetic-text/kinetic-text-service.js";
 import { automaticSearchTerm } from "./ui/modules/money-printer.js";
 
 const [routeSource, uiSource, htmlSource] = await Promise.all([
@@ -41,14 +42,21 @@ assert.equal(
   "restarting the UI server must not kill an active MoneyPrinterTurbo task",
 );
 assert.equal(
-  buildMoneyPrinterVideoFilter({ width: 1920, height: 1080, frameRate: 30, textEffectEnabled: false }),
+  buildMoneyPrinterVideoFilter({
+    width: 1920,
+    height: 1080,
+    frameRate: 30,
+    textEffectEnabled: false,
+    showBottomSubtitles: false,
+  }),
   "[0:v]scale=1920:1080:force_original_aspect_ratio=increase,crop=1920:1080,fps=30[v]",
 );
 assert.ok(buildMoneyPrinterVideoFilter({
   width: 1920,
   height: 1080,
   frameRate: 30,
-  textEffectEnabled: true,
+  textEffectEnabled: false,
+  showBottomSubtitles: true,
   assPath: "D:\\tmp\\subtitle.ass",
 }).includes("subtitles="));
 assert.ok(
@@ -63,10 +71,47 @@ assert.equal(
 assert.ok(htmlSource.includes('id="moneyPrinterMaterialMode"'));
 assert.ok(htmlSource.includes('value="fast"'));
 assert.ok(htmlSource.includes('id="moneyPrinterTextEffectEnabled"'));
+assert.equal(
+  /data-money-printer-effect-setting[^>]*>\s*<input id="moneyPrinterBottomSubtitles"/m.test(htmlSource),
+  false,
+  "bottom keyword subtitles must remain independently selectable when the big-text effect is off",
+);
+assert.ok(
+  htmlSource.includes('id="moneyPrinterBottomSubtitles" type="checkbox" checked'),
+  "bottom keyword subtitles must be selected by default",
+);
+assert.ok(
+  uiSource.includes("moneyPrefs.showBottomSubtitles ?? true"),
+  "the first-run preference fallback must keep bottom keyword subtitles selected",
+);
 assert.ok(uiSource.includes('material_mode: els.materialMode.value'));
 assert.ok(uiSource.includes("textEffectEnabled: els.textEffectEnabled.checked"));
 assert.ok(routeSource.includes('target === "downloads"'));
 assert.ok(uiSource.includes("state.task.progress"));
+
+const bottomOnlyAss = buildAss({
+  effectId: "rolling-focus-subtitle",
+  aspectRatio: "9:16",
+  frameRate: 30,
+  text: "底部关键词字幕",
+  segments: [{
+    id: "mpt-bottom-1",
+    start: 0,
+    end: 2,
+    text: "底部关键词字幕",
+    keywords: ["关键词"],
+  }],
+  showBottomSubtitles: true,
+}, { includeMainText: false, includeBookends: false });
+const bottomOnlyDialogues = bottomOnlyAss
+  .split(/\r?\n/)
+  .filter((line) => line.startsWith("Dialogue:"));
+assert.ok(bottomOnlyDialogues.some((line) => line.includes(",Bottom,")));
+assert.equal(
+  bottomOnlyDialogues.some((line) => !line.includes(",Bottom,")),
+  false,
+  "bottom-only mode must not render the dynamic big-text track",
+);
 
 const fastPlan = buildFastMaterialPlan([
   { start: 0, end: 5.2, text: "运动后感觉疲惫", searchTerm: "tired workout" },

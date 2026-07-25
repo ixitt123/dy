@@ -710,7 +710,7 @@ function drawPreview() {
     drawCover(ctx, video, width, height);
   }
   const segment = state.segments.find((item) => state.currentTime >= item.start && state.currentTime <= item.end);
-  if (segment && els.textEffectEnabled.checked) drawSubtitle(ctx, segment, width, height);
+  if (segment && (els.textEffectEnabled.checked || els.bottomSubtitles.checked)) drawSubtitle(ctx, segment, width, height);
   else if (!state.previewReady) drawCenteredText(ctx, hasConfirmedHandoff() ? "点击“自动匹配素材并预览”" : "等待 TTS 三件套", width, height);
   syncPreviewClock();
 }
@@ -735,18 +735,20 @@ function drawSubtitle(ctx, segment, width, height) {
   ctx.save();
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  ctx.font = `800 ${fontSize}px "Microsoft YaHei", sans-serif`;
   ctx.lineJoin = "round";
   ctx.shadowColor = "rgba(0,0,0,.65)";
   ctx.shadowBlur = Math.max(8, fontSize * 0.16);
-  lines.forEach((line, index) => {
-    const yy = y + index * fontSize * 1.18;
-    ctx.lineWidth = Math.max(4, fontSize * 0.08);
-    ctx.strokeStyle = "rgba(8,10,14,.92)";
-    ctx.strokeText(line, width / 2, yy);
-    ctx.fillStyle = keywordMatch(line, segment.keywords) ? accent : primary;
-    ctx.fillText(line, width / 2, yy);
-  });
+  if (els.textEffectEnabled.checked) {
+    ctx.font = `800 ${fontSize}px "Microsoft YaHei", sans-serif`;
+    lines.forEach((line, index) => {
+      const yy = y + index * fontSize * 1.18;
+      ctx.lineWidth = Math.max(4, fontSize * 0.08);
+      ctx.strokeStyle = "rgba(8,10,14,.92)";
+      ctx.strokeText(line, width / 2, yy);
+      ctx.fillStyle = keywordMatch(line, segment.keywords) ? accent : primary;
+      ctx.fillText(line, width / 2, yy);
+    });
+  }
   if (els.bottomSubtitles.checked) {
     ctx.font = `700 ${Math.max(18, Math.round(fontSize * 0.42))}px "Microsoft YaHei", sans-serif`;
     ctx.fillStyle = "#ffffff";
