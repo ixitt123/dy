@@ -1454,7 +1454,7 @@
                   <button id="moneyPrinterRefresh" class="ghost" type="button">刷新</button>
                   <button id="moneyPrinterOpenDocs" class="ghost" type="button">API 文档</button>
                   <button id="moneyPrinterOpenRoot" class="ghost" type="button">项目目录</button>
-                  <button id="moneyPrinterOpenTasks" class="ghost" type="button">输出目录</button>
+                  <button id="moneyPrinterOpenTasks" class="ghost" type="button">统一下载目录</button>
                 </div>
                 <div class="money-printer-status-line">
                   <strong id="moneyPrinterStatus">检测中</strong>
@@ -1467,6 +1467,14 @@
                   <strong>素材与转场</strong>
                   <span>自动匹配</span>
                 </div>
+                <label>
+                  <span>素材生成模式</span>
+                  <select id="moneyPrinterMaterialMode">
+                    <option value="standard" selected>标准模式 · 分镜更丰富</option>
+                    <option value="fast">快速模式 · 较少长素材</option>
+                  </select>
+                  <small>快速模式按语义合并分镜，约每 12–20 秒使用一个素材。</small>
+                </label>
                 <label>
                   <span>素材来源</span>
                   <select id="moneyPrinterSource">
@@ -1499,7 +1507,11 @@
                   <strong>成片参数</strong>
                   <span>本页缓存</span>
                 </div>
-                <label>
+                <label class="kinetic-check">
+                  <input id="moneyPrinterTextEffectEnabled" type="checkbox" />
+                  <span>开启动态大字文字特效</span>
+                </label>
+                <label data-money-printer-effect-setting>
                   <span>字幕模板</span>
                   <select id="moneyPrinterEffect"></select>
                 </label>
@@ -1518,17 +1530,17 @@
                     <option value="60">60fps 流畅</option>
                   </select>
                 </label>
-                <label class="kinetic-range-row"><span>字号</span><input id="moneyPrinterFontSize" type="range" min="34" max="160" value="88" /><output id="moneyPrinterFontSizeValue">88</output></label>
-                <div class="kinetic-color-row">
+                <label class="kinetic-range-row" data-money-printer-effect-setting><span>字号</span><input id="moneyPrinterFontSize" type="range" min="34" max="160" value="88" /><output id="moneyPrinterFontSizeValue">88</output></label>
+                <div class="kinetic-color-row" data-money-printer-effect-setting>
                   <label><span>文字颜色</span><input id="moneyPrinterPrimaryColor" type="color" value="#ffffff" /></label>
                   <label><span>强调色</span><input id="moneyPrinterAccentColor" type="color" value="#ffd84d" /></label>
                 </div>
-                <label>
+                <label data-money-printer-effect-setting>
                   <span>最大行数</span>
                   <select id="moneyPrinterMaxLines"><option value="1">1 行</option><option value="2" selected>2 行</option><option value="3">3 行</option></select>
                 </label>
                 <label class="kinetic-range-row"><span>TTS 音量</span><input id="moneyPrinterTtsVolume" type="range" min="0" max="200" value="100" /><output id="moneyPrinterTtsVolumeValue">100%</output></label>
-                <label class="kinetic-check"><input id="moneyPrinterBottomSubtitles" type="checkbox" checked /><span>显示底部关键词字幕</span></label>
+                <label class="kinetic-check" data-money-printer-effect-setting><input id="moneyPrinterBottomSubtitles" type="checkbox" checked /><span>显示底部关键词字幕</span></label>
               </section>
 
               <details class="kinetic-card money-printer-card money-printer-log-card">

@@ -29,6 +29,7 @@ const managedTasks = new Map();
 export function createMoneyPrinterRoutes({ baseDir, sendJson, ffmpegPath, ffprobePath, getDownloadsDir, modelRouter }) {
   const defaultRoot = path.resolve(process.env.MONEY_PRINTER_TURBO_ROOT || path.join(baseDir, "integrations", "moneyprinterturbo"));
   const workflowDir = path.join(baseDir, ".data", "money-printer");
+  const materialSearchPrompt = readOptionalText(path.join(baseDir, "prompts", "money-printer-material-search.md"));
 
   const handleMoneyPrinterRoutes = async function handleMoneyPrinterRoutes(req, res, url) {
     if (!url.pathname.startsWith("/api/money-printer/")) return false;
@@ -36,7 +37,11 @@ export function createMoneyPrinterRoutes({ baseDir, sendJson, ffmpegPath, ffprob
 
     if (req.method === "GET" && route === "status") {
       const status = await buildStatus(defaultRoot);
-      sendJson(res, 200, { ok: true, ...status });
+      sendJson(res, 200, {
+        ok: true,
+        ...status,
+        downloadDir: typeof getDownloadsDir === "function" ? getDownloadsDir() : path.join(baseDir, "downloads"),
+      });
       return true;
     }
 
@@ -59,7 +64,11 @@ export function createMoneyPrinterRoutes({ baseDir, sendJson, ffmpegPath, ffprob
     if (req.method === "POST" && route === "start-api") {
       try {
         const status = await startApi(defaultRoot);
-        sendJson(res, 200, { ok: true, ...status });
+        sendJson(res, 200, {
+          ok: true,
+          ...status,
+          downloadDir: typeof getDownloadsDir === "function" ? getDownloadsDir() : path.join(baseDir, "downloads"),
+        });
       } catch (error) {
         sendJson(res, 400, { ok: false, message: error instanceof Error ? error.message : String(error), logs: apiLogs.slice(-80) });
       }
@@ -113,15 +122,28 @@ export function createMoneyPrinterRoutes({ baseDir, sendJson, ffmpegPath, ffprob
         const status = await startApi(defaultRoot);
         if (!status.api.online) throw new Error("MoneyPrinterTurbo API 未运行，请先点击“启动 API”。");
         const materialSources = resolveMaterialSourceOrder(body.video_source, status.materials);
-        const payload = buildGeneratePayload({ ...body, video_source: materialSources[0] });
-        if (shouldRefineTerms(payload.video_terms)) {
+        const materialMode = normalizeMaterialMode(body.material_mode);
+        const materialPlan = materialMode === "fast"
+          ? buildFastMaterialPlan(body.video_term_segments)
+          : null;
+        const plannedBody = materialPlan?.groups?.length
+          ? {
+              ...body,
+              video_terms: materialPlan.groups.map((group) => group.searchTerm),
+              video_term_texts: materialPlan.groups.map((group) => group.text),
+              video_clip_duration: materialPlan.clipDuration,
+            }
+          : body;
+        const payload = buildGeneratePayload({ ...plannedBody, video_source: materialSources[0] });
+        if (materialMode === "fast" || shouldRefineTerms(payload.video_terms)) {
           try {
             const refined = await refineVideoTermsWithLlm({
               modelRouter,
               terms: payload.video_terms,
               script: payload.video_script,
               subject: payload.video_subject,
-              termTexts: Array.isArray(body.video_term_texts) ? body.video_term_texts : null,
+              termTexts: Array.isArray(plannedBody.video_term_texts) ? plannedBody.video_term_texts : null,
+              promptGuide: materialSearchPrompt,
             });
             if (refined) payload.video_terms = refined;
           } catch (refineError) {
@@ -129,11 +151,21 @@ export function createMoneyPrinterRoutes({ baseDir, sendJson, ffmpegPath, ffprob
             console.warn(`[MoneyPrinter] LLM 关键词提炼失败，沿用原始搜索词: ${refineError instanceof Error ? refineError.message : String(refineError)}`);
           }
         }
-        const managed = await createManagedTask(status, payload, materialSources);
+        if (materialPlan?.groups?.length) {
+          materialPlan.groups.forEach((group, index) => {
+            group.searchTerm = payload.video_terms?.[index] || group.searchTerm;
+          });
+        }
+        const managed = await createManagedTask(status, payload, materialSources, {
+          materialMode,
+          materialPlan,
+        });
         sendJson(res, 202, {
           ok: true,
           task: managedTaskSnapshot(managed),
           payload,
+          materialMode,
+          materialPlan,
           materialSources,
           apiBaseUrl: status.api.baseUrl,
         });
@@ -194,7 +226,10 @@ export function createMoneyPrinterRoutes({ baseDir, sendJson, ffmpegPath, ffprob
     if (req.method === "POST" && route === "open") {
       try {
         const body = await readJsonBody(req, { maxBytes: 16 * 1024 });
-        const status = await buildStatus(defaultRoot);
+        const status = {
+          ...(await buildStatus(defaultRoot)),
+          downloadDir: typeof getDownloadsDir === "function" ? getDownloadsDir() : path.join(baseDir, "downloads"),
+        };
         const target = openTarget(String(body.target || ""), status, body);
         if (!target) throw new Error("没有可打开的 MoneyPrinterTurbo 目标。");
         openExternal(target);
@@ -210,27 +245,7 @@ export function createMoneyPrinterRoutes({ baseDir, sendJson, ffmpegPath, ffprob
 
     return false;
   };
-  handleMoneyPrinterRoutes.shutdown = stopApiProcess;
   return handleMoneyPrinterRoutes;
-}
-
-function stopApiProcess() {
-  const child = apiProcess;
-  apiProcess = null;
-  apiStartPromise = null;
-  if (!child?.pid || child.killed) return;
-  try {
-    if (process.platform === "win32") {
-      spawnSync("taskkill.exe", ["/PID", String(child.pid), "/T", "/F"], {
-        windowsHide: true,
-        stdio: "ignore",
-      });
-    } else {
-      child.kill("SIGTERM");
-    }
-  } catch {
-    try { child.kill(); } catch {}
-  }
 }
 
 async function buildStatus(rootDir) {
@@ -405,7 +420,7 @@ export function resolveMaterialSourceOrder(preferred, materials = {}) {
   return [selected, ...configured].filter((source, index, all) => configured.includes(source) && all.indexOf(source) === index);
 }
 
-async function createManagedTask(status, payload, materialSources) {
+async function createManagedTask(status, payload, materialSources, options = {}) {
   const managed = {
     id: `dy-mpt-${randomUUID()}`,
     payload: { ...payload },
@@ -414,6 +429,8 @@ async function createManagedTask(status, payload, materialSources) {
     officialTaskId: "",
     attempts: [],
     createdAt: new Date().toISOString(),
+    materialMode: normalizeMaterialMode(options.materialMode),
+    materialPlan: options.materialPlan || null,
   };
   managed.officialTaskId = await submitOfficialTask(status, managed.payload);
   managedTasks.set(managed.id, managed);
@@ -442,6 +459,8 @@ function managedTaskSnapshot(managed, overrides = {}) {
     material_source: managed.materialSources[managed.sourceIndex] || "",
     material_sources: managed.materialSources,
     fallback_attempts: managed.attempts,
+    material_mode: managed.materialMode || "standard",
+    material_plan: managed.materialPlan || null,
     ...overrides,
   };
 }
@@ -474,6 +493,8 @@ async function pollManagedTask(status, managed) {
     material_source: source,
     material_sources: managed.materialSources,
     fallback_attempts: attempts,
+    material_mode: managed.materialMode || "standard",
+    material_plan: managed.materialPlan || null,
     error: official.state === TASK_STATE_FAILED
       ? attempts.map((item) => `${item.source}: ${item.error}`).join("；")
       : sanitizeMptError(official.error || ""),
@@ -515,7 +536,7 @@ function buildGeneratePayload(body = {}) {
     video_aspect: aspect,
     video_source: source,
     video_count: clampInteger(body.video_count, 1, 4, 1),
-    video_clip_duration: clampInteger(body.video_clip_duration, 1, 12, 5),
+    video_clip_duration: clampInteger(body.video_clip_duration, 1, 20, 5),
     video_concat_mode: concatMode,
     video_transition_mode: transition || null,
     match_materials_to_script: body.match_materials_to_script === true,
@@ -571,7 +592,7 @@ function shouldRefineTerms(terms) {
   return unique.size <= Math.max(2, Math.ceil(terms.length / 3)) || fallbackCount >= Math.ceil(terms.length / 4);
 }
 
-async function refineVideoTermsWithLlm({ modelRouter, terms, script, subject, termTexts }) {
+async function refineVideoTermsWithLlm({ modelRouter, terms, script, subject, termTexts, promptGuide = "" }) {
   if (!modelRouter || typeof modelRouter.generate !== "function") return null;
   if (!Array.isArray(terms) || !terms.length) return null;
   // 优先用前端按字幕时间轴切好的段文本（与 terms 严格同序对齐）；
@@ -585,6 +606,7 @@ async function refineVideoTermsWithLlm({ modelRouter, terms, script, subject, te
   if (!sentences.length) return null;
 
   const prompt = [
+    promptGuide,
     subject ? `视频主题：${subject}` : "",
     `以下是短视频口播文案的 ${sentences.length} 个字幕段落：`,
     ...sentences.map((sentence, index) => `${index + 1}. ${sentence}`),
@@ -770,6 +792,7 @@ export function openTarget(target, status, body = {}) {
   if (target === "docs") return status.api.docsUrl;
   if (target === "api") return status.api.baseUrl;
   if (target === "webui") return status.webui.baseUrl;
+  if (target === "downloads") return status.downloadDir || "";
   if (target === "task-video") return sanitizeMoneyPrinterTaskVideoUrl(body.url);
   if (target === "tasks") {
     const root = String(status.root || "");
@@ -781,6 +804,60 @@ export function openTarget(target, status, body = {}) {
     return pathApi.join(root, "storage", "tasks");
   }
   return "";
+}
+
+function normalizeMaterialMode(value) {
+  return String(value || "").trim().toLowerCase() === "fast" ? "fast" : "standard";
+}
+
+export function buildFastMaterialPlan(value) {
+  const segments = (Array.isArray(value) ? value : [])
+    .map((item, index) => {
+      const start = safeNumber(item?.start, NaN);
+      const end = safeNumber(item?.end, NaN);
+      const text = String(item?.text || "").trim();
+      if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start || !text) return null;
+      return {
+        index,
+        start,
+        end,
+        text,
+        searchTerm: String(item?.searchTerm || "").trim() || "daily life people",
+      };
+    })
+    .filter(Boolean)
+    .sort((a, b) => a.start - b.start);
+  if (!segments.length) return { mode: "fast", clipDuration: 15, groups: [] };
+
+  const timelineStart = segments[0].start;
+  const timelineEnd = Math.max(...segments.map((item) => item.end));
+  const totalDuration = Math.max(1, timelineEnd - timelineStart);
+  const desiredGroups = Math.max(1, Math.ceil(totalDuration / 18));
+  const targetDuration = totalDuration / desiredGroups;
+  const buckets = Array.from({ length: desiredGroups }, () => []);
+
+  for (const segment of segments) {
+    const midpoint = (segment.start + segment.end) / 2;
+    const bucketIndex = Math.min(
+      desiredGroups - 1,
+      Math.max(0, Math.floor((midpoint - timelineStart) / targetDuration)),
+    );
+    buckets[bucketIndex].push(segment);
+  }
+
+  const groups = buckets.filter((bucket) => bucket.length).map((bucket, index) => {
+    const uniqueTerms = [...new Set(bucket.map((item) => item.searchTerm).filter(Boolean))];
+    return {
+      id: `fast-scene-${index + 1}`,
+      start: bucket[0].start,
+      end: bucket[bucket.length - 1].end,
+      text: bucket.map((item) => item.text).join(""),
+      searchTerm: uniqueTerms[0] || "daily life people",
+      segmentIndexes: bucket.map((item) => item.index),
+    };
+  });
+  const clipDuration = clampInteger(Math.ceil(totalDuration / Math.max(1, groups.length)), 12, 20, 15);
+  return { mode: "fast", clipDuration, groups };
 }
 
 export function openExternalCommand(target, platform = process.platform) {
@@ -821,12 +898,13 @@ async function renderFinalVideo(body = {}, context = {}) {
   const tts = body.tts && typeof body.tts === "object" ? body.tts : {};
   const audioPath = String(body.audio_path || tts.audio_path || tts.audioPath || "").trim();
   if (!audioPath || !fs.existsSync(audioPath)) throw new Error("缺少已确认 TTS 音频文件，无法合成。");
+  const settings = body.settings && typeof body.settings === "object" ? body.settings : {};
+  const textEffectEnabled = settings.textEffectEnabled === true;
   const segments = normalizeRenderSegments(body.segments || body.timeline || tts.sentence_timeline || tts.subtitle_timeline);
-  if (!segments.length) throw new Error("缺少已确认时间戳字幕，无法合成。");
+  if (textEffectEnabled && !segments.length) throw new Error("开启动态大字特效时必须提供已确认时间戳字幕。");
   const backgroundPath = resolveMptFilePath(body.background_video || body.backgroundVideo || body.combined_video || firstLocalCombinedVideo(body.task), context.rootDir);
   if (!backgroundPath || !fs.existsSync(backgroundPath)) throw new Error("缺少 MoneyPrinterTurbo 混剪背景视频，请先完成素材匹配预览。");
 
-  const settings = body.settings && typeof body.settings === "object" ? body.settings : {};
   const effectId = normalizeEffectId(settings.effectId);
   const project = {
     id: `money-printer-${Date.now()}`,
@@ -840,6 +918,7 @@ async function renderFinalVideo(body = {}, context = {}) {
     aspectRatio: ALLOWED_ASPECTS.has(String(settings.aspectRatio || "")) ? String(settings.aspectRatio) : "9:16",
     frameRate: Number(settings.frameRate) === 60 ? 60 : 30,
     showBottomSubtitles: settings.showBottomSubtitles !== false,
+    textEffectEnabled,
     bottomSubtitlePosition: settings.bottomSubtitlePosition || { x: 50, y: 94 },
     bookends: settings.bookends || {},
   };
@@ -847,8 +926,8 @@ async function renderFinalVideo(body = {}, context = {}) {
   const runId = `mpt-${Date.now()}-${randomUUID().slice(0, 6)}`;
   const runDir = path.join(context.workflowDir, runId);
   fs.mkdirSync(runDir, { recursive: true });
-  const assPath = path.join(runDir, "dynamic-subtitles.ass");
-  fs.writeFileSync(assPath, buildAss(project), "utf8");
+  const assPath = textEffectEnabled ? path.join(runDir, "dynamic-subtitles.ass") : "";
+  if (assPath) fs.writeFileSync(assPath, buildAss(project), "utf8");
   fs.writeFileSync(path.join(runDir, "manifest.json"), `${JSON.stringify({ project, backgroundPath, sourceTask: body.task || {} }, null, 2)}\n`, "utf8");
 
   const outputDir = context.downloadsDir || process.cwd();
@@ -857,12 +936,19 @@ async function renderFinalVideo(body = {}, context = {}) {
   const { width, height } = outputSize(project.aspectRatio);
   const duration = await probeDuration(context.ffprobePath, audioPath) || project.duration;
   const ttsVolume = clampFloat(settings.ttsVolume, 0, 2, 1);
+  const videoFilter = buildMoneyPrinterVideoFilter({
+    width,
+    height,
+    frameRate: project.frameRate,
+    textEffectEnabled,
+    assPath,
+  });
   const args = [
     "-y",
     "-stream_loop", "-1", "-i", backgroundPath,
     "-i", audioPath,
     "-filter_complex",
-    `[0:v]scale=${width}:${height}:force_original_aspect_ratio=increase,crop=${width}:${height},fps=${project.frameRate},subtitles='${escapeFilterPath(assPath)}'[v];[1:a]volume=${ttsVolume.toFixed(3)}[a]`,
+    `${videoFilter};[1:a]volume=${ttsVolume.toFixed(3)}[a]`,
     "-map", "[v]",
     "-map", "[a]",
     "-t", Math.max(0.5, duration).toFixed(3),
@@ -884,6 +970,19 @@ async function renderFinalVideo(body = {}, context = {}) {
     manifestPath: path.join(runDir, "manifest.json"),
     title: project.title,
   };
+}
+
+export function buildMoneyPrinterVideoFilter({
+  width,
+  height,
+  frameRate,
+  textEffectEnabled = false,
+  assPath = "",
+} = {}) {
+  const base = `[0:v]scale=${width}:${height}:force_original_aspect_ratio=increase,crop=${width}:${height},fps=${frameRate}`;
+  return textEffectEnabled && assPath
+    ? `${base},subtitles='${escapeFilterPath(assPath)}'[v]`
+    : `${base}[v]`;
 }
 
 function normalizeRenderSegments(value) {
@@ -1003,6 +1102,14 @@ function escapeFilterPath(filePath) {
 function safeFileName(value, fallback = "file") {
   const clean = String(value || "").replace(/[<>:"/\\|?*\u0000-\u001f]+/g, "-").trim();
   return clean.slice(0, 120) || fallback;
+}
+
+function readOptionalText(filePath) {
+  try {
+    return fs.readFileSync(filePath, "utf8").trim();
+  } catch {
+    return "";
+  }
 }
 
 function uniqueOutputPath(filePath) {

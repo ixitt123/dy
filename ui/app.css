@@ -11091,3 +11091,6 @@ audio {
 @media (max-width: 520px) {
   .kinetic-effect-grid { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); }
 }
+.money-printer-card [data-money-printer-effect-setting].is-disabled {
+  opacity: 0.46;
+}
