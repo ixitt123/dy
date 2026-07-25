@@ -596,6 +596,10 @@ def get_video_materials(task_id, params, video_terms, audio_duration):
             audio_duration=audio_duration * params.video_count,
             max_clip_duration=params.video_clip_duration,
             match_script_order=params.match_materials_to_script,
+            progress_callback=lambda ratio: sm.state.update_task(
+                task_id,
+                progress=min(49, round(40 + (max(0.0, min(1.0, ratio)) * 10), 1)),
+            ),
         )
         if not downloaded_videos:
             _mark_task_failed(
@@ -631,6 +635,8 @@ def generate_final_videos(
     _progress = 50
     for i in range(params.video_count):
         index = i + 1
+        video_progress_span = 50 / params.video_count
+        video_progress_base = 50 + (i * video_progress_span)
         combined_video_path = path.join(
             utils.task_dir(task_id), f"combined-{index}.mp4"
         )
@@ -645,6 +651,10 @@ def generate_final_videos(
             max_clip_duration=params.video_clip_duration,
             threads=params.n_threads,
             clip_speed=params.video_clip_speed,
+            progress_callback=lambda ratio, base=video_progress_base, span=video_progress_span: sm.state.update_task(
+                task_id,
+                progress=round(base + (max(0.0, min(1.0, ratio)) * span / 2), 1),
+            ),
         )
 
         _progress += 50 / params.video_count / 2
@@ -689,6 +699,13 @@ def generate_final_videos(
             output_file=final_video_path,
             params=params,
             bgm_file_override=bgm_file_override,
+            progress_callback=lambda ratio, base=video_progress_base, span=video_progress_span: sm.state.update_task(
+                task_id,
+                progress=min(
+                    99,
+                    round(base + (span / 2) + (max(0.0, min(1.0, ratio)) * span / 2), 1),
+                ),
+            ),
         )
         if (
             video_music_provider is not None

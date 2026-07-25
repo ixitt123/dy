@@ -1,6 +1,7 @@
 import os
 import random
 import threading
+from concurrent.futures import ThreadPoolExecutor
 from typing import List
 from urllib.parse import urlencode
 
@@ -15,6 +16,25 @@ from app.utils import utils
 # Thread-safe counter for API key rotation
 _api_key_counter = 0
 _api_key_lock = threading.Lock()
+
+# 素材下载并行度：Pexels/Pixabay 单连接速度有限，4 路并发可以把
+# 12 段素材的下载耗时压到原来的 1/4 左右，同时不至于触发源站限速。
+_DOWNLOAD_WORKERS = 4
+
+
+def _save_video_quietly(video_url: str, save_dir: str):
+    """线程安全的素材下载包装：单个失败只返回空字符串，不中断整批任务。"""
+    try:
+        if not video_url:
+            return ""
+        logger.info(f"downloading video: {video_url}")
+        saved_video_path = save_video(video_url=video_url, save_dir=save_dir)
+        if saved_video_path:
+            logger.info(f"video saved: {saved_video_path}")
+        return saved_video_path or ""
+    except Exception as e:
+        logger.error(f"failed to download video: {video_url} => {str(e)}")
+        return ""
 
 
 def _get_tls_verify() -> bool:
@@ -310,6 +330,7 @@ def download_videos(
     audio_duration: float = 0.0,
     max_clip_duration: int = 5,
     match_script_order: bool = False,
+    progress_callback=None,
 ) -> List[str]:
     search_videos = search_videos_pexels
     if source == "pixabay":
@@ -332,6 +353,7 @@ def download_videos(
             audio_duration=audio_duration,
             max_clip_duration=max_clip_duration,
             material_directory=material_directory,
+            progress_callback=progress_callback,
         )
 
     valid_video_items = []
@@ -361,24 +383,28 @@ def download_videos(
         random.shuffle(valid_video_items)
 
     total_duration = 0.0
-    for item in valid_video_items:
-        try:
-            logger.info(f"downloading video: {item.url}")
-            saved_video_path = save_video(
-                video_url=item.url, save_dir=material_directory
-            )
-            if saved_video_path:
-                logger.info(f"video saved: {saved_video_path}")
+    pending_items = list(valid_video_items)
+    with ThreadPoolExecutor(max_workers=_DOWNLOAD_WORKERS) as executor:
+        while pending_items and total_duration < audio_duration:
+            batch = pending_items[:_DOWNLOAD_WORKERS]
+            pending_items = pending_items[_DOWNLOAD_WORKERS:]
+            saved_paths = list(executor.map(
+                lambda item: _save_video_quietly(item.url, material_directory),
+                batch,
+            ))
+            for item, saved_video_path in zip(batch, saved_paths):
+                if not saved_video_path:
+                    continue
                 video_paths.append(saved_video_path)
                 seconds = min(max_clip_duration, item.duration)
                 total_duration += seconds
-                if total_duration > audio_duration:
-                    logger.info(
-                        f"total duration of downloaded videos: {total_duration} seconds, skip downloading more"
-                    )
-                    break
-        except Exception as e:
-            logger.error(f"failed to download video: {utils.to_json(item)} => {str(e)}")
+                if progress_callback:
+                    progress_callback(min(1.0, total_duration / max(audio_duration, 0.001)))
+            if total_duration >= audio_duration:
+                logger.info(
+                    f"total duration of downloaded videos: {total_duration} seconds, skip downloading more"
+                )
+                break
     logger.success(f"downloaded {len(video_paths)} videos")
     return video_paths
 
@@ -391,6 +417,7 @@ def _download_videos_by_script_order(
     audio_duration: float,
     max_clip_duration: int,
     material_directory: str,
+    progress_callback=None,
 ) -> List[str]:
     """
     按脚本文案顺序下载素材。
@@ -433,38 +460,37 @@ def _download_videos_by_script_order(
     video_paths = []
     total_duration = 0.0
     candidate_index = 0
-    while candidate_groups and total_duration <= audio_duration:
-        has_candidate = False
-        for search_term, term_items in candidate_groups:
-            if candidate_index >= len(term_items):
-                continue
+    with ThreadPoolExecutor(max_workers=_DOWNLOAD_WORKERS) as executor:
+        while candidate_groups and total_duration < audio_duration:
+            # 每一轮仍然按关键词分组轮询取候选，保持素材顺序贴近文案顺序；
+            # 只是把同一轮取到的候选并行下载，缩短整体等待时间。
+            round_items = []
+            for search_term, term_items in candidate_groups:
+                if candidate_index >= len(term_items):
+                    continue
+                round_items.append((search_term, term_items[candidate_index]))
 
-            has_candidate = True
-            item = term_items[candidate_index]
-            try:
+            if not round_items:
+                break
+
+            saved_paths = list(executor.map(
+                lambda pair: _save_video_quietly(pair[1].url, material_directory),
+                round_items,
+            ))
+            for (search_term, item), saved_video_path in zip(round_items, saved_paths):
+                if not saved_video_path:
+                    continue
+                video_paths.append(saved_video_path)
+                total_duration += min(max_clip_duration, item.duration)
+                if progress_callback:
+                    progress_callback(min(1.0, total_duration / max(audio_duration, 0.001)))
+
+            if total_duration >= audio_duration:
                 logger.info(
-                    f"downloading ordered video for '{search_term}': {item.url}"
+                    f"total duration of downloaded videos: {total_duration} seconds, skip downloading more"
                 )
-                saved_video_path = save_video(
-                    video_url=item.url, save_dir=material_directory
-                )
-                if saved_video_path:
-                    logger.info(f"video saved: {saved_video_path}")
-                    video_paths.append(saved_video_path)
-                    total_duration += min(max_clip_duration, item.duration)
-                    if total_duration > audio_duration:
-                        logger.info(
-                            f"total duration of downloaded videos: {total_duration} seconds, skip downloading more"
-                        )
-                        break
-            except Exception as e:
-                logger.error(
-                    f"failed to download ordered video: {utils.to_json(item)} => {str(e)}"
-                )
-
-        if not has_candidate:
-            break
-        candidate_index += 1
+                break
+            candidate_index += 1
 
     logger.success(f"downloaded {len(video_paths)} ordered videos")
     return video_paths

@@ -15,6 +15,37 @@ from app.services import material
 
 
 class TestMaterialTlsVerification(unittest.TestCase):
+    def test_ordered_download_stops_when_first_round_exactly_covers_audio(self):
+        search_results = {
+            "scene one": [SimpleNamespace(url="https://v.example/a1.mp4", duration=5)],
+            "scene two": [SimpleNamespace(url="https://v.example/b1.mp4", duration=5)],
+        }
+        downloaded_urls = []
+        progress_values = []
+
+        def fake_search(search_term, minimum_duration, video_aspect):
+            return search_results[search_term]
+
+        def fake_save(video_url, save_dir):
+            downloaded_urls.append(video_url)
+            return f"/tmp/{video_url.rsplit('/', 1)[-1]}"
+
+        with patch.object(material, "save_video", side_effect=fake_save):
+            result = material._download_videos_by_script_order(
+                task_id="task-fast",
+                search_terms=["scene one", "scene two"],
+                search_videos=fake_search,
+                video_aspect=None,
+                audio_duration=10,
+                max_clip_duration=5,
+                material_directory="/tmp",
+                progress_callback=progress_values.append,
+            )
+
+        self.assertEqual(len(downloaded_urls), 2)
+        self.assertEqual(len(result), 2)
+        self.assertEqual(progress_values[-1], 1.0)
+
     def setUp(self):
         self.original_app_config = dict(config.app)
         self.original_proxy_config = dict(config.proxy)
@@ -134,6 +165,10 @@ class TestMaterialTlsVerification(unittest.TestCase):
         开启按文案顺序匹配素材后，不能让第一个关键词的多个候选先把
         音频时长填满。这里模拟两个关键词各有多个候选，验证下载顺序是
         term1-第1个、term2-第1个、term1-第2个，贴近脚本叙事顺序。
+
+        注意：下载已并行化（每轮候选整批并发下载），时长达标的判断
+        在整批完成后进行，因此最后一轮可能多带出同批其他候选。多余的
+        素材只是多占几 MB 磁盘，不影响后续按音频时长截取合成。
         """
         search_results = {
             "opening city": [
@@ -168,15 +203,18 @@ class TestMaterialTlsVerification(unittest.TestCase):
                 match_script_order=True,
             )
 
+        # 并行下载的调用顺序取决于线程调度，只能断言集合一致；
+        # 返回路径的顺序必须保持轮询顺序（a1, b1 第一轮，a2, b2 第二轮）。
         self.assertEqual(
-            downloaded_urls,
+            sorted(downloaded_urls),
             [
                 "https://v.example/a1.mp4",
-                "https://v.example/b1.mp4",
                 "https://v.example/a2.mp4",
+                "https://v.example/b1.mp4",
+                "https://v.example/b2.mp4",
             ],
         )
-        self.assertEqual(result, ["/tmp/a1.mp4", "/tmp/b1.mp4", "/tmp/a2.mp4"])
+        self.assertEqual(result, ["/tmp/a1.mp4", "/tmp/b1.mp4", "/tmp/a2.mp4", "/tmp/b2.mp4"])
 
 
 class TestCoverrProvider(unittest.TestCase):

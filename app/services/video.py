@@ -24,6 +24,7 @@ from moviepy import (
 )
 from moviepy.video.tools.subtitles import SubtitlesClip
 from PIL import Image, ImageDraw, ImageFont
+from proglog import ProgressBarLogger
 
 from app.config import config
 from app.models import const
@@ -37,6 +38,20 @@ from app.models.schema import (
 from app.services import bgm as bgm_service
 from app.services.utils import video_effects
 from app.utils import file_security, utils
+
+
+class _CallbackProgressLogger(ProgressBarLogger):
+    def __init__(self, callback):
+        super().__init__()
+        self._callback = callback
+
+    def bars_callback(self, bar, attr, value, old_value=None):
+        if bar != "frame_index" or attr != "index" or not self._callback:
+            return
+        total = self.bars.get(bar, {}).get("total") or 0
+        if total:
+            self._callback(max(0.0, min(1.0, float(value) / float(total))))
+
 
 class SubClippedVideoClip:
     def __init__(
@@ -187,6 +202,25 @@ def _get_configured_video_codec() -> str:
     return configured_codec
 
 
+def _get_ffmpeg_preset() -> str:
+    """
+    读取用户配置的 x264 编码 preset，默认 veryfast。
+
+    生成场景是短视频批量出片，medium 与 veryfast 的画质差异在手机上几乎
+    不可感知，但编码耗时可缩短 30% 以上。硬件编码器（nvenc/amf/qsv）不认
+    x264 preset，由调用方只在 libx264 时附加该参数。
+    """
+    allowed = {
+        "ultrafast", "superfast", "veryfast", "faster",
+        "fast", "medium", "slow", "slower", "veryslow",
+    }
+    preset = str(config.app.get("ffmpeg_preset", "veryfast") or "veryfast").strip()
+    if preset not in allowed:
+        logger.warning(f"unsupported ffmpeg_preset configured: {preset}, fallback to veryfast")
+        return "veryfast"
+    return preset
+
+
 @lru_cache(maxsize=16)
 def _ffmpeg_encoder_exists(ffmpeg_binary: str, codec: str) -> bool:
     """
@@ -297,6 +331,8 @@ def _write_videofile_with_codec_fallback(clip, output_file: str, codec: str, **k
     生成任务不能因为高级编码器不可用而整体失败，所以这里把回退集中处理。
     """
     effective_codec = _get_effective_video_codec(codec)
+    if effective_codec == _DEFAULT_VIDEO_CODEC and "preset" not in kwargs:
+        kwargs["preset"] = _get_ffmpeg_preset()
     try:
         clip.write_videofile(output_file, codec=effective_codec, **kwargs)
         return effective_codec
@@ -353,11 +389,15 @@ def concat_video_clips_with_ffmpeg(
             concat_list_file,
             "-c:v",
             codec,
+        ]
+        if codec == _DEFAULT_VIDEO_CODEC:
+            command.extend(["-preset", _get_ffmpeg_preset()])
+        command.extend([
             "-threads",
             str(threads or 2),
             "-pix_fmt",
             "yuv420p",
-        ]
+        ])
         if max_duration is not None and max_duration > 0:
             command.extend(["-t", f"{max_duration:.3f}"])
         command.append(output_file)
@@ -545,6 +585,7 @@ def combine_videos(
     max_clip_duration: int = 5,
     threads: int = 2,
     clip_speed: float = 1.0,
+    progress_callback=None,
 ) -> str:
     audio_clip = AudioFileClip(audio_file)
     try:
@@ -717,6 +758,8 @@ def combine_videos(
                 )
             )
             video_duration += clip_duration_saved
+            if progress_callback:
+                progress_callback(min(0.85, 0.85 * video_duration / max(required_video_duration, 0.001)))
             
         except Exception as e:
             logger.error(f"failed to process clip: {str(e)}")
@@ -741,6 +784,8 @@ def combine_videos(
      
     # merge video clips progressively, avoid loading all videos at once to avoid memory overflow
     logger.info("starting clip merging process")
+    if progress_callback:
+        progress_callback(0.9)
     if not processed_clips:
         logger.warning("no clips available for merging")
         return combined_video_path
@@ -759,6 +804,8 @@ def combine_videos(
     delete_files(clip_files)
             
     logger.info("video combining completed")
+    if progress_callback:
+        progress_callback(1.0)
     return combined_video_path
 
 
@@ -975,6 +1022,7 @@ def generate_video(
     output_file: str,
     params: VideoParams,
     bgm_file_override: str | None = None,
+    progress_callback=None,
 ) -> bool:
     """
     合成最终视频，并返回本次背景音乐处理是否成功。
@@ -1261,7 +1309,7 @@ def generate_video(
             audio_bitrate=audio_bitrate,
             temp_audiofile_path=_get_temp_audio_dir(output_dir),
             threads=params.n_threads or 2,
-            logger=None,
+            logger=_CallbackProgressLogger(progress_callback) if progress_callback else None,
             fps=fps,
         )
         return bgm_mix_succeeded
