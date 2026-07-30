@@ -44,6 +44,8 @@ const state = {
   pollTimer: 0,
   downloadsDir: "",
   audio: null,
+  bgmAudio: null,
+  bgmPreviewStarted: false,
   backgroundMedia: null,
   seekResumePlaying: false,
   seekCommitUntil: 0,
@@ -176,6 +178,11 @@ function syncPreviewMediaTime(time, { trustMs = SEEK_LOCK_MS } = {}) {
       state.audio.currentTime = Math.min(targetTime, Math.max(0, Number(state.audio.duration || 0)));
     } else if (state.audio) {
       state.audio.currentTime = targetTime;
+    }
+  } catch {}
+  try {
+    if (state.bgmPreviewStarted && state.bgmAudio && targetTime > 0.001 && state.bgmAudio.readyState >= 1 && Number.isFinite(Number(state.bgmAudio.duration)) && state.bgmAudio.duration > 0) {
+      state.bgmAudio.currentTime = targetTime % state.bgmAudio.duration;
     }
   } catch {}
   try {
@@ -496,10 +503,36 @@ function syncAudio() {
     if (state.audio !== audio) return;
     state.currentTime = previewDuration();
     state.playing = false;
+    state.bgmAudio?.pause();
     cancelAnimationFrame(state.raf);
     $("#kineticPreviewPlay").textContent = "播放预览";
     drawPreview();
   });
+}
+
+function syncPreviewBgmAudio({ force = false } = {}) {
+  const mix = state.project?.audioMix || {};
+  const source = mix.source === "local" && mix.localPath ? mediaUrl("bgm") : "";
+  if (!force && state.bgmAudio?.src === new URL(source || "", window.location.href).href) {
+    state.bgmAudio.volume = Math.max(0, Math.min(1, Number(mix.backgroundVolume ?? 18) / 100));
+    return;
+  }
+  if (state.bgmAudio) {
+    state.bgmAudio.pause();
+    state.bgmAudio.src = "";
+    state.bgmAudio.remove();
+  }
+  state.bgmAudio = null;
+  state.bgmPreviewStarted = false;
+  if (!source) return;
+  const audio = document.createElement("audio");
+  audio.src = source;
+  audio.dataset.previewBgmAudio = "true";
+  audio.preload = "auto";
+  audio.loop = true;
+  audio.volume = Math.max(0, Math.min(1, Number(mix.backgroundVolume ?? 18) / 100));
+  document.body.append(audio);
+  state.bgmAudio = audio;
 }
 
 function syncBackgroundMedia() {
@@ -1339,6 +1372,7 @@ function previewTick(timestamp) {
     state.currentTime = duration;
     state.playing = false;
     state.audio?.pause();
+    state.bgmAudio?.pause();
     if (state.backgroundMedia instanceof HTMLVideoElement) state.backgroundMedia.pause();
     $("#kineticPreviewPlay").textContent = "播放预览";
     drawPreview();
@@ -1369,6 +1403,16 @@ function startPreviewPlayback() {
       drawPreview();
     });
   }
+  if (state.bgmAudio) {
+    if (!state.bgmPreviewStarted) syncPreviewBgmAudio({ force: true });
+    const bgmAudio = state.bgmAudio;
+    bgmAudio?.play().then(() => {
+      if (state.bgmAudio === bgmAudio) state.bgmPreviewStarted = true;
+    }).catch(() => {
+      if (state.bgmAudio !== bgmAudio) return;
+      console.warn("BGM preview playback was blocked by the browser");
+    });
+  }
   if (state.backgroundMedia instanceof HTMLVideoElement) { state.backgroundMedia.currentTime = state.currentTime % Math.max(state.backgroundMedia.duration || 1, 1); state.backgroundMedia.play().catch(() => {}); }
   cancelAnimationFrame(state.raf);
   state.raf = requestAnimationFrame(previewTick);
@@ -1380,6 +1424,7 @@ function playPreview() {
     state.playing = false;
     $("#kineticPreviewPlay").textContent = "播放预览";
     state.audio?.pause();
+    state.bgmAudio?.pause();
     if (state.backgroundMedia instanceof HTMLVideoElement) state.backgroundMedia.pause();
     cancelAnimationFrame(state.raf);
     return;
@@ -1746,6 +1791,7 @@ function renderProject() {
   renderOutputs();
   renderReceivedFiles();
   syncAudio();
+  syncPreviewBgmAudio();
   syncBackgroundMedia();
   drawPreview();
 }
@@ -2273,6 +2319,7 @@ function bindEvents() {
   $("#kineticBgVolume").addEventListener("input", (event) => {
     $("#kineticBgVolumeValue").value = `${event.target.value}%`;
     savePreferences({ backgroundVolume: Number(event.target.value) });
+    if (state.bgmAudio) state.bgmAudio.volume = Math.max(0, Math.min(1, Number(event.target.value) / 100));
     scheduleSave({ audioMix: { backgroundVolume: Number(event.target.value) } });
   });
   $("#kineticBottomSubtitles").addEventListener("change", (event) => {

@@ -34,6 +34,7 @@ const state = {
   renderedVideo: null,
   backgroundAudio: null,
   handoffBgm: null,
+  previewBgmAudio: null,
   includeBgm: false,
   timelineDraftRows: null,
   planGenerating: false,
@@ -370,7 +371,11 @@ async function handleParentHandoff(event) {
   els.titleInput.value = handoffTitle;
   els.copyInput.value = handoffText;
   state.handoffBgm = handoff.bgm_path || job.bgm_path
-    ? { path: handoff.bgm_path || job.bgm_path, name: handoff.bgm_name || job.bgm_name || "清爽教育 BGM" }
+    ? {
+      path: handoff.bgm_path || job.bgm_path,
+      url: handoff.bgm_url || job.bgm_url || "",
+      name: handoff.bgm_name || job.bgm_name || "清爽教育 BGM",
+    }
     : null;
   state.includeBgm = Boolean(state.handoffBgm);
   syncHandoffBgmControl();
@@ -647,6 +652,7 @@ function bindEvents() {
   els.includeBgm?.addEventListener("change", () => {
     state.includeBgm = Boolean(els.includeBgm.checked && (state.handoffBgm || state.backgroundAudio));
     syncHandoffBgmControl();
+    syncPreviewBgmAudio();
     state.renderedVideo = null;
     updateVideoDownloadState();
   });
@@ -688,9 +694,18 @@ function bindEvents() {
     drawVideoPreview();
   });
   els.downloadXiaoheiVideo.addEventListener("click", downloadRenderedVideo);
-  els.audioPreview.addEventListener("play", startVideoPreviewLoop);
-  els.audioPreview.addEventListener("pause", stopVideoPreviewLoop);
-  els.audioPreview.addEventListener("ended", stopVideoPreviewLoop);
+  els.audioPreview.addEventListener("play", () => {
+    startVideoPreviewLoop();
+    void playPreviewBgm();
+  });
+  els.audioPreview.addEventListener("pause", () => {
+    pausePreviewBgm();
+    stopVideoPreviewLoop();
+  });
+  els.audioPreview.addEventListener("ended", () => {
+    pausePreviewBgm({ reset: true });
+    stopVideoPreviewLoop();
+  });
   els.audioPreview.addEventListener("loadedmetadata", syncVideoPreview);
   els.audioPreview.addEventListener("timeupdate", syncVideoPreviewTime);
 }
@@ -3353,12 +3368,86 @@ function showAudio(url, title = "当前试听音频") {
   els.audioPreview.src = url;
   els.audioPreviewTitle.textContent = title;
   els.audioPreviewPanel.hidden = false;
+  syncPreviewBgmAudio();
 }
 
 function hideAudio() {
+  pausePreviewBgm({ reset: true });
+  if (state.previewBgmAudio) {
+    state.previewBgmAudio.src = "";
+    state.previewBgmAudio.remove();
+  }
+  state.previewBgmAudio = null;
   els.audioPreview.removeAttribute("src");
   els.audioPreview.load();
   els.audioPreviewPanel.hidden = true;
+}
+
+function previewBgmUrl() {
+  if (!state.includeBgm) return "";
+  const url = state.handoffBgm?.url || "";
+  return url ? `${url}${url.includes("?") ? "&" : "?"}preview_bgm=1` : "";
+}
+
+function syncPreviewBgmAudio({ force = false } = {}) {
+  const url = previewBgmUrl();
+  const resolvedUrl = url ? new URL(url, window.location.href).href : "";
+  if (!force && state.previewBgmAudio?.src === resolvedUrl) {
+    state.previewBgmAudio.volume = Math.max(0, Math.min(1, Number(els.bgmVolume?.value || 18) / 100));
+    return;
+  }
+  pausePreviewBgm({ reset: true });
+  if (state.previewBgmAudio) {
+    state.previewBgmAudio.src = "";
+    state.previewBgmAudio.remove();
+  }
+  state.previewBgmAudio = null;
+  if (!url) return;
+  const audio = document.createElement("audio");
+  audio.src = url;
+  audio.dataset.previewBgmAudio = "true";
+  audio.preload = "auto";
+  audio.loop = true;
+  audio.volume = Math.max(0, Math.min(1, Number(els.bgmVolume?.value || 18) / 100));
+  document.body.append(audio);
+  state.previewBgmAudio = audio;
+}
+
+function syncPreviewBgmTime(time = Number(els.audioPreview.currentTime || 0)) {
+  const audio = state.previewBgmAudio;
+  if (!audio || audio.dataset.previewBgmStarted !== "true") return;
+  const target = Math.max(0, Number(time || 0));
+  if (target <= 0.001) return;
+  if (audio.readyState < 1) {
+    audio.addEventListener("loadedmetadata", () => syncPreviewBgmTime(target), { once: true });
+    return;
+  }
+  try {
+    audio.currentTime = Number.isFinite(Number(audio.duration)) && audio.duration > 0
+      ? target % audio.duration
+      : 0;
+  } catch {}
+}
+
+async function playPreviewBgm() {
+  if (state.previewBgmAudio?.dataset.previewBgmStarted !== "true") syncPreviewBgmAudio({ force: true });
+  const audio = state.previewBgmAudio;
+  if (!audio || els.audioPreview.paused) return;
+  try {
+    await audio.play();
+    audio.dataset.previewBgmStarted = "true";
+  } catch (error) {
+    console.warn("BGM preview playback was blocked by the browser", error);
+  }
+}
+
+function pausePreviewBgm({ reset = false } = {}) {
+  const audio = state.previewBgmAudio;
+  if (!audio) return;
+  audio.pause();
+  if (reset) {
+    try { audio.currentTime = 0; } catch {}
+  }
 }
 
 function setBusy(busy) {
@@ -3440,6 +3529,7 @@ function resolvedBookendText(kind) {
 function handleComposeSettingsChange() {
   els.ttsVolumeValue.textContent = `${els.ttsVolume.value}%`;
   els.bgmVolumeValue.textContent = `${els.bgmVolume.value}%`;
+  if (state.previewBgmAudio) state.previewBgmAudio.volume = Math.max(0, Math.min(1, Number(els.bgmVolume.value || 18) / 100));
   els.subtitleSizeValue.textContent = els.subtitleSize.value;
   els.subtitleSpeedValue.textContent = `${(Number(els.subtitleSpeed.value) / 100).toFixed(2)}×`;
   localStorage.setItem(COMPOSE_SETTINGS_KEY, JSON.stringify(composeSettings()));

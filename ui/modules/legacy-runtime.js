@@ -5017,6 +5017,7 @@ async function applyTtsToXiaohei(payload = {}) {
     text: payload.text || "",
     ttsJob: job,
     files: payload.files || [],
+    bgm_url: payload.bgm_url || "",
     bgm_path: payload.bgm_path || "",
     bgm_name: payload.bgm_name || "清爽教育 BGM",
     has_bgm: Boolean(payload.has_bgm),
