@@ -25,6 +25,7 @@ export function initCs1VideoModule() {
   const copyFormatButton = document.getElementById("cs1VideoCopyFormat");
   const deleteStyleButton = document.getElementById("cs1VideoDeleteStyle");
   const bgmModeSelect = document.getElementById("cs1VideoBgmMode");
+  const includeBgmInput = document.getElementById("cs1VideoIncludeBgm");
   const bgmPathInput = document.getElementById("cs1VideoBgmPath");
   const chooseBgmButton = document.getElementById("cs1VideoChooseBgm");
   const iconVariantSelect = document.getElementById("cs1IconVariant");
@@ -123,7 +124,8 @@ export function initCs1VideoModule() {
     if (textInput) textInput.value = "";
     if (textInput) textInput.readOnly = false;
     if (bgmPathInput) bgmPathInput.value = "";
-    if (bgmModeSelect) bgmModeSelect.value = "auto";
+    if (bgmModeSelect) bgmModeSelect.value = "none";
+    if (includeBgmInput) includeBgmInput.checked = false;
     renderTimeline();
   };
 
@@ -147,7 +149,8 @@ export function initCs1VideoModule() {
     textInput.readOnly = true;
     if (titleInput) titleInput.value = payload.title || payload.seo_title || payload.publish_title || `TTS #${payload.display_number || payload.id}`;
     if (bgmPathInput) bgmPathInput.value = payload.bgm_path || "";
-    if (bgmModeSelect) bgmModeSelect.value = payload.bgm_path ? "local" : "auto";
+    if (bgmModeSelect) bgmModeSelect.value = payload.bgm_path ? "local" : "none";
+    if (includeBgmInput) includeBgmInput.checked = Boolean(payload.bgm_path);
     renderTimeline();
     setStatus(
       payload.has_bgm ? "已接收 TTS 四件套" : "已接收 TTS 三件套",
@@ -339,6 +342,7 @@ export function initCs1VideoModule() {
       if (data.filePath) {
         bgmPathInput.value = data.filePath;
         if (bgmModeSelect) bgmModeSelect.value = "local";
+        if (includeBgmInput) includeBgmInput.checked = true;
         setStatus("已选择音乐", "生成时会把本地音乐写入 HyperFrames 视频。");
       } else {
         setStatus("未选择音乐", "继续使用默认 128BPM 暗色律动或不添加 BGM。");
@@ -370,8 +374,10 @@ export function initCs1VideoModule() {
         style: selectedStyle(),
         beatCount: beatCountSelect?.value || "auto",
         cardHoldPreset: cardHoldSelect?.value || "auto",
-        bgmMode: bgmModeSelect?.value || "builtin_dark_pulse_128",
+        includeBgm: Boolean(includeBgmInput?.checked),
+        bgmMode: includeBgmInput?.checked ? (bgmModeSelect?.value || "none") : "none",
         bgmPath: bgmPathInput?.value || "",
+        ttsAudioPath: includeBgmInput?.checked ? (currentTtsHandoff?.audio_path || "") : "",
         iconVariant: iconVariantSelect?.value || "orbit_nodes",
         textPalette: textPaletteSelect?.value || "gold_green",
         layoutVariant: layoutVariantSelect?.value || "left_right",

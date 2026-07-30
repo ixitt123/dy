@@ -1714,6 +1714,8 @@ function renderProject() {
   $("#kineticBackgroundMode").value = project.background?.mode || "black";
   $("#kineticBackgroundName").textContent = project.background?.name ? `当前：${project.background.name}` : "当前：纯黑背景";
   $("#kineticAudioSource").value = project.audioMix?.source || "none";
+  $("#kineticIncludeBgm").checked = project.audioMix?.source === "local";
+  $("#kineticIncludeBgm").disabled = !project.audioMix?.localPath;
   $("#kineticBgmName").textContent = project.audioMix?.localName || "未上传背景音乐";
   $("#kineticTtsVolume").value = String(project.audioMix?.ttsVolume ?? 100);
   $("#kineticBgVolume").value = String(project.audioMix?.backgroundVolume ?? 18);
@@ -2251,8 +2253,17 @@ function bindEvents() {
     });
   });
   $("#kineticAudioSource").addEventListener("change", (event) => {
+    if (event.target.value !== "local") $("#kineticIncludeBgm").checked = false;
+    else if (state.project?.audioMix?.localPath) $("#kineticIncludeBgm").checked = true;
     savePreferences({ audioSource: event.target.value });
     scheduleSave({ audioMix: { source: event.target.value } });
+  });
+  $("#kineticIncludeBgm").addEventListener("change", (event) => {
+    const hasLocalBgm = Boolean(state.project?.audioMix?.localPath);
+    const source = event.target.checked && hasLocalBgm ? "local" : "none";
+    $("#kineticAudioSource").value = source;
+    savePreferences({ audioSource: source });
+    scheduleSave({ audioMix: { source } });
   });
   $("#kineticTtsVolume").addEventListener("input", (event) => {
     $("#kineticTtsVolumeValue").value = `${event.target.value}%`;

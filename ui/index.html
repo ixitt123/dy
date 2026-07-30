@@ -1310,10 +1310,11 @@
               </div>
               <label>
                 背景音乐
+                <span class="kinetic-check"><input id="cs1VideoIncludeBgm" type="checkbox" /><span>加入对应 BGM 音频</span></span>
                 <select id="cs1VideoBgmMode">
-                  <option value="builtin_dark_pulse_128" selected>默认 128BPM 暗色律动</option>
+                  <option value="none" selected>不添加 BGM</option>
                   <option value="local">使用本地音频</option>
-                  <option value="none">不添加 BGM</option>
+                  <option value="builtin_dark_pulse_128">默认 128BPM 暗色律动</option>
                 </select>
                 <div class="cs1-bgm-row">
                   <input id="cs1VideoBgmPath" type="text" placeholder="本地音频路径，可选" readonly />
@@ -1605,6 +1606,7 @@
                   <select id="moneyPrinterMaxLines"><option value="1">1 行</option><option value="2" selected>2 行</option><option value="3">3 行</option></select>
                 </label>
                 <label class="kinetic-range-row"><span>TTS 音量</span><input id="moneyPrinterTtsVolume" type="range" min="0" max="200" value="100" /><output id="moneyPrinterTtsVolumeValue">100%</output></label>
+                <label class="kinetic-check"><input id="moneyPrinterIncludeBgm" type="checkbox" /><span>加入对应 BGM 音频</span></label>
                 <label class="kinetic-check"><input id="moneyPrinterBottomSubtitles" type="checkbox" checked /><span>显示底部关键词字幕</span></label>
               </section>
 
@@ -1749,6 +1751,7 @@
 
               <section class="kinetic-card">
                 <div class="kinetic-card-head"><strong>声音与字幕</strong></div>
+                <label class="kinetic-check"><input id="kineticIncludeBgm" type="checkbox" /><span>加入对应 BGM 音频</span></label>
                 <label>
                   <span>背景声音</span>
                   <select id="kineticAudioSource">

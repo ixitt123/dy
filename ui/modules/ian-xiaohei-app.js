@@ -34,6 +34,7 @@ const state = {
   renderedVideo: null,
   backgroundAudio: null,
   handoffBgm: null,
+  includeBgm: false,
   timelineDraftRows: null,
   planGenerating: false,
   planRestorePromise: null,
@@ -217,6 +218,7 @@ const els = {
   imageFit: document.querySelector("#xiaoheiImageFit"),
   ttsVolume: document.querySelector("#xiaoheiTtsVolume"),
   ttsVolumeValue: document.querySelector("#xiaoheiTtsVolumeValue"),
+  includeBgm: document.querySelector("#xiaoheiIncludeBgm"),
   chooseBgm: document.querySelector("#chooseXiaoheiBgm"),
   bgmFile: document.querySelector("#xiaoheiBgmFile"),
   bgmName: document.querySelector("#xiaoheiBgmName"),
@@ -370,6 +372,8 @@ async function handleParentHandoff(event) {
   state.handoffBgm = handoff.bgm_path || job.bgm_path
     ? { path: handoff.bgm_path || job.bgm_path, name: handoff.bgm_name || job.bgm_name || "清爽教育 BGM" }
     : null;
+  state.includeBgm = Boolean(state.handoffBgm);
+  syncHandoffBgmControl();
   state.ttsJob = job;
   try {
     const data = await fetchJson("/api/ian-xiaohei/audio-select", {
@@ -640,6 +644,12 @@ function bindEvents() {
   els.aspectRatioSelect.addEventListener("change", () => resetVisualWorkflow("视频比例已改变，请重新生成分镜计划。"));
   els.chooseBgm.addEventListener("click", () => els.bgmFile.click());
   els.bgmFile.addEventListener("change", (event) => uploadXiaoheiBgm(event.target.files?.[0]));
+  els.includeBgm?.addEventListener("change", () => {
+    state.includeBgm = Boolean(els.includeBgm.checked && (state.handoffBgm || state.backgroundAudio));
+    syncHandoffBgmControl();
+    state.renderedVideo = null;
+    updateVideoDownloadState();
+  });
   for (const element of [els.frameRate, els.imageFit, els.showSubtitles, els.subtitleColor, els.keywordColor, els.subtitleLines, els.subtitleOutline, els.subtitleShadow, els.introEnabled, els.introPreset, els.introText, els.outroEnabled, els.outroPreset, els.outroText]) {
     element.addEventListener("change", handleComposeSettingsChange);
   }
@@ -1480,8 +1490,8 @@ async function generateCompleteWorkflow() {
         images: state.images,
         transition_mode: els.videoTransitionMode.value || "smart",
         compose: composeSettings(),
-        background_audio: state.backgroundAudio,
-        tts_bgm_path: state.handoffBgm?.path || "",
+        background_audio: state.includeBgm ? state.backgroundAudio : null,
+        tts_bgm_path: state.includeBgm ? (state.handoffBgm?.path || "") : "",
       }),
     });
     state.renderedVideo = exported;
@@ -3404,6 +3414,19 @@ function composeSettings() {
   };
 }
 
+function syncHandoffBgmControl() {
+  const available = Boolean(state.handoffBgm || state.backgroundAudio);
+  if (els.includeBgm) {
+    els.includeBgm.disabled = !available;
+    els.includeBgm.checked = Boolean(state.includeBgm && available);
+  }
+  if (state.handoffBgm && els.bgmName) {
+    els.bgmName.textContent = state.includeBgm
+      ? `当前：${state.handoffBgm.name}（随 TTS 四件套加入）`
+      : `已接收：${state.handoffBgm.name}（未加入）`;
+  }
+}
+
 function resolvedBookendText(kind) {
   const intro = kind === "intro";
   const preset = intro ? els.introPreset.value : els.outroPreset.value;
@@ -3464,11 +3487,14 @@ async function uploadXiaoheiBgm(file) {
       body: JSON.stringify({ project_id: state.projectId, file_name: file.name, audio_mime: file.type, audio_data: await readFileDataUrl(file) }),
     });
     state.backgroundAudio = data.audio;
+    state.includeBgm = true;
+    syncHandoffBgmControl();
     els.bgmName.textContent = `当前：${data.audio.name}`;
     state.renderedVideo = null;
     updateVideoDownloadState();
   } catch (error) {
     state.backgroundAudio = null;
+    syncHandoffBgmControl();
     els.bgmName.textContent = error.payload?.message || error.message || "背景音乐上传失败";
   } finally {
     els.bgmFile.value = "";

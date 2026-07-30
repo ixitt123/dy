@@ -199,6 +199,8 @@ export function createCs1VideoRoutes({ baseDir, sendJson, modelRouter, ffmpegPat
           templateName: body.templateName,
           bgmMode: body.bgmMode,
           bgmPath: body.bgmPath,
+          includeBgm: body.includeBgm === true,
+          ttsAudioPath: body.ttsAudioPath,
           packaging: {
             introTemplateId: body.introTemplateId,
             outroTemplateId: body.outroTemplateId,
@@ -249,7 +251,7 @@ function writeHiddenStyleIds(filePath, ids) {
   fs.writeFileSync(filePath, `${JSON.stringify(payload, null, 2)}\n`, "utf8");
 }
 
-async function generateVideo({ runsDir, outputDir, text, style, title, aspectRatio, beatCount, cardHoldPreset, visualOptions, templateName, bgmMode, bgmPath, packaging, aiRefine, modelRouter, ffmpegPath, ffprobePath }) {
+async function generateVideo({ runsDir, outputDir, text, style, title, aspectRatio, beatCount, cardHoldPreset, visualOptions, templateName, bgmMode, bgmPath, includeBgm = false, ttsAudioPath = "", packaging, aiRefine, modelRouter, ffmpegPath, ffprobePath }) {
   const script = normalizeScript(text);
   const styleId = normalizeStyle(style);
   const aspect = normalizeAspectRatio(aspectRatio);
@@ -298,6 +300,16 @@ async function generateVideo({ runsDir, outputDir, text, style, title, aspectRat
   await runHyperframes(projectDir, ["inspect"], checkOutput, hyperframesEnv);
   const renderOutput = [];
   await runHyperframes(projectDir, ["render", "--output", outputPath, "--quality", "standard"], renderOutput, hyperframesEnv);
+  const mixedBgm = includeBgm ? resolveCs1LocalAudioPath(bgmPath) : "";
+  if (mixedBgm) {
+    await mixCs1BgmIntoVideo({
+      ffmpegPath,
+      ffprobePath,
+      outputPath,
+      bgmPath: mixedBgm,
+      ttsAudioPath: resolveCs1LocalAudioPath(ttsAudioPath),
+    });
+  }
 
   return {
     id: slug,
@@ -311,7 +323,7 @@ async function generateVideo({ runsDir, outputDir, text, style, title, aspectRat
     outputPath,
     outputDir,
     aiUsed: Boolean(refined),
-    bgm: files.bgm || null,
+    bgm: mixedBgm ? { mode: "local", label: `${path.basename(mixedBgm)} · 已混入成片`, sourcePath: mixedBgm } : files.bgm || null,
     visualOptions: files.visualOptions || aifmanVisual,
     packaging: files.packaging || packagingOptions,
     checkLog: checkOutput.join("\n").slice(-8000),
@@ -566,6 +578,55 @@ function runHyperframes(cwd, args, output, env = process.env) {
       }
       reject(new Error(`HyperFrames ${args[0]} failed:\n${combined.slice(-2500)}`));
     });
+  });
+}
+
+function resolveCs1LocalAudioPath(value) {
+  const candidate = String(value || "").trim();
+  if (!candidate) return "";
+  const resolved = path.resolve(candidate);
+  const extension = path.extname(resolved).toLowerCase();
+  const supported = new Set([".mp3", ".wav", ".m4a", ".aac", ".ogg"]);
+  return fs.existsSync(resolved) && fs.statSync(resolved).isFile() && supported.has(extension) ? resolved : "";
+}
+
+async function mixCs1BgmIntoVideo({ ffmpegPath, ffprobePath, outputPath, bgmPath, ttsAudioPath = "" }) {
+  if (!ffmpegPath || !fs.existsSync(ffmpegPath)) throw new Error("FFmpeg 不可用，无法混入 BGM。");
+  const temporaryPath = `${outputPath}.bgm.mp4`;
+  const hasTts = Boolean(ttsAudioPath);
+  const outputDuration = await mediaDurationSeconds(ffprobePath, outputPath);
+  const fadeStart = Math.max(0, outputDuration - 0.8).toFixed(3);
+  const args = ["-y", "-i", outputPath];
+  if (hasTts) args.push("-i", ttsAudioPath);
+  args.push("-stream_loop", "-1", "-i", bgmPath);
+  const bgmInputIndex = hasTts ? 2 : 1;
+  const filter = hasTts
+    ? `[1:a]volume=1.000[tts];[${bgmInputIndex}:a]volume=0.180,afade=t=in:st=0:d=0.5,afade=t=out:st=${fadeStart}:d=0.8[bgm];[tts][bgm]amix=inputs=2:duration=first:dropout_transition=2[aout]`
+    : `[${bgmInputIndex}:a]volume=0.180,afade=t=in:st=0:d=0.5,afade=t=out:st=${fadeStart}:d=0.8[aout]`;
+  args.push("-filter_complex", filter, "-map", "0:v:0", "-map", "[aout]", "-c:v", "copy", "-c:a", "aac", "-shortest", "-movflags", "+faststart", temporaryPath);
+  await runFfmpeg(ffmpegPath, args);
+  fs.unlinkSync(outputPath);
+  fs.renameSync(temporaryPath, outputPath);
+}
+
+function mediaDurationSeconds(ffprobePath, mediaPath) {
+  return new Promise((resolve) => {
+    if (!ffprobePath || !fs.existsSync(ffprobePath)) return resolve(0);
+    const child = spawn(ffprobePath, ["-v", "error", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", mediaPath], { windowsHide: true });
+    let stdout = "";
+    child.stdout.on("data", (chunk) => { stdout += chunk.toString(); });
+    child.on("error", () => resolve(0));
+    child.on("close", () => resolve(Math.max(0, Number.parseFloat(stdout) || 0)));
+  });
+}
+
+function runFfmpeg(command, args) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(command, args, { windowsHide: true });
+    let stderr = "";
+    child.stderr.on("data", (chunk) => { stderr += chunk.toString(); });
+    child.on("error", reject);
+    child.on("close", (code) => code === 0 ? resolve() : reject(new Error(`BGM 混音失败：${stderr.slice(-1500)}`)));
   });
 }
 

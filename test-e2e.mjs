@@ -277,7 +277,7 @@ test("Completed TTS generation reveals its audio preview", async () => {
 });
 
 test("Optional clean-education BGM is a separate fourth handoff asset", async () => {
-  const [pageResponse, legacyResponse, cssResponse, workbenchResponse, cs1Response, moneyResponse, kineticResponse, xiaoheiResponse, xiaoheiRoute] = await Promise.all([
+  const [pageResponse, legacyResponse, cssResponse, workbenchResponse, cs1Response, moneyResponse, kineticResponse, xiaoheiResponse, xiaoheiRoute, cs1Route] = await Promise.all([
     fetch(`${BASE}/`),
     fetch(`${BASE}/modules/legacy-runtime.js`),
     fetch(`${BASE}/app.css`),
@@ -287,6 +287,7 @@ test("Optional clean-education BGM is a separate fourth handoff asset", async ()
     fetch(`${BASE}/modules/kinetic-text.js`),
     fetch(`${BASE}/modules/ian-xiaohei-app.js`),
     readFile(new URL("./server/routes/ian-xiaohei-routes.js", import.meta.url), "utf8"),
+    readFile(new URL("./server/routes/cs1-video-routes.js", import.meta.url), "utf8"),
   ]);
   const [page, legacy, css, workbench, cs1, money, kinetic, xiaohei] = await Promise.all([
     pageResponse.text(), legacyResponse.text(), cssResponse.text(), workbenchResponse.text(), cs1Response.text(), moneyResponse.text(), kineticResponse.text(), xiaoheiResponse.text(),
@@ -343,13 +344,21 @@ test("Optional clean-education BGM is a separate fourth handoff asset", async ()
     || !legacy.includes('type: "bgm"')
     || !legacy.includes('payload.has_bgm ?')
     || !cs1.includes('payload.bgm_path || ""')
-    || !money.includes('bgm_type: state.handoff?.bgm_path ? "custom" : "none"')
-    || !money.includes('state.handoff?.has_bgm ? "四件套（含独立 BGM）" : "三件套"')
+    || !page.includes('id="cs1VideoIncludeBgm"')
+    || !page.includes('id="moneyPrinterIncludeBgm"')
+    || !page.includes('id="kineticIncludeBgm"')
+    || !cs1.includes('includeBgm: Boolean(includeBgmInput?.checked)')
+    || !cs1.includes('ttsAudioPath: includeBgmInput?.checked')
+    || !cs1Route.includes('await mixCs1BgmIntoVideo({')
+    || !cs1Route.includes('afade=t=out:st=${fadeStart}:d=0.8')
+    || !money.includes('state.includeBgm && state.handoff?.bgm_path ? "custom" : "none"')
+    || !money.includes('state.includeBgm && hasBgm ? "四件套（含独立 BGM）" : "三件套"')
     || !money.includes('等待已确认 TTS 交接包')
     || !kinetic.includes('localPath: payload.bgm_path')
     || !kinetic.includes('async function jsonFetch(url, options = {}, retryLocalSession = true)')
     || !kinetic.includes('return jsonFetch(url, options, false);')
-    || !xiaohei.includes('tts_bgm_path: state.handoffBgm?.path || ""')
+    || !xiaohei.includes('tts_bgm_path: state.includeBgm ? (state.handoffBgm?.path || "") : ""')
+    || !xiaohei.includes('includeBgm: document.querySelector("#xiaoheiIncludeBgm")')
     || !xiaoheiRoute.includes('const handoffBgmPath = String(body.tts_bgm_path || "").trim();')) {
     throw new Error("Optional clean-education BGM four-asset handoff is incomplete");
   }

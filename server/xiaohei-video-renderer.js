@@ -119,7 +119,9 @@ export async function renderXiaoheiVideo({ ffmpegPath, scenes, audioPath, backgr
   if (backgroundAudioPath) {
     if (!fs.existsSync(backgroundAudioPath)) throw new Error("背景音乐文件不存在，请重新选择。");
     args.push("-stream_loop", "-1", "-i", backgroundAudioPath);
-    filter += `;[${ttsInputIndex}:a]volume=${ttsVolume.toFixed(3)}[tts];[${ttsInputIndex + 1}:a]volume=${bgmVolume.toFixed(3)}[bgm];[tts][bgm]amix=inputs=2:duration=first:dropout_transition=2[aout]`;
+    const duration = Math.max(1, scenes.reduce((sum, scene) => Math.max(sum, Number(scene.end_time || 0)), 0));
+    const fadeStart = Math.max(0, duration - 0.8).toFixed(3);
+    filter += `;[${ttsInputIndex}:a]volume=${ttsVolume.toFixed(3)}[tts];[${ttsInputIndex + 1}:a]volume=${bgmVolume.toFixed(3)},afade=t=in:st=0:d=0.5,afade=t=out:st=${fadeStart}:d=0.8[bgm];[tts][bgm]amix=inputs=2:duration=first:dropout_transition=2[aout]`;
     audioMap = "[aout]";
   } else if (ttsVolume !== 1) {
     filter += `;[${ttsInputIndex}:a]volume=${ttsVolume.toFixed(3)}[aout]`;

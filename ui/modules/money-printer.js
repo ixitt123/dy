@@ -9,6 +9,7 @@ const state = {
   effects: [],
   status: null,
   handoff: null,
+  includeBgm: false,
   segments: [],
   timelineDraftSegments: null,
   materialPlan: null,
@@ -72,6 +73,7 @@ function cacheElements() {
     maxLines: $("#moneyPrinterMaxLines"),
     ttsVolume: $("#moneyPrinterTtsVolume"),
     ttsVolumeValue: $("#moneyPrinterTtsVolumeValue"),
+    includeBgm: $("#moneyPrinterIncludeBgm"),
     bottomSubtitles: $("#moneyPrinterBottomSubtitles"),
     previewTitle: $("#moneyPrinterPreviewTitle"),
     previewSpec: $("#moneyPrinterPreviewSpec"),
@@ -173,6 +175,10 @@ function bindEvents() {
     savePreferences();
     updateButtons();
   });
+  els.includeBgm?.addEventListener("change", () => {
+    state.includeBgm = Boolean(els.includeBgm.checked && state.handoff?.bgm_path);
+    renderHandoff();
+  });
   for (const input of [els.effect, els.textEffectEnabled, els.materialMode, els.aspect, els.frameRate, els.fontSize, els.primaryColor, els.accentColor, els.maxLines, els.ttsVolume, els.bottomSubtitles, els.transition]) {
     input?.addEventListener("input", () => { savePreferences(); updateSettingOutputs(); drawPreview(); renderTimeline(); });
     input?.addEventListener("change", () => { savePreferences(); updateSettingOutputs(); drawPreview(); renderTimeline(); });
@@ -257,6 +263,7 @@ function receiveTts(payload = {}, { navigate = true } = {}) {
     return null;
   }
   state.handoff = payload;
+  state.includeBgm = Boolean(payload.bgm_path);
   state.segments = segments;
   state.timelineDraftSegments = null;
   state.materialPlan = null;
@@ -281,6 +288,7 @@ function clearTimelineState() {
   stopPolling();
   pausePreview();
   state.handoff = null;
+  state.includeBgm = false;
   state.segments = [];
   state.timelineDraftSegments = null;
   state.materialPlan = null;
@@ -327,9 +335,14 @@ function renderAll() {
 
 function renderHandoff() {
   const confirmed = hasConfirmedHandoff();
+  const hasBgm = Boolean(state.handoff?.bgm_path);
+  if (els.includeBgm) {
+    els.includeBgm.disabled = !hasBgm;
+    els.includeBgm.checked = Boolean(state.includeBgm && hasBgm);
+  }
   els.handoffBadge.textContent = confirmed ? `音频 #${state.handoff.display_number || state.handoff.id}` : "等待 TTS";
   els.previewSpec.textContent = confirmed
-    ? `${state.segments.length} 段字幕 · ${els.aspect.value} · ${els.frameRate.value}fps · ${state.handoff?.has_bgm ? "四件套（含独立 BGM）" : "三件套"}`
+    ? `${state.segments.length} 段字幕 · ${els.aspect.value} · ${els.frameRate.value}fps · ${state.includeBgm && hasBgm ? "四件套（含独立 BGM）" : "三件套"}`
     : "等待已确认 TTS 交接包";
   if (!confirmed) {
     setStatus("等待已确认 TTS", "请先在 TTS 语音页确认最终文案、音频和字幕时间轴，再发送到 MoneyPrinter。", true);
@@ -501,9 +514,9 @@ function buildMptPayload() {
     video_transition_mode: transitionPayloadValue(),
     match_materials_to_script: true,
     custom_audio_file: state.handoff.audio_path || "",
-    bgm_type: state.handoff?.bgm_path ? "custom" : "none",
-    bgm_file: state.handoff?.bgm_path || "",
-    bgm_volume: state.handoff?.bgm_path ? 0.18 : 0.2,
+    bgm_type: state.includeBgm && state.handoff?.bgm_path ? "custom" : "none",
+    bgm_file: state.includeBgm ? (state.handoff?.bgm_path || "") : "",
+    bgm_volume: state.includeBgm && state.handoff?.bgm_path ? 0.18 : 0,
     subtitle_enabled: false,
   };
 }
@@ -689,7 +702,7 @@ function updateSettingOutputs() {
   els.fontSizeValue.textContent = els.fontSize.value;
   els.ttsVolumeValue.textContent = `${els.ttsVolume.value}%`;
   els.previewSpec.textContent = state.handoff
-    ? `${state.segments.length} 段字幕 · ${els.aspect.value} · ${els.frameRate.value}fps · ${state.handoff?.has_bgm ? "四件套（含独立 BGM）" : "三件套"} · 文字特效${els.textEffectEnabled.checked ? "开启" : "关闭"}`
+    ? `${state.segments.length} 段字幕 · ${els.aspect.value} · ${els.frameRate.value}fps · ${state.includeBgm && state.handoff?.bgm_path ? "四件套（含独立 BGM）" : "三件套"} · 文字特效${els.textEffectEnabled.checked ? "开启" : "关闭"}`
     : "等待已确认 TTS 交接包";
   for (const element of state.page.querySelectorAll("[data-money-printer-effect-setting]")) {
     element.classList.toggle("is-disabled", !els.textEffectEnabled.checked);
