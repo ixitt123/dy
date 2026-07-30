@@ -301,6 +301,37 @@ export function findLatestDesktopNamedFolder({
   return matches[0]?.folderPath || "";
 }
 
+export function findDesktopNamedFolderContainingFile({
+  desktopDir = path.join(os.homedir(), "Desktop"),
+  suffix,
+  fileName,
+  now = new Date(),
+} = {}) {
+  const resolvedDesktop = path.resolve(desktopDir);
+  const normalizedSuffix = normalizeDesktopFolderName(suffix);
+  const safeFileName = path.basename(String(fileName || ""));
+  if (!safeFileName || safeFileName !== String(fileName || "")) return "";
+  const baseName = `${formatLocalDate(now)}-${normalizedSuffix}`;
+  if (!fs.existsSync(resolvedDesktop)) return "";
+  const matches = fs.readdirSync(resolvedDesktop, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => {
+      const match = new RegExp(`^${escapeRegExp(baseName)}(?:-(\\d+))?$`, "u").exec(entry.name);
+      if (!match) return null;
+      const folderPath = path.join(resolvedDesktop, entry.name);
+      const referencePath = path.join(folderPath, safeFileName);
+      if (!fs.existsSync(referencePath) || !fs.statSync(referencePath).isFile()) return null;
+      return {
+        folderPath,
+        sequence: Number(match[1] || 1),
+        updatedAt: fs.statSync(referencePath).mtimeMs,
+      };
+    })
+    .filter(Boolean)
+    .sort((left, right) => right.updatedAt - left.updatedAt || right.sequence - left.sequence);
+  return matches[0]?.folderPath || "";
+}
+
 function escapeRegExp(value) {
   return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }

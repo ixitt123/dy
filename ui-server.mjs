@@ -36,6 +36,7 @@ import { createYtDlpService } from "./server/core/yt-dlp-service.js";
 import {
   createDesktopDateFolder,
   deleteEmptyDesktopNamedFolder,
+  findDesktopNamedFolderContainingFile,
   findLatestDesktopNamedFolder,
   formatLocalDate,
   listDesktopImageSequenceFromReference,
@@ -7631,6 +7632,11 @@ const server = http.createServer(async (req, res) => {
         const maxSequence = Math.min(Math.max(Number(body.maxSequence || 1), 1), 100);
         const desktopDir = path.resolve(path.join(os.homedir(), "Desktop"));
         const expectedBaseName = `${formatLocalDate()}-${suffix}`;
+        const referenceFolderPath = findDesktopNamedFolderContainingFile({
+          desktopDir,
+          suffix,
+          fileName: referenceFileName,
+        });
         let folderPath = String(body.folderPath || "").trim();
         if (folderPath) {
           folderPath = path.resolve(folderPath);
@@ -7640,8 +7646,11 @@ const server = http.createServer(async (req, res) => {
           if (!isPathInsideRoot(desktopDir, folderPath) || !validName) {
             throw new Error("只能扫描当前名称对应的桌面新建文件夹");
           }
+          if (!fs.existsSync(path.join(folderPath, referenceFileName)) && referenceFolderPath) {
+            folderPath = referenceFolderPath;
+          }
         } else {
-          folderPath = findLatestDesktopNamedFolder({ desktopDir, suffix });
+          folderPath = referenceFolderPath || findLatestDesktopNamedFolder({ desktopDir, suffix });
         }
         if (!folderPath || !fs.existsSync(folderPath)) {
           throw new Error("未找到第一张图片所在的桌面新建文件夹");

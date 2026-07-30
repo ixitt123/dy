@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import {
   createDesktopDateFolder,
   deleteEmptyDesktopNamedFolder,
+  findDesktopNamedFolderContainingFile,
   formatLocalDate,
   listDesktopImageSequenceFromReference,
   listLatestDesktopImageBatch,
@@ -76,6 +77,29 @@ try {
     /请先清空文件夹/,
     "包含素材的文件夹必须保留，不能随名称一起删除",
   );
+  const staleReferenceFolder = createDesktopDateFolder({
+    desktopDir: tempDesktop,
+    now: date,
+    suffix: "一键添加",
+  });
+  const currentReferenceFolder = createDesktopDateFolder({
+    desktopDir: tempDesktop,
+    now: date,
+    suffix: "一键添加",
+  });
+  const currentReferenceName = "ChatGPT Image 2026年7月23日 16_01_43 (1).png";
+  fs.writeFileSync(path.join(currentReferenceFolder.folderPath, currentReferenceName), "image");
+  assert.equal(
+    findDesktopNamedFolderContainingFile({
+      desktopDir: tempDesktop,
+      suffix: "一键添加",
+      fileName: currentReferenceName,
+      now: date,
+    }),
+    currentReferenceFolder.folderPath,
+    "同名新文件夹存在时，应按首张图片文件名定位真实文件夹，不能继续扫描旧路径",
+  );
+  assert.notEqual(staleReferenceFolder.folderPath, currentReferenceFolder.folderPath);
   assert.equal(fs.existsSync(protectedFolder.folderPath), true);
   assert.throws(
     () => deleteEmptyDesktopNamedFolder({
