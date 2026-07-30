@@ -2683,6 +2683,7 @@ function normalizeXiaoheiCompose(value = {}) {
   });
   return {
     fps: Number(source.fps) === 60 ? 60 : 30,
+    playbackSpeed: [1, 1.1, 1.2, 1.3].includes(Number(source.playbackSpeed)) ? Number(source.playbackSpeed) : 1,
     imageFit: source.imageFit === "contain" ? "contain" : "cover",
     ttsVolume: clamp(Number(source.ttsVolume ?? 100), 0, 200),
     bgmVolume: clamp(Number(source.bgmVolume ?? 18), 0, 100),

@@ -216,6 +216,7 @@ const els = {
   speedSelect: document.querySelector("#speedSelect"),
   aspectRatioSelect: document.querySelector("#aspectRatioSelect"),
   frameRate: document.querySelector("#xiaoheiFrameRate"),
+  playbackSpeed: document.querySelector("#xiaoheiPlaybackSpeed"),
   imageFit: document.querySelector("#xiaoheiImageFit"),
   ttsVolume: document.querySelector("#xiaoheiTtsVolume"),
   ttsVolumeValue: document.querySelector("#xiaoheiTtsVolumeValue"),
@@ -656,7 +657,7 @@ function bindEvents() {
     state.renderedVideo = null;
     updateVideoDownloadState();
   });
-  for (const element of [els.frameRate, els.imageFit, els.showSubtitles, els.subtitleColor, els.keywordColor, els.subtitleLines, els.subtitleOutline, els.subtitleShadow, els.introEnabled, els.introPreset, els.introText, els.outroEnabled, els.outroPreset, els.outroText]) {
+  for (const element of [els.frameRate, els.playbackSpeed, els.imageFit, els.showSubtitles, els.subtitleColor, els.keywordColor, els.subtitleLines, els.subtitleOutline, els.subtitleShadow, els.introEnabled, els.introPreset, els.introText, els.outroEnabled, els.outroPreset, els.outroText]) {
     element.addEventListener("change", handleComposeSettingsChange);
   }
   for (const element of [els.ttsVolume, els.bgmVolume, els.subtitleSize, els.subtitleSpeed]) {
@@ -1513,7 +1514,7 @@ async function generateCompleteWorkflow() {
     updateVideoDownloadState();
     await loadOutputs();
     if (!exported.videoUrl) throw new Error("视频已经处理，但没有返回 MP4 地址。");
-    els.videoRenderStatus.textContent = `MP4 已生成 · ${exported.width}×${exported.height} · ${exported.fps}fps`;
+    els.videoRenderStatus.textContent = `MP4 已生成 · ${exported.width}×${exported.height} · ${exported.fps}fps · ${Number(exported.playbackSpeed || 1).toFixed(1)}×`;
     setStatus(
       "小黑视频已生成",
       "请在预览确认后点击右侧“下载视频”。",
@@ -3070,8 +3071,10 @@ function syncVideoPreview() {
   }
   els.videoPreviewSeek.max = String(Math.max(0, duration));
   els.videoPreviewDuration.textContent = formatPreviewClock(duration);
+  const playbackSpeed = Number(els.playbackSpeed?.value || 1);
+  const outputDuration = duration / playbackSpeed;
   els.videoPreviewSpec.textContent = shots.length
-    ? `${ratio} · ${Number(els.frameRate.value) === 60 ? 60 : 30}fps · ${shots.length} 个分镜 · ${duration.toFixed(1)} 秒`
+    ? `${ratio} · ${Number(els.frameRate.value) === 60 ? 60 : 30}fps · ${shots.length} 个分镜 · 导出 ${playbackSpeed.toFixed(1)}×（约 ${outputDuration.toFixed(1)} 秒）`
     : "等待分镜图片和 TTS 时间轴";
   const ready = Boolean(shots.length && state.images.length && !missingShotImages(state.plan, state.images).length);
   els.videoPreviewEmpty.hidden = ready;
@@ -3471,6 +3474,7 @@ function setBusy(busy) {
     els.setDefaultVoice,
     els.deleteVoice,
     els.downloadXiaoheiVideo,
+    els.playbackSpeed,
   ].filter(Boolean)) {
     element.disabled = busy;
   }
@@ -3485,6 +3489,7 @@ function setBusy(busy) {
 function composeSettings() {
   return {
     fps: Number(els.frameRate.value) === 60 ? 60 : 30,
+    playbackSpeed: [1, 1.1, 1.2, 1.3].includes(Number(els.playbackSpeed?.value)) ? Number(els.playbackSpeed.value) : 1,
     imageFit: els.imageFit.value === "contain" ? "contain" : "cover",
     ttsVolume: Number(els.ttsVolume.value || 100),
     bgmVolume: Number(els.bgmVolume.value || 18),
@@ -3541,6 +3546,7 @@ function restoreComposeSettings() {
   try {
     const saved = JSON.parse(localStorage.getItem(COMPOSE_SETTINGS_KEY) || "{}");
     if (saved.fps && els.frameRate) els.frameRate.value = String(saved.fps);
+    if ([1, 1.1, 1.2, 1.3].includes(Number(saved.playbackSpeed)) && els.playbackSpeed) els.playbackSpeed.value = String(saved.playbackSpeed);
     if (saved.imageFit && els.imageFit) els.imageFit.value = saved.imageFit;
     if (saved.ttsVolume !== undefined && els.ttsVolume) els.ttsVolume.value = String(saved.ttsVolume);
     if (saved.bgmVolume !== undefined && els.bgmVolume) els.bgmVolume.value = String(saved.bgmVolume);
