@@ -135,6 +135,13 @@ export function createMoneyPrinterRoutes({ baseDir, sendJson, ffmpegPath, ffprob
             }
           : body;
         const payload = buildGeneratePayload({ ...plannedBody, video_source: materialSources[0] });
+        if (payload.bgm_type === "custom" && payload.bgm_file) {
+          payload.bgm_file = stageTtsBgmForMoneyPrinter({
+            sourcePath: payload.bgm_file,
+            ttsAudioRoot: path.join(baseDir, ".data", "tts", "audio"),
+            moneyPrinterRoot: status.root,
+          });
+        }
         if (materialMode === "fast" || shouldRefineTerms(payload.video_terms)) {
           try {
             const refined = await refineVideoTermsWithLlm({
@@ -519,6 +526,27 @@ export function sanitizeMptError(value) {
     .replace(/("[^"\r\n]*(?:key|secret|token)[^"\r\n]*"\s*:\s*)"[^"]*"/gi, '$1"[REDACTED]"')
     .replace(/\s+/g, " ")
     .slice(0, 800);
+}
+
+export function stageTtsBgmForMoneyPrinter({ sourcePath, ttsAudioRoot, moneyPrinterRoot }) {
+  const source = path.resolve(String(sourcePath || ""));
+  const allowedRoot = path.resolve(String(ttsAudioRoot || ""));
+  const relativeSource = path.relative(allowedRoot, source);
+  if (!sourcePath || !ttsAudioRoot) {
+    throw new Error("TTS BGM 缺少源文件或受信任音频目录。");
+  }
+  if (!relativeSource || relativeSource === ".." || relativeSource.startsWith(`..${path.sep}`) || path.isAbsolute(relativeSource)) {
+    throw new Error("TTS BGM 文件不在允许的音频目录中。");
+  }
+  const extension = path.extname(source).toLowerCase();
+  if (!new Set([".mp3", ".wav", ".m4a", ".aac", ".ogg"]).has(extension) || !fs.existsSync(source) || !fs.statSync(source).isFile()) {
+    throw new Error("TTS BGM 文件不存在或格式不受支持。");
+  }
+  const targetDir = path.join(path.resolve(String(moneyPrinterRoot || "")), "storage", "bgm");
+  fs.mkdirSync(targetDir, { recursive: true });
+  const stagedName = `tts-bgm-${randomUUID()}${extension}`;
+  fs.copyFileSync(source, path.join(targetDir, stagedName));
+  return stagedName;
 }
 
 function buildGeneratePayload(body = {}) {

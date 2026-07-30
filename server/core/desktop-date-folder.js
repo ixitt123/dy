@@ -20,6 +20,88 @@ export function normalizeDesktopFolderName(value) {
   return name;
 }
 
+function resolveValidatedDesktopNamedFolder({
+  desktopDir = path.join(os.homedir(), "Desktop"),
+  folderPath,
+  suffix,
+} = {}) {
+  const resolvedDesktop = path.resolve(desktopDir);
+  const resolvedFolder = path.resolve(String(folderPath || ""));
+  const normalizedSuffix = normalizeDesktopFolderName(suffix);
+  const relative = path.relative(resolvedDesktop, resolvedFolder);
+  if (!relative || relative === ".." || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) {
+    throw new Error("只能操作桌面上的指定文件夹");
+  }
+  const match = new RegExp(
+    `^(\\d{4}-\\d{2}-\\d{2})-${escapeRegExp(normalizedSuffix)}(-\\d+)?$`,
+    "u",
+  ).exec(path.basename(resolvedFolder));
+  if (!match) throw new Error("文件夹名称与当前选择不一致");
+  return {
+    resolvedDesktop,
+    resolvedFolder,
+    datePrefix: match[1],
+    sequenceSuffix: match[2] || "",
+    suffix: normalizedSuffix,
+  };
+}
+
+function directoryTreeContainsFiles(folderPath) {
+  return fs.readdirSync(folderPath, { withFileTypes: true }).some((entry) => {
+    if (!entry.isDirectory()) return true;
+    return directoryTreeContainsFiles(path.join(folderPath, entry.name));
+  });
+}
+
+export function renameDesktopNamedFolder({
+  desktopDir = path.join(os.homedir(), "Desktop"),
+  folderPath,
+  fromSuffix,
+  toSuffix,
+} = {}) {
+  const current = resolveValidatedDesktopNamedFolder({
+    desktopDir,
+    folderPath,
+    suffix: fromSuffix,
+  });
+  if (!fs.existsSync(current.resolvedFolder) || !fs.statSync(current.resolvedFolder).isDirectory()) {
+    throw new Error("需要改名的桌面文件夹不存在");
+  }
+  const normalizedNextSuffix = normalizeDesktopFolderName(toSuffix);
+  const nextFolderPath = path.join(
+    current.resolvedDesktop,
+    `${current.datePrefix}-${normalizedNextSuffix}${current.sequenceSuffix}`,
+  );
+  if (nextFolderPath !== current.resolvedFolder && fs.existsSync(nextFolderPath)) {
+    throw new Error("同名桌面文件夹已经存在");
+  }
+  if (nextFolderPath !== current.resolvedFolder) fs.renameSync(current.resolvedFolder, nextFolderPath);
+  return {
+    folderName: path.basename(nextFolderPath),
+    folderPath: nextFolderPath,
+    suffix: normalizedNextSuffix,
+  };
+}
+
+export function deleteEmptyDesktopNamedFolder({
+  desktopDir = path.join(os.homedir(), "Desktop"),
+  folderPath,
+  suffix,
+} = {}) {
+  const current = resolveValidatedDesktopNamedFolder({ desktopDir, folderPath, suffix });
+  if (!fs.existsSync(current.resolvedFolder)) {
+    return { deleted: false, folderPath: current.resolvedFolder };
+  }
+  if (!fs.statSync(current.resolvedFolder).isDirectory()) {
+    throw new Error("需要删除的路径不是文件夹");
+  }
+  if (directoryTreeContainsFiles(current.resolvedFolder)) {
+    throw new Error("文件夹中已有素材，请先清空文件夹后再删除");
+  }
+  fs.rmSync(current.resolvedFolder, { recursive: true });
+  return { deleted: true, folderPath: current.resolvedFolder };
+}
+
 export function formatLocalDate(value = new Date()) {
   const date = value instanceof Date ? value : new Date(value);
   if (Number.isNaN(date.getTime())) {
@@ -60,6 +142,92 @@ function chatGptImageFileMeta(fileName) {
     sequence: Number(match[7]),
     capturedAt,
   };
+}
+
+function numberedImageFileMeta(fileName, fallbackTime = 0) {
+  const name = String(fileName || "");
+  const numbered = /\((\d+)\)\.(png|jpe?g|webp)$/iu.exec(name);
+  if (!numbered) return null;
+  const timestamp = /(\d{4})年(\d{1,2})月(\d{1,2})日\s+(\d{1,2})_(\d{2})_(\d{2})/u.exec(name);
+  const capturedAt = timestamp
+    ? new Date(
+      Number(timestamp[1]),
+      Number(timestamp[2]) - 1,
+      Number(timestamp[3]),
+      Number(timestamp[4]),
+      Number(timestamp[5]),
+      Number(timestamp[6]),
+    ).getTime()
+    : Number(fallbackTime || 0);
+  return {
+    sequence: Number(numbered[1]),
+    extension: `.${numbered[2].toLowerCase()}`,
+    capturedAt: Number.isFinite(capturedAt) ? capturedAt : Number(fallbackTime || 0),
+  };
+}
+
+export function listDesktopImageSequenceFromReference(
+  folderPath,
+  referenceFileName,
+  { maxGapMs = 10_000, maxSequence = 100 } = {},
+) {
+  const resolvedFolder = path.resolve(String(folderPath || ""));
+  if (!resolvedFolder || !fs.existsSync(resolvedFolder) || !fs.statSync(resolvedFolder).isDirectory()) {
+    throw new Error("第一张图片所在文件夹不存在");
+  }
+  const safeReferenceName = path.basename(String(referenceFileName || ""));
+  if (!safeReferenceName || safeReferenceName !== String(referenceFileName || "")) {
+    throw new Error("第一张图片文件名无效");
+  }
+  const candidates = fs.readdirSync(resolvedFolder, { withFileTypes: true })
+    .filter((entry) => entry.isFile())
+    .map((entry) => {
+      const filePath = path.join(resolvedFolder, entry.name);
+      const stats = fs.statSync(filePath);
+      const meta = numberedImageFileMeta(entry.name, stats.mtimeMs);
+      return meta ? {
+        name: entry.name,
+        path: filePath,
+        size: stats.size,
+        updatedAt: stats.mtime.toISOString(),
+        ...meta,
+      } : null;
+    })
+    .filter(Boolean)
+    .sort((left, right) => (
+      left.capturedAt - right.capturedAt
+      || left.sequence - right.sequence
+      || left.name.localeCompare(right.name, "zh-CN")
+    ));
+  const referenceIndex = candidates.findIndex(
+    (item) => item.name.toLocaleLowerCase("zh-CN") === safeReferenceName.toLocaleLowerCase("zh-CN"),
+  );
+  if (referenceIndex < 0) throw new Error("当前桌面文件夹中找不到手动添加的第一张图片");
+  const reference = candidates[referenceIndex];
+  if (reference.sequence !== 1) throw new Error("第一张图片文件名必须是编号 (1)");
+  const sameRound = [reference];
+  let previous = reference;
+  for (const candidate of candidates.slice(referenceIndex + 1)) {
+    if (candidate.extension !== reference.extension) continue;
+    if (candidate.sequence === 1) break;
+    if (candidate.capturedAt - previous.capturedAt > maxGapMs) break;
+    sameRound.push(candidate);
+    previous = candidate;
+  }
+  const upperSequence = Math.min(Math.max(Number(maxSequence || 1), 1), 100);
+  const selected = new Map();
+  for (const candidate of sameRound) {
+    if (candidate.sequence <= 1 || candidate.sequence > upperSequence) continue;
+    const existing = selected.get(candidate.sequence);
+    if (
+      !existing
+      || Math.abs(candidate.capturedAt - reference.capturedAt)
+        < Math.abs(existing.capturedAt - reference.capturedAt)
+    ) {
+      selected.set(candidate.sequence, candidate);
+    }
+  }
+  return [...selected.values()].sort((left, right) => left.sequence - right.sequence);
 }
 
 export function listLatestDesktopImageBatch(folderPath, { maxGapMs = 10_000 } = {}) {

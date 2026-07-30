@@ -329,8 +329,8 @@ function renderHandoff() {
   const confirmed = hasConfirmedHandoff();
   els.handoffBadge.textContent = confirmed ? `音频 #${state.handoff.display_number || state.handoff.id}` : "等待 TTS";
   els.previewSpec.textContent = confirmed
-    ? `${state.segments.length} 段字幕 · ${els.aspect.value} · ${els.frameRate.value}fps`
-    : "等待 TTS 三件套";
+    ? `${state.segments.length} 段字幕 · ${els.aspect.value} · ${els.frameRate.value}fps · ${state.handoff?.has_bgm ? "四件套（含独立 BGM）" : "三件套"}`
+    : "等待已确认 TTS 交接包";
   if (!confirmed) {
     setStatus("等待已确认 TTS", "请先在 TTS 语音页确认最终文案、音频和字幕时间轴，再发送到 MoneyPrinter。", true);
   }
@@ -501,7 +501,9 @@ function buildMptPayload() {
     video_transition_mode: transitionPayloadValue(),
     match_materials_to_script: true,
     custom_audio_file: state.handoff.audio_path || "",
-    bgm_type: "none",
+    bgm_type: state.handoff?.bgm_path ? "custom" : "none",
+    bgm_file: state.handoff?.bgm_path || "",
+    bgm_volume: state.handoff?.bgm_path ? 0.18 : 0.2,
     subtitle_enabled: false,
   };
 }
@@ -687,8 +689,8 @@ function updateSettingOutputs() {
   els.fontSizeValue.textContent = els.fontSize.value;
   els.ttsVolumeValue.textContent = `${els.ttsVolume.value}%`;
   els.previewSpec.textContent = state.handoff
-    ? `${state.segments.length} 段字幕 · ${els.aspect.value} · ${els.frameRate.value}fps · 文字特效${els.textEffectEnabled.checked ? "开启" : "关闭"}`
-    : "等待 TTS 三件套";
+    ? `${state.segments.length} 段字幕 · ${els.aspect.value} · ${els.frameRate.value}fps · ${state.handoff?.has_bgm ? "四件套（含独立 BGM）" : "三件套"} · 文字特效${els.textEffectEnabled.checked ? "开启" : "关闭"}`
+    : "等待已确认 TTS 交接包";
   for (const element of state.page.querySelectorAll("[data-money-printer-effect-setting]")) {
     element.classList.toggle("is-disabled", !els.textEffectEnabled.checked);
     for (const control of element.querySelectorAll("input, select")) {
@@ -711,7 +713,7 @@ function drawPreview() {
   }
   const segment = state.segments.find((item) => state.currentTime >= item.start && state.currentTime <= item.end);
   if (segment && (els.textEffectEnabled.checked || els.bottomSubtitles.checked)) drawSubtitle(ctx, segment, width, height);
-  else if (!state.previewReady) drawCenteredText(ctx, hasConfirmedHandoff() ? "点击“自动匹配素材并预览”" : "等待 TTS 三件套", width, height);
+  else if (!state.previewReady) drawCenteredText(ctx, hasConfirmedHandoff() ? "点击“自动匹配素材并预览”" : "等待已确认 TTS 交接包", width, height);
   syncPreviewClock();
 }
 

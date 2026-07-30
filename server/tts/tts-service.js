@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import { generateSeoTitlePackage } from "../core/title-generator.js";
 import { createTtsProvider } from "./providers/index.js";
 import { redactSecrets } from "./provider-adapter.js";
@@ -1697,12 +1698,24 @@ export function createTtsService({
     const sourceRaw = String(input.audio_path || "").trim();
     if (!sourceRaw) return { error: "Missing generated audio path." };
     const sourcePath = path.resolve(sourceRaw);
+    const selectedVoiceAssetId = Number(input.voice_asset_id || 0);
+    const selectedVoicePreviewPath = selectedVoiceAssetId > 0
+      ? String(taskStore.getVoiceAsset(selectedVoiceAssetId)?.preview_path || "").trim()
+      : "";
+    const matchesSelectedVoicePreview = Boolean(selectedVoicePreviewPath)
+      && path.resolve(selectedVoicePreviewPath) === sourcePath;
+    const isManagedBgmPreview = String(input.source || "") === "minimax_music_bgm"
+      && String(input.voice_id || "") === "music:clean_education_bgm"
+      && sourcePath.toLowerCase().includes(`${path.sep}voices${path.sep}previews${path.sep}`)
+      && path.extname(sourcePath).toLowerCase() === ".mp3";
     const allowedRoots = [
       path.resolve(baseDir, "voices"),
       path.resolve(baseDir, "ui", "assets", "voice-previews"),
       path.resolve(outputDir),
     ];
-    if (!allowedRoots.some((root) => sourcePath !== root && sourcePath.startsWith(`${root}${path.sep}`))) {
+    if (!matchesSelectedVoicePreview
+      && !isManagedBgmPreview
+      && !allowedRoots.some((root) => sourcePath !== root && sourcePath.startsWith(`${root}${path.sep}`))) {
       return { error: "Generated audio path is not allowed." };
     }
     if (!fs.existsSync(sourcePath)) return { error: "Generated audio file does not exist." };
@@ -1716,7 +1729,40 @@ export function createTtsService({
     const targetPath = path.join(outputDir, `${fileBaseName}.${format}`);
     if (path.resolve(sourcePath) !== path.resolve(targetPath)) fs.copyFileSync(sourcePath, targetPath);
     const inputMetadata = input.metadata && typeof input.metadata === "object" ? input.metadata : {};
-    const probedDuration = probeAudioDurationSync(targetPath);
+    const isBackgroundMusic = String(inputMetadata.audio_role || "") === "background_music";
+    const requestedBgmDuration = isBackgroundMusic
+      ? Number(inputMetadata.requested_duration || 0)
+      : 0;
+    let probedDuration = probeAudioDurationSync(targetPath);
+    if (isBackgroundMusic && probedDuration > 0) {
+      if (!ffmpegPath || !fs.existsSync(ffmpegPath)) return { error: "无法处理 BGM：FFmpeg 不可用。" };
+      const processedDuration = requestedBgmDuration > 0
+        ? Math.min(probedDuration, requestedBgmDuration)
+        : probedDuration;
+      const requestedFadeOut = Number(inputMetadata.fade_out_seconds || 2.5);
+      const fadeOutSeconds = Math.min(Math.max(1, requestedFadeOut), Math.max(1, processedDuration - 0.05));
+      const fadeStart = Math.max(0, processedDuration - fadeOutSeconds);
+      const requestedVolume = Number(inputMetadata.background_volume || 0.28);
+      const backgroundVolume = Math.min(0.5, Math.max(0.1, requestedVolume));
+      const temporaryPath = path.join(outputDir, `${fileBaseName}.bgm-${randomUUID()}.${format}`);
+      const codecArgs = format === "wav" ? ["-c:a", "pcm_s16le"] : ["-c:a", "libmp3lame", "-q:a", "2"];
+      const processed = spawnSync(ffmpegPath, [
+        "-y", "-i", targetPath,
+        "-t", String(processedDuration),
+        "-af", `volume=${backgroundVolume},afade=t=out:st=${fadeStart}:d=${fadeOutSeconds}`,
+        ...codecArgs,
+        temporaryPath,
+      ], {
+        encoding: "utf8",
+        windowsHide: true,
+      });
+      if (processed.status !== 0 || !fs.existsSync(temporaryPath)) {
+        return { error: `无法处理 BGM：${String(processed.stderr || processed.error?.message || "FFmpeg 处理失败").trim()}` };
+      }
+      fs.copyFileSync(temporaryPath, targetPath);
+      fs.unlinkSync(temporaryPath);
+      probedDuration = probeAudioDurationSync(targetPath);
+    }
     const declaredDuration = Number(input.duration || inputMetadata.duration || 0)
       || (Number(inputMetadata.duration_ms || inputMetadata.music_duration_ms || inputMetadata.audio_length_ms || 0) / 1000)
       || 0;

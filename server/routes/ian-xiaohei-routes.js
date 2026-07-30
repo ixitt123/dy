@@ -1178,9 +1178,19 @@ export function createIanXiaoheiRoutes({
         const outputPath = path.join(packageDir, "final.mp4");
         const transitionMode = normalizeXiaoheiTransitionMode(body.transition_mode);
         const compose = normalizeXiaoheiCompose(body.compose);
-        const backgroundAudioPath = body.background_audio?.path
+        const uploadedBackgroundAudioPath = body.background_audio?.path
           ? resolveFileWithin(videoAudioRoot, body.background_audio.path)
           : "";
+        const handoffBgmPath = String(body.tts_bgm_path || "").trim();
+        const ttsAudioDir = path.dirname(audioJob.audio_path);
+        const resolvedHandoffBgmPath = handoffBgmPath ? path.resolve(handoffBgmPath) : "";
+        const backgroundAudioPath = resolvedHandoffBgmPath
+          && resolvedHandoffBgmPath !== ttsAudioDir
+          && resolvedHandoffBgmPath.startsWith(`${ttsAudioDir}${path.sep}`)
+          && fs.existsSync(resolvedHandoffBgmPath)
+          && fs.statSync(resolvedHandoffBgmPath).isFile()
+          ? resolvedHandoffBgmPath
+          : uploadedBackgroundAudioPath;
         const rendered = await renderXiaoheiVideo({
           ffmpegPath,
           scenes,
@@ -1368,6 +1378,20 @@ export function createIanXiaoheiRoutes({
           message: error instanceof Error ? error.message : String(error),
         });
       }
+      return true;
+    }
+
+    if (req.method === "GET" && route === "plan-restore") {
+      const projectId = String(url.searchParams.get("project_id") || "").trim();
+      const ttsJobId = Number(url.searchParams.get("tts_job_id") || 0);
+      if (!projectId || !Number.isInteger(ttsJobId) || ttsJobId <= 0) {
+        sendJson(res, 400, { ok: false, message: "缺少有效的项目或 TTS 音频编号。" });
+        return true;
+      }
+      sendJson(res, 200, {
+        ok: true,
+        plan: findSavedPromptPlan(outputRoot, { projectId, ttsJobId }),
+      });
       return true;
     }
 
@@ -3237,6 +3261,29 @@ function listOutputBatches(outputRoot, deps = {}) {
     })
     .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
     .slice(0, 40);
+}
+
+function findSavedPromptPlan(outputRoot, { projectId, ttsJobId }) {
+  if (!fs.existsSync(outputRoot)) return null;
+  const candidates = fs.readdirSync(outputRoot, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory() && !entry.name.startsWith("_"))
+    .map((entry) => {
+      const planPath = path.join(outputRoot, entry.name, "plan.json");
+      if (!fs.existsSync(planPath)) return null;
+      const plan = readJsonFile(planPath, null);
+      if (
+        !plan?.shots?.length
+        || String(plan.projectId || "") !== String(projectId)
+        || Number(plan.ttsJobId || 0) !== Number(ttsJobId)
+      ) return null;
+      return {
+        plan,
+        updatedAt: fs.statSync(planPath).mtimeMs,
+      };
+    })
+    .filter(Boolean)
+    .sort((left, right) => right.updatedAt - left.updatedAt);
+  return candidates[0]?.plan || null;
 }
 
 function resolveBatchDir(outputRoot, id) {

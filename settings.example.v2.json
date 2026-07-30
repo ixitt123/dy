@@ -1,8 +1,8 @@
 {
   "modelMapping": {
-    "rewrite": { "provider": "deepseek", "model": "deepseek-chat" },
-    "director": { "provider": "deepseek", "model": "deepseek-chat" },
-    "storyboard": { "provider": "deepseek", "model": "deepseek-chat" },
+    "rewrite": { "provider": "deepseek", "model": "deepseek-v4-flash" },
+    "director": { "provider": "deepseek", "model": "deepseek-v4-flash" },
+    "storyboard": { "provider": "deepseek", "model": "deepseek-v4-flash" },
     "tts": { "provider": "ali-bailian", "model": "cosyvoice-v2" }
   },
   "providers": {

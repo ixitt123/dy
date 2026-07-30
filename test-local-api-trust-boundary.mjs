@@ -8,6 +8,8 @@ const [serverSource, imageServiceSource, workbenchSource] = await Promise.all([
 ]);
 
 assert.match(serverSource, /const localApiSessionToken = randomBytes\(32\)\.toString\("base64url"\)/, "local API must use a per-start random session token");
+assert.match(serverSource, /let localApiCookieName = "__dy_local_api"/, "local API must retain a dedicated cookie name before its listening port is known");
+assert.match(serverSource, /localApiCookieName = `__dy_local_api_\$\{port\}`/, "local API cookie names must be isolated by listening port so concurrent local servers cannot overwrite each other's session");
 assert.match(serverSource, /setLocalApiCookie\(headers = \{\}\)[\s\S]*HttpOnly; SameSite=Strict/, "HTML responses must set a strict HttpOnly local API cookie");
 assert.match(serverSource, /if \(rejectHttpHost\(req, res\)\) return;/, "HTTP requests must validate local Host before routing");
 assert.match(serverSource, /url\.pathname\.startsWith\("\/api\/"\) && rejectLocalApiRequest\(req, res\)/, "API requests must pass the local trust-boundary guard");

@@ -1,5 +1,8 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import {
   buildFastMaterialPlan,
   buildMoneyPrinterVideoFilter,
@@ -7,6 +10,7 @@ import {
   openTarget,
   resolveMaterialSourceOrder,
   sanitizeMptError,
+  stageTtsBgmForMoneyPrinter,
   sanitizeMoneyPrinterTaskVideoUrl,
   shouldTryNextMaterialSource,
 } from "./server/routes/money-printer-routes.js";
@@ -26,6 +30,7 @@ assert.ok(routeSource.includes("waitForApiReady"));
 assert.ok(routeSource.includes("resolveMaterialSourceOrder"));
 assert.ok(routeSource.includes("shouldTryNextMaterialSource"));
 assert.ok(routeSource.includes("sanitizeMptError"));
+assert.ok(routeSource.includes("stageTtsBgmForMoneyPrinter"));
 assert.equal(routeSource.includes('spawn("cmd"'), false, "MoneyPrinter open target must not invoke cmd.exe");
 assert.deepEqual(openExternalCommand("https://example.com/video.mp4", "win32"), {
   command: "explorer.exe",
@@ -144,6 +149,21 @@ assert.equal(
   "Pexels 素材 API Key 未配置",
 );
 assert.ok(!sanitizeMptError('request failed {"api_key":"secret"}').includes("secret"));
+
+const bgmStageRoot = fs.mkdtempSync(path.join(os.tmpdir(), "money-printer-bgm-stage-"));
+try {
+  const ttsAudioRoot = path.join(bgmStageRoot, "tts-audio");
+  const moneyPrinterRoot = path.join(bgmStageRoot, "money-printer");
+  fs.mkdirSync(ttsAudioRoot, { recursive: true });
+  const sourceBgm = path.join(ttsAudioRoot, "tts-bgm.mp3");
+  fs.writeFileSync(sourceBgm, "test-bgm");
+  const stagedName = stageTtsBgmForMoneyPrinter({ sourcePath: sourceBgm, ttsAudioRoot, moneyPrinterRoot });
+  assert.match(stagedName, /^tts-bgm-[a-f0-9-]+\.mp3$/);
+  assert.equal(fs.readFileSync(path.join(moneyPrinterRoot, "storage", "bgm", stagedName), "utf8"), "test-bgm");
+  assert.throws(() => stageTtsBgmForMoneyPrinter({ sourcePath: path.join(bgmStageRoot, "outside.mp3"), ttsAudioRoot, moneyPrinterRoot }), /允许的音频目录/);
+} finally {
+  fs.rmSync(bgmStageRoot, { recursive: true, force: true });
+}
 
 const openStatus = {
   root: "D:\\tools\\moneyprinterturbo",

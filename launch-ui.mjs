@@ -18,7 +18,10 @@ async function existingServerUrl() {
   try {
     const url = fs.readFileSync(urlPath, "utf8").trim();
     if (!url) return "";
-    const response = await fetch(`${url}/api/status`);
+    // The API requires the browser-only local session cookie. The launcher's
+    // liveness probe must use the public HTML entry instead, or every launch
+    // falsely looks offline and starts another server on the next port.
+    const response = await fetch(url);
     if (response.ok) return url;
   } catch {
     return "";

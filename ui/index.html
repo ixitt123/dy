@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>短视频内容生产工厂</title>
-    <link rel="stylesheet" href="/app.css" />
+    <link rel="stylesheet" href="/app.css?v=2026073014" />
   </head>
   <body>
     <div class="workbench-app">
@@ -215,7 +215,12 @@
             <button type="button" data-collector-tab="local">本地视频</button>
             <button type="button" data-collector-tab="copybank">文案库</button>
             <button type="button" data-collector-tab="batch">批量任务</button>
-            <button id="createDesktopDateFolder" type="button">新建文件夹</button>
+            <span class="collector-folder-toolbar">
+              <button id="createDesktopDateFolder" type="button">新建文件夹</button>
+              <select id="collectorFolderNameSelect" title="选择文件夹名称" data-no-choice-persist></select>
+              <button id="editCollectorFolderName" type="button" title="编辑名称" disabled>✏️</button>
+              <button id="deleteCollectorFolderName" type="button" title="删除名称" disabled>🗑️</button>
+            </span>
           </div>
 
           <section class="collector-panel active" data-collector-panel="link">
@@ -517,6 +522,13 @@
                   </select>
                 </label>
               </div>
+              <label class="rewrite-parent-template-toggle" for="rewriteParentConversionTemplate">
+                <input id="rewriteParentConversionTemplate" type="checkbox" checked />
+                <span>
+                  <strong>家长触动与转化模板</strong>
+                  <small>默认开启：生成“触动咨询版”和“行动号召版”；关闭后恢复通用改写。</small>
+                </span>
+              </label>
               <details class="rewrite-advanced-settings">
                 <summary>高级微调</summary>
               <div class="rewrite-param-grid">
@@ -562,7 +574,7 @@
           <div class="rewrite-result-head" id="rewriteAnchorName1" data-anchor-name="名称1">
             <div>
               <h3>文案定制成品</h3>
-              <p id="rewriteStatus">选择参数后点击生成，默认生成 3 个可选成品。</p>
+              <p id="rewriteStatus">家长触动与转化模板默认生成两篇成品；关闭后为单篇通用改写。</p>
               <div class="rewrite-unified-actions">
                 <button class="primary small" id="runRewrite" type="button">生成文案定制成品</button>
                 <button class="ghost small" id="saveRewrite" type="button">保存成品</button>
@@ -684,6 +696,32 @@
                     <option value="yes">是（按文案适量添加）</option>
                   </select>
                 </label>
+                <label>
+                  表情风格
+                  <select id="momentsEmojiStyle" disabled>
+                    <option value="gentle" selected>轻柔日常 · 温和自然</option>
+                    <option value="lively">元气分享 · 轻松有趣</option>
+                    <option value="professional">专业清爽 · 克制可信</option>
+                    <option value="warm">暖心陪伴 · 真诚有温度</option>
+                  </select>
+                  <small>启用后会优先插入本风格的专属表情，再按文案主题补充；只使用常见平台可复制显示的 Unicode 表情。</small>
+                </label>
+                <label>
+                  表情数量
+                  <select id="momentsEmojiCount" disabled>
+                    <option value="auto" selected>智能适量（3–6 个，默认）</option>
+                    <option value="3-5">3–5 个</option>
+                    <option value="5-10">5–10 个</option>
+                  </select>
+                  <small>按文案长度与段落分布，在所选数量范围内自然插入。</small>
+                </label>
+                <div class="moments-emoji-palette" id="momentsEmojiPalette" aria-live="polite" hidden>
+                  <div>
+                    <strong id="momentsEmojiPaletteTitle">轻柔日常</strong>
+                    <small id="momentsEmojiPaletteHint">按语义自动挑选，不会连续堆叠。</small>
+                  </div>
+                  <p id="momentsEmojiPalettePreview" aria-label="表情预览">😊 ☺️ 🌿 ✨ ☀️ ☕ 💛 🌙</p>
+                </div>
                 <label>
                   配图数量
                   <select id="momentsImageCount">
@@ -851,7 +889,7 @@
                 <label><input class="tts-audio-handoff-choice" type="checkbox" data-target="money-printer" checked />MoneyPrinter</label>
                 <label><input class="tts-audio-handoff-choice" type="checkbox" data-target="kinetic-text" checked />动态大字视频</label>
               </div>
-              <small class="tts-job-handoff-status" id="ttsCentralHandoffStatus">点“确定修改”后发送当前三件套。</small>
+              <small class="tts-job-handoff-status" id="ttsCentralHandoffStatus">点“确定修改”后会按 BGM 状态发送三件套或四件套。</small>
             </div>
             <div class="tts-central-timeline-labels">
               <span>序号</span><span>开始</span><span>结束</span><span>字幕文字</span>
@@ -904,6 +942,19 @@
                 <input id="ttsManualVoice" type="text" placeholder="填写平台提供的 voice_id" />
               </label>
             </div>
+            <label class="tts-bgm-option">
+              <input id="ttsGenerateCleanEducationBgm" type="checkbox" data-no-choice-persist />
+              <span>
+                <strong>同时生成清爽教育 BGM</strong>
+                <small>MiniMax · music-2.6-free · 纯音乐；按当前文案的旁白时长生成，作为独立音轨发送</small>
+                <small id="ttsBgmSelectionState" class="tts-bgm-selection-state">未选择：本次生成将保持原三件套。</small>
+              </span>
+            </label>
+            <label class="tts-bgm-volume-control" for="ttsBgmVolume">
+              <span>成品 BGM 音量 <strong id="ttsBgmVolumeValue">28%</strong></span>
+              <input id="ttsBgmVolume" type="range" min="10" max="50" step="1" value="28" aria-describedby="ttsBgmVolumeHint" />
+              <small id="ttsBgmVolumeHint">默认较低，避免盖住旁白；调整会立即作用于 BGM 预览，并用于之后新生成的 BGM 文件。</small>
+            </label>
             <div class="tts-voice-quick-panel" id="ttsVoiceQuickPanel"></div>
             <div class="tts-music-presets" id="ttsMusicPresetsPanel" hidden></div>
             <details class="tts-advanced-settings">
@@ -981,6 +1032,20 @@
                 <span id="ttsPreviewMeta"></span>
               </div>
               <audio id="ttsAudio" controls preload="metadata"></audio>
+            </div>
+            <div class="tts-preview tts-bgm-preview" id="ttsBgmPreview" hidden>
+              <div>
+                <strong id="ttsBgmPreviewTitle">清爽教育 BGM</strong>
+                <span id="ttsBgmPreviewMeta"></span>
+              </div>
+              <audio id="ttsBgmAudio" controls preload="metadata"></audio>
+            </div>
+            <div class="tts-bgm-missing" id="ttsBgmMissing" hidden>
+              <div>
+                <strong>当前旁白尚未生成 BGM</strong>
+                <small id="ttsBgmMissingMessage">可为这条已完成的旁白补生成独立清爽教育 BGM。</small>
+              </div>
+              <button class="ghost small" id="generateTtsBgmForCurrent" type="button">补生成 BGM</button>
             </div>
             <section class="tts-alignment-editor" id="ttsAlignmentEditor" hidden>
               <div class="tts-alignment-head">
@@ -1555,7 +1620,7 @@
                   <div class="kinetic-preview-toolbar-main">
                     <div class="kinetic-preview-title">
                       <strong id="moneyPrinterPreviewTitle">MoneyPrinter 最终预览</strong>
-                      <span id="moneyPrinterPreviewSpec">等待 TTS 三件套</span>
+                      <span id="moneyPrinterPreviewSpec">等待已确认 TTS 交接包</span>
                     </div>
                     <div class="kinetic-preview-actions">
                       <div class="kinetic-preview-buttons">
@@ -1962,8 +2027,8 @@
 
     <script src="/modules/tts-handoff-store.js"></script>
     <script src="/modules/moments-image-instruction.js"></script>
-    <script src="/modules/legacy-runtime.js"></script>
-    <script src="/workbench.js"></script>
+    <script src="/modules/legacy-runtime.js?v=2026073016"></script>
+    <script src="/workbench.js?v=2026073011"></script>
     <script src="/modules/tts-voice-clone.js"></script>
     <script type="module" src="/app.js"></script>
 </body>

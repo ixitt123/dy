@@ -293,6 +293,15 @@ const downloadDirInput = document.querySelector("#downloadDirInput");
 const chooseDownloadDirBtn = document.querySelector("#chooseDownloadDir");
 const saveDownloadDirBtn = document.querySelector("#saveDownloadDir");
 const createDesktopDateFolderBtn = document.querySelector("#createDesktopDateFolder");
+const collectorFolderNameSelect = document.querySelector("#collectorFolderNameSelect");
+const editCollectorFolderNameBtn = document.querySelector("#editCollectorFolderName");
+const deleteCollectorFolderNameBtn = document.querySelector("#deleteCollectorFolderName");
+const FOLDER_NAMES_API = "/api/folder-names";
+const COLLECTOR_FOLDER_NAME_STORAGE_KEY = "collector-desktop-folder-name";
+const FOLDER_NAMES_CHANGED_STORAGE_KEY = "ian-folder-names-changed";
+let collectorFolderNames = [];
+let collectorDesktopFolderPath = "";
+let collectorFolderPromptActive = false;
 const localVideoPath = document.querySelector("#localVideoPath");
 const chooseLocalVideoBtn = document.querySelector("#chooseLocalVideo");
 const extractLocalVideoTranscriptBtn = document.querySelector("#extractLocalVideoTranscript");
@@ -362,6 +371,7 @@ const rewriteEmotionValue = document.querySelector("#rewriteEmotionValue");
 const rewriteSalesLevel = document.querySelector("#rewriteSalesLevel");
 const rewriteSalesValue = document.querySelector("#rewriteSalesValue");
 const rewriteHumanizeLevel = document.querySelector("#rewriteHumanizeLevel");
+const rewriteParentConversionTemplate = document.querySelector("#rewriteParentConversionTemplate");
 const rewriteVersions = document.querySelector("#rewriteVersions");
 const rewriteVersionCountInput = document.querySelector("#rewriteVersionCountInput");
 const rewriteStatus = document.querySelector("#rewriteStatus");
@@ -440,6 +450,10 @@ const ttsPresetVoiceField = document.querySelector("#ttsPresetVoiceField");
 const ttsPresetVoice = document.querySelector("#ttsPresetVoice");
 const ttsVoiceQuickPanel = document.querySelector("#ttsVoiceQuickPanel");
 const ttsMusicPresetsPanel = document.querySelector("#ttsMusicPresetsPanel");
+const ttsGenerateCleanEducationBgm = document.querySelector("#ttsGenerateCleanEducationBgm");
+const ttsBgmSelectionState = document.querySelector("#ttsBgmSelectionState");
+const ttsBgmVolume = document.querySelector("#ttsBgmVolume");
+const ttsBgmVolumeValue = document.querySelector("#ttsBgmVolumeValue");
 const ttsManualVoiceField = document.querySelector("#ttsManualVoiceField");
 const ttsManualVoice = document.querySelector("#ttsManualVoice");
 const ttsSpeed = document.querySelector("#ttsSpeed");
@@ -472,11 +486,79 @@ const ttsMainProgressLabel = ttsMainProgress.querySelector("#ttsMainProgressLabe
 const ttsMainProgressPercent = ttsMainProgress.querySelector("#ttsMainProgressPercent");
 const ttsMainProgressBar = ttsMainProgress.querySelector(".tts-main-progress-bar");
 const ttsMainProgressFill = ttsMainProgress.querySelector(".tts-main-progress-bar i");
+const ttsBgmProgress = document.createElement("div");
+ttsBgmProgress.className = "tts-main-progress tts-bgm-progress";
+ttsBgmProgress.id = "ttsBgmProgress";
+ttsBgmProgress.hidden = true;
+ttsBgmProgress.innerHTML = `
+  <div class="tts-main-progress-meta">
+    <span id="ttsBgmProgressLabel">BGM 生成进度（阶段）</span>
+    <strong id="ttsBgmProgressPercent">0%</strong>
+  </div>
+  <div class="tts-main-progress-bar" role="progressbar" aria-label="BGM 生成进度（阶段）" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+    <i></i>
+  </div>
+`;
+ttsMainProgress.after(ttsBgmProgress);
+const ttsBgmProgressLabel = ttsBgmProgress.querySelector("#ttsBgmProgressLabel");
+const ttsBgmProgressPercent = ttsBgmProgress.querySelector("#ttsBgmProgressPercent");
+const ttsBgmProgressBar = ttsBgmProgress.querySelector(".tts-main-progress-bar");
+const ttsBgmProgressFill = ttsBgmProgress.querySelector(".tts-main-progress-bar i");
 const ttsOutputColumn = document.querySelector(".tts-output-column");
 const ttsPreview = document.querySelector("#ttsPreview");
 const ttsPreviewTitle = document.querySelector("#ttsPreviewTitle");
 const ttsPreviewMeta = document.querySelector("#ttsPreviewMeta");
 const ttsAudio = document.querySelector("#ttsAudio");
+let ttsBgmPreview = document.querySelector("#ttsBgmPreview");
+let ttsBgmPreviewTitle = document.querySelector("#ttsBgmPreviewTitle");
+let ttsBgmPreviewMeta = document.querySelector("#ttsBgmPreviewMeta");
+let ttsBgmAudio = document.querySelector("#ttsBgmAudio");
+let ttsBgmMissing = document.querySelector("#ttsBgmMissing");
+let ttsBgmMissingMessage = document.querySelector("#ttsBgmMissingMessage");
+let generateTtsBgmForCurrent = document.querySelector("#generateTtsBgmForCurrent");
+const ttsBgmJobsByParentId = new Map();
+
+function ensureTtsBgmPreview() {
+  if (ttsBgmPreview || !ttsPreview?.parentElement) return;
+  const preview = document.createElement("div");
+  preview.className = "tts-preview tts-bgm-preview";
+  preview.id = "ttsBgmPreview";
+  preview.hidden = true;
+  preview.innerHTML = `
+    <div>
+      <strong id="ttsBgmPreviewTitle">清爽教育 BGM（独立音轨）</strong>
+      <span id="ttsBgmPreviewMeta"></span>
+    </div>
+    <audio id="ttsBgmAudio" controls preload="metadata"></audio>
+  `;
+  ttsPreview.insertAdjacentElement("afterend", preview);
+  ttsBgmPreview = preview;
+  ttsBgmPreviewTitle = preview.querySelector("#ttsBgmPreviewTitle");
+  ttsBgmPreviewMeta = preview.querySelector("#ttsBgmPreviewMeta");
+  ttsBgmAudio = preview.querySelector("#ttsBgmAudio");
+}
+
+function ensureTtsBgmMissingPanel() {
+  if (ttsBgmMissing || !ttsBgmPreview?.parentElement) return;
+  const panel = document.createElement("div");
+  panel.className = "tts-bgm-missing";
+  panel.id = "ttsBgmMissing";
+  panel.hidden = true;
+  panel.innerHTML = `
+    <div>
+      <strong>当前旁白尚未生成 BGM</strong>
+      <small id="ttsBgmMissingMessage">可为这条已完成的旁白补生成独立清爽教育 BGM。</small>
+    </div>
+    <button class="ghost small" id="generateTtsBgmForCurrent" type="button">补生成 BGM</button>
+  `;
+  ttsBgmPreview.insertAdjacentElement("afterend", panel);
+  ttsBgmMissing = panel;
+  ttsBgmMissingMessage = panel.querySelector("#ttsBgmMissingMessage");
+  generateTtsBgmForCurrent = panel.querySelector("#generateTtsBgmForCurrent");
+}
+
+ensureTtsBgmPreview();
+ensureTtsBgmMissingPanel();
 const ttsAlignmentEditor = document.querySelector("#ttsAlignmentEditor");
 const ttsAlignmentSummary = document.querySelector("#ttsAlignmentSummary");
 const ttsAlignmentBadges = document.querySelector("#ttsAlignmentBadges");
@@ -497,6 +579,7 @@ const ttsCentralTimeline = document.querySelector("#ttsCentralTimeline");
 const ttsSaveTimelineBtn = document.querySelector("#ttsSaveTimeline");
 const ttsReloadTimelineBtn = document.querySelector("#ttsReloadTimeline");
 const ttsCentralHandoff = document.querySelector("#ttsCentralHandoff");
+const ttsCentralHandoffStatus = document.querySelector("#ttsCentralHandoffStatus");
 const ttsAudioHandoff = document.querySelector("#ttsAudioHandoff");
 const sendConfirmedTtsAudioBtn = document.querySelector("#sendConfirmedTtsAudio");
 const ttsAudioHandoffStatus = document.querySelector("#ttsAudioHandoffStatus");
@@ -518,6 +601,12 @@ const momentsVisualStyle = document.querySelector("#momentsVisualStyle");
 const momentsWordCount = document.querySelector("#momentsWordCount");
 const momentsWordCountCustom = document.querySelector("#momentsWordCountCustom");
 const momentsEmojiMode = document.querySelector("#momentsEmojiMode");
+const momentsEmojiStyle = document.querySelector("#momentsEmojiStyle");
+const momentsEmojiCount = document.querySelector("#momentsEmojiCount");
+const momentsEmojiPalette = document.querySelector("#momentsEmojiPalette");
+const momentsEmojiPaletteTitle = document.querySelector("#momentsEmojiPaletteTitle");
+const momentsEmojiPaletteHint = document.querySelector("#momentsEmojiPaletteHint");
+const momentsEmojiPalettePreview = document.querySelector("#momentsEmojiPalettePreview");
 const momentsImageCount = document.querySelector("#momentsImageCount");
 const momentsTone = document.querySelector("#momentsTone");
 const momentsIntent = document.querySelector("#momentsIntent");
@@ -651,7 +740,11 @@ const rewriteVersionOptions = [
   { key: "resonanceVersion", name: "成品 2：共鸣解释版", direction: "知识解释", wordCount: "120-180字" },
   { key: "conversionVersion", name: "成品 3：转化行动版", direction: "成交转化", wordCount: "120-180字" },
 ];
-const defaultRewriteVersionCount = 3;
+const parentConversionVersionOptions = [
+  { key: "parentConsultation", name: "触动咨询版", direction: "招生引流", wordCount: "120-180字", ctaMode: "consult" },
+  { key: "parentAction", name: "行动号召版", direction: "成交转化", wordCount: "120-180字", ctaMode: "action" },
+];
+const defaultRewriteVersionCount = 1;
 const maxRewriteVersionCount = 50;
 const rewritePresetStorageKey = "video-factory:rewrite-preset-v2";
 const rewriteCoherenceContract = "无论选择哪种改写方案，都必须输出一篇完整文章：主题始终一致，事实不矛盾，指代清楚，句子之间有承接，段落之间有过渡，开头自然进入主题，结尾完整收束。禁止输出句子拼接、提纲、半句话、互相断裂的段落。强钩子、冲突、短句、情绪和转化风格不得破坏文章的通顺、连贯与事实完整。";
@@ -974,6 +1067,41 @@ function defaultRewriteVersionSettings() {
   };
 }
 
+function parentConversionTemplateEnabled() {
+  return rewriteParentConversionTemplate?.checked === true;
+}
+
+function parentConversionVersionAt(index) {
+  const base = parentConversionVersionOptions[index];
+  if (!base) return rewriteVersionAt(index);
+  const cached = rewriteVersionDrafts.get(base.key) || {};
+  return {
+    ...base,
+    ...defaultRewriteVersionSettings(),
+    ...cached,
+    params: {
+      ...rewriteParams(),
+      ...cached.params,
+      parentConversionTemplate: true,
+      ctaMode: base.ctaMode,
+    },
+    content: cached.content || "",
+  };
+}
+
+function defaultRewriteVersionSpecs() {
+  return parentConversionTemplateEnabled()
+    ? parentConversionVersionOptions.map((_, index) => parentConversionVersionAt(index))
+    : [rewriteVersionAt(0)];
+}
+
+function syncParentConversionTemplateVersions() {
+  renderRewriteVersions({ versions: defaultRewriteVersionSpecs() }, { allowDefaults: false });
+  rewriteStatus.textContent = parentConversionTemplateEnabled()
+    ? "家长触动与转化模板已开启：将生成触动咨询版和行动号召版。"
+    : "已关闭家长触动与转化模板：恢复单篇通用改写。";
+}
+
 function clampRewriteVersionCount(value) {
   const parsed = Number.parseInt(value, 10);
   return Math.max(1, Math.min(maxRewriteVersionCount, Number.isFinite(parsed) ? parsed : 1));
@@ -1032,6 +1160,7 @@ function saveRewritePresetSettings() {
     emotionLevel: rewriteEmotionLevel?.value || "",
     salesLevel: rewriteSalesLevel?.value || "",
     humanizeLevel: rewriteHumanizeLevel?.value || "",
+    parentConversionTemplate: parentConversionTemplateEnabled(),
     referenceStyle: rewriteReference?.value || "",
   };
   try {
@@ -1047,11 +1176,17 @@ function loadRewritePresetSettings() {
     data = {};
   }
   if (!Object.keys(data).length) {
+    if (rewriteParentConversionTemplate) rewriteParentConversionTemplate.checked = true;
     applyRewritePlanPreset(rewriteStyle?.value || "保留原意强化表达", { save: false });
     syncRewriteSliderLabels();
     return;
   }
   setSelectIfOption(rewriteProvider, data.provider);
+  if (rewriteParentConversionTemplate) {
+    rewriteParentConversionTemplate.checked = Object.prototype.hasOwnProperty.call(data, "parentConversionTemplate")
+      ? data.parentConversionTemplate === true
+      : true;
+  }
   setSelectIfOption(rewriteStyle, data.style);
   const selectedPlan = rewritePlanPresets[rewriteStyle?.value] ? rewriteStyle.value : "保留原意强化表达";
   setSelectIfOption(rewriteStyle, selectedPlan);
@@ -1091,6 +1226,9 @@ function buildRewriteReferenceStyle() {
     `- 禁止事项：${plan.avoid}`,
     `- 全方案连贯性合同：${rewriteCoherenceContract}`,
     `- 绑定参数：平台=${preset.platform}；字数=${preset.wordRange}；语气=${preset.tone}；人设=${preset.persona}；用途=${preset.purpose}。`,
+    parentConversionTemplateEnabled()
+      ? "- 已启用家长触动与转化模板：输出两篇完整口播稿，分别使用低压力咨询引导和明确行动号召；不得虚构课程、老师、服务、名额、成绩或案例。"
+      : "- 未启用家长触动与转化模板：保持通用改写，不强行改成教育招生内容。",
     "",
     "生成基础参考 dbskill 方法，但只输出可直接发布的中文文案：",
     "1. 内容诊断：先把原文的核心事情、受众、矛盾和传播价值搞清楚，再改写。",
@@ -1113,11 +1251,12 @@ function normalizeRewriteVersions(rewrite = {}, allowDefaults = true) {
     : currentRewriteSpecs.length > 0
       ? currentRewriteSpecs
       : allowDefaults
-        ? rewriteVersionOptions.slice(0, defaultRewriteVersionCount)
+        ? defaultRewriteVersionSpecs()
         : [];
 
   return sources.map((item, index) => {
-    const base = rewriteVersionOptions.find((option) => option.key === item.key || option.name === item.name) || {};
+    const base = [...rewriteVersionOptions, ...parentConversionVersionOptions]
+      .find((option) => option.key === item.key || option.name === item.name) || {};
     const key = item.key || base.key || `version-${index + 1}`;
     const cached = rewriteVersionDrafts.get(key) || {};
     const defaults = defaultRewriteVersionSettings();
@@ -1131,6 +1270,7 @@ function normalizeRewriteVersions(rewrite = {}, allowDefaults = true) {
       wordCountSoftMax: Number(item.wordCountSoftMax || cached.wordCountSoftMax || 0) || null,
       wordCountWarning: String(item.wordCountWarning || cached.wordCountWarning || "").trim(),
       coherencePassed: item.coherencePassed === true || cached.coherencePassed === true,
+      conversionStructure: item.conversionStructure || cached.conversionStructure || null,
       revisionInstruction: item.revisionInstruction || cached.revisionInstruction || "",
       provider: item.provider || cached.provider || defaults.provider,
       style: item.style || cached.style || defaults.style,
@@ -1166,6 +1306,7 @@ function renderRewriteVersions(rewrite = {}, { allowDefaults = true } = {}) {
             <button class="ghost small rewrite-copy" type="button" data-version-key="${escapeHtml(version.key)}">复制</button>
           </div>
         </div>
+        ${rewriteConversionStructureMarkup(version)}
         <div class="rewrite-version-hidden-fields" hidden>
         <div class="rewrite-version-options">
           <label>
@@ -1256,21 +1397,41 @@ function rewriteHandoffChoicesMarkup() {
   ].map(([target, label]) => `<label><input class="rewrite-handoff-choice" type="checkbox" data-target="${target}" />${label}</label>`).join("");
 }
 
+function rewriteConversionStructureMarkup(version) {
+  if (version.params?.parentConversionTemplate !== true) return "";
+  const structure = version.conversionStructure || {};
+  const parts = [
+    ["hook", "钩子"],
+    ["painConflict", "痛点冲突"],
+    ["turn", "转折"],
+    ["climax", "高潮"],
+    ["ending", "回味或行动"],
+  ];
+  return `<div class="rewrite-conversion-structure" aria-label="成稿结构：钩子 / 痛点冲突 / 转折 / 高潮 / 回味或行动">${parts
+    .map(([key, label]) => `<span title="${escapeHtml(structure[key] || label)}">${label}</span>`)
+    .join("")}</div>`;
+}
+
 function collectRewriteVersions() {
   const versions = [...rewriteVersions.querySelectorAll(".rewrite-version")].map((card, index) => {
     const cached = rewriteVersionDrafts.get(card.dataset.versionKey) || currentRewriteSpecs[index] || {};
     const version = {
       key: card.dataset.versionKey,
       name: cached.name || `版本 ${index + 1}`,
-      provider: rewriteProvider.value,
-      direction: rewriteDirection.value,
-      style: rewriteStyle.value,
-      wordCount: rewriteWordRange?.value || card.querySelector(".rewrite-version-word-count")?.value.trim() || "120-180字",
-      params: rewriteParams(),
-      humanizeLevel: rewriteHumanizeLevel.value || "极强",
-      referenceStyle: buildRewriteReferenceStyle(),
+      provider: cached.provider || rewriteProvider.value,
+      direction: cached.direction || rewriteDirection.value,
+      style: cached.style || rewriteStyle.value,
+      wordCount: cached.wordCount || rewriteWordRange?.value || card.querySelector(".rewrite-version-word-count")?.value.trim() || "120-180字",
+      params: {
+        ...rewriteParams(),
+        ...(cached.params?.ctaMode ? { ctaMode: cached.params.ctaMode } : {}),
+        ...(cached.params?.parentConversionTemplate ? { parentConversionTemplate: true } : {}),
+      },
+      humanizeLevel: cached.humanizeLevel || rewriteHumanizeLevel.value || "极强",
+      referenceStyle: cached.referenceStyle || buildRewriteReferenceStyle(),
       content: card.querySelector(".rewrite-version-text")?.value || "",
       revisionInstruction: card.querySelector(".rewrite-version-suggestion")?.value.trim() || "",
+      conversionStructure: cached.conversionStructure || null,
     };
     rewriteVersionDrafts.set(version.key, { ...version });
     return version;
@@ -1323,6 +1484,7 @@ function rewriteParams() {
     visibleDifference: plan.mustShow,
     forbiddenInventions: plan.avoid,
     coherenceContract: rewriteCoherenceContract,
+    parentConversionTemplate: parentConversionTemplateEnabled(),
   };
 }
 
@@ -2182,6 +2344,8 @@ function collectMomentsPayload() {
     wordCount: momentsWordCount?.value || "100",
     wordCountCustom: momentsWordCountCustom?.value || "100",
     addEmoji: momentsEmojiMode?.value || "no",
+    emojiStyle: momentsEmojiStyle?.value || "gentle",
+    emojiCount: momentsEmojiCount?.value || "auto",
     imageCount: momentsImageCount?.value === "auto" ? 0 : Number(momentsImageCount?.value || 0),
     tone: momentsTone?.value || "强反差急转弯",
     intent: momentsIntent?.value || "冲突反转",
@@ -2201,6 +2365,8 @@ function saveMomentsDraft() {
       wordCount: momentsWordCount?.value || "100",
       wordCountCustom: momentsWordCountCustom?.value || "100",
       addEmoji: momentsEmojiMode?.value || "no",
+      emojiStyle: momentsEmojiStyle?.value || "gentle",
+      emojiCount: momentsEmojiCount?.value || "auto",
       imageCount: momentsImageCount?.value || "auto",
       tone: momentsTone?.value || "强反差急转弯",
       intent: momentsIntent?.value || "冲突反转",
@@ -2224,6 +2390,14 @@ function loadMomentsDraft() {
     if (draft.wordCount && momentsWordCount) momentsWordCount.value = draft.wordCount;
     if (draft.wordCountCustom && momentsWordCountCustom) momentsWordCountCustom.value = draft.wordCountCustom;
     if (draft.addEmoji && momentsEmojiMode) momentsEmojiMode.value = draft.addEmoji;
+    if (draft.emojiStyle && momentsEmojiStyle) {
+      const hasStyle = [...momentsEmojiStyle.options].some((option) => option.value === draft.emojiStyle);
+      momentsEmojiStyle.value = hasStyle ? draft.emojiStyle : "gentle";
+    }
+    if (draft.emojiCount && momentsEmojiCount) {
+      const hasCount = [...momentsEmojiCount.options].some((option) => option.value === draft.emojiCount);
+      momentsEmojiCount.value = hasCount ? draft.emojiCount : "auto";
+    }
     if (draft.imageCount && momentsImageCount) momentsImageCount.value = draft.imageCount;
     if (draft.tone && momentsTone) momentsTone.value = draft.tone;
     if (draft.intent && momentsIntent) momentsIntent.value = draft.intent;
@@ -2234,6 +2408,40 @@ function loadMomentsDraft() {
       renderMomentsResult(currentMomentsResult);
     }
   } catch {}
+}
+
+const MOMENTS_EMOJI_STYLE_PREVIEWS = {
+  gentle: {
+    title: "轻柔日常",
+    hint: "优先 😊 🌿 ✨；舒缓、自然，适合生活观察和轻松提醒。",
+    emojis: "😊 🌿 ✨ ☺️ ☀️ ☕ 💛 🌙",
+  },
+  lively: {
+    title: "元气分享",
+    hint: "优先 😄 🎈 🌈；明快、有趣，适合活动、体验和日常分享。",
+    emojis: "😄 🎈 🌈 😉 😋 🎉 ✨ ☕",
+  },
+  professional: {
+    title: "专业清爽",
+    hint: "优先 📌 💡 ✅；克制、可信，适合知识、课程和工作复盘。",
+    emojis: "📌 💡 ✅ 📝 📚 📈 🔍 👍",
+  },
+  warm: {
+    title: "暖心陪伴",
+    hint: "优先 🤗 💗 🌷；真诚、有温度，适合亲子、感谢和陪伴主题。",
+    emojis: "🤗 💗 🌷 😊 ❤️ 💛 🙏 👏",
+  },
+};
+
+function syncMomentsEmojiStyle() {
+  const enabled = momentsEmojiMode?.value === "yes";
+  const style = MOMENTS_EMOJI_STYLE_PREVIEWS[momentsEmojiStyle?.value] || MOMENTS_EMOJI_STYLE_PREVIEWS.gentle;
+  if (momentsEmojiStyle) momentsEmojiStyle.disabled = !enabled;
+  if (momentsEmojiCount) momentsEmojiCount.disabled = !enabled;
+  if (momentsEmojiPalette) momentsEmojiPalette.hidden = !enabled;
+  if (momentsEmojiPaletteTitle) momentsEmojiPaletteTitle.textContent = style.title;
+  if (momentsEmojiPaletteHint) momentsEmojiPaletteHint.textContent = style.hint;
+  if (momentsEmojiPalettePreview) momentsEmojiPalettePreview.textContent = style.emojis;
 }
 
 function syncMomentsWordCountCustom() {
@@ -2339,7 +2547,9 @@ function renderMomentsResult(result) {
   if (momentsResultMeta) {
     const reference = result.reference_used ? ` · ${result.reference_style || "已引用"}：${result.reference_used}` : "";
     const target = result.word_count_target ? ` · 建议 ${result.word_count_target} 字` : "";
-    const emoji = result.add_emoji ? " · 已按语义添加表情" : " · 不添加表情";
+    const emoji = result.add_emoji
+      ? ` · ${result.emoji_style_label || "已选风格"}表情 · ${result.emoji_count_label || "智能适量"} · 已按语义添加`
+      : " · 不添加表情";
     const visualStyle = result.visual_style_label ? ` · ${result.visual_style_label}` : "";
     const wordCountWarning = result.word_count_warning ? ` · ${result.word_count_warning}` : "";
     momentsResultMeta.textContent = `${result.theme || "朋友圈图文"} · ${images.length} 张配图提示词 · ${momentsCharacterCount(momentsPostOutput?.value || result.post)} 字${target}${emoji}${visualStyle}${wordCountWarning}${reference}`;
@@ -2459,15 +2669,210 @@ async function copyMomentsImageInstruction() {
   setMomentsStatus(`图片生成指令已复制，本轮共 ${prompts.length} 张。`, "success");
 }
 
+function notifyFolderNamesChanged() {
+  localStorage.setItem(
+    FOLDER_NAMES_CHANGED_STORAGE_KEY,
+    `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+  );
+}
+
+function renderCollectorFolderNames(preferredName = "") {
+  if (!collectorFolderNameSelect) return;
+  const current = String(preferredName || collectorFolderNameSelect.value || "");
+  const cached = String(localStorage.getItem(COLLECTOR_FOLDER_NAME_STORAGE_KEY) || "");
+  const selected = collectorFolderNames.includes(current)
+    ? current
+    : collectorFolderNames.includes(cached)
+      ? cached
+      : collectorFolderNames.length === 1
+        ? collectorFolderNames[0]
+        : "";
+  collectorFolderNameSelect.innerHTML = "";
+  const placeholder = document.createElement("option");
+  placeholder.value = "";
+  placeholder.textContent = collectorFolderNames.length ? "选择文件夹名称" : "请选择“＋ 添加名称…”";
+  collectorFolderNameSelect.appendChild(placeholder);
+  for (const name of collectorFolderNames) {
+    const option = document.createElement("option");
+    option.value = name;
+    option.textContent = name;
+    collectorFolderNameSelect.appendChild(option);
+  }
+  const addOption = document.createElement("option");
+  addOption.value = "__new__";
+  addOption.textContent = "＋ 添加名称…";
+  collectorFolderNameSelect.appendChild(addOption);
+  collectorFolderNameSelect.value = selected;
+  if (selected) localStorage.setItem(COLLECTOR_FOLDER_NAME_STORAGE_KEY, selected);
+  syncCollectorFolderButtons();
+}
+
+async function loadCollectorFolderNames() {
+  const data = await fetchJson(FOLDER_NAMES_API);
+  collectorFolderNames = Array.isArray(data.names) ? data.names : [];
+  renderCollectorFolderNames();
+  const selected = String(collectorFolderNameSelect?.value || "");
+  if (selected && selected !== "__new__") await resolveCollectorDesktopFolder(selected);
+}
+
+async function saveCollectorFolderNames(names) {
+  return fetchJson(FOLDER_NAMES_API, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ names }),
+  });
+}
+
+function syncCollectorFolderButtons() {
+  const hasSelection = Boolean(
+    collectorFolderNameSelect?.value
+    && collectorFolderNameSelect.value !== "__new__",
+  );
+  if (createDesktopDateFolderBtn) createDesktopDateFolderBtn.disabled = false;
+  if (editCollectorFolderNameBtn) editCollectorFolderNameBtn.disabled = !hasSelection;
+  if (deleteCollectorFolderNameBtn) deleteCollectorFolderNameBtn.disabled = !hasSelection;
+}
+
+function setCollectorFolderStatus(message, success = true) {
+  if (resultBox) resultBox.textContent = message;
+  setReady(success ? "文件夹已同步" : "文件夹操作失败", success);
+}
+
+async function promptNewCollectorFolderName(defaultValue = "") {
+  if (collectorFolderPromptActive) return "";
+  collectorFolderPromptActive = true;
+  document.activeElement?.blur();
+  try {
+    return await runCollectorFolderNamePrompt(defaultValue);
+  } finally {
+    setTimeout(() => { collectorFolderPromptActive = false; }, 350);
+  }
+}
+
+async function runCollectorFolderNamePrompt(defaultValue = "") {
+  const input = window.prompt(
+    defaultValue ? "编辑文件夹名称：" : "输入新文件夹名称（将创建为 日期-名称）：",
+    defaultValue,
+  );
+  if (input === null) {
+    renderCollectorFolderNames(defaultValue);
+    return "";
+  }
+  const nextName = input.trim();
+  if (!nextName) {
+    setCollectorFolderStatus("名称不能为空，请输入有效的文件夹名称。", false);
+    renderCollectorFolderNames(defaultValue);
+    return "";
+  }
+  if (defaultValue) {
+    const data = await fetchJson("/api/desktop-folder-named/rename", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ current: defaultValue, next: nextName }),
+    });
+    collectorFolderNames = Array.isArray(data.names) ? data.names : collectorFolderNames;
+    collectorDesktopFolderPath = String(data.folderPath || "");
+    renderCollectorFolderNames(nextName);
+    localStorage.setItem(COLLECTOR_FOLDER_NAME_STORAGE_KEY, nextName);
+    if (data.folderPath) await setDownloadDir(data.folderPath);
+    notifyFolderNamesChanged();
+    setCollectorFolderStatus(`文件夹名称已改为“${nextName}”。`);
+    return nextName;
+  }
+  const nextNames = collectorFolderNames.includes(nextName)
+    ? collectorFolderNames
+    : [...collectorFolderNames, nextName];
+  const data = await saveCollectorFolderNames(nextNames);
+  collectorFolderNames = Array.isArray(data.names) ? data.names : nextNames;
+  collectorDesktopFolderPath = "";
+  renderCollectorFolderNames(nextName);
+  localStorage.setItem(COLLECTOR_FOLDER_NAME_STORAGE_KEY, nextName);
+  notifyFolderNamesChanged();
+  return nextName;
+}
+
+async function resolveCollectorDesktopFolder(name) {
+  const data = await fetchJson("/api/desktop-folder-named/resolve", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ suffix: name }),
+  });
+  collectorDesktopFolderPath = String(data.folderPath || "");
+  if (collectorDesktopFolderPath) {
+    await setDownloadDir(data.folderPath);
+    setCollectorFolderStatus(`采集处理素材将保存到：${data.folderPath}`);
+  } else {
+    setCollectorFolderStatus(`“${name}”今天还没有对应文件夹，请点击“新建文件夹”。`);
+  }
+  return data;
+}
+
+async function onCollectorFolderNameChange() {
+  const selected = String(collectorFolderNameSelect?.value || "");
+  if (selected === "__new__") {
+    collectorFolderNameSelect.value = "";
+    await promptNewCollectorFolderName();
+    return;
+  }
+  collectorDesktopFolderPath = "";
+  if (!selected) {
+    localStorage.removeItem(COLLECTOR_FOLDER_NAME_STORAGE_KEY);
+    syncCollectorFolderButtons();
+    return;
+  }
+  localStorage.setItem(COLLECTOR_FOLDER_NAME_STORAGE_KEY, selected);
+  syncCollectorFolderButtons();
+  await resolveCollectorDesktopFolder(selected);
+}
+
 async function createDesktopDateFolder() {
   if (!createDesktopDateFolderBtn) return;
+  let name = String(collectorFolderNameSelect?.value || "");
+  if (!name || name === "__new__") {
+    name = await promptNewCollectorFolderName();
+    if (!name) return;
+  }
   createDesktopDateFolderBtn.disabled = true;
   try {
-    const data = await fetchJson("/api/desktop-date-folder", { method: "POST" });
-    window.alert(`文件夹已创建：${data.folderName}`);
+    const data = await fetchJson("/api/desktop-folder-named", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ suffix: name }),
+    });
+    collectorDesktopFolderPath = String(data.folderPath || "");
+    localStorage.setItem(COLLECTOR_FOLDER_NAME_STORAGE_KEY, name);
+    await setDownloadDir(data.folderPath);
+    setCollectorFolderStatus(`文件夹已创建：${data.folderName}；采集素材将保存到这里。`);
   } finally {
-    createDesktopDateFolderBtn.disabled = false;
+    syncCollectorFolderButtons();
   }
+}
+
+async function editCollectorFolderName() {
+  const current = String(collectorFolderNameSelect?.value || "");
+  if (!current || current === "__new__") return;
+  await promptNewCollectorFolderName(current);
+}
+
+async function deleteCollectorFolderName() {
+  const suffix = String(collectorFolderNameSelect?.value || "");
+  if (!suffix || suffix === "__new__") return;
+  if (!window.confirm(`确定删除“${suffix}”吗？\n文件夹中已有素材时会阻止删除。`)) return;
+  const data = await fetchJson("/api/desktop-folder-named/delete", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ suffix }),
+  });
+  collectorFolderNames = Array.isArray(data.names)
+    ? data.names
+    : collectorFolderNames.filter((name) => name !== suffix);
+  collectorDesktopFolderPath = "";
+  localStorage.removeItem(COLLECTOR_FOLDER_NAME_STORAGE_KEY);
+  renderCollectorFolderNames();
+  notifyFolderNamesChanged();
+  setCollectorFolderStatus(data.deleted
+    ? `空文件夹和名称“${suffix}”已删除。`
+    : `名称“${suffix}”已删除；桌面上没有对应文件夹。`);
 }
 
 async function copyMomentsPost() {
@@ -3032,7 +3437,7 @@ function renderMomentsProviderControls(providers = {}, defaultProvider = "dashsc
   const deepseek = providers.deepseek;
   const fallbackAvailable = selectedProvider !== "deepseek" && Boolean(deepseek?.apiKeyConfigured);
   momentsFallbackProvider.innerHTML = fallbackAvailable
-    ? `<option value="deepseek">${escapeHtml(`${deepseek.label || "DeepSeek"} · ${deepseek.model || "deepseek-chat"}`)}</option>`
+    ? `<option value="deepseek">${escapeHtml(`${deepseek.label || "DeepSeek"} · ${deepseek.model || "deepseek-v4-flash"}`)}</option>`
     : '<option value="">无备用 API</option>';
   momentsFallbackProvider.value = fallbackAvailable ? "deepseek" : "";
   momentsFallbackProvider.disabled = true;
@@ -3303,6 +3708,118 @@ function ttsMusicJobFromPreview(asset = {}, data = {}, text = "") {
     status: "completed",
     source: "minimax_music",
   };
+}
+
+function cleanEducationBgmAsset() {
+  return voiceAssets.find((asset) => isTtsMusicAsset(asset)
+    && (asset.metadata?.music_preset_id === "clean_education_bgm"
+      || asset.metadata?.preset_id === "clean_education_bgm"
+      || asset.voice_id === "music:clean_education_bgm")) || null;
+}
+
+const CLEAN_EDUCATION_BGM_TAIL_SECONDS = 3.5;
+const CLEAN_EDUCATION_BGM_FADE_OUT_SECONDS = 2.5;
+const CLEAN_EDUCATION_BGM_VOLUME = 0.28;
+
+function selectedTtsBgmVolume() {
+  const fallbackPercent = CLEAN_EDUCATION_BGM_VOLUME * 100;
+  const percent = Number(ttsBgmVolume?.value || fallbackPercent);
+  return Math.min(0.5, Math.max(0.1, Math.round(percent) / 100));
+}
+
+function syncTtsBgmVolume() {
+  const volume = selectedTtsBgmVolume();
+  if (ttsBgmVolumeValue) ttsBgmVolumeValue.textContent = `${Math.round(volume * 100)}%`;
+  if (ttsBgmAudio) ttsBgmAudio.volume = volume;
+}
+
+function cleanEducationBgmTargetDuration(narrationDuration = 0) {
+  const narration = Number(narrationDuration || 0);
+  return narration > 0 ? Math.round((narration + CLEAN_EDUCATION_BGM_TAIL_SECONDS) * 10) / 10 : 0;
+}
+
+function requestCleanEducationBgmPreview(asset, text, targetDuration) {
+  return fetchJson("/api/voice-assets/preview", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      id: asset.id,
+      model: "music-2.6-free",
+      text,
+      prompt_extra: targetDuration > 0
+        ? `请生成可循环的纯音乐 BGM，适配约 ${Math.round(targetDuration)} 秒的教育口播；末尾预留约 4 秒自然收尾，音乐不抢人声。`
+        : "请生成可循环的纯音乐 BGM，末尾自然收尾，音乐不抢人声。",
+      force: true,
+    }),
+  });
+}
+
+async function generateCleanEducationBgm(parentJob, text, { previewPromise = null } = {}) {
+  const asset = cleanEducationBgmAsset();
+  if (!asset) {
+    showTtsBgmMissing("未找到“清爽教育 BGM”预设，无法补生成。");
+    ttsStatus.textContent = "旁白已生成；未找到“清爽教育 BGM”预设，已保留原三件套。";
+    return null;
+  }
+  const narrationDuration = Number(parentJob?.duration || parentJob?.audio_duration || parentJob?.metadata?.audio_duration || 0);
+  const targetDuration = cleanEducationBgmTargetDuration(narrationDuration);
+  try {
+    generateTtsButton.disabled = true;
+    if (generateTtsBgmForCurrent) generateTtsBgmForCurrent.disabled = true;
+    showTtsBgmMissing("旁白已完成，正在生成“旁白时长 + 约 3.5 秒收尾”的独立清爽教育 BGM…");
+    setTtsBgmProgress(10, "BGM：准备生成");
+    ttsStatus.textContent = "旁白已完成，正在按旁白时长生成清爽教育 BGM...";
+    setTtsBgmProgress(45, previewPromise ? "BGM：与字幕校准并行生成中" : "BGM：已提交生成请求");
+    const preview = await (previewPromise || requestCleanEducationBgmPreview(asset, text, targetDuration));
+    setTtsBgmProgress(82, "BGM：正在保存生成结果");
+    const registered = await fetchJson("/api/tts/import-generated", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        provider: asset.provider || "minimax",
+        project_id: window.videoProjects?.current?.()?.id || "",
+        text,
+        voice_id: asset.voice_id || "music:clean_education_bgm",
+        voice_name: "清爽教育 BGM",
+        voice_asset_id: asset.id,
+        model: "music-2.6-free",
+        source: "minimax_music_bgm",
+        asset_kind: "minimax_music_preset",
+        format: "mp3",
+        audio_path: preview.audio_path || "",
+        duration: preview.duration || preview.metadata?.duration || 0,
+        metadata: {
+          ...(preview.metadata || {}),
+          parent_tts_job_id: parentJob.id,
+          source_tts_job_id: parentJob.id,
+          narration_duration: narrationDuration,
+          requested_duration: targetDuration,
+          tail_seconds: CLEAN_EDUCATION_BGM_TAIL_SECONDS,
+          fade_out_seconds: CLEAN_EDUCATION_BGM_FADE_OUT_SECONDS,
+          background_volume: selectedTtsBgmVolume(),
+          audio_role: "background_music",
+          instrumental: true,
+        },
+      }),
+    });
+    const bgmJob = registered.job || ttsMusicJobFromPreview(asset, preview, text);
+    if (bgmJob?.id) ttsBgmJobsByParentId.set(String(parentJob.id), bgmJob);
+    showTtsBgmPreview(bgmJob, { reveal: false });
+    setTtsBgmProgress(100, "BGM：生成完成");
+    ttsStatus.textContent = "旁白和独立清爽教育 BGM 已生成；确认字幕后将发送四件套。";
+    await refreshTtsJobs();
+    return bgmJob;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    clearTtsBgmPreview();
+    showTtsBgmMissing(`BGM 生成失败：${message}。可重试补生成。`);
+    setTtsBgmProgress(100, "BGM：生成失败");
+    ttsStatus.textContent = `旁白已生成，但 BGM 未生成：${message}。可继续发送原三件套。`;
+    return null;
+  } finally {
+    generateTtsButton.disabled = false;
+    if (generateTtsBgmForCurrent) generateTtsBgmForCurrent.disabled = false;
+  }
 }
 
 function playRenderedTtsVoicePreview() {
@@ -3732,6 +4249,29 @@ function setTtsMainProgress(percent = 0, label = "") {
   if (ttsMainProgressBar) ttsMainProgressBar.setAttribute("aria-valuenow", String(value));
 }
 
+function ttsLinkedBgmParentId(job = {}) {
+  return String(job?.metadata?.parent_tts_job_id || job?.metadata?.source_tts_job_id || "").trim();
+}
+
+function isTtsLinkedBgmJob(job = {}) {
+  return Boolean(ttsLinkedBgmParentId(job)) && ttsIsMusicJob(job);
+}
+
+function setTtsBgmProgress(percent = 0, label = "") {
+  if (!ttsBgmProgress) return;
+  if (ttsMainProgress?.isConnected && !ttsBgmProgress.isConnected) ttsMainProgress.after(ttsBgmProgress);
+  const value = Math.max(0, Math.min(100, Math.round(Number(percent || 0))));
+  ttsBgmProgress.hidden = false;
+  if (ttsBgmProgressLabel) ttsBgmProgressLabel.textContent = label || "BGM 生成进度（阶段）";
+  if (ttsBgmProgressPercent) ttsBgmProgressPercent.textContent = `${value}%`;
+  if (ttsBgmProgressFill) ttsBgmProgressFill.style.width = `${value}%`;
+  if (ttsBgmProgressBar) ttsBgmProgressBar.setAttribute("aria-valuenow", String(value));
+}
+
+function hideTtsBgmProgress() {
+  if (ttsBgmProgress) ttsBgmProgress.hidden = true;
+}
+
 function hideTtsMainProgress() {
   if (ttsMainProgress) ttsMainProgress.hidden = true;
   if (ttsStatus) ttsStatus.hidden = false;
@@ -3921,11 +4461,11 @@ function ttsJobTitle(job = {}) {
   ).trim();
   if (value) return value;
   const fromText = String(job.text || "").replace(/\s+/g, "").slice(0, 18);
-  return fromText || job.voice_name || `配音 #${job.id || ""}`.trim() || "TTS 三件套";
+  return fromText || job.voice_name || `配音 #${job.id || ""}`.trim() || "TTS 音频交接";
 }
 
 function renderTtsJobsEnhanced(jobs = []) {
-  const visibleJobs = jobs.filter((job) => !isTtsJobHidden(job.id));
+  const visibleJobs = jobs.filter((job) => !isTtsJobHidden(job.id) && !isTtsLinkedBgmJob(job));
   if (!visibleJobs.length) {
     ttsHistory.innerHTML = '<div class="tts-empty">还没有生成记录。</div>';
     return;
@@ -3943,15 +4483,20 @@ function renderTtsJobsEnhanced(jobs = []) {
     const displayNumber = Number(job.display_number || job.sequence_number || job.id || 0);
     const title = ttsJobTitle(job);
     const timedSubtitleUrl = job.timestamped_text_url || job.subtitle_url || "";
+    const linkedBgm = linkedTtsBgmJob(job);
     const fileLinks = [
       job.audio_url ? `<button type="button" data-tts-load-file="audio">音频</button>` : "",
       job.script_url ? `<button type="button" data-tts-load-file="script">文案</button>` : "",
       timedSubtitleUrl ? `<button type="button" data-tts-load-file="timestamped-subtitle">带时间戳字幕</button>` : "",
+      linkedBgm?.audio_url ? `<button type="button" data-tts-load-file="bgm">BGM 预览</button>` : "",
     ].filter(Boolean).join("");
     const rawAlignmentStatus = String(job.alignment_status || job.metadata?.alignment_status || "");
     const alignmentStatus = ttsAlignmentDisplayStatus(job);
     const rewriteRequired = ttsAlignmentRewriteRequired(job);
     const matchInfo = ttsAlignmentMatchInfo(job);
+    const bundleFilesLabel = linkedBgm
+      ? "音频 / 文案 / 带时间戳字幕 / 独立 BGM"
+      : "音频 / 文案 / 带时间戳字幕";
     const confirmationMode = String(job.alignment_confirmation_mode || job.metadata?.alignment_confirmation_mode || "");
     const recognitionRatio = Number(job.recognition_match_ratio || job.metadata?.recognition_match_ratio || job.metadata?.alignment_best_asr_match_ratio || NaN);
     const recognitionText = Number.isFinite(recognitionRatio) && recognitionRatio > 0
@@ -3961,24 +4506,25 @@ function renderTtsJobsEnhanced(jobs = []) {
     const syncedByAudioTranscript = confirmationMode === "automatic_audio_transcript_fallback";
     const syncedByScriptFallback = confirmationMode === "automatic_script_locked_fallback";
     const matchPassedText = matchInfo.percent === null
-      ? "发送：音频 / 文案 / 带时间戳字幕"
+      ? `发送：${bundleFilesLabel}`
       : syncedBySingingLyrics
-        ? `已按音频实际歌词同步字幕，可以发送。${recognitionText ? ` ${recognitionText}。` : ""}`
+        ? `已按音频实际歌词同步字幕，可以发送${linkedBgm ? "四件套" : "三件套"}。${recognitionText ? ` ${recognitionText}。` : ""}`
         : syncedByAudioTranscript
-          ? `已按音频实际识别内容同步字幕，可以发送。${recognitionText ? ` ${recognitionText}。` : ""}`
+          ? `已按音频实际识别内容同步字幕，可以发送${linkedBgm ? "四件套" : "三件套"}。${recognitionText ? ` ${recognitionText}。` : ""}`
           : syncedByScriptFallback
-            ? `已生成兜底字幕时间轴，可以发送。${recognitionText ? ` ${recognitionText}。` : ""}`
+            ? `已生成兜底字幕时间轴，可以发送${linkedBgm ? "四件套" : "三件套"}。${recognitionText ? ` ${recognitionText}。` : ""}`
             : `字幕匹配率 ${matchInfo.percent}%，已达到 ${matchInfo.thresholdPercent}% 门槛。`;
     const matchReviewText = matchInfo.percent === null
       ? (job.alignment_error || "字幕尚未完成可用性检查。")
       : rewriteRequired
         ? ttsAlignmentFailureMessage(job)
         : `原文与音频识别匹配率 ${matchInfo.percent}%，低于 ${matchInfo.thresholdPercent}%。系统会自动重新识别，不再人工放行。`;
+    const handoffBundleLabel = linkedBgm ? "已生成四件套（含独立 BGM）" : "已生成三件套";
     const handoffPanel = job.status === "completed" && alignmentStatus === "confirmed"
       ? `
         <div class="tts-job-handoff">
           <div class="tts-job-handoff-head">
-            <strong>已生成三件套</strong>
+            <strong>${handoffBundleLabel}</strong>
             <span>${escapeHtml(matchPassedText)}</span>
           </div>
           <div class="tts-job-handoff-options">${renderTtsHandoffTargetOptions("tts-job-handoff-choice")}</div>
@@ -4034,7 +4580,7 @@ function renderTtsJobsEnhanced(jobs = []) {
         </div>
         <div class="tts-history-text" title="${escapeHtml(job.final_text || job.recognized_text || job.text)}">${escapeHtml(job.final_text || job.recognized_text || job.text)}</div>
         <div class="tts-history-meta">${escapeHtml(job.voice_name || job.voice_id || "-")} · ${escapeHtml(labels[job.provider] || job.provider)} · ${escapeHtml(String(job.format || "mp3").toUpperCase())}</div>
-        <span class="tts-history-files">${fileLinks}</span>
+        <span class="tts-history-files${linkedBgm ? " has-bgm" : ""}">${fileLinks}</span>
         ${handoffPanel}
       </div>
     `;
@@ -4043,6 +4589,7 @@ function renderTtsJobsEnhanced(jobs = []) {
 
 async function refreshTtsJobs() {
   const data = await fetchJson("/api/tts/jobs?limit=30");
+  indexTtsBgmJobs(data.jobs || []);
   renderTtsJobsEnhanced(data.jobs || []);
   renderTtsRailLists(data.jobs || []);
   if (activeTtsRailJob?.id) {
@@ -4052,8 +4599,121 @@ async function refreshTtsJobs() {
       renderTtsRail(latest);
       renderTtsAlignmentEditor(latest);
       renderTtsCentralTimeline(latest, { preserveDraft: true });
+      const linkedBgm = linkedTtsBgmJob(latest);
+      if (linkedBgm) showTtsBgmPreview(linkedBgm);
     }
   }
+}
+
+function indexTtsBgmJobs(jobs = []) {
+  ttsBgmJobsByParentId.clear();
+  for (const candidate of jobs) {
+    const parentId = ttsLinkedBgmParentId(candidate);
+    if (parentId && ttsIsMusicJob(candidate) && !ttsBgmJobsByParentId.has(String(parentId))) {
+      ttsBgmJobsByParentId.set(String(parentId), candidate);
+    }
+  }
+}
+
+function linkedTtsBgmJob(job = {}) {
+  const parentId = String(job?.id || "");
+  return parentId ? ttsBgmJobsByParentId.get(parentId) || null : null;
+}
+
+function ttsHandoffBundleLabel(job = activeTtsRailJob) {
+  const bgmJob = linkedTtsBgmJob(job);
+  return bgmJob?.audio_url || bgmJob?.audio_path ? "四件套（含独立 BGM）" : "三件套";
+}
+
+function syncTtsCentralHandoffBundle(job = activeTtsRailJob) {
+  if (!job?.id) {
+    if (ttsSaveTimelineBtn) ttsSaveTimelineBtn.textContent = "确定修改并发送到：";
+    if (ttsCentralHandoffStatus) ttsCentralHandoffStatus.textContent = "点“确定修改”后会按 BGM 状态发送三件套或四件套。";
+    return "交接包";
+  }
+  const bundleLabel = ttsHandoffBundleLabel(job);
+  if (ttsSaveTimelineBtn) ttsSaveTimelineBtn.textContent = `确定修改并发送${bundleLabel}到：`;
+  if (ttsCentralHandoffStatus) ttsCentralHandoffStatus.textContent = `点“确定修改”后发送当前${bundleLabel}。`;
+  return bundleLabel;
+}
+
+async function resolveTtsBgmJob(parentJob) {
+  const cached = linkedTtsBgmJob(parentJob);
+  try {
+    const data = await fetchJson("/api/tts/jobs?limit=500");
+    indexTtsBgmJobs(data.jobs || []);
+    return linkedTtsBgmJob(parentJob) || cached;
+  } catch (error) {
+    if (cached?.audio_url) return cached;
+    throw error;
+  }
+}
+
+async function resolveTtsBgmForHandoff(job = activeTtsRailJob) {
+  if (!job?.id || ttsIsMusicJob(job)) return null;
+  try {
+    return await resolveTtsBgmJob(job);
+  } catch (error) {
+    console.warn("发送前未能刷新 BGM 关联，按当前已加载记录继续发送", error);
+    return linkedTtsBgmJob(job);
+  }
+}
+
+function refreshTtsCentralHandoffBundle(job = activeTtsRailJob) {
+  if (!job?.id || linkedTtsBgmJob(job)) return;
+  resolveTtsBgmForHandoff(job).then((bgmJob) => {
+    if (bgmJob && String(activeTtsRailJob?.id) === String(job.id)) syncTtsCentralHandoffBundle(job);
+  }).catch(() => {});
+}
+
+function showTtsBgmPreview(job, { reveal = false, play = false } = {}) {
+  if (!job?.audio_url || !ttsBgmPreview || !ttsBgmAudio) return false;
+  if (ttsOutputColumn) ttsOutputColumn.hidden = false;
+  if (ttsAudioHandoff) ttsAudioHandoff.hidden = true;
+  ttsBgmPreview.hidden = false;
+  if (ttsBgmMissing) ttsBgmMissing.hidden = true;
+  if (ttsBgmPreviewTitle) ttsBgmPreviewTitle.textContent = "清爽教育 BGM（独立音轨）";
+  if (ttsBgmPreviewMeta) {
+    const duration = Number(job.duration || job.audio_duration || job.metadata?.audio_duration || 0);
+    ttsBgmPreviewMeta.textContent = [
+      "清爽教育 BGM",
+      "music-2.6-free",
+      duration > 0 ? `${duration.toFixed(1)} 秒` : "时长以旁白为准",
+    ].join(" · ");
+  }
+  const separator = job.audio_url.includes("?") ? "&" : "?";
+  syncTtsBgmVolume();
+  ttsBgmAudio.src = `${job.audio_url}${separator}t=${Date.now()}`;
+  ttsBgmAudio.load();
+  if (reveal || play) {
+    window.requestAnimationFrame(() => {
+      if (reveal) ttsBgmPreview.scrollIntoView?.({ behavior: "smooth", block: "center" });
+      if (play) ttsBgmAudio.play().catch(() => {});
+    });
+  }
+  return true;
+}
+
+function clearTtsBgmPreview() {
+  if (ttsBgmPreview) ttsBgmPreview.hidden = true;
+  if (ttsBgmAudio) {
+    ttsBgmAudio.removeAttribute("src");
+    ttsBgmAudio.load();
+  }
+}
+
+function showTtsBgmMissing(message = "可为这条已完成的旁白补生成独立清爽教育 BGM。") {
+  if (!ttsBgmMissing) return;
+  if (ttsBgmMissingMessage) ttsBgmMissingMessage.textContent = message;
+  ttsBgmMissing.hidden = false;
+}
+
+function syncTtsBgmSelectionState() {
+  if (!ttsBgmSelectionState) return;
+  const selected = Boolean(ttsGenerateCleanEducationBgm?.checked);
+  ttsBgmSelectionState.textContent = selected
+    ? "已选择：旁白完成后会自动生成独立 BGM，成功后在下方显示播放器并发送四件套。"
+    : "未选择：本次生成将保持原三件套，不会显示 BGM 播放器。";
 }
 
 function confirmedTtsAudioPayload(job = activeTtsRailJob) {
@@ -4076,10 +4736,13 @@ function confirmedTtsAudioPayload(job = activeTtsRailJob) {
   const hasAudio = Boolean(job.audio_url || job.audio_path);
   const hasTimedSubtitle = Boolean(timedSubtitleUrl || timedSubtitlePath || sentenceTimeline.length || subtitleTimeline.length);
   if (!hasAudio || !finalText || !hasTimedSubtitle) return null;
+  const bgmJob = linkedTtsBgmJob(job);
+  const hasBgm = Boolean(bgmJob?.audio_url || bgmJob?.audio_path);
   const files = [
     { type: "audio", label: "音频", title, url: job.audio_url || "", path: job.audio_path || "" },
     { type: "script", label: "最终确认文案", title, url: job.script_url || "", path: job.script_path || "" },
     { type: "timed_subtitle", label: "带时间戳字幕", title, url: timedSubtitleUrl, path: timedSubtitlePath },
+    ...(hasBgm ? [{ type: "bgm", label: "清爽教育 BGM", title: `${title} BGM`, url: bgmJob.audio_url || "", path: bgmJob.audio_path || "" }] : []),
   ].filter((item) => item.url || item.path);
   return {
     id: job.id,
@@ -4097,6 +4760,12 @@ function confirmedTtsAudioPayload(job = activeTtsRailJob) {
     files,
     audio_url: job.audio_url || "",
     audio_path: job.audio_path || "",
+    bgm_job_id: bgmJob?.id || "",
+    bgm_url: bgmJob?.audio_url || "",
+    bgm_path: bgmJob?.audio_path || "",
+    bgm_name: bgmJob?.voice_name || "清爽教育 BGM",
+    bgm_duration: Number(bgmJob?.duration || bgmJob?.audio_duration || bgmJob?.metadata?.audio_duration || 0),
+    has_bgm: hasBgm,
     script_url: job.script_url || "",
     script_path: job.script_path || "",
     subtitle_url: job.subtitle_url || "",
@@ -4139,6 +4808,7 @@ function ttsHandoffRevision(payload = {}, sentAt = new Date().toISOString()) {
     payload.id || "",
     payload.alignment_revision || 0,
     payload.audio_path || payload.audio_url || "",
+    payload.bgm_path || payload.bgm_url || "",
     Array.isArray(payload.sentence_timeline) ? payload.sentence_timeline.length : 0,
     sentAt,
   ].join(":");
@@ -4217,7 +4887,7 @@ function ttsHandoffTitle(payload = {}) {
   const title = String(payload.title || payload.seo_title || payload.publish_title || platformTitles.douyin || platformTitles.xiaohongshu || "").trim();
   if (title) return title;
   const fromText = String(payload.text || "").replace(/\s+/g, "").slice(0, 18);
-  return fromText || payload.voice_name || `配音 #${payload.id || ""}`.trim() || "TTS 三件套";
+  return fromText || payload.voice_name || `配音 #${payload.id || ""}`.trim() || "TTS 音频交接";
 }
 
 function ttsConsumerJob(payload = {}) {
@@ -4316,11 +4986,11 @@ function applyTtsToCs1(payload = {}) {
   if (titleInput) titleInput.value = ttsHandoffTitle(payload);
   const bgmPathInput = document.querySelector("#cs1VideoBgmPath");
   const bgmModeSelect = document.querySelector("#cs1VideoBgmMode");
-  if (bgmPathInput) bgmPathInput.value = payload.audio_path || "";
-  if (bgmModeSelect) bgmModeSelect.value = payload.audio_path ? "local" : "auto";
+  if (bgmPathInput) bgmPathInput.value = payload.bgm_path || "";
+  if (bgmModeSelect) bgmModeSelect.value = payload.bgm_path ? "local" : "auto";
   const status = document.querySelector("#cs1VideoStatus");
   const message = document.querySelector("#cs1VideoMessage");
-  if (status) status.textContent = "已接收 TTS 三件套";
+  if (status) status.textContent = payload.has_bgm ? "已接收 TTS 四件套（含独立 BGM）" : "已接收 TTS 三件套";
   if (message) message.textContent = "文案已填入，音频和带时间戳字幕已绑定到本次生产线素材。";
 }
 
@@ -4330,7 +5000,7 @@ function applyTtsToMoneyPrinter(payload = {}) {
   if (subject) subject.value = ttsHandoffTitle(payload);
   const status = document.querySelector("#moneyPrinterStatus");
   const detail = document.querySelector("#moneyPrinterDetail");
-  if (status) status.textContent = "已接收 TTS 三件套";
+  if (status) status.textContent = payload.has_bgm ? "已接收 TTS 四件套（含独立 BGM）" : "已接收 TTS 三件套";
   if (detail) detail.textContent = "脚本已填入，音频和带时间戳字幕已保存到 MoneyPrinter handoff。";
   if (window.moneyPrinterProduction?.receiveTts) window.moneyPrinterProduction.receiveTts(payload, { navigate: false });
   else window.dispatchEvent(new CustomEvent("money-printer-handoff", { detail: payload }));
@@ -4347,6 +5017,9 @@ async function applyTtsToXiaohei(payload = {}) {
     text: payload.text || "",
     ttsJob: job,
     files: payload.files || [],
+    bgm_path: payload.bgm_path || "",
+    bgm_name: payload.bgm_name || "清爽教育 BGM",
+    has_bgm: Boolean(payload.has_bgm),
     sentAt: payload.sent_at || payload.sentAt || payload.sharedUpdatedAt || new Date().toISOString(),
     handoffId: payload.handoff_id || "",
     handoffRevision: payload.handoff_revision || "",
@@ -4437,6 +5110,7 @@ async function refreshSentTtsRecord(job = activeTtsRailJob) {
 }
 
 async function sendConfirmedTtsAudio(container = document, job = activeTtsRailJob) {
+  await resolveTtsBgmForHandoff(job);
   const originalPayload = confirmedTtsAudioPayload(job);
   if (!originalPayload) {
     setTtsHandoffStatus(container, "请先完成最终音频字幕校准并点击确认，再发送。");
@@ -4491,7 +5165,8 @@ async function sendConfirmedTtsAudio(container = document, job = activeTtsRailJo
     : corrected
       ? "字幕错字和标点已校正，时间戳已按字词边界微调；"
     : `${correctionWarning || "字幕未校正，已采用原字幕继续发送。"}`;
-  const sentMessage = `${correctionStatus}已发送三件套到：${sent.join("、")}。`;
+  const bundleLabel = payload.has_bgm ? "四件套（含独立 BGM）" : "三件套";
+  const sentMessage = `${correctionStatus}已发送${bundleLabel}到：${sent.join("、")}。`;
   setTtsHandoffStatus(container, sentMessage);
   if (ttsTimelineStatus) ttsTimelineStatus.textContent = `字幕已保存并发送：${sent.join("、")}。`;
 }
@@ -4558,8 +5233,9 @@ function setTtsTimelineDirty(dirty) {
   ttsTimelineDirty = Boolean(dirty);
   if (ttsSaveTimelineBtn) ttsSaveTimelineBtn.disabled = !activeTtsRailJob?.id || !ttsTimelineDraftRows.length;
   if (ttsTimelineStatus && activeTtsRailJob?.id) {
+    const bundleLabel = ttsHandoffBundleLabel(activeTtsRailJob);
     ttsTimelineStatus.textContent = ttsTimelineDirty
-      ? "字幕已修改，点击“确定修改”后写入这条 TTS 三件套。"
+      ? `字幕已修改，点击“确定修改”后写入这条 TTS ${bundleLabel}。`
       : "字幕时间轴已加载，可直接核对或修改。";
   }
 }
@@ -4588,6 +5264,7 @@ function renderTtsCentralTimeline(job = activeTtsRailJob, { preserveDraft = fals
   if (!ttsCentralTimeline) return;
   const jobId = String(job?.id || "");
   const rows = ttsTimelineRows(job);
+  const bundleLabel = syncTtsCentralHandoffBundle(job);
   const shouldKeepDraft = preserveDraft && ttsTimelineDirty && jobId && jobId === ttsTimelineDraftJobId;
   if (ttsTimelineJobTitle) {
     ttsTimelineJobTitle.textContent = job?.id
@@ -4620,7 +5297,7 @@ function renderTtsCentralTimeline(job = activeTtsRailJob, { preserveDraft = fals
   }
   if (ttsTimelineStatus) {
     ttsTimelineStatus.textContent = ttsTimelineDirty
-      ? "字幕已修改，点击“确定修改”后写入这条 TTS 三件套。"
+      ? `字幕已修改，点击“确定修改”后写入这条 TTS ${bundleLabel}。`
       : "字幕时间轴已加载，可直接核对或修改。";
   }
   if (ttsSaveTimelineBtn) ttsSaveTimelineBtn.disabled = false;
@@ -4633,6 +5310,7 @@ function renderTtsCentralTimeline(job = activeTtsRailJob, { preserveDraft = fals
       <textarea rows="2" data-tts-timeline-text="${index}" data-no-draft-persist autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-1p-ignore="true">${escapeHtml(row.text || "")}</textarea>
     </div>
   `).join("");
+  refreshTtsCentralHandoffBundle(job);
 }
 
 async function syncGeneratedTtsJobToCentralTimeline(jobOrId, { preserveDraft = false } = {}) {
@@ -4697,11 +5375,12 @@ async function saveTtsCentralTimeline() {
   ttsTimelineDraftRows = ttsTimelineRows(data.job);
   ttsTimelineDraftJobId = String(data.job?.id || "");
   setTtsTimelineDirty(false);
+  await resolveTtsBgmForHandoff(data.job);
   renderTtsRail(data.job);
   renderTtsAlignmentEditor(data.job);
   renderTtsCentralTimeline(data.job);
   updateTtsMainProgressFromJob(data.job);
-  if (ttsStatus) ttsStatus.textContent = "字幕时间轴已保存到 TTS 三件套。";
+  if (ttsStatus) ttsStatus.textContent = `字幕时间轴已保存到 TTS ${ttsHandoffBundleLabel(data.job)}。`;
   refreshTtsJobs().catch(() => {});
   return data.job;
 }
@@ -4728,7 +5407,8 @@ function ttsTopIssuePanelShouldShow(job = activeTtsRailJob) {
 }
 
 function syncTtsTopIssuePanel(job = activeTtsRailJob) {
-  const show = ttsTopIssuePanelShouldShow(job);
+  const hasCompletedAudio = job?.status === "completed" && Boolean(job?.audio_url);
+  const show = hasCompletedAudio || ttsTopIssuePanelShouldShow(job);
   if (ttsOutputColumn) ttsOutputColumn.hidden = !show;
   if (ttsAudioHandoff) ttsAudioHandoff.hidden = true;
   if (!show) {
@@ -4947,7 +5627,7 @@ async function confirmActiveTtsAlignment() {
   await refreshTtsJobs();
 }
 
-function showTtsPreview(job) {
+function showTtsPreview(job, { reveal = false } = {}) {
   activeTtsRailJob = job;
   renderTtsCentralTimeline(job);
   if (!syncTtsTopIssuePanel(job)) return;
@@ -4965,6 +5645,14 @@ function showTtsPreview(job) {
     }
   }
   renderTtsAlignmentEditor(job);
+  const linkedBgm = linkedTtsBgmJob(job);
+  if (linkedBgm) showTtsBgmPreview(linkedBgm);
+  else if (!ttsIsMusicJob(job) && job?.status === "completed") showTtsBgmMissing();
+  if (reveal) {
+    window.requestAnimationFrame(() => {
+      ttsPreview?.scrollIntoView?.({ behavior: "smooth", block: "center" });
+    });
+  }
 }
 
 function showTtsAudioFile(job) {
@@ -4983,6 +5671,9 @@ function showTtsAudioFile(job) {
     ttsAudio.src = `${job.audio_url}${separator}t=${Date.now()}`;
     ttsAudio.load();
   }
+  const linkedBgm = linkedTtsBgmJob(job);
+  if (linkedBgm) showTtsBgmPreview(linkedBgm);
+  else if (!ttsIsMusicJob(job) && job?.status === "completed") showTtsBgmMissing();
   ttsPreview?.scrollIntoView?.({ behavior: "smooth", block: "center" });
 }
 
@@ -5008,6 +5699,15 @@ async function loadTtsHistoryFileToWorkspace(jobId, kind = "audio", row = null) 
     ttsTimelineColumn?.scrollIntoView?.({ behavior: "smooth", block: "center" });
     return synced || job;
   }
+  if (kind === "bgm") {
+    const bgmJob = await resolveTtsBgmJob(job);
+    if (!bgmJob?.audio_url) throw new Error("这条旁白尚未找到可预览的 BGM。");
+    activeTtsRailJob = job;
+    showTtsBgmPreview(bgmJob, { reveal: true, play: true });
+    const status = row?.querySelector?.(".tts-job-handoff-status") || ttsStatus;
+    if (status) status.textContent = `已加载独立 BGM：#${bgmJob.display_number || bgmJob.sequence_number || bgmJob.id}`;
+    return job;
+  }
   if (!job.audio_url) throw new Error("这条记录没有可试听的音频。");
   renderTtsCentralTimeline(job, { preserveDraft: false });
   showTtsAudioFile(job);
@@ -5016,7 +5716,7 @@ async function loadTtsHistoryFileToWorkspace(jobId, kind = "audio", row = null) 
   return job;
 }
 
-async function waitForTtsJob(jobId) {
+async function waitForTtsJob(jobId, { onCompleted } = {}) {
   if (ttsPollTimer) clearTimeout(ttsPollTimer);
   const data = await fetchJson(`/api/tts/job?id=${encodeURIComponent(jobId)}`);
   const job = data.job;
@@ -5025,6 +5725,7 @@ async function waitForTtsJob(jobId) {
   updateTtsMainProgressFromJob(job);
   if (job.status === "completed") {
     generateTtsButton.disabled = false;
+    if (typeof onCompleted === "function") onCompleted(job);
     const completedJob = await syncGeneratedTtsJobToCentralTimeline(job);
     const displayJob = completedJob || job;
     const alignmentStatus = ttsAlignmentDisplayStatus(displayJob);
@@ -5035,9 +5736,9 @@ async function waitForTtsJob(jobId) {
         : displayJob.alignment_status === "failed"
           ? `音频已生成，但字幕校准失败：${displayJob.alignment_error || "请重试。"}`
           : "音频生成完成。";
-    showTtsPreview(displayJob);
+    showTtsPreview(displayJob, { reveal: true });
     await refreshTtsJobs();
-    return;
+    return displayJob;
   }
   if (job.status === "failed") {
     generateTtsButton.disabled = false;
@@ -5046,20 +5747,25 @@ async function waitForTtsJob(jobId) {
     syncTtsTopIssuePanel(job);
     renderTtsRail(job);
     await refreshTtsJobs();
-    return;
+    return null;
   }
   updateTtsMainProgressFromJob(job);
-  ttsPollTimer = setTimeout(() => {
-    waitForTtsJob(jobId).catch((error) => {
-      generateTtsButton.disabled = false;
-      ttsStatus.textContent = error instanceof Error ? error.message : String(error);
-      renderTtsRail({
-        ...(activeTtsRailJob || {}),
-        status: "failed",
-        error: error instanceof Error ? error.message : String(error),
-      });
-    });
-  }, 1000);
+  return new Promise((resolve) => {
+    ttsPollTimer = setTimeout(() => {
+      waitForTtsJob(jobId, { onCompleted })
+        .then(resolve)
+        .catch((error) => {
+          generateTtsButton.disabled = false;
+          ttsStatus.textContent = error instanceof Error ? error.message : String(error);
+          renderTtsRail({
+            ...(activeTtsRailJob || {}),
+            status: "failed",
+            error: error instanceof Error ? error.message : String(error),
+          });
+          resolve(null);
+        });
+    }, 1000);
+  });
 }
 
 async function generateTts() {
@@ -5596,6 +6302,7 @@ applyVoiceAssetToTts = async function applyVoiceAssetToTtsUnified(asset) {
 
 generateTts = async function generateTtsUnified() {
   const text = ttsText.value.trim();
+  const shouldGenerateBgm = Boolean(ttsGenerateCleanEducationBgm?.checked);
   const selectedVoiceForModel = selectedTtsVoice();
   const voiceId = selectedVoiceForModel?.id || "";
   const voiceAsset = selectedVoiceForModel?.asset || null;
@@ -5623,6 +6330,8 @@ generateTts = async function generateTtsUnified() {
     progress: 8,
   });
   try {
+    syncTtsBgmSelectionState();
+    if (!shouldGenerateBgm) clearTtsBgmPreview();
     if (isMusicAsset) {
       setTtsMainProgress(35, "正在生成音乐音频");
       const data = await fetchJson("/api/voice-assets/preview", {
@@ -5661,7 +6370,7 @@ generateTts = async function generateTtsUnified() {
       const musicJob = registered.job || ttsMusicJobFromPreview(voiceAsset, data, text);
       const completedMusicJob = await syncGeneratedTtsJobToCentralTimeline(musicJob);
       setTtsMainProgress(100, "生成完成");
-      showTtsPreview(completedMusicJob || musicJob);
+      showTtsPreview(completedMusicJob || musicJob, { reveal: true });
       renderTtsVoiceQuickPanel(voiceAsset, { refreshAudio: true, previewMessage: "音乐音频已生成。" });
       await loadVoiceAssets();
       await refreshTtsJobs();
@@ -5689,7 +6398,19 @@ generateTts = async function generateTtsUnified() {
     });
     renderTtsRail(data.job);
     updateTtsMainProgressFromJob(data.job);
-    await waitForTtsJob(data.job.id);
+    let bgmPreviewPromise = null;
+    const completedJob = await waitForTtsJob(data.job.id, {
+      onCompleted: (completedNarration) => {
+        if (!shouldGenerateBgm || bgmPreviewPromise) return;
+        const bgmAsset = cleanEducationBgmAsset();
+        if (!bgmAsset) return;
+        const estimatedNarrationDuration = Number(completedNarration.duration || completedNarration.audio_duration || completedNarration.metadata?.audio_duration || 0);
+        const estimatedDuration = cleanEducationBgmTargetDuration(estimatedNarrationDuration);
+        setTtsBgmProgress(10, "BGM：旁白完成，正在与字幕校准并行生成");
+        bgmPreviewPromise = requestCleanEducationBgmPreview(bgmAsset, text, estimatedDuration);
+      },
+    });
+    if (completedJob && shouldGenerateBgm) await generateCleanEducationBgm(completedJob, text, { previewPromise: bgmPreviewPromise });
     await loadVoiceAssets();
   } catch (error) {
     generateTtsButton.disabled = false;
@@ -6849,6 +7570,13 @@ async function generateRewrite() {
   if (!rewriteVersions.querySelector(".rewrite-version")) {
     renderRewriteVersions({}, { allowDefaults: true });
   }
+  const expectedKeys = parentConversionTemplateEnabled()
+    ? parentConversionVersionOptions.map((item) => item.key)
+    : [rewriteVersionOptions[0].key];
+  const currentKeys = [...rewriteVersions.querySelectorAll(".rewrite-version")].map((card) => card.dataset.versionKey);
+  if (expectedKeys.some((key, index) => currentKeys[index] !== key) || currentKeys.length !== expectedKeys.length) {
+    renderRewriteVersions({ versions: defaultRewriteVersionSpecs() }, { allowDefaults: false });
+  }
   const versionSpecs = collectRewriteVersions();
   if (versionSpecs.length === 0) {
     rewriteStatus.textContent = "请至少保留一个输出框。";
@@ -7566,6 +8294,25 @@ sendConfirmedTtsAudioBtn?.addEventListener("click", () => {
   });
 });
 
+ttsGenerateCleanEducationBgm?.addEventListener("change", syncTtsBgmSelectionState);
+ttsBgmVolume?.addEventListener("input", syncTtsBgmVolume);
+ttsBgmVolume?.addEventListener("change", syncTtsBgmVolume);
+syncTtsBgmSelectionState();
+syncTtsBgmVolume();
+
+generateTtsBgmForCurrent?.addEventListener("click", () => {
+  const job = activeTtsRailJob;
+  const text = String(job?.final_text || job?.metadata?.final_text || job?.text || "").trim();
+  if (!job?.id || job.status !== "completed" || !text) {
+    ttsStatus.textContent = "请先在生成记录中加载一条已完成且含文案的旁白，再补生成 BGM。";
+    return;
+  }
+  generateCleanEducationBgm(job, text).catch((error) => {
+    const message = error instanceof Error ? error.message : String(error);
+    showTtsBgmMissing(`BGM 生成失败：${message}。可重试补生成。`);
+  });
+});
+
 document.querySelector("#refreshTtsJobs").addEventListener("click", () => {
   refreshTtsJobs().catch((error) => {
     ttsStatus.textContent = error instanceof Error ? error.message : String(error);
@@ -7925,8 +8672,32 @@ chooseDownloadDirBtn.addEventListener("click", () => {
 
 createDesktopDateFolderBtn?.addEventListener("click", () => {
   createDesktopDateFolder().catch((error) => {
-    window.alert(error instanceof Error ? error.message : String(error));
+    setCollectorFolderStatus(error instanceof Error ? error.message : String(error), false);
   });
+});
+collectorFolderNameSelect?.addEventListener("change", () => {
+  onCollectorFolderNameChange().catch((error) => {
+    setCollectorFolderStatus(error instanceof Error ? error.message : String(error), false);
+    renderCollectorFolderNames();
+  });
+});
+editCollectorFolderNameBtn?.addEventListener("click", () => {
+  editCollectorFolderName().catch((error) => {
+    setCollectorFolderStatus(error instanceof Error ? error.message : String(error), false);
+  });
+});
+deleteCollectorFolderNameBtn?.addEventListener("click", () => {
+  deleteCollectorFolderName().catch((error) => {
+    setCollectorFolderStatus(error instanceof Error ? error.message : String(error), false);
+  });
+});
+window.addEventListener("storage", (event) => {
+  if (event.key === FOLDER_NAMES_CHANGED_STORAGE_KEY) {
+    loadCollectorFolderNames().catch(() => {});
+  }
+});
+loadCollectorFolderNames().catch((error) => {
+  setCollectorFolderStatus(error instanceof Error ? error.message : String(error), false);
 });
 
 chooseLocalVideoBtn?.addEventListener("click", () => {
@@ -8279,6 +9050,11 @@ rewriteVersionCountInput.addEventListener("input", () => {
   syncRewriteVersionCount();
 });
 
+rewriteParentConversionTemplate?.addEventListener("change", () => {
+  saveRewritePresetSettings();
+  syncParentConversionTemplateVersions();
+});
+
 [
   rewriteProvider,
   rewriteTargetPlatform,
@@ -8456,6 +9232,18 @@ momentsWordCount?.addEventListener("change", () => {
 });
 syncMomentsWordCountCustom();
 
+momentsEmojiMode?.addEventListener("change", () => {
+  syncMomentsEmojiStyle();
+  saveMomentsDraft();
+});
+
+momentsEmojiStyle?.addEventListener("change", () => {
+  syncMomentsEmojiStyle();
+  saveMomentsDraft();
+});
+momentsEmojiCount?.addEventListener("change", saveMomentsDraft);
+syncMomentsEmojiStyle();
+
 momentsImagePromptList?.addEventListener("change", (event) => {
   const input = event.target.closest("[data-moments-material-file]");
   if (!input) return;
@@ -8474,6 +9262,8 @@ momentsImagePromptList?.addEventListener("change", (event) => {
   momentsWordCount,
   momentsWordCountCustom,
   momentsEmojiMode,
+  momentsEmojiStyle,
+  momentsEmojiCount,
   momentsImageCount,
   momentsTone,
   momentsIntent,
@@ -8805,6 +9595,7 @@ async function init() {
     restoreUiDraftValues({ dispatch: true });
     await loadMomentsPersonas();
     loadMomentsDraft();
+    syncMomentsEmojiStyle();
     restoreMomentsActiveProgress();
     updateTtsVoiceSource();
     updateTtsEmotionField();

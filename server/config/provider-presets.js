@@ -26,8 +26,8 @@ export const REWRITE_PROVIDER_PRESETS = {
   deepseek: {
     label: "DeepSeek",
     baseUrl: "https://api.deepseek.com",
-    model: "deepseek-chat",
-    models: ["deepseek-chat", "deepseek-reasoner"],
+    model: "deepseek-v4-flash",
+    models: ["deepseek-v4-flash", "deepseek-v4-pro"],
     applyUrl: "https://platform.deepseek.com/api_keys",
     balanceUrl: "https://platform.deepseek.com/usage",
   },

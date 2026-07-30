@@ -50,8 +50,56 @@ assert.doesNotMatch(
 
 assert.match(
   source,
-  /await navigator\.clipboard\.writeText\(promptClipboardText\(\)\)/,
-  "The toolbar copy action must copy the full prompt package.",
+  /await writeClipboardText\(promptClipboardText\(\)\)/,
+  "The toolbar copy action must use the focus-safe clipboard helper.",
+);
+
+assert.match(
+  source,
+  /document\.execCommand\("copy"\)/,
+  "Clipboard writes must fall back to the legacy copy command when the embedded document is not focused.",
+);
+
+assert.doesNotMatch(
+  source,
+  /async function copyAllPrompts\(\)[\s\S]*?await createPlan\(\)[\s\S]*?function promptClipboardText/u,
+  "Copying prompts must never trigger timeline analysis.",
+);
+
+assert.doesNotMatch(
+  source,
+  /async function copyImageConstraint\(which\)[\s\S]*?await createPlan\(\)[\s\S]*?function syncImageConstraintButtons/u,
+  "Copying image constraints must never trigger timeline analysis.",
+);
+
+assert.match(
+  source,
+  /planGenerating/u,
+  "Timeline analysis must expose a single-flight state.",
+);
+
+assert.match(
+  source,
+  /function syncPromptActionButtons\(\)/u,
+  "Analysis and copy button availability must be synchronized explicitly.",
+);
+
+assert.match(
+  source,
+  /function promptPlanCacheKey\([^)]*job[\s\S]*ttsJobId/u,
+  "Prompt plan caches must be keyed by the confirmed TTS job.",
+);
+
+assert.doesNotMatch(
+  source,
+  /const restored = false;/u,
+  "A repeated TTS handoff must not hard-code cache restoration to false.",
+);
+
+assert.match(
+  routes,
+  /route === "plan-restore"/u,
+  "The server must expose a durable prompt-plan restore endpoint backed by saved plan files.",
 );
 
 assert.match(

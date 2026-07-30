@@ -86,14 +86,14 @@ function createTempProject() {
   return baseDir;
 }
 
-function createAudioFile(baseDir, name) {
+function createAudioFile(baseDir, name, duration = 1.6) {
   const audioPath = path.join(baseDir, "voices", name);
   const result = spawnSync(ffmpegPath, [
     "-y",
     "-f",
     "lavfi",
     "-i",
-    "sine=frequency=440:sample_rate=24000:duration=1.6",
+    `sine=frequency=440:sample_rate=24000:duration=${duration}`,
     "-q:a",
     "9",
     "-acodec",
@@ -103,6 +103,19 @@ function createAudioFile(baseDir, name) {
   assert.equal(result.status, 0, result.stderr || result.stdout);
   assert.equal(fs.existsSync(audioPath), true);
   return audioPath;
+}
+
+function audioMaxVolumeDb(audioPath) {
+  const result = spawnSync(ffmpegPath, [
+    "-i", audioPath,
+    "-af", "volumedetect",
+    "-f", "null",
+    "-",
+  ], { encoding: "utf8", windowsHide: true });
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  const match = String(result.stderr || "").match(/max_volume:\s*(-?[\d.]+) dB/u);
+  assert.ok(match, `Could not measure maximum volume: ${result.stderr || result.stdout}`);
+  return Number(match[1]);
 }
 
 function timedWords(text, duration = 1.6) {
@@ -291,6 +304,35 @@ const audioLyrics = "你问我 AI 怎么拍成片 我用一段旋律唱给你听
   assert.equal(calls(), 3);
   assert.equal(result.job.alignment_status, "failed");
   assert.equal(result.job.alignment_failure_action, "rewrite_script_required");
+}
+
+{
+  const baseDir = createTempProject();
+  const sourcePath = createAudioFile(baseDir, "background-music-source.mp3", 7.4);
+  const taskStore = new MemoryTaskStore();
+  const { service } = createService({
+    baseDir,
+    taskStore,
+    transcript: originalScript,
+  });
+  const imported = await service.importGenerated({
+    audio_path: sourcePath,
+    text: originalScript,
+    provider: "minimax",
+    voice_id: "music:clean_education_bgm",
+    voice_name: "清爽教育 BGM",
+    emotion: "music",
+    source: "minimax_music_bgm",
+    metadata: {
+      audio_role: "background_music",
+      requested_duration: 5.1,
+      fade_out_seconds: 2.5,
+      background_volume: 0.35,
+    },
+  });
+  assert.equal(imported.error, undefined);
+  assert.ok(imported.job.audio_duration >= 4.9 && imported.job.audio_duration <= 5.25, `Expected 5.1s BGM, received ${imported.job.audio_duration}s`);
+  assert.ok(audioMaxVolumeDb(imported.job.audio_path) <= audioMaxVolumeDb(sourcePath) - 6, "BGM must honor the requested lower background volume");
 }
 
 console.log("TTS alignment service tests passed");

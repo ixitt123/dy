@@ -306,7 +306,7 @@ User-visible behavior:
 - Edits remain local until `确定修改` is clicked.
 - `确定修改` writes the edited text back into the TTS job's script, SRT/VTT, timestamped text, sentence timeline, and word timeline.
 - `发送所选` still uses the same send flow and target checkboxes as before.
-- If a TTS job was confirmed from the new TTS timeline editor, send uses that confirmed TTS triplet directly instead of running another send-time correction over the user's manual edit.
+- If a TTS job was confirmed from the new TTS timeline editor, send uses that confirmed TTS handoff package directly instead of running another send-time correction over the user's manual edit. The package is three assets without BGM and four assets with an independent BGM.
 - CS1, Xiaohei, MoneyPrinter, and kinetic text pages keep their own editable subtitle timelines; those edits remain page-local and do not become the shared TTS source.
 
 Verification:
@@ -386,7 +386,7 @@ User-visible behavior:
 - The central timeline button is now labeled `确定修改并发送到：`.
 - The production-line checkboxes now live inside the TTS `字幕时间轴` card, directly under the confirm/send action area.
 - The button is enabled whenever the current TTS job has a subtitle timeline, even if the user has not edited text.
-- Clicking it saves the current timeline text into the TTS triplet, then sends `文案 + 音频 + 带时间戳字幕` to the checked production lines.
+- Clicking it saves the current timeline text into the TTS handoff package, then sends `文案 + 音频 + 带时间戳字幕` and, when present, `独立 BGM` to the checked production lines.
 - The TTS workbench layout is now top-row `项目文案 | 字幕时间轴 | 选择声音`; the generated-record lane spans the full row underneath those three modules instead of occupying the right side.
 - Generated records no longer show their own production-line checkbox/send entry; sending is centralized through the timeline confirm flow.
 
@@ -412,7 +412,7 @@ User-visible behavior:
 
 - TTS generated records no longer show `校对字幕` or `查看字幕详情` buttons.
 - Completed confirmed generated records again show production-line checkboxes plus `发送所选`.
-- Sending from a generated record still sends the TTS triplet: `文案 + 音频 + 带时间戳字幕`.
+- Sending from a generated record uses the TTS handoff package: `文案 + 音频 + 带时间戳字幕`, plus `独立 BGM` when present.
 - The TTS page remembers the last selected production-line targets in localStorage key `dy:tts:handoff-targets`.
 - Central timeline checkboxes and generated-record checkboxes both default to the last-used selection; first use defaults to all four production lines.
 
@@ -436,7 +436,7 @@ Completed item:
 
 User-visible behavior:
 
-- After `确定修改并发送到：` saves the central subtitle timeline and sends the TTS triplet, the generated-record list is refreshed from the latest persisted TTS job.
+- After `确定修改并发送到：` saves the central subtitle timeline and sends the TTS handoff package, the generated-record list is refreshed from the latest persisted TTS job.
 - The generated record's script/subtitle/timestamped subtitle links now point at the files rewritten by the page confirmation step.
 - The central timeline also reloads from the same confirmed job after send, so the page and generated record stay on the same subtitle data.
 
@@ -601,7 +601,7 @@ Verification:
 - Browser E2E against `http://127.0.0.1:8787/#tts` passed using TTS job `#28`:
   - central timeline rendered 12 editable rows;
   - all four central production-line choices were checked;
-  - button status became `已采用 TTS 页面确认过的字幕时间轴；已发送三件套到：CS1生成器、小黑视频风格生成、MoneyPrinter、动态大字视频。`;
+  - button status is dynamic: without BGM it reports `已发送三件套` and with an independent BGM it reports `已发送四件套（含独立 BGM）` to the checked production lines;
   - `dy:handoff:cs1-video:audio`, `dy:handoff:xiaohei-video:audio`, `dy:handoff:money-printer:audio`, `dy:handoff:kinetic-text:audio`, and matching `video-factory-handoff:*` keys all contained job `#28`, audio path, subtitle path, text, and 12 timeline rows.
 
 ## 2026-07-19 21:58 +08:00

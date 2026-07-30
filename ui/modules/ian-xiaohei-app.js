@@ -19,6 +19,7 @@ const state = {
   pendingUploads: new Map(),
   localMaterialPool: [],
   materialBindings: new Map(),
+  folderSequenceReference: null,
   desktopFolderPath: "",
   desktopFolderName: "",
   confirmingUploads: new Set(),
@@ -32,7 +33,10 @@ const state = {
   previewFrame: 0,
   renderedVideo: null,
   backgroundAudio: null,
+  handoffBgm: null,
   timelineDraftRows: null,
+  planGenerating: false,
+  planRestorePromise: null,
   projectId: localStorage.getItem("ian-xiaohei-project-id") || `xiaohei-${Date.now()}`,
 };
 const embeddedMode = new URLSearchParams(window.location.search).get("embedded") === "1";
@@ -44,7 +48,9 @@ const PURPOSE_STORAGE_KEY = "ian-xiaohei-selected-purpose";
 const COMPOSE_SETTINGS_KEY = "ian-xiaohei-compose-settings-v1";
 const FOLDER_NAMES_API = "/api/folder-names";
 const FOLDER_CREATE_API = "/api/desktop-folder-named";
+const FOLDER_NAMES_CHANGED_STORAGE_KEY = "ian-folder-names-changed";
 let folderNames = [];
+let folderNamePromptActive = false;
 
 function startStandalonePageSession() {
   if (embeddedMode) return;
@@ -325,12 +331,17 @@ async function init() {
   bindEvents();
   syncImageConstraintButtons();
   window.addEventListener("message", handleParentHandoff);
+  window.addEventListener("storage", (event) => {
+    if (event.key === FOLDER_NAMES_CHANGED_STORAGE_KEY) void loadFolderNames();
+  });
   window.addEventListener("focus", () => {
     if (state.localImagePickerActive) setTimeout(() => { state.localImagePickerActive = false; }, 250);
   });
   await Promise.all([loadConfig(), loadAudioJobs(), loadFolderNames()]);
   restoreComposeSettings();
-  const restored = restorePromptPlanCache();
+  let restored = restorePromptPlanCache();
+  if (!restored) restored = await restorePromptPlanFromServer();
+  syncPromptActionButtons();
   if (restored) {
     setStatus("已恢复提示词计划", `刷新前生成的 ${state.plan?.shots?.length || 0} 个分镜提示词已恢复。`, 100, false, "本地缓存");
   }
@@ -342,8 +353,11 @@ async function handleParentHandoff(event) {
   if (event.origin !== window.location.origin || event.data?.type !== "video-factory:xiaohei-handoff") return;
   const handoff = event.data.handoff || {};
   const job = handoff.ttsJob || {};
-  clearTtsTimelineState();
+  const previousProjectId = String(state.projectId || "");
+  const previousJobId = Number((state.selectedTtsJob || state.ttsJob)?.id || 0);
   if (!job.id || job.status !== "completed" || !isTtsAlignmentConfirmed(job) || !timelineRows(job).length) {
+    clearTtsTimelineState();
+    resetVisualWorkflow();
     setStatus("缺少已确认音频", "请先在 TTS 语音页检查并确认最终文案和字幕时间轴。", 0, true);
     return;
   }
@@ -353,6 +367,9 @@ async function handleParentHandoff(event) {
   const handoffText = handoff.text || confirmedTtsText(job);
   els.titleInput.value = handoffTitle;
   els.copyInput.value = handoffText;
+  state.handoffBgm = handoff.bgm_path || job.bgm_path
+    ? { path: handoff.bgm_path || job.bgm_path, name: handoff.bgm_name || job.bgm_name || "清爽教育 BGM" }
+    : null;
   state.ttsJob = job;
   try {
     const data = await fetchJson("/api/ian-xiaohei/audio-select", {
@@ -367,14 +384,21 @@ async function handleParentHandoff(event) {
       return;
     }
     syncTtsSource(data.job, { title: handoffTitle, text: handoffText });
-    resetVisualWorkflow();
+    const sameTtsSource = previousProjectId === String(state.projectId)
+      && previousJobId === Number(data.job.id);
+    if (!sameTtsSource) resetVisualWorkflow();
     await loadAudioJobs();
-    const restored = false;
+    let restored = sameTtsSource && Boolean(state.plan?.shots?.length);
+    if (!restored) restored = restorePromptPlanCache();
+    if (!restored) restored = await restorePromptPlanFromServer();
+    syncPromptActionButtons();
     setStatus(
       restored ? "已恢复提示词计划" : "已接收 TTS 资产",
       restored
         ? `刷新前生成的 ${state.plan?.shots?.length || 0} 个分镜提示词已恢复。`
-        : "文案、音频和同步时间戳已绑定，可以根据真实时间轴分析分镜配图。",
+        : state.handoffBgm
+          ? "文案、音频、同步时间戳和独立 BGM 已绑定；合成时会按旁白时长循环或裁切 BGM。"
+          : "文案、音频和同步时间戳已绑定，可以根据真实时间轴分析分镜配图。",
       100,
       false,
       restored ? "本地缓存" : "等待分镜分析",
@@ -1297,6 +1321,7 @@ async function deleteCurrentVoice() {
 }
 
 async function createPlan() {
+  if (state.planGenerating) return null;
   setButtonFeedback(els.planPrompts, "loading", "正在分析");
   const payload = formPayload();
   if (!payload.text) {
@@ -1313,7 +1338,9 @@ async function createPlan() {
     setButtonFeedback(els.planPrompts, "error", "请先从 TTS 发送");
     return null;
   }
+  state.planGenerating = true;
   setBusy(true);
+  syncPromptActionButtons();
   setStatus("正在按 TTS 时间轴分析分镜", "正在结合已确认音频时长、同步字幕和文案语义生成分镜提示词。", 35, false, "TTS 时间轴分析");
   try {
     const data = await fetchJson("/api/ian-xiaohei/timeline-plan", {
@@ -1331,6 +1358,7 @@ async function createPlan() {
     state.pendingUploads.clear();
     state.localMaterialPool = [];
     state.materialBindings.clear();
+    state.folderSequenceReference = null;
     renderPlan(data);
     renderImages([], []);
     savePromptPlanCache(data, payload);
@@ -1342,7 +1370,9 @@ async function createPlan() {
     setButtonFeedback(els.planPrompts, "error", "分析失败");
     return null;
   } finally {
+    state.planGenerating = false;
     setBusy(false);
+    syncPromptActionButtons();
   }
 }
 
@@ -1451,6 +1481,7 @@ async function generateCompleteWorkflow() {
         transition_mode: els.videoTransitionMode.value || "smart",
         compose: composeSettings(),
         background_audio: state.backgroundAudio,
+        tts_bgm_path: state.handoffBgm?.path || "",
       }),
     });
     state.renderedVideo = exported;
@@ -1532,7 +1563,26 @@ async function uploadAndValidateAudio(payload) {
 async function loadAudioJobs() {
   const data = await fetchJson(`/api/ian-xiaohei/audio-jobs?project_id=${encodeURIComponent(state.projectId)}`);
   state.audioJobs = data.jobs || [];
-  if (!state.selectedTtsJob && !state.ttsJob) syncTtsSource(null);
+  if (!state.selectedTtsJob && !state.ttsJob) {
+    const selectedCandidate = data.selected || state.audioJobs.find((job) => (
+      job.metadata?.selected_for_project
+    ));
+    const selected = selectedCandidate?.status === "completed"
+      && isTtsAlignmentConfirmed(selectedCandidate)
+      && timelineRows(selectedCandidate).length
+      ? selectedCandidate
+      : null;
+    if (selected) {
+      state.selectedTtsJob = selected;
+      state.ttsJob = selected;
+      syncTtsSource(selected, {
+        title: selected.title || selected.seo_title || "",
+        text: confirmedTtsText(selected),
+      });
+    } else {
+      syncTtsSource(null);
+    }
+  }
   renderAudioJobs();
 }
 
@@ -1616,6 +1666,9 @@ async function handlePromptFileChange(event) {
   const file = input.files[0];
   const dataUrl = await readFileDataUrl(file);
   state.pendingUploads.set(index, { dataUrl, mimeType: file.type, fileName: file.name });
+  if (index === 1) {
+    state.folderSequenceReference = { fileName: file.name, mimeType: file.type };
+  }
   input.value = "";
   renderPlan(state.plan);
 }
@@ -1669,7 +1722,7 @@ async function handlePromptAction(event) {
     const shot = state.plan?.shots?.find((item) => Number(item.index) === index);
     if (!shot) return;
     try {
-      await navigator.clipboard.writeText(shotPromptBlock(shot, state.plan));
+      await writeClipboardText(shotPromptBlock(shot, state.plan));
       setStatus("已复制单张提示词", `#${index} 会作为独立任务生成 1 张图片。`, 100);
       setButtonFeedback(button, "success", "已复制");
     } catch (error) {
@@ -1681,6 +1734,7 @@ async function handlePromptAction(event) {
   if (action === "cancel-image") {
     if (!ensurePromptPlanAvailable()) return;
     state.pendingUploads.delete(index);
+    if (index === 1) state.folderSequenceReference = null;
     savePromptPlanCache(state.plan);
     renderPlan(state.plan);
     return;
@@ -1875,6 +1929,22 @@ async function uploadAllPendingShotImages(button) {
 }
 
 async function addLatestFolderImages(button) {
+  const reference = state.pendingUploads.get(1) || state.folderSequenceReference;
+  if (!reference?.fileName) {
+    setStatus(
+      "请先手动添加图片素材1",
+      "先在分镜 #1 选择文件名末尾为 (1) 的本地图片，再点击“一键添加图片素材”。",
+      0,
+      true,
+    );
+    setButtonFeedback(button, "error", "缺少图片1");
+    return;
+  }
+  if (!/\(1\)\.(png|jpe?g|webp)$/iu.test(reference.fileName)) {
+    setStatus("图片素材1编号无效", "第一张图片文件名必须以 (1) 结尾，且必须是 PNG、JPG、JPEG 或 WEBP。", 0, true);
+    setButtonFeedback(button, "error", "第一张不是 (1)");
+    return;
+  }
   const suffix = resolveFolderNameSelection({
     names: folderNames,
     currentValue: els.folderNameSelect?.value,
@@ -1890,35 +1960,96 @@ async function addLatestFolderImages(button) {
   syncFolderNameButtons();
   setButtonFeedback(button, "loading", "扫描中");
   try {
-    const data = await fetchJson("/api/desktop-folder-latest-images", {
+    const shots = [...(state.plan?.shots || [])]
+      .sort((left, right) => Number(left.index) - Number(right.index));
+    const maxSequence = Math.max(1, ...shots.map((shot) => Number(shot.index) || 0));
+    const data = await fetchJson("/api/desktop-folder-reference-images", {
       method: "POST",
       body: JSON.stringify({
         suffix,
         folderPath: state.desktopFolderPath,
+        referenceFileName: reference.fileName,
+        maxSequence,
       }),
     });
-    const existing = new Map(state.localMaterialPool.map((item) => [String(item.path), item]));
-    const retainedBound = state.localMaterialPool.filter((item) => item.boundShotIndex);
-    const latest = (data.images || []).map((item) => ({
-      ...item,
-      confirmed: Boolean(existing.get(String(item.path))?.confirmed),
-      boundShotIndex: Number(existing.get(String(item.path))?.boundShotIndex || 0),
-    }));
-    const latestPaths = new Set(latest.map((item) => String(item.path)));
-    state.localMaterialPool = [
-      ...retainedBound.filter((item) => !latestPaths.has(String(item.path))),
-      ...latest,
-    ];
     state.desktopFolderPath = data.folderPath || state.desktopFolderPath;
-    renderPlan(state.plan);
-    savePromptPlanCache(state.plan);
-    if (!latest.length) {
-      setStatus("没有找到可确定的最新图片", "只识别 10 秒内、文件名末尾从 (1) 开始连续编号的 PNG、JPG、WEBP 图片。", 0, true);
+    const candidates = Array.isArray(data.images) ? data.images : [];
+    if (!candidates.length) {
+      setStatus(
+        "没有匹配到后续图片",
+        "没有找到与图片素材1同文件夹、同扩展名、同一轮时间段的 (2)(3)(4)… 图片。",
+        0,
+        true,
+      );
       setButtonFeedback(button, "error", "没有图片");
       return;
     }
-    setStatus("图片素材已加入", `已从最新一轮加入 ${latest.length} 张图片，请点击“全部确认使用”。`, 100, false, "等待确认");
-    setButtonFeedback(button, "success", `已添加 ${latest.length} 张`);
+    const shotIndexes = new Set(shots.map((shot) => Number(shot.index)));
+    const occupied = (sequence) => (
+      state.pendingUploads.has(sequence)
+      || state.images.some((image) => Number(image.index) === sequence && image.assetId)
+      || state.localMaterialPool.some((item) => Number(item.boundShotIndex) === sequence)
+    );
+    let addedCount = 0;
+    let skippedCount = 0;
+    const failed = [];
+    for (const [position, item] of candidates.entries()) {
+      const sequence = Number(item.sequence);
+      if (!shotIndexes.has(sequence) || occupied(sequence)) {
+        skippedCount += 1;
+        continue;
+      }
+      const latestButton = els.promptResults.querySelector('[data-prompt-action="add-folder-images"]') || button;
+      setButtonFeedback(latestButton, "loading", `添加 ${position + 1}/${candidates.length}`);
+      setStatus(
+        "正在按图片素材1添加后续图片",
+        `正在把 (${sequence}) 添加到分镜 #${sequence}，只进入待确认状态。`,
+        Math.round(((position + 1) / candidates.length) * 90),
+        false,
+        "本地图片",
+      );
+      try {
+        const response = await fetch(item.imageUrl);
+        if (!response.ok) throw new Error(`读取图片失败 ${response.status}`);
+        const blob = await response.blob();
+        const dataUrl = await readFileDataUrl(blob);
+        state.pendingUploads.set(sequence, {
+          dataUrl,
+          mimeType: blob.type || "application/octet-stream",
+          fileName: item.name,
+          sourcePath: item.path,
+        });
+        addedCount += 1;
+        renderPlan(state.plan);
+      } catch (error) {
+        failed.push({ sequence, message: error.message || String(error) });
+      }
+    }
+    savePromptPlanCache(state.plan);
+    const matched = new Set(candidates.map((item) => Number(item.sequence)));
+    const missing = shots
+      .map((shot) => Number(shot.index))
+      .filter((sequence) => sequence > 1 && !matched.has(sequence) && !occupied(sequence));
+    const detail = [
+      `已添加 ${addedCount} 张到对应分镜的待确认区域`,
+      skippedCount ? `跳过 ${skippedCount} 个已有素材位` : "",
+      missing.length ? `未识别：#${missing.join("、#")}（保持空白）` : "",
+      failed.length ? `读取失败：#${failed.map((item) => item.sequence).join("、#")}` : "",
+      "请由你手动确认和绑定",
+    ].filter(Boolean).join("；");
+    const latestButton = els.promptResults.querySelector('[data-prompt-action="add-folder-images"]') || button;
+    setStatus(
+      failed.length ? "图片素材部分添加完成" : "图片素材已按编号添加",
+      `${detail}。`,
+      100,
+      Boolean(failed.length),
+      "等待手动确认",
+    );
+    setButtonFeedback(
+      latestButton,
+      failed.length ? "error" : "success",
+      addedCount ? `已添加 ${addedCount} 张` : "没有新增",
+    );
   } catch (error) {
     setStatus("添加图片素材失败", error.payload?.message || error.message || String(error), 0, true);
     setButtonFeedback(button, "error", "添加失败");
@@ -2053,7 +2184,15 @@ function formPayload() {
   };
 }
 
-function promptPlanCacheKey(projectId = state.projectId) {
+function promptPlanCacheKey(
+  projectId = state.projectId,
+  job = state.selectedTtsJob || state.ttsJob,
+) {
+  const ttsJobId = Number(job?.id || 0);
+  return `${PROMPT_PLAN_CACHE_PREFIX}:v${PROMPT_PLAN_CACHE_VERSION}:${String(projectId || "default")}:tts-${ttsJobId}`;
+}
+
+function legacyPromptPlanCacheKey(projectId = state.projectId) {
   return `${PROMPT_PLAN_CACHE_PREFIX}:v${PROMPT_PLAN_CACHE_VERSION}:${String(projectId || "default")}`;
 }
 
@@ -2078,6 +2217,8 @@ function promptPlanCacheMatches(cached) {
   const currentJob = state.selectedTtsJob || state.ttsJob;
   if (String(signature.projectId || "") !== String(state.projectId || "")) return false;
   if (Number(signature.ttsJobId || 0) !== Number(currentJob?.id || 0)) return false;
+  if (String(signature.purpose || "article") !== String(formPayload().purpose || "article")) return false;
+  if (String(signature.aspectRatio || "16:9") !== String(formPayload().aspectRatio || "16:9")) return false;
   const currentText = normalizeComparableText(confirmedTtsText(currentJob) || formPayload().text);
   const cachedText = normalizeComparableText(cached?.plan?.sourceText || signature.text);
   return !currentText || !cachedText || currentText === cachedText;
@@ -2106,19 +2247,30 @@ function savePromptPlanCache(plan, payload = formPayload()) {
       desktopFolderName: state.desktopFolderName,
     }));
     localStorage.setItem(PROMPT_PLAN_LATEST_KEY, key);
-    removeOlderPromptPlanCaches(key);
+    prunePromptPlanCaches(key);
   } catch {
     // The plan remains usable in memory even if browser storage is unavailable.
   }
 }
 
-function removeOlderPromptPlanCaches(keepKey) {
-  for (let index = localStorage.length - 1; index >= 0; index -= 1) {
+function prunePromptPlanCaches(keepKey, maximumEntries = 40) {
+  const entries = [];
+  for (let index = 0; index < localStorage.length; index += 1) {
     const key = localStorage.key(index);
-    if (key?.startsWith(`${PROMPT_PLAN_CACHE_PREFIX}:`) && key !== PROMPT_PLAN_LATEST_KEY && key !== keepKey) {
-      localStorage.removeItem(key);
+    if (!key?.startsWith(`${PROMPT_PLAN_CACHE_PREFIX}:`) || key === PROMPT_PLAN_LATEST_KEY) continue;
+    let savedAt = 0;
+    try {
+      savedAt = Date.parse(JSON.parse(localStorage.getItem(key) || "null")?.savedAt || "") || 0;
+    } catch {
+      savedAt = 0;
     }
+    entries.push({ key, savedAt });
   }
+  entries
+    .filter((entry) => entry.key !== keepKey)
+    .sort((left, right) => right.savedAt - left.savedAt)
+    .slice(Math.max(0, maximumEntries - 1))
+    .forEach((entry) => localStorage.removeItem(entry.key));
 }
 
 function cacheableBoundImages(images = []) {
@@ -2154,17 +2306,18 @@ function restorePromptPlanCache() {
   if (!state.projectId || !(state.selectedTtsJob || state.ttsJob)) return false;
   const key = promptPlanCacheKey();
   try {
-    const latestKey = localStorage.getItem(PROMPT_PLAN_LATEST_KEY);
-    if (latestKey && latestKey !== key) return false;
-    const cached = JSON.parse(localStorage.getItem(key) || "null");
+    const legacyKey = legacyPromptPlanCacheKey();
+    const sourceKey = localStorage.getItem(key) ? key : legacyKey;
+    const cached = JSON.parse(localStorage.getItem(sourceKey) || "null");
     if (
       cached?.version !== PROMPT_PLAN_CACHE_VERSION
       || !promptPlanCacheMatches(cached)
       || !cached.plan?.shots?.length
       || cached.plan.skillProfileVersion !== 2
     ) return false;
+    if (sourceKey !== key) localStorage.setItem(key, JSON.stringify(cached));
     localStorage.setItem(PROMPT_PLAN_LATEST_KEY, key);
-    removeOlderPromptPlanCaches(key);
+    prunePromptPlanCaches(key);
     state.plan = cached.plan;
     const cachedPurpose = String(cached.plan.purpose || "article");
     if ([...els.purposeSelect.options].some((option) => option.value === cachedPurpose)) {
@@ -2191,11 +2344,64 @@ function restorePromptPlanCache() {
     state.pendingUploads.clear();
     renderPlan(state.plan);
     renderImages(state.images, []);
+    syncPromptActionButtons();
     return true;
   } catch {
     localStorage.removeItem(key);
     return false;
   }
+}
+
+async function restorePromptPlanFromServer() {
+  const job = state.selectedTtsJob || state.ttsJob;
+  if (!state.projectId || !job?.id) return false;
+  if (state.planRestorePromise) return state.planRestorePromise;
+  state.planRestorePromise = (async () => {
+    try {
+      const data = await fetchJson(
+        `/api/ian-xiaohei/plan-restore?project_id=${encodeURIComponent(state.projectId)}&tts_job_id=${encodeURIComponent(job.id)}`,
+      );
+      const plan = data.plan;
+      if (
+        !plan?.shots?.length
+        || Number(plan.ttsJobId || 0) !== Number(job.id)
+        || String(plan.projectId || "") !== String(state.projectId)
+      ) return false;
+      state.plan = plan;
+      state.images = [];
+      state.localMaterialPool = [];
+      state.materialBindings.clear();
+      state.pendingUploads.clear();
+      state.folderSequenceReference = null;
+      const purpose = String(plan.purpose || "article");
+      if ([...els.purposeSelect.options].some((option) => option.value === purpose)) {
+        els.purposeSelect.value = purpose;
+        localStorage.setItem(PURPOSE_STORAGE_KEY, purpose);
+        renderPurposeTemplates();
+      }
+      const aspectRatio = String(plan.aspectRatio || "16:9");
+      if ([...els.aspectRatioSelect.options].some((option) => option.value === aspectRatio)) {
+        els.aspectRatioSelect.value = aspectRatio;
+      }
+      if (els.titleInput) els.titleInput.value = plan.title || els.titleInput.value;
+      if (els.copyInput) els.copyInput.value = plan.sourceText || confirmedTtsText(job);
+      renderPlan(plan);
+      renderImages([], []);
+      savePromptPlanCache(plan, {
+        title: plan.title,
+        text: plan.sourceText,
+        purpose: plan.purpose,
+        aspectRatio: plan.aspectRatio,
+      });
+      syncPromptActionButtons();
+      return true;
+    } catch {
+      return false;
+    } finally {
+      state.planRestorePromise = null;
+    }
+  })();
+  return state.planRestorePromise;
 }
 
 function ensurePromptPlanAvailable() {
@@ -2312,8 +2518,8 @@ function promptBatchActionMarkup(plan = state.plan) {
 function renderPlan(plan) {
   const shots = plan?.shots || [];
   els.planCount.textContent = String(shots.length);
-  syncImageConstraintButtons();
   state.promptsText = promptPlanText(shots, plan);
+  syncPromptActionButtons();
   if (!shots.length) {
     els.promptResults.className = "prompt-list empty";
     els.promptResults.textContent = "还没有生成提示词。";
@@ -2459,15 +2665,58 @@ async function handleOutputHistoryAction(event) {
   }
 }
 
+async function writeClipboardText(value) {
+  const text = String(value || "");
+  if (!text) throw new Error("没有可复制的内容。");
+  try {
+    if (!navigator.clipboard?.writeText || !document.hasFocus()) {
+      throw new Error("clipboard-focus-required");
+    }
+    await navigator.clipboard.writeText(text);
+    return;
+  } catch {
+    const textarea = document.createElement("textarea");
+    const selection = document.getSelection();
+    const selectedRange = selection?.rangeCount ? selection.getRangeAt(0) : null;
+    textarea.value = text;
+    textarea.setAttribute("readonly", "");
+    textarea.style.position = "fixed";
+    textarea.style.left = "-9999px";
+    textarea.style.top = "0";
+    document.body.appendChild(textarea);
+    let copied = false;
+    try {
+      window.focus();
+      textarea.focus({ preventScroll: true });
+      textarea.select();
+      try {
+        copied = Boolean(document.execCommand("copy"));
+      } catch {
+        copied = false;
+      }
+    } finally {
+      textarea.remove();
+      if (selectedRange && selection) {
+        selection.removeAllRanges();
+        selection.addRange(selectedRange);
+      }
+    }
+    if (!copied) throw new Error("浏览器未允许写入剪贴板，请重新点击复制按钮。");
+  }
+}
+
 async function copyAllPrompts() {
+  if (state.planGenerating) return;
   setButtonFeedback(els.copyPrompts, "loading", "正在复制");
-  if (!state.promptsText) await createPlan();
+  if (!state.plan?.shots?.length && !restorePromptPlanCache()) {
+    await restorePromptPlanFromServer();
+  }
   if (!state.promptsText) {
     setButtonFeedback(els.copyPrompts, "error", "没有可复制内容");
     return;
   }
   try {
-    await navigator.clipboard.writeText(promptClipboardText());
+    await writeClipboardText(promptClipboardText());
     setStatus("已复制全部提示词", "已一次性复制当前全部生图提示词。", 100);
     setButtonFeedback(els.copyPrompts, "success", "已复制");
   } catch (error) {
@@ -2518,8 +2767,11 @@ function imageConstraintText(which, { first, rest }) {
 
 async function copyImageConstraint(which) {
   const button = which === 1 ? els.copyImageConstraint1 : els.copyImageConstraint2;
+  if (state.planGenerating) return;
   setButtonFeedback(button, "loading", "正在复制");
-  if (!state.promptsText) await createPlan();
+  if (!state.plan?.shots?.length && !restorePromptPlanCache()) {
+    await restorePromptPlanFromServer();
+  }
   const counts = imageConstraintCounts();
   const available = which === 1 ? counts.first > 0 : counts.rest > 0;
   if (!available) {
@@ -2529,7 +2781,7 @@ async function copyImageConstraint(which) {
     return;
   }
   try {
-    await navigator.clipboard.writeText(imageConstraintText(which, counts));
+    await writeClipboardText(imageConstraintText(which, counts));
     const copiedCount = which === 1 ? counts.first : counts.rest;
     const segment = which === 2 ? `后${copiedCount}` : `${copiedCount}`;
     setStatus(
@@ -2544,14 +2796,21 @@ async function copyImageConstraint(which) {
   }
 }
 
+function syncPromptActionButtons() {
+  const promptsAvailable = Boolean(state.plan?.shots?.length && state.promptsText);
+  if (els.planPrompts) els.planPrompts.disabled = state.planGenerating;
+  if (els.copyPrompts) els.copyPrompts.disabled = state.planGenerating || !promptsAvailable;
+  syncImageConstraintButtons();
+}
+
 function syncImageConstraintButtons() {
   if (!els.copyImageConstraint1 || !els.copyImageConstraint2) return;
   const { total, first, rest } = imageConstraintCounts();
-  els.copyImageConstraint1.disabled = total <= 0;
+  els.copyImageConstraint1.disabled = state.planGenerating || total <= 0;
   els.copyImageConstraint1.title = total > 0
     ? `复制“${first}张”约束词（当前共 ${total} 个分镜）`
     : "请先生成分镜提示词";
-  els.copyImageConstraint2.disabled = rest <= 0;
+  els.copyImageConstraint2.disabled = state.planGenerating || rest <= 0;
   els.copyImageConstraint2.title = rest > 0
     ? `复制"后${rest}张"约束词（当前共 ${total} 个分镜）`
     : "分镜不超过 10 个时无需约束词2";
@@ -2606,6 +2865,7 @@ function onFolderNameSelectChange() {
   if (selected === "__new__") {
     state.desktopFolderName = "";
     state.desktopFolderPath = "";
+    els.folderNameSelect.value = "";
     void promptNewFolderName();
     return;
   }
@@ -2614,7 +2874,25 @@ function onFolderNameSelectChange() {
   if (state.plan) savePromptPlanCache(state.plan);
 }
 
+function notifyFolderNamesChanged() {
+  localStorage.setItem(
+    FOLDER_NAMES_CHANGED_STORAGE_KEY,
+    `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+  );
+}
+
 async function promptNewFolderName(defaultValue = "") {
+  if (folderNamePromptActive) return "";
+  folderNamePromptActive = true;
+  document.activeElement?.blur();
+  try {
+    return await runFolderNamePrompt(defaultValue);
+  } finally {
+    setTimeout(() => { folderNamePromptActive = false; }, 350);
+  }
+}
+
+async function runFolderNamePrompt(defaultValue = "") {
   const input = prompt(
     defaultValue
       ? `编辑文件夹名称：`
@@ -2624,41 +2902,47 @@ async function promptNewFolderName(defaultValue = "") {
   if (input === null) {
     els.folderNameSelect.value = defaultValue || "";
     syncFolderNameButtons();
-    return;
+    return "";
   }
   const trimmed = input.trim();
   if (!trimmed) {
     els.folderNameSelect.value = defaultValue || "";
     setStatus("名称不能为空", "请输入有效的文件夹名称。", 0, true);
     syncFolderNameButtons();
-    return;
-  }
-
-  const nextNames = [...folderNames];
-  if (defaultValue !== "") {
-    const idx = nextNames.indexOf(defaultValue);
-    if (idx >= 0) nextNames[idx] = trimmed;
-    else nextNames.push(trimmed);
-  } else if (!nextNames.includes(trimmed)) {
-    nextNames.push(trimmed);
+    return "";
   }
 
   try {
-    const data = await saveFolderNames(nextNames);
-    folderNames = Array.isArray(data.names) ? data.names : nextNames;
+    let data;
+    if (defaultValue) {
+      data = await fetchJson("/api/desktop-folder-named/rename", {
+        method: "POST",
+        body: JSON.stringify({ current: defaultValue, next: trimmed }),
+      });
+    } else {
+      const nextNames = folderNames.includes(trimmed) ? folderNames : [...folderNames, trimmed];
+      data = await saveFolderNames(nextNames);
+    }
+    folderNames = Array.isArray(data.names) ? data.names : folderNames;
     state.desktopFolderName = trimmed;
-    state.desktopFolderPath = "";
+    state.desktopFolderPath = String(data.folderPath || "");
     renderFolderNameSelect();
     els.folderNameSelect.value = trimmed;
     syncFolderNameButtons();
+    notifyFolderNamesChanged();
+    if (state.plan) savePromptPlanCache(state.plan);
     setStatus(
       defaultValue ? "名称已更新" : "名称已添加",
-      `已选择“${trimmed}”，现在可以点击“新建文件夹”。`,
+      defaultValue && data.folderPath
+        ? `桌面文件夹已同步改名为“${data.folderName}”。`
+        : `已选择“${trimmed}”，现在可以点击“新建文件夹”。`,
       100,
     );
+    return trimmed;
   } catch (error) {
     renderFolderNameSelect();
     setStatus("保存名称失败", error.message || String(error), 0, true);
+    return "";
   }
 }
 
@@ -2677,7 +2961,7 @@ async function saveFolderNames(names) {
 
 function syncFolderNameButtons() {
   const hasSelection = els.folderNameSelect && els.folderNameSelect.value && els.folderNameSelect.value !== "__new__";
-  if (els.createDesktopFolder) els.createDesktopFolder.disabled = !hasSelection;
+  if (els.createDesktopFolder) els.createDesktopFolder.disabled = false;
   if (els.editFolderName) els.editFolderName.disabled = !hasSelection;
   if (els.deleteFolderName) els.deleteFolderName.disabled = !hasSelection;
 }
@@ -2691,26 +2975,35 @@ function editFolderName() {
 async function deleteFolderName() {
   const current = els.folderNameSelect?.value;
   if (!current || current === "__new__") return;
-  if (!confirm(`确定删除名称"${current}"吗？\n（不会删除桌面上已创建的文件夹）`)) return;
+  if (!confirm(`确定删除“${current}”吗？\n文件夹中已有素材时会阻止删除。`)) return;
 
   try {
-    const nextNames = folderNames.filter((name) => name !== current);
-    const data = await saveFolderNames(nextNames);
-    folderNames = Array.isArray(data.names) ? data.names : nextNames;
+    const data = await fetchJson("/api/desktop-folder-named/delete", {
+      method: "POST",
+      body: JSON.stringify({ suffix: current }),
+    });
+    folderNames = Array.isArray(data.names) ? data.names : folderNames.filter((name) => name !== current);
     state.desktopFolderName = "";
     state.desktopFolderPath = "";
     renderFolderNameSelect();
-    setStatus(`已删除名称`, `"${current}"已从列表移除。`, 100);
+    notifyFolderNamesChanged();
+    setStatus(
+      "文件夹已删除",
+      data.deleted
+        ? `空文件夹和名称“${current}”已删除。`
+        : `名称“${current}”已删除；桌面上没有对应文件夹。`,
+      100,
+    );
   } catch (error) {
     setStatus("删除名称失败", error.message || String(error), 0, true);
   }
 }
 
 async function createDesktopFolder() {
-  const name = els.folderNameSelect?.value;
+  let name = els.folderNameSelect?.value;
   if (!name || name === "__new__") {
-    setStatus("请先选择或新建名称", "从下拉框选择一个文件夹名称，或点击「＋ 新建名称」。", 0, true);
-    return;
+    name = await promptNewFolderName();
+    if (!name) return;
   }
 
   const btn = els.createDesktopFolder;
@@ -3037,10 +3330,12 @@ function resetVisualWorkflow(message = "") {
   state.pendingUploads.clear();
   state.localMaterialPool = [];
   state.materialBindings.clear();
+  state.folderSequenceReference = null;
   state.promptsText = "";
   renderPlan(null);
   renderImages([], []);
   syncVideoPreview();
+  syncPromptActionButtons();
   if (message) setStatus("需要重新生成分镜", message, 0);
 }
 
@@ -3084,6 +3379,7 @@ function setBusy(busy) {
     renderVoiceDescription();
     renderReferenceStyleChoices();
     updateVideoDownloadState();
+    syncPromptActionButtons();
   }
 }
 

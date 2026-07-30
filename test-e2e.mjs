@@ -226,8 +226,132 @@ test("Xiaohei prompt plan refresh cache", async () => {
     || !source.includes('els.purposeSelect.value = cachedPurpose')
     || !source.includes('currentBatch?.boundImages || []')
     || !source.includes('const PROMPT_PLAN_LATEST_KEY')
-    || !source.includes('removeOlderPromptPlanCaches(key)')) {
+    || !source.includes('function prunePromptPlanCaches(')
+    || !source.includes('prunePromptPlanCaches(key)')
+    || !source.includes(':tts-${ttsJobId}')
+    || !source.includes('restorePromptPlanFromServer()')
+    || !source.includes('/api/ian-xiaohei/plan-restore?project_id=')) {
     throw new Error("Xiaohei prompt plan refresh cache is incomplete");
+  }
+});
+
+test("Moments emoji packs are source-built and cross-platform safe", async () => {
+  const [pageResponse, legacyResponse, server, emojiSkill] = await Promise.all([
+    fetch(`${BASE}/`),
+    fetch(`${BASE}/modules/legacy-runtime.js`),
+    readFile(new URL("./ui-server.mjs", import.meta.url), "utf8"),
+    readFile(new URL("./skills/wechat-moments-copy-emoji/SKILL.md", import.meta.url), "utf8"),
+  ]);
+  const [page, legacy] = await Promise.all([pageResponse.text(), legacyResponse.text()]);
+  const requiredStyles = ["gentle", "lively", "professional", "warm"];
+  if (!page.includes('id="momentsEmojiStyle"')
+    || !page.includes('id="momentsEmojiCount"')
+    || !page.includes("智能适量（3–6 个，默认）")
+    || !page.includes('id="momentsEmojiPalette"')
+    || !requiredStyles.every((style) => page.includes(`value="${style}"`))
+    || !["auto", "3-5", "5-10"].every((count) => page.includes(`value="${count}"`))
+    || !legacy.includes("MOMENTS_EMOJI_STYLE_PREVIEWS")
+    || !legacy.includes("emojiStyle: momentsEmojiStyle?.value")
+    || !legacy.includes("emojiCount: momentsEmojiCount?.value")
+    || !legacy.includes("syncMomentsEmojiStyle")
+    || !server.includes("MOMENTS_CROSS_PLATFORM_EMOJIS")
+    || !server.includes("...styleConfig.signature, ...matched, ...styleConfig.defaults")
+    || !server.includes("MOMENTS_EMOJI_COUNT_OPTIONS")
+    || !server.includes('auto: { label: "智能适量（3–6 个）", min: 3, max: 6 }')
+    || !server.includes('String(emoji).includes("\\u200D")')
+    || !server.includes("applyPresetMomentsEmojis(post, emojiStyle, emojiCount)")
+    || !emojiSkill.includes("表情库必须直接内置在源代码中")) {
+    throw new Error("Moments emoji packs are not fully source-built or cross-platform guarded");
+  }
+});
+
+test("Completed TTS generation reveals its audio preview", async () => {
+  const legacy = await (await fetch(`${BASE}/modules/legacy-runtime.js`)).text();
+  if (!legacy.includes('const hasCompletedAudio = job?.status === "completed" && Boolean(job?.audio_url);')
+    || !legacy.includes('const show = hasCompletedAudio || ttsTopIssuePanelShouldShow(job);')
+    || !legacy.includes('showTtsPreview(displayJob, { reveal: true });')
+    || !legacy.includes('showTtsPreview(completedMusicJob || musicJob, { reveal: true });')
+    || !legacy.includes('ttsPreview?.scrollIntoView?.({ behavior: "smooth", block: "center" })')) {
+    throw new Error("Completed TTS generation does not reliably reveal the audio preview");
+  }
+});
+
+test("Optional clean-education BGM is a separate fourth handoff asset", async () => {
+  const [pageResponse, legacyResponse, cssResponse, workbenchResponse, cs1Response, moneyResponse, kineticResponse, xiaoheiResponse, xiaoheiRoute] = await Promise.all([
+    fetch(`${BASE}/`),
+    fetch(`${BASE}/modules/legacy-runtime.js`),
+    fetch(`${BASE}/app.css`),
+    fetch(`${BASE}/workbench.js`),
+    fetch(`${BASE}/modules/cs1-video.js`),
+    fetch(`${BASE}/modules/money-printer.js`),
+    fetch(`${BASE}/modules/kinetic-text.js`),
+    fetch(`${BASE}/modules/ian-xiaohei-app.js`),
+    readFile(new URL("./server/routes/ian-xiaohei-routes.js", import.meta.url), "utf8"),
+  ]);
+  const [page, legacy, css, workbench, cs1, money, kinetic, xiaohei] = await Promise.all([
+    pageResponse.text(), legacyResponse.text(), cssResponse.text(), workbenchResponse.text(), cs1Response.text(), moneyResponse.text(), kineticResponse.text(), xiaoheiResponse.text(),
+  ]);
+  if (!page.includes('id="ttsGenerateCleanEducationBgm"')
+    || !page.includes('data-no-choice-persist')
+    || !page.includes('id="ttsBgmSelectionState"')
+    || page.includes('点“确定修改”后发送当前三件套。')
+    || !page.includes('id="ttsBgmVolume"')
+    || !page.includes('id="ttsBgmVolumeValue"')
+    || !page.includes('min="10" max="50" step="1" value="28"')
+    || !page.includes('id="ttsBgmPreview"')
+    || !page.includes('id="generateTtsBgmForCurrent"')
+    || !legacy.includes('function generateCleanEducationBgm(parentJob, text, { previewPromise = null } = {})')
+    || !legacy.includes('id = "ttsBgmProgress"')
+    || !legacy.includes('function setTtsBgmProgress(percent = 0, label = "")')
+    || !legacy.includes('setTtsBgmProgress(45, previewPromise ?')
+    || !legacy.includes('function ensureTtsBgmPreview()')
+    || !legacy.includes('ttsBgmJobsByParentId.clear()')
+    || !legacy.includes('function isTtsLinkedBgmJob(job = {})')
+    || !legacy.includes('data-tts-load-file="bgm"')
+    || !legacy.includes('const handoffBundleLabel = linkedBgm ?')
+    || !legacy.includes('const bundleFilesLabel = linkedBgm')
+    || !legacy.includes('async function resolveTtsBgmJob(parentJob)')
+    || !legacy.includes('const data = await fetchJson("/api/tts/jobs?limit=500");')
+    || !legacy.includes('showTtsBgmPreview(bgmJob, { reveal: true, play: true });')
+    || !legacy.includes('if (ttsOutputColumn) ttsOutputColumn.hidden = false;')
+    || !legacy.includes('tts-history-files${linkedBgm ? " has-bgm" : ""}')
+    || !css.includes('.tts-history-files.has-bgm::before')
+    || !css.includes('content: "四件套";')
+    || !page.includes('src="/workbench.js?v=2026073011"')
+    || !workbench.includes('const bgmPreview = lab.querySelector("#ttsBgmPreview");')
+    || !workbench.includes('if (bgmPreview) resultLane.appendChild(bgmPreview);')
+    || !legacy.includes('function ensureTtsBgmMissingPanel()')
+    || !legacy.includes('setTtsBgmProgress(100,')
+    || !legacy.includes('function requestCleanEducationBgmPreview(asset, text, targetDuration)')
+    || !legacy.includes('bgmPreviewPromise = requestCleanEducationBgmPreview')
+    || !legacy.includes('function ensureTtsBgmPreview()')
+    || !legacy.includes('function syncTtsBgmSelectionState()')
+    || !legacy.includes('function selectedTtsBgmVolume()')
+    || !legacy.includes('background_volume: selectedTtsBgmVolume()')
+    || !legacy.includes('ttsBgmAudio.volume = volume')
+    || !legacy.includes('async function resolveTtsBgmForHandoff(job = activeTtsRailJob)')
+    || !legacy.includes('await resolveTtsBgmForHandoff(job);')
+    || !legacy.includes('function ttsHandoffBundleLabel(job = activeTtsRailJob)')
+    || !legacy.includes('function syncTtsCentralHandoffBundle(job = activeTtsRailJob)')
+    || !legacy.includes('function refreshTtsCentralHandoffBundle(job = activeTtsRailJob)')
+    || !legacy.includes('确定修改并发送${bundleLabel}到：')
+    || !legacy.includes('bgm_path: payload.bgm_path || ""')
+    || !legacy.includes('return new Promise((resolve) => {')
+    || !legacy.includes('.then(resolve)')
+    || !legacy.includes('generateCleanEducationBgm(job, text)')
+    || !legacy.includes('parent_tts_job_id: parentJob.id')
+    || !legacy.includes('type: "bgm"')
+    || !legacy.includes('payload.has_bgm ?')
+    || !cs1.includes('payload.bgm_path || ""')
+    || !money.includes('bgm_type: state.handoff?.bgm_path ? "custom" : "none"')
+    || !money.includes('state.handoff?.has_bgm ? "四件套（含独立 BGM）" : "三件套"')
+    || !money.includes('等待已确认 TTS 交接包')
+    || !kinetic.includes('localPath: payload.bgm_path')
+    || !kinetic.includes('async function jsonFetch(url, options = {}, retryLocalSession = true)')
+    || !kinetic.includes('return jsonFetch(url, options, false);')
+    || !xiaohei.includes('tts_bgm_path: state.handoffBgm?.path || ""')
+    || !xiaoheiRoute.includes('const handoffBgmPath = String(body.tts_bgm_path || "").trim();')) {
+    throw new Error("Optional clean-education BGM four-asset handoff is incomplete");
   }
 });
 

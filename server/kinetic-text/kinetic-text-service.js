@@ -1425,6 +1425,32 @@ function projectPublic(project) {
   };
 }
 
+function projectSummary(project) {
+  if (!project) return null;
+  const effectId = normalizeEffectId(project.effectId);
+  const audioMix = project.audioMix && typeof project.audioMix === "object" ? project.audioMix : {};
+  return {
+    id: String(project.id || ""),
+    title: normalizeText(project.title) || "动态大字视频",
+    status: String(project.status || "editing"),
+    stage: String(project.stage || "编辑中"),
+    progress: safeNumber(project.progress, 0, 0, 100),
+    ttsJobId: Number(project.ttsJobId || 0),
+    ttsHandoffRevision: String(project.ttsHandoffRevision || ""),
+    duration: safeNumber(project.duration, 0, 0),
+    effectId,
+    effect: effectById(effectId),
+    audioMix: {
+      source: ["none", "video", "local"].includes(audioMix.source) ? audioMix.source : "none",
+      localPath: String(audioMix.localPath || ""),
+      localName: String(audioMix.localName || ""),
+      ttsVolume: safeNumber(audioMix.ttsVolume, 100, 0, 200),
+      backgroundVolume: safeNumber(audioMix.backgroundVolume, 18, 0, 100),
+    },
+    updatedAt: String(project.updatedAt || ""),
+  };
+}
+
 export function createKineticTextService({
   baseDir,
   downloadsDir,
@@ -1470,7 +1496,7 @@ export function createKineticTextService({
   function list() {
     return fs.readdirSync(projectsDir, { withFileTypes: true })
       .filter((entry) => entry.isDirectory())
-      .map((entry) => get(entry.name))
+      .map((entry) => projectSummary(readJson(projectPath(entry.name), null)))
       .filter(Boolean)
       .sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt)));
   }

@@ -17,7 +17,7 @@ const workbenchPages = {
   },
   rewrite: {
     title: "文案定制改写",
-    description: "选择视频类型，默认生成 1 个版本，需要时可增加输出框。",
+    description: "家长触动与转化模板默认开启，生成两篇可直接发送到生产线的口播稿。",
   },
   "moments-copy": {
     title: "朋友圈文案定制",
@@ -759,6 +759,8 @@ function setupTtsStudio() {
   const controlColumn = oldWorkbench.querySelector(".tts-control-column");
   const settings = lab.querySelector(".tts-settings");
   const preview = lab.querySelector(".tts-preview");
+  const bgmPreview = lab.querySelector("#ttsBgmPreview");
+  const bgmMissing = lab.querySelector("#ttsBgmMissing");
   const alignmentEditor = lab.querySelector("#ttsAlignmentEditor");
   const audioHandoff = lab.querySelector("#ttsAudioHandoff");
   const historyPanel = lab.querySelector(".tts-history-panel");
@@ -781,6 +783,8 @@ function setupTtsStudio() {
   if (settings) settingsLane.appendChild(settings);
   if (controlColumn) settingsLane.appendChild(controlColumn);
   if (preview) resultLane.appendChild(preview);
+  if (bgmPreview) resultLane.appendChild(bgmPreview);
+  if (bgmMissing) resultLane.appendChild(bgmMissing);
   if (alignmentEditor) resultLane.appendChild(alignmentEditor);
   if (audioHandoff) resultLane.appendChild(audioHandoff);
   if (historyHead) resultLane.appendChild(historyHead);

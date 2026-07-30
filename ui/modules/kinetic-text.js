@@ -83,13 +83,17 @@ function toggleFavorite(templateId) {
   renderEffects();
 }
 
-async function jsonFetch(url, options = {}) {
+async function jsonFetch(url, options = {}, retryLocalSession = true) {
   const response = await fetch(url, {
     cache: "no-store",
+    credentials: "same-origin",
     ...options,
     headers: { "Content-Type": "application/json", ...(options.headers || {}) },
   });
   const data = await response.json();
+  if (response.status === 401 && retryLocalSession && /local session token/i.test(String(data.message || data.error || ""))) {
+    return jsonFetch(url, options, false);
+  }
   if (!response.ok || data.ok === false) throw new Error(data.message || `请求失败：${response.status}`);
   return data;
 }
@@ -1748,7 +1752,12 @@ async function refreshProjects(preferredId = "") {
   const data = await jsonFetch("/api/kinetic-text/projects");
   state.projects = data.projects || [];
   const id = preferredId || state.project?.id || "";
-  state.project = id ? state.projects.find((project) => project.id === id) || null : null;
+  if (id && state.projects.some((project) => project.id === id)) {
+    const projectData = await jsonFetch(`/api/kinetic-text/project?id=${encodeURIComponent(id)}`);
+    state.project = projectData.project || null;
+  } else {
+    state.project = null;
+  }
   state.pendingTimelineChanges = {};
   localStorage.removeItem("dy:kinetic-text:project-id");
   renderProject();
@@ -2043,6 +2052,9 @@ async function receiveTts(payload, { navigate = true } = {}) {
     return null;
   }
   const existing = state.projects.find((project) => String(project.ttsJobId) === String(payload.id));
+  const receivedBgm = payload?.bgm_path
+    ? { source: "local", localPath: payload.bgm_path, localName: payload.bgm_name || "清爽教育 BGM" }
+    : null;
   const handoffRevision = String(payload.handoff_revision || "");
   if (
     existing
@@ -2058,6 +2070,10 @@ async function receiveTts(payload, { navigate = true } = {}) {
   clearTimelineState("正在接收新的 TTS 参数");
   if (existing) {
     state.project = await applySharedTimelineToKineticProject(payload) || existing;
+    if (receivedBgm && state.project?.id) {
+      const updated = await postJson("/api/kinetic-text/update", { projectId: state.project.id, changes: { audioMix: receivedBgm } });
+      state.project = updated.project || state.project;
+    }
     await refreshProjects(state.project.id);
     renderProject();
     if (navigate) window.workbenchNavigate?.("kinetic-text");
@@ -2073,6 +2089,10 @@ async function receiveTts(payload, { navigate = true } = {}) {
   });
   state.pendingTimelineChanges = {};
   state.project = data.project;
+  if (receivedBgm && state.project?.id) {
+    const updated = await postJson("/api/kinetic-text/update", { projectId: state.project.id, changes: { audioMix: receivedBgm } });
+    state.project = updated.project || state.project;
+  }
   await refreshProjects(state.project.id);
   if (navigate) window.workbenchNavigate?.("kinetic-text");
   return state.project;

@@ -146,10 +146,15 @@ export function initCs1VideoModule() {
     textInput.value = text;
     textInput.readOnly = true;
     if (titleInput) titleInput.value = payload.title || payload.seo_title || payload.publish_title || `TTS #${payload.display_number || payload.id}`;
-    if (bgmPathInput) bgmPathInput.value = payload.audio_path || "";
-    if (bgmModeSelect) bgmModeSelect.value = payload.audio_path ? "local" : "auto";
+    if (bgmPathInput) bgmPathInput.value = payload.bgm_path || "";
+    if (bgmModeSelect) bgmModeSelect.value = payload.bgm_path ? "local" : "auto";
     renderTimeline();
-    setStatus("已接收 TTS 三件套", "CS1 正在使用公共文案、音频和时间戳字幕。");
+    setStatus(
+      payload.has_bgm ? "已接收 TTS 四件套" : "已接收 TTS 三件套",
+      payload.has_bgm
+        ? "CS1 将使用独立 BGM，并按旁白时长自动循环或裁切。"
+        : "CS1 正在使用公共文案、音频和时间戳字幕。",
+    );
     if (navigate) window.workbenchNavigate?.("cs1-video");
     return currentTtsHandoff;
   };
