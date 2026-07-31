@@ -24,7 +24,7 @@ For ordinary rewrites, return only the versions requested by the caller.
 When the `家长触动与转化模板` is enabled, return exactly these two complete versions:
 
 1. 触动咨询版：低压力的“留言或私信聊聊孩子目前的情况”类引导。
-2. 行动号召版：更明确地邀请咨询或进一步了解，但不虚构试听、名额、成绩、课程或服务承诺。
+2. 行动号召版：给出一个明确下一步，例如“留言或私信说说孩子目前卡在哪里，我们一起分析”；只邀请沟通且不承诺课程或效果时属于合规行动，不要求必须出现“咨询”二字。
 
 ## Style Requirements
 
@@ -40,6 +40,7 @@ When the `家长触动与转化模板` is enabled, return exactly these two comp
 - 适合教育招生和转化
 - 每篇都必须有完整弧线：具体钩子 → 家长真实痛点/冲突 → 情绪递进 → 转折 → 围绕孩子与家长真实选择或代价的高潮 → 解决视角 → 回味或行动。
 - 钩子须从原文中选择反常识、具体场景、家长误区或后果预警；不能用空泛口号。
+- 明确说出对象、场景与具体矛盾的问句属于合格钩子；高潮可表现长期结果、能力差异、依赖或后果，不强制出现“选择”“代价”字样。
 
 ## Required Process
 

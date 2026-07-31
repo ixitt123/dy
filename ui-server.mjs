@@ -52,6 +52,10 @@ import { isPathInsideRoot, resolveStaticRequestPath } from "./server/core/static
 import { runtimeProcessIsRunning } from "./server/core/runtime-process.js";
 import { deepSeekRequestCompatibility } from "./server/core/model-router/providers/deepseek.js";
 import {
+  parentConversionLocalQuality,
+  reviewIssuesAreOnlyParentAdvisory,
+} from "./server/core/rewrite-conversion-quality.js";
+import {
   DEFAULT_REWRITE_REFERENCE,
   PARENT_CONVERSION_VERSION_DEFS,
   PARENT_CONVERSION_VERSION_DEFAULTS,
@@ -5946,6 +5950,7 @@ async function ensureRewriteCoherence(provider, versions, specs, sourceText, sig
   let current = versions.map((item) => ({ ...item }));
   let lastIssues = [];
   for (let attempt = 0; attempt < 3; attempt += 1) {
+    const previousIssues = [...lastIssues];
     const reviewInput = specs.map((spec) => {
       const version = current.find((item) => item.key === spec.key) || { ...spec, content: "" };
       const range = requestedWordCountRange(spec.wordCount);
@@ -5976,9 +5981,14 @@ async function ensureRewriteCoherence(provider, versions, specs, sourceText, sig
           "最高优先级：忠于原文事实，主题统一，前后不矛盾，指代清楚，句子有承接，段落有过渡，开头自然进入主题，结尾完整收束。",
           "禁止输出句子拼接、提纲、半句话、孤立口号或互相断裂的段落。强钩子、冲突、短句、情绪和转化要求只能在不破坏连贯性的前提下保留。",
           "对 parent_conversion_template=true 的版本，必须逐项检查并在 conversionStructure 返回正文中实际存在的证据短语：hook、painConflict、turn、climax、ending。任何一项为空都必须 pass=false 并重写。钩子必须具体，不得是空泛口号；高潮必须回到孩子与家长的真实选择或代价。",
-          "对 parent_conversion_template=true 的版本，还必须逐句对照用户原文：不得编造学校、老师、课程、试听、服务、名额、促销、成绩、录取、案例、见证或联系方式；不得作出任何成绩、录取或课程效果承诺。cta_mode=consult 必须是低压力的留言/私信了解孩子情况类引导；cta_mode=action 可以更明确邀请咨询，但仍不可虚构上述事实。",
+          "对 parent_conversion_template=true 的版本，还必须逐句对照用户原文：不得编造学校、老师、课程、试听、服务、名额、促销、成绩、录取、案例、见证或联系方式；不得作出任何成绩、录取或课程效果承诺。",
+          "CTA 判定必须统一：cta_mode=consult 使用低压力的留言/私信/评论区聊孩子当前情况；cta_mode=action 给出更清楚的下一步，例如“留言或私信说说孩子目前卡在哪里，我们一起分析”。这类只邀请沟通、没有承诺课程或效果的表达是合规行动，不得仅以“可能隐含服务”为由否决，也不强制正文必须出现“咨询”二字。",
+          "结构判定必须基于正文：钩子只要明确写出对象、场景和矛盾或反差，就不是空泛口号；高潮只要明确写出孩子或家长继续原做法与改变做法的长期结果、能力差异或真实代价即可，不强制出现“选择”或“代价”字样。",
           "字数以用户范围为目标，完整收尾最多可超过建议上限 20%；过长时智能压缩重复意思，绝不能按字符硬截断。",
           "如果文章已经合格，保持原文不动并返回 pass=true；如果不合格，先重写修复，再对修复稿重新检查。只有确认全部规则都满足时才能返回 pass=true。",
+          previousIssues.length
+            ? `上一轮未通过原因：${previousIssues.join("；")}。本轮必须在 content 中逐项修复，再按修复后的 content 判断 pass。`
+            : "这是第一轮检查；如需修复，必须直接返回已经修好的完整 content。",
           "每个 key 都必须返回，content 必须始终是可直接发布的最终完整文章。",
           `用户原文：\n${String(sourceText || "").slice(0, 12000)}`,
           `待检查成品：\n${JSON.stringify(reviewInput, null, 2)}`,
@@ -6012,12 +6022,27 @@ async function ensureRewriteCoherence(provider, versions, specs, sourceText, sig
       const conversionStructure = normalizeConversionStructure(row?.conversionStructure);
       const structureComplete = !parentTemplate || hasCompleteConversionStructure(conversionStructure);
       next[versionIndex] = { ...next[versionIndex], conversionStructure };
-      const passed = row?.pass === true && locallyComplete && structureComplete;
+      const localParentQuality = parentTemplate
+        ? parentConversionLocalQuality({
+          content: next[versionIndex].content,
+          conversionStructure,
+          ctaMode: next[versionIndex].params?.ctaMode,
+          sourceText,
+        })
+        : { pass: true, issues: [] };
+      const parentReviewAccepted = !parentTemplate
+        || (
+          localParentQuality.pass
+          && (row?.pass === true || reviewIssuesAreOnlyParentAdvisory(issues))
+        );
+      const passed = locallyComplete && structureComplete && parentReviewAccepted && (parentTemplate || row?.pass === true);
       if (!passed) {
         allPassed = false;
         const fallbackIssue = parentTemplate && !structureComplete
           ? `${spec.name || spec.key} 缺少钩子、痛点冲突、转折、高峰或结尾的完整结构`
-          : `${spec.name || spec.key} 连贯性未确认`;
+          : parentTemplate && localParentQuality.issues.length
+            ? `${spec.name || spec.key}：${localParentQuality.issues.join("、")}`
+            : `${spec.name || spec.key} 连贯性未确认`;
         lastIssues.push(...(issues.length ? issues.map((item) => `${spec.name || spec.key}：${item}`) : [fallbackIssue]));
       }
     }

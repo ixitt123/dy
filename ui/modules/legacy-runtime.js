@@ -688,6 +688,12 @@ const defaultMomentsPersona = {
 let momentsPersonas = [];
 let currentMomentsResult = null;
 let rewriteVersionDrafts = new Map();
+let rewriteEditorRevision = 0;
+const rewriteOperationRevisions = {
+  analysis: 0,
+  generation: 0,
+  save: 0,
+};
 let directorConfig = null;
 let directorSources = [];
 let directorProjectsState = [];
@@ -1668,9 +1674,50 @@ async function openAnalysisEditor(taskId) {
   analysisPanel.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
+function invalidateRewriteAsyncOperations() {
+  rewriteEditorRevision += 1;
+  for (const type of Object.keys(rewriteOperationRevisions)) {
+    rewriteOperationRevisions[type] += 1;
+  }
+  return rewriteEditorRevision;
+}
+
+function beginRewriteEditorLoad(taskId) {
+  return {
+    taskId: String(taskId || ""),
+    editorRevision: invalidateRewriteAsyncOperations(),
+  };
+}
+
+function rewriteEditorLoadIsCurrent(context) {
+  return context?.editorRevision === rewriteEditorRevision;
+}
+
+function beginRewriteAsyncOperation(type, taskId) {
+  rewriteOperationRevisions[type] = Number(rewriteOperationRevisions[type] || 0) + 1;
+  return {
+    type,
+    taskId: String(taskId || ""),
+    editorRevision: rewriteEditorRevision,
+    operationRevision: rewriteOperationRevisions[type],
+  };
+}
+
+function rewriteOperationIsCurrent(context) {
+  return Boolean(
+    context
+    && context.editorRevision === rewriteEditorRevision
+    && context.operationRevision === rewriteOperationRevisions[context.type]
+    && context.taskId === String(rewriteTaskId.value || ""),
+  );
+}
+
 async function openRewriteEditor(taskId) {
+  const loadContext = beginRewriteEditorLoad(taskId);
   const transcripts = await refreshTranscripts();
+  if (!rewriteEditorLoadIsCurrent(loadContext)) return;
   const savedExamples = await fetchJson("/api/reference-examples").catch(() => ({ examples: [] }));
+  if (!rewriteEditorLoadIsCurrent(loadContext)) return;
   const item = transcripts.find((row) => String(row.id) === String(taskId));
   if (!item) return;
 
@@ -1679,6 +1726,7 @@ async function openRewriteEditor(taskId) {
     taskId: Number(item.id || 0),
     source: "downloaded",
   });
+  if (!rewriteEditorLoadIsCurrent(loadContext)) return;
 
   rewriteTaskId.value = item.id;
   rewriteOriginal.value = item.text || "";
@@ -1731,20 +1779,24 @@ async function runRewriteInlineAnalysis() {
     rewriteStatus.textContent = "原始文案为空，无法分析。";
     return;
   }
+  const operation = beginRewriteAsyncOperation("analysis", id);
   if (rewriteAnalysisStatus) rewriteAnalysisStatus.textContent = "正在检查模型配置...";
   rewriteAnalysisView.textContent = "正在分析文案结构、钩子、痛点、情绪和行动号召...";
   try {
     await ensureTranscriptProvidersConfigured();
+    if (!rewriteOperationIsCurrent(operation)) return;
     const data = await fetchJson("/api/tasks/analyze", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ id, text, provider: rewriteProvider?.value || "" }),
     });
+    if (!rewriteOperationIsCurrent(operation)) return;
     rewriteAnalysisView.textContent = formatAnalysisForRewrite(data.analysis || {});
     if (rewriteAnalysisStatus) rewriteAnalysisStatus.textContent = "AI 分析已生成。";
     renderTranscripts(data.transcripts);
     await refreshTasks();
   } catch (error) {
+    if (!rewriteOperationIsCurrent(operation)) return;
     const message = error instanceof Error ? error.message : String(error);
     rewriteAnalysisView.textContent = message;
     if (rewriteAnalysisStatus) rewriteAnalysisStatus.textContent = "分析失败，请检查模型配置。";
@@ -7567,6 +7619,7 @@ async function generateRewrite() {
   saveRewritePresetSettings();
   const id = await ensureRewriteTaskReady();
   if (!id) return;
+  const operation = beginRewriteAsyncOperation("generation", id);
   if (document.activeElement === rewriteVersionCountInput) syncRewriteVersionCount();
   if (!rewriteVersions.querySelector(".rewrite-version")) {
     renderRewriteVersions({}, { allowDefaults: true });
@@ -7585,12 +7638,14 @@ async function generateRewrite() {
   }
   rewriteStatus.textContent = `正在生成 ${versionSpecs.length} 个改写版本...`;
   startRewriteProgress(versionSpecs.length);
+  const generatedVersions = [];
   try {
     await ensureRewriteProviderConfigured();
-    const generatedVersions = [];
+    if (!rewriteOperationIsCurrent(operation)) return;
     let latestTranscripts = [];
     let latestTask = null;
     for (let index = 0; index < versionSpecs.length; index += 1) {
+      if (!rewriteOperationIsCurrent(operation)) return;
       const spec = versionSpecs[index];
       setRewriteProgress(Math.min(92, Math.round(index / versionSpecs.length * 82) + 8), `正在生成输出框 ${index + 1}/${versionSpecs.length}`);
       const data = await fetchJson("/api/tasks/rewrite", {
@@ -7598,6 +7653,7 @@ async function generateRewrite() {
         headers: { "content-type": "application/json" },
         body: JSON.stringify(rewritePayloadForVersion(id, spec, { previewOnly: true })),
       });
+      if (!rewriteOperationIsCurrent(operation)) return;
       const generated = data.rewrite?.versions?.[0];
       if (!generated) throw new Error(`输出框 ${index + 1} 没有生成内容`);
       generatedVersions.push({ ...spec, ...generated, content: generated.content || spec.content || "" });
@@ -7621,18 +7677,32 @@ async function generateRewrite() {
         format: "md",
       }),
     });
+    if (!rewriteOperationIsCurrent(operation)) return;
     renderRewriteVersions({ versions: generatedVersions }, { allowDefaults: false });
     renderTranscripts(saved.transcripts || latestTranscripts);
     stopRewriteProgress("正在保存结果", 96);
     await refreshTasks();
+    if (!rewriteOperationIsCurrent(operation)) return;
     await refreshFiles();
+    if (!rewriteOperationIsCurrent(operation)) return;
     await selectRewriteForCurrentProject(first, id);
+    if (!rewriteOperationIsCurrent(operation)) return;
     stopRewriteProgress("改写完成", 100);
     lastRewritePath = saved.task?.rewrite_path || latestTask?.rewrite_path || lastRewritePath;
     rewriteStatus.textContent = `改写已生成并写入 SQLite：${saved.task?.rewrite_path || latestTask?.rewrite_path || ""}`;
   } catch (error) {
+    if (!rewriteOperationIsCurrent(operation)) return;
     stopRewriteProgress("生成失败", 100);
-    rewriteStatus.textContent = error instanceof Error ? error.message : String(error);
+    const message = error instanceof Error ? error.message : String(error);
+    if (generatedVersions.length) {
+      const partialVersions = versionSpecs.map((spec) => (
+        generatedVersions.find((version) => version.key === spec.key) || spec
+      ));
+      renderRewriteVersions({ versions: partialVersions }, { allowDefaults: false });
+      rewriteStatus.textContent = `已保留 ${generatedVersions.length} 篇通过质检的成品；其余生成失败：${message}`;
+    } else {
+      rewriteStatus.textContent = message;
+    }
   }
 }
 
@@ -7642,15 +7712,18 @@ async function generateSingleRewrite(versionKey) {
   const versions = collectRewriteVersions();
   const target = versions.find((version) => version.key === versionKey);
   if (!target) return;
+  const operation = beginRewriteAsyncOperation("generation", id);
   rewriteStatus.textContent = "正在生成当前输出框...";
   startRewriteProgress(1);
   try {
     await ensureRewriteProviderConfigured();
+    if (!rewriteOperationIsCurrent(operation)) return;
     const data = await fetchJson("/api/tasks/rewrite", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(rewritePayloadForVersion(id, target, { previewOnly: true })),
     });
+    if (!rewriteOperationIsCurrent(operation)) return;
     const generated = data.rewrite?.versions?.[0];
     if (!generated) throw new Error("当前输出框没有生成内容");
     const mergedVersions = versions.map((version) => version.key === versionKey
@@ -7660,6 +7733,7 @@ async function generateSingleRewrite(versionKey) {
     stopRewriteProgress("当前输出框生成完成", 100);
     rewriteStatus.textContent = "当前输出框已生成，可单独保存或继续编辑。";
   } catch (error) {
+    if (!rewriteOperationIsCurrent(operation)) return;
     stopRewriteProgress("生成失败", 100);
     rewriteStatus.textContent = error instanceof Error ? error.message : String(error);
   }
@@ -7679,10 +7753,12 @@ async function reviseSingleRewrite(versionKey) {
     rewriteStatus.textContent = "当前输出框没有文案，请先生成一次。";
     return;
   }
+  const operation = beginRewriteAsyncOperation("generation", id);
   rewriteStatus.textContent = "正在按修改建议二次改写...";
   startRewriteProgress(1);
   try {
     await ensureRewriteProviderConfigured();
+    if (!rewriteOperationIsCurrent(operation)) return;
     const data = await fetchJson("/api/tasks/rewrite", {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -7692,6 +7768,7 @@ async function reviseSingleRewrite(versionKey) {
         previewOnly: true,
       })),
     });
+    if (!rewriteOperationIsCurrent(operation)) return;
     const generated = data.rewrite?.versions?.[0];
     if (!generated) throw new Error("二次改写没有返回内容");
     const mergedVersions = versions.map((version) => version.key === versionKey
@@ -7701,6 +7778,7 @@ async function reviseSingleRewrite(versionKey) {
     stopRewriteProgress("二次改写完成", 100);
     rewriteStatus.textContent = "已按修改建议完成二次改写。";
   } catch (error) {
+    if (!rewriteOperationIsCurrent(operation)) return;
     stopRewriteProgress("二次改写失败", 100);
     rewriteStatus.textContent = error instanceof Error ? error.message : String(error);
   }
@@ -7711,6 +7789,7 @@ async function saveSingleRewrite(versionKey) {
   if (!id) return;
   const target = collectRewriteVersions().find((version) => version.key === versionKey);
   if (!target) return;
+  const operation = beginRewriteAsyncOperation("save", id);
   rewriteStatus.textContent = "正在保存当前输出框...";
   try {
     const data = await fetchJson("/api/tasks/rewrite/save", {
@@ -7730,13 +7809,18 @@ async function saveSingleRewrite(versionKey) {
         mergeExisting: true,
       }),
     });
+    if (!rewriteOperationIsCurrent(operation)) return;
     renderTranscripts(data.transcripts);
     await refreshTasks();
+    if (!rewriteOperationIsCurrent(operation)) return;
     await refreshFiles();
+    if (!rewriteOperationIsCurrent(operation)) return;
     await selectRewriteForCurrentProject(target, id);
+    if (!rewriteOperationIsCurrent(operation)) return;
     lastRewritePath = data.filePath || data.task?.rewrite_path || lastRewritePath;
     rewriteStatus.textContent = "当前输出框已保存。";
   } catch (error) {
+    if (!rewriteOperationIsCurrent(operation)) return;
     rewriteStatus.textContent = error instanceof Error ? error.message : String(error);
   }
 }
@@ -7744,6 +7828,7 @@ async function saveSingleRewrite(versionKey) {
 async function saveRewrite(format = "txt") {
   const id = rewriteTaskId.value;
   if (!id) return;
+  const operation = beginRewriteAsyncOperation("save", id);
   if (document.activeElement === rewriteVersionCountInput) syncRewriteVersionCount();
   rewriteStatus.textContent = format === "md" ? "正在另存为 MD..." : format === "txt" ? "正在保存改写..." : "正在保存...";
   try {
@@ -7765,13 +7850,18 @@ async function saveRewrite(format = "txt") {
         format,
       }),
     });
+    if (!rewriteOperationIsCurrent(operation)) return;
     renderTranscripts(data.transcripts);
     await refreshTasks();
+    if (!rewriteOperationIsCurrent(operation)) return;
     await refreshFiles();
+    if (!rewriteOperationIsCurrent(operation)) return;
     await selectRewriteForCurrentProject(first, id);
+    if (!rewriteOperationIsCurrent(operation)) return;
     lastRewritePath = data.filePath || data.task?.rewrite_path || lastRewritePath;
     rewriteStatus.textContent = `已保存：${data.filePath || data.task?.rewrite_path || ""}`;
   } catch (error) {
+    if (!rewriteOperationIsCurrent(operation)) return;
     rewriteStatus.textContent = error instanceof Error ? error.message : String(error);
   }
 }

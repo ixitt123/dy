@@ -138,6 +138,21 @@ assert.match(runtime, /navigationType === "reload"[\s\S]*reason: pageExitReason/
 assert.match(server, /lifecycle:\s*pageLifecycle\.status\(\)/u, "Status API must expose lifecycle state for verification.");
 assert.match(runtime, /UI_DRAFT_STORAGE_KEY[\s\S]*restoreUiDraftValues/u, "Text inputs and ordinary parameters must be restored after refresh.");
 assert.match(runtime, /api\.\?key\|secret\|token\|cookie\|password/u, "Sensitive credentials must never be stored in browser drafts.");
+assert.match(
+  runtime,
+  /function beginRewriteEditorLoad[\s\S]*invalidateRewriteAsyncOperations[\s\S]*async function openRewriteEditor[\s\S]*rewriteEditorLoadIsCurrent/u,
+  "Opening another rewrite task must invalidate slower editor loads from the previous task.",
+);
+assert.match(
+  runtime,
+  /async function generateRewrite[\s\S]*beginRewriteAsyncOperation\("generation", id\)[\s\S]*fetchJson\("\/api\/tasks\/rewrite"[\s\S]*rewriteOperationIsCurrent\(operation\)/u,
+  "A late rewrite response must not overwrite the task that is currently open.",
+);
+assert.match(
+  runtime,
+  /async function runRewriteInlineAnalysis[\s\S]*beginRewriteAsyncOperation\("analysis", id\)[\s\S]*rewriteOperationIsCurrent\(operation\)/u,
+  "A late analysis response must stay bound to the task that started it.",
+);
 assert.match(workbench, /short-video-workbench-page/u, "The active feature page must be restored after refresh.");
 assert.match(launcher, /const url = await existingServerUrl\(\)/u, "The launcher must always reuse an existing backend.");
 assert.match(launcher, /const response = await fetch\(url\);/u, "The launcher liveness probe must use the public HTML entry rather than the cookie-protected API.");

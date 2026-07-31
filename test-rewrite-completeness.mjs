@@ -42,8 +42,11 @@ assert.match(server, /parent_conversion_template/u);
 assert.match(server, /conversionStructure/u);
 assert.match(server, /hasCompleteConversionStructure/u);
 assert.match(server, /parentTemplate && !structureComplete/u);
+assert.match(server, /parentConversionLocalQuality/u);
+assert.match(server, /reviewIssuesAreOnlyParentAdvisory/u);
 assert.match(server, /不得编造学校、老师、课程、试听/u);
 assert.match(pipelinePrompt, /Parent Emotion and Conversion Template/u);
 assert.match(pipelinePrompt, /painConflict/u);
+assert.match(runtime, /已保留 \$\{generatedVersions\.length\} 篇通过质检的成品/u);
 
 console.log("Rewrite completeness: OK");
