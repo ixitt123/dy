@@ -166,7 +166,14 @@ async function projectApi(path, options = {}) {
     },
   });
   const data = await response.json().catch(() => ({}));
-  if (!response.ok || data.ok === false) throw new Error(data.message || data.error || `HTTP ${response.status}`);
+  if (!response.ok || data.ok === false) {
+    const error = new Error(data.message || data.error || `HTTP ${response.status}`);
+    error.code = data.code || "UNKNOWN";
+    error.category = data.category || "unknown";
+    error.retryable = Boolean(data.retryable);
+    error.retryAfterMs = Number(data.retryAfterMs || 0);
+    throw error;
+  }
   return data;
 }
 
@@ -1293,14 +1300,33 @@ async function updateWorkbenchConnection() {
   try {
     const response = await fetch("/api/status", { cache: "no-store" });
     if (!response.ok) throw new Error("offline");
+    const data = await response.json();
     status.classList.add("online");
     status.classList.remove("offline");
     status.querySelector("span").textContent = "系统正常";
+    updateRuntimeVersionBadge(data?.runtimeVersion);
   } catch {
     status.classList.remove("online");
     status.classList.add("offline");
     status.querySelector("span").textContent = "后台未连接";
   }
+}
+
+function updateRuntimeVersionBadge(rv) {
+  const badge = document.querySelector("#runtimeVersionBadge");
+  if (!badge || !rv) return;
+  const fmtTime = (iso) => {
+    try {
+      const d = new Date(iso);
+      const p = (n) => String(n).padStart(2, "0");
+      return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+    } catch { return iso || "unknown"; }
+  };
+  badge.querySelector(".rv-branch").textContent = rv.branch || "unknown";
+  badge.querySelector(".rv-commit").textContent = rv.commit || "unknown";
+  badge.querySelector(".rv-buildtime").textContent = fmtTime(rv.buildTime);
+  badge.querySelector(".rv-submodule").textContent = "MPT:" + (rv.submoduleCommit || "unknown");
+  badge.style.display = "";
 }
 
 async function openLatestOutputLocation() {
@@ -1994,24 +2020,24 @@ function setupImageStudio() {
     if (!results.length) { grid.innerHTML = '<div class="empty-state">无结果</div>'; return; }
     grid.innerHTML = `${
       results.map((r, i) => {
-      const safePrompt = String(sourcePrompt || r.prompt || "").replace(/\\/g, "\\\\").replace(/'/g, "\\'");
+      const prompt = String(sourcePrompt || r.prompt || "");
       if (!r.success) return `<div class="img-card error">
         <div class="img-meta"><span>第${i + 1}张生成失败</span><small>${escapeHtml(r.error || "失败")}</small></div>
         <div class="img-actions">
-          <button class="btn-sm danger-action" type="button" onclick="this.closest('.img-card').remove()">删除</button>
-          <button class="btn-sm" type="button" onclick="document.getElementById('imagePrompt').value='${safePrompt}';document.getElementById('imageGenerateBtn').click()">重新生成</button>
+          <button class="btn-sm danger-action" type="button" data-image-action="remove">删除</button>
+          <button class="btn-sm" type="button" data-image-action="retry" data-image-prompt="${escapeHtml(prompt)}">重新生成</button>
         </div>
       </div>`;
       const originalUrl = imageFileUrl(r);
       const thumbUrl = r.thumbnailUrl || imageThumbnailUrl(r);
-      return `<div class="img-card" data-asset-id="${r.assetId || ""}">
-        <button class="img-preview" type="button" onclick="window.open('${originalUrl}')">
-          <img src="${thumbUrl}" alt="生成图片缩略图" loading="lazy" />
+      return `<div class="img-card" data-asset-id="${escapeHtml(r.assetId || "")}">
+        <button class="img-preview" type="button" data-image-action="open" data-image-url="${escapeHtml(originalUrl)}">
+          <img src="${escapeHtml(thumbUrl)}" alt="生成图片缩略图" loading="lazy" />
         </button>
         <div class="img-actions">
-          <button class="btn-sm" type="button" onclick="window.open('${originalUrl}')">预览原图</button>
-          <button class="btn-sm" type="button" onclick="fetch('/api/image/assets/${r.assetId}/delete',{method:'POST'}).then(()=>this.closest('.img-card').remove())">删除</button>
-          <button class="btn-sm" type="button" onclick="document.getElementById('imagePrompt').value='${safePrompt}';document.getElementById('imageGenerateBtn').click()">重新生成</button>
+          <button class="btn-sm" type="button" data-image-action="open" data-image-url="${escapeHtml(originalUrl)}">预览原图</button>
+          <button class="btn-sm" type="button" data-image-action="delete" data-image-asset-id="${escapeHtml(r.assetId || "")}">删除</button>
+          <button class="btn-sm" type="button" data-image-action="retry" data-image-prompt="${escapeHtml(prompt)}">重新生成</button>
         </div>
       </div>`;
     }).join("")}`;
@@ -2047,16 +2073,16 @@ function setupImageStudio() {
             ${sortedRows.map((a, assetIndex) => `
               <div class="img-card">
                 <button class="img-preview" type="button" data-image-preview-group="${groupId}" data-image-preview-index="${assetIndex}">
-                  <img src="${a.thumbnail_url || imageThumbnailUrl(a)}" alt="图片资产缩略图" loading="lazy" />
+                  <img src="${escapeHtml(imageThumbnailUrl(a))}" alt="图片资产缩略图" loading="lazy" />
                 </button>
                 <div class="img-meta">
-                  <span>#${Number(a.scene_index || 0) || "-"} ${(a.prompt || "").slice(0, 30)}</span>
-                  <span class="text-xs text-secondary">${(a.created_at || "").slice(0, 10)} · ${a.width || 1080}x${a.height || 1080}</span>
+                  <span>#${Number(a.scene_index || 0) || "-"} ${escapeHtml((a.prompt || "").slice(0, 30))}</span>
+                  <span class="text-xs text-secondary">${escapeHtml((a.created_at || "").slice(0, 10))} · ${Number(a.width || 1080)}x${Number(a.height || 1080)}</span>
                 </div>
                 <div class="img-actions">
                   <button class="btn-sm" type="button" data-image-preview-group="${groupId}" data-image-preview-index="${assetIndex}">预览原图</button>
-                  <button class="btn-sm" onclick="document.getElementById('imagePrompt').value='${String(a.prompt || "").replace(/\\/g, "\\\\").replace(/'/g, "\\'")}';document.getElementById('imageGenerateBtn').click()">重新生成</button>
-                  <button class="btn-sm danger-action" onclick="fetch('/api/image/assets/${a.id}/delete',{method:'POST'}).then(()=>this.closest('.img-card').remove())">删除</button>
+                  <button class="btn-sm" type="button" data-image-action="retry" data-image-prompt="${escapeHtml(String(a.prompt || ""))}">重新生成</button>
+                  <button class="btn-sm danger-action" type="button" data-image-action="delete" data-image-asset-id="${escapeHtml(a.id || "")}">删除</button>
                 </div>
               </div>
             `).join("")}
@@ -2065,7 +2091,7 @@ function setupImageStudio() {
       `;
       }).join("");
     } catch (e) {
-      grid.innerHTML = `<div class="empty-state">加载失败: ${e.message}</div>`;
+      grid.innerHTML = `<div class="empty-state">加载失败: ${escapeHtml(e.message)}</div>`;
     }
   }
 
@@ -2076,7 +2102,29 @@ function setupImageStudio() {
       loadImageAssets();
     }
   };
-  document.addEventListener("click", (e) => {
+  document.addEventListener("click", async (e) => {
+    const imageAction = e.target.closest("[data-image-action]");
+    if (imageAction) {
+      e.preventDefault();
+      const card = imageAction.closest(".img-card");
+      if (imageAction.dataset.imageAction === "remove") card?.remove();
+      if (imageAction.dataset.imageAction === "retry") {
+        if (promptInput) promptInput.value = imageAction.dataset.imagePrompt || "";
+        document.getElementById("imageGenerateBtn")?.click();
+      }
+      if (imageAction.dataset.imageAction === "open") {
+        const url = String(imageAction.dataset.imageUrl || "");
+        if (url.startsWith("/api/image/")) window.open(url, "_blank", "noopener");
+      }
+      if (imageAction.dataset.imageAction === "delete") {
+        const assetId = String(imageAction.dataset.imageAssetId || "");
+        if (assetId) {
+          const response = await fetch(`/api/image/assets/${encodeURIComponent(assetId)}/delete`, { method: "POST" });
+          if (response.ok) card?.remove();
+        }
+      }
+      return;
+    }
     const previewTrigger = e.target.closest("[data-image-preview-group]");
     if (previewTrigger) {
       e.preventDefault();

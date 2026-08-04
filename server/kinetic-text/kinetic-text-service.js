@@ -12,6 +12,7 @@ import {
 } from "./effects.js";
 import { generateIllustrationBackground, normalizeIllustrationConfig } from "./generative-illustration.js";
 import { mergeSourceConstrainedRows } from "../tts/source-constrained-repair.js";
+import { readJsonWithRecovery, writeJsonAtomic } from "../core/atomic-write.mjs";
 
 const FPS = 30;
 const DEFAULT_FONT = "Microsoft YaHei";
@@ -50,16 +51,11 @@ function frameRateForProject(project = {}) {
 }
 
 function readJson(filePath, fallback = null) {
-  try {
-    return JSON.parse(fs.readFileSync(filePath, "utf8"));
-  } catch {
-    return fallback;
-  }
+  return readJsonWithRecovery(filePath, { fallback });
 }
 
 function writeJson(filePath, value) {
-  fs.mkdirSync(path.dirname(filePath), { recursive: true });
-  fs.writeFileSync(filePath, `${JSON.stringify(value, null, 2)}\n`, "utf8");
+  writeJsonAtomic(filePath, value);
 }
 
 function normalizeText(value) {
@@ -1459,6 +1455,7 @@ export function createKineticTextService({
   ffprobePath,
   modelRouter,
   imageService,
+  finalAssetRegistry = null,
   onOutput = () => {},
 }) {
   const rootDir = path.join(baseDir, ".data", "kinetic-text");
@@ -1488,9 +1485,56 @@ export function createKineticTextService({
     return projectPublic(normalized);
   }
 
+  function ensureFinalAsset(project) {
+    const outputPath = String(project?.outputs?.finalVideo || "");
+    if (!finalAssetRegistry || !outputPath || !fs.existsSync(outputPath)) return project;
+    const existingAssetId = String(project.outputs?.finalAssetId || "").trim();
+    if (existingAssetId && typeof finalAssetRegistry.get === "function") {
+      const existingAsset = finalAssetRegistry.get(existingAssetId);
+      const outputStat = fs.statSync(outputPath);
+      const sameFile = existingAsset
+        && path.resolve(existingAsset.filePath) === path.resolve(outputPath)
+        && Number(existingAsset.size || 0) === outputStat.size;
+      if (sameFile) {
+        const sameUrls = project.outputs?.finalVideoUrl === existingAsset.videoUrl
+          && project.outputs?.finalDownloadUrl === existingAsset.downloadUrl;
+        if (sameUrls) return project;
+        const updated = {
+          ...project,
+          outputs: {
+            ...(project.outputs || {}),
+            finalVideoUrl: existingAsset.videoUrl,
+            finalDownloadUrl: existingAsset.downloadUrl,
+          },
+        };
+        writeJson(projectPath(updated.id), updated);
+        return updated;
+      }
+    }
+    const finalAsset = finalAssetRegistry.register({
+      filePath: outputPath,
+      kind: "video",
+      source: "kinetic-text",
+      sourceRef: project.id,
+      metadata: { title: project.title, duration: project.duration, effectId: project.effectId, discoveredFromHistory: true },
+    });
+    if (project.outputs?.finalAssetId === finalAsset.assetId) return project;
+    const updated = {
+      ...project,
+      outputs: {
+        ...(project.outputs || {}),
+        finalAssetId: finalAsset.assetId,
+        finalVideoUrl: finalAsset.videoUrl,
+        finalDownloadUrl: finalAsset.downloadUrl,
+      },
+    };
+    writeJson(projectPath(updated.id), updated);
+    return updated;
+  }
+
   function get(id) {
     const project = readJson(projectPath(id), null);
-    return project ? projectPublic(normalizeProject(project)) : null;
+    return project ? projectPublic(ensureFinalAsset(normalizeProject(project))) : null;
   }
 
   function list() {
@@ -1557,6 +1601,14 @@ export function createKineticTextService({
       : hasTimedTimeline
         ? constrainKineticTimelineToVoiceScript(timeline, finalText)
         : timeline;
+    const receivedBgmPath = String(tts.bgm_path || tts.bgmPath || "").trim();
+    const receivedBgmEnabled = Boolean(receivedBgmPath) && tts.include_bgm !== false && tts.includeBgm !== false;
+    const receivedBgmVolume = safeNumber(
+      tts.bgm_volume_percent ?? tts.bgmVolumePercent ?? (Number(tts.bgm_volume ?? tts.bgmVolume ?? 0.18) * 100),
+      18,
+      0,
+      100,
+    );
     return save({
       id,
       title: input.title || tts.title || `动态大字视频 ${new Date().toLocaleString("zh-CN", { hour12: false })}`,
@@ -1596,7 +1648,13 @@ export function createKineticTextService({
       bookends: input.bookends && typeof input.bookends === "object" ? input.bookends : {},
       background: { mode: "black", path: "", name: "" },
       dynamicIllustration: { config: normalizeIllustrationConfig({}, { duration }), outputs: {} },
-      audioMix: { source: "none", localPath: "", localName: "", ttsVolume: 100, backgroundVolume: 18 },
+      audioMix: {
+        source: receivedBgmEnabled ? "local" : "none",
+        localPath: receivedBgmPath,
+        localName: String(tts.bgm_name || tts.bgmName || (receivedBgmPath ? "清爽教育 BGM" : "")),
+        ttsVolume: 100,
+        backgroundVolume: receivedBgmVolume,
+      },
       outputs: {},
       createdAt: nowIso(),
       updatedAt: nowIso(),
@@ -1902,8 +1960,9 @@ export function createKineticTextService({
       const bgVolume = (project.audioMix.backgroundVolume / 100).toFixed(3);
       const filters = [videoFilter, `[1:a]volume=${ttsVolume}[tts]`];
       if (backgroundAudioIndex >= 0) {
-        const fadeOut = Math.max(0, duration - 0.8).toFixed(3);
-        filters.push(`[${backgroundAudioIndex}:a]volume=${bgVolume},afade=t=in:st=0:d=0.5,afade=t=out:st=${fadeOut}:d=0.8[bgm]`);
+        // 04.07 BGM 收尾淡出 2.0s（执行总表建议 2-3s，避免突停）
+        const fadeOut = Math.max(0, duration - 2.0).toFixed(3);
+        filters.push(`[${backgroundAudioIndex}:a]volume=${bgVolume},afade=t=in:st=0:d=0.5,afade=t=out:st=${fadeOut}:d=2.0[bgm]`);
         filters.push("[tts][bgm]amix=inputs=2:duration=first:dropout_transition=0:normalize=0[a]");
       }
       args.push("-filter_complex", filters.join(";"), "-map", "[v]", "-map", backgroundAudioIndex >= 0 ? "[a]" : "[tts]");
@@ -1916,9 +1975,31 @@ export function createKineticTextService({
         updateJob(jobId, { progress: Math.min(94, 42 + Math.round((elapsed / duration) * 50)), stage: "合成 MP4" });
       } });
       updateJob(jobId, { progress: 97, stage: "归档完成" });
-      project = update(projectId, { status: "completed", stage: "成片完成", progress: 100, outputs: { finalVideo: outputPath } });
-      await Promise.resolve(onOutput(project, { videoPath: outputPath, materialZip: project.outputs.materialZip, srtPath: project.outputs.srtPath }));
-      updateJob(jobId, { status: "completed", progress: 100, stage: "成片完成", result: { videoPath: outputPath, project } });
+      const finalAsset = finalAssetRegistry?.register({
+        filePath: outputPath,
+        kind: "video",
+        source: "kinetic-text",
+        sourceRef: projectId,
+        metadata: { title: project.title, duration: project.duration, effectId: project.effectId },
+      });
+      project = update(projectId, {
+        status: "completed",
+        stage: "成片完成",
+        progress: 100,
+        outputs: {
+          finalVideo: outputPath,
+          finalAssetId: finalAsset?.assetId || "",
+          finalVideoUrl: finalAsset?.videoUrl || "",
+          finalDownloadUrl: finalAsset?.downloadUrl || "",
+        },
+      });
+      await Promise.resolve(onOutput(project, {
+        videoPath: outputPath,
+        assetId: finalAsset?.assetId || "",
+        materialZip: project.outputs.materialZip,
+        srtPath: project.outputs.srtPath,
+      }));
+      updateJob(jobId, { status: "completed", progress: 100, stage: "成片完成", result: { videoPath: outputPath, assetId: finalAsset?.assetId || "", project } });
       return project;
     } catch (error) {
       updateJob(jobId, { status: "failed", stage: "成片生成失败", error: error instanceof Error ? error.message : String(error) });

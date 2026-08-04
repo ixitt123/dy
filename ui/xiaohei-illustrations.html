@@ -51,6 +51,7 @@
                 <label class="xiaohei-check"><input id="xiaoheiIncludeBgm" type="checkbox" /><span>加入对应 BGM 音频</span></label>
                 <label class="field"><span>背景音乐</span><button id="chooseXiaoheiBgm" type="button">选择本地背景音乐</button><small id="xiaoheiBgmName">未选择背景音乐</small></label>
                 <input id="xiaoheiBgmFile" type="file" accept="audio/mpeg,audio/wav,audio/x-wav,audio/mp4,audio/x-m4a" hidden />
+                <div id="xiaoheiBgmPlayerWrap" class="field xiaohei-bgm-player" hidden><span>BGM 预览</span><audio id="xiaoheiBgmPlayer" controls preload="metadata"></audio></div>
                 <label class="field"><span>背景音量</span><input id="xiaoheiBgmVolume" type="range" min="0" max="100" value="18" /><output id="xiaoheiBgmVolumeValue">18%</output></label>
                 <label class="xiaohei-check"><input id="xiaoheiShowSubtitles" type="checkbox" checked /><span>显示底部关键词字幕</span></label>
                 <label class="field"><span>字幕字号</span><input id="xiaoheiSubtitleSize" type="range" min="28" max="96" value="48" /><output id="xiaoheiSubtitleSizeValue">48</output></label>

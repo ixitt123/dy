@@ -6,6 +6,7 @@ import { randomUUID } from "node:crypto";
 import { HttpBodyError, readJsonBody } from "../utils/http-body.js";
 import { buildAss, safeNumber } from "../kinetic-text/kinetic-text-service.js";
 import { KINETIC_TEXT_EFFECTS, defaultEffectParams, normalizeEffectId } from "../kinetic-text/effects.js";
+import { createMoneyPrinterStore } from "../core/money-printer-store.js";
 
 const DEFAULT_API_PORT = 8080;
 const DEFAULT_WEBUI_PORT = 8501;
@@ -23,13 +24,26 @@ const MAX_OPEN_URL_LENGTH = 2048;
 let apiProcess = null;
 let apiStartPromise = null;
 const apiLogs = [];
-const renderedFiles = new Map();
-const managedTasks = new Map();
-
-export function createMoneyPrinterRoutes({ baseDir, sendJson, ffmpegPath, ffprobePath, getDownloadsDir, modelRouter }) {
+export function createMoneyPrinterRoutes({ baseDir, sendJson, ffmpegPath, ffprobePath, getDownloadsDir, modelRouter, ttsHandoffService, finalAssetRegistry = null }) {
   const defaultRoot = path.resolve(process.env.MONEY_PRINTER_TURBO_ROOT || path.join(baseDir, "integrations", "moneyprinterturbo"));
   const workflowDir = path.join(baseDir, ".data", "money-printer");
+  const moneyPrinterStore = createMoneyPrinterStore(baseDir);
   const materialSearchPrompt = readOptionalText(path.join(baseDir, "prompts", "money-printer-material-search.md"));
+  if (finalAssetRegistry) {
+    for (const record of moneyPrinterStore.listRenderedFiles()) {
+      if (!record.filePath || !fs.existsSync(record.filePath)) continue;
+      const finalAsset = finalAssetRegistry.register({
+        filePath: record.filePath,
+        kind: "video",
+        source: "money-printer",
+        sourceRef: record.id,
+        metadata: { ...(record.metadata || {}), discoveredFromHistory: true },
+      });
+      if (record.metadata?.assetId !== finalAsset.assetId) {
+        moneyPrinterStore.saveRenderedFile(record.id, { ...record, metadata: { ...(record.metadata || {}), assetId: finalAsset.assetId } });
+      }
+    }
+  }
 
   const handleMoneyPrinterRoutes = async function handleMoneyPrinterRoutes(req, res, url) {
     if (!url.pathname.startsWith("/api/money-printer/")) return false;
@@ -52,7 +66,7 @@ export function createMoneyPrinterRoutes({ baseDir, sendJson, ffmpegPath, ffprob
 
     if (req.method === "GET" && route === "file") {
       const id = String(url.searchParams.get("id") || "").trim();
-      const record = id ? renderedFiles.get(id) : null;
+      const record = id ? moneyPrinterStore.getRenderedFile(id) : null;
       if (!record?.filePath || !fs.existsSync(record.filePath)) {
         sendJson(res, 404, { ok: false, message: "MoneyPrinter 输出文件不存在。" });
       } else {
@@ -79,15 +93,33 @@ export function createMoneyPrinterRoutes({ baseDir, sendJson, ffmpegPath, ffprob
       try {
         const body = await readJsonBody(req, { maxBytes: 2 * 1024 * 1024 });
         const status = await buildStatus(defaultRoot);
-        const result = await renderFinalVideo(body, {
+        const trustedBody = applyTrustedMoneyPrinterBgm(body, ttsHandoffService);
+        const result = await renderFinalVideo(trustedBody, {
           rootDir: status.root,
           workflowDir,
           downloadsDir: typeof getDownloadsDir === "function" ? getDownloadsDir() : path.join(baseDir, "downloads"),
           ffmpegPath,
           ffprobePath,
         });
-        renderedFiles.set(result.id, { filePath: result.outputPath, createdAt: new Date().toISOString() });
-        sendJson(res, 200, { ok: true, ...result, videoUrl: `/api/money-printer/file?id=${encodeURIComponent(result.id)}` });
+        const finalAsset = finalAssetRegistry?.register({
+          filePath: result.outputPath,
+          kind: "video",
+          source: "money-printer",
+          sourceRef: result.id,
+          metadata: { title: result.title, manifestPath: result.manifestPath, bgmMixed: result.bgmMixed === true },
+        });
+        moneyPrinterStore.saveRenderedFile(result.id, {
+          filePath: result.outputPath,
+          createdAt: new Date().toISOString(),
+          metadata: { title: result.title, manifestPath: result.manifestPath, bgmMixed: result.bgmMixed === true, assetId: finalAsset?.assetId || "" },
+        });
+        sendJson(res, 200, {
+          ok: true,
+          ...result,
+          assetId: finalAsset?.assetId || "",
+          videoUrl: finalAsset?.videoUrl || `/api/money-printer/file?id=${encodeURIComponent(result.id)}`,
+          downloadUrl: finalAsset?.downloadUrl || `/api/money-printer/file?id=${encodeURIComponent(result.id)}&download=1`,
+        });
       } catch (error) {
         sendJson(res, error instanceof HttpBodyError ? error.statusCode : 400, {
           ok: false,
@@ -166,7 +198,7 @@ export function createMoneyPrinterRoutes({ baseDir, sendJson, ffmpegPath, ffprob
         const managed = await createManagedTask(status, payload, materialSources, {
           materialMode,
           materialPlan,
-        });
+        }, moneyPrinterStore);
         sendJson(res, 202, {
           ok: true,
           task: managedTaskSnapshot(managed),
@@ -191,9 +223,9 @@ export function createMoneyPrinterRoutes({ baseDir, sendJson, ffmpegPath, ffprob
         if (!taskId) throw new Error("缺少 MoneyPrinterTurbo 任务 ID。");
         const status = await buildStatus(defaultRoot);
         if (!status.api.online) throw new Error("MoneyPrinterTurbo API 未运行。");
-        const managed = managedTasks.get(taskId);
+        const managed = moneyPrinterStore.getManagedTask(taskId);
         if (managed) {
-          const task = await pollManagedTask(status, managed);
+          const task = await pollManagedTask(status, managed, moneyPrinterStore);
           sendJson(res, 200, { ok: true, task, apiBaseUrl: status.api.baseUrl });
           return true;
         }
@@ -253,6 +285,43 @@ export function createMoneyPrinterRoutes({ baseDir, sendJson, ffmpegPath, ffprob
     return false;
   };
   return handleMoneyPrinterRoutes;
+}
+
+export function applyTrustedMoneyPrinterBgm(body = {}, ttsHandoffService = null) {
+  const tts = body.tts && typeof body.tts === "object" ? body.tts : {};
+  const includeBgm = body.includeBgm === true;
+  if (!includeBgm) {
+    return { ...body, includeBgm: false, bgm_file: "", bgm_path: "", bgm_volume: 0 };
+  }
+  const handoffId = String(body.handoff_id || tts.handoff_id || "").trim();
+  const revision = String(body.revision || body.handoff_revision || tts.handoff_revision || tts.revision || "").trim();
+  if (!handoffId || !revision || typeof ttsHandoffService?.get !== "function") {
+    throw new Error("最终 BGM 请求缺少可验证的 handoff ID 或 revision。");
+  }
+  const handoff = ttsHandoffService.get(handoffId);
+  if (!handoff || !handoff.targets?.includes("money-printer")) {
+    throw new Error("当前 handoff 不存在或未发送给 MoneyPrinter。");
+  }
+  if (handoff.revision !== revision) throw new Error("最终 BGM 请求 revision 与已确认 handoff 不一致。");
+  const trustedPath = String(handoff.payload?.bgm_path || "").trim();
+  const requestedPath = String(body.bgm_file || body.bgm_path || "").trim();
+  if (!trustedPath || !requestedPath || path.resolve(trustedPath).toLowerCase() !== path.resolve(requestedPath).toLowerCase()) {
+    throw new Error("最终 BGM 路径不是当前 handoff 的受信任资产。");
+  }
+  const trustedVolume = clampFloat(handoff.payload?.bgm_volume, 0, 1, 0.18);
+  const requestedVolume = Number(body.bgm_volume);
+  if (!Number.isFinite(requestedVolume) || Math.abs(requestedVolume - trustedVolume) > 0.000001) {
+    throw new Error("最终 BGM 音量与已确认 handoff 不一致。");
+  }
+  return {
+    ...body,
+    handoff_id: handoff.id,
+    revision: handoff.revision,
+    includeBgm: true,
+    bgm_file: trustedPath,
+    bgm_path: trustedPath,
+    bgm_volume: trustedVolume,
+  };
 }
 
 async function buildStatus(rootDir) {
@@ -427,7 +496,7 @@ export function resolveMaterialSourceOrder(preferred, materials = {}) {
   return [selected, ...configured].filter((source, index, all) => configured.includes(source) && all.indexOf(source) === index);
 }
 
-async function createManagedTask(status, payload, materialSources, options = {}) {
+async function createManagedTask(status, payload, materialSources, options = {}, store) {
   const managed = {
     id: `dy-mpt-${randomUUID()}`,
     payload: { ...payload },
@@ -438,9 +507,10 @@ async function createManagedTask(status, payload, materialSources, options = {})
     createdAt: new Date().toISOString(),
     materialMode: normalizeMaterialMode(options.materialMode),
     materialPlan: options.materialPlan || null,
+    runtime: {},
   };
   managed.officialTaskId = await submitOfficialTask(status, managed.payload);
-  managedTasks.set(managed.id, managed);
+  store.saveManagedTask(managed);
   return managed;
 }
 
@@ -472,7 +542,7 @@ function managedTaskSnapshot(managed, overrides = {}) {
   };
 }
 
-async function pollManagedTask(status, managed) {
+async function pollManagedTask(status, managed, store) {
   const result = await fetchMptJson(`${status.api.v1BaseUrl}/tasks/${encodeURIComponent(managed.officialTaskId)}`);
   if (Number(result?.status || 0) !== 200) throw new Error(result?.message || "读取任务失败。");
   const official = normalizeTask(result.data || {}, status.api.baseUrl);
@@ -483,6 +553,8 @@ async function pollManagedTask(status, managed) {
     const nextSource = managed.materialSources[managed.sourceIndex];
     managed.payload = { ...managed.payload, video_source: nextSource };
     managed.officialTaskId = await submitOfficialTask(status, managed.payload);
+    managed.runtime = {};
+    store.saveManagedTask(managed);
     return managedTaskSnapshot(managed, {
       stateLabel: `切换到 ${nextSource}`,
       fallback_message: `${source} 素材失败，已自动切换到 ${nextSource}。`,
@@ -493,8 +565,12 @@ async function pollManagedTask(status, managed) {
     attempts.push({ source, taskId: managed.officialTaskId, error: sanitizeMptError(official.error || official.message || "任务失败") });
     managed.attempts = attempts;
   }
+  managed.runtime = updateMoneyPrinterTaskRuntime(managed.runtime, official);
+  const presentation = moneyPrinterTaskPresentation(official, managed.runtime);
+  store.saveManagedTask(managed);
   return {
     ...official,
+    ...presentation,
     task_id: managed.id,
     official_task_id: managed.officialTaskId,
     material_source: source,
@@ -506,6 +582,51 @@ async function pollManagedTask(status, managed) {
       ? attempts.map((item) => `${item.source}: ${item.error}`).join("；")
       : sanitizeMptError(official.error || ""),
   };
+}
+
+export function updateMoneyPrinterTaskRuntime(previous = {}, task = {}, now = new Date()) {
+  const observedAt = now instanceof Date ? now.toISOString() : new Date(now).toISOString();
+  const progress = Number(task.progress || 0);
+  const state = Number(task.state || 0);
+  const progressChanged = Number(previous.lastProgress) !== progress || Number(previous.lastState) !== state;
+  return {
+    lastProgress: progress,
+    lastState: state,
+    progressChangedAt: progressChanged || !previous.progressChangedAt ? observedAt : previous.progressChangedAt,
+    lastPolledAt: observedAt,
+  };
+}
+
+export function moneyPrinterTaskPresentation(task = {}, runtime = {}, now = Date.now()) {
+  const state = Number(task.state || 0);
+  const progress = Math.max(0, Math.min(100, Number(task.progress || 0)));
+  const changedAtMs = Date.parse(String(runtime.progressChangedAt || runtime.lastPolledAt || ""));
+  const unchangedSeconds = Number.isFinite(changedAtMs) ? Math.max(0, Math.floor((Number(now) - changedAtMs) / 1000)) : 0;
+  const common = {
+    heartbeat_at: String(runtime.lastPolledAt || ""),
+    progress_changed_at: String(runtime.progressChangedAt || ""),
+    progress_unchanged_seconds: unchangedSeconds,
+  };
+  if (state === TASK_STATE_FAILED) {
+    const failedStage = String(task.failed_stage || "").toLowerCase();
+    const stageLabel = failedStage === "materials" ? "素材准备" : failedStage === "video" ? "视频合成" : failedStage ? failedStage : "未知阶段";
+    return { ...common, status_kind: "failed", processing_stage: failedStage, stateLabel: `任务已经失败 · ${stageLabel}` };
+  }
+  if (state === TASK_STATE_COMPLETE) {
+    return { ...common, status_kind: "complete", processing_stage: "complete", stateLabel: "已完成" };
+  }
+  if (state === TASK_STATE_PROCESSING && progress >= 50) {
+    return {
+      ...common,
+      status_kind: "processing",
+      processing_stage: "video",
+      stateLabel: "视频合成仍在进行",
+      activity_message: unchangedSeconds > 0
+        ? `任务服务心跳正常；当前百分比已 ${unchangedSeconds} 秒未变化，长视频 FFmpeg 合成可能需要较长时间。`
+        : "任务服务心跳正常；正在进入视频 FFmpeg 合成阶段。",
+    };
+  }
+  return { ...common, status_kind: "processing", processing_stage: progress >= 40 ? "materials" : "preparing", stateLabel: "生成中" };
 }
 
 export function shouldTryNextMaterialSource(task, managed) {
@@ -921,7 +1042,7 @@ function wait(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function renderFinalVideo(body = {}, context = {}) {
+export async function renderFinalVideo(body = {}, context = {}) {
   if (!context.ffmpegPath || !fs.existsSync(context.ffmpegPath)) throw new Error("没有找到 ffmpeg，无法合成最终视频。");
   const tts = body.tts && typeof body.tts === "object" ? body.tts : {};
   const audioPath = String(body.audio_path || tts.audio_path || tts.audioPath || "").trim();
@@ -971,6 +1092,10 @@ async function renderFinalVideo(body = {}, context = {}) {
   const { width, height } = outputSize(project.aspectRatio);
   const duration = await probeDuration(context.ffprobePath, audioPath) || project.duration;
   const ttsVolume = clampFloat(settings.ttsVolume, 0, 2, 1);
+  // 05.03：解析 BGM 参数，最终 FFmpeg 合成混入独立 BGM（修复最终成片丢失 BGM）
+  const bgmPath = resolveMptFilePath(body.bgm_file || body.bgm_path || body.bgm, context.rootDir);
+  const bgmVolume = clampFloat(body.bgm_volume, 0, 1, 0.18);
+  const hasBgm = Boolean(bgmPath) && fs.existsSync(bgmPath);
   const videoFilter = buildMoneyPrinterVideoFilter({
     width,
     height,
@@ -979,12 +1104,27 @@ async function renderFinalVideo(body = {}, context = {}) {
     showBottomSubtitles,
     assPath,
   });
+  // 音频滤镜：无 BGM 时只调 TTS 音量；有 BGM 时 TTS + BGM 混音（BGM 循环到 TTS 时长、淡出 2s、音量按 bgmVolume）
+  let audioFilter;
+  if (hasBgm) {
+    const fadeInDuration = Math.min(0.5, Math.max(0.1, duration * 0.1));
+    const fadeOutDuration = Math.min(2, Math.max(0.5, duration / 3));
+    const fadeStart = Math.max(fadeInDuration, duration - fadeOutDuration);
+    audioFilter = `[1:a]volume=${ttsVolume.toFixed(3)}[a1];[2:a]aloop=loop=-1:size=2e9,atrim=duration=${duration.toFixed(3)},asetpts=N/SR/TB,volume=${bgmVolume.toFixed(3)},afade=t=in:st=0:d=${fadeInDuration.toFixed(3)},afade=t=out:st=${fadeStart.toFixed(3)}:d=${fadeOutDuration.toFixed(3)}[a2];[a1][a2]amix=inputs=2:duration=first:dropout_transition=0:normalize=0[a]`;
+  } else {
+    audioFilter = `[1:a]volume=${ttsVolume.toFixed(3)}[a]`;
+  }
   const args = [
     "-y",
     "-stream_loop", "-1", "-i", backgroundPath,
     "-i", audioPath,
+  ];
+  if (hasBgm) {
+    args.push("-i", bgmPath);
+  }
+  args.push(
     "-filter_complex",
-    `${videoFilter};[1:a]volume=${ttsVolume.toFixed(3)}[a]`,
+    `${videoFilter};${audioFilter}`,
     "-map", "[v]",
     "-map", "[a]",
     "-t", Math.max(0.5, duration).toFixed(3),
@@ -997,7 +1137,7 @@ async function renderFinalVideo(body = {}, context = {}) {
     "-b:a", "192k",
     "-movflags", "+faststart",
     outputPath,
-  ];
+  );
   await spawnLogged(context.ffmpegPath, args);
   return {
     id: runId,
@@ -1005,6 +1145,8 @@ async function renderFinalVideo(body = {}, context = {}) {
     assPath,
     manifestPath: path.join(runDir, "manifest.json"),
     title: project.title,
+    bgmMixed: hasBgm,
+    bgmPath: hasBgm ? bgmPath : "",
   };
 }
 

@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>短视频内容生产工厂</title>
-    <link rel="stylesheet" href="/app.css?v=2026073014" />
+    <link rel="stylesheet" href="/app.css?v=2026080102" />
   </head>
   <body>
     <div class="workbench-app">
@@ -80,6 +80,9 @@
             <p id="workbenchPageDescription">了解软件能力、视频生产线和常用入口。</p>
           </div>
           <div class="header-actions">
+            <span class="runtime-version-badge" id="runtimeVersionBadge" title="运行版本（branch / commit / 构建时间 / 子模块）" style="display:none;">
+              <span class="rv-branch"></span> · <span class="rv-commit"></span> · <span class="rv-buildtime"></span> · <span class="rv-submodule"></span>
+            </span>
             <span class="connection-status" id="workbenchConnectionStatus">
               <i></i><span>正在连接</span>
             </span>
@@ -405,7 +408,7 @@
                 </div>
               </div>
               <textarea id="rewriteOriginal" rows="13" placeholder="从采集处理发送来的文案会出现在这里，也可以手动修改后再生成。"></textarea>
-              <div class="rewrite-handoff-panel">
+              <div class="rewrite-handoff-panel" data-no-choice-persist>
                 <strong>发送原始文案到</strong>
                 <div class="rewrite-handoff-actions">
                   <label><input class="rewrite-handoff-choice" type="checkbox" data-target="moments-copy" />朋友圈文案定制</label>
@@ -710,8 +713,6 @@
                   表情数量
                   <select id="momentsEmojiCount" disabled>
                     <option value="auto" selected>智能适量（3–6 个，默认）</option>
-                    <option value="3-5">3–5 个</option>
-                    <option value="5-10">5–10 个</option>
                   </select>
                   <small>按文案长度与段落分布，在所选数量范围内自然插入。</small>
                 </label>
@@ -951,8 +952,8 @@
               </span>
             </label>
             <label class="tts-bgm-volume-control" for="ttsBgmVolume">
-              <span>成品 BGM 音量 <strong id="ttsBgmVolumeValue">28%</strong></span>
-              <input id="ttsBgmVolume" type="range" min="10" max="50" step="1" value="28" aria-describedby="ttsBgmVolumeHint" />
+              <span>成品 BGM 音量 <strong id="ttsBgmVolumeValue">18%</strong></span>
+              <input id="ttsBgmVolume" type="range" min="10" max="50" step="1" value="18" aria-describedby="ttsBgmVolumeHint" />
               <small id="ttsBgmVolumeHint">默认较低，避免盖住旁白；调整会立即作用于 BGM 预览，并用于之后新生成的 BGM 文件。</small>
             </label>
             <div class="tts-voice-quick-panel" id="ttsVoiceQuickPanel"></div>
@@ -1462,9 +1463,11 @@
               </div>
               <div class="cs1-output-card" id="cs1VideoResult" hidden>
                 <span>输出文件</span>
+                <video id="cs1VideoPreview" controls preload="metadata" playsinline></video>
                 <code id="cs1VideoOutputPath"></code>
                 <div class="cs1-output-actions">
                   <button class="secondary" id="cs1VideoOpenFile" type="button">打开视频</button>
+                  <a class="ghost" id="cs1VideoDownload" href="#" download>下载成片</a>
                   <button class="ghost" id="cs1VideoOpenProject" type="button">打开工程目录</button>
                 </div>
               </div>
@@ -1763,6 +1766,10 @@
                 <input id="kineticBgmFile" type="file" accept="audio/*" hidden />
                 <button id="kineticChooseBgm" class="ghost" type="button">上传本地背景音乐</button>
                 <small id="kineticBgmName">未上传背景音乐</small>
+                <div id="kineticBgmPlayerWrap" class="kinetic-bgm-player" hidden>
+                  <span>BGM 预览</span>
+                  <audio id="kineticBgmPlayer" controls preload="metadata"></audio>
+                </div>
                 <div id="kineticReceivedFiles" class="kinetic-received-files"></div>
                 <label class="kinetic-range-row"><span>TTS 音量</span><input id="kineticTtsVolume" type="range" min="0" max="200" value="100" /><output id="kineticTtsVolumeValue">100%</output></label>
                 <label class="kinetic-range-row"><span>背景音量</span><input id="kineticBgVolume" type="range" min="0" max="100" value="18" /><output id="kineticBgVolumeValue">18%</output></label>
@@ -2028,9 +2035,10 @@
       </div>
     </div>
 
+    <script src="/modules/dom-xss-guard.js?v=2026080301"></script>
     <script src="/modules/tts-handoff-store.js"></script>
     <script src="/modules/moments-image-instruction.js"></script>
-    <script src="/modules/legacy-runtime.js?v=2026073117"></script>
+    <script src="/modules/legacy-runtime.js?v=2026080102"></script>
     <script src="/workbench.js?v=2026073011"></script>
     <script src="/modules/tts-voice-clone.js"></script>
     <script type="module" src="/app.js"></script>

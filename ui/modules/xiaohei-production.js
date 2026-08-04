@@ -29,6 +29,12 @@ function handoffFromPayload(payload = {}, project = activeProject()) {
       alignment_status: payload.alignment_status || "confirmed",
     },
     files: payload.files || [],
+    bgm_url: payload.bgm_url || "",
+    bgm_path: payload.bgm_path || "",
+    bgm_name: payload.bgm_name || "清爽教育 BGM",
+    bgm_volume: Number(payload.bgm_volume || 0),
+    bgm_volume_percent: Number(payload.bgm_volume_percent || 0),
+    has_bgm: Boolean(payload.has_bgm),
     sentAt: new Date().toISOString(),
   };
 }
@@ -105,13 +111,13 @@ export function initXiaoheiProductionModule() {
   };
 
   const receiveTts = (payload = {}) => receiveHandoff(handoffFromPayload(payload));
-  const restoreStoredTtsHandoff = () => {
-    const payload = globalThis.ttsHandoffStore?.read("xiaohei-video");
+  const restoreStoredTtsHandoff = async () => {
+    const payload = await globalThis.ttsHandoffStore?.hydrate("xiaohei-video");
     return payload?.id ? receiveTts(payload) : null;
   };
   productionReceiver = receiveHandoff;
   window.xiaoheiProduction = { receiveHandoff, receiveTts, restoreStoredTtsHandoff };
-  restoreStoredTtsHandoff();
+  restoreStoredTtsHandoff().catch(() => null);
 
   frame.addEventListener("load", refreshStatus);
   refresh.addEventListener("click", () => {
@@ -123,7 +129,7 @@ export function initXiaoheiProductionModule() {
     // 切换页面保留生产线状态：不清空 handoff、不重载 iframe，避免已接收的音频资产和工作内容丢失。
     // 只有手动点击"刷新工作台"或从 TTS 页重新发送时才重置。
     routeActive = event.detail?.page === "xiaohei-video";
-    if (routeActive) restoreStoredTtsHandoff();
+    if (routeActive) restoreStoredTtsHandoff().catch(() => null);
   });
   window.videoFactorySendToXiaohei = sendConfirmedTtsToXiaohei;
   refreshStatus();

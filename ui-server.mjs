@@ -12,10 +12,13 @@ import ffmpegPath from "ffmpeg-static";
 import ffprobeStatic from "ffprobe-static";
 import { openTaskStore, TASK_STATUS } from "./task-store.mjs";
 import { createTtsService } from "./server/tts/tts-service.js";
+import { createTtsHandoffService } from "./server/tts/tts-handoff-service.mjs";
 import { createImageService } from "./server/image/image-service.js";
 import modelRouter from "./server/core/model-router/model-router.js";
 import { createSettingsCenter } from "./server/core/settings-center.js";
+import { ErrorCodes, toErrorResponse } from "./server/core/error-codes.mjs";
 import { createTaskCenterV2 } from "./server/core/task-center.js";
+import { createFinalAssetRegistry, sendFinalAssetFile } from "./server/core/final-asset-registry.js";
 import { providerRegistry } from "./server/core/provider-registry.js";
 import { createAnalysisEngine } from "./server/core/analysis-engine.js";
 import { PipelineRunner } from "./server/core/pipeline-bus/PipelineRunner.js";
@@ -83,6 +86,21 @@ const desktopFolderImageTokens = new Map();
 const wechatMomentsPublisherScript = path.join(__dirname, "scripts", "wechat_moments_publish.py");
 const referenceExamplesPath = path.join(__dirname, "reference_examples.json");
 const defaultDownloadsDir = path.join(__dirname, "downloads");
+const runtimeVersion = (() => {
+  try {
+    const branch = String(spawnSync("git", ["rev-parse", "--abbrev-ref", "HEAD"], { encoding: "utf8" }).stdout || "").trim() || "unknown";
+    const commit = String(spawnSync("git", ["rev-parse", "--short", "HEAD"], { encoding: "utf8" }).stdout || "").trim() || "unknown";
+    let submoduleCommit = "unknown";
+    try {
+      const subOut = String(spawnSync("git", ["submodule", "status"], { encoding: "utf8" }).stdout || "");
+      const line = subOut.split("\n").find((l) => l.includes("moneyprinterturbo"));
+      if (line) submoduleCommit = line.trim().split(/\s+/)[0].replace(/^[-+U]/, "").slice(0, 12);
+    } catch {}
+    return { branch, commit, submoduleCommit, buildTime: new Date().toISOString() };
+  } catch {
+    return { branch: "unknown", commit: "unknown", submoduleCommit: "unknown", buildTime: new Date().toISOString() };
+  }
+})();
 const browserDownloadsRoot = path.join(__dirname, ".data", "browser-downloads");
 const browserDownloadsDir = path.join(browserDownloadsRoot, `session-${process.pid}-${Date.now()}`);
 const localMediaDir = path.join(__dirname, "local-media");
@@ -171,6 +189,7 @@ const ytDlpService = createYtDlpService({
 });
 const taskStore = openTaskStore(__dirname);
 taskStore.resetActiveTasks();
+const finalAssetRegistry = createFinalAssetRegistry(__dirname, { dbPath: taskStore.dbPath });
 const projectCenter = createProjectCenter(__dirname);
 let directorService;
 const ttsService = createTtsService({
@@ -186,6 +205,7 @@ const ttsService = createTtsService({
   },
   onJobCompleted: handleTtsJobCompleted,
 });
+const ttsHandoffService = createTtsHandoffService(__dirname);
 const voiceAssetService = createVoiceAssetService({
   baseDir: __dirname,
   taskStore,
@@ -222,6 +242,7 @@ const handleCs1VideoRoutes = createCs1VideoRoutes({
   modelRouter,
   ffmpegPath,
   ffprobePath,
+  finalAssetRegistry,
 });
 const handleMoneyPrinterRoutes = createMoneyPrinterRoutes({
   baseDir: __dirname,
@@ -230,6 +251,8 @@ const handleMoneyPrinterRoutes = createMoneyPrinterRoutes({
   ffprobePath,
   getDownloadsDir: () => downloadsDir,
   modelRouter,
+  ttsHandoffService,
+  finalAssetRegistry,
 });
 
 // -----------------------------------------------------------------------------
@@ -309,6 +332,7 @@ const handleIanXiaoheiRoutes = createIanXiaoheiRoutes({
   transcribeLocalMedia: transcribeLocalMediaWithDashScope,
   downloadsDir,
   getDownloadsDir: () => downloadsDir,
+  finalAssetRegistry,
 });
 const handleKineticTextRoutes = createKineticTextRoutes({
   baseDir: __dirname,
@@ -320,6 +344,7 @@ const handleKineticTextRoutes = createKineticTextRoutes({
   ffmpegPath,
   ffprobePath,
   projectCenter,
+  finalAssetRegistry,
 });
 
 // ModelRouter 统一模型路由。失败时只降级 AI 路由，其他本地功能继续可用。
@@ -341,10 +366,10 @@ function initializeModelRuntime(settings) {
   }
 }
 
-initializeModelRuntime(readSettings());
-
 // 统一设置中心
 const settingsCenter = createSettingsCenter(__dirname, settingsPath);
+
+initializeModelRuntime(readSettings());
 
 // 进度广播占位（WebSocket 初始化后赋值）
 let broadcastProgress = () => {};
@@ -352,6 +377,7 @@ let broadcastProgress = () => {};
 // 任务中心 2.0
 const taskCenter = createTaskCenterV2(__dirname, {
   maxConcurrency: 3,
+  taskStore,
   onProgress: (data) => broadcastProgress({ type: "task", ...data }),
 });
 
@@ -398,6 +424,11 @@ function sendJson(res, status, value, headers = {}) {
   res.end(body);
 }
 
+function sendCodedError(res, error, options = {}) {
+  const response = toErrorResponse(error, options);
+  sendJson(res, response.status, response.body);
+}
+
 function sendText(res, status, body, contentType, fileName = "") {
   const headers = {
     "content-type": `${contentType}; charset=utf-8`,
@@ -422,16 +453,28 @@ function sendBuffer(res, status, buffer, contentType, fileName = "") {
   res.end(buffer);
 }
 
-function sendFileAttachment(res, filePath, fileName = path.basename(filePath)) {
-  const stat = fs.statSync(filePath);
-  const type = mimeTypes.get(path.extname(filePath).toLowerCase()) || "application/octet-stream";
-  res.writeHead(200, {
+async function sendFileAttachment(res, filePath, fileName = path.basename(filePath), options = {}) {
+  const stat = await fs.promises.stat(filePath);
+  const type = options.contentType || mimeTypes.get(path.extname(filePath).toLowerCase()) || "application/octet-stream";
+  const headers = {
     "content-type": type,
     "content-length": stat.size,
-    "content-disposition": `attachment; filename*=UTF-8''${encodeURIComponent(fileName)}`,
     "cache-control": "no-store",
+  };
+  if (options.attachment !== false) {
+    headers["content-disposition"] = `attachment; filename*=UTF-8''${encodeURIComponent(fileName)}`;
+  }
+  res.writeHead(200, headers);
+  const stream = fs.createReadStream(filePath);
+  stream.on("error", (error) => {
+    console.warn("[sendFileAttachment] stream failed", {
+      code: String(error?.code || "STREAM_FAILED"),
+      filePath,
+      message: error instanceof Error ? error.message : String(error),
+    });
+    res.destroy(error);
   });
-  fs.createReadStream(filePath).pipe(res);
+  stream.pipe(res);
 }
 
 function localApiPort() {
@@ -658,15 +701,11 @@ function extractAnyUrls(text, { limit = 1000, kind = "video", taskAction = "down
 }
 
 function readSettings() {
-  try {
-    return normalizeSettings(JSON.parse(fs.readFileSync(settingsPath, "utf8")));
-  } catch {
-    return normalizeSettings({});
-  }
+  return normalizeSettings(settingsCenter.read());
 }
 
 function writeSettings(settings) {
-  fs.writeFileSync(settingsPath, JSON.stringify(normalizeSettings(settings), null, 2), "utf8");
+  settingsCenter.write(normalizeSettings(settings));
 }
 
 function normalizeFolderNames(value) {
@@ -2423,7 +2462,17 @@ async function validateAndSaveRequiredProvider(body = {}) {
     if (!status.ok) return status;
   }
 
-  const normalized = reloadModelRuntime(draft);
+  const normalized = normalizeSettings(await settingsCenter.update((latestRaw) => {
+    const latest = normalizeSettings(latestRaw);
+    saveUnifiedProvider(latest, body);
+    applyLocalProviderConfig(latest, id);
+    if (scope !== "tts" && latest.rewriteProviders?.[id] && draft.rewriteProviders?.[id]) {
+      latest.rewriteProviders[id].model = draft.rewriteProviders[id].model;
+      latest.rewriteProviders[id].autoModel = draft.rewriteProviders[id].autoModel;
+    }
+    return latest;
+  }));
+  initializeModelRuntime(normalized);
   return {
     ok: true,
     status: "success",
@@ -2471,7 +2520,12 @@ function readTextFileSafe(filePath, fallback = "") {
   try {
     if (!fs.existsSync(filePath)) return fallback;
     return fs.readFileSync(filePath, "utf8");
-  } catch {
+  } catch (error) {
+    console.warn("[readTextFileSafe] read failed", {
+      code: String(error?.code || "READ_FAILED"),
+      filePath,
+      message: error instanceof Error ? error.message : String(error),
+    });
     return fallback;
   }
 }
@@ -2518,7 +2572,12 @@ function readReferenceExamples() {
   try {
     if (!fs.existsSync(referenceExamplesPath)) return [];
     return normalizeReferenceExamples(JSON.parse(fs.readFileSync(referenceExamplesPath, "utf8")));
-  } catch {
+  } catch (error) {
+    console.warn("[readReferenceExamples] read failed", {
+      code: String(error?.code || "INVALID_REFERENCE_EXAMPLES"),
+      filePath: referenceExamplesPath,
+      message: error instanceof Error ? error.message : String(error),
+    });
     return [];
   }
 }
@@ -2861,6 +2920,11 @@ function shutdownNow() {
   }
   try {
     handleMoneyPrinterRoutes.shutdown?.();
+  } catch {
+    // Best effort only.
+  }
+  try {
+    finalAssetRegistry.close();
   } catch {
     // Best effort only.
   }
@@ -4158,7 +4222,15 @@ async function getRewriteProvider(providerId, { refreshAutoModel = true, persist
   if (!String(provider.model || "").trim()) {
     throw new Error(`请先填写 ${provider.label} model`);
   }
-  if (refreshAutoModel && persistAutoModel && provider.autoModel !== false) writeSettings(settings);
+  if (refreshAutoModel && persistAutoModel && provider.autoModel !== false) {
+    const resolvedModel = String(provider.model || "").trim();
+    await settingsCenter.update((latestRaw) => {
+      const latest = normalizeSettings(latestRaw);
+      const latestProvider = latest.rewriteProviders?.[id];
+      if (latestProvider?.autoModel !== false && resolvedModel) latestProvider.model = resolvedModel;
+      return latest;
+    });
+  }
   return { id, ...provider };
 }
 
@@ -4633,8 +4705,6 @@ function normalizeMomentsEmojiStyle(value = "") {
 
 const MOMENTS_EMOJI_COUNT_OPTIONS = {
   auto: { label: "智能适量（3–6 个）", min: 3, max: 6 },
-  "3-5": { label: "3–5 个", min: 3, max: 5 },
-  "5-10": { label: "5–10 个", min: 5, max: 10 },
 };
 
 function normalizeMomentsEmojiCount(value = "") {
@@ -5396,7 +5466,7 @@ async function generateMomentsPostJsonV2(body = {}, { onProgress = () => {} } = 
           `语气：${tone}`,
           `用途：${intent}`,
           `建议字数：${wordCount.label}（允许 ${wordCount.min}-${wordCount.max} 字自然浮动）`,
-          `添加表情：${addEmoji ? "是，普通篇幅至少 2 个，通常 2-3 个；长文可按语义自然增加" : "否，不添加 emoji"}`,
+          `添加表情：${addEmoji ? `是，由源码静态表情库按文案篇幅插入 ${MOMENTS_EMOJI_COUNT_OPTIONS[emojiCount].label}` : "否，不添加 emoji"}`,
           `视觉风格类别：${visualStyle}`,
           `引用素材：${referenceStyle}`,
           "",
@@ -7465,6 +7535,7 @@ const server = http.createServer(async (req, res) => {
           ready: modelRouterReady,
           error: modelRouterStartupError,
         },
+        runtimeVersion,
       });
       return;
     }
@@ -7729,7 +7800,7 @@ const server = http.createServer(async (req, res) => {
           ".jpeg": "image/jpeg",
           ".webp": "image/webp",
         }[path.extname(filePath).toLowerCase()] || "application/octet-stream";
-        sendBuffer(res, 200, fs.readFileSync(filePath), mime);
+        await sendFileAttachment(res, filePath, path.basename(filePath), { attachment: false, contentType: mime });
       } catch (error) {
         sendJson(res, 404, { ok: false, message: error.message || "图片不存在" });
       }
@@ -7771,7 +7842,7 @@ const server = http.createServer(async (req, res) => {
         sendJson(res, 404, { ok: false, message: "没有找到可下载的文件" });
         return;
       }
-      sendFileAttachment(res, filePath, path.basename(filePath));
+      await sendFileAttachment(res, filePath, path.basename(filePath));
       return;
     }
 
@@ -7782,7 +7853,7 @@ const server = http.createServer(async (req, res) => {
         sendJson(res, 404, { ok: false, message: "没有找到该任务的可下载文件" });
         return;
       }
-      sendFileAttachment(res, filePath, path.basename(filePath));
+      await sendFileAttachment(res, filePath, path.basename(filePath));
       return;
     }
 
@@ -7823,7 +7894,7 @@ const server = http.createServer(async (req, res) => {
           transcripts: transcriptRows(),
         });
       } catch (error) {
-        sendJson(res, 400, { ok: false, message: error instanceof Error ? error.message : String(error) });
+        sendCodedError(res, error, { code: ErrorCodes.BUSINESS_FAILURE });
       }
       return;
     }
@@ -8233,9 +8304,8 @@ const server = http.createServer(async (req, res) => {
         sendJson(res, 404, { ok: false, message: "导演稿文件不存在或尚未生成。" });
         return;
       }
-      const buffer = fs.readFileSync(filePath);
       const contentType = format === "json" ? "application/json" : "text/markdown";
-      sendBuffer(res, 200, buffer, contentType, path.basename(filePath));
+      await sendFileAttachment(res, filePath, path.basename(filePath), { contentType });
       return;
     }
 
@@ -8297,8 +8367,7 @@ const server = http.createServer(async (req, res) => {
         sendJson(res, 404, { ok: false, message: "VFO 文件不存在或尚未生成。" });
         return;
       }
-      const buffer = fs.readFileSync(filePath);
-      sendBuffer(res, 200, buffer, "application/json", path.basename(filePath));
+      await sendFileAttachment(res, filePath, path.basename(filePath), { contentType: "application/json" });
       return;
     }
 
@@ -8687,6 +8756,49 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
+    if (req.method === "POST" && url.pathname === "/api/tts/handoff") {
+      try {
+        const body = await readJsonBody(req, { maxBytes: 4 * 1024 * 1024 });
+        const handoff = ttsHandoffService.save(body.payload || {}, body.targets || []);
+        sendJson(res, 201, { ok: true, handoff });
+      } catch (error) {
+        sendCodedError(res, error, { code: ErrorCodes.BUSINESS_FAILURE });
+      }
+      return;
+    }
+
+    if (req.method === "GET" && url.pathname === "/api/tts/handoff") {
+      const handoff = ttsHandoffService.get(url.searchParams.get("id") || "");
+      if (!handoff) {
+        sendCodedError(res, new Error("handoff 不存在。"), { code: ErrorCodes.JOB_NOT_FOUND });
+        return;
+      }
+      sendJson(res, 200, { ok: true, handoff });
+      return;
+    }
+
+    if (req.method === "GET" && url.pathname === "/api/tts/handoff/receipts") {
+      const handoffId = url.searchParams.get("handoffId") || "";
+      const handoff = ttsHandoffService.get(handoffId);
+      if (!handoff) {
+        sendCodedError(res, new Error("handoff 不存在。"), { code: ErrorCodes.JOB_NOT_FOUND });
+        return;
+      }
+      sendJson(res, 200, { ok: true, handoffId, revision: handoff.revision, receipts: ttsHandoffService.listReceipts(handoffId) });
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/tts/handoff/receipt") {
+      try {
+        const body = await readJsonBody(req);
+        const receipt = ttsHandoffService.updateReceipt(body);
+        sendJson(res, 200, { ok: true, receipt });
+      } catch (error) {
+        sendCodedError(res, error, { code: ErrorCodes.BUSINESS_FAILURE });
+      }
+      return;
+    }
+
     if (req.method === "GET" && url.pathname === "/api/tts/audio") {
       const job = taskStore.getTtsJob(Number(url.searchParams.get("id") || 0));
       const audioPath = job?.audio_path ? path.resolve(job.audio_path) : "";
@@ -8721,7 +8833,7 @@ const server = http.createServer(async (req, res) => {
         return;
       }
       const contentType = url.pathname === "/api/tts/subtitle" ? "application/x-subrip; charset=utf-8" : "text/plain; charset=utf-8";
-      sendBuffer(res, 200, fs.readFileSync(resolved), contentType, path.basename(resolved));
+      await sendFileAttachment(res, resolved, path.basename(resolved), { contentType });
       return;
     }
 
@@ -9620,7 +9732,15 @@ const server = http.createServer(async (req, res) => {
       return;
     }
     if (url.pathname === "/api/task-center/list") {
-      sendJson(res, 200, { ok: true, tasks: taskCenter.getAllTasks() });
+      if (url.searchParams.get("view") === "collector") {
+        sendJson(res, 200, { ok: true, ...taskCenter.getCollectorView({ limit: url.searchParams.get("limit") || 200, status: url.searchParams.get("status") || "" }) });
+      } else {
+        sendJson(res, 200, { ok: true, tasks: taskCenter.getAllTasks({ limit: url.searchParams.get("limit") || 500, source: url.searchParams.get("source") || "" }) });
+      }
+      return;
+    }
+    if (url.pathname === "/api/task-center/events") {
+      sendJson(res, 200, { ok: true, events: taskCenter.getJobEvents(url.searchParams.get("id") || "", url.searchParams.get("limit") || 200) });
       return;
     }
 
@@ -9708,6 +9828,17 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
+    if (req.method === "GET" && url.pathname === "/api/final-assets/file") {
+      const asset = finalAssetRegistry.get(url.searchParams.get("id"));
+      if (!asset) sendCodedError(res, new Error("最终资产不存在或原文件已丢失。"), { code: ErrorCodes.JOB_NOT_FOUND });
+      else sendFinalAssetFile(req, res, asset, { download: url.searchParams.get("download") === "1" });
+      return;
+    }
+    if (req.method === "GET" && url.pathname === "/api/final-assets/list") {
+      sendJson(res, 200, { ok: true, assets: finalAssetRegistry.list({ source: url.searchParams.get("source") || "", limit: url.searchParams.get("limit") || 100 }) });
+      return;
+    }
+
     if (await handleCs1VideoRoutes(req, res, url)) return;
     if (await handleMoneyPrinterRoutes(req, res, url)) return;
     if (await handleIanXiaoheiRoutes(req, res, url)) return;
@@ -9788,8 +9919,7 @@ const server = http.createServer(async (req, res) => {
         }
         const ext = path.extname(filePath).toLowerCase();
         const mime = { ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".gif": "image/gif", ".webp": "image/webp" };
-        const data = fs.readFileSync(filePath);
-        sendBuffer(res, 200, data, mime[ext] || "image/png");
+        await sendFileAttachment(res, filePath, path.basename(filePath), { attachment: false, contentType: mime[ext] || "image/png" });
         return;
       }
 
@@ -9800,7 +9930,7 @@ const server = http.createServer(async (req, res) => {
           const thumbPath = await imageService.thumbnailForImage(filePath, { width: Number(url.searchParams.get("width")) || 360 });
           const ext = path.extname(thumbPath).toLowerCase();
           const mime = { ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".gif": "image/gif", ".webp": "image/webp" };
-          sendBuffer(res, 200, fs.readFileSync(thumbPath), mime[ext] || "image/jpeg");
+          await sendFileAttachment(res, thumbPath, path.basename(thumbPath), { attachment: false, contentType: mime[ext] || "image/jpeg" });
         } catch (error) {
           sendJson(res, 404, { ok: false, message: error instanceof Error ? error.message : String(error) });
         }

@@ -1,0 +1,4 @@
+interface:
+  display_name: "抖音第二轮维修监督器"
+  short_description: "用独立四次状态机调度并验收72项第二轮维修"
+  default_prompt: "Use $douyin-round2-supervisor to validate the second-round register, select the next ready R2 item, and build its evidence packet."

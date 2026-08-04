@@ -1,4 +1,5 @@
 import { execFileSync, spawnSync } from "node:child_process";
+import { existsSync } from "node:fs";
 
 const output = execFileSync(
   "git",
@@ -8,6 +9,8 @@ const output = execFileSync(
 const files = [...new Set(output.split(/\r?\n/u).map((item) => item.trim()).filter(Boolean))];
 
 for (const file of files) {
+  // 跳过工作树中不存在的文件（如已被 git mv 重命名但索引尚未更新的旧文件名）
+  if (!existsSync(file)) continue;
   const check = spawnSync(process.execPath, ["--check", file], { encoding: "utf8" });
   if (check.status !== 0) {
     process.stderr.write(check.stdout || "");

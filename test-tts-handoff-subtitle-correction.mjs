@@ -115,8 +115,7 @@ assert.match(runtime, /<div class="tts-job-handoff-options">\$\{renderTtsHandoff
 assert.match(runtime, /<button class="primary small tts-job-send" type="button">发送所选<\/button>/u);
 assert.match(runtime, /async function refreshSentTtsRecord/u);
 assert.match(runtime, /renderTtsCentralTimeline\(data\.job, \{ preserveDraft: false \}\)/u);
-assert.match(runtime, /refreshSentTtsRecord\(handoffJob\)\.catch/u);
-assert.doesNotMatch(runtime, /await refreshSentTtsRecord\(handoffJob\)/u);
+assert.match(runtime, /await refreshSentTtsRecord\(handoffJob\)\.catch/u, "final success text must be written after the record refresh finishes");
 assert.match(runtime, /async function confirmAndSendTtsCentralTimeline/u);
 assert.match(runtime, /const targets = selectedTtsHandoffTargets\(ttsCentralHandoff \|\| ttsTimelineColumn \|\| document\)/u);
 assert.match(runtime, /const confirmedJob = await saveTtsCentralTimeline\(\)/u);

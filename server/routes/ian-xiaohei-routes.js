@@ -285,6 +285,7 @@ export function createIanXiaoheiRoutes({
   transcribeLocalMedia = null,
   downloadsDir = "",
   getDownloadsDir = () => downloadsDir,
+  finalAssetRegistry = null,
 }) {
   const outputRoot = path.join(baseDir, "image-assets", "ian-xiaohei");
   const uploadRoot = path.join(outputRoot, "_uploaded-audio");
@@ -325,7 +326,14 @@ export function createIanXiaoheiRoutes({
   }
 
   function registerXiaoheiFile(filePath, downloadName) {
-    const id = `xiaohei-${Date.now()}-${randomUUID().slice(0, 6)}`;
+    const registered = finalAssetRegistry?.register({
+      filePath,
+      kind: "video",
+      source: "xiaohei-video",
+      sourceRef: path.basename(filePath),
+      metadata: { downloadName },
+    });
+    const id = registered?.assetId || `xiaohei-${Date.now()}-${randomUUID().slice(0, 6)}`;
     xiaoheiRenderedFiles.set(id, { filePath, createdAt: new Date().toISOString(), downloadName });
     return id;
   }
@@ -351,7 +359,8 @@ export function createIanXiaoheiRoutes({
     // 统一下载文件服务（与 MoneyPrinter /api/money-printer/file?id= 同模式）
     if (req.method === "GET" && route === "file") {
       const id = String(url.searchParams.get("id") || "").trim();
-      const record = id ? xiaoheiRenderedFiles.get(id) : null;
+      const registered = id ? finalAssetRegistry?.get(id) : null;
+      const record = registered ? { filePath: registered.filePath, downloadName: registered.metadata?.downloadName } : (id ? xiaoheiRenderedFiles.get(id) : null);
       if (!record?.filePath || !fs.existsSync(record.filePath)) {
         sendJson(res, 404, { ok: false, message: "小黑输出文件不存在。" });
       } else {
@@ -894,6 +903,7 @@ export function createIanXiaoheiRoutes({
           resolvedDownloadsDir: currentDownloadsDir(),
           xiaoheiRenderedFiles,
           registerXiaoheiFile,
+          finalAssetRegistry,
         }),
       });
       return true;
@@ -1216,12 +1226,14 @@ export function createIanXiaoheiRoutes({
         const downloadName = xiaoheiVideoDownloadName(plan.title);
         const unifiedPath = copyToDownloadsDir(outputPath, plan.title) || outputPath;
         const fileId = registerXiaoheiFile(unifiedPath, downloadName);
+        const finalAsset = finalAssetRegistry?.get(fileId);
         sendJson(res, 200, {
           ok: true,
           batchId: plan.batchId,
+          assetId: fileId,
           videoPath: outputPath,
-          videoUrl: `/api/ian-xiaohei/video-file?batch_id=${encodeURIComponent(plan.batchId)}`,
-          downloadUrl: `/api/ian-xiaohei/file?id=${encodeURIComponent(fileId)}&download=1`,
+          videoUrl: finalAsset?.videoUrl || `/api/ian-xiaohei/file?id=${encodeURIComponent(fileId)}`,
+          downloadUrl: finalAsset?.downloadUrl || `/api/ian-xiaohei/file?id=${encodeURIComponent(fileId)}&download=1`,
           downloadName,
           unifiedOutputPath: unifiedPath !== outputPath ? unifiedPath : "",
           transitionMode,
@@ -3165,7 +3177,7 @@ function promptsMarkdown(plan) {
 }
 
 function listOutputBatches(outputRoot, deps = {}) {
-  const { resolvedDownloadsDir = null, xiaoheiRenderedFiles = null, registerXiaoheiFile = null } = deps;
+  const { resolvedDownloadsDir = null, xiaoheiRenderedFiles = null, registerXiaoheiFile = null, finalAssetRegistry = null } = deps;
   if (!fs.existsSync(outputRoot)) return [];
   return fs.readdirSync(outputRoot, { withFileTypes: true })
     .filter((entry) => entry.isDirectory() && !entry.name.startsWith("_"))
@@ -3237,7 +3249,7 @@ function listOutputBatches(outputRoot, deps = {}) {
           const dName = xiaoheiVideoDownloadName(manifest.title);
           existingId = registerXiaoheiFile(finalVideoPath, dName);
         }
-        unifiedDownloadUrl = `/api/ian-xiaohei/file?id=${encodeURIComponent(existingId)}&download=1`;
+        unifiedDownloadUrl = finalAssetRegistry?.get(existingId)?.downloadUrl || `/api/ian-xiaohei/file?id=${encodeURIComponent(existingId)}&download=1`;
         unifiedDownloadId = existingId;
       }
       return {
@@ -3247,9 +3259,10 @@ function listOutputBatches(outputRoot, deps = {}) {
         timelineProjectId: 0,
         draftPath: result.output?.draft_path || manifest.draft_path || "",
         finalVideoPath: hasFinalMp4 ? finalVideoPath : "",
-        videoUrl: hasFinalMp4
-          ? `/api/ian-xiaohei/video-file?batch_id=${encodeURIComponent(entry.name)}`
-          : "",
+        assetId: unifiedDownloadId,
+        videoUrl: unifiedDownloadId
+          ? (finalAssetRegistry?.get(unifiedDownloadId)?.videoUrl || `/api/ian-xiaohei/file?id=${encodeURIComponent(unifiedDownloadId)}`)
+          : (hasFinalMp4 ? `/api/ian-xiaohei/video-file?batch_id=${encodeURIComponent(entry.name)}` : ""),
         downloadUrl: unifiedDownloadUrl || (hasFinalMp4
           ? `/api/ian-xiaohei/video-file?batch_id=${encodeURIComponent(entry.name)}&download=1`
           : ""),

@@ -1,0 +1,4 @@
+interface:
+  display_name: "抖音发布审计"
+  short_description: "核验本地测试、真实浏览器、重启、安全与正式发布完整门禁"
+  default_prompt: "Use $douyin-release-auditor to audit release readiness without overstating blocked external evidence."

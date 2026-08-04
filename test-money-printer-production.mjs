@@ -6,6 +6,7 @@ import path from "node:path";
 import {
   buildFastMaterialPlan,
   buildMoneyPrinterVideoFilter,
+  applyTrustedMoneyPrinterBgm,
   openExternalCommand,
   openTarget,
   resolveMaterialSourceOrder,
@@ -13,9 +14,11 @@ import {
   stageTtsBgmForMoneyPrinter,
   sanitizeMoneyPrinterTaskVideoUrl,
   shouldTryNextMaterialSource,
+  updateMoneyPrinterTaskRuntime,
+  moneyPrinterTaskPresentation,
 } from "./server/routes/money-printer-routes.js";
 import { buildAss } from "./server/kinetic-text/kinetic-text-service.js";
-import { automaticSearchTerm } from "./ui/modules/money-printer.js";
+import { automaticSearchTerm, moneyPrinterTaskDisplay } from "./ui/modules/money-printer.js";
 
 const [routeSource, uiSource, htmlSource] = await Promise.all([
   readFile(new URL("./server/routes/money-printer-routes.js", import.meta.url), "utf8"),
@@ -41,6 +44,45 @@ assert.ok(uiSource.includes("正在切换备用素材 API"));
 assert.ok(uiSource.includes("素材备用顺序"));
 assert.ok(uiSource.includes("state.handoff.audio_path"));
 assert.ok(uiSource.includes("subtitle_enabled: false"));
+const finalRequestStart = uiSource.indexOf('postJson("/api/money-printer/render-final", {');
+const finalRequestEnd = uiSource.indexOf("\n    });", finalRequestStart);
+assert.ok(finalRequestStart >= 0 && finalRequestEnd > finalRequestStart, "must find the live final-render payload");
+const finalRequestSource = uiSource.slice(finalRequestStart, finalRequestEnd);
+for (const field of ["includeBgm", "bgm_file", "bgm_volume", "revision", "handoff_id"]) {
+  assert.match(finalRequestSource, new RegExp(`\\b${field}\\b`), `final-render payload must carry ${field}`);
+}
+for (const token of ["moneyPrinterFinalVideo", "moneyPrinterFinalPreview", "moneyPrinterFinalDownload", "download=1", "showFinalAsset"]) {
+  assert.ok(uiSource.includes(token), `final preview/download UI must include ${token}`);
+}
+const trustedHandoff = {
+  id: "handoff-money-printer-test",
+  revision: "revision-money-printer-test",
+  targets: ["money-printer"],
+  payload: { bgm_path: "D:\\trusted\\bgm.wav", bgm_volume: 0.18 },
+};
+const trustedFinal = applyTrustedMoneyPrinterBgm({
+  includeBgm: true,
+  handoff_id: trustedHandoff.id,
+  revision: trustedHandoff.revision,
+  bgm_file: trustedHandoff.payload.bgm_path,
+  bgm_volume: 0.18,
+}, { get: () => trustedHandoff });
+assert.equal(trustedFinal.bgm_file, trustedHandoff.payload.bgm_path);
+assert.equal(trustedFinal.bgm_volume, 0.18);
+assert.throws(() => applyTrustedMoneyPrinterBgm({
+  includeBgm: true,
+  handoff_id: trustedHandoff.id,
+  revision: trustedHandoff.revision,
+  bgm_file: "D:\\untrusted\\bgm.wav",
+  bgm_volume: 0.18,
+}, { get: () => trustedHandoff }), /受信任资产/);
+assert.throws(() => applyTrustedMoneyPrinterBgm({
+  includeBgm: true,
+  handoff_id: trustedHandoff.id,
+  revision: "stale-revision",
+  bgm_file: trustedHandoff.payload.bgm_path,
+  bgm_volume: 0.18,
+}, { get: () => trustedHandoff }), /revision/);
 assert.equal(
   routeSource.includes("handleMoneyPrinterRoutes.shutdown = stopApiProcess"),
   false,
@@ -93,6 +135,14 @@ assert.ok(uiSource.includes('material_mode: els.materialMode.value'));
 assert.ok(uiSource.includes("textEffectEnabled: els.textEffectEnabled.checked"));
 assert.ok(routeSource.includes('target === "downloads"'));
 assert.ok(uiSource.includes("state.task.progress"));
+assert.ok(
+  routeSource.includes('processing_stage: "video"') && routeSource.includes("progress_changed_at"),
+  "a long 50% video/FFmpeg stage must expose persisted progress timing instead of looking failed",
+);
+assert.ok(
+  uiSource.includes("视频合成仍在进行") && uiSource.includes("任务已经失败"),
+  "the UI must distinguish a responsive long-running 50% task from an actual failed task",
+);
 
 const bottomOnlyAss = buildAss({
   effectId: "rolling-focus-subtitle",
@@ -149,6 +199,25 @@ assert.equal(
   "Pexels 素材 API Key 未配置",
 );
 assert.ok(!sanitizeMptError('request failed {"api_key":"secret"}').includes("secret"));
+
+const slowStarted = updateMoneyPrinterTaskRuntime({}, { state: 4, progress: 50 }, new Date("2026-08-02T04:00:00.000Z"));
+const slowHeartbeat = updateMoneyPrinterTaskRuntime(slowStarted, { state: 4, progress: 50 }, new Date("2026-08-02T04:01:05.000Z"));
+const slowPresentation = moneyPrinterTaskPresentation({ state: 4, progress: 50 }, slowHeartbeat, Date.parse("2026-08-02T04:01:05.000Z"));
+assert.equal(slowPresentation.processing_stage, "video");
+assert.equal(slowPresentation.progress_unchanged_seconds, 65);
+assert.equal(slowPresentation.stateLabel, "视频合成仍在进行");
+assert.match(slowPresentation.activity_message, /心跳正常.*65 秒未变化/);
+assert.deepEqual(moneyPrinterTaskDisplay({ state: 4, progress: 50, ...slowPresentation }), {
+  progress: 50,
+  stage: "视频合成仍在进行",
+  title: "视频合成仍在进行",
+  detail: slowPresentation.activity_message,
+  isError: false,
+});
+const failedPresentation = moneyPrinterTaskPresentation({ state: -1, progress: 50, failed_stage: "video" }, slowHeartbeat);
+assert.equal(failedPresentation.status_kind, "failed");
+assert.equal(failedPresentation.stateLabel, "任务已经失败 · 视频合成");
+assert.equal(moneyPrinterTaskDisplay({ state: -1, progress: 50, error: "FFmpeg exited", ...failedPresentation }).isError, true);
 
 const bgmStageRoot = fs.mkdtempSync(path.join(os.tmpdir(), "money-printer-bgm-stage-"));
 try {

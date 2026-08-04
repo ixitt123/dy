@@ -3,9 +3,14 @@
 # 本文件与 .codex/hooks/* 应随仓库分发;首次加载时 Codex 会提示"信任"这些 hook,请信任。
 # 不配置 SessionStart 自动拉取；启动和打开 Codex 均不得静默改变磁盘代码。
 
-[hooks]
-enable = true
+[features]
+hooks = true
 
 # 编辑停止时：有改动则只跑离线测试闸门，不提交、不推送。
-[hooks.Stop]
+[[hooks.Stop]]
+
+[[hooks.Stop.hooks]]
+type = "command"
 command = "node .codex/hooks/stop-sync.mjs"
+timeout = 600
+statusMessage = "运行离线维修门禁"

@@ -47,6 +47,7 @@ For a bug fix:
 2. Run it before the fix and confirm that it fails for the intended reason.
 3. Implement the smallest complete fix.
 4. Run the same test again and confirm that it passes.
+5. If the repair still fails, record the cycle with the repair supervisor's failure recorder. Do not start a third source-changing cycle for the same repair item after two recorded failures.
 
 For a feature:
 
@@ -77,11 +78,13 @@ Run validation from narrowest to broadest:
    npm.cmd run check:gate
    ```
 
-4. Also run the full end-to-end suite when changing UI/API wiring, production flows, state transitions, persistence, exports, TTS handoff, subtitles, Xiaohei, CS1, or MoneyPrinterTurbo:
+4. Also run the HTTP/source contract suite when changing UI/API wiring, production flows, state transitions, persistence, exports, TTS handoff, subtitles, Xiaohei, CS1, or MoneyPrinterTurbo:
 
    ```powershell
-   npm.cmd run test:e2e
+   npm.cmd run test:http-contract
    ```
+
+   This does not prove browser, media, restart, or external-service behavior. Run the separately named applicable suite (`test:browser`, `test:media`, or `test:restart`) and report any unavailable real-service evidence.
 
 5. Perform a focused manual smoke test when automated tests cannot verify visual or media behavior.
 6. Run `git diff --check` and compare `git status --short` with the baseline. Investigate any unexpected file mutation caused by tests or generators.

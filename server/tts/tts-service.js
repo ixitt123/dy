@@ -1737,19 +1737,22 @@ export function createTtsService({
     if (isBackgroundMusic && probedDuration > 0) {
       if (!ffmpegPath || !fs.existsSync(ffmpegPath)) return { error: "无法处理 BGM：FFmpeg 不可用。" };
       const processedDuration = requestedBgmDuration > 0
-        ? Math.min(probedDuration, requestedBgmDuration)
+        ? requestedBgmDuration
         : probedDuration;
+      const shouldLoopToRequestedDuration = requestedBgmDuration > probedDuration + 0.05;
       const requestedFadeOut = Number(inputMetadata.fade_out_seconds || 2.5);
       const fadeOutSeconds = Math.min(Math.max(1, requestedFadeOut), Math.max(1, processedDuration - 0.05));
       const fadeStart = Math.max(0, processedDuration - fadeOutSeconds);
-      const requestedVolume = Number(inputMetadata.background_volume || 0.28);
-      const backgroundVolume = Math.min(0.5, Math.max(0.1, requestedVolume));
+      const sourceNormalizedLufs = Math.min(-16, Math.max(-24, Number(inputMetadata.source_normalized_lufs || -20)));
+      const sourcePeakLimitDbfs = Math.min(-0.5, Math.max(-3, Number(inputMetadata.source_peak_limit_dbfs || -1.5)));
       const temporaryPath = path.join(outputDir, `${fileBaseName}.bgm-${randomUUID()}.${format}`);
       const codecArgs = format === "wav" ? ["-c:a", "pcm_s16le"] : ["-c:a", "libmp3lame", "-q:a", "2"];
       const processed = spawnSync(ffmpegPath, [
-        "-y", "-i", targetPath,
+        "-y",
+        ...(shouldLoopToRequestedDuration ? ["-stream_loop", "-1"] : []),
+        "-i", targetPath,
         "-t", String(processedDuration),
-        "-af", `volume=${backgroundVolume},afade=t=out:st=${fadeStart}:d=${fadeOutSeconds}`,
+        "-af", `loudnorm=I=${sourceNormalizedLufs}:TP=${sourcePeakLimitDbfs}:LRA=11,afade=t=out:st=${fadeStart}:d=${fadeOutSeconds}`,
         ...codecArgs,
         temporaryPath,
       ], {
@@ -1761,6 +1764,9 @@ export function createTtsService({
       }
       fs.copyFileSync(temporaryPath, targetPath);
       fs.unlinkSync(temporaryPath);
+      inputMetadata.source_normalized_lufs = sourceNormalizedLufs;
+      inputMetadata.source_peak_limit_dbfs = sourcePeakLimitDbfs;
+      inputMetadata.background_volume_is_mix_gain = true;
       probedDuration = probeAudioDurationSync(targetPath);
     }
     const declaredDuration = Number(input.duration || inputMetadata.duration || 0)

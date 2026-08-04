@@ -1,0 +1,30 @@
+{
+  "scenario": "kinetic-text",
+  "description": "动态大字生产线测试 fixture。固定文本、背景、BGM，用于验证 BGM 原子交接、预览、成片、恢复。",
+  "text": "勾股定理是几何学的基础",
+  "segments": [
+    { "text": "勾股定理", "highlight": true },
+    { "text": "是", "highlight": false },
+    { "text": "几何学的基础", "highlight": true }
+  ],
+  "background": {
+    "type": "solid",
+    "color": "#000000"
+  },
+  "narration": { "refScenario": "tts" },
+  "bgm": {
+    "refScenario": "bgm",
+    "atomicWriteRule": "创建项目时原子写入 BGM，不先写 audioMix:none 再二次更新",
+    "defaultRule": "手动新建默认关闭；收到有效四件套自动开启"
+  },
+  "expectedBehavior": "三件套、四件套、手动关闭 BGM 三种成片均正确；预览能听到 BGM；最终 MP4 真实检测到 BGM；刷新/切页/重启恢复 handoff、音量、是否加入 BGM",
+  "verificationPoints": [
+    "创建项目时原子写入 BGM（不先写 audioMix:none 再二次更新）",
+    "落实生产线默认 BGM 规则：手动新建默认关闭；收到有效四件套自动开启",
+    "可见 BGM 播放条：预览能听到，时间和音量控制真实有效",
+    "最终视频混入 BGM：最终 MP4 可检测到 BGM，不只停留在预览",
+    "刷新、切页、重启恢复：handoff、音量、是否加入 BGM 不丢失",
+    "动态大字完整真实验收：三件套、四件套、手动关闭 BGM 三种成片均正确"
+  ],
+  "referenceStyle": "C:/Users/Admin/Desktop/7月14日音频案例/1.mp4（黑底白字发光、关键词黄色高亮、底部字幕、横向动态模糊转场）"
+}

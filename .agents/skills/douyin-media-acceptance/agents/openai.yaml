@@ -1,0 +1,4 @@
+interface:
+  display_name: "抖音媒体验收"
+  short_description: "核验真实音视频产物、播放器、下载与生产线交接完整一致性"
+  default_prompt: "Use $douyin-media-acceptance to verify the real media output and user-visible playback for this repair."

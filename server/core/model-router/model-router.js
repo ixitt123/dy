@@ -212,7 +212,7 @@ class ModelRouter {
 
     // Hook: 生成前回调
     if (this._onBeforeGenerate) {
-      try { this._onBeforeGenerate(taskType, messages, mergedOptions); } catch {}
+      try { this._onBeforeGenerate(taskType, messages, mergedOptions); } catch (e) { console.warn("[model-router] onBeforeGenerate hook error:", e?.message || e); }
     }
 
     try {
@@ -241,14 +241,14 @@ class ModelRouter {
 
       // Hook: 生成后回调
       if (this._onAfterGenerate) {
-        try { this._onAfterGenerate(taskType, finalResult, usageEntry); } catch {}
+        try { this._onAfterGenerate(taskType, finalResult, usageEntry); } catch (e) { console.warn("[model-router] onAfterGenerate hook error:", e?.message || e); }
       }
 
       return finalResult;
     } catch (error) {
       // Hook: 错误回调
       if (this._onError) {
-        try { this._onError(taskType, error); } catch {}
+        try { this._onError(taskType, error); } catch (e) { console.warn("[model-router] onError hook error:", e?.message || e); }
       }
       throw error;
     }
@@ -303,7 +303,7 @@ class ModelRouter {
       };
     } catch (error) {
       if (this._onError) {
-        try { this._onError("direct", error); } catch {}
+        try { this._onError("direct", error); } catch (e) { console.warn("[model-router] onError(direct) hook error:", e?.message || e); }
       }
       throw error;
     }

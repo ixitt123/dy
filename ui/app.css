@@ -2535,6 +2535,18 @@ pre {
   transition: width 0.25s ease;
 }
 
+.tts-bgm-progress[data-state="completed"] .tts-main-progress-bar i {
+  background: linear-gradient(90deg, #38bdf8, #34d399);
+}
+
+.tts-bgm-progress[data-state="failed"] .tts-main-progress-bar i {
+  background: linear-gradient(90deg, #f97316, #ef4444);
+}
+
+.tts-bgm-progress[data-state="failed"] .tts-main-progress-meta strong {
+  color: #fca5a5;
+}
+
 #ttsStatus {
   color: var(--muted);
   font-size: 13px;
@@ -5492,6 +5504,33 @@ a {
   font-weight: 800;
 }
 
+.money-printer-final-asset {
+  display: grid;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid #32415a;
+  border-radius: 8px;
+  background: #0b1018;
+}
+
+.money-printer-final-asset video {
+  width: 100%;
+  max-height: 520px;
+  border-radius: 8px;
+  background: #000;
+}
+
+.money-printer-final-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.money-printer-final-actions a {
+  color: #91d5ff;
+  font-weight: 800;
+}
+
 .money-printer-assets div {
   display: flex;
   justify-content: space-between;
@@ -8379,6 +8418,11 @@ audio {
 
 .moments-copy-receiver textarea {
   min-height: 150px;
+}
+
+.moments-copy-receiver textarea,
+.moments-output {
+  font-family: "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", "Microsoft YaHei", "PingFang SC", sans-serif;
 }
 
 #momentsCopyInput {
@@ -11327,6 +11371,43 @@ audio {
 }
 .money-printer-card [data-money-printer-effect-setting].is-disabled {
   opacity: 0.46;
+}
+
+.cs1-output-card video {
+  display: block;
+  width: 100%;
+  max-height: 460px;
+  margin: 0 0 14px;
+  border-radius: 8px;
+  background: #111;
+}
+
+.cs1-output-actions a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+}
+
+.kinetic-bgm-player {
+  display: grid;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.kinetic-bgm-player[hidden] {
+  display: none;
+}
+
+.kinetic-bgm-player > span {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.kinetic-bgm-player audio {
+  display: block;
+  width: 100%;
+  min-height: 40px;
 }
 
 /* 文案定制改写：统一三栏节奏，减少无效留白。 */

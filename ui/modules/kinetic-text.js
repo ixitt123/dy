@@ -181,7 +181,7 @@ function syncPreviewMediaTime(time, { trustMs = SEEK_LOCK_MS } = {}) {
     }
   } catch {}
   try {
-    if (state.bgmPreviewStarted && state.bgmAudio && targetTime > 0.001 && state.bgmAudio.readyState >= 1 && Number.isFinite(Number(state.bgmAudio.duration)) && state.bgmAudio.duration > 0) {
+    if (state.bgmAudio && state.bgmAudio.readyState >= 1 && Number.isFinite(Number(state.bgmAudio.duration)) && state.bgmAudio.duration > 0) {
       state.bgmAudio.currentTime = targetTime % state.bgmAudio.duration;
     }
   } catch {}
@@ -411,6 +411,9 @@ function renderTimelineRuleStatus() {
 
 function mediaUrl(kind, { download = false } = {}) {
   if (!state.project) return "";
+  if (kind === "video" && state.project.outputs?.finalAssetId) {
+    return `/api/final-assets/file?id=${encodeURIComponent(state.project.outputs.finalAssetId)}${download ? "&download=1" : ""}`;
+  }
   const suffix = download ? "&download=1" : "";
   return `/api/kinetic-text/file?id=${encodeURIComponent(state.project.id)}&kind=${encodeURIComponent(kind)}&v=${encodeURIComponent(state.project.updatedAt || Date.now())}${suffix}`;
 }
@@ -513,26 +516,32 @@ function syncAudio() {
 function syncPreviewBgmAudio({ force = false } = {}) {
   const mix = state.project?.audioMix || {};
   const source = mix.source === "local" && mix.localPath ? mediaUrl("bgm") : "";
-  if (!force && state.bgmAudio?.src === new URL(source || "", window.location.href).href) {
-    state.bgmAudio.volume = Math.max(0, Math.min(1, Number(mix.backgroundVolume ?? 18) / 100));
+  const player = $("#kineticBgmPlayer");
+  const playerWrap = $("#kineticBgmPlayerWrap");
+  if (!player || !playerWrap) return;
+  const absoluteSource = source ? new URL(source, window.location.href).href : "";
+  if (!force && source && player.src === absoluteSource) {
+    player.volume = Math.max(0, Math.min(1, Number(mix.backgroundVolume ?? 18) / 100));
+    playerWrap.hidden = false;
+    state.bgmAudio = player;
     return;
   }
   if (state.bgmAudio) {
     state.bgmAudio.pause();
-    state.bgmAudio.src = "";
-    state.bgmAudio.remove();
   }
+  player.pause();
+  player.removeAttribute("src");
+  player.load();
+  playerWrap.hidden = true;
   state.bgmAudio = null;
   state.bgmPreviewStarted = false;
   if (!source) return;
-  const audio = document.createElement("audio");
-  audio.src = source;
-  audio.dataset.previewBgmAudio = "true";
-  audio.preload = "auto";
-  audio.loop = true;
-  audio.volume = Math.max(0, Math.min(1, Number(mix.backgroundVolume ?? 18) / 100));
-  document.body.append(audio);
-  state.bgmAudio = audio;
+  player.src = source;
+  player.loop = true;
+  player.volume = Math.max(0, Math.min(1, Number(mix.backgroundVolume ?? 18) / 100));
+  playerWrap.hidden = false;
+  player.load();
+  state.bgmAudio = player;
 }
 
 function syncBackgroundMedia() {
@@ -1404,7 +1413,10 @@ function startPreviewPlayback() {
     });
   }
   if (state.bgmAudio) {
-    if (!state.bgmPreviewStarted) syncPreviewBgmAudio({ force: true });
+    if (!state.bgmPreviewStarted) {
+      syncPreviewBgmAudio();
+      syncPreviewMediaTime(state.currentTime);
+    }
     const bgmAudio = state.bgmAudio;
     bgmAudio?.play().then(() => {
       if (state.bgmAudio === bgmAudio) state.bgmPreviewStarted = true;
@@ -1534,6 +1546,7 @@ function beginPreviewSeek(event) {
   if (!state.playing) return;
   state.playing = false;
   state.audio?.pause();
+  state.bgmAudio?.pause();
   if (state.backgroundMedia instanceof HTMLVideoElement) state.backgroundMedia.pause();
   cancelAnimationFrame(state.raf);
 }
@@ -2007,6 +2020,12 @@ async function pollJob(jobId, options = {}) {
     await refreshProjects(job.projectId);
     if (options.renderOnComplete && job.type === "render") {
       const videoPath = job.result?.videoPath || state.project?.outputs?.finalVideo || kineticDownloadDirectory();
+      const finalAssetId = job.result?.assetId || state.project?.outputs?.finalAssetId || "";
+      const receiptHandoffId = String(state.project?.ttsHandoffId || "");
+      if (receiptHandoffId && finalAssetId && globalThis.ttsHandoffStore?.updateReceipt) {
+        await globalThis.ttsHandoffStore.updateReceipt("kinetic-text", "rendered", { handoffId: receiptHandoffId, assetId: finalAssetId });
+        await globalThis.ttsHandoffStore.updateReceipt("kinetic-text", "verified", { handoffId: receiptHandoffId, assetId: finalAssetId });
+      }
       const downloadStarted = options.downloadOnComplete && triggerKineticVideoDownload();
       setProgress(100, downloadStarted ? "成片完成，浏览器下载已开始" : `视频已保存：${videoPath}`);
       setRenderButtonBusy(false);
@@ -2101,7 +2120,12 @@ async function receiveTts(payload, { navigate = true } = {}) {
   }
   const existing = state.projects.find((project) => String(project.ttsJobId) === String(payload.id));
   const receivedBgm = payload?.bgm_path
-    ? { source: "local", localPath: payload.bgm_path, localName: payload.bgm_name || "清爽教育 BGM" }
+    ? {
+      source: "local",
+      localPath: payload.bgm_path,
+      localName: payload.bgm_name || "清爽教育 BGM",
+      backgroundVolume: Math.max(0, Math.min(100, Number(payload.bgm_volume_percent ?? (Number(payload.bgm_volume ?? 0.28) * 100)))),
+    }
     : null;
   const handoffRevision = String(payload.handoff_revision || "");
   if (
@@ -2137,17 +2161,13 @@ async function receiveTts(payload, { navigate = true } = {}) {
   });
   state.pendingTimelineChanges = {};
   state.project = data.project;
-  if (receivedBgm && state.project?.id) {
-    const updated = await postJson("/api/kinetic-text/update", { projectId: state.project.id, changes: { audioMix: receivedBgm } });
-    state.project = updated.project || state.project;
-  }
   await refreshProjects(state.project.id);
   if (navigate) window.workbenchNavigate?.("kinetic-text");
   return state.project;
 }
 
 async function restoreStoredTtsHandoff() {
-  const payload = globalThis.ttsHandoffStore?.read("kinetic-text");
+  const payload = await globalThis.ttsHandoffStore?.hydrate("kinetic-text");
   return payload?.id ? receiveTts(payload, { navigate: false }) : null;
 }
 
@@ -2321,6 +2341,14 @@ function bindEvents() {
     savePreferences({ backgroundVolume: Number(event.target.value) });
     if (state.bgmAudio) state.bgmAudio.volume = Math.max(0, Math.min(1, Number(event.target.value) / 100));
     scheduleSave({ audioMix: { backgroundVolume: Number(event.target.value) } });
+  });
+  $("#kineticBgmPlayer").addEventListener("volumechange", (event) => {
+    if (!state.project || state.bgmAudio !== event.currentTarget) return;
+    const percentage = Math.round(event.currentTarget.volume * 100);
+    const slider = $("#kineticBgVolume");
+    if (slider && Number(slider.value) !== percentage) slider.value = String(percentage);
+    $("#kineticBgVolumeValue").value = `${percentage}%`;
+    scheduleSave({ audioMix: { backgroundVolume: percentage } });
   });
   $("#kineticBottomSubtitles").addEventListener("change", (event) => {
     savePreferences({ showBottomSubtitles: event.target.checked });

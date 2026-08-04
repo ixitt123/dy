@@ -38,7 +38,7 @@ export function initMoneyPrinterModule() {
   if (!state.page) return;
   cacheElements();
   bindEvents();
-  window.moneyPrinterProduction = { receiveTts, refresh: refreshStatus, restoreStoredTtsHandoff };
+  window.moneyPrinterProduction = { receiveTts, refresh: refreshStatus, restoreStoredTtsHandoff, showFinalAsset, showTaskProgress };
   initialize()
     .then(() => restoreStoredTtsHandoff())
     .catch((error) => setStatus("初始化失败", error.message, true));
@@ -146,10 +146,13 @@ async function restoreActiveTask() {
       setStatus("上次任务已完成", "页面刷新前创建的素材任务已完成，可重新发送 TTS 参数后预览合成。");
     } else if (Number(task.state) === -1) {
       clearActiveTaskId();
-      setStatus("MoneyPrinterTurbo 任务失败", task.error || "任务失败。", true);
+      const display = moneyPrinterTaskDisplay(task);
+      setProgress(display.progress, display.stage);
+      setStatus(display.title, display.detail, true);
     } else {
-      setProgress(task.progress || 0, task.stateLabel || "生成中");
-      setStatus("已恢复上次任务", `页面刷新前的任务 ${task.task_id} 仍在运行，继续自动刷新进度。`);
+      const display = moneyPrinterTaskDisplay(task);
+      setProgress(display.progress, display.stage);
+      setStatus(display.title, display.detail || `页面刷新前的任务 ${task.task_id} 仍在运行，继续自动刷新进度。`);
       state.pollTimer = window.setInterval(() => pollTask(state.task?.task_id), POLL_INTERVAL_MS);
     }
   } catch (error) {
@@ -196,7 +199,7 @@ function bindEvents() {
   document.addEventListener("workbench:route", (event) => {
     const nextActive = event.detail?.page === "money-printer";
     if (nextActive) {
-      restoreStoredTtsHandoff();
+      restoreStoredTtsHandoff().catch((error) => setStatus("TTS 交接恢复失败", error.message, true));
       renderAll();
       ensureApiReady().catch((error) => setStatus("API 自动启动失败", error.message, true));
     } else if (state.routeActive) {
@@ -279,8 +282,8 @@ function receiveTts(payload = {}, { navigate = true } = {}) {
   return state.handoff;
 }
 
-function restoreStoredTtsHandoff() {
-  const payload = globalThis.ttsHandoffStore?.read("money-printer");
+async function restoreStoredTtsHandoff() {
+  const payload = await globalThis.ttsHandoffStore?.hydrate("money-printer");
   return payload?.id ? receiveTts(payload, { navigate: false }) : null;
 }
 
@@ -386,10 +389,20 @@ function renderTask() {
   const videos = [
     ...(Array.isArray(task?.combined_videos) ? task.combined_videos.map((url) => ({ label: "官方混剪预览", url })) : []),
     ...(Array.isArray(task?.videos) ? task.videos.map((url) => ({ label: "MoneyPrinter 输出", url })) : []),
-    ...(task?.finalVideoUrl ? [{ label: task?.finalTextEffectEnabled ? "最终动态大字成片" : "最终成片", url: task.finalVideoUrl }] : []),
   ];
-  els.taskVideos.innerHTML = videos.length
-    ? videos.map((item) => `<div class="money-printer-video-row"><a href="${escapeAttr(item.url)}" target="_blank" rel="noreferrer">${escapeHtml(item.label)}</a></div>`).join("")
+  const regularRows = videos.map((item) => `<div class="money-printer-video-row"><a href="${escapeAttr(item.url)}" target="_blank" rel="noreferrer">${escapeHtml(item.label)}</a></div>`).join("");
+  const finalUrls = moneyPrinterFinalAssetUrls(task?.finalVideoUrl);
+  const finalRow = finalUrls.previewUrl ? `
+    <div class="money-printer-final-asset" data-final-asset-id="${escapeAttr(finalUrls.assetId)}">
+      <strong>${task?.finalTextEffectEnabled ? "最终动态大字成片" : "最终成片"}</strong>
+      <video id="moneyPrinterFinalVideo" controls playsinline preload="metadata" src="${escapeAttr(finalUrls.previewUrl)}"></video>
+      <div class="money-printer-final-actions">
+        <a id="moneyPrinterFinalPreview" href="${escapeAttr(finalUrls.previewUrl)}" target="_blank" rel="noreferrer">单独预览最终成片</a>
+        <a id="moneyPrinterFinalDownload" href="${escapeAttr(finalUrls.downloadUrl)}" download>下载最终成片</a>
+      </div>
+    </div>` : "";
+  els.taskVideos.innerHTML = regularRows || finalRow
+    ? `${regularRows}${finalRow}`
     : "<p>预览完成后这里会显示官方混剪和最终视频。</p>";
   els.materialSummary.textContent = state.segments.length
     ? `字幕 ${state.segments.length} 段 · 已匹配 ${matchedMaterialCount()} 段 · 复用 ${state.segments.filter((item) => item.materialReused).length} 段`
@@ -516,7 +529,9 @@ function buildMptPayload() {
     custom_audio_file: state.handoff.audio_path || "",
     bgm_type: state.includeBgm && state.handoff?.bgm_path ? "custom" : "none",
     bgm_file: state.includeBgm ? (state.handoff?.bgm_path || "") : "",
-    bgm_volume: state.includeBgm && state.handoff?.bgm_path ? 0.18 : 0,
+    bgm_volume: state.includeBgm && state.handoff?.bgm_path
+      ? Math.max(0, Math.min(1, Number(state.handoff?.bgm_volume ?? 0.28)))
+      : 0,
     subtitle_enabled: false,
   };
 }
@@ -532,9 +547,12 @@ async function pollTask(taskId) {
       state.materialPlan = state.task.material_plan;
       applyMaterialPlanSearchTerms();
     }
-    setProgress(state.task.progress || 0, state.task.stateLabel || "生成中");
+    const display = moneyPrinterTaskDisplay({ ...state.task, progress: state.task.progress || 0 });
+    setProgress(display.progress, display.stage);
     if (state.task.fallback_message) {
       setStatus("正在切换备用素材 API", state.task.fallback_message);
+    } else if (Number(state.task.state) !== 1) {
+      setStatus(display.title, display.detail, display.isError);
     }
     renderTask();
     if (Number(state.task.state) === 1) {
@@ -550,7 +568,7 @@ async function pollTask(taskId) {
     } else if (Number(state.task.state) === -1) {
       stopPolling();
       clearActiveTaskId();
-      setStatus("MoneyPrinterTurbo 任务失败", state.task.error || "全部素材 API 均失败，请检查后台配置。", true);
+      setStatus(display.title, display.detail, true);
     }
   } catch (error) {
     state.pollErrorCount += 1;
@@ -563,6 +581,67 @@ async function pollTask(taskId) {
     state.pollInFlight = false;
     updateButtons();
   }
+}
+
+export function moneyPrinterTaskDisplay(task = {}) {
+  const progress = Math.max(0, Math.min(100, Number(task.progress || 0)));
+  const stateValue = Number(task.state || 0);
+  if (stateValue === -1 || task.status_kind === "failed") {
+    return {
+      progress,
+      stage: task.stateLabel || "任务已经失败",
+      title: "任务已经失败",
+      detail: task.error || "MoneyPrinterTurbo 已明确返回失败，请按失败阶段检查配置或素材。",
+      isError: true,
+    };
+  }
+  if (stateValue === 4 && (task.processing_stage === "video" || progress >= 50)) {
+    return {
+      progress,
+      stage: task.stateLabel || "视频合成仍在进行",
+      title: "视频合成仍在进行",
+      detail: task.activity_message || "任务服务仍可查询；长视频 FFmpeg 合成期间百分比可能暂时不变。",
+      isError: false,
+    };
+  }
+  return {
+    progress,
+    stage: task.stateLabel || (stateValue === 1 ? "已完成" : "生成中"),
+    title: stateValue === 1 ? "任务已完成" : "MoneyPrinterTurbo 正在处理",
+    detail: task.activity_message || "任务服务仍在响应，继续自动刷新进度。",
+    isError: false,
+  };
+}
+
+function showTaskProgress(task = {}) {
+  state.task = { ...task };
+  const display = moneyPrinterTaskDisplay(state.task);
+  renderTask();
+  setProgress(display.progress, display.stage);
+  setStatus(display.title, display.detail, display.isError);
+  return display;
+}
+
+export function moneyPrinterFinalAssetUrls(videoUrl = "") {
+  const previewUrl = String(videoUrl || "").trim();
+  if (!previewUrl) return { previewUrl: "", downloadUrl: "", assetId: "" };
+  const separator = previewUrl.includes("?") ? "&" : "?";
+  let assetId = "";
+  try { assetId = new URL(previewUrl, window.location.origin).searchParams.get("id") || ""; } catch {}
+  return { previewUrl, downloadUrl: `${previewUrl}${separator}download=1`, assetId };
+}
+
+function showFinalAsset(asset = {}) {
+  state.task = {
+    ...(state.task || {}),
+    task_id: state.task?.task_id || asset.id || "final-asset",
+    stateLabel: "最终成片已就绪",
+    finalVideoUrl: String(asset.videoUrl || asset.finalVideoUrl || "").trim(),
+    finalOutputPath: String(asset.outputPath || asset.finalOutputPath || "").trim(),
+    finalTextEffectEnabled: asset.textEffectEnabled === true || asset.finalTextEffectEnabled === true,
+  };
+  renderTask();
+  return moneyPrinterFinalAssetUrls(state.task.finalVideoUrl);
 }
 
 function applyTaskMaterials(task = {}) {
@@ -635,22 +714,34 @@ async function renderFinalVideo() {
   setProgress(4, "开始合成最终视频");
   try {
     const settings = currentSettings();
+    const includeBgm = Boolean(state.includeBgm && state.handoff?.bgm_path);
     const data = await postJson("/api/money-printer/render-final", {
       title: els.subject.value.trim() || state.handoff.title || "MoneyPrinter 视频",
       tts: state.handoff,
       text: state.handoff.text || state.handoff.final_text || "",
+      handoff_id: state.handoff.handoff_id || "",
+      revision: state.handoff.handoff_revision || state.handoff.revision || "",
+      includeBgm,
+      bgm_file: includeBgm ? state.handoff.bgm_path : "",
+      bgm_volume: includeBgm
+        ? Math.max(0, Math.min(1, Number(state.handoff.bgm_volume ?? 0.18)))
+        : 0,
       task: state.task,
       background_video: state.task.localCombinedVideos?.[0] || state.task.combined_videos?.[0] || state.task.videos?.[0] || "",
       segments: state.segments,
       settings,
     });
-    state.task = {
-      ...state.task,
-      finalVideoUrl: data.videoUrl,
-      finalOutputPath: data.outputPath,
-      finalTextEffectEnabled: settings.textEffectEnabled,
-    };
-    renderTask();
+    showFinalAsset({
+      id: data.id,
+      assetId: data.assetId,
+      videoUrl: data.videoUrl,
+      outputPath: data.outputPath,
+      textEffectEnabled: settings.textEffectEnabled,
+    });
+    if (state.handoff?.handoff_id && data.assetId && globalThis.ttsHandoffStore?.updateReceipt) {
+      await globalThis.ttsHandoffStore.updateReceipt("money-printer", "rendered", { assetId: data.assetId });
+      await globalThis.ttsHandoffStore.updateReceipt("money-printer", "verified", { assetId: data.assetId });
+    }
     setProgress(100, "最终视频已保存到统一下载目录");
     setStatus("最终视频已生成", data.outputPath || "已保存。");
   } catch (error) {

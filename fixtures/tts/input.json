@@ -1,0 +1,28 @@
+{
+  "scenario": "tts",
+  "description": "TTS 旁白生成测试 fixture。固定文案和语音参数，用于验证旁白生成、音频预览、发送到生产线。",
+  "text": "同学们好，今天我们学习勾股定理。直角三角形两条直角边的平方和等于斜边的平方，记作 a 平方加 b 平方等于 c 平方。这个定理是几何学的基础，我们来做一个简单的证明。",
+  "provider": "minimax",
+  "voice": {
+    "preset": "default-female",
+    "speed": 1.0,
+    "volume": 1.0,
+    "pitch": 0
+  },
+  "params": {
+    "model": "speech-01",
+    "format": "mp3",
+    "sampleRate": 24000
+  },
+  "expectedDuration": "约 18-22 秒",
+  "expectedBehavior": "生成成功后页面显示音频预览播放器；点击播放时间正常推进；音频可发送到四条生产线",
+  "verificationPoints": [
+    "旁白生成成功后默认显示音频预览",
+    "播放器可见且时间推进",
+    "音频文件可被 FFprobe 检测",
+    "发送到 TTS 时文本与当前页面选中版本一致"
+  ],
+  "mediaRef": {
+    "note": "生成产物为旁白音频 mp3；期望输出特征见 fixtures/expected/tts.json"
+  }
+}

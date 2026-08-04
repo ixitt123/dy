@@ -1,9 +1,10 @@
 ﻿import fs from "node:fs";
 import path from "node:path";
 import { spawn, spawnSync } from "node:child_process";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { createRequire } from "node:module";
 import { HttpBodyError, readJsonBody } from "../utils/http-body.js";
+import { writeJsonAtomic } from "../core/atomic-write.mjs";
 
 const HYPERFRAMES_VERSION = "0.7.37";
 const nodeRequire = createRequire(import.meta.url);
@@ -124,7 +125,7 @@ const CS1_VIDEO_STYLES = [
   { id: "blank", name: "Blank 空白基础风", description: "最少包装的基础模板，适合后续深度自定义，不建议作为商业成片默认选择。", source: "hyperframes" },
 ];
 
-export function createCs1VideoRoutes({ baseDir, sendJson, modelRouter, ffmpegPath = "", ffprobePath = "" }) {
+export function createCs1VideoRoutes({ baseDir, sendJson, modelRouter, ffmpegPath = "", ffprobePath = "", finalAssetRegistry = null }) {
   const runsDir = path.join(baseDir, ".data", "cs1-video-maker");
   const outputDir = path.join(baseDir, "jianying-exports", "hyperframes");
   const hiddenStylesPath = path.join(runsDir, "hidden-styles.json");
@@ -149,8 +150,20 @@ export function createCs1VideoRoutes({ baseDir, sendJson, modelRouter, ffmpegPat
       sendJson(res, 200, {
         ok: true,
         outputDir,
-        outputs: listCs1Outputs(outputDir),
+        outputs: listCs1Outputs(outputDir, finalAssetRegistry),
       });
+      return true;
+    }
+
+    if (req.method === "GET" && route === "file") {
+      const name = path.basename(String(url.searchParams.get("name") || ""));
+      const filePath = path.resolve(outputDir, name);
+      const isDirectChild = name.toLowerCase().endsWith(".mp4") && path.dirname(filePath) === path.resolve(outputDir);
+      if (!isDirectChild || !fs.existsSync(filePath) || !fs.statSync(filePath).isFile()) {
+        sendJson(res, 404, { ok: false, message: "CS1 视频不存在。" });
+        return true;
+      }
+      sendCs1VideoFile(req, res, filePath, url.searchParams.get("download") === "1");
       return true;
     }
 
@@ -199,6 +212,7 @@ export function createCs1VideoRoutes({ baseDir, sendJson, modelRouter, ffmpegPat
           templateName: body.templateName,
           bgmMode: body.bgmMode,
           bgmPath: body.bgmPath,
+          bgmVolume: body.bgmVolume,
           includeBgm: body.includeBgm === true,
           ttsAudioPath: body.ttsAudioPath,
           packaging: {
@@ -216,7 +230,18 @@ export function createCs1VideoRoutes({ baseDir, sendJson, modelRouter, ffmpegPat
           ffmpegPath,
           ffprobePath,
         });
-        sendJson(res, 200, { ok: true, ...result });
+        const finalAsset = finalAssetRegistry?.register({
+          filePath: result.outputPath,
+          kind: "video",
+          source: "cs1-video",
+          sourceRef: result.id,
+          metadata: { title: result.title, style: result.style, projectDir: result.projectDir },
+        });
+        sendJson(res, 200, {
+          ok: true,
+          ...result,
+          ...(finalAsset ? { assetId: finalAsset.assetId, videoUrl: finalAsset.videoUrl, downloadUrl: finalAsset.downloadUrl } : {}),
+        });
       } catch (error) {
         sendJson(res, error instanceof HttpBodyError ? error.statusCode : 400, {
           ok: false,
@@ -243,15 +268,14 @@ function readHiddenStyleIds(filePath) {
 }
 
 function writeHiddenStyleIds(filePath, ids) {
-  fs.mkdirSync(path.dirname(filePath), { recursive: true });
   const payload = {
     ids: Array.from(ids).sort(),
     updated_at: new Date().toISOString(),
   };
-  fs.writeFileSync(filePath, `${JSON.stringify(payload, null, 2)}\n`, "utf8");
+  writeJsonAtomic(filePath, payload);
 }
 
-async function generateVideo({ runsDir, outputDir, text, style, title, aspectRatio, beatCount, cardHoldPreset, visualOptions, templateName, bgmMode, bgmPath, includeBgm = false, ttsAudioPath = "", packaging, aiRefine, modelRouter, ffmpegPath, ffprobePath }) {
+async function generateVideo({ runsDir, outputDir, text, style, title, aspectRatio, beatCount, cardHoldPreset, visualOptions, templateName, bgmMode, bgmPath, bgmVolume = 0.18, includeBgm = false, ttsAudioPath = "", packaging, aiRefine, modelRouter, ffmpegPath, ffprobePath }) {
   const script = normalizeScript(text);
   const styleId = normalizeStyle(style);
   const aspect = normalizeAspectRatio(aspectRatio);
@@ -301,14 +325,19 @@ async function generateVideo({ runsDir, outputDir, text, style, title, aspectRat
   const renderOutput = [];
   await runHyperframes(projectDir, ["render", "--output", outputPath, "--quality", "standard"], renderOutput, hyperframesEnv);
   const mixedBgm = includeBgm ? resolveCs1LocalAudioPath(bgmPath) : "";
+  const narrationAudio = resolveCs1LocalAudioPath(ttsAudioPath);
+  let bgmMix = null;
   if (mixedBgm) {
-    await mixCs1BgmIntoVideo({
+    bgmMix = await mixCs1BgmIntoVideo({
       ffmpegPath,
       ffprobePath,
       outputPath,
       bgmPath: mixedBgm,
-      ttsAudioPath: resolveCs1LocalAudioPath(ttsAudioPath),
+      bgmVolume,
+      ttsAudioPath: narrationAudio,
     });
+  } else if (narrationAudio) {
+    await muxCs1NarrationIntoVideo({ ffmpegPath, ffprobePath, outputPath, ttsAudioPath: narrationAudio });
   }
 
   return {
@@ -323,7 +352,15 @@ async function generateVideo({ runsDir, outputDir, text, style, title, aspectRat
     outputPath,
     outputDir,
     aiUsed: Boolean(refined),
-    bgm: mixedBgm ? { mode: "local", label: `${path.basename(mixedBgm)} · 已混入成片`, sourcePath: mixedBgm } : files.bgm || null,
+    videoUrl: `/api/cs1-video/file?name=${encodeURIComponent(path.basename(outputPath))}`,
+    downloadUrl: `/api/cs1-video/file?name=${encodeURIComponent(path.basename(outputPath))}&download=1`,
+    narration: narrationAudio ? { sourcePath: narrationAudio, mixedIntoVideo: true } : null,
+    bgm: mixedBgm ? {
+      mode: "local",
+      label: `${path.basename(mixedBgm)} · 已混入成片`,
+      sourcePath: mixedBgm,
+      manifestPath: bgmMix?.manifestPath || "",
+    } : files.bgm || null,
     visualOptions: files.visualOptions || aifmanVisual,
     packaging: files.packaging || packagingOptions,
     checkLog: checkOutput.join("\n").slice(-8000),
@@ -590,23 +627,113 @@ function resolveCs1LocalAudioPath(value) {
   return fs.existsSync(resolved) && fs.statSync(resolved).isFile() && supported.has(extension) ? resolved : "";
 }
 
-async function mixCs1BgmIntoVideo({ ffmpegPath, ffprobePath, outputPath, bgmPath, ttsAudioPath = "" }) {
+export async function mixCs1BgmIntoVideo({ ffmpegPath, ffprobePath, outputPath, bgmPath, bgmVolume = 0.18, ttsAudioPath = "" }) {
   if (!ffmpegPath || !fs.existsSync(ffmpegPath)) throw new Error("FFmpeg 不可用，无法混入 BGM。");
   const temporaryPath = `${outputPath}.bgm.mp4`;
   const hasTts = Boolean(ttsAudioPath);
   const outputDuration = await mediaDurationSeconds(ffprobePath, outputPath);
-  const fadeStart = Math.max(0, outputDuration - 0.8).toFixed(3);
+  const narrationDuration = hasTts ? await mediaDurationSeconds(ffprobePath, ttsAudioPath) : 0;
+  const bgmDuration = await mediaDurationSeconds(ffprobePath, bgmPath);
+  const inputVideoHash = sha256File(outputPath);
+  const narrationHash = hasTts ? sha256File(ttsAudioPath) : "";
+  const bgmHash = sha256File(bgmPath);
+  // 04.07 BGM 收尾淡出 2.0s（执行总表建议 2-3s，避免突停）
+  const fadeStart = Math.max(0, outputDuration - 2.0).toFixed(3);
   const args = ["-y", "-i", outputPath];
   if (hasTts) args.push("-i", ttsAudioPath);
   args.push("-stream_loop", "-1", "-i", bgmPath);
   const bgmInputIndex = hasTts ? 2 : 1;
+  const requestedBgmVolume = Number(bgmVolume);
+  const normalizedBgmVolume = Math.max(0, Math.min(1, Number.isFinite(requestedBgmVolume) ? requestedBgmVolume : 0.18));
   const filter = hasTts
-    ? `[1:a]volume=1.000[tts];[${bgmInputIndex}:a]volume=0.180,afade=t=in:st=0:d=0.5,afade=t=out:st=${fadeStart}:d=0.8[bgm];[tts][bgm]amix=inputs=2:duration=first:dropout_transition=2[aout]`
-    : `[${bgmInputIndex}:a]volume=0.180,afade=t=in:st=0:d=0.5,afade=t=out:st=${fadeStart}:d=0.8[aout]`;
+    ? `[1:a]volume=1.000[tts];[${bgmInputIndex}:a]volume=${normalizedBgmVolume.toFixed(3)},afade=t=in:st=0:d=0.5,afade=t=out:st=${fadeStart}:d=2.0[bgm];[tts][bgm]amix=inputs=2:duration=first:dropout_transition=2[aout]`
+    : `[${bgmInputIndex}:a]volume=${normalizedBgmVolume.toFixed(3)},afade=t=in:st=0:d=0.5,afade=t=out:st=${fadeStart}:d=2.0[aout]`;
   args.push("-filter_complex", filter, "-map", "0:v:0", "-map", "[aout]", "-c:v", "copy", "-c:a", "aac", "-shortest", "-movflags", "+faststart", temporaryPath);
   await runFfmpeg(ffmpegPath, args);
-  fs.unlinkSync(outputPath);
-  fs.renameSync(temporaryPath, outputPath);
+  const verification = await verifyCs1MixedVideo(ffprobePath, temporaryPath);
+  const replacement = replaceVerifiedCs1Video({ outputPath, temporaryPath });
+  const manifestPath = `${outputPath}.bgm-manifest.json`;
+  const manifest = {
+    schemaVersion: 1,
+    createdAt: new Date().toISOString(),
+    operation: "cs1-bgm-mix",
+    inputs: {
+      video: { path: replacement.backupPath, sha256: inputVideoHash, durationSeconds: outputDuration },
+      narration: hasTts ? { path: ttsAudioPath, sha256: narrationHash, durationSeconds: narrationDuration } : null,
+      bgm: { path: bgmPath, sha256: bgmHash, durationSeconds: bgmDuration },
+    },
+    mix: {
+      bgmVolume: normalizedBgmVolume,
+      fadeInSeconds: 0.5,
+      fadeOutSeconds: 2,
+      fadeOutStartSeconds: Number(fadeStart),
+      targetDurationSeconds: outputDuration,
+      bgmTailSeconds: Math.max(0, bgmDuration - (narrationDuration || outputDuration)),
+    },
+    output: {
+      path: outputPath,
+      sha256: sha256File(outputPath),
+      durationSeconds: verification.duration,
+      hasVideo: verification.hasVideo,
+      hasAudio: verification.hasAudio,
+    },
+    recovery: { originalBackupPath: replacement.backupPath, originalBackupSha256: inputVideoHash },
+  };
+  writeJsonAtomic(manifestPath, manifest);
+  return { ...replacement, manifestPath, manifest };
+}
+
+export async function verifyCs1MixedVideo(ffprobePath, mediaPath) {
+  if (!ffprobePath || !fs.existsSync(ffprobePath)) throw new Error("FFprobe 不可用，不能安全替换 CS1 成片。");
+  const result = await new Promise((resolve, reject) => {
+    const child = spawn(ffprobePath, ["-v", "error", "-show_entries", "format=duration:stream=codec_type", "-of", "json", mediaPath], { windowsHide: true });
+    let stdout = "";
+    let stderr = "";
+    child.stdout.on("data", (chunk) => { stdout += chunk.toString(); });
+    child.stderr.on("data", (chunk) => { stderr += chunk.toString(); });
+    child.on("error", reject);
+    child.on("close", (code) => code === 0 ? resolve(stdout) : reject(new Error(`混音临时文件验证失败：${stderr.slice(-1000)}`)));
+  });
+  let probe;
+  try { probe = JSON.parse(result); } catch { throw new Error("混音临时文件验证失败：FFprobe 返回无效 JSON。"); }
+  const streamTypes = new Set((probe.streams || []).map((stream) => stream.codec_type));
+  const duration = Number(probe.format?.duration || 0);
+  if (!streamTypes.has("video") || !streamTypes.has("audio") || !(duration > 0)) {
+    throw new Error("混音临时文件验证失败：缺少视频流、音频流或有效时长。");
+  }
+  return { duration, hasVideo: true, hasAudio: true };
+}
+
+export async function muxCs1NarrationIntoVideo({ ffmpegPath, ffprobePath, outputPath, ttsAudioPath }) {
+  if (!ffmpegPath || !fs.existsSync(ffmpegPath)) throw new Error("FFmpeg 不可用，无法写入 CS1 旁白。 ");
+  if (!ttsAudioPath || !fs.existsSync(ttsAudioPath)) throw new Error("CS1 旁白音频不存在，禁止生成无声三件套。");
+  const temporaryPath = `${outputPath}.tts.mp4`;
+  await runFfmpeg(ffmpegPath, [
+    "-y", "-i", outputPath, "-i", ttsAudioPath,
+    "-map", "0:v:0", "-map", "1:a:0",
+    "-c:v", "copy", "-c:a", "aac", "-shortest", "-movflags", "+faststart",
+    temporaryPath,
+  ]);
+  await verifyCs1MixedVideo(ffprobePath, temporaryPath);
+  return replaceVerifiedCs1Video({ outputPath, temporaryPath });
+}
+
+export function replaceVerifiedCs1Video({ outputPath, temporaryPath, renameFile = fs.renameSync }) {
+  if (!fs.existsSync(outputPath)) throw new Error("原 CS1 成片不存在，禁止替换。");
+  if (!fs.existsSync(temporaryPath)) throw new Error("已验证的混音临时文件不存在，禁止替换。");
+  const backupPath = `${outputPath}.pre-bgm-${Date.now()}.mp4`;
+  renameFile(outputPath, backupPath);
+  try {
+    renameFile(temporaryPath, outputPath);
+  } catch (error) {
+    try {
+      if (!fs.existsSync(outputPath) && fs.existsSync(backupPath)) renameFile(backupPath, outputPath);
+    } catch (restoreError) {
+      throw new Error(`CS1 混音替换失败且原成片恢复失败：${error.message || error}；恢复错误：${restoreError.message || restoreError}`);
+    }
+    throw new Error(`CS1 混音替换失败，原成片已恢复：${error.message || error}`);
+  }
+  return { outputPath, backupPath, temporaryPath, replaced: true };
 }
 
 function mediaDurationSeconds(ffprobePath, mediaPath) {
@@ -618,6 +745,10 @@ function mediaDurationSeconds(ffprobePath, mediaPath) {
     child.on("error", () => resolve(0));
     child.on("close", () => resolve(Math.max(0, Number.parseFloat(stdout) || 0)));
   });
+}
+
+function sha256File(filePath) {
+  return createHash("sha256").update(fs.readFileSync(filePath)).digest("hex");
 }
 
 function runFfmpeg(command, args) {
@@ -927,7 +1058,7 @@ function aifmanModelFromParts({ title, headlineLead, headlineKeyword, cards, out
   };
 }
 
-function listCs1Outputs(outputDir) {
+function listCs1Outputs(outputDir, finalAssetRegistry = null) {
   try {
     if (!fs.existsSync(outputDir)) return [];
     return fs.readdirSync(outputDir, { withFileTypes: true })
@@ -935,9 +1066,19 @@ function listCs1Outputs(outputDir) {
       .map((entry) => {
         const filePath = path.join(outputDir, entry.name);
         const stat = fs.statSync(filePath);
+        const finalAsset = finalAssetRegistry?.register({
+          filePath,
+          kind: "video",
+          source: "cs1-video",
+          sourceRef: entry.name,
+          metadata: { discoveredFromHistory: true },
+        });
         return {
           name: entry.name,
           filePath,
+          assetId: finalAsset?.assetId || "",
+          videoUrl: finalAsset?.videoUrl || `/api/cs1-video/file?name=${encodeURIComponent(entry.name)}`,
+          downloadUrl: finalAsset?.downloadUrl || `/api/cs1-video/file?name=${encodeURIComponent(entry.name)}&download=1`,
           size: stat.size,
           updatedAt: stat.mtime.toISOString(),
         };
@@ -947,6 +1088,41 @@ function listCs1Outputs(outputDir) {
   } catch {
     return [];
   }
+}
+
+function sendCs1VideoFile(req, res, filePath, download = false) {
+  const stat = fs.statSync(filePath);
+  const range = String(req.headers.range || "");
+  const disposition = `${download ? "attachment" : "inline"}; filename*=UTF-8''${encodeURIComponent(path.basename(filePath))}`;
+  if (!range) {
+    res.writeHead(200, {
+      "Content-Type": "video/mp4",
+      "Content-Length": stat.size,
+      "Accept-Ranges": "bytes",
+      "Content-Disposition": disposition,
+      "Cache-Control": "no-store",
+    });
+    fs.createReadStream(filePath).pipe(res);
+    return;
+  }
+  const match = /^bytes=(\d*)-(\d*)$/u.exec(range);
+  const start = match && match[1] ? Number(match[1]) : 0;
+  const requestedEnd = match && match[2] ? Number(match[2]) : stat.size - 1;
+  const end = Math.min(requestedEnd, stat.size - 1);
+  if (!match || !Number.isSafeInteger(start) || !Number.isSafeInteger(end) || start < 0 || start > end || start >= stat.size) {
+    res.writeHead(416, { "Content-Range": `bytes */${stat.size}` });
+    res.end();
+    return;
+  }
+  res.writeHead(206, {
+    "Content-Type": "video/mp4",
+    "Content-Length": end - start + 1,
+    "Content-Range": `bytes ${start}-${end}/${stat.size}`,
+    "Accept-Ranges": "bytes",
+    "Content-Disposition": disposition,
+    "Cache-Control": "no-store",
+  });
+  fs.createReadStream(filePath, { start, end }).pipe(res);
 }
 
 function storyModelFromBeats(title, rawBeats, beatCount = DEFAULT_BEAT_COUNT) {
@@ -1824,5 +2000,3 @@ Official HyperFrames example style: ${config.title}. Template id: \`${templateId
 </html>`,
   };
 }
-
-

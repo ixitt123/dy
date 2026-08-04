@@ -1,0 +1,31 @@
+{
+  "scenario": "xiaohei",
+  "description": "小黑视频生产线测试 fixture。固定场景、图片、BGM、倍速，用于验证小黑场景、一键图片、倍速、渲染、下载。",
+  "scenes": [
+    { "id": "scene-1", "title": "开场", "durationSec": 3 },
+    { "id": "scene-2", "title": "讲解", "durationSec": 12 },
+    { "id": "scene-3", "title": "结尾", "durationSec": 3 }
+  ],
+  "images": {
+    "oneClick": {
+      "singleImage": { "refScene": "scene-1", "placeholder": true, "note": "单图绑定场景" },
+      "multiImage": { "refScenes": ["scene-1", "scene-2", "scene-3"], "placeholder": true, "note": "多图分别绑定场景" }
+    }
+  },
+  "bgm": { "refScenario": "bgm", "rule": "手动新建默认关闭；收到有效四件套自动开启" },
+  "speed": {
+    "options": [1.0, 1.1, 1.2, 1.3],
+    "default": 1.0
+  },
+  "narration": { "refScenario": "tts" },
+  "subtitle": { "type": "srt" },
+  "expectedBehavior": "一键添加图片（单图/多图/场景绑定/刷新恢复/最终渲染）均验证；1.0/1.1/1.2/1.3 倍速按选择写入成品；字幕、画面、TTS、BGM 结束点同步",
+  "verificationPoints": [
+    "BGM 默认规则和预览播放条可见",
+    "最终成片 BGM 真实检测到，响度和收尾合格",
+    "一键添加图片：单图、多图、场景绑定、刷新恢复、最终渲染",
+    "视频倍速 1.0/1.1/1.2/1.3 按选择写入下载成品",
+    "字幕、画面、TTS 与 BGM 结束点倍速后保持同步",
+    "iframe 重载、父页重发、预览和下载全部通过"
+  ]
+}

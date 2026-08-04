@@ -7,6 +7,7 @@ import ffmpegPath from "ffmpeg-static";
 import ffprobeStatic from "ffprobe-static";
 import { createTtsService } from "./server/tts/tts-service.js";
 import { tokenizeAlignmentText } from "./server/tts/alignment.js";
+import { measureLoudness } from "./scripts/media-verifier.mjs";
 
 const PROMPT_FILES = ["tts_script_prepare.md", "tts_emotion_prompt.md", "seo_title_generation.md"];
 
@@ -332,7 +333,41 @@ const audioLyrics = "你问我 AI 怎么拍成片 我用一段旋律唱给你听
   });
   assert.equal(imported.error, undefined);
   assert.ok(imported.job.audio_duration >= 4.9 && imported.job.audio_duration <= 5.25, `Expected 5.1s BGM, received ${imported.job.audio_duration}s`);
-  assert.ok(audioMaxVolumeDb(imported.job.audio_path) <= audioMaxVolumeDb(sourcePath) - 6, "BGM must honor the requested lower background volume");
+  const normalizedLoudness = measureLoudness(imported.job.audio_path);
+  assert.ok(normalizedLoudness.integratedLufs >= -24 && normalizedLoudness.integratedLufs <= -17, `BGM source must be normalized near -20 LUFS before final mix gain: ${normalizedLoudness.integratedLufs}`);
+  assert.equal(imported.job.metadata.background_volume, 0.35, "Selected volume must remain the final mix gain");
+  assert.equal(imported.job.metadata.background_volume_is_mix_gain, true);
+}
+
+{
+  const baseDir = createTempProject();
+  const sourcePath = createAudioFile(baseDir, "short-background-music-source.mp3", 2.2);
+  const taskStore = new MemoryTaskStore();
+  const { service } = createService({
+    baseDir,
+    taskStore,
+    transcript: originalScript,
+  });
+  const imported = await service.importGenerated({
+    audio_path: sourcePath,
+    text: originalScript,
+    provider: "minimax",
+    voice_id: "music:clean_education_bgm",
+    voice_name: "清爽教育 BGM",
+    emotion: "music",
+    source: "minimax_music_bgm",
+    metadata: {
+      audio_role: "background_music",
+      requested_duration: 5.1,
+      fade_out_seconds: 2.5,
+      background_volume: 0.35,
+    },
+  });
+  assert.equal(imported.error, undefined);
+  assert.ok(imported.job.audio_duration >= 4.9 && imported.job.audio_duration <= 5.25, `Short BGM source must loop to 5.1s, received ${imported.job.audio_duration}s`);
+  const normalizedLoudness = measureLoudness(imported.job.audio_path);
+  assert.ok(normalizedLoudness.integratedLufs >= -24 && normalizedLoudness.integratedLufs <= -17, `Looped BGM source must be normalized near -20 LUFS: ${normalizedLoudness.integratedLufs}`);
+  assert.equal(imported.job.metadata.background_volume, 0.35, "Looped BGM must preserve final mix gain");
 }
 
 console.log("TTS alignment service tests passed");

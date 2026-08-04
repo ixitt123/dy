@@ -1,0 +1,27 @@
+{
+  "scenario": "moneyprinter",
+  "description": "MoneyPrinterTurbo 生产线测试 fixture。固定脚本、TTS、BGM、素材，用于验证最终二次合成 BGM、任务映射、进度、真实成片。",
+  "script": { "refScenario": "rewrite-crossover", "field": "taskA.rewriteText" },
+  "narration": { "refScenario": "tts" },
+  "bgm": {
+    "refScenario": "bgm",
+    "includeBgmParam": true,
+    "note": "最终请求必须传递 includeBgm、受信任路径、音量、revision"
+  },
+  "materials": {
+    "videoSegments": { "placeholder": true, "note": "可引用 assets/ 下已有素材或占位" },
+    "images": { "placeholder": true }
+  },
+  "submoduleCommit": "d994b15fc8f4b8a9eeb7d43cc8aed4a2a0e2c3f2",
+  "expectedBehavior": "最终 MP4 同时检测到旁白和 BGM；预览和下载对应同一最终文件；8787 重启后仍能恢复官方任务和最终文件；50% 长时间 FFmpeg 与真正失败可区分",
+  "verificationPoints": [
+    "最终二次合成丢失 BGM 的失败测试（固定 TTS + 特征 BGM 稳定失败）",
+    "最终请求传递 BGM 参数：includeBgm、受信任路径、音量、revision",
+    "最终 FFmpeg 合成加入 BGM：循环或裁切、淡入淡出、混音、主时长策略正确",
+    "预览和下载资产统一：点击预览和下载对应同一最终文件",
+    "持久化 MPT 包装任务映射：8787 重启后恢复官方任务和最终文件",
+    "进度和慢任务提示：50% 长时间 FFmpeg 与真正失败可区分",
+    "最终 MP4 同时检测到旁白和 BGM，页面可预览和下载"
+  ],
+  "knownIssue": "00.01 基线记录指出子模块内部分支为 codex/mpt-fast-progress-20260725（非正式 vendor 指针），需在 05.x 核对"
+}

@@ -21,6 +21,24 @@ globalThis.localStorage = {
     values.delete(String(key));
   },
 };
+const serverHandoffs = new Map();
+globalThis.fetch = async (url, options = {}) => {
+  if (String(url) === "/api/tts/handoff" && options.method === "POST") {
+    const body = JSON.parse(options.body || "{}");
+    const handoff = {
+      id: body.payload.handoff_id,
+      revision: body.payload.handoff_revision,
+      jobId: String(body.payload.id),
+      targets: body.targets,
+      payload: body.payload,
+    };
+    serverHandoffs.set(handoff.id, handoff);
+    return { ok: true, status: 201, json: async () => ({ ok: true, handoff }) };
+  }
+  const id = new URL(String(url), "http://local.test").searchParams.get("id");
+  const handoff = serverHandoffs.get(id);
+  return { ok: Boolean(handoff), status: handoff ? 200 : 404, json: async () => handoff ? ({ ok: true, handoff }) : ({ ok: false, message: "missing" }) };
+};
 
 await import(`./ui/modules/tts-handoff-store.js?test=${Date.now()}`);
 const store = globalThis.ttsHandoffStore;
@@ -41,8 +59,12 @@ const newPayload = {
   sentence_timeline: [{ start: 0, end: 1, text: "本轮正确字幕" }],
 };
 
-store.save(oldPayload, ["kinetic-text"]);
-store.save(newPayload, ["kinetic-text"]);
+oldPayload.handoff_id = "handoff-101";
+oldPayload.handoff_revision = "revision-101";
+newPayload.handoff_id = "handoff-102";
+newPayload.handoff_revision = "revision-102";
+await store.save(oldPayload, ["kinetic-text"]);
+await store.save(newPayload, ["kinetic-text"]);
 const latest = store.read("kinetic-text");
 assert.equal(latest.id, 102);
 assert.equal(latest.text, "本轮正确字幕");
@@ -52,8 +74,15 @@ assert.equal(store.isPending("kinetic-text"), true, "a newly sent handoff should
 store.acknowledge("kinetic-text");
 assert.equal(store.isPending("kinetic-text"), false, "opening the target page should acknowledge its badge");
 assert.equal(store.read("kinetic-text").id, 102, "acknowledging the badge must keep the handoff payload");
-store.save({ ...newPayload, id: 103 }, ["kinetic-text"]);
+await store.save({ ...newPayload, id: 103, handoff_id: "handoff-103", handoff_revision: "revision-103" }, ["kinetic-text"]);
 assert.equal(store.isPending("kinetic-text"), true, "a newer handoff should show the badge again");
+assert.equal(store.latestId("kinetic-text"), "handoff-103", "localStorage must retain only the latest server handoff ID");
+assert.equal(values.get(store.keyFor("kinetic-text")), "handoff-103");
+values.set("dy:tts:handoff:v2:cs1-video", JSON.stringify({ ...newPayload, handoff_target: "cs1-video", handoff_job_id: "102", stored_at: new Date().toISOString() }));
+const migrated = await store.hydrate("cs1-video");
+assert.equal(migrated.id, 102, "legacy full payload must migrate through the server without losing the TTS job");
+assert.equal(store.latestId("cs1-video"), "handoff-102");
+assert.equal(values.has("dy:tts:handoff:v2:cs1-video"), false, "legacy full-payload localStorage must be removed after migration");
 
 assert.match(html, /modules\/tts-handoff-store\.js[\s\S]*modules\/legacy-runtime\.js/u);
 assert.match(runtime, /data-tts-timeline-text="\$\{index\}"[^>]*data-no-draft-persist/u);
@@ -62,8 +91,11 @@ for (const [name, source] of Object.entries({ cs1, xiaohei, moneyPrinter, kineti
 }
 
 assert.doesNotMatch(runtime, /\nclearProductionTtsHandoffStorage\(\);\n/u);
-assert.match(runtime, /ttsHandoffStore\?\.save\(sharedPayload,\s*targets\)/u);
-assert.match(runtime, /scheduleTtsTargetDelivery/u);
+assert.match(runtime, /await globalThis\.ttsHandoffStore\?\.save\(sharedPayload,\s*targets\)/u);
+assert.doesNotMatch(runtime, /scheduleTtsTargetDelivery/u, "sending must not report success before background delivery finishes");
+assert.match(runtime, /Promise\.allSettled\(selectedTargets\.map\(async \(target\)/u);
+assert.match(runtime, /await deliverTtsPayloadToTarget\(target, sharedPayload\)/u);
+assert.match(runtime, /以下生产线接收失败/u, "failed selected targets must be reported instead of hidden in the console");
 assert.match(runtime, /function acknowledgeProductionTarget/u);
 assert.match(runtime, /workbench:route[\s\S]*acknowledgeProductionTarget/u);
 assert.match(
@@ -85,12 +117,13 @@ for (const [target, source] of Object.entries({
 })) {
   assert.match(
     source,
-    new RegExp(`ttsHandoffStore\\?\\.read\\("${target}"\\)`),
-    `${target} must restore its latest task-specific handoff`,
+    new RegExp(`ttsHandoffStore\\?\\.hydrate\\("${target}"\\)`),
+    `${target} must restore its latest task-specific handoff from the server`,
   );
 }
 
 delete globalThis.ttsHandoffStore;
 delete globalThis.localStorage;
+delete globalThis.fetch;
 
-console.log("TTS handoff isolation and deferred delivery: OK");
+console.log("TTS handoff isolation and confirmed delivery: OK");

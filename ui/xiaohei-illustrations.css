@@ -1875,3 +1875,12 @@ pre {
   opacity: 0.35;
   cursor: not-allowed;
 }
+.xiaohei-bgm-player audio {
+  display: block;
+  width: 100%;
+  min-height: 40px;
+}
+
+.xiaohei-bgm-player[hidden] {
+  display: none;
+}

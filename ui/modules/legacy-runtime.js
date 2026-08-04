@@ -29,7 +29,13 @@ if (typeof window.fetch !== "function") {
 
 const UI_CHOICE_STORAGE_KEY = "dy.ui.choicePreferences.v1";
 const UI_CHOICE_SELECTOR = 'select, input[type="checkbox"], input[type="radio"], input[type="range"]';
-const UI_DRAFT_STORAGE_KEY = "dy.ui.inputDrafts.v1";
+const UI_DRAFT_STORAGE_KEY = "dy.ui.inputDrafts.v2";
+const UI_DRAFT_LEGACY_STORAGE_KEY = "dy.ui.inputDrafts.v1";
+const UI_DRAFT_QUARANTINE_STORAGE_KEY = "dy.ui.inputDrafts.quarantine.v1";
+const UI_DRAFT_MIGRATION_MARKER_KEY = "dy.ui.inputDrafts.migration.v2";
+const POLLUTED_LEGACY_DRAFT_KEY_PATTERNS = [
+  /^rewrite:textarea:rewrite-version-text:\d+$/,
+];
 const UI_DRAFT_SELECTOR = [
   "textarea",
   'input:not([type])',
@@ -92,7 +98,73 @@ function isPersistableDraftControl(control) {
   return !/(?:api.?key|secret|token|cookie|password|credential|authorization)/i.test(identity);
 }
 
+function draftIdentityValue(value) {
+  return encodeURIComponent(String(value || "").trim());
+}
+
+function draftControlScope(control) {
+  const rewriteScoped = Boolean(control.closest("#rewritePanel"));
+  const taskId = control.dataset?.taskId
+    || control.closest("[data-task-id]")?.dataset.taskId
+    || (rewriteScoped ? document.querySelector("#rewriteTaskId")?.value : "")
+    || "";
+  const projectId = control.dataset?.projectId
+    || control.closest("[data-project-id]")?.dataset.projectId
+    || (rewriteScoped
+      ? window.videoProjects?.current?.()?.id || window.localStorage?.getItem("active-video-project-id") || ""
+      : "");
+  const versionId = control.dataset?.versionKey
+    || control.closest("[data-version-key]")?.dataset.versionKey
+    || control.dataset?.versionId
+    || control.closest("[data-version-id]")?.dataset.versionId
+    || "";
+  return { taskId: String(taskId), projectId: String(projectId), versionId: String(versionId) };
+}
+
+function draftControlRole(control) {
+  if (control.id) return `id=${draftIdentityValue(control.id)}`;
+  const explicitRole = control.dataset?.draftRole || control.dataset?.draftKey;
+  if (explicitRole) return `explicit=${draftIdentityValue(explicitRole)}`;
+  if (control.dataset?.field) return `field=${draftIdentityValue(control.dataset.field)}`;
+  if (control.dataset?.target) return `target=${draftIdentityValue(control.dataset.target)}`;
+  if (control.name) return `name=${draftIdentityValue(control.name)}`;
+  const classIdentity = [...control.classList]
+    .filter((name) => !["active", "selected", "invalid", "loading"].includes(name))
+    .sort()
+    .join(".");
+  return classIdentity ? `class=${draftIdentityValue(classIdentity)}` : "";
+}
+
 function draftControlBaseKey(control) {
+  const pageId = control.closest("[data-page]")?.dataset.page || "global";
+  const scope = draftControlScope(control);
+  const role = draftControlRole(control);
+  if (!role) return "";
+  return [
+    `page=${draftIdentityValue(pageId)}`,
+    scope.projectId ? `project=${draftIdentityValue(scope.projectId)}` : "",
+    scope.taskId ? `task=${draftIdentityValue(scope.taskId)}` : "",
+    scope.versionId ? `version=${draftIdentityValue(scope.versionId)}` : "",
+    `role=${role}`,
+  ].filter(Boolean).join("|");
+}
+
+function draftControlKey(control) {
+  const baseKey = draftControlBaseKey(control);
+  return baseKey ? `v2|${baseKey}` : "";
+}
+
+function draftControlKeyIsUnique(control, key) {
+  if (!key) return false;
+  let matches = 0;
+  for (const candidate of document.querySelectorAll(UI_DRAFT_SELECTOR)) {
+    if (isPersistableDraftControl(candidate) && draftControlKey(candidate) === key) matches += 1;
+    if (matches > 1) return false;
+  }
+  return true;
+}
+
+function legacyDraftControlBaseKey(control) {
   if (control.id) return `#${control.id}`;
   const pageId = control.closest("[data-page]")?.dataset.page || "global";
   const dataIdentity = ["field", "provider", "task", "target", "draftKey"]
@@ -104,19 +176,31 @@ function draftControlBaseKey(control) {
   return `${pageId}:${control.tagName.toLowerCase()}:${dataIdentity || nameIdentity || classIdentity || "unnamed"}`;
 }
 
-function draftControlKey(control) {
-  const baseKey = draftControlBaseKey(control);
+function legacyDraftControlKey(control) {
+  const baseKey = legacyDraftControlBaseKey(control);
   if (control.id) return baseKey;
   const peers = [...document.querySelectorAll(UI_DRAFT_SELECTOR)]
-    .filter((candidate) => isPersistableDraftControl(candidate) && draftControlBaseKey(candidate) === baseKey);
+    .filter((candidate) => isPersistableDraftControl(candidate) && legacyDraftControlBaseKey(candidate) === baseKey);
   return `${baseKey}:${Math.max(0, peers.indexOf(control))}`;
+}
+
+function migrateUnscopedLegacyDraft(control, drafts, key) {
+  const scope = draftControlScope(control);
+  if (scope.taskId || scope.projectId || scope.versionId) return false;
+  const legacyDrafts = readLegacyUiDraftValues();
+  const legacyKey = legacyDraftControlKey(control);
+  if (!Object.prototype.hasOwnProperty.call(legacyDrafts, legacyKey)) return false;
+  drafts[key] = legacyDrafts[legacyKey];
+  writeUiDraftValues(drafts);
+  return true;
 }
 
 function restoreUiDraftControl(control, drafts, { dispatch = false } = {}) {
   if (!isPersistableDraftControl(control) || restoredUiDraftControls.has(control)) return;
   restoredUiDraftControls.add(control);
   const key = draftControlKey(control);
-  if (!Object.prototype.hasOwnProperty.call(drafts, key)) return;
+  if (!draftControlKeyIsUnique(control, key)) return;
+  if (!Object.prototype.hasOwnProperty.call(drafts, key) && !migrateUnscopedLegacyDraft(control, drafts, key)) return;
   const value = String(drafts[key] ?? "");
   if (value.length > 200_000 || control.value === value) return;
   control.value = value;
@@ -136,7 +220,9 @@ function saveUiDraftValue(event) {
   const value = String(control.value ?? "");
   if (value.length > 200_000) return;
   const drafts = readUiDraftValues();
-  drafts[draftControlKey(control)] = value;
+  const key = draftControlKey(control);
+  if (!draftControlKeyIsUnique(control, key)) return;
+  drafts[key] = value;
   writeUiDraftValues(drafts);
 }
 
@@ -255,6 +341,8 @@ function saveUiChoicePreference(event) {
   preferences[choicePreferenceKey(control)] = value;
   writeUiChoicePreferences(preferences);
 }
+
+migratePollutedLegacyDrafts();
 
 document.addEventListener("change", saveUiChoicePreference, true);
 document.addEventListener("input", saveUiChoicePreference, true);
@@ -536,6 +624,53 @@ function ensureTtsBgmPreview() {
   ttsBgmPreviewTitle = preview.querySelector("#ttsBgmPreviewTitle");
   ttsBgmPreviewMeta = preview.querySelector("#ttsBgmPreviewMeta");
   ttsBgmAudio = preview.querySelector("#ttsBgmAudio");
+}
+
+function readLegacyUiDraftValues() {
+  try {
+    return JSON.parse(window.localStorage?.getItem(UI_DRAFT_LEGACY_STORAGE_KEY) || "{}");
+  } catch {
+    return {};
+  }
+}
+
+function migratePollutedLegacyDrafts() {
+  const legacyDrafts = readLegacyUiDraftValues();
+  const pollutedEntries = Object.entries(legacyDrafts)
+    .filter(([key]) => POLLUTED_LEGACY_DRAFT_KEY_PATTERNS.some((pattern) => pattern.test(key)));
+  if (!pollutedEntries.length) return;
+
+  try {
+    const existingQuarantine = JSON.parse(
+      window.localStorage?.getItem(UI_DRAFT_QUARANTINE_STORAGE_KEY) || "{}",
+    );
+    const quarantine = {
+      ...existingQuarantine,
+      version: 1,
+      entries: {
+        ...(existingQuarantine?.entries && typeof existingQuarantine.entries === "object"
+          ? existingQuarantine.entries
+          : {}),
+        ...Object.fromEntries(pollutedEntries),
+      },
+    };
+    const cleanedLegacyDrafts = Object.fromEntries(
+      Object.entries(legacyDrafts).filter(([key]) =>
+        !POLLUTED_LEGACY_DRAFT_KEY_PATTERNS.some((pattern) => pattern.test(key))),
+    );
+    const marker = {
+      version: 2,
+      quarantinedCount: pollutedEntries.length,
+      keys: pollutedEntries.map(([key]) => key).sort(),
+      migratedAt: new Date().toISOString(),
+    };
+
+    window.localStorage?.setItem(UI_DRAFT_QUARANTINE_STORAGE_KEY, JSON.stringify(quarantine));
+    window.localStorage?.setItem(UI_DRAFT_LEGACY_STORAGE_KEY, JSON.stringify(cleanedLegacyDrafts));
+    window.localStorage?.setItem(UI_DRAFT_MIGRATION_MARKER_KEY, JSON.stringify(marker));
+  } catch {
+    // A failed backup/write leaves the original v1 data available for a later retry.
+  }
 }
 
 function ensureTtsBgmMissingPanel() {
@@ -1367,8 +1502,8 @@ function renderRewriteVersions(rewrite = {}, { allowDefaults = true } = {}) {
           <textarea class="rewrite-version-reference" rows="3" placeholder="给这个输出框单独指定参考风格">${escapeHtml(version.referenceStyle || buildRewriteReferenceStyle())}</textarea>
         </label>
         </div>
-        <textarea class="rewrite-version-text" rows="10" data-version-key="${escapeHtml(version.key)}" placeholder="点击“生成文案定制成品”后这里会出现可直接发送的成品，也可以继续手动编辑。">${escapeHtml(version.content)}</textarea>
-        <div class="rewrite-handoff-panel rewrite-version-handoff">
+        <textarea class="rewrite-version-text" rows="10" data-version-key="${escapeHtml(version.key)}" data-no-draft-persist placeholder="点击“生成文案定制成品”后这里会出现可直接发送的成品，也可以继续手动编辑。">${escapeHtml(version.content)}</textarea>
+        <div class="rewrite-handoff-panel rewrite-version-handoff" data-no-choice-persist>
           <strong>发送这个成品到</strong>
           <div class="rewrite-handoff-actions">
             ${rewriteHandoffChoicesMarkup()}
@@ -3275,7 +3410,7 @@ function scheduleTasksPoll(active) {
 }
 
 async function refreshTasks() {
-  const data = await fetchJson("/api/tasks?limit=200");
+  const data = await fetchJson("/api/task-center/list?view=collector&limit=200");
   renderTaskStats(data.summary, data.running, data.concurrency);
   renderTasks(data.tasks);
   updateResultFromTasks(data.tasks);
@@ -3771,7 +3906,7 @@ function cleanEducationBgmAsset() {
 
 const CLEAN_EDUCATION_BGM_TAIL_SECONDS = 3.5;
 const CLEAN_EDUCATION_BGM_FADE_OUT_SECONDS = 2.5;
-const CLEAN_EDUCATION_BGM_VOLUME = 0.28;
+const CLEAN_EDUCATION_BGM_VOLUME = 0.18;
 
 function selectedTtsBgmVolume() {
   const fallbackPercent = CLEAN_EDUCATION_BGM_VOLUME * 100;
@@ -3819,11 +3954,15 @@ async function generateCleanEducationBgm(parentJob, text, { previewPromise = nul
     generateTtsButton.disabled = true;
     if (generateTtsBgmForCurrent) generateTtsBgmForCurrent.disabled = true;
     showTtsBgmMissing("旁白已完成，正在生成“旁白时长 + 约 3.5 秒收尾”的独立清爽教育 BGM…");
-    setTtsBgmProgress(10, "BGM：准备生成");
+    setTtsBgmProgress({ completedSteps: 0, state: "generating", label: "BGM：准备生成" });
     ttsStatus.textContent = "旁白已完成，正在按旁白时长生成清爽教育 BGM...";
-    setTtsBgmProgress(45, previewPromise ? "BGM：与字幕校准并行生成中" : "BGM：已提交生成请求");
+    setTtsBgmProgress({
+      completedSteps: 0,
+      state: "generating",
+      label: previewPromise ? "BGM：外部生成进行中（0/2）" : "BGM：已提交外部生成（0/2）",
+    });
     const preview = await (previewPromise || requestCleanEducationBgmPreview(asset, text, targetDuration));
-    setTtsBgmProgress(82, "BGM：正在保存生成结果");
+    setTtsBgmProgress({ completedSteps: 1, state: "saving", label: "BGM：外部生成完成，正在本地保存（1/2）" });
     const registered = await fetchJson("/api/tts/import-generated", {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -3849,6 +3988,9 @@ async function generateCleanEducationBgm(parentJob, text, { previewPromise = nul
           tail_seconds: CLEAN_EDUCATION_BGM_TAIL_SECONDS,
           fade_out_seconds: CLEAN_EDUCATION_BGM_FADE_OUT_SECONDS,
           background_volume: selectedTtsBgmVolume(),
+          source_normalized_lufs: -20,
+          source_peak_limit_dbfs: -1.5,
+          background_volume_is_mix_gain: true,
           audio_role: "background_music",
           instrumental: true,
         },
@@ -3857,7 +3999,7 @@ async function generateCleanEducationBgm(parentJob, text, { previewPromise = nul
     const bgmJob = registered.job || ttsMusicJobFromPreview(asset, preview, text);
     if (bgmJob?.id) ttsBgmJobsByParentId.set(String(parentJob.id), bgmJob);
     showTtsBgmPreview(bgmJob, { reveal: false });
-    setTtsBgmProgress(100, "BGM：生成完成");
+    setTtsBgmProgress({ completedSteps: 2, state: "completed", label: "BGM：生成并保存完成（2/2）" });
     ttsStatus.textContent = "旁白和独立清爽教育 BGM 已生成；确认字幕后将发送四件套。";
     await refreshTtsJobs();
     return bgmJob;
@@ -3865,7 +4007,8 @@ async function generateCleanEducationBgm(parentJob, text, { previewPromise = nul
     const message = error instanceof Error ? error.message : String(error);
     clearTtsBgmPreview();
     showTtsBgmMissing(`BGM 生成失败：${message}。可重试补生成。`);
-    setTtsBgmProgress(100, "BGM：生成失败");
+    const completedSteps = Number(ttsBgmProgress?.dataset.completedSteps || 0);
+    setTtsBgmProgress({ completedSteps, state: "failed", label: `BGM：生成失败（${completedSteps}/2）` });
     ttsStatus.textContent = `旁白已生成，但 BGM 未生成：${message}。可继续发送原三件套。`;
     return null;
   } finally {
@@ -4309,15 +4452,24 @@ function isTtsLinkedBgmJob(job = {}) {
   return Boolean(ttsLinkedBgmParentId(job)) && ttsIsMusicJob(job);
 }
 
-function setTtsBgmProgress(percent = 0, label = "") {
+function setTtsBgmProgress({ completedSteps = 0, totalSteps = 2, state = "generating", label = "" } = {}) {
   if (!ttsBgmProgress) return;
   if (ttsMainProgress?.isConnected && !ttsBgmProgress.isConnected) ttsMainProgress.after(ttsBgmProgress);
-  const value = Math.max(0, Math.min(100, Math.round(Number(percent || 0))));
+  const total = Math.max(1, Math.round(Number(totalSteps || 2)));
+  const completed = Math.max(0, Math.min(total, Math.round(Number(completedSteps || 0))));
+  const value = Math.round((completed / total) * 100);
+  const normalizedState = ["generating", "saving", "completed", "failed"].includes(state) ? state : "generating";
   ttsBgmProgress.hidden = false;
-  if (ttsBgmProgressLabel) ttsBgmProgressLabel.textContent = label || "BGM 生成进度（阶段）";
+  ttsBgmProgress.dataset.state = normalizedState;
+  ttsBgmProgress.dataset.completedSteps = String(completed);
+  ttsBgmProgress.dataset.totalSteps = String(total);
+  if (ttsBgmProgressLabel) ttsBgmProgressLabel.textContent = label || `BGM 流程进度（${completed}/${total}）`;
   if (ttsBgmProgressPercent) ttsBgmProgressPercent.textContent = `${value}%`;
   if (ttsBgmProgressFill) ttsBgmProgressFill.style.width = `${value}%`;
-  if (ttsBgmProgressBar) ttsBgmProgressBar.setAttribute("aria-valuenow", String(value));
+  if (ttsBgmProgressBar) {
+    ttsBgmProgressBar.setAttribute("aria-valuenow", String(value));
+    ttsBgmProgressBar.setAttribute("aria-valuetext", `${normalizedState === "failed" ? "失败" : "已完成"} ${completed}/${total} 项，${value}%`);
+  }
 }
 
 function hideTtsBgmProgress() {
@@ -4790,6 +4942,7 @@ function confirmedTtsAudioPayload(job = activeTtsRailJob) {
   if (!hasAudio || !finalText || !hasTimedSubtitle) return null;
   const bgmJob = linkedTtsBgmJob(job);
   const hasBgm = Boolean(bgmJob?.audio_url || bgmJob?.audio_path);
+  const bgmVolume = hasBgm ? selectedTtsBgmVolume() : 0;
   const files = [
     { type: "audio", label: "音频", title, url: job.audio_url || "", path: job.audio_path || "" },
     { type: "script", label: "最终确认文案", title, url: job.script_url || "", path: job.script_path || "" },
@@ -4817,6 +4970,8 @@ function confirmedTtsAudioPayload(job = activeTtsRailJob) {
     bgm_path: bgmJob?.audio_path || "",
     bgm_name: bgmJob?.voice_name || "清爽教育 BGM",
     bgm_duration: Number(bgmJob?.duration || bgmJob?.audio_duration || bgmJob?.metadata?.audio_duration || 0),
+    bgm_volume: bgmVolume,
+    bgm_volume_percent: Math.round(bgmVolume * 100),
     has_bgm: hasBgm,
     script_url: job.script_url || "",
     script_path: job.script_path || "",
@@ -4861,6 +5016,7 @@ function ttsHandoffRevision(payload = {}, sentAt = new Date().toISOString()) {
     payload.alignment_revision || 0,
     payload.audio_path || payload.audio_url || "",
     payload.bgm_path || payload.bgm_url || "",
+    Number(payload.bgm_volume || 0).toFixed(2),
     Array.isArray(payload.sentence_timeline) ? payload.sentence_timeline.length : 0,
     sentAt,
   ].join(":");
@@ -4876,13 +5032,14 @@ function clearProductionTtsHandoffStorage() {
   ];
   for (const target of PRODUCTION_TTS_TARGETS) {
     staleKeys.push(`dy:handoff:${target}:audio`, `video-factory-handoff:${target}`);
+    globalThis.ttsHandoffStore?.clear(target);
   }
   for (const key of staleKeys) {
     try { localStorage.removeItem(key); } catch {}
   }
 }
 
-function saveSharedTtsHandoff(payload = {}, { sourceTarget = "", targets = [] } = {}) {
+async function saveSharedTtsHandoff(payload = {}, { sourceTarget = "", targets = [] } = {}) {
   if (!payload?.id) return payload;
   const sentAt = payload.sent_at || payload.sentAt || new Date().toISOString();
   const sharedPayload = {
@@ -4896,7 +5053,7 @@ function saveSharedTtsHandoff(payload = {}, { sourceTarget = "", targets = [] } 
     sharedUpdatedAt: sentAt,
     sourceTarget,
   };
-  globalThis.ttsHandoffStore?.save(sharedPayload, targets);
+  await globalThis.ttsHandoffStore?.save(sharedPayload, targets);
   return sharedPayload;
 }
 
@@ -4916,8 +5073,9 @@ function sharedTimelineRows(payload = {}) {
   })).filter((row) => row.text && row.end > row.start);
 }
 
-function restoreProductionTtsBadges() {
+async function restoreProductionTtsBadges() {
   for (const target of PRODUCTION_TTS_TARGETS) {
+    await globalThis.ttsHandoffStore?.hydrate(target).catch(() => null);
     const payload = globalThis.ttsHandoffStore?.read(target);
     if (payload?.id && globalThis.ttsHandoffStore?.isPending(target)) {
       markProductionTargetReceived(target, payload);
@@ -5030,8 +5188,7 @@ document.addEventListener("click", (event) => {
 
 function applyTtsToCs1(payload = {}) {
   if (window.cs1VideoProduction?.receiveTts) {
-    window.cs1VideoProduction.receiveTts(payload, { navigate: false });
-    return;
+    return window.cs1VideoProduction.receiveTts(payload, { navigate: false });
   }
   setTextareaValue(document.querySelector("#cs1VideoText"), payload.text || "");
   const titleInput = document.querySelector("#cs1VideoTitle");
@@ -5044,6 +5201,7 @@ function applyTtsToCs1(payload = {}) {
   const message = document.querySelector("#cs1VideoMessage");
   if (status) status.textContent = payload.has_bgm ? "已接收 TTS 四件套（含独立 BGM）" : "已接收 TTS 三件套";
   if (message) message.textContent = "文案已填入，音频和带时间戳字幕已绑定到本次生产线素材。";
+  return payload;
 }
 
 function applyTtsToMoneyPrinter(payload = {}) {
@@ -5054,8 +5212,9 @@ function applyTtsToMoneyPrinter(payload = {}) {
   const detail = document.querySelector("#moneyPrinterDetail");
   if (status) status.textContent = payload.has_bgm ? "已接收 TTS 四件套（含独立 BGM）" : "已接收 TTS 三件套";
   if (detail) detail.textContent = "脚本已填入，音频和带时间戳字幕已保存到 MoneyPrinter handoff。";
-  if (window.moneyPrinterProduction?.receiveTts) window.moneyPrinterProduction.receiveTts(payload, { navigate: false });
-  else window.dispatchEvent(new CustomEvent("money-printer-handoff", { detail: payload }));
+  if (window.moneyPrinterProduction?.receiveTts) return window.moneyPrinterProduction.receiveTts(payload, { navigate: false });
+  window.dispatchEvent(new CustomEvent("money-printer-handoff", { detail: payload }));
+  return payload;
 }
 
 async function applyTtsToXiaohei(payload = {}) {
@@ -5072,15 +5231,22 @@ async function applyTtsToXiaohei(payload = {}) {
     bgm_url: payload.bgm_url || "",
     bgm_path: payload.bgm_path || "",
     bgm_name: payload.bgm_name || "清爽教育 BGM",
+    bgm_volume: Number(payload.bgm_volume || 0),
+    bgm_volume_percent: Number(payload.bgm_volume_percent || 0),
     has_bgm: Boolean(payload.has_bgm),
     sentAt: payload.sent_at || payload.sentAt || payload.sharedUpdatedAt || new Date().toISOString(),
     handoffId: payload.handoff_id || "",
     handoffRevision: payload.handoff_revision || "",
   };
-  if (window.xiaoheiProduction?.receiveHandoff) window.xiaoheiProduction.receiveHandoff(handoff);
-  else document.querySelector("#xiaoheiProductionFrame")?.contentWindow?.postMessage({ type: "video-factory:xiaohei-handoff", handoff }, window.location.origin);
+  let received = null;
+  if (window.xiaoheiProduction?.receiveHandoff) received = await window.xiaoheiProduction.receiveHandoff(handoff);
+  else {
+    document.querySelector("#xiaoheiProductionFrame")?.contentWindow?.postMessage({ type: "video-factory:xiaohei-handoff", handoff }, window.location.origin);
+    received = handoff;
+  }
   const status = document.querySelector("#xiaoheiHandoffStatus");
   if (status) status.textContent = `已接收音频 #${payload.display_number || payload.id || "-"}：${handoff.title}`;
+  return received;
 }
 
 function selectedTtsHandoffTargets(container = document) {
@@ -5112,36 +5278,30 @@ async function deliverTtsPayloadToTarget(target, sharedPayload) {
   return null;
 }
 
-function scheduleTtsTargetDelivery(target, sharedPayload) {
-  Promise.resolve()
-    .then(() => deliverTtsPayloadToTarget(target, sharedPayload))
-    .catch((error) => {
-      console.error(`TTS 后台交接失败：${target}`, error);
-    });
-}
-
 async function sendTtsPayloadToTargets(payload, targets = []) {
-  const sharedPayload = saveSharedTtsHandoff(payload, { sourceTarget: "send-selected", targets });
-  const sent = [];
-  if (targets.includes("cs1-video")) {
-    scheduleTtsTargetDelivery("cs1-video", sharedPayload);
-    markProductionTargetReceived("cs1-video", sharedPayload);
-    sent.push("CS1生成器");
-  }
-  if (targets.includes("xiaohei-video")) {
-    scheduleTtsTargetDelivery("xiaohei-video", sharedPayload);
-    markProductionTargetReceived("xiaohei-video", sharedPayload);
-    sent.push("小黑视频风格生成");
-  }
-  if (targets.includes("money-printer")) {
-    scheduleTtsTargetDelivery("money-printer", sharedPayload);
-    markProductionTargetReceived("money-printer", sharedPayload);
-    sent.push("MoneyPrinter");
-  }
-  if (targets.includes("kinetic-text")) {
-    scheduleTtsTargetDelivery("kinetic-text", sharedPayload);
-    markProductionTargetReceived("kinetic-text", sharedPayload);
-    sent.push("动态大字视频");
+  const targetLabels = {
+    "cs1-video": "CS1生成器",
+    "xiaohei-video": "小黑视频风格生成",
+    "money-printer": "MoneyPrinter",
+    "kinetic-text": "动态大字视频",
+  };
+  const selectedTargets = [...new Set(targets)].filter((target) => PRODUCTION_TTS_TARGETS.includes(target));
+  const sharedPayload = await saveSharedTtsHandoff(payload, { sourceTarget: "send-selected", targets: selectedTargets });
+  const results = await Promise.allSettled(selectedTargets.map(async (target) => {
+    await globalThis.ttsHandoffStore?.updateReceipt(target, "received", { handoffId: sharedPayload.handoff_id });
+    const received = await deliverTtsPayloadToTarget(target, sharedPayload);
+    if (!received) throw new Error(`${targetLabels[target]}接收端未确认本次交接`);
+    await globalThis.ttsHandoffStore?.updateReceipt(target, "staged", { handoffId: sharedPayload.handoff_id });
+    markProductionTargetReceived(target, sharedPayload);
+    return targetLabels[target];
+  }));
+  const sent = results.filter((item) => item.status === "fulfilled").map((item) => item.value);
+  const failed = results.flatMap((item, index) => item.status === "rejected"
+    ? [`${targetLabels[selectedTargets[index]]}：${item.reason instanceof Error ? item.reason.message : String(item.reason)}`]
+    : []);
+  if (failed.length) {
+    const completed = sent.length ? `；已完成：${sent.join("、")}` : "";
+    throw new Error(`以下生产线接收失败：${failed.join("；")}${completed}`);
   }
   return sent;
 }
@@ -5208,7 +5368,7 @@ async function sendConfirmedTtsAudio(container = document, job = activeTtsRailJo
   Promise.resolve(window.videoProjects?.linkCurrent?.("tts", payload.id, ttsHandoffTitle(payload), payload))
     .catch((error) => console.error("TTS 项目关联失败", error));
   const sent = await sendTtsPayloadToTargets(payload, targets);
-  refreshSentTtsRecord(handoffJob).catch(() => {});
+  await refreshSentTtsRecord(handoffJob).catch(() => {});
   const correctionStatus = corrected && correctionMode === "source_constrained_music_asr_repair"
     ? partialCorrection
       ? `${correctionWarning || "已完成原文约束修复，未确定内容保留原识别文字；"}`
@@ -6459,7 +6619,7 @@ generateTts = async function generateTtsUnified() {
         if (!bgmAsset) return;
         const estimatedNarrationDuration = Number(completedNarration.duration || completedNarration.audio_duration || completedNarration.metadata?.audio_duration || 0);
         const estimatedDuration = cleanEducationBgmTargetDuration(estimatedNarrationDuration);
-        setTtsBgmProgress(10, "BGM：旁白完成，正在与字幕校准并行生成");
+        setTtsBgmProgress({ completedSteps: 0, state: "generating", label: "BGM：旁白完成，外部生成进行中（0/2）" });
         bgmPreviewPromise = requestCleanEducationBgmPreview(bgmAsset, text, estimatedDuration);
       },
     });

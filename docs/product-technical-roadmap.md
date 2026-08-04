@@ -490,7 +490,7 @@ created
 
 ```powershell
 pnpm run check
-pnpm run test:e2e
+pnpm run test:http-contract
 pnpm run test:pipeline
 pnpm run test:provider-registry
 pnpm run test:http-body

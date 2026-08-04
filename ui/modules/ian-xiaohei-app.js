@@ -34,6 +34,7 @@ const state = {
   renderedVideo: null,
   backgroundAudio: null,
   handoffBgm: null,
+  handoffId: "",
   previewBgmAudio: null,
   includeBgm: false,
   timelineDraftRows: null,
@@ -53,6 +54,7 @@ const FOLDER_CREATE_API = "/api/desktop-folder-named";
 const FOLDER_NAMES_CHANGED_STORAGE_KEY = "ian-folder-names-changed";
 let folderNames = [];
 let folderNamePromptActive = false;
+let parentHandoffRevision = 0;
 
 function startStandalonePageSession() {
   if (embeddedMode) return;
@@ -224,6 +226,8 @@ const els = {
   chooseBgm: document.querySelector("#chooseXiaoheiBgm"),
   bgmFile: document.querySelector("#xiaoheiBgmFile"),
   bgmName: document.querySelector("#xiaoheiBgmName"),
+  bgmPlayerWrap: document.querySelector("#xiaoheiBgmPlayerWrap"),
+  bgmPlayer: document.querySelector("#xiaoheiBgmPlayer"),
   bgmVolume: document.querySelector("#xiaoheiBgmVolume"),
   bgmVolumeValue: document.querySelector("#xiaoheiBgmVolumeValue"),
   showSubtitles: document.querySelector("#xiaoheiShowSubtitles"),
@@ -355,6 +359,7 @@ async function init() {
 
 async function handleParentHandoff(event) {
   if (event.origin !== window.location.origin || event.data?.type !== "video-factory:xiaohei-handoff") return;
+  const revision = ++parentHandoffRevision;
   const handoff = event.data.handoff || {};
   const job = handoff.ttsJob || {};
   const previousProjectId = String(state.projectId || "");
@@ -366,6 +371,7 @@ async function handleParentHandoff(event) {
     return;
   }
   state.projectId = String(handoff.projectId || state.projectId);
+  state.handoffId = String(handoff.handoffId || handoff.handoff_id || job.handoff_id || "");
   localStorage.setItem("ian-xiaohei-project-id", state.projectId);
   const handoffTitle = handoff.title || handoff.projectTitle || "小黑配图视频";
   const handoffText = handoff.text || confirmedTtsText(job);
@@ -378,6 +384,15 @@ async function handleParentHandoff(event) {
       name: handoff.bgm_name || job.bgm_name || "清爽教育 BGM",
     }
     : null;
+  const handedBgmVolume = Number(
+    handoff.bgm_volume_percent
+    ?? job.bgm_volume_percent
+    ?? (Number(handoff.bgm_volume ?? job.bgm_volume) * 100),
+  );
+  if (state.handoffBgm && Number.isFinite(handedBgmVolume) && els.bgmVolume) {
+    els.bgmVolume.value = String(Math.max(0, Math.min(100, Math.round(handedBgmVolume))));
+    handleComposeSettingsChange();
+  }
   state.includeBgm = Boolean(state.handoffBgm);
   syncHandoffBgmControl();
   state.ttsJob = job;
@@ -386,6 +401,7 @@ async function handleParentHandoff(event) {
       method: "POST",
       body: JSON.stringify({ project_id: state.projectId, job_id: job.id }),
     });
+    if (revision !== parentHandoffRevision) return;
     state.selectedTtsJob = data.job;
     state.ttsJob = data.job;
     if (!timelineRows(data.job).length) {
@@ -398,9 +414,11 @@ async function handleParentHandoff(event) {
       && previousJobId === Number(data.job.id);
     if (!sameTtsSource) resetVisualWorkflow();
     await loadAudioJobs();
+    if (revision !== parentHandoffRevision) return;
     let restored = sameTtsSource && Boolean(state.plan?.shots?.length);
     if (!restored) restored = restorePromptPlanCache();
     if (!restored) restored = await restorePromptPlanFromServer();
+    if (revision !== parentHandoffRevision) return;
     syncPromptActionButtons();
     setStatus(
       restored ? "已恢复提示词计划" : "已接收 TTS 资产",
@@ -414,6 +432,7 @@ async function handleParentHandoff(event) {
       restored ? "本地缓存" : "等待分镜分析",
     );
   } catch (error) {
+    if (revision !== parentHandoffRevision) return;
     setStatus("TTS 资产接收失败", error.payload?.message || error.message || String(error), 100, true);
   }
 }
@@ -1511,16 +1530,31 @@ async function generateCompleteWorkflow() {
       }),
     });
     state.renderedVideo = exported;
+    const receiptStore = globalThis.ttsHandoffStore || globalThis.parent?.ttsHandoffStore;
+    const receiptHandoffId = String(state.handoffId || "");
+    const receiptAssetId = String(exported.assetId || "");
+    let receiptWarning = "";
+    if (receiptHandoffId && receiptAssetId && receiptStore?.updateReceipt) {
+      try {
+        await receiptStore.updateReceipt("xiaohei-video", "rendered", { handoffId: receiptHandoffId, assetId: receiptAssetId });
+        await receiptStore.updateReceipt("xiaohei-video", "verified", { handoffId: receiptHandoffId, assetId: receiptAssetId });
+      } catch (error) {
+        receiptWarning = error?.message || String(error);
+        console.warn("[xiaohei] 视频已生成，但生产线回执更新失败:", error);
+      }
+    }
     updateVideoDownloadState();
     await loadOutputs();
     if (!exported.videoUrl) throw new Error("视频已经处理，但没有返回 MP4 地址。");
     els.videoRenderStatus.textContent = `MP4 已生成 · ${exported.width}×${exported.height} · ${exported.fps}fps · ${Number(exported.playbackSpeed || 1).toFixed(1)}×`;
     setStatus(
       "小黑视频已生成",
-      "请在预览确认后点击右侧“下载视频”。",
+      receiptWarning
+        ? `成片已生成并可下载；生产线回执更新失败：${receiptWarning}`
+        : "请在预览确认后点击右侧“下载视频”。",
       100,
       false,
-      "MP4 完成",
+      receiptWarning ? "MP4 完成 · 回执警告" : "MP4 完成",
     );
   } catch (error) {
     els.videoRenderStatus.textContent = error.payload?.message || error.message || String(error);
@@ -3376,11 +3410,9 @@ function showAudio(url, title = "当前试听音频") {
 
 function hideAudio() {
   pausePreviewBgm({ reset: true });
-  if (state.previewBgmAudio) {
-    state.previewBgmAudio.src = "";
-    state.previewBgmAudio.remove();
-  }
+  if (state.previewBgmAudio) state.previewBgmAudio.removeAttribute("src");
   state.previewBgmAudio = null;
+  if (els.bgmPlayerWrap) els.bgmPlayerWrap.hidden = true;
   els.audioPreview.removeAttribute("src");
   els.audioPreview.load();
   els.audioPreviewPanel.hidden = true;
@@ -3397,22 +3429,23 @@ function syncPreviewBgmAudio({ force = false } = {}) {
   const resolvedUrl = url ? new URL(url, window.location.href).href : "";
   if (!force && state.previewBgmAudio?.src === resolvedUrl) {
     state.previewBgmAudio.volume = Math.max(0, Math.min(1, Number(els.bgmVolume?.value || 18) / 100));
+    if (els.bgmPlayerWrap) els.bgmPlayerWrap.hidden = false;
     return;
   }
   pausePreviewBgm({ reset: true });
-  if (state.previewBgmAudio) {
-    state.previewBgmAudio.src = "";
-    state.previewBgmAudio.remove();
-  }
+  const audio = els.bgmPlayer;
+  if (!audio) return;
+  audio.removeAttribute("src");
+  audio.load();
+  if (els.bgmPlayerWrap) els.bgmPlayerWrap.hidden = true;
   state.previewBgmAudio = null;
   if (!url) return;
-  const audio = document.createElement("audio");
   audio.src = url;
   audio.dataset.previewBgmAudio = "true";
-  audio.preload = "auto";
   audio.loop = true;
   audio.volume = Math.max(0, Math.min(1, Number(els.bgmVolume?.value || 18) / 100));
-  document.body.append(audio);
+  if (els.bgmPlayerWrap) els.bgmPlayerWrap.hidden = false;
+  audio.load();
   state.previewBgmAudio = audio;
 }
 
@@ -3519,6 +3552,7 @@ function syncHandoffBgmControl() {
       ? `当前：${state.handoffBgm.name}（随 TTS 四件套加入）`
       : `已接收：${state.handoffBgm.name}（未加入）`;
   }
+  syncPreviewBgmAudio();
 }
 
 function resolvedBookendText(kind) {

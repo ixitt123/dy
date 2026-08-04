@@ -9,6 +9,14 @@ const DEFAULT_SCRIPT_FORMAT = [
   "结尾：给出行动提醒、CTA 或一句总结。",
 ].join("\n");
 
+export function normalizeCs1HandoffBgmVolume(payload = {}) {
+  const percent = Number(payload.bgm_volume_percent);
+  if (Number.isFinite(percent) && percent >= 0) return Math.max(0, Math.min(1, percent / 100));
+  const ratio = Number(payload.bgm_volume);
+  if (Number.isFinite(ratio) && ratio >= 0) return Math.max(0, Math.min(1, ratio));
+  return 0.18;
+}
+
 export function initCs1VideoModule() {
   const form = document.getElementById("cs1VideoForm");
   if (!form) return;
@@ -45,6 +53,8 @@ export function initCs1VideoModule() {
   const message = document.getElementById("cs1VideoMessage");
   const resultPanel = document.getElementById("cs1VideoResult");
   const outputPath = document.getElementById("cs1VideoOutputPath");
+  const previewVideo = document.getElementById("cs1VideoPreview");
+  const downloadLink = document.getElementById("cs1VideoDownload");
   const outputList = document.getElementById("cs1VideoOutputList");
   const logPanel = document.getElementById("cs1VideoLog");
   const generateButton = document.getElementById("cs1VideoGenerate");
@@ -139,6 +149,7 @@ export function initCs1VideoModule() {
     }
     currentTtsHandoff = {
       ...payload,
+      bgm_volume: normalizeCs1HandoffBgmVolume(payload),
       sentence_timeline: rows,
       subtitle_timeline: rows,
     };
@@ -224,6 +235,25 @@ export function initCs1VideoModule() {
 
   const selectedStyle = () => styleSelect?.value || form.querySelector('input[name="cs1VideoStyle"]:checked')?.value || "cs1";
 
+  const showOutputResult = (item = {}) => {
+    if (!item.outputPath && !item.filePath) return;
+    const filePath = item.outputPath || item.filePath;
+    const name = item.name || filePath.split(/[\\/]/u).pop() || "video.mp4";
+    const videoUrl = item.videoUrl || `/api/cs1-video/file?name=${encodeURIComponent(name)}`;
+    const downloadUrl = item.downloadUrl || `${videoUrl}${videoUrl.includes("?") ? "&" : "?"}download=1`;
+    lastResult = { ...lastResult, ...item, outputPath: filePath, videoUrl, downloadUrl };
+    outputPath.textContent = filePath;
+    if (previewVideo && previewVideo.src !== new URL(videoUrl, window.location.href).href) {
+      previewVideo.src = videoUrl;
+      previewVideo.load();
+    }
+    if (downloadLink) {
+      downloadLink.href = downloadUrl;
+      downloadLink.download = name;
+    }
+    resultPanel.hidden = false;
+  };
+
   const renderOutputs = (outputs = []) => {
     if (!outputList) return;
     if (!outputs.length) {
@@ -237,7 +267,11 @@ export function initCs1VideoModule() {
         <strong>${index + 1}. ${escapeHtml(item.name || "video.mp4")}</strong>
         <code>${escapeHtml(item.filePath || "")}</code>
         <small>${escapeHtml([sizeMb, updatedAt].filter(Boolean).join(" · "))}</small>
-        <button class="ghost small" type="button" data-open-output="${escapeHtml(item.filePath || "")}">打开</button>
+        <div class="cs1-output-actions">
+          <button class="ghost small" type="button" data-preview-output="${escapeHtml(item.videoUrl || "")}" data-output-path="${escapeHtml(item.filePath || "")}" data-output-name="${escapeHtml(item.name || "video.mp4")}">预览</button>
+          <a class="ghost small" href="${escapeHtml(item.downloadUrl || "#")}" download="${escapeHtml(item.name || "video.mp4")}">下载</a>
+          <button class="ghost small" type="button" data-open-output="${escapeHtml(item.filePath || "")}">打开</button>
+        </div>
       </div>`;
     }).join("");
   };
@@ -247,7 +281,9 @@ export function initCs1VideoModule() {
       const response = await fetch("/api/cs1-video/outputs", { cache: "no-store" });
       const data = await response.json();
       outputDir = data.outputDir || outputDir;
-      renderOutputs(Array.isArray(data.outputs) ? data.outputs : []);
+      const outputs = Array.isArray(data.outputs) ? data.outputs : [];
+      renderOutputs(outputs);
+      if (outputs[0] && !lastResult?.outputPath) showOutputResult(outputs[0]);
     } catch {
       if (outputList) outputList.innerHTML = "<p>输出记录加载失败，请稍后刷新。</p>";
     }
@@ -260,17 +296,17 @@ export function initCs1VideoModule() {
     });
   });
 
-  const restoreStoredTtsHandoff = () => {
-    const payload = globalThis.ttsHandoffStore?.read("cs1-video");
+  const restoreStoredTtsHandoff = async () => {
+    const payload = await globalThis.ttsHandoffStore?.hydrate("cs1-video");
     return payload?.id ? receiveTts(payload, { navigate: false }) : null;
   };
 
   window.cs1VideoProduction = { receiveTts, restoreStoredTtsHandoff };
-  restoreStoredTtsHandoff();
+  restoreStoredTtsHandoff().catch(() => null);
   window.addEventListener("cs1-video-handoff", (event) => receiveTts(event.detail, { navigate: true }));
   document.addEventListener("workbench:route", (event) => {
     const nextActive = event.detail?.page === "cs1-video";
-    if (nextActive) restoreStoredTtsHandoff();
+    if (nextActive) restoreStoredTtsHandoff().catch(() => null);
     else if (routeActive) clearTimelineState();
     routeActive = nextActive;
   });
@@ -361,7 +397,6 @@ export function initCs1VideoModule() {
   });
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
-    resultPanel.hidden = true;
     logPanel.textContent = "";
     generateButton.disabled = true;
     startProgress();
@@ -377,6 +412,7 @@ export function initCs1VideoModule() {
         includeBgm: Boolean(includeBgmInput?.checked),
         bgmMode: includeBgmInput?.checked ? (bgmModeSelect?.value || "none") : "none",
         bgmPath: bgmPathInput?.value || "",
+        bgmVolume: includeBgmInput?.checked ? normalizeCs1HandoffBgmVolume(currentTtsHandoff) : 0,
         ttsAudioPath: includeBgmInput?.checked ? (currentTtsHandoff?.audio_path || "") : "",
         iconVariant: iconVariantSelect?.value || "orbit_nodes",
         textPalette: textPaletteSelect?.value || "gold_green",
@@ -392,8 +428,7 @@ export function initCs1VideoModule() {
         watermarkAnimation: watermarkAnimationSelect?.value || "float_y",
         aiRefine: aiInput.checked,
       });
-      lastResult = result;
-      outputPath.textContent = result.outputPath || "";
+      showOutputResult(result);
       outputDir = result.outputDir || outputDir;
       logPanel.textContent = [
         result.aiUsed ? `Structure refinement: AI used · ${result.beatCount || beatCountSelect?.value || "auto"} cards` : `Structure refinement: local parser · ${result.beatCount || beatCountSelect?.value || "auto"} cards`,
@@ -409,6 +444,10 @@ export function initCs1VideoModule() {
       ].join("\n").trim();
       resultPanel.hidden = false;
       await loadOutputs();
+      if (currentTtsHandoff?.handoff_id && result.assetId && globalThis.ttsHandoffStore?.updateReceipt) {
+        await globalThis.ttsHandoffStore.updateReceipt("cs1-video", "rendered", { assetId: result.assetId });
+        await globalThis.ttsHandoffStore.updateReceipt("cs1-video", "verified", { assetId: result.assetId });
+      }
       const style = styleCatalog.find((item) => item.id === result.style);
       completeProgress();
       setStatus("生成完成", `模板：${result.templateName || style?.name || result.style}。视频已输出到本机。`);
@@ -438,6 +477,15 @@ export function initCs1VideoModule() {
   });
 
   outputList?.addEventListener("click", (event) => {
+    const previewButton = event.target instanceof Element ? event.target.closest("[data-preview-output]") : null;
+    if (previewButton) {
+      showOutputResult({
+        videoUrl: previewButton.getAttribute("data-preview-output") || "",
+        filePath: previewButton.getAttribute("data-output-path") || "",
+        name: previewButton.getAttribute("data-output-name") || "video.mp4",
+      });
+      return;
+    }
     const button = event.target instanceof Element ? event.target.closest("[data-open-output]") : null;
     const filePath = button?.getAttribute("data-open-output");
     if (filePath) openPath(filePath);

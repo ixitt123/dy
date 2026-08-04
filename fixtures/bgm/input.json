@@ -1,0 +1,32 @@
+{
+  "scenario": "bgm",
+  "description": "BGM 背景音乐生成测试 fixture。固定风格、时长、音量，用于验证 BGM 独立生成、预览、音量控制、淡出。",
+  "style": "clean_education",
+  "basedOnNarration": {
+    "refScenario": "tts",
+    "narrationDurationSec": 20
+  },
+  "duration": {
+    "strategy": "narration + 3-4s",
+    "expectedSec": 23,
+    "fadeOutSec": 2.5
+  },
+  "volume": {
+    "default": 0.18,
+    "min": 0,
+    "max": 1
+  },
+  "expectedBehavior": "BGM 是独立文件；可见播放条；音量可调；时长比旁白长 3-4 秒；淡出 2-3 秒不突停",
+  "verificationPoints": [
+    "BGM 独立勾选项位于声音选择之后，默认不选中",
+    "按当前文案生成匹配 BGM，独立文件",
+    "BGM 独立进度条和百分比（生成中/成功/失败）",
+    "BGM 可见播放条，非后台静默",
+    "音量默认值、调整值、刷新恢复值、传给生产线的值一致",
+    "时长比旁白长 3-4 秒，淡出约 2-3 秒",
+    "响度以真实检测验收，默认约 18% 仅作起点"
+  ],
+  "mediaRef": {
+    "note": "可引用 .data/audio-reference/ian-xiaohei/ 下已有的 clean_education_bgm 样例；期望输出特征见 fixtures/expected/bgm.json"
+  }
+}

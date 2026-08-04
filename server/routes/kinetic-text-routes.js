@@ -51,6 +51,7 @@ export function createKineticTextRoutes({
   ffmpegPath,
   ffprobePath,
   projectCenter,
+  finalAssetRegistry = null,
 }) {
   const service = createKineticTextService({
     baseDir,
@@ -61,12 +62,14 @@ export function createKineticTextRoutes({
     imageService,
     ffmpegPath,
     ffprobePath,
+    finalAssetRegistry,
     onOutput: (project, outputs) => {
       const videoProjectId = String(project.videoProjectId || "");
       if (!videoProjectId || !projectCenter?.getById(videoProjectId)) return;
       if (outputs.videoPath) {
-        projectCenter.linkAsset(videoProjectId, "video", project.id, project.title, {
+        projectCenter.linkAsset(videoProjectId, "video", outputs.assetId || project.id, project.title, {
           path: outputs.videoPath,
+          assetId: outputs.assetId || "",
           source: "kinetic_text",
           effectId: project.effectId,
           duration: project.duration,

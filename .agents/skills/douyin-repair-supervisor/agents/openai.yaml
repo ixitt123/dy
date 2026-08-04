@@ -1,0 +1,4 @@
+interface:
+  display_name: "短视频维修监管"
+  short_description: "监督固定顺序维修、全功能无缺失回归、真实运行验收和交接更新"
+  default_prompt: "Use $douyin-repair-supervisor to supervise the next authorized repair item and preserve every existing feature."
