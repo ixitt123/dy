@@ -21,6 +21,7 @@ import {
   readCoordination,
   validateCoordination,
 } from "./round2-coordination-lib.mjs";
+import { validateImportedEvidence } from "./round2-evidence-provenance-lib.mjs";
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const checker = path.join(scriptDir, "check-round2-plan.mjs");
@@ -30,6 +31,7 @@ const completionRecorder = path.join(scriptDir, "record-round2-completion.mjs");
 const assignmentActivator = path.join(scriptDir, "activate-round2-assignments.mjs");
 const planLibrary = path.join(scriptDir, "round2-plan-lib.mjs");
 const coordinationLibrary = path.join(scriptDir, "round2-coordination-lib.mjs");
+const evidenceProvenanceLibrary = path.join(scriptDir, "round2-evidence-provenance-lib.mjs");
 const planPath = resolvePlanPath(process.argv.slice(2));
 const specsPath = path.join(scriptDir, "..", "references", "round2-execution-specs.json");
 const provenancePath = path.join(scriptDir, "..", "..", "..", "..", "docs", "repair", "round2", "evidence-provenance.json");
@@ -98,6 +100,42 @@ try {
 
   const normal = run(checker, ["--plan", planPath, "--specs", specsPath]);
   check(normal.status === 0 && normal.stdout.includes("items=73"), "current second-round plan passes independently of which item is current", `${normal.stdout}${normal.stderr}`);
+
+  const evidenceProvenance = JSON.parse(fs.readFileSync(provenancePath, "utf8"));
+  const portableBusinessRecord = evidenceProvenance.records.find((entry) => entry.itemId === "R2-01.12");
+  const portableBusinessSpec = specs.items.find((entry) => entry.id === "R2-01.12");
+  let portableBusinessValidated = false;
+  try {
+    const imported = validateImportedEvidence({
+      itemId: "R2-01.12",
+      evidencePath: portableBusinessRecord.evidencePath,
+      originalError: new Error(`missing evidence path: ${portableBusinessRecord.evidencePath}`),
+      evidenceProvenance,
+      provenancePath,
+      repoRoot: process.cwd(),
+      spec: { ...portableBusinessSpec, requiredGates: ["F 数据与回滚"], manual: false },
+    });
+    portableBusinessValidated = imported.receipt?.completionManifestSha256 === portableBusinessRecord.manifestSha256;
+  } catch {}
+  check(portableBusinessValidated, "portable business evidence verifies the immutable path, receipt and manifest SHA-256 without copying local evidence");
+
+  const tamperedBusinessProvenance = structuredClone(evidenceProvenance);
+  tamperedBusinessProvenance.records.find((entry) => entry.itemId === "R2-01.12").receiptSha256 = "0".repeat(64);
+  let tamperedBusinessRejected = false;
+  try {
+    validateImportedEvidence({
+      itemId: "R2-01.12",
+      evidencePath: portableBusinessRecord.evidencePath,
+      originalError: new Error(`missing evidence path: ${portableBusinessRecord.evidencePath}`),
+      evidenceProvenance: tamperedBusinessProvenance,
+      provenancePath,
+      repoRoot: process.cwd(),
+      spec: { ...portableBusinessSpec, requiredGates: ["F 数据与回滚"], manual: false },
+    });
+  } catch (error) {
+    tamperedBusinessRejected = error.message.includes("receipt SHA-256 mismatch");
+  }
+  check(tamperedBusinessRejected, "portable business evidence rejects a tampered receipt SHA-256");
 
   const tamperedProvenancePath = path.join(tempRoot, "tampered-evidence-provenance.json");
   const tamperedProvenance = JSON.parse(fs.readFileSync(provenancePath, "utf8"));
@@ -277,7 +315,7 @@ try {
     && ["R2-01.12", "R2-02.02"].every((id) => activatedRows.find((row) => row.id === id)?.state === "进行中")
     && JSON.stringify(activatedItemIds) === JSON.stringify(["R2-01.12", "R2-02.02"]), "B atomically activates only the selected non-overlapping A/B pair", `${bActivation.stdout}${bActivation.stderr}`);
 
-  const coreScripts = [checker, packetBuilder, failureRecorder, completionRecorder, assignmentActivator, planLibrary, coordinationLibrary].map((file) => fs.readFileSync(file, "utf8")).join("\n");
+  const coreScripts = [checker, packetBuilder, failureRecorder, completionRecorder, assignmentActivator, planLibrary, coordinationLibrary, evidenceProvenanceLibrary].map((file) => fs.readFileSync(file, "utf8")).join("\n");
   check(!coreScripts.includes("01-短视频软件彻底修复执行总表") && coreScripts.includes("master-register.md"), "round-two tools default to the repository master register and never mutate the first-round register");
   check(sha256(firstRoundPath) === firstHash, "first-round register hash remains unchanged by every round-two test");
 } finally {

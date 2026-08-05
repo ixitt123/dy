@@ -47,6 +47,14 @@ Use `docs/repair/round2/master-register.md` as the only round-two state authorit
 8. B exports the desktop mirror only after the authoritative register passes: `pnpm.cmd run repair:r2:mirror -- --machine B`.
 9. Do not stage, commit, push, merge, delete, or change the MoneyPrinterTurbo submodule without separate authorization.
 
+## Preserve completed evidence across machines
+
+1. Never ask the other machine to create, copy, or fake an origin machine's local `.data` evidence directory.
+2. For every completed business item whose evidence remains local, B commits a JSON receipt under `docs/repair/round2/evidence-receipts/`. The receipt preserves the original absolute path, source repair commit, complete verification manifest, manifest SHA-256, command output hashes, and evidence file hashes; it must not contain secrets or the local evidence files themselves.
+3. After the receipt and its matching master-register evidence path are committed, B adds an `evidence-provenance.json` record whose `recordedAtCommit` points to that immutable commit and whose `receiptSha256` is the exact Git blob content hash calculated with SHA-256.
+4. A missing local directory is accepted only when the immutable commit contains both the exact master-register path and the receipt, both SHA-256 values match, and the receipt satisfies the current item's verification mode and expected commands. Local evidence, when present, always receives the full file-by-file validation first.
+5. Manual items cannot use portable receipts for user confirmation; their original human evidence must remain locally verifiable by B.
+
 ## Handle manual or external waiting
 
 1. Set the item to `待人工/外部` with its real blocker and evidence.
