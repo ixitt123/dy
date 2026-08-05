@@ -1,0 +1,76 @@
+{
+  "schemaVersion": 1,
+  "itemId": "R2-01.15",
+  "originMachine": "B",
+  "availability": "origin-machine-local-not-synchronized",
+  "originalEvidencePath": "D:\\cs1\\dy-b-primary-20260805-102410\\.data\\repair-evidence\\R2-01.15\\20260805-163411\\attempt-2",
+  "sourceRepairCommit": "6ae95f77ab33b211ad669d2e0346d105da028bca",
+  "completionManifestSha256": "4d1e6fa6b2b104e1d5c5dea070009bb309a27e0f850d91c51233a4b9d5215979",
+  "receiptGeneratedAt": "2026-08-05T08:49:35.399Z",
+  "completionManifest": {
+    "itemId": "R2-01.15",
+    "verificationMode": "restart-real",
+    "completedVerification": true,
+    "completedAt": "2026-08-05T08:44:36.681Z",
+    "sourceRepairCommit": "6ae95f77ab33b211ad669d2e0346d105da028bca",
+    "attempt": 2,
+    "commands": [
+      {
+        "expectedCommand": "node test-launcher-single-instance.mjs",
+        "command": "node test-launcher-single-instance.mjs",
+        "exitCode": 0,
+        "outputPath": "01-single-instance.log",
+        "outputSha256": "6f25ff279a31407ba53f28cc43e739329424e410229565589e011a95c0b7667c"
+      },
+      {
+        "expectedCommand": "pnpm.cmd run test:restart",
+        "command": "pnpm.cmd run test:restart",
+        "exitCode": 0,
+        "outputPath": "02-restart.log",
+        "outputSha256": "aae7154339e931e9d855c90c7e951a24b77e688470e19449c9e127d4b85200cc"
+      },
+      {
+        "expectedCommand": "pnpm.cmd run check:gate",
+        "command": "pnpm.cmd run check:gate",
+        "exitCode": 0,
+        "outputPath": "03-check-gate.log",
+        "outputSha256": "1d8f36d4950522108f4cbc60fde338c641ffbbb9b671f1ea95faeee592baa5ba"
+      }
+    ],
+    "evidenceFiles": [
+      { "path": "01-single-instance.log", "sha256": "6f25ff279a31407ba53f28cc43e739329424e410229565589e011a95c0b7667c" },
+      { "path": "02-restart.log", "sha256": "aae7154339e931e9d855c90c7e951a24b77e688470e19449c9e127d4b85200cc" },
+      { "path": "03-check-gate.log", "sha256": "1d8f36d4950522108f4cbc60fde338c641ffbbb9b671f1ea95faeee592baa5ba" },
+      { "path": "04-round2-check.log", "sha256": "e936fba65ddd54ba8b67151085e46b0671ac70cd11958c49e4b5d6f4445997a3" },
+      { "path": "05-supervisor.log", "sha256": "849f38ac6ffefc28772e555447c21933dfaa881c7ebb6a406aaebc9c329028ca" },
+      { "path": "06-project-identity.log", "sha256": "8d7f9dfe622b97977be88bfadd08a15118bb7078941d7d40d4c96c7001adeb19" },
+      { "path": "07-log-rotation.log", "sha256": "91f99424ab14b8b02947e7f2d2c10350214ba8c3982cf10b0210104794710bce" },
+      { "path": "08-missing-dependency.log", "sha256": "d192cdeab3ac43a760ac17082cff4d95e17ca81c51864983a908dbafcb6dc4db" },
+      { "path": "09-diff-check.log", "sha256": "f4ebdfbdaa61d467df54d71de0a317f343a9e95abc947869c5acbd2f6a5ff28d" },
+      { "path": "completion-gates.json", "sha256": "e111cfa7c0c224107b3213fc407d87a6ef0800106e912d164d13047bd4b19e12" },
+      { "path": "verification-summary.md", "sha256": "1fd91a83aaed012cc30ba026e9bcb5d0c5164484fcb4f90ce52dd98775e3a2f9" },
+      { "path": "rollback-plan.md", "sha256": "8bf079f4b63004c860e09e29e44084c80228ca743c35f97253edbf819f406123" },
+      { "path": "verification-result.json", "sha256": "6b5c9478969d4e3c2ec15fa4cc005daba2e3609fc0735fb8e4ca333e5d0b968c" },
+      { "path": "single-instance/launcher-single-instance.json", "sha256": "3b06542d779729ffc67e8dd34237c0abf39115a3d69e10c254058a61a107e6d4" },
+      { "path": "restart/tests/restart-result.json", "sha256": "a7c6497b3f4f96d1deb0e7fe5545138262db84b8fc5968725c7f81454ea969e6" },
+      { "path": "restart/baseline.json", "sha256": "8297ae5573995a46349d049dad5d14626e1dbba18f9cbcc978a7d1a2cead3769" },
+      { "path": "restart/browser/after-restart.png", "sha256": "6e1a4f087420862a6e452f0e3a99b4501bee21a5247104563f02ba9c34b40cea" },
+      { "path": "compat/project-identity/launcher-project-identity.json", "sha256": "0ccead4fe2f6d38fc07b5df9ad150cf4973514ea21dccfc89c61bb139fb9fd1b" },
+      { "path": "compat/log-rotation/launcher-log-verification.json", "sha256": "0f5b9a5c7c71ea7bbe0fd0d658270540af14552e3ab9205c87ef4c935715bfc1" }
+    ],
+    "actualEvidence": [
+      "single-instance/launcher-single-instance.json",
+      "restart/tests/restart-result.json",
+      "restart/browser/after-restart.png",
+      "verification-summary.md"
+    ],
+    "securityEvidence": [
+      "single-instance/launcher-single-instance.json",
+      "compat/project-identity/launcher-project-identity.json"
+    ],
+    "rollbackEvidence": [
+      "rollback-plan.md",
+      "restart/tests/restart-result.json"
+    ]
+  }
+}
