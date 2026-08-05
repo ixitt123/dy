@@ -11,6 +11,8 @@ const evidenceDir = path.resolve(process.env.TTS_AUTO_PREVIEW_DIR || path.join(R
 const fixturePath = path.join(ROOT, "fixtures", "tts", "input.json");
 const fixtureBuffer = fs.readFileSync(fixturePath);
 const fixture = JSON.parse(fixtureBuffer.toString("utf8"));
+const safeAudioFixturePath = path.join(ROOT, "fixtures", "kinetic", "narration-440.wav");
+const safeAudioFixtureBuffer = fs.readFileSync(safeAudioFixturePath);
 const startedAt = Date.now();
 const reuseJobId = String(process.env.TTS_AUTO_PREVIEW_JOB_ID || "").trim();
 const nativeFetch = globalThis.fetch.bind(globalThis);
@@ -29,13 +31,6 @@ async function apiFetch(url, options = {}) {
   return nativeFetch(url, { ...options, headers });
 }
 
-async function jobs() {
-  const response = await apiFetch(`${BASE}/api/tts/jobs?limit=100`);
-  if (!response.ok) throw new Error(`读取 TTS 任务失败：HTTP ${response.status}`);
-  const data = await response.json();
-  return Array.isArray(data.jobs) ? data.jobs : [];
-}
-
 async function jobById(id) {
   const response = await apiFetch(`${BASE}/api/tts/job?id=${encodeURIComponent(id)}`);
   const data = await response.json();
@@ -47,12 +42,98 @@ async function sleep(ms) {
   await new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+async function importSafeFixture({ text = fixture.text, marker = "primary" } = {}) {
+  const managedAudioDir = path.join(ROOT, ".data", "tts", "audio");
+  const stagingPath = path.join(managedAudioDir, `r2-01-01-${marker}-${process.pid}-${Date.now()}.wav`);
+  fs.mkdirSync(managedAudioDir, { recursive: true });
+  fs.copyFileSync(safeAudioFixturePath, stagingPath);
+  try {
+    const response = await apiFetch(`${BASE}/api/tts/import-generated`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        audio_path: stagingPath,
+        text,
+        provider: "safe_fixture",
+        voice_id: "r2-01-01-safe-narration",
+        voice_name: "R2-01.01 安全旁白 fixture",
+        source: "generated_preview",
+        emotion: "neutral",
+        speed: 1,
+        volume: 50,
+        pitch: 1,
+        format: "wav",
+        metadata: {
+          source_fixture: path.relative(ROOT, safeAudioFixturePath).replaceAll("\\", "/"),
+          source_fixture_sha256: crypto.createHash("sha256").update(safeAudioFixtureBuffer).digest("hex").toUpperCase(),
+          audio_role: "narration",
+        },
+      }),
+    });
+    const data = await response.json();
+    if (!response.ok || !data.job?.id) throw new Error(`导入安全 TTS fixture 失败：${data.message || response.status}`);
+    return data.job;
+  } finally {
+    fs.rmSync(stagingPath, { force: true });
+  }
+}
+
 await establishLocalSession();
-const beforeIds = reuseJobId ? new Set() : new Set((await jobs()).map((job) => String(job.id)));
 let browser;
 let page;
 let newJob = null;
+let alternateJob = null;
 let browserState = null;
+let beforeAutomaticPlayback = null;
+let switchState = null;
+let refreshState = null;
+let blockedFallbackState = null;
+
+async function readPreviewState({ pause = false } = {}) {
+  return page.evaluate(`(function(){
+    const audio = document.querySelector('#ttsAudio');
+    const state = {
+      src: audio?.currentSrc || audio?.src || '',
+      readyState: audio?.readyState ?? -1,
+      duration: audio?.duration ?? NaN,
+      currentTime: audio?.currentTime ?? 0,
+      paused: audio?.paused ?? true,
+      muted: audio?.muted ?? false,
+      autoPreviewState: audio?.dataset?.autoPreviewState || '',
+      autoPreviewJobId: audio?.dataset?.autoPreviewJobId || '',
+      autoPreviewError: audio?.dataset?.autoPreviewError || '',
+      previewTitle: document.querySelector('#ttsPreviewTitle')?.textContent || '',
+      previewMeta: document.querySelector('#ttsPreviewMeta')?.textContent || '',
+      resultLaneVisible: Boolean(document.querySelector('.tts-result-lane')?.getBoundingClientRect().width),
+      previewHidden: document.querySelector('#ttsPreview')?.hidden,
+      activeJobId: typeof activeTtsRailJob === 'object' ? String(activeTtsRailJob?.id || '') : '',
+      statusText: document.querySelector('#ttsStatus')?.textContent || '',
+    };
+    if (${pause ? "true" : "false"}) audio?.pause();
+    return state;
+  })()`);
+}
+
+async function waitForAutomaticPlayback(jobId, label, { pause = true } = {}) {
+  try {
+    await page.waitForFunction(`(function(){
+      const audio = document.querySelector('#ttsAudio');
+      const src = audio?.currentSrc || audio?.src || '';
+      return String(activeTtsRailJob?.id || '') === ${JSON.stringify(String(jobId))}
+        && src.includes('id=${String(jobId)}')
+        && audio.currentTime > 0.15;
+    })()`, 15000);
+  } catch (error) {
+    const failedState = await readPreviewState();
+    throw new Error(`${label} 15 秒内未自动播放：${JSON.stringify(failedState)}；${error.message}`);
+  }
+  const state = await readPreviewState({ pause });
+  if (state.previewHidden || !state.resultLaneVisible || state.activeJobId !== String(jobId)
+    || state.autoPreviewJobId !== String(jobId) || state.autoPreviewState !== "playing" || state.currentTime <= 0.15) {
+    throw new Error(`${label} 自动预览状态不完整：${JSON.stringify(state)}`);
+  }
+  return state;
+}
 try {
   browser = new BrowserCDP({ debuggingPort: 9227 });
   await browser.launch();
@@ -75,77 +156,12 @@ try {
     await page.evaluate(`waitForTtsJob(${JSON.stringify(reuseJobId)})`);
     console.log(`[tts-auto-preview] replay completed job=${newJob.id}`);
   } else {
-    const submitted = await page.evaluate(`(function(){
-    const text = document.querySelector('#ttsText');
-    const bgm = document.querySelector('#ttsGenerateCleanEducationBgm');
-    const voice = document.querySelector('#ttsPresetVoice');
-    const source = document.querySelector('#ttsVoiceSource');
-    const provider = document.querySelector('#ttsProvider');
-    const model = document.querySelector('#ttsModel');
-    function chooseNarrationVoice() {
-      for (const option of [...voice.options]) {
-        voice.value = option.value;
-        const selected = selectedTtsVoice();
-        if (selected?.id && !isTtsMusicAsset(selected.asset)) return selected;
-      }
-      source.value = 'all';
-      updateTtsVoiceSource();
-      for (const option of [...voice.options]) {
-        voice.value = option.value;
-        const selected = selectedTtsVoice();
-        if (selected?.id && !isTtsMusicAsset(selected.asset)) return selected;
-      }
-      return null;
+    newJob = await importSafeFixture();
+    if (newJob.status !== "completed" || String(newJob.text || "").trim() !== fixture.text) {
+      throw new Error(`安全 TTS fixture 未形成已完成任务：${JSON.stringify({ id: newJob.id, status: newJob.status, text: newJob.text })}`);
     }
-    const selected = chooseNarrationVoice();
-    voice.dispatchEvent(new Event('change', { bubbles: true }));
-    text.value = ${JSON.stringify(fixture.text)};
-    text.dispatchEvent(new Event('input', { bubbles: true }));
-    if (bgm) {
-      bgm.checked = false;
-      bgm.dispatchEvent(new Event('change', { bubbles: true }));
-    }
-    return {
-      text: text.value,
-      provider: provider?.value || '',
-      voiceId: selected?.id || '',
-      voiceLabel: voice?.selectedOptions?.[0]?.textContent?.trim() || '',
-      model: model?.value || '',
-      musicAsset: Boolean(selected && isTtsMusicAsset(selected.asset)),
-      bgmChecked: Boolean(bgm?.checked),
-      previewHiddenBefore: Boolean(document.querySelector('#ttsPreview')?.hidden),
-    };
-  })()`);
-    if (submitted.text !== fixture.text || !submitted.provider || !submitted.voiceId || submitted.musicAsset || submitted.bgmChecked) {
-      throw new Error(`TTS 冻结输入未正确装载：${JSON.stringify(submitted)}`);
-    }
-    console.log(`[tts-auto-preview] submit provider=${submitted.provider} voice=${submitted.voiceLabel || submitted.voiceId}`);
-    await page.click("#generateTts");
-
-    const createDeadline = Date.now() + 45000;
-    while (Date.now() < createDeadline && !newJob) {
-      const candidates = await jobs();
-      newJob = candidates.find((job) => !beforeIds.has(String(job.id)) && String(job.text || "").trim() === fixture.text) || null;
-      if (!newJob) await sleep(1000);
-    }
-    if (!newJob?.id) throw new Error("点击生成后 45 秒内未创建新的 TTS 任务");
-    console.log(`[tts-auto-preview] created job=${newJob.id}`);
-
-    const completionDeadline = Date.now() + 360000;
-    let lastStatus = "";
-    let lastHeartbeat = 0;
-    while (Date.now() < completionDeadline) {
-      newJob = await jobById(newJob.id);
-      if (newJob.status !== lastStatus || Date.now() - lastHeartbeat > 15000) {
-        console.log(`[tts-auto-preview] job=${newJob.id} status=${newJob.status} progress=${newJob.progress ?? ""} stage=${newJob.stage || ""}`);
-        lastStatus = newJob.status;
-        lastHeartbeat = Date.now();
-      }
-      if (newJob.status === "completed") break;
-      if (newJob.status === "failed") throw new Error(`真实 TTS 任务失败：${newJob.error || "未知错误"}`);
-      await sleep(1000);
-    }
-    if (newJob.status !== "completed") throw new Error(`真实 TTS 任务在 360 秒内未完成：${newJob.status}`);
+    console.log(`[tts-auto-preview] imported safe fixture job=${newJob.id}`);
+    await page.evaluate(`waitForTtsJob(${JSON.stringify(newJob.id)})`);
   }
 
   await page.waitForFunction(`(function(){
@@ -162,48 +178,47 @@ try {
     return true;
   })()`);
   await sleep(500);
-  const beforePlay = await page.evaluate(`(function(){
-    const audio = document.querySelector('#ttsAudio');
-    audio.muted = true;
-    const rect = audio.getBoundingClientRect();
-    return {
-      src: audio.currentSrc || audio.src || '',
-      readyState: audio.readyState,
-      duration: audio.duration,
-      currentTime: audio.currentTime,
-      clickPoint: { x: rect.left + 20, y: rect.top + rect.height / 2 },
-      previewTitle: document.querySelector('#ttsPreviewTitle')?.textContent || '',
-      previewMeta: document.querySelector('#ttsPreviewMeta')?.textContent || '',
-      resultLaneVisible: Boolean(document.querySelector('.tts-result-lane')?.getBoundingClientRect().width),
-      previewHidden: document.querySelector('#ttsPreview')?.hidden,
-    };
-  })()`);
-  await page._send("Input.dispatchMouseEvent", { type: "mousePressed", x: beforePlay.clickPoint.x, y: beforePlay.clickPoint.y, button: "left", buttons: 1, clickCount: 1 });
-  await page._send("Input.dispatchMouseEvent", { type: "mouseReleased", x: beforePlay.clickPoint.x, y: beforePlay.clickPoint.y, button: "left", buttons: 0, clickCount: 1 });
-  await page.waitForFunction('document.querySelector("#ttsAudio")?.currentTime > 0.15', 15000);
-  browserState = await page.evaluate(`(function(){
-    const audio = document.querySelector('#ttsAudio');
-    const state = {
-      src: audio.currentSrc || audio.src || '',
-      readyState: audio.readyState,
-      duration: audio.duration,
-      currentTime: audio.currentTime,
-      paused: audio.paused,
-      previewTitle: document.querySelector('#ttsPreviewTitle')?.textContent || '',
-      previewMeta: document.querySelector('#ttsPreviewMeta')?.textContent || '',
-      resultLaneVisible: Boolean(document.querySelector('.tts-result-lane')?.getBoundingClientRect().width),
-      previewHidden: document.querySelector('#ttsPreview')?.hidden,
-      activeJobId: typeof activeTtsRailJob === 'object' ? String(activeTtsRailJob?.id || '') : '',
-    };
-    audio.pause();
-    return state;
-  })()`);
-  if (browserState.previewHidden || !browserState.resultLaneVisible || browserState.activeJobId !== String(newJob.id) || browserState.currentTime <= 0.15) {
-    throw new Error(`新任务没有自动显示并播放正确预览：${JSON.stringify(browserState)}`);
-  }
+  beforeAutomaticPlayback = await readPreviewState();
+  browserState = await waitForAutomaticPlayback(newJob.id, "新任务");
+
+  alternateJob = await importSafeFixture({ text: `${fixture.text}\n切换任务验证。`, marker: "alternate" });
+  await page.evaluate(`waitForTtsJob(${JSON.stringify(alternateJob.id)})`);
+  const alternateState = await waitForAutomaticPlayback(alternateJob.id, "切换到另一任务");
+  await page.evaluate(`waitForTtsJob(${JSON.stringify(newJob.id)})`);
+  const returnedState = await waitForAutomaticPlayback(newJob.id, "切回原任务");
+  switchState = { alternate: alternateState, returned: returnedState };
+
+  await page.navigate(`${BASE}/#tts`);
+  await page.waitForSelector("#runtimeVersionBadge", 15000);
+  await page.waitForFunction("document.readyState === 'complete' && typeof waitForTtsJob === 'function'", 15000);
+  await page.click('[data-nav="tts"]');
+  await page.evaluate(`waitForTtsJob(${JSON.stringify(newJob.id)})`);
+  refreshState = await waitForAutomaticPlayback(newJob.id, "刷新后重新加载原任务");
 
   fs.mkdirSync(path.join(evidenceDir, "browser"), { recursive: true });
   await page.screenshot(path.join(evidenceDir, "browser", "tts-auto-preview.png"));
+  blockedFallbackState = await page.evaluate(`(async function(){
+    const audio = document.querySelector('#ttsAudio');
+    const originalPlay = audio.play;
+    audio.play = () => Promise.reject(new DOMException('test policy block', 'NotAllowedError'));
+    try {
+      const started = await autoPlayTtsPreview(activeTtsRailJob);
+      return {
+        started,
+        state: audio.dataset.autoPreviewState || '',
+        error: audio.dataset.autoPreviewError || '',
+        controls: audio.controls,
+        statusText: document.querySelector('#ttsStatus')?.textContent || '',
+      };
+    } finally {
+      audio.play = originalPlay;
+    }
+  })()`);
+  if (blockedFallbackState.started || blockedFallbackState.state !== "blocked"
+    || !blockedFallbackState.error.startsWith("NotAllowedError:") || !blockedFallbackState.controls
+    || !blockedFallbackState.statusText.includes("点击播放器")) {
+    throw new Error(`自动播放策略拒绝时没有保留可操作回退：${JSON.stringify(blockedFallbackState)}`);
+  }
 } finally {
   if (browser) await browser.close().catch(() => {});
 }
@@ -218,10 +233,12 @@ if (!media.ok) throw new Error(`真实 TTS 音频验证失败：${media.errors.j
 const audioBuffer = fs.readFileSync(audioPath);
 const result = {
   generatedAt: new Date().toISOString(),
-  generationMode: reuseJobId ? "completed-job-replay" : "new-browser-generation",
+  generationMode: reuseJobId ? "completed-job-replay" : "safe-fixture-import",
   elapsedSeconds: Number(((Date.now() - startedAt) / 1000).toFixed(3)),
   fixturePath,
   fixtureSha256: crypto.createHash("sha256").update(fixtureBuffer).digest("hex").toUpperCase(),
+  safeAudioFixturePath,
+  safeAudioFixtureSha256: crypto.createHash("sha256").update(safeAudioFixtureBuffer).digest("hex").toUpperCase(),
   newJob: {
     id: newJob.id,
     status: newJob.status,
@@ -239,7 +256,13 @@ const result = {
     media,
   },
   browser: browserState,
+  beforeAutomaticPlayback,
+  switchedTask: switchState,
+  refreshedTask: refreshState,
+  blockedFallback: blockedFallbackState,
+  alternateJob: alternateJob ? { id: alternateJob.id, status: alternateJob.status, audioUrl: alternateJob.audio_url } : null,
   noHistoryAudioButtonClick: true,
+  noAudioControlClick: true,
   passed: true,
 };
 fs.mkdirSync(path.join(evidenceDir, "tests"), { recursive: true });

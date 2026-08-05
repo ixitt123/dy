@@ -854,6 +854,7 @@ let ttsMusicPresets = [];
 let ttsPollTimer = 0;
 let ttsRealignTimer = 0;
 let activeTtsRailJob = null;
+let ttsPreviewPlaybackAttempt = 0;
 let ttsTimelineDraftRows = [];
 let ttsTimelineDraftJobId = "";
 let ttsTimelineDirty = false;
@@ -5840,7 +5841,52 @@ async function confirmActiveTtsAlignment() {
   await refreshTtsJobs();
 }
 
-function showTtsPreview(job, { reveal = false } = {}) {
+function ttsPreviewSourceMatches(job) {
+  const jobId = String(job?.id || "");
+  if (!jobId || !ttsAudio) return false;
+  return [ttsAudio.src, ttsAudio.currentSrc].filter(Boolean).some((source) => {
+    try {
+      const url = new URL(source, window.location.href);
+      return url.pathname === "/api/tts/audio" && url.searchParams.get("id") === jobId;
+    } catch (_) {
+      return String(source).includes(`/api/tts/audio?id=${encodeURIComponent(jobId)}`);
+    }
+  });
+}
+
+async function autoPlayTtsPreview(job) {
+  const jobId = String(job?.id || "");
+  if (!jobId || !job?.audio_url || !ttsAudio || !ttsPreviewSourceMatches(job)) return false;
+  const attempt = ++ttsPreviewPlaybackAttempt;
+  ttsAudio.dataset.autoPreviewJobId = jobId;
+  ttsAudio.dataset.autoPreviewState = "attempting";
+  delete ttsAudio.dataset.autoPreviewError;
+  try {
+    const playResult = ttsAudio.play();
+    if (playResult && typeof playResult.then === "function") await playResult;
+    if (attempt !== ttsPreviewPlaybackAttempt
+      || String(activeTtsRailJob?.id || "") !== jobId
+      || !ttsPreviewSourceMatches(job)) return false;
+    ttsAudio.dataset.autoPreviewState = "playing";
+    return true;
+  } catch (error) {
+    if (attempt !== ttsPreviewPlaybackAttempt
+      || String(activeTtsRailJob?.id || "") !== jobId
+      || !ttsPreviewSourceMatches(job)) return false;
+    const name = String(error?.name || "PlaybackError");
+    const message = String(error?.message || error || "播放失败");
+    ttsAudio.dataset.autoPreviewState = name === "NotAllowedError" ? "blocked" : "failed";
+    ttsAudio.dataset.autoPreviewError = `${name}: ${message}`;
+    if (ttsStatus) {
+      ttsStatus.textContent = name === "NotAllowedError"
+        ? "旁白已生成；浏览器阻止了自动试听，请点击播放器开始播放。"
+        : `旁白已生成；自动试听失败（${message}），请点击播放器重试。`;
+    }
+    return false;
+  }
+}
+
+function showTtsPreview(job, { reveal = false, autoPlay = false } = {}) {
   activeTtsRailJob = job;
   renderTtsCentralTimeline(job);
   if (!syncTtsTopIssuePanel(job)) return;
@@ -5866,6 +5912,7 @@ function showTtsPreview(job, { reveal = false } = {}) {
       ttsPreview?.scrollIntoView?.({ behavior: "smooth", block: "center" });
     });
   }
+  if (autoPlay) void autoPlayTtsPreview(job);
 }
 
 function showTtsAudioFile(job) {
@@ -5949,7 +5996,7 @@ async function waitForTtsJob(jobId, { onCompleted } = {}) {
         : displayJob.alignment_status === "failed"
           ? `音频已生成，但字幕校准失败：${displayJob.alignment_error || "请重试。"}`
           : "音频生成完成。";
-    showTtsPreview(displayJob, { reveal: true });
+    showTtsPreview(displayJob, { reveal: true, autoPlay: true });
     await refreshTtsJobs();
     return displayJob;
   }
