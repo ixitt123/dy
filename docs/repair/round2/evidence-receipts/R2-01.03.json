@@ -1,0 +1,76 @@
+{
+  "schemaVersion": 1,
+  "itemId": "R2-01.03",
+  "originMachine": "B",
+  "availability": "origin-machine-local-not-synchronized",
+  "originalEvidencePath": "D:\\cs1\\dy-b-primary-20260805-102410\\.data\\repair-evidence\\R2-01.03\\20260805-184123\\attempt-1",
+  "sourceRepairCommit": "da53cb8428130b6a5f8ff8d863bbc424c91a4af3",
+  "completionManifestSha256": "227474effd3d9afa4880410e72e45ecc9fc72f462612b0398da39d496d8ba9c9",
+  "receiptGeneratedAt": "2026-08-05T11:01:00.000Z",
+  "completionManifest": {
+    "itemId": "R2-01.03",
+    "verificationMode": "browser-real",
+    "completedVerification": true,
+    "completedAt": "2026-08-05T10:57:04.109Z",
+    "sourceRepairCommit": "da53cb8428130b6a5f8ff8d863bbc424c91a4af3",
+    "attempt": 1,
+    "commands": [
+      {
+        "expectedCommand": "node test-tts-bundle-labels.mjs",
+        "command": "node test-tts-bundle-labels.mjs",
+        "exitCode": 0,
+        "outputPath": "01-tts-bundle-labels.log",
+        "outputSha256": "a65f5b16109914f9c65d1b7bd3c3cb4adbdc0e6e18b7379fc85283136205023e"
+      },
+      {
+        "expectedCommand": "node test-tts-bgm-persistence.mjs",
+        "command": "node test-tts-bgm-persistence.mjs",
+        "exitCode": 0,
+        "outputPath": "02-tts-bgm-persistence.log",
+        "outputSha256": "e84e465820e7beb7de87b54c5c5218883274e2c7d6a0ad536a347653040a1472"
+      },
+      {
+        "expectedCommand": "pnpm.cmd run check:gate",
+        "command": "pnpm.cmd run check:gate",
+        "exitCode": 0,
+        "outputPath": "04-check-gate.log",
+        "outputSha256": "96fe522eb61ebfd88dc3e34b75289b3d053aafa7fa168bea4e6ef91ee7d58cb7"
+      }
+    ],
+    "evidenceFiles": [
+      { "path": "01-tts-bundle-labels.log", "sha256": "a65f5b16109914f9c65d1b7bd3c3cb4adbdc0e6e18b7379fc85283136205023e" },
+      { "path": "02-tts-bgm-persistence.log", "sha256": "e84e465820e7beb7de87b54c5c5218883274e2c7d6a0ad536a347653040a1472" },
+      { "path": "03-r2-01-02-compat.log", "sha256": "5cb0e71118ebf789f74193e3e740fda8cb9f0578cf9627d21e4a481d9e9bbb0a" },
+      { "path": "04-check-gate.log", "sha256": "96fe522eb61ebfd88dc3e34b75289b3d053aafa7fa168bea4e6ef91ee7d58cb7" },
+      { "path": "05-round2-check.log", "sha256": "4090724e0e2398896550544f7bcdd462db6f0c614a9ff4184a459565a1f188a2" },
+      { "path": "06-supervisor.log", "sha256": "653578b0355de88e6a23b2e41f2e7d1277aaf67259d1d7302ae1aede81196c92" },
+      { "path": "07-diff-submodule.log", "sha256": "d45be3241a7411baa8a64b66f6dffefa70ebb492936f3dfa931468cc3cb05e03" },
+      { "path": "08-service-restore.log", "sha256": "25e137cb43603173fc9b23f7a7aac03f3e83e5e72a1f3110ca065989a4ca6242" },
+      { "path": "browser/four-piece-48.png", "sha256": "e6e701a63737f3921e772a13ed2f3a1cb4cdcb75c25ff0aa240a755592ce7695" },
+      { "path": "browser/three-piece-46.png", "sha256": "49daacee64b020d87756cc5e934ae344ed37efaa617cfa2f2f7a7c09a419f224" },
+      { "path": "browser/tts-parent-50-persistent-bgm.png", "sha256": "5a709cf8d1169d2800416272686a8207214490546b6327015edb87db1015ca74" },
+      { "path": "compat-r2-01-02/browser/tts-bgm-explicit-association.png", "sha256": "7cee48f15873d679e97554789c3d362053ed0e27b637a3a44fcdca89779aa0bc" },
+      { "path": "compat-r2-01-02/tests/tts-bgm-option.json", "sha256": "740695e8580a8127cb1b886874da64a554b3811fb1e1d55830e9a24ec13e5c30" },
+      { "path": "completion-gates.json", "sha256": "ea765f29a7672297e3d9133a3c7289d31661136d6036420bae1fe68ef9954b2f" },
+      { "path": "rollback-plan.md", "sha256": "66f6acec9d8d662c188c61dd9b24fbcc21e5de93d14b25af098f221da940856b" },
+      { "path": "tests/tts-bgm-persistence.json", "sha256": "b198687385a726f37f1b2324e390e710637aa53041e45cd3dfd12161ebeae156" },
+      { "path": "tests/tts-bundle-labels.json", "sha256": "1c83daed83811e920de45a4d1e70b778c9ab76d8af4bd7d858b7e272cb4e79c1" },
+      { "path": "verification-result.json", "sha256": "eac582b9bae6bc7610400537ee9982f8d4630eed27b7bb930a480aecb4d3779d" },
+      { "path": "verification-summary.md", "sha256": "5fe75f878a51ce231ef4a2bb73e6e9c4ad55f6fb0b48ad58c1c22f8b3aa41806" }
+    ],
+    "actualEvidence": [
+      "tests/tts-bundle-labels.json",
+      "browser/three-piece-46.png",
+      "browser/four-piece-48.png",
+      "verification-summary.md"
+    ],
+    "securityEvidence": [
+      "tests/tts-bundle-labels.json",
+      "compat-r2-01-02/tests/tts-bgm-option.json"
+    ],
+    "rollbackEvidence": [
+      "rollback-plan.md",
+      "08-service-restore.log"
+    ]
+  }
+}
