@@ -1,0 +1,62 @@
+{
+  "schemaVersion": 1,
+  "itemId": "R2-01.07",
+  "originMachine": "B",
+  "availability": "origin-machine-local-not-synchronized",
+  "originalEvidencePath": "D:\\cs1\\dy-b-primary-20260805-102410\\.data\\repair-evidence\\R2-01.07\\20260805-194256\\attempt-1",
+  "sourceRepairCommit": "8c9b2c5587e9752dbb232ee0da31cf63ecefac13",
+  "completionManifestSha256": "535350ee69c520c318edb7224ef1c78a3fdc3a3cbe156d6bcdcd588b9b194d33",
+  "receiptGeneratedAt": "2026-08-05T12:21:27.000Z",
+  "completionManifest": {
+    "itemId": "R2-01.07",
+    "verificationMode": "browser-real",
+    "completedVerification": true,
+    "completedAt": "2026-08-05T12:16:21.000Z",
+    "sourceRepairCommit": "8c9b2c5587e9752dbb232ee0da31cf63ecefac13",
+    "attempt": 1,
+    "commands": [
+      { "expectedCommand": "node test-kinetic-bgm-player-browser.mjs", "command": "node test-kinetic-bgm-player-browser.mjs", "exitCode": 0, "outputPath": "01-kinetic-bgm-player.log", "outputSha256": "9dbc20f4d9bc9f0c5d0295e80060f86d405e8e13b691478753bd854eaae17e04" },
+      { "expectedCommand": "node test-kinetic-atomic-bgm-browser.mjs", "command": "node test-kinetic-atomic-bgm-browser.mjs", "exitCode": 0, "outputPath": "02-kinetic-atomic-bgm.log", "outputSha256": "7ec64f57cb8b4b9d8693be1f00a5656e170c5a51bdf15257ad5f3f7d8d7adf84" },
+      { "expectedCommand": "node test-kinetic-bgm-recovery-browser.mjs", "command": "node test-kinetic-bgm-recovery-browser.mjs", "exitCode": 0, "outputPath": "03-kinetic-bgm-recovery.log", "outputSha256": "e091757130c5481126d973a26adb1ec89d838dea748c9231f6875a450614b215" },
+      { "expectedCommand": "pnpm.cmd run check:gate", "command": "pnpm.cmd run check:gate", "exitCode": 0, "outputPath": "04-check-gate.log", "outputSha256": "a792c864b0d029168d2953fe6707ae27cdc0dcb86b33eee072909670f8c17e14" },
+      { "expectedCommand": "pnpm.cmd run repair:r2:check", "command": "pnpm.cmd run repair:r2:check", "exitCode": 0, "outputPath": "05-round2-check.log", "outputSha256": "b3feac2fb43c525f28d644a00121c3981513beb211e0403987a43509594b7710" },
+      { "expectedCommand": "pnpm.cmd run repair:r2:test-supervisor", "command": "pnpm.cmd run repair:r2:test-supervisor", "exitCode": 0, "outputPath": "06-supervisor.log", "outputSha256": "ac6edc141360884ca78fd8688c6f3160d734078bef11d638812c304ba7d79beb" },
+      { "expectedCommand": "git diff --check", "command": "git diff --check", "exitCode": 0, "outputPath": "07-diff-submodule.log", "outputSha256": "af9e0462e947c5a35a4f463a77a7ca48a47aaf8212705b43360e91436fe0e464" }
+    ],
+    "evidenceFiles": [
+      { "path": "01-kinetic-bgm-player.log", "sha256": "9dbc20f4d9bc9f0c5d0295e80060f86d405e8e13b691478753bd854eaae17e04" },
+      { "path": "02-kinetic-atomic-bgm.log", "sha256": "7ec64f57cb8b4b9d8693be1f00a5656e170c5a51bdf15257ad5f3f7d8d7adf84" },
+      { "path": "03-kinetic-bgm-recovery.log", "sha256": "e091757130c5481126d973a26adb1ec89d838dea748c9231f6875a450614b215" },
+      { "path": "04-check-gate.log", "sha256": "a792c864b0d029168d2953fe6707ae27cdc0dcb86b33eee072909670f8c17e14" },
+      { "path": "05-round2-check.log", "sha256": "b3feac2fb43c525f28d644a00121c3981513beb211e0403987a43509594b7710" },
+      { "path": "06-supervisor.log", "sha256": "ac6edc141360884ca78fd8688c6f3160d734078bef11d638812c304ba7d79beb" },
+      { "path": "07-diff-submodule.log", "sha256": "af9e0462e947c5a35a4f463a77a7ca48a47aaf8212705b43360e91436fe0e464" },
+      { "path": "08-service-restore.log", "sha256": "c05f181b7809ed83b5020cb08e11593d2a68da6594897da02dbcab0443dfe5b7" },
+      { "path": "browser/kinetic-bgm-after-refresh-seek.png", "sha256": "22839f84f90a74fcc5f503058045b7b6de11ba4117efe025882de996be8e872a" },
+      { "path": "browser/kinetic-bgm-first-and-second-seek.png", "sha256": "cd9282b9d79cccc973a3c080db7b9a40feedbb6ba6f9cdf87925a29036d56e3d" },
+      { "path": "browser/kinetic-bgm-recovered-after-restart.png", "sha256": "22e91b114b9c30363a54de6e1e2c63e47cdda26f66da3d400e8fd0bfe671f3c4" },
+      { "path": "tests/kinetic-bgm-player-browser.json", "sha256": "d8a3a2cf037c617b0061965d59a35bfd2effe052f62cbe80e49c50468e93a849" },
+      { "path": "tests/kinetic-bgm-recovery-browser.json", "sha256": "9082156d40f07cddb0660e17b3efa6f93aef7a177144dcf40bc8ab4caaa2e919" },
+      { "path": "tests/nested-restart.txt", "sha256": "8250b27dd174eb68e23b7dd7ade9887a54892a4d0a678d800519c04fd3bbe976" },
+      { "path": "completion-gates.json", "sha256": "ea765f29a7672297e3d9133a3c7289d31661136d6036420bae1fe68ef9954b2f" },
+      { "path": "verification-result.json", "sha256": "a8b76876516ba4f19dee5778dd655c03d8b6972e897b2f698cd2fdbc0298d10d" },
+      { "path": "verification-summary.md", "sha256": "94dbde93e7c2a36e8b70cdf0178b062d7e672982804c535d2c6f6dfcaa5373ef" },
+      { "path": "rollback-plan.md", "sha256": "be17d5f69142f7568deda10e675d4b1182cd521d4337200db55af82a3c834c85" }
+    ],
+    "actualEvidence": [
+      "tests/kinetic-bgm-player-browser.json",
+      "browser/kinetic-bgm-first-and-second-seek.png",
+      "browser/kinetic-bgm-after-refresh-seek.png",
+      "verification-summary.md"
+    ],
+    "securityEvidence": [
+      "tests/kinetic-bgm-player-browser.json",
+      "01-kinetic-bgm-player.log"
+    ],
+    "rollbackEvidence": [
+      "rollback-plan.md",
+      "08-service-restore.log",
+      "tests/kinetic-bgm-recovery-browser.json"
+    ]
+  }
+}
