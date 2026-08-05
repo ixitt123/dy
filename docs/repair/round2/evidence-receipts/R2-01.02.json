@@ -1,0 +1,76 @@
+{
+  "schemaVersion": 1,
+  "itemId": "R2-01.02",
+  "originMachine": "B",
+  "availability": "origin-machine-local-not-synchronized",
+  "originalEvidencePath": "D:\\cs1\\dy-b-primary-20260805-102410\\.data\\repair-evidence\\R2-01.02\\20260805-174933\\attempt-1",
+  "sourceRepairCommit": "0b730b9ddeffe26be1d600a9c91798b3ac6bff7d",
+  "completionManifestSha256": "9600f959cc90a66c1643675a2178b9d7b2421dc673c65f836526993772a972b0",
+  "receiptGeneratedAt": "2026-08-05T10:31:00.000Z",
+  "completionManifest": {
+    "itemId": "R2-01.02",
+    "verificationMode": "browser-real",
+    "completedVerification": true,
+    "completedAt": "2026-08-05T10:28:07.702Z",
+    "sourceRepairCommit": "0b730b9ddeffe26be1d600a9c91798b3ac6bff7d",
+    "attempt": 1,
+    "commands": [
+      {
+        "expectedCommand": "node test-tts-bgm-option.mjs",
+        "command": "node test-tts-bgm-option.mjs",
+        "exitCode": 0,
+        "outputPath": "01-tts-bgm-option.log",
+        "outputSha256": "ce1202d7ae0301625716e0c671f1ef62352b0ba19810abf06608b7757136e088"
+      },
+      {
+        "expectedCommand": "node test-tts-bgm-persistence.mjs",
+        "command": "node test-tts-bgm-persistence.mjs",
+        "exitCode": 0,
+        "outputPath": "02-tts-bgm-persistence.log",
+        "outputSha256": "5fea410cfbc9f382d8604bbde53439882503c56d57243d2af615384fbdb32e16"
+      },
+      {
+        "expectedCommand": "pnpm.cmd run check:gate",
+        "command": "pnpm.cmd run check:gate",
+        "exitCode": 0,
+        "outputPath": "04-check-gate.log",
+        "outputSha256": "b255e82e3d29e21af8a5012ace1ef24f1fe4107c02913e361d6177e56c8b6270"
+      }
+    ],
+    "evidenceFiles": [
+      { "path": "01-tts-bgm-option.log", "sha256": "ce1202d7ae0301625716e0c671f1ef62352b0ba19810abf06608b7757136e088" },
+      { "path": "02-tts-bgm-persistence.log", "sha256": "5fea410cfbc9f382d8604bbde53439882503c56d57243d2af615384fbdb32e16" },
+      { "path": "03-auto-preview-compat.log", "sha256": "30b7da6161cea08f4443bd29f2fc777a4adbbb0ef95f18d80cd98fe1a2a03f2e" },
+      { "path": "03a-auto-preview-harness-interruption.log", "sha256": "55cff96bf728d281efa14220acd3e197ce845dafe09913af8fb2dd6d65d39167" },
+      { "path": "04-check-gate.log", "sha256": "b255e82e3d29e21af8a5012ace1ef24f1fe4107c02913e361d6177e56c8b6270" },
+      { "path": "05-round2-check.log", "sha256": "b622769296579039db1d16c00ffcbfe26fa816bb656756bf1f576e126cea049f" },
+      { "path": "06-supervisor.log", "sha256": "e9f7914a9124105c2fa13947d812834e7a561b153f37e30a691e68be833971b6" },
+      { "path": "07-diff-submodule.log", "sha256": "0d27eee1ad52f804430fe4181d5cfea5e64eaec7dfd857042e4faf1ac2867f0d" },
+      { "path": "08-service-restore.log", "sha256": "ff3dc03e7aa0f3e06b2f58540ca8c2630f5335fc62aa01c9b5733c84f5ed8521" },
+      { "path": "browser/tts-bgm-explicit-association.png", "sha256": "663063a2c67e2b613d6efeb8cbc2f09510cc2ff650df27c53b2e69a19ce8bd0d" },
+      { "path": "browser/tts-parent-32-persistent-bgm.png", "sha256": "cd179adaa1474bff5aca669842248cb9193c55f9afa2c4b379e9b73e35a3339e" },
+      { "path": "compat-r2-01-01/browser/tts-auto-preview.png", "sha256": "3263f3f6983b9e4817ac4b49b8edf42803917ee3e0929c3376316843b7ecff69" },
+      { "path": "compat-r2-01-01/tests/tts-auto-preview.json", "sha256": "a19306940e2d08278152d78e271b0bd8abf04a62dfdfe87e5c4b70818f4c062f" },
+      { "path": "completion-gates.json", "sha256": "ea765f29a7672297e3d9133a3c7289d31661136d6036420bae1fe68ef9954b2f" },
+      { "path": "rollback-plan.md", "sha256": "cddb9faf93d5fff3cceb74d42b2daaebdb294b746d198982851115c0ad287082" },
+      { "path": "tests/tts-bgm-option.json", "sha256": "4331db324f4951b8d1a22a24b59e1faa289a2561cacf0cb3b9554ef2af28fa02" },
+      { "path": "tests/tts-bgm-persistence.json", "sha256": "0b70c544f864d5375a6a282d0a496f29d3487774b45a1ff366bc8729dca9daf6" },
+      { "path": "verification-result.json", "sha256": "de3ab646a89724fc0ec8547bd1407dcfc3f292ab90e12e3282f810a40c3a05f9" },
+      { "path": "verification-summary.md", "sha256": "246d41cdc07008ef1c2000e532e08ba41d990c74f004b9729432da6e2e0686d4" }
+    ],
+    "actualEvidence": [
+      "tests/tts-bgm-option.json",
+      "tests/tts-bgm-persistence.json",
+      "browser/tts-bgm-explicit-association.png",
+      "browser/tts-parent-32-persistent-bgm.png",
+      "verification-summary.md"
+    ],
+    "securityEvidence": [
+      "tests/tts-bgm-option.json"
+    ],
+    "rollbackEvidence": [
+      "rollback-plan.md",
+      "08-service-restore.log"
+    ]
+  }
+}
