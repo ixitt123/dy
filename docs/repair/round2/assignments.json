@@ -263,7 +263,27 @@
       ],
       "evidenceDir": ".data/repair-evidence/R2-01.08/",
       "researchRecord": "docs/repair/round2/research/R2-01.08.md"
+    },
+    {
+      "itemId": "R2-02.01",
+      "machine": "B",
+      "complexity": "complex",
+      "status": "active",
+      "branch": "repair/b-r2-02-01",
+      "allowedPaths": [
+        "package.json",
+        "pnpm-lock.yaml",
+        "server/core/ssrf-guard.mjs",
+        "test-ssrf-guard.mjs",
+        "test-fast-uri-host-confusion.mjs",
+        "docs/repair/round2/research/R2-02.01.md",
+        "docs/repair/round2/records/R2-02.01.md",
+        "docs/repair/round2/master-register.md",
+        "docs/repair/round2/assignments.json"
+      ],
+      "evidenceDir": ".data/repair-evidence/R2-02.01/",
+      "researchRecord": "docs/repair/round2/research/R2-02.01.md"
     }
   ],
-  "updatedAt": "2026-08-05T13:42:11.090Z"
+  "updatedAt": "2026-08-05T13:56:28.173Z"
 }
