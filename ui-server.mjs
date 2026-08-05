@@ -73,6 +73,11 @@ import { AUTO_MODEL_VALUE, REWRITE_PROVIDER_ORDER, REWRITE_PROVIDER_PRESETS } fr
 const runtimeSourcePath = fileURLToPath(import.meta.url);
 const runtimeSourceMtimeMs = fs.statSync(runtimeSourcePath).mtimeMs;
 const __dirname = path.dirname(runtimeSourcePath);
+const runtimeProjectRoot = fs.realpathSync.native(__dirname);
+const runtimeEntryPath = fs.realpathSync.native(runtimeSourcePath);
+const runtimeInstanceId = randomUUID();
+const runtimeStartedAt = new Date().toISOString();
+const runtimeServiceId = "douyin-local-workbench";
 const uiDir = path.join(__dirname, "ui");
 const skillsDir = path.join(__dirname, "skills");
 const promptsDir = path.join(__dirname, "prompts");
@@ -89,16 +94,17 @@ const defaultDownloadsDir = path.join(__dirname, "downloads");
 const runtimeVersion = (() => {
   try {
     const branch = String(spawnSync("git", ["rev-parse", "--abbrev-ref", "HEAD"], { encoding: "utf8" }).stdout || "").trim() || "unknown";
-    const commit = String(spawnSync("git", ["rev-parse", "--short", "HEAD"], { encoding: "utf8" }).stdout || "").trim() || "unknown";
+    const fullCommit = String(spawnSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).stdout || "").trim() || "unknown";
+    const commit = fullCommit === "unknown" ? "unknown" : fullCommit.slice(0, 7);
     let submoduleCommit = "unknown";
     try {
       const subOut = String(spawnSync("git", ["submodule", "status"], { encoding: "utf8" }).stdout || "");
       const line = subOut.split("\n").find((l) => l.includes("moneyprinterturbo"));
       if (line) submoduleCommit = line.trim().split(/\s+/)[0].replace(/^[-+U]/, "").slice(0, 12);
     } catch {}
-    return { branch, commit, submoduleCommit, buildTime: new Date().toISOString() };
+    return { branch, commit, fullCommit, submoduleCommit, buildTime: runtimeStartedAt };
   } catch {
-    return { branch: "unknown", commit: "unknown", submoduleCommit: "unknown", buildTime: new Date().toISOString() };
+    return { branch: "unknown", commit: "unknown", fullCommit: "unknown", submoduleCommit: "unknown", buildTime: runtimeStartedAt };
   }
 })();
 const browserDownloadsRoot = path.join(__dirname, ".data", "browser-downloads");
@@ -7517,11 +7523,48 @@ broadcastProgress = (data) => {
   }
 };
 
+function comparableRuntimePath(filePath) {
+  let value;
+  try {
+    value = fs.realpathSync.native(String(filePath || ""));
+  } catch {
+    value = path.resolve(String(filePath || ""));
+  }
+  value = value.replaceAll("\\", "/").replace(/\/+$/u, "");
+  return process.platform === "win32" ? value.toLowerCase() : value;
+}
+
+function currentRuntimeUrl() {
+  const address = server.address();
+  return address && typeof address === "object" ? `http://127.0.0.1:${address.port}` : "";
+}
+
+function runtimeIdentity() {
+  return {
+    ok: true,
+    service: runtimeServiceId,
+    protocolVersion: 1,
+    projectRoot: runtimeProjectRoot,
+    entryPath: runtimeEntryPath,
+    instanceId: runtimeInstanceId,
+    pid: process.pid,
+    commit: runtimeVersion.fullCommit,
+    sourceMtimeMs: runtimeSourceMtimeMs,
+    startedAt: runtimeStartedAt,
+    ready: server.listening,
+    url: currentRuntimeUrl(),
+  };
+}
+
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, "http://127.0.0.1");
 
   try {
     if (rejectHttpHost(req, res)) return;
+    if (req.method === "GET" && url.pathname === "/api/runtime/identity") {
+      sendJson(res, 200, runtimeIdentity());
+      return;
+    }
     if (url.pathname.startsWith("/api/") && rejectLocalApiRequest(req, res)) return;
 
     if (req.method === "GET" && url.pathname === "/api/status") {
@@ -10004,6 +10047,50 @@ function processIsRunning(pid) {
   return runtimeProcessIsRunning(pid, { expectedEntryPath: runtimeSourcePath });
 }
 
+function parseRuntimeUrl(value) {
+  try {
+    const url = new URL(String(value || "").trim());
+    if (url.protocol !== "http:" || !isAllowedLocalHostname(url.hostname.replace(/^\[|\]$/gu, ""))) return null;
+    if (url.username || url.password || url.search || url.hash) return null;
+    if (!Number.isInteger(Number(url.port)) || Number(url.port) <= 0 || Number(url.port) > 65_535) return null;
+    url.pathname = "/";
+    return url;
+  } catch {
+    return null;
+  }
+}
+
+function existingRuntimeIdentityMatches(identity, baseUrl, expectedPid) {
+  const pid = Number(identity?.pid);
+  const sourceMtimeMs = Number(identity?.sourceMtimeMs);
+  if (!identity || identity.ok !== true || identity.service !== runtimeServiceId || identity.protocolVersion !== 1) return false;
+  if (identity.ready !== true || typeof identity.instanceId !== "string" || identity.instanceId.length < 16) return false;
+  if (!Number.isInteger(pid) || pid <= 0 || pid !== Number(expectedPid) || !processIsRunning(pid)) return false;
+  if (comparableRuntimePath(identity.projectRoot) !== comparableRuntimePath(runtimeProjectRoot)) return false;
+  if (comparableRuntimePath(identity.entryPath) !== comparableRuntimePath(runtimeEntryPath)) return false;
+  if (identity.commit !== runtimeVersion.fullCommit) return false;
+  if (!Number.isFinite(sourceMtimeMs) || Math.abs(sourceMtimeMs - runtimeSourceMtimeMs) > 1) return false;
+  const reportedUrl = parseRuntimeUrl(identity.url);
+  return Boolean(reportedUrl && reportedUrl.origin === baseUrl.origin);
+}
+
+async function probeExistingRuntime(value, expectedPid) {
+  const baseUrl = parseRuntimeUrl(value);
+  if (!baseUrl) return "";
+  try {
+    const response = await fetch(new URL("/api/runtime/identity", baseUrl), {
+      headers: { accept: "application/json" },
+      redirect: "error",
+      signal: AbortSignal.timeout(1_500),
+    });
+    if (!response.ok) return "";
+    const identity = await response.json();
+    return existingRuntimeIdentityMatches(identity, baseUrl, expectedPid) ? baseUrl.origin : "";
+  } catch {
+    return "";
+  }
+}
+
 function acquireRuntimeLock() {
   const existingPid = runtimeOwnerPid();
   if (existingPid && existingPid !== process.pid && processIsRunning(existingPid)) {
@@ -10028,14 +10115,12 @@ function acquireRuntimeLock() {
   }
 }
 
-async function waitForExistingRuntimeUrl() {
+async function waitForExistingRuntimeUrl(expectedPid) {
   for (let attempt = 0; attempt < 30; attempt += 1) {
     try {
       const url = fs.readFileSync(urlPath, "utf8").trim();
-      if (url) {
-        const response = await fetch(url);
-        if (response.ok) return url;
-      }
+      const verifiedUrl = await probeExistingRuntime(url, expectedPid);
+      if (verifiedUrl) return verifiedUrl;
     } catch {
       // The first process may still be starting and writing its URL file.
     }
@@ -10044,18 +10129,41 @@ async function waitForExistingRuntimeUrl() {
   return "";
 }
 
-async function start() {
-  const runtimeLock = acquireRuntimeLock();
-  if (!runtimeLock.acquired) {
-    const existingUrl = await waitForExistingRuntimeUrl();
-    if (process.argv.includes("--open") && existingUrl) {
-      spawn("cmd", ["/c", "start", "", existingUrl], { detached: true, stdio: "ignore" }).unref();
+function discardRuntimeState(expectedPid) {
+  if (!expectedPid || runtimeOwnerPid() !== Number(expectedPid)) return false;
+  for (const filePath of [pidPath, urlPath]) {
+    try {
+      fs.rmSync(filePath, { force: true });
+    } catch {
+      return false;
     }
-    console.log(existingUrl
-      ? `Douyin page already running: ${existingUrl}`
-      : `Douyin backend is already starting (PID ${runtimeLock.existingPid || "unknown"}).`);
-    process.exit(0);
-    return;
+  }
+  return true;
+}
+
+async function start() {
+  let runtimeLock = acquireRuntimeLock();
+  if (!runtimeLock.acquired) {
+    const existingUrl = await waitForExistingRuntimeUrl(runtimeLock.existingPid);
+    if (existingUrl) {
+      if (process.argv.includes("--open")) {
+        spawn("cmd", ["/c", "start", "", existingUrl], { detached: true, stdio: "ignore" }).unref();
+      }
+      console.log(`Douyin page already running: ${existingUrl}`);
+      process.exit(0);
+      return;
+    }
+    if (!discardRuntimeState(runtimeLock.existingPid)) {
+      console.error(`Refused an unverifiable UI runtime owned by PID ${runtimeLock.existingPid || "unknown"}; its state changed before cleanup.`);
+      process.exitCode = 4;
+      return;
+    }
+    runtimeLock = acquireRuntimeLock();
+    if (!runtimeLock.acquired) {
+      console.error(`Could not acquire the UI runtime after rejecting stale state (PID ${runtimeLock.existingPid || "unknown"}).`);
+      process.exitCode = 4;
+      return;
+    }
   }
   // The selected download directory belongs to the user. Never scan or move
   // unrelated loose files when the service starts.

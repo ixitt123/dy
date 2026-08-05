@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -8,9 +8,41 @@ const dataDir = path.join(__dirname, ".data");
 const logPath = path.join(dataDir, "launcher.log");
 const logLockPath = path.join(dataDir, "launcher-log.lock");
 const urlPath = path.join(__dirname, "ui-server.url");
+const pidPath = path.join(__dirname, "ui-server.pid");
 const packagePath = path.join(__dirname, "node_modules", "@yc-w-cn", "douyin-mcp-server", "package.json");
 const serverEntryPath = path.join(__dirname, "ui-server.mjs");
 const runId = String(process.env.DOUYIN_LAUNCHER_RUN_ID || `node-${process.pid}-${Date.now()}`);
+const runtimeServiceId = "douyin-local-workbench";
+
+function canonicalPath(filePath) {
+  try {
+    return fs.realpathSync.native(filePath);
+  } catch {
+    return path.resolve(filePath);
+  }
+}
+
+function comparablePath(filePath) {
+  const value = canonicalPath(filePath).replaceAll("\\", "/").replace(/\/+$/u, "");
+  return process.platform === "win32" ? value.toLowerCase() : value;
+}
+
+function currentCommit() {
+  const result = spawnSync("git", ["rev-parse", "HEAD"], {
+    cwd: __dirname,
+    encoding: "utf8",
+    windowsHide: true,
+    timeout: 5_000,
+  });
+  return result.status === 0 ? String(result.stdout || "").trim() : "unknown";
+}
+
+const expectedRuntime = Object.freeze({
+  projectRoot: comparablePath(__dirname),
+  entryPath: comparablePath(serverEntryPath),
+  commit: currentCommit(),
+  sourceMtimeMs: fs.existsSync(serverEntryPath) ? fs.statSync(serverEntryPath).mtimeMs : 0,
+});
 
 function environmentInteger(name, fallback, minimum, maximum) {
   const value = Number(process.env[name]);
@@ -66,6 +98,80 @@ function readCurrentUrl() {
     return fs.readFileSync(urlPath, "utf8").trim();
   } catch {
     return "";
+  }
+}
+
+function runtimeOwnerPid() {
+  try {
+    const pid = Number(fs.readFileSync(pidPath, "utf8").trim());
+    return Number.isInteger(pid) && pid > 0 ? pid : 0;
+  } catch {
+    return 0;
+  }
+}
+
+function processExists(pid) {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function parseLocalRuntimeUrl(value) {
+  try {
+    const url = new URL(String(value || "").trim());
+    const hostname = url.hostname.toLowerCase();
+    if (url.protocol !== "http:") return null;
+    if (!["127.0.0.1", "localhost", "[::1]", "::1"].includes(hostname)) return null;
+    if (url.username || url.password || url.search || url.hash) return null;
+    if (!Number.isInteger(Number(url.port)) || Number(url.port) <= 0 || Number(url.port) > 65_535) return null;
+    url.pathname = "/";
+    return url;
+  } catch {
+    return null;
+  }
+}
+
+function runtimeIdentityMatches(identity, baseUrl) {
+  const ownerPid = runtimeOwnerPid();
+  const pid = Number(identity?.pid);
+  const sourceMtimeMs = Number(identity?.sourceMtimeMs);
+  if (!identity || identity.ok !== true || identity.service !== runtimeServiceId || identity.protocolVersion !== 1) return false;
+  if (identity.ready !== true || typeof identity.instanceId !== "string" || identity.instanceId.length < 16) return false;
+  if (!Number.isInteger(pid) || pid <= 0 || !ownerPid || pid !== ownerPid || !processExists(pid)) return false;
+  if (comparablePath(identity.projectRoot) !== expectedRuntime.projectRoot) return false;
+  if (comparablePath(identity.entryPath) !== expectedRuntime.entryPath) return false;
+  if (!identity.commit || identity.commit !== expectedRuntime.commit) return false;
+  if (!Number.isFinite(sourceMtimeMs) || Math.abs(sourceMtimeMs - expectedRuntime.sourceMtimeMs) > 1) return false;
+  const reportedUrl = parseLocalRuntimeUrl(identity.url);
+  return Boolean(reportedUrl && reportedUrl.origin === baseUrl.origin);
+}
+
+async function probeRuntimeIdentity(value) {
+  const baseUrl = parseLocalRuntimeUrl(value);
+  if (!baseUrl) return null;
+  try {
+    const identityUrl = new URL("/api/runtime/identity", baseUrl);
+    const response = await fetch(identityUrl, {
+      headers: { accept: "application/json" },
+      redirect: "error",
+      signal: AbortSignal.timeout(1_500),
+    });
+    if (!response.ok) return null;
+    const identity = await response.json();
+    return runtimeIdentityMatches(identity, baseUrl) ? { url: baseUrl.origin, identity } : null;
+  } catch {
+    return null;
+  }
+}
+
+function clearStaleUrl() {
+  try {
+    fs.rmSync(urlPath, { force: true });
+  } catch {
+    // Spawning the current project remains the safe fallback if cleanup races.
   }
 }
 
@@ -142,19 +248,17 @@ async function openUrl(url) {
   });
 }
 
-async function existingServerUrl() {
-  try {
-    const url = fs.readFileSync(urlPath, "utf8").trim();
-    if (!url) return "";
-    // The API requires the browser-only local session cookie. The launcher's
-    // liveness probe must use the public HTML entry instead, or every launch
-    // falsely looks offline and starts another server on the next port.
-    const response = await fetch(url);
-    if (response.ok) return url;
-  } catch {
-    return "";
-  }
-  return "";
+async function existingServerRuntime() {
+  const url = readCurrentUrl();
+  if (!url) return null;
+  const runtime = await probeRuntimeIdentity(url);
+  if (runtime) return runtime;
+  clearStaleUrl();
+  logEvent("reject-existing", {
+    url,
+    message: "Rejected a stale or foreign UI URL because its project identity, commit, PID, or health did not match.",
+  });
+  return null;
 }
 
 async function main() {
@@ -175,10 +279,14 @@ async function main() {
     return;
   }
 
-  const url = await existingServerUrl();
-  if (url) {
-    logEvent("reuse-existing", { url, message: "Reusing the responsive local UI service." });
-    await openUrl(url);
+  const existingRuntime = await existingServerRuntime();
+  if (existingRuntime) {
+    logEvent("reuse-existing", {
+      pid: existingRuntime.identity.pid,
+      url: existingRuntime.url,
+      message: `Reusing verified instance ${existingRuntime.identity.instanceId} at commit ${existingRuntime.identity.commit}.`,
+    });
+    await openUrl(existingRuntime.url);
     return;
   }
 

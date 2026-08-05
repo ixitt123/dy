@@ -154,10 +154,14 @@ assert.match(
   "A late analysis response must stay bound to the task that started it.",
 );
 assert.match(workbench, /short-video-workbench-page/u, "The active feature page must be restored after refresh.");
-assert.match(launcher, /const url = await existingServerUrl\(\)/u, "The launcher must always reuse an existing backend.");
-assert.match(launcher, /const response = await fetch\(url\);/u, "The launcher liveness probe must use the public HTML entry rather than the cookie-protected API.");
+assert.match(launcher, /const existingRuntime = await existingServerRuntime\(\)/u, "The launcher must verify an existing backend before reuse.");
+assert.match(launcher, /new URL\("\/api\/runtime\/identity", baseUrl\)/u, "The launcher must obtain a live runtime identity rather than trusting a responsive root page.");
+assert.match(launcher, /runtimeIdentityMatches\(identity, baseUrl\)/u, "Existing runtime reuse must validate the returned identity contract.");
+assert.match(launcher, /identity\.projectRoot[\s\S]*identity\.entryPath[\s\S]*identity\.commit[\s\S]*identity\.url/u, "Runtime identity reuse must bind the project root, entry, commit and reported URL.");
+assert.match(launcher, /pid !== ownerPid \|\| !processExists\(pid\)/u, "Runtime identity reuse must bind a live PID to the local PID file.");
+assert.doesNotMatch(launcher, /const response = await fetch\(url\);/u, "A responsive root page alone must never prove runtime identity.");
 assert.doesNotMatch(launcher, /fetch\(`\$\{url\}\/api\/status`\)/u, "The launcher must not treat the protected status API as an unauthenticated liveness probe.");
-assert.doesNotMatch(launcher, /syncChanged\s*\?\s*""\s*:\s*await existingServerUrl/u, "A repository sync must never bypass single-instance reuse.");
+assert.doesNotMatch(launcher, /syncChanged\s*\?\s*null\s*:\s*await existingServerRuntime/u, "A repository sync must never bypass verified single-instance reuse.");
 assert.match(server, /fs\.openSync\(pidPath, "wx"\)/u, "The backend must use an exclusive single-instance lock.");
 assert.match(server, /runtimeProcessIsRunning\(pid,\s*\{\s*expectedEntryPath:\s*runtimeSourcePath\s*\}\)/u, "The backend lock must verify that an existing PID belongs to this runtime.");
 assert.doesNotMatch(html, /class="status-rail"|id="railCurrentTask"|id="railRecentOutput"|id="railErrors"/u, "The right status rail must stay removed from the main page.");

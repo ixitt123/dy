@@ -172,7 +172,26 @@ try {
   saveEvidence("new-server", newServer, { exitCode: newServerResult.status, records: newServerRecords.length });
 
   const reuse = makeFixture("reuse", { vbs: false, server: true });
-  const reuseServer = http.createServer((_request, response) => {
+  let reuseUrl = "";
+  const reuseServer = http.createServer((request, response) => {
+    if (request.url === "/api/runtime/identity") {
+      response.writeHead(200, { "content-type": "application/json" });
+      response.end(JSON.stringify({
+        ok: true,
+        service: "douyin-local-workbench",
+        protocolVersion: 1,
+        projectRoot: fs.realpathSync.native(reuse),
+        entryPath: fs.realpathSync.native(path.join(reuse, "ui-server.mjs")),
+        instanceId: "r2-01-13-compatible-identity",
+        pid: process.pid,
+        commit: "unknown",
+        sourceMtimeMs: fs.statSync(path.join(reuse, "ui-server.mjs")).mtimeMs,
+        startedAt: new Date().toISOString(),
+        ready: true,
+        url: reuseUrl,
+      }));
+      return;
+    }
     response.writeHead(200, { "content-type": "text/plain" });
     response.end("ok");
   });
@@ -181,7 +200,8 @@ try {
     reuseServer.listen(0, "127.0.0.1", resolve);
   });
   const reuseAddress = reuseServer.address();
-  const reuseUrl = `http://127.0.0.1:${reuseAddress.port}`;
+  reuseUrl = `http://127.0.0.1:${reuseAddress.port}`;
+  fs.writeFileSync(path.join(reuse, "ui-server.pid"), String(process.pid), "utf8");
   fs.writeFileSync(path.join(reuse, "ui-server.url"), reuseUrl, "utf8");
   const reuseResult = await runAsync(
     process.execPath,
