@@ -24,14 +24,57 @@ function contentType(filePath) {
   return "application/octet-stream";
 }
 
-function sendFile(res, filePath, { download = false } = {}) {
+export function parseSingleByteRange(value, size) {
+  const header = String(value || "").trim();
+  if (!header) return null;
+  const total = Number(size);
+  if (!Number.isSafeInteger(total) || total < 0 || header.length > 128) return { unsatisfiable: true };
+  const match = /^bytes=(\d*)-(\d*)$/i.exec(header);
+  if (!match || (!match[1] && !match[2]) || total === 0) return { unsatisfiable: true };
+  if (match[1]) {
+    const start = Number(match[1]);
+    const requestedEnd = match[2] ? Number(match[2]) : total - 1;
+    if (!Number.isSafeInteger(start) || !Number.isSafeInteger(requestedEnd) || start >= total || requestedEnd < start) {
+      return { unsatisfiable: true };
+    }
+    const end = Math.min(requestedEnd, total - 1);
+    return { start, end, length: end - start + 1 };
+  }
+  const suffixLength = Number(match[2]);
+  if (!Number.isSafeInteger(suffixLength) || suffixLength <= 0) return { unsatisfiable: true };
+  const start = Math.max(0, total - suffixLength);
+  return { start, end: total - 1, length: total - start };
+}
+
+function sendFile(req, res, filePath, { download = false } = {}) {
   const stat = fs.statSync(filePath);
-  res.writeHead(200, {
+  const baseHeaders = {
     "Content-Type": contentType(filePath),
-    "Content-Length": stat.size,
     "Content-Disposition": `${download ? "attachment" : "inline"}; filename*=UTF-8''${encodeURIComponent(path.basename(filePath))}`,
     "Cache-Control": "no-store",
-  });
+    "Accept-Ranges": "bytes",
+  };
+  const rangeHeader = req.headers.range;
+  const range = parseSingleByteRange(rangeHeader, stat.size);
+  if (range?.unsatisfiable) {
+    res.writeHead(416, {
+      ...baseHeaders,
+      "Content-Range": `bytes */${stat.size}`,
+      "Content-Length": 0,
+    });
+    res.end();
+    return;
+  }
+  if (range) {
+    res.writeHead(206, {
+      ...baseHeaders,
+      "Content-Range": `bytes ${range.start}-${range.end}/${stat.size}`,
+      "Content-Length": range.length,
+    });
+    fs.createReadStream(filePath, { start: range.start, end: range.end }).pipe(res);
+    return;
+  }
+  res.writeHead(200, { ...baseHeaders, "Content-Length": stat.size });
   fs.createReadStream(filePath).pipe(res);
 }
 
@@ -129,7 +172,7 @@ export function createKineticTextRoutes({
       if (req.method === "GET" && route === "file") {
         const filePath = service.resolveOutputFile(url.searchParams.get("id"), url.searchParams.get("kind"));
         if (!filePath) sendJson(res, 404, { ok: false, message: "输出文件不存在。" });
-        else sendFile(res, filePath, { download: url.searchParams.get("download") === "1" });
+        else sendFile(req, res, filePath, { download: url.searchParams.get("download") === "1" });
         return true;
       }
       if (req.method === "POST" && route === "create") {
