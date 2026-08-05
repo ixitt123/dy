@@ -13,6 +13,7 @@
         "start-ui-hidden.vbs",
         "launch-ui.mjs",
         "test-launcher-missing-dependency.mjs",
+        "docs/repair/round2/research/R2-01.12.md",
         "docs/repair/round2/records/R2-01.12.md"
       ],
       "evidenceDir": ".data/repair-evidence/R2-01.12/",
@@ -30,6 +31,7 @@
         "server/core/ssrf-guard.mjs",
         "test-ip-address-leading-zero.mjs",
         "test-ssrf-guard.mjs",
+        "docs/repair/round2/research/R2-02.02.md",
         "docs/repair/round2/records/R2-02.02.md",
         "docs/repair/round2/master-register.md",
         "docs/repair/round2/assignments.json"

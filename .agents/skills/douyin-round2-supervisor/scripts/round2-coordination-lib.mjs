@@ -81,6 +81,7 @@ export function validateCoordination(policy, assignmentDocument, rows = []) {
     if (!Array.isArray(entry.allowedPaths) || !entry.allowedPaths.length || entry.allowedPaths.some((value) => !normalized(value))) problems.push(`${entry.itemId} requires non-empty allowedPaths`);
     if (!String(entry.evidenceDir || "").replaceAll("\\", "/").includes(`.data/repair-evidence/${entry.itemId}/`)) problems.push(`${entry.itemId} evidenceDir must be item-specific`);
     if (!String(entry.researchRecord || "").replaceAll("\\", "/").endsWith(`/research/${entry.itemId}.md`)) problems.push(`${entry.itemId} requires its own research record`);
+    if (!entry.allowedPaths?.some((candidate) => normalized(candidate) === normalized(entry.researchRecord))) problems.push(`${entry.itemId} researchRecord must be included in allowedPaths`);
     if (rows.length && !byRow.has(entry.itemId)) problems.push(`assignment references unknown item ${entry.itemId}`);
   }
 
