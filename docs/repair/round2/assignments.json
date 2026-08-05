@@ -1,13 +1,13 @@
 {
   "schemaVersion": 1,
-  "updatedBy": "A-control-baseline",
+  "updatedBy": "B",
   "primaryMachine": "B",
   "assignments": [
     {
       "itemId": "R2-01.12",
       "machine": "A",
       "complexity": "simple",
-      "status": "planned",
+      "status": "active",
       "branch": "repair/a-r2-01-12",
       "allowedPaths": [
         "start-ui-hidden.vbs",
@@ -23,7 +23,7 @@
       "itemId": "R2-02.02",
       "machine": "B",
       "complexity": "complex",
-      "status": "planned",
+      "status": "active",
       "branch": "repair/b-r2-02-02",
       "allowedPaths": [
         "package.json",
@@ -39,5 +39,6 @@
       "evidenceDir": ".data/repair-evidence/R2-02.02/",
       "researchRecord": "docs/repair/round2/research/R2-02.02.md"
     }
-  ]
+  ],
+  "updatedAt": "2026-08-05T02:30:06.350Z"
 }
