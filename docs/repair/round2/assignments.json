@@ -37,10 +37,10 @@
     },
     {
       "itemId": "R2-01.14",
-      "machine": "A",
+      "machine": "B",
       "complexity": "simple",
-      "status": "active",
-      "branch": "repair/a-r2-01-14",
+      "status": "planned",
+      "branch": "repair/b-r2-01-14",
       "allowedPaths": [
         "start-ui-hidden.vbs",
         "launch-ui.mjs",
@@ -111,5 +111,5 @@
       "researchRecord": "docs/repair/round2/research/R2-02.04.md"
     }
   ],
-  "updatedAt": "2026-08-05T07:23:32.925Z"
+  "updatedAt": "2026-08-05T07:28:00.000Z"
 }
