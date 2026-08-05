@@ -178,7 +178,27 @@
       ],
       "evidenceDir": ".data/repair-evidence/R2-01.02/",
       "researchRecord": "docs/repair/round2/research/R2-01.02.md"
+    },
+    {
+      "itemId": "R2-01.03",
+      "machine": "B",
+      "complexity": "simple",
+      "status": "active",
+      "branch": "repair/b-r2-01-03",
+      "allowedPaths": [
+        "server/tts/",
+        "ui/modules/tts-handoff-store.js",
+        "ui/modules/legacy-runtime.js",
+        "ui/workbench.js",
+        "ui-server.mjs",
+        "test-tts-bundle-labels.mjs",
+        "test-tts-bgm-persistence.mjs",
+        "docs/repair/round2/research/R2-01.03.md",
+        "docs/repair/round2/records/R2-01.03.md"
+      ],
+      "evidenceDir": ".data/repair-evidence/R2-01.03/",
+      "researchRecord": "docs/repair/round2/research/R2-01.03.md"
     }
   ],
-  "updatedAt": "2026-08-05T10:30:09.331Z"
+  "updatedAt": "2026-08-05T10:40:02.043Z"
 }
