@@ -153,6 +153,16 @@
       "receiptPath": "docs/repair/round2/evidence-receipts/R2-01.04.json",
       "receiptSha256": "1513c5cc19b817fe9d89de3ba4d2a6ec297e7a5e60fd3199e97b23b58ab0db7c",
       "manifestSha256": "4ba90394135c1a73d4a960904ca78a039bcafb3ebe9addb01c597a4da409a9d9"
+    },
+    {
+      "itemId": "R2-01.07",
+      "originMachine": "B",
+      "availability": "origin-machine-local-not-synchronized",
+      "recordedAtCommit": "747b0bc3437ff626a74a877ee0e53244548d8c45",
+      "evidencePath": "D:\\cs1\\dy-b-primary-20260805-102410\\.data\\repair-evidence\\R2-01.07\\20260805-194256\\attempt-1",
+      "receiptPath": "docs/repair/round2/evidence-receipts/R2-01.07.json",
+      "receiptSha256": "80bb85a9fbd50af36dd24b9eb15df8d88bc54f8ed7b234f20299cb850327c8ed",
+      "manifestSha256": "535350ee69c520c318edb7224ef1c78a3fdc3a3cbe156d6bcdcd588b9b194d33"
     }
   ]
 }
