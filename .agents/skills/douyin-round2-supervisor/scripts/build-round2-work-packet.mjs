@@ -4,6 +4,7 @@ import path from "node:path";
 import { execFileSync, spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { getCurrentItem, getReadyQueue, parseRows, readPlan, resolvePlanPath } from "./round2-plan-lib.mjs";
+import { assignmentFor, option, readCoordination } from "./round2-coordination-lib.mjs";
 
 const args = process.argv.slice(2);
 const planPath = resolvePlanPath(args);
@@ -39,8 +40,19 @@ try {
 
   const planText = readPlan(planPath);
   const rows = parseRows(planText);
-  const current = getCurrentItem(rows);
+  const requestedItem = option(args, "--item");
+  const machine = option(args, "--machine").toUpperCase();
+  const current = requestedItem ? rows.find((row) => row.id === requestedItem) : getCurrentItem(rows);
   if (!current) stop("all round-two items are terminal; no work packet can be built");
+  let assignment = null;
+  if (!current.id.startsWith("R2-00.")) {
+    if (!new Set(["A", "B"]).has(machine)) stop("business work packets require --machine A or --machine B");
+    const coordination = readCoordination(args);
+    assignment = assignmentFor(coordination.assignmentDocument, current.id, machine);
+    if (!assignment) stop(`item ${current.id} is not assigned to machine ${machine}`);
+    const ready = getReadyQueue(rows).some((row) => row.id === current.id);
+    if (!ready && !new Set(["进行中", "待复验"]).has(current.state)) stop(`item ${current.id} is not dependency-ready or active`);
+  }
   const specDocument = JSON.parse(fs.readFileSync(specsPath, "utf8"));
   const spec = specDocument.items.find((item) => item.id === current.id);
   if (!spec) stop(`missing execution spec for ${current.id}`);
@@ -56,6 +68,8 @@ try {
 
   const baseline = {
     itemId: current.id,
+    machine: machine || "control",
+    assignment,
     generatedAt: now.toISOString(),
     planPath,
     planSha256: crypto.createHash("sha256").update(planText).digest("hex"),
@@ -80,6 +94,14 @@ try {
 > 依赖：${current.dependencies.join(",") || "无"}
 > 就绪队列：${baseline.readyQueue.join(",") || "无"}
 > 证据目录：${evidenceDir}
+> 执行电脑：${baseline.machine}
+> 分支与允许路径：${assignment ? `${assignment.branch}｜${assignment.allowedPaths.join("、")}` : "控制项按当前控制分支"}
+
+## 修改前强制研究
+
+- 业务源码修改前必须完成全网检索，优先官方文档、上游仓库和一手资料。
+- 研究记录必须写入：${assignment?.researchRecord || `docs/repair/round2/research/${current.id}.md`}
+- 未完成研究记录时，只能诊断和取证，不得修改业务源码。
 
 ## 完成判定
 

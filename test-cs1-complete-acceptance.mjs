@@ -119,6 +119,10 @@ assert.equal((await rangeResponse.arrayBuffer()).byteLength, 1024);
 const outputsResponse = await localFetch("/api/cs1-video/outputs");
 const outputs = await outputsResponse.json();
 assert.equal(outputs.outputs?.[0]?.filePath, four.payload.outputPath, "Refresh list did not restore latest final MP4");
+assert.ok(
+  (outputs.outputs || []).every((entry) => !/\.pre-bgm-\d+\.mp4$/iu.test(String(entry.name || entry.filePath || ""))),
+  "Refresh list must exclude recoverable pre-BGM source backups from formal final videos",
+);
 
 const threeProbe = probe(threeEvidence);
 const fourProbe = probe(fourEvidence);

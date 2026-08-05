@@ -6,7 +6,7 @@ import {
   ACTIVE_STATES,
   acquirePlanLock,
   atomicReplacePlan,
-  getCurrentItem,
+  dependenciesAreTerminal,
   parseRows,
   readPlan,
   replaceRow,
@@ -16,6 +16,7 @@ import {
   validateHumanConfirmationPath,
 } from "./round2-plan-lib.mjs";
 import { requiredGatesForMode } from "./round2-spec-lib.mjs";
+import { assertMasterWriter, readCoordination } from "./round2-coordination-lib.mjs";
 
 const args = process.argv.slice(2);
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
@@ -35,6 +36,9 @@ function stop(message) {
 
 try {
   const itemId = option("--item");
+  const machine = option("--machine").toUpperCase();
+  const coordination = readCoordination(args);
+  assertMasterWriter(coordination.policy, machine, itemId);
   if (!/^R2-\d{2}\.\d{2}$/.test(itemId)) stop("--item must be a second-round id such as R2-00.03");
   const specsPath = path.resolve(option("--specs") || path.join(scriptDir, "..", "references", "round2-execution-specs.json"));
   if (!fs.existsSync(specsPath)) stop(`missing execution specs: ${specsPath}`);
@@ -62,8 +66,8 @@ try {
   const rows = parseRows(original);
   const row = rows.find((candidate) => candidate.id === itemId);
   if (!row) stop(`unknown round-two item: ${itemId}`);
-  const current = getCurrentItem(rows);
-  if (!current || current.id !== itemId || !ACTIVE_STATES.has(row.state)) stop(`item ${itemId} must be the active item before completion`);
+  if (!ACTIVE_STATES.has(row.state)) stop(`item ${itemId} must be active before completion`);
+  if (!dependenciesAreTerminal(row, rows)) stop(`item ${itemId} does not have terminal dependencies`);
   if (row.attempts >= 4) stop(`item ${itemId} has no remaining completion attempt`);
   let resolvedHumanEvidence = "";
   if (row.manual) {

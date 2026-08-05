@@ -16,6 +16,18 @@ assert.match(source, /test-xiaohei-video-render\.mjs/u, "media category must inc
 assert.match(source, /test-kinetic-text-render-smoke\.mjs/u, "media category must include Kinetic renderer coverage");
 assert.doesNotMatch(source, /cmd:\s*"npm\.cmd"/u, "release gate must not use a Windows command wrapper as a direct spawn executable");
 assert.match(source, /name:\s*"security"/u, "security must be a separate release-gate category");
+for (const file of [
+  "test-error-code-http.mjs",
+  "test-error-code-integration.mjs",
+  "test-image-delete-boundary.mjs",
+  "test-settings-concurrency.mjs",
+  "test-task-export-xlsx-browser.mjs",
+  "test-ui-server-read-observability.mjs",
+  "test-ui-server-streamed-file-response.mjs",
+  "test-xlsx-export-compatibility.mjs",
+]) {
+  assert.match(source, new RegExp(file.replaceAll(".", "\\."), "u"), `release gate must include ${file}`);
+}
 
 const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "release-gate-scope-"));
 const reportPath = path.join(tempRoot, "external-report.json");

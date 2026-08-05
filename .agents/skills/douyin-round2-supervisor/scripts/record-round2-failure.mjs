@@ -6,7 +6,7 @@ import {
   ACTIVE_STATES,
   acquirePlanLock,
   atomicReplacePlan,
-  getCurrentItem,
+  dependenciesAreTerminal,
   getReadyQueue,
   parseRows,
   readPlan,
@@ -15,6 +15,7 @@ import {
   sanitizeSummary,
   validateFailureEvidencePath,
 } from "./round2-plan-lib.mjs";
+import { assertMasterWriter, readCoordination } from "./round2-coordination-lib.mjs";
 
 const args = process.argv.slice(2);
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
@@ -32,6 +33,7 @@ function stop(message) {
 }
 
 const itemId = option("--item");
+const machine = option("--machine").toUpperCase();
 const evidence = option("--evidence");
 const summary = sanitizeSummary(option("--summary"));
 const specs = option("--specs");
@@ -40,6 +42,8 @@ if (!evidence) stop("--evidence is required");
 if (!summary) stop("--summary is required");
 
 try {
+  const coordination = readCoordination(args);
+  assertMasterWriter(coordination.policy, machine, itemId);
   const evidenceRecord = validateFailureEvidencePath(itemId, evidence);
   const evidencePath = evidenceRecord.resolved;
   const original = readPlan(planPath);
@@ -49,9 +53,8 @@ try {
   if (row.attempts >= 4 || row.state === "四次失败待最终收尾") {
     stop(`item ${itemId} already reached 4/4; a fifth ordinary repair is forbidden`);
   }
-  const current = getCurrentItem(rows);
-  if (!current || current.id !== itemId) stop(`item ${itemId} is not the current allowed item`);
   if (!ACTIVE_STATES.has(row.state)) stop(`item ${itemId} must be active before recording failure; current state=${row.state}`);
+  if (!dependenciesAreTerminal(row, rows)) stop(`item ${itemId} does not have terminal dependencies`);
 
   const attempt = row.attempts + 1;
   const terminal = attempt === 4;

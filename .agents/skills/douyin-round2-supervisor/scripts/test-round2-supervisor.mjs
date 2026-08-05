@@ -14,13 +14,21 @@ import {
   validateCompletionEvidencePath,
   validateHardGateCompletion,
 } from "./round2-plan-lib.mjs";
+import {
+  assertMasterWriter,
+  pathsOverlap,
+  readCoordination,
+  validateCoordination,
+} from "./round2-coordination-lib.mjs";
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const checker = path.join(scriptDir, "check-round2-plan.mjs");
 const packetBuilder = path.join(scriptDir, "build-round2-work-packet.mjs");
 const failureRecorder = path.join(scriptDir, "record-round2-failure.mjs");
 const completionRecorder = path.join(scriptDir, "record-round2-completion.mjs");
+const assignmentActivator = path.join(scriptDir, "activate-round2-assignments.mjs");
 const planLibrary = path.join(scriptDir, "round2-plan-lib.mjs");
+const coordinationLibrary = path.join(scriptDir, "round2-coordination-lib.mjs");
 const planPath = resolvePlanPath(process.argv.slice(2));
 const specsPath = path.join(scriptDir, "..", "references", "round2-execution-specs.json");
 const firstRoundPath = path.join(os.homedir(), "Desktop", "01-短视频软件彻底修复执行总表.md");
@@ -72,14 +80,16 @@ try {
   const planText = readPlan(planPath);
   const specs = JSON.parse(fs.readFileSync(specsPath, "utf8"));
   const rows = parseRows(planText);
-  check(rows.length === 72 && specs.items.length === 72, "72 repair rows and 72 execution specifications exist");
-  check(new Set(rows.map((row) => row.id)).size === 72 && new Set(specs.items.map((item) => item.id)).size === 72, "all row and specification ids are unique");
+  check(rows.length === 73 && specs.items.length === 73, "73 repair rows and 73 execution specifications exist");
+  check(new Set(rows.map((row) => row.id)).size === 73 && new Set(specs.items.map((item) => item.id)).size === 73, "all row and specification ids are unique");
 
   const normal = run(checker, ["--plan", planPath, "--specs", specsPath]);
-  check(normal.status === 0 && normal.stdout.includes("items=72"), "current second-round plan passes independently of which item is current", `${normal.stdout}${normal.stderr}`);
+  check(normal.status === 0 && normal.stdout.includes("items=73"), "current second-round plan passes independently of which item is current", `${normal.stdout}${normal.stderr}`);
 
   let synthetic = withoutItemLogs(planText, "R2-00.03");
   synthetic = forceRow(synthetic, "R2-00.03", { state: "进行中", attempts: 0 });
+  synthetic = forceRow(synthetic, "R2-00.04", { state: "未开始", attempts: 0 });
+  synthetic = forceRow(synthetic, "R2-00.06", { state: "未开始", attempts: 0 });
   const syntheticPlan = path.join(tempRoot, "synthetic-plan.md");
   fs.writeFileSync(syntheticPlan, synthetic, "utf8");
   const packetPath = path.join(tempRoot, "packet", "current-work-packet.md");
@@ -132,12 +142,12 @@ try {
     evidenceFiles: ["evidence.md", "completion-gates.json"].map((file) => ({ path: file, sha256: sha256(path.join(completionDir, file)) })),
     rollbackEvidence: ["evidence.md"],
   }, null, 2)}\n`, "utf8");
-  const completed = run(completionRecorder, ["--plan", completionPlan, "--specs", specsPath, "--item", "R2-00.03", "--evidence", completionDir, "--gates", gatesPath, "--summary", "独立四次状态机与72项规格全部复验通过"]);
+  const completed = run(completionRecorder, ["--plan", completionPlan, "--specs", specsPath, "--item", "R2-00.03", "--evidence", completionDir, "--gates", gatesPath, "--summary", "独立四次状态机与73项规格全部复验通过"]);
   const completionText = fs.readFileSync(completionPlan, "utf8");
   check(completed.status === 0 && completionText.includes("| `R2-00.03` | 控制 | 完成 | 1/4 |") && completionText.includes("#### EVIDENCE-R2-00.03｜七道门"), "completion recorder requires gates and writes a validated completion record", `${completed.stdout}${completed.stderr}`);
 
   const missingSpecPath = path.join(tempRoot, "missing-spec.json");
-  fs.writeFileSync(missingSpecPath, `${JSON.stringify({ ...specs, itemCount: 71, items: specs.items.slice(1) }, null, 2)}\n`, "utf8");
+  fs.writeFileSync(missingSpecPath, `${JSON.stringify({ ...specs, itemCount: 72, items: specs.items.slice(1) }, null, 2)}\n`, "utf8");
   const missing = run(checker, ["--plan", planPath, "--specs", missingSpecPath]);
   check(missing.status !== 0 && `${missing.stdout}${missing.stderr}`.includes("missing execution spec"), "checker rejects a missing execution card and RUN specification");
   const stalePath = path.join(tempRoot, "stale-spec.json");
@@ -161,6 +171,7 @@ try {
 
   const byId = new Map(specs.items.map((item) => [item.id, item]));
   check(byId.get("R2-00.03").run.testToAdd.includes("test-round2-supervisor.mjs")
+    && byId.get("R2-00.06").run.testToAdd.includes("test-round2-supervisor.mjs")
     && byId.get("R2-01.01").run.testToAdd === "test-tts-auto-preview.mjs"
     && byId.get("R2-02.05").run.testToAdd === "test-hono-cors-redos.mjs"
     && byId.get("R2-02.06").run.testToAdd === "test-brace-expansion-dos.mjs"
@@ -198,8 +209,32 @@ try {
   }
   check(injectionRejected, "placeholder values cannot inject shell control operators into completion commands");
 
-  const coreScripts = [checker, packetBuilder, failureRecorder, completionRecorder, planLibrary].map((file) => fs.readFileSync(file, "utf8")).join("\n");
-  check(!coreScripts.includes("01-短视频软件彻底修复执行总表") && coreScripts.includes("02-短视频软件第二轮彻底修复执行总表.md"), "round-two tools never default to or mutate the first-round register");
+  const coordination = readCoordination([]);
+  check(validateCoordination(coordination.policy, coordination.assignmentDocument, rows).length === 0, "B-primary dual-machine policy and planned assignments are valid");
+  check(pathsOverlap("ui/modules", "ui/modules/tts.js") && !pathsOverlap("launch-ui.mjs", "server/core/ssrf-guard.mjs"), "path ownership detects directory overlap without false overlap across separate files");
+  let aWriterRejected = false;
+  try { assertMasterWriter(coordination.policy, "A", "R2-01.12"); } catch (error) { aWriterRejected = error.message.includes("cannot write the master register"); }
+  check(aWriterRejected, "A cannot write the authoritative business register");
+  const overlappingAssignments = structuredClone(coordination.assignmentDocument);
+  for (const entry of overlappingAssignments.assignments) entry.status = "active";
+  overlappingAssignments.assignments[1].allowedPaths.push("launch-ui.mjs");
+  check(validateCoordination(coordination.policy, overlappingAssignments, rows).some((problem) => problem.includes("overlap")), "two active machines cannot own overlapping paths");
+
+  const activationPlan = path.join(tempRoot, "activation-plan.md");
+  const activationAssignments = path.join(tempRoot, "assignments.json");
+  fs.writeFileSync(activationPlan, planText, "utf8");
+  fs.copyFileSync(coordination.assignmentsPath, activationAssignments);
+  const aActivation = run(assignmentActivator, ["--machine", "A", "--items", "R2-01.12,R2-02.02", "--plan", activationPlan, "--assignments", activationAssignments, "--policy", coordination.policyPath]);
+  check(aActivation.status !== 0 && `${aActivation.stdout}${aActivation.stderr}`.includes("only B may activate assignments"), "A cannot activate source assignments");
+  const bActivation = run(assignmentActivator, ["--machine", "B", "--items", "R2-01.12,R2-02.02", "--plan", activationPlan, "--assignments", activationAssignments, "--policy", coordination.policyPath]);
+  const activatedRows = parseRows(fs.readFileSync(activationPlan, "utf8"));
+  const activatedDocument = JSON.parse(fs.readFileSync(activationAssignments, "utf8"));
+  check(bActivation.status === 0
+    && ["R2-01.12", "R2-02.02"].every((id) => activatedRows.find((row) => row.id === id)?.state === "进行中")
+    && activatedDocument.assignments.every((entry) => entry.status === "active"), "B atomically activates the first non-overlapping A/B pair", `${bActivation.stdout}${bActivation.stderr}`);
+
+  const coreScripts = [checker, packetBuilder, failureRecorder, completionRecorder, assignmentActivator, planLibrary, coordinationLibrary].map((file) => fs.readFileSync(file, "utf8")).join("\n");
+  check(!coreScripts.includes("01-短视频软件彻底修复执行总表") && coreScripts.includes("master-register.md"), "round-two tools default to the repository master register and never mutate the first-round register");
   check(sha256(firstRoundPath) === firstHash, "first-round register hash remains unchanged by every round-two test");
 } finally {
   const resolved = path.resolve(tempRoot);

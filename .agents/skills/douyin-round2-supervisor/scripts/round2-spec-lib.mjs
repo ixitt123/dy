@@ -52,6 +52,7 @@ const ITEM_PROFILES = {
   "R2-00.03": { mode: "control", regression: "独立监督器自测必须证明第5次被拒绝且第一轮哈希不变", test: ".agents/skills/douyin-round2-supervisor/scripts/test-round2-supervisor.mjs", commands: ["pnpm.cmd run repair:r2:test-supervisor", "pnpm.cmd run repair:r2:check"] },
   "R2-00.04": { mode: "control", regression: "现有41项不能逐项隔离、超时和恢复服务时失败", test: "test-round2-complete-runner.mjs", commands: ["node test-round2-complete-runner.mjs", "node test-release-gate-scope.mjs"] },
   "R2-00.05": { mode: "control", regression: "不适用：能力预检以真实安装和阻塞登记为判据", test: "不新增：分别运行 Skill quick_validate 和浏览器能力探针", commands: ["pnpm.cmd run repair:r2:check", "node test-browser-behavior-scope.mjs"] },
+  "R2-00.06": { mode: "control", regression: "旧规则仍允许 A 写总表/合并、A 超过2次、双机路径重叠或业务项未先研究", test: ".agents/skills/douyin-round2-supervisor/scripts/test-round2-supervisor.mjs", commands: ["pnpm.cmd run repair:r2:test-supervisor", "pnpm.cmd run repair:r2:check"] },
   "R2-01.01": { mode: "browser-real", test: "test-tts-auto-preview.mjs", commands: ["node test-tts-auto-preview.mjs"] },
   "R2-01.02": { mode: "browser-real", test: "test-tts-bgm-option.mjs", commands: ["node test-tts-bgm-option.mjs", "node test-tts-bgm-persistence.mjs"] },
   "R2-01.03": { mode: "browser-real", test: "test-tts-bundle-labels.mjs", commands: ["node test-tts-bundle-labels.mjs", "node test-tts-bgm-persistence.mjs"] },

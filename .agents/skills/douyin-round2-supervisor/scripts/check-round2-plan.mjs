@@ -16,6 +16,7 @@ import {
   validateHumanConfirmationPath,
 } from "./round2-plan-lib.mjs";
 import { buildExecutionSpecs, planDefinitionFingerprint, requiredGatesForMode } from "./round2-spec-lib.mjs";
+import { ACTIVE_ASSIGNMENT_STATES, readCoordination, validateCoordination } from "./round2-coordination-lib.mjs";
 
 const args = process.argv.slice(2);
 const planPath = resolvePlanPath(args);
@@ -39,7 +40,7 @@ function requireText(value, label) {
 try {
   const text = readPlan(planPath);
   const rows = parseRows(text);
-  if (rows.length !== 72) problems.push(`expected 72 repair rows, found ${rows.length}`);
+  if (rows.length !== 73) problems.push(`expected 73 repair rows, found ${rows.length}`);
 
   const seen = new Set();
   for (const row of rows) {
@@ -128,9 +129,20 @@ try {
   problems.push(...validateHardGateCompletion(rows));
 
   const active = rows.filter((row) => ACTIVE_STATES.has(row.state));
-  if (active.length > 1) problems.push(`more than one active item: ${active.map((row) => row.id).join(", ")}`);
-  if (active.length === 1) {
-    if (!dependenciesAreTerminal(active[0], rows)) problems.push(`active item ${active[0].id} does not have terminal dependencies`);
+  if (active.length > 2) problems.push(`more than two active items: ${active.map((row) => row.id).join(", ")}`);
+  for (const row of active) {
+    if (!dependenciesAreTerminal(row, rows)) problems.push(`active item ${row.id} does not have terminal dependencies`);
+  }
+
+  const coordination = readCoordination(args);
+  problems.push(...validateCoordination(coordination.policy, coordination.assignmentDocument, rows));
+  const activeBusinessRows = active.filter((row) => !row.id.startsWith("R2-00."));
+  const activeAssignments = coordination.assignmentDocument.assignments.filter((entry) => ACTIVE_ASSIGNMENT_STATES.has(entry.status));
+  for (const row of activeBusinessRows) {
+    if (!activeAssignments.some((entry) => entry.itemId === row.id)) problems.push(`active business item ${row.id} requires an active machine assignment`);
+  }
+  for (const assignment of activeAssignments) {
+    if (!activeBusinessRows.some((row) => row.id === assignment.itemId)) problems.push(`active assignment ${assignment.itemId}/${assignment.machine} requires an active plan row`);
   }
 
   if (!fs.existsSync(specsPath)) {
@@ -143,7 +155,7 @@ try {
       problems.push(`invalid execution specs JSON: ${error.message}`);
     }
     if (specs) {
-      if (specs.itemCount !== 72 || specs.items?.length !== 72) problems.push("execution specs must contain exactly 72 items");
+      if (specs.itemCount !== 73 || specs.items?.length !== 73) problems.push("execution specs must contain exactly 73 items");
       if (specs.definitionSha256 !== planDefinitionFingerprint(rows)) problems.push("execution specs do not match the current plan definition");
       if (JSON.stringify(specs.items) !== JSON.stringify(buildExecutionSpecs(rows))) problems.push("execution specs are stale relative to the current specification templates; regenerate them");
       const specIds = new Set();
@@ -179,7 +191,7 @@ try {
   const ready = getReadyQueue(rows);
   const stateCounts = Object.fromEntries([...ALLOWED_STATES].map((state) => [state, rows.filter((row) => row.state === state).length]));
   console.log(`[round2-plan] OK: ${planPath}`);
-  console.log(`[round2-plan] items=${rows.length} active=${active[0]?.id || "none"} ready=${ready.map((row) => row.id).join(",") || "none"}`);
+  console.log(`[round2-plan] items=${rows.length} active=${active.map((row) => row.id).join(",") || "none"} ready=${ready.map((row) => row.id).join(",") || "none"}`);
   console.log(`[round2-plan] states=${JSON.stringify(stateCounts)}`);
   console.log(`[round2-plan] specs=${specsPath}`);
 } catch (error) {

@@ -1,10 +1,12 @@
 import fs from "node:fs";
 import crypto from "node:crypto";
-import os from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 export const PLAN_FILENAME = "02-短视频软件第二轮彻底修复执行总表.md";
-export const DEFAULT_PLAN_PATH = path.join(os.homedir(), "Desktop", PLAN_FILENAME);
+const scriptDir = path.dirname(fileURLToPath(import.meta.url));
+export const REPO_ROOT = path.resolve(scriptDir, "..", "..", "..", "..");
+export const DEFAULT_PLAN_PATH = path.join(REPO_ROOT, "docs", "repair", "round2", "master-register.md");
 export const ALLOWED_STATES = new Set([
   "未开始",
   "进行中",

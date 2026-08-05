@@ -14,10 +14,10 @@ const outputPath = path.resolve(outputIndex >= 0 && args[outputIndex + 1]
 
 try {
   const rows = parseRows(readPlan(planPath));
-  if (rows.length !== 72) throw new Error(`expected 72 rows, found ${rows.length}`);
+  if (rows.length !== 73) throw new Error(`expected 73 rows, found ${rows.length}`);
   const document = {
     schemaVersion: 1,
-    plan: "02-短视频软件第二轮彻底修复执行总表.md",
+    plan: "docs/repair/round2/master-register.md",
     definitionSha256: planDefinitionFingerprint(rows),
     generatedBy: ".agents/skills/douyin-round2-supervisor/scripts/build-round2-specs.mjs",
     itemCount: rows.length,

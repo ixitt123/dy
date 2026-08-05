@@ -54,19 +54,31 @@ const CATEGORIES = [
       test("test-production-media-line-binding-scope.mjs", "生产线媒体绑定范围"),
       test("test-service-restart-scope.mjs", "重启证明范围"),
       test("test-release-gate-scope.mjs", "发布门禁防回退"),
+      test("test-error-code-integration.mjs", "错误码生产集成"),
+      test("test-image-delete-boundary.mjs", "图片删除边界"),
+      test("test-settings-concurrency.mjs", "设置并发与单写入者"),
+      test("test-ui-server-read-observability.mjs", "UI 服务读取可观测性"),
+      test("test-ui-server-streamed-file-response.mjs", "UI 服务流式文件响应"),
+      test("test-xlsx-export-compatibility.mjs", "XLSX 导出兼容"),
     ],
   },
   {
     name: "http",
     label: "HTTP/源码契约测试",
     requiresUi: true,
-    tests: [test("test-http-contract.mjs", "HTTP/源码契约")],
+    tests: [
+      test("test-http-contract.mjs", "HTTP/源码契约"),
+      test("test-error-code-http.mjs", "错误码 HTTP 契约"),
+    ],
   },
   {
     name: "browser",
     label: "真实浏览器测试",
     requiresUi: true,
-    tests: [test("test-browser-smoke.mjs", "Chrome CDP 真实控件与刷新")],
+    tests: [
+      test("test-browser-smoke.mjs", "Chrome CDP 真实控件与刷新"),
+      test("test-task-export-xlsx-browser.mjs", "浏览器 XLSX 任务导出"),
+    ],
   },
   {
     name: "media",

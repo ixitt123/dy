@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "primaryMachine": "B",
+  "masterRegisterWriters": ["B"],
+  "baselineMergeAuthorities": ["B"],
+  "assignmentWriters": ["B"],
+  "maxParallelSourceItems": 2,
+  "attemptLimits": {
+    "A": 2,
+    "BDirect": 4,
+    "totalPerItem": 4
+  },
+  "researchBeforeSourceChange": true,
+  "manualInterventionDeferMinutes": 5,
+  "sync": {
+    "include": ["source", "tests", "non-sensitive repair documents"],
+    "exclude": ["settings.json", ".data", "downloads", "node_modules", "SQLite", "API keys", "secrets", "cookies", "tokens", "local media", "exports"]
+  },
+  "forbiddenAutomation": ["pull", "rebase", "merge", "force-push", "git add -A"]
+}

@@ -1,9 +1,9 @@
 {
   "schemaVersion": 1,
-  "plan": "02-短视频软件第二轮彻底修复执行总表.md",
-  "definitionSha256": "79354ab99b255527a7004e8b62535b352b7f5578754e4e688a381b908291d43e",
+  "plan": "docs/repair/round2/master-register.md",
+  "definitionSha256": "b9f4decd6e286c64d9077ca5ca56640cd30d1098b0382b85a0b350be99e92918",
   "generatedBy": ".agents/skills/douyin-round2-supervisor/scripts/build-round2-specs.mjs",
-  "itemCount": 72,
+  "itemCount": 73,
   "items": [
     {
       "id": "R2-00.01",
@@ -244,6 +244,53 @@
         "testToAdd": "不新增：分别运行 Skill quick_validate 和浏览器能力探针",
         "requiredEvidence": "两项官方 Skill 已安装、三项项目 Skill 已创建并全局安装且校验通过；Playwright 阻塞原因已登记且不阻塞现有 Chrome CDP 维修",
         "evidenceDir": ".data/repair-evidence/R2-00.05/<YYYYMMDD-HHMMSS>/"
+      }
+    },
+    {
+      "id": "R2-00.06",
+      "card": {
+        "scope": "控制｜建立 B 主机双机并行控制基线",
+        "verificationMode": "control",
+        "orderedActions": [
+          "冻结 R2-00.06 开工时的 Git、运行状态、输入与输出证据",
+          "沿 package.json、.agents/skills/、scripts/、scripts/release-gate.mjs、scripts/service-restart.mjs、docs/ 定位真实状态所有者和调用链",
+          "建立失败判据：旧规则仍允许 A 写总表/合并、A 超过2次、双机路径重叠或业务项未先研究",
+          "逐项复验完成判定：总表与维修记录迁入仓库；B 唯一写表和合并；A 最多 2 次、B 总计最多 4 次；双机最多两项且路径不重叠；每项先全网研究；失败详细交接；敏感和本地数据不上传；监督器自动拒绝冲突、越权和第 5 次",
+          "执行目标回归、完整门禁，并把真实产物写入 .data/repair-evidence/R2-00.06/<YYYYMMDD-HHMMSS>/"
+        ],
+        "failingRegression": "旧规则仍允许 A 写总表/合并、A 超过2次、双机路径重叠或业务项未先研究",
+        "targetedChecks": [
+          "pnpm.cmd run repair:r2:test-supervisor",
+          "pnpm.cmd run repair:r2:check",
+          "pnpm.cmd run check:gate"
+        ],
+        "realEvidence": "必须保存与“总表与维修记录迁入仓库；B 唯一写表和合并；A 最多 2 次、B 总计最多 4 次；双机最多两项且路径不重叠；每项先全网研究；失败详细交接；敏感和本地数据不上传；监督器自动拒绝冲突、越权和第 5 次”直接对应的真实输出、日志、页面或媒体证据，不能用代码存在代替。",
+        "prohibitedShortcuts": [
+          "不得以提示词、延时、默认值、假数据或静态断言掩盖根因",
+          "不得修改第一轮总表、第一轮证据或第一轮两次状态机",
+          "不得触碰 MoneyPrinterTurbo 子模块内部；相关项只改主程序集成边界",
+          "不得把四次失败待最终收尾计为完成或满足硬门禁"
+        ],
+        "rollback": "只回滚本项目明确列出的本轮文件；先保护用户数据、历史输出、设置、SQLite、证据和子模块指针。",
+        "escalation": "连续第 4 次完整维修复验仍失败时登记为四次失败待最终收尾并推进；禁止第 5 次普通维修。"
+      },
+      "run": {
+        "sourceAnchors": [
+          "package.json",
+          ".agents/skills/",
+          "scripts/",
+          "scripts/release-gate.mjs",
+          "scripts/service-restart.mjs",
+          "docs/"
+        ],
+        "commands": [
+          "pnpm.cmd run repair:r2:test-supervisor",
+          "pnpm.cmd run repair:r2:check",
+          "pnpm.cmd run check:gate"
+        ],
+        "testToAdd": ".agents/skills/douyin-round2-supervisor/scripts/test-round2-supervisor.mjs",
+        "requiredEvidence": "总表与维修记录迁入仓库；B 唯一写表和合并；A 最多 2 次、B 总计最多 4 次；双机最多两项且路径不重叠；每项先全网研究；失败详细交接；敏感和本地数据不上传；监督器自动拒绝冲突、越权和第 5 次",
+        "evidenceDir": ".data/repair-evidence/R2-00.06/<YYYYMMDD-HHMMSS>/"
       }
     },
     {
