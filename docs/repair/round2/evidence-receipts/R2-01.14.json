@@ -1,0 +1,60 @@
+{
+  "schemaVersion": 1,
+  "itemId": "R2-01.14",
+  "originMachine": "B",
+  "availability": "origin-machine-local-not-synchronized",
+  "originalEvidencePath": "D:\\cs1\\dy-b-primary-20260805-102410\\.data\\repair-evidence\\R2-01.14\\20260805-154018\\attempt-2",
+  "sourceRepairCommit": "ce7f843a6120046a46f3a84def5a93f9c4a30839",
+  "completionManifestSha256": "e1cb0fe322572ae56ffda7e45854270c382f9b6fe162bfc3af9ef0e01500dfbe",
+  "receiptGeneratedAt": "2026-08-05T08:02:00.000Z",
+  "completionManifest": {
+    "itemId": "R2-01.14",
+    "verificationMode": "automated",
+    "completedVerification": true,
+    "completedAt": "2026-08-05T08:00:00.000Z",
+    "commands": [
+      {
+        "expectedCommand": "node test-launcher-project-identity.mjs",
+        "command": "node test-launcher-project-identity.mjs",
+        "exitCode": 0,
+        "outputPath": "01-project-identity.log",
+        "outputSha256": "cf13ae4313043f86de532e380689881da94415b47337857524492efe8da69a2e"
+      },
+      {
+        "expectedCommand": "pnpm.cmd run check:gate",
+        "command": "pnpm.cmd run check:gate",
+        "exitCode": 0,
+        "outputPath": "07-check-gate.log",
+        "outputSha256": "1ed295df677bb843e56c97c47e44abf4aaf48926d1cab15195e11bb0a2f60713"
+      }
+    ],
+    "evidenceFiles": [
+      { "path": "01-project-identity.log", "sha256": "cf13ae4313043f86de532e380689881da94415b47337857524492efe8da69a2e" },
+      { "path": "02-log-rotation.log", "sha256": "adf72d2f5a1d4c3bf735312fe849188f7e5bc10ac630b45514f62ce9eaffce63" },
+      { "path": "03-missing-dependency.log", "sha256": "3895e4b23e116b9aa2ed92f90e14f00aa369feda56cda9f31a2285711fab463a" },
+      { "path": "04-page-lifecycle.log", "sha256": "b6c75977c6b2b61f7be11c7ebe1276892b2cbfc9991426ade5cec933c42d9b60" },
+      { "path": "05-round2-check.log", "sha256": "6f215c6e2e3962b6a9c5cb37ced775e5a2a591b905e0a8e328851ed80a7e5bc1" },
+      { "path": "06-supervisor.log", "sha256": "b6d7b97ad554493c36f1aebd0c67f86d3a0dd9cba0bffc28b2457dcd63607292" },
+      { "path": "07-check-gate.log", "sha256": "1ed295df677bb843e56c97c47e44abf4aaf48926d1cab15195e11bb0a2f60713" },
+      { "path": "08-diff-check.log", "sha256": "972cf93989cabe896bcb6fb6089fbae81ad480c33657b725bd9699c50ff6d28f" },
+      { "path": "identity/launcher-project-identity.json", "sha256": "b49428c5febe03e6f3e30b2c804e46d5f742eef6f6b8d132234dbf356eb43c27" },
+      { "path": "r2-01-12-compat/launcher-fixtures.json", "sha256": "8aa97779636c6b5002397a75de548866fb998c5f528b058982481fc3f977dea1" },
+      { "path": "r2-01-13-compat/launcher-log-verification.json", "sha256": "a06ab7134a7a7f47c8d3b91e4f60e5687d6edf5fe8f432a341f89cba1cda3e20" },
+      { "path": "completion-gates.json", "sha256": "e111cfa7c0c224107b3213fc407d87a6ef0800106e912d164d13047bd4b19e12" },
+      { "path": "verification-summary.md", "sha256": "178e380683601aca2266ca345cbc742b248e24ce7bde6c28ab588f6c9be94e9e" },
+      { "path": "rollback-plan.md", "sha256": "b29a80569c601afaf42a41005e8d7664666d1ac60acbdbe2268b8d2c8d2e0f68" }
+    ],
+    "actualEvidence": [
+      "identity/launcher-project-identity.json",
+      "r2-01-13-compat/launcher-log-verification.json",
+      "verification-summary.md"
+    ],
+    "securityEvidence": [
+      "identity/launcher-project-identity.json",
+      "verification-summary.md"
+    ],
+    "rollbackEvidence": [
+      "rollback-plan.md"
+    ]
+  }
+}
