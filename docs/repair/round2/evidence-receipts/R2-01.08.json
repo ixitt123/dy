@@ -1,0 +1,67 @@
+{
+  "schemaVersion": 1,
+  "itemId": "R2-01.08",
+  "originMachine": "B",
+  "availability": "origin-machine-local-not-synchronized",
+  "originalEvidencePath": "D:\\cs1\\dy-b-primary-20260805-102410\\.data\\repair-evidence\\R2-01.08\\20260805-203127\\attempt-2",
+  "sourceRepairCommit": "7bd677ffbfdfb7c7d549c97577aaf4fac9441334",
+  "completionManifestSha256": "52288d08c16d95ebe5705e322e3f307e827864aa5cbc023b3c16ff2121af7336",
+  "receiptGeneratedAt": "2026-08-05T13:42:11.090Z",
+  "completionManifest": {
+    "itemId": "R2-01.08",
+    "verificationMode": "browser-real",
+    "completedVerification": true,
+    "completedAt": "2026-08-05T13:37:37.189Z",
+    "sourceRepairCommit": "7bd677ffbfdfb7c7d549c97577aaf4fac9441334",
+    "attempt": 2,
+    "commands": [
+      { "expectedCommand": "node test-money-printer-final-asset-browser.mjs", "command": "node test-money-printer-final-asset-browser.mjs", "exitCode": 0, "outputPath": "01-final-asset-browser.log", "outputSha256": "780732e47ad76e913cd52dad362f671523428168415cd389f5631c0407b011bb" },
+      { "expectedCommand": "node test-money-printer-restart-recovery.mjs", "command": "node test-money-printer-restart-recovery.mjs", "exitCode": 0, "outputPath": "02-restart-recovery.log", "outputSha256": "07a693e52de2c2c232d3bae3c8d99f432fb3240470562feb50b43f081cd6682a" },
+      { "expectedCommand": "pnpm.cmd run check:gate", "command": "pnpm.cmd run check:gate", "exitCode": 0, "outputPath": "03-check-gate.log", "outputSha256": "96fe522eb61ebfd88dc3e34b75289b3d053aafa7fa168bea4e6ef91ee7d58cb7" },
+      { "expectedCommand": "pnpm.cmd run repair:r2:check", "command": "pnpm.cmd run repair:r2:check", "exitCode": 0, "outputPath": "04-repair-r2-check.log", "outputSha256": "6fb9eba55a6f3abc7c968822abceac17cde5b1a2affa0791ea512dedbfc8e3ec" },
+      { "expectedCommand": "pnpm.cmd run repair:r2:test-supervisor", "command": "pnpm.cmd run repair:r2:test-supervisor", "exitCode": 0, "outputPath": "05-test-supervisor.log", "outputSha256": "e872063ef07f6d4c16606504a898b4981355d37ba6f263f8619cc146f34872fa" },
+      { "expectedCommand": "git diff --check", "command": "git diff --check", "exitCode": 0, "outputPath": "06-git-diff-check.log", "outputSha256": "c9c049ae62b2d88664253ba46d09c204b49aa9f371ee9654e1505f48865dabf8" }
+    ],
+    "evidenceFiles": [
+      { "path": "01-final-asset-browser.log", "sha256": "780732e47ad76e913cd52dad362f671523428168415cd389f5631c0407b011bb" },
+      { "path": "02-restart-recovery.log", "sha256": "07a693e52de2c2c232d3bae3c8d99f432fb3240470562feb50b43f081cd6682a" },
+      { "path": "03-check-gate.log", "sha256": "96fe522eb61ebfd88dc3e34b75289b3d053aafa7fa168bea4e6ef91ee7d58cb7" },
+      { "path": "04-repair-r2-check.log", "sha256": "6fb9eba55a6f3abc7c968822abceac17cde5b1a2affa0791ea512dedbfc8e3ec" },
+      { "path": "05-test-supervisor.log", "sha256": "e872063ef07f6d4c16606504a898b4981355d37ba6f263f8619cc146f34872fa" },
+      { "path": "06-git-diff-check.log", "sha256": "c9c049ae62b2d88664253ba46d09c204b49aa9f371ee9654e1505f48865dabf8" },
+      { "path": "07-moneyprinter-pointer.log", "sha256": "b99948e8af843b9d92db22d3bf683c8780fddf493c128dc216b65f7d16e8d466" },
+      { "path": "08-git-status-before-completion.log", "sha256": "667d38948bffa4869dd67451803fe9f2a9063a9971d6700503c2b4cb672fff3a" },
+      { "path": "09-service-restore.log", "sha256": "aa8e6390a528dbe23bef3b190297e85d8cbd8f646cb02403656caefb1ceb25fd" },
+      { "path": "10-fixture-cleanup.log", "sha256": "553630bc8306aa5d64eed8910b676eacf2c0e4b26471a9091341deffeb8aa7f6" },
+      { "path": "final-asset/browser/money-printer-final-preview-download.png", "sha256": "a180c1d55ae4161977015d7b2cdbf2ed529e07fa3a30dabcf408ef6ffb0d4a6e" },
+      { "path": "final-asset/downloads/r2-01-08-1785936624554-final-asset.mp4", "sha256": "2ad789c17169912e04c7da6d71db275da439b009e02c3973716d4e14a8fb268a" },
+      { "path": "final-asset/tests/money-printer-final-asset-browser.json", "sha256": "40e6282e91620a07f4c437200fde239a0623e55ebc2810500ad111d2528702e9" },
+      { "path": "restart/browser/money-printer-recovered-after-restart.png", "sha256": "07aead96d9c72c6fa38fe7d6be30519461cd3b918db4529fdb8c28c26d1bcde6" },
+      { "path": "restart/media/mpt-restart-recovered.mp4", "sha256": "2ad789c17169912e04c7da6d71db275da439b009e02c3973716d4e14a8fb268a" },
+      { "path": "restart/tests/money-printer-restart-recovery.json", "sha256": "a150c3ed0087dddd8169d6b3388cc5b6f215913eae6ab094e28c8db8b6117ec9" },
+      { "path": "completion-gates.json", "sha256": "ea765f29a7672297e3d9133a3c7289d31661136d6036420bae1fe68ef9954b2f" },
+      { "path": "verification-result.json", "sha256": "3aaa641e9a229e0212970f1d17eca65f564522f7fa157eb26f718f10475fb4a8" },
+      { "path": "verification-summary.md", "sha256": "73b90964662de597d441ef92a4f6a9c75c23c73267558be3261ac9c721c35dc4" },
+      { "path": "rollback-plan.md", "sha256": "31a3512496d5a3e9d6e17d5a1ee6980e76b6d498ca56722f25f8d99259215857" }
+    ],
+    "actualEvidence": [
+      "final-asset/tests/money-printer-final-asset-browser.json",
+      "final-asset/browser/money-printer-final-preview-download.png",
+      "final-asset/downloads/r2-01-08-1785936624554-final-asset.mp4",
+      "restart/tests/money-printer-restart-recovery.json",
+      "restart/browser/money-printer-recovered-after-restart.png",
+      "verification-summary.md"
+    ],
+    "securityEvidence": [
+      "final-asset/tests/money-printer-final-asset-browser.json",
+      "01-final-asset-browser.log",
+      "07-moneyprinter-pointer.log"
+    ],
+    "rollbackEvidence": [
+      "rollback-plan.md",
+      "09-service-restore.log",
+      "10-fixture-cleanup.log",
+      "restart/tests/money-printer-restart-recovery.json"
+    ]
+  }
+}
