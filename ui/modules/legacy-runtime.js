@@ -3984,6 +3984,8 @@ async function generateCleanEducationBgm(parentJob, text, { previewPromise = nul
           ...(preview.metadata || {}),
           parent_tts_job_id: parentJob.id,
           source_tts_job_id: parentJob.id,
+          bgm_relation_confirmed: true,
+          bgm_relation_source: "explicit_user_request",
           narration_duration: narrationDuration,
           requested_duration: targetDuration,
           tail_seconds: CLEAN_EDUCATION_BGM_TAIL_SECONDS,
@@ -4446,7 +4448,26 @@ function setTtsMainProgress(percent = 0, label = "") {
 }
 
 function ttsLinkedBgmParentId(job = {}) {
-  return String(job?.metadata?.parent_tts_job_id || job?.metadata?.source_tts_job_id || "").trim();
+  return String(
+    job?.parent_tts_job_id
+    || job?.source_tts_job_id
+    || job?.metadata?.parent_tts_job_id
+    || job?.metadata?.source_tts_job_id
+    || "",
+  ).trim();
+}
+
+function ttsBgmRequestedState(job = {}) {
+  const value = Object.prototype.hasOwnProperty.call(job, "bgm_requested")
+    ? job.bgm_requested
+    : job?.metadata?.bgm_requested;
+  if (value === true) return true;
+  if (value === false) return false;
+  return null;
+}
+
+function ttsBgmRelationConfirmed(job = {}) {
+  return (job?.bgm_relation_confirmed ?? job?.metadata?.bgm_relation_confirmed) === true;
 }
 
 function isTtsLinkedBgmJob(job = {}) {
@@ -4812,11 +4833,14 @@ async function refreshTtsJobs() {
 
 function indexTtsBgmJobs(jobs = []) {
   ttsBgmJobsByParentId.clear();
+  const jobsById = new Map(jobs.map((job) => [String(job?.id || ""), job]));
   for (const candidate of jobs) {
     const parentId = ttsLinkedBgmParentId(candidate);
-    if (parentId && ttsIsMusicJob(candidate) && !ttsBgmJobsByParentId.has(String(parentId))) {
-      ttsBgmJobsByParentId.set(String(parentId), candidate);
-    }
+    if (!parentId || !ttsIsMusicJob(candidate) || ttsBgmJobsByParentId.has(String(parentId))) continue;
+    const parentJob = jobsById.get(String(parentId));
+    if (!parentJob || ttsIsMusicJob(parentJob)) continue;
+    if (ttsBgmRequestedState(parentJob) === false && !ttsBgmRelationConfirmed(candidate)) continue;
+    ttsBgmJobsByParentId.set(String(parentId), candidate);
   }
 }
 
@@ -6076,6 +6100,7 @@ async function generateTts() {
         volume: Number(ttsVolume.value || 50),
         pitch: Number(ttsPitch.value || 1),
         format: ttsFormat.value,
+        bgm_requested: shouldGenerateBgm,
       }),
     });
     renderTtsRail(data.job);

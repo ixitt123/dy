@@ -816,6 +816,11 @@ export function createTtsService({
     const seoKeywords = Array.isArray(metadata.seo_keywords) ? metadata.seo_keywords : Array.isArray(metadata.seoKeywords) ? metadata.seoKeywords : [];
     const hashtags = Array.isArray(metadata.hashtags) ? metadata.hashtags : [];
     const title = String(metadata.title || metadata.seo_title || metadata.publish_title || platformTitles.douyin || "").trim();
+    const parentTtsJobId = Number(metadata.parent_tts_job_id || 0);
+    const sourceTtsJobId = Number(metadata.source_tts_job_id || 0);
+    const bgmRequested = Object.prototype.hasOwnProperty.call(metadata, "bgm_requested")
+      ? metadata.bgm_requested === true
+      : null;
     return {
       ...job,
       error: visibleError(job, metadata),
@@ -884,6 +889,10 @@ export function createTtsService({
       low_confidence_count: Number(metadata.low_confidence_count || 0),
       match_ratio: Number(metadata.match_ratio || 0),
       recognition_match_ratio: Number(metadata.recognition_match_ratio || metadata.alignment_best_asr_match_ratio || 0),
+      bgm_requested: bgmRequested,
+      parent_tts_job_id: Number.isInteger(parentTtsJobId) && parentTtsJobId > 0 ? parentTtsJobId : 0,
+      source_tts_job_id: Number.isInteger(sourceTtsJobId) && sourceTtsJobId > 0 ? sourceTtsJobId : 0,
+      bgm_relation_confirmed: metadata.bgm_relation_confirmed === true,
       progress: Math.max(0, Math.min(100, Number(metadata.progress || (job.status === "completed" ? 100 : 0)))),
       stage: String(metadata.stage || (job.status === "completed" ? "生成完成" : "")),
       duration: Number(metadata.audio_duration || metadata.duration || 0)
@@ -1650,6 +1659,7 @@ export function createTtsService({
         voice_asset_id: Number(input.voice_asset_id || 0),
         project_id: String(input.project_id || input.projectId || ""),
         source: String(input.source || ""),
+        bgm_requested: input.bgm_requested === true || input.include_bgm === true,
         selected_for_project: false,
         workflow_auto_director: input.workflow_auto_director !== false,
         default_voice_fallback: voiceSelection.usedFallback,
