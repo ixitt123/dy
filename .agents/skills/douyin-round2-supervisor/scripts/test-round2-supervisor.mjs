@@ -254,7 +254,7 @@ try {
 
   const activationPlan = path.join(tempRoot, "activation-plan.md");
   const activationAssignments = path.join(tempRoot, "assignments.json");
-  let activationReadyPlan = planText;
+  let activationReadyPlan = resetActiveBusinessRows(loggedBusinessPlan);
   for (const id of ["R2-01.12", "R2-02.02"]) activationReadyPlan = forceRow(activationReadyPlan, id, { state: "未开始", attempts: 0 });
   fs.writeFileSync(activationPlan, activationReadyPlan, "utf8");
   const activationReadyAssignments = structuredClone(coordination.assignmentDocument);
