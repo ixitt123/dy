@@ -16,6 +16,7 @@ import {
 } from "./round2-plan-lib.mjs";
 import {
   assertMasterWriter,
+  closeAssignment,
   pathsOverlap,
   readCoordination,
   validateCoordination,
@@ -243,6 +244,10 @@ try {
   check(injectionRejected, "placeholder values cannot inject shell control operators into completion commands");
 
   check(validateCoordination(coordination.policy, coordination.assignmentDocument, rows).length === 0, "B-primary dual-machine policy and planned assignments are valid");
+  const closedAssignmentDocument = closeAssignment(coordination.assignmentDocument, "R2-02.02", "B", "2026-08-05T00:00:00.000Z");
+  check(closedAssignmentDocument.assignments.find((entry) => entry.itemId === "R2-02.02")?.status === "closed"
+    && coordination.assignmentDocument.assignments.find((entry) => entry.itemId === "R2-02.02")?.status === "active"
+    && closedAssignmentDocument.updatedBy === "B", "business completion closes an assignment without mutating the source document");
   check(pathsOverlap("ui/modules", "ui/modules/tts.js") && !pathsOverlap("launch-ui.mjs", "server/core/ssrf-guard.mjs"), "path ownership detects directory overlap without false overlap across separate files");
   let aWriterRejected = false;
   try { assertMasterWriter(coordination.policy, "A", "R2-01.12"); } catch (error) { aWriterRejected = error.message.includes("cannot write the master register"); }

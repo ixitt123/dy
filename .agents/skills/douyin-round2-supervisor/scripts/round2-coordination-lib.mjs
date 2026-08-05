@@ -99,6 +99,18 @@ export function assignmentFor(document, itemId, machine) {
   return document.assignments.find((entry) => entry.itemId === itemId && entry.machine === machine) || null;
 }
 
+export function closeAssignment(document, itemId, writerMachine, completedAt = new Date().toISOString()) {
+  if (writerMachine !== "B") throw new Error("only B may close a repair assignment");
+  const updated = structuredClone(document);
+  const assignment = updated.assignments.find((entry) => entry.itemId === itemId);
+  if (!assignment) throw new Error(`missing assignment for ${itemId}`);
+  if (!ACTIVE_ASSIGNMENT_STATES.has(assignment.status)) throw new Error(`${itemId} assignment must be active or review before completion`);
+  assignment.status = "closed";
+  updated.updatedBy = writerMachine;
+  updated.updatedAt = completedAt;
+  return updated;
+}
+
 export function assertMasterWriter(policy, machine, itemId) {
   if (itemId.startsWith("R2-00.")) return;
   if (!machine) throw new Error("business register writes require --machine B");
