@@ -78,6 +78,16 @@ const runtimeEntryPath = fs.realpathSync.native(runtimeSourcePath);
 const runtimeInstanceId = randomUUID();
 const runtimeStartedAt = new Date().toISOString();
 const runtimeServiceId = "douyin-local-workbench";
+function runtimeEnvironmentInteger(name, fallback, minimum, maximum) {
+  const value = Number(process.env[name]);
+  return Number.isInteger(value) && value >= minimum && value <= maximum ? value : fallback;
+}
+const runtimePortStart = runtimeEnvironmentInteger("DOUYIN_UI_PORT_START", 8787, 1024, 65_535);
+const runtimePortEnd = Math.max(
+  runtimePortStart,
+  runtimeEnvironmentInteger("DOUYIN_UI_PORT_END", 8799, runtimePortStart, 65_535),
+);
+const runtimeStartupDelayMs = runtimeEnvironmentInteger("DOUYIN_TEST_UI_STARTUP_DELAY_MS", 0, 0, 10_000);
 const uiDir = path.join(__dirname, "ui");
 const skillsDir = path.join(__dirname, "skills");
 const promptsDir = path.join(__dirname, "prompts");
@@ -10035,11 +10045,53 @@ function listen(port) {
   });
 }
 
-function runtimeOwnerPid() {
+function readRuntimeOwnerState() {
+  let handle;
   try {
-    return Number(fs.readFileSync(pidPath, "utf8").trim() || 0);
+    handle = fs.openSync(pidPath, "r");
+    const raw = fs.readFileSync(handle, "utf8");
+    const stat = fs.fstatSync(handle, { bigint: true });
+    const parsedPid = Number(raw.trim());
+    return {
+      raw,
+      pid: Number.isInteger(parsedPid) && parsedPid > 0 ? parsedPid : 0,
+      dev: String(stat.dev),
+      ino: String(stat.ino),
+      birthtimeNs: String(stat.birthtimeNs),
+      mtimeNs: String(stat.mtimeNs),
+      mtimeMs: Number(stat.mtimeNs) / 1_000_000,
+    };
   } catch {
-    return 0;
+    return null;
+  } finally {
+    if (handle !== undefined) {
+      try { fs.closeSync(handle); } catch {}
+    }
+  }
+}
+
+function sameRuntimeOwnerState(left, right) {
+  return Boolean(
+    left
+    && right
+    && left.raw === right.raw
+    && left.dev === right.dev
+    && left.ino === right.ino
+    && left.birthtimeNs === right.birthtimeNs
+    && left.mtimeNs === right.mtimeNs
+  );
+}
+
+function runtimeOwnerPid() {
+  return readRuntimeOwnerState()?.pid || 0;
+}
+
+function processExists(pid) {
+  try {
+    process.kill(Number(pid), 0);
+    return true;
+  } catch {
+    return false;
   }
 }
 
@@ -10076,84 +10128,126 @@ function existingRuntimeIdentityMatches(identity, baseUrl, expectedPid) {
 
 async function probeExistingRuntime(value, expectedPid) {
   const baseUrl = parseRuntimeUrl(value);
-  if (!baseUrl) return "";
+  if (!baseUrl) return { status: "pending", url: "" };
   try {
     const response = await fetch(new URL("/api/runtime/identity", baseUrl), {
       headers: { accept: "application/json" },
       redirect: "error",
       signal: AbortSignal.timeout(1_500),
     });
-    if (!response.ok) return "";
+    if (!response.ok) return { status: "mismatch", url: baseUrl.origin };
     const identity = await response.json();
-    return existingRuntimeIdentityMatches(identity, baseUrl, expectedPid) ? baseUrl.origin : "";
+    return existingRuntimeIdentityMatches(identity, baseUrl, expectedPid)
+      ? { status: "verified", url: baseUrl.origin, identity }
+      : { status: "mismatch", url: baseUrl.origin, identity };
   } catch {
-    return "";
+    return { status: "pending", url: baseUrl.origin };
   }
 }
 
 function acquireRuntimeLock() {
-  const existingPid = runtimeOwnerPid();
-  if (existingPid && existingPid !== process.pid && processIsRunning(existingPid)) {
-    return { acquired: false, existingPid };
-  }
-  for (const filePath of [pidPath, urlPath]) {
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    let handle;
+    let createdLock = false;
     try {
-      if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
-    } catch {
-      // The exclusive create below remains the final lock authority.
+      handle = fs.openSync(pidPath, "wx");
+      createdLock = true;
+      fs.writeFileSync(handle, String(process.pid), "utf8");
+      fs.closeSync(handle);
+      handle = undefined;
+      if (runtimeOwnerPid() !== process.pid) throw new Error("The new UI runtime lock could not be verified after publication.");
+      fs.rmSync(urlPath, { force: true });
+      ownsRuntimeLock = true;
+      return { acquired: true, existingPid: 0 };
+    } catch (error) {
+      if (handle !== undefined) {
+        try { fs.closeSync(handle); } catch {}
+      }
+      if (createdLock) {
+        fs.rmSync(pidPath, { force: true });
+        throw error;
+      }
+      if (error?.code !== "EEXIST") throw error;
+      const existingOwner = readRuntimeOwnerState();
+      if (!existingOwner) continue;
+      const existingPid = existingOwner.pid;
+      if (existingPid && existingPid !== process.pid && processIsRunning(existingPid)) {
+        return { acquired: false, existingPid, existingOwner };
+      }
+      if (!discardRuntimeState(existingOwner, { requireStopped: true })) {
+        return { acquired: false, existingPid: runtimeOwnerPid(), existingOwner: readRuntimeOwnerState() };
+      }
     }
   }
-  try {
-    const handle = fs.openSync(pidPath, "wx");
-    fs.writeFileSync(handle, String(process.pid), "utf8");
-    fs.closeSync(handle);
-    ownsRuntimeLock = true;
-    return { acquired: true, existingPid: 0 };
-  } catch (error) {
-    if (error?.code !== "EEXIST") throw error;
-    return { acquired: false, existingPid: runtimeOwnerPid() };
-  }
+  return { acquired: false, existingPid: runtimeOwnerPid(), existingOwner: readRuntimeOwnerState() };
 }
 
 async function waitForExistingRuntimeUrl(expectedPid) {
   for (let attempt = 0; attempt < 30; attempt += 1) {
+    if (runtimeOwnerPid() !== Number(expectedPid) || !processExists(expectedPid)) {
+      return { status: "stale", url: "" };
+    }
     try {
       const url = fs.readFileSync(urlPath, "utf8").trim();
-      const verifiedUrl = await probeExistingRuntime(url, expectedPid);
-      if (verifiedUrl) return verifiedUrl;
+      const probe = await probeExistingRuntime(url, expectedPid);
+      if (probe.status !== "pending") return probe;
     } catch {
       // The first process may still be starting and writing its URL file.
     }
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
-  return "";
+  return runtimeOwnerPid() === Number(expectedPid) && processIsRunning(expectedPid)
+    ? { status: "pending", url: "" }
+    : { status: "stale", url: "" };
 }
 
-function discardRuntimeState(expectedPid) {
-  if (!expectedPid || runtimeOwnerPid() !== Number(expectedPid)) return false;
-  for (const filePath of [pidPath, urlPath]) {
-    try {
-      fs.rmSync(filePath, { force: true });
-    } catch {
-      return false;
-    }
+function discardRuntimeState(expectedOwner, { requireStopped = false } = {}) {
+  if (!sameRuntimeOwnerState(expectedOwner, readRuntimeOwnerState())) return false;
+  if (requireStopped && expectedOwner.pid === 0 && Date.now() - expectedOwner.mtimeMs <= 5_000) return false;
+  if (requireStopped && expectedOwner.pid > 0 && processIsRunning(expectedOwner.pid)) return false;
+  try {
+    fs.rmSync(urlPath, { force: true });
+    if (!sameRuntimeOwnerState(expectedOwner, readRuntimeOwnerState())) return false;
+    fs.rmSync(pidPath, { force: true });
+    return true;
+  } catch {
+    return false;
   }
-  return true;
+}
+
+function publishRuntimeUrl(url) {
+  if (!ownsRuntimeLock || runtimeOwnerPid() !== process.pid) return false;
+  const temporaryUrlPath = `${urlPath}.${process.pid}.${runtimeInstanceId}.tmp`;
+  try {
+    fs.writeFileSync(temporaryUrlPath, url, "utf8");
+    if (!ownsRuntimeLock || runtimeOwnerPid() !== process.pid) return false;
+    fs.rmSync(urlPath, { force: true });
+    if (!ownsRuntimeLock || runtimeOwnerPid() !== process.pid) return false;
+    fs.renameSync(temporaryUrlPath, urlPath);
+    return runtimeOwnerPid() === process.pid;
+  } finally {
+    fs.rmSync(temporaryUrlPath, { force: true });
+  }
 }
 
 async function start() {
   let runtimeLock = acquireRuntimeLock();
   if (!runtimeLock.acquired) {
-    const existingUrl = await waitForExistingRuntimeUrl(runtimeLock.existingPid);
-    if (existingUrl) {
+    const existingRuntime = await waitForExistingRuntimeUrl(runtimeLock.existingPid);
+    if (existingRuntime.status === "verified") {
       if (process.argv.includes("--open")) {
-        spawn("cmd", ["/c", "start", "", existingUrl], { detached: true, stdio: "ignore" }).unref();
+        spawn("cmd", ["/c", "start", "", existingRuntime.url], { detached: true, stdio: "ignore" }).unref();
       }
-      console.log(`Douyin page already running: ${existingUrl}`);
+      console.log(`Douyin page already running: ${existingRuntime.url}`);
       process.exit(0);
       return;
     }
-    if (!discardRuntimeState(runtimeLock.existingPid)) {
+    if (existingRuntime.status === "pending") {
+      console.log(`Douyin page is already starting under PID ${runtimeLock.existingPid}.`);
+      process.exit(0);
+      return;
+    }
+    if (!discardRuntimeState(runtimeLock.existingOwner, { requireStopped: true })) {
       console.error(`Refused an unverifiable UI runtime owned by PID ${runtimeLock.existingPid || "unknown"}; its state changed before cleanup.`);
       process.exitCode = 4;
       return;
@@ -10168,8 +10262,12 @@ async function start() {
   // The selected download directory belongs to the user. Never scan or move
   // unrelated loose files when the service starts.
 
-  let port = 8787;
-  while (port < 8800) {
+  if (runtimeStartupDelayMs > 0) {
+    await new Promise((resolve) => setTimeout(resolve, runtimeStartupDelayMs));
+  }
+
+  let port = runtimePortStart;
+  while (port <= runtimePortEnd) {
     try {
       await listen(port);
       break;
@@ -10178,10 +10276,18 @@ async function start() {
       port += 1;
     }
   }
+  if (!server.listening) {
+    throw new Error(`No UI port is available in the configured range ${runtimePortStart}-${runtimePortEnd}.`);
+  }
 
   localApiCookieName = `__dy_local_api_${port}`;
   const url = `http://127.0.0.1:${port}`;
-  fs.writeFileSync(urlPath, url, "utf8");
+  if (!publishRuntimeUrl(url)) {
+    await new Promise((resolve) => server.close(resolve));
+    console.error("The UI runtime lost its single-instance lock before publishing its URL.");
+    process.exitCode = 4;
+    return;
+  }
   console.log(`Douyin page: ${url}`);
   console.log(`Download folder: ${downloadsDir}`);
   console.log("Keep this window open while using the page.");
@@ -10196,12 +10302,11 @@ function cleanupRuntimeFiles() {
   if (!ownsRuntimeLock) return;
   const ownerPid = runtimeOwnerPid();
   if (ownerPid && ownerPid !== process.pid) return;
-  for (const filePath of [pidPath, urlPath]) {
-    try {
-      if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
-    } catch {
-      // Best effort cleanup only.
-    }
+  try {
+    fs.rmSync(urlPath, { force: true });
+    if (runtimeOwnerPid() === process.pid) fs.rmSync(pidPath, { force: true });
+  } catch {
+    // Best effort cleanup only.
   }
 }
 

@@ -7,6 +7,8 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const dataDir = path.join(__dirname, ".data");
 const logPath = path.join(dataDir, "launcher.log");
 const logLockPath = path.join(dataDir, "launcher-log.lock");
+const serverLaunchLockPath = path.join(dataDir, "launcher-server.lock");
+const serverLaunchOwnerPath = path.join(serverLaunchLockPath, "owner.json");
 const urlPath = path.join(__dirname, "ui-server.url");
 const pidPath = path.join(__dirname, "ui-server.pid");
 const packagePath = path.join(__dirname, "node_modules", "@yc-w-cn", "douyin-mcp-server", "package.json");
@@ -52,6 +54,7 @@ function environmentInteger(name, fallback, minimum, maximum) {
 const logMaxBytes = environmentInteger("DOUYIN_LAUNCHER_LOG_MAX_BYTES", 262_144, 512, 10_485_760);
 const logBackups = environmentInteger("DOUYIN_LAUNCHER_LOG_BACKUPS", 3, 0, 20);
 const logLockStaleMs = environmentInteger("DOUYIN_LAUNCHER_LOG_LOCK_STALE_MS", 30_000, 100, 300_000);
+const serverLaunchLockStaleMs = environmentInteger("DOUYIN_LAUNCHER_SERVER_LOCK_STALE_MS", 30_000, 5_000, 300_000);
 const lockWaitArray = new Int32Array(new SharedArrayBuffer(4));
 
 function acquireLogLock() {
@@ -119,6 +122,35 @@ function processExists(pid) {
   }
 }
 
+function runtimeCommandMatches(commandLine, expectedEntryPath) {
+  const command = String(commandLine || "").trim().toLowerCase().replaceAll("\\", "/");
+  const entryPath = String(expectedEntryPath || "").trim().toLowerCase().replaceAll("\\", "/");
+  return Boolean(command && entryPath && command.includes(entryPath));
+}
+
+function windowsProcessCommandLine(pid) {
+  const normalizedPid = Number(pid);
+  if (!Number.isInteger(normalizedPid) || normalizedPid <= 0) return "";
+  const script = [
+    `$runtimeProcess = Get-CimInstance Win32_Process -Filter 'ProcessId = ${normalizedPid}' -ErrorAction SilentlyContinue`,
+    "if ($null -ne $runtimeProcess) { [Console]::Out.Write($runtimeProcess.CommandLine) }",
+  ].join("; ");
+  const result = spawnSync("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", script], {
+    encoding: "utf8",
+    windowsHide: true,
+    timeout: 5_000,
+  });
+  if (result.error || result.status !== 0) return null;
+  return String(result.stdout || "").trim();
+}
+
+function runtimeOwnerMatchesProject(pid) {
+  if (!processExists(pid)) return false;
+  if (process.platform !== "win32") return true;
+  const commandLine = windowsProcessCommandLine(pid);
+  return commandLine === null || runtimeCommandMatches(commandLine, serverEntryPath);
+}
+
 function parseLocalRuntimeUrl(value) {
   try {
     const url = new URL(String(value || "").trim());
@@ -151,7 +183,7 @@ function runtimeIdentityMatches(identity, baseUrl) {
 
 async function probeRuntimeIdentity(value) {
   const baseUrl = parseLocalRuntimeUrl(value);
-  if (!baseUrl) return null;
+  if (!baseUrl) return { status: "pending" };
   try {
     const identityUrl = new URL("/api/runtime/identity", baseUrl);
     const response = await fetch(identityUrl, {
@@ -159,11 +191,13 @@ async function probeRuntimeIdentity(value) {
       redirect: "error",
       signal: AbortSignal.timeout(1_500),
     });
-    if (!response.ok) return null;
+    if (!response.ok) return { status: "mismatch" };
     const identity = await response.json();
-    return runtimeIdentityMatches(identity, baseUrl) ? { url: baseUrl.origin, identity } : null;
+    return runtimeIdentityMatches(identity, baseUrl)
+      ? { status: "verified", url: baseUrl.origin, identity }
+      : { status: "mismatch", identity };
   } catch {
-    return null;
+    return { status: "pending" };
   }
 }
 
@@ -249,16 +283,157 @@ async function openUrl(url) {
 }
 
 async function existingServerRuntime() {
-  const url = readCurrentUrl();
-  if (!url) return null;
-  const runtime = await probeRuntimeIdentity(url);
-  if (runtime) return runtime;
-  clearStaleUrl();
-  logEvent("reject-existing", {
-    url,
-    message: "Rejected a stale or foreign UI URL because its project identity, commit, PID, or health did not match.",
-  });
+  const initialOwnerPid = runtimeOwnerPid();
+  const ownerMatchesProject = initialOwnerPid > 0 && runtimeOwnerMatchesProject(initialOwnerPid);
+  const deadline = Date.now() + (ownerMatchesProject ? 5_000 : 0);
+  let lastUrl = readCurrentUrl();
+
+  do {
+    const ownerPid = runtimeOwnerPid();
+    if (ownerPid !== initialOwnerPid || (ownerMatchesProject && !processExists(ownerPid))) break;
+    lastUrl = readCurrentUrl() || lastUrl;
+    if (lastUrl) {
+      const runtime = await probeRuntimeIdentity(lastUrl);
+      if (runtime.status === "verified") return runtime;
+      if (runtime.status === "mismatch") {
+        if (ownerMatchesProject) {
+          logEvent("runtime-conflict", {
+            pid: ownerPid,
+            url: lastUrl,
+            message: "A live backend from this project owns the lock but its runtime identity does not match; refusing to spawn a duplicate.",
+          });
+          return { status: "conflict", pid: ownerPid, url: lastUrl };
+        }
+        clearStaleUrl();
+        logEvent("reject-existing", {
+          pid: ownerPid || process.pid,
+          url: lastUrl,
+          message: "Rejected a stale or foreign UI URL because its project identity, commit, PID, or health did not match.",
+        });
+        return null;
+      }
+    }
+    if (!ownerMatchesProject || Date.now() >= deadline) break;
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  } while (true);
+
+  if (initialOwnerPid > 0 && runtimeOwnerPid() === initialOwnerPid && runtimeOwnerMatchesProject(initialOwnerPid)) {
+    logEvent("reuse-starting", {
+      pid: initialOwnerPid,
+      url: lastUrl || null,
+      message: "A verified project backend owns the runtime lock and is still starting; no duplicate server was spawned.",
+    });
+    return { status: "pending", pid: initialOwnerPid, url: lastUrl || null };
+  }
+
+  if (lastUrl) {
+    clearStaleUrl();
+    logEvent("reject-existing", {
+      pid: initialOwnerPid || process.pid,
+      url: lastUrl,
+      message: "Rejected a stale UI URL because no live matching project backend owned it.",
+    });
+  }
   return null;
+}
+
+function readServerLaunchOwner() {
+  try {
+    const stat = fs.statSync(serverLaunchLockPath);
+    try {
+      const owner = JSON.parse(fs.readFileSync(serverLaunchOwnerPath, "utf8"));
+      return {
+        exists: true,
+        ownerReadable: true,
+        pid: Number(owner?.pid) || 0,
+        runId: String(owner?.runId || ""),
+        createdAt: String(owner?.createdAt || ""),
+        mtimeMs: stat.mtimeMs,
+      };
+    } catch {
+      return { exists: true, ownerReadable: false, pid: 0, runId: "", createdAt: "", mtimeMs: stat.mtimeMs };
+    }
+  } catch {
+    return null;
+  }
+}
+
+function sameServerLaunchOwner(left, right) {
+  if (!left || !right || left.exists !== true || right.exists !== true) return false;
+  if (left.ownerReadable !== right.ownerReadable) return false;
+  if (!left.ownerReadable) return left.mtimeMs === right.mtimeMs;
+  return left.pid === right.pid && left.runId === right.runId;
+}
+
+function reclaimStaleServerLaunchLock() {
+  const owner = readServerLaunchOwner();
+  if (!owner) return false;
+  const ageMs = Date.now() - owner.mtimeMs;
+  if (!owner.ownerReadable && ageMs <= serverLaunchLockStaleMs) return false;
+  if (owner?.pid > 0 && processExists(owner.pid) && ageMs <= serverLaunchLockStaleMs) return false;
+  const confirmation = readServerLaunchOwner();
+  if (!sameServerLaunchOwner(owner, confirmation)) return false;
+  const quarantinePath = `${serverLaunchLockPath}.stale-${process.pid}-${Date.now()}`;
+  try {
+    fs.renameSync(serverLaunchLockPath, quarantinePath);
+    fs.rmSync(quarantinePath, { recursive: true, force: true });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function tryAcquireServerLaunchLock() {
+  fs.mkdirSync(dataDir, { recursive: true });
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    try {
+      fs.mkdirSync(serverLaunchLockPath);
+      try {
+        fs.writeFileSync(serverLaunchOwnerPath, `${JSON.stringify({ pid: process.pid, runId, createdAt: new Date().toISOString() })}\n`, "utf8");
+        return true;
+      } catch (error) {
+        fs.rmSync(serverLaunchLockPath, { recursive: true, force: true });
+        throw error;
+      }
+    } catch (error) {
+      if (error?.code !== "EEXIST") throw error;
+      if (!reclaimStaleServerLaunchLock()) return false;
+    }
+  }
+  return false;
+}
+
+function releaseServerLaunchLock() {
+  const owner = readServerLaunchOwner();
+  if (!owner || owner.pid !== process.pid || owner.runId !== runId) return false;
+  try {
+    fs.rmSync(serverLaunchLockPath, { recursive: true, force: true });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function waitForServerLaunchTurn(timeoutMs = 20_000) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const url = readCurrentUrl();
+    if (url) {
+      const runtime = await probeRuntimeIdentity(url);
+      if (runtime.status === "verified") return { acquired: false, runtime };
+    }
+    if (tryAcquireServerLaunchLock()) {
+      const existingRuntime = await existingServerRuntime();
+      if (existingRuntime) {
+        releaseServerLaunchLock();
+        return { acquired: false, runtime: existingRuntime };
+      }
+      return { acquired: true };
+    }
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  const owner = readServerLaunchOwner();
+  return { acquired: false, pendingPid: runtimeOwnerPid() || owner?.pid || 0 };
 }
 
 async function main() {
@@ -280,6 +455,13 @@ async function main() {
   }
 
   const existingRuntime = await existingServerRuntime();
+  if (existingRuntime?.status === "pending") return;
+  if (existingRuntime?.status === "conflict") {
+    const message = `A different live build of this project already owns the UI runtime (PID ${existingRuntime.pid}). Stop it before starting this build.`;
+    console.error(message);
+    process.exitCode = 4;
+    return;
+  }
   if (existingRuntime) {
     logEvent("reuse-existing", {
       pid: existingRuntime.identity.pid,
@@ -290,19 +472,51 @@ async function main() {
     return;
   }
 
-  const previousUrl = urlState();
-  const child = await spawnDetached(process.execPath, [serverEntryPath, "--open", "--no-auto-close"], {
-    cwd: __dirname,
-    detached: true,
-    stdio: "ignore",
-    windowsHide: true,
-  });
-  const startedUrl = await waitForUpdatedUrl(previousUrl);
-  logEvent("spawn-server", {
-    pid: child.pid,
-    url: startedUrl || null,
-    message: startedUrl ? "Started a new local UI service." : "Started a new local UI service; URL is pending.",
-  });
+  const launchTurn = await waitForServerLaunchTurn();
+  if (launchTurn.runtime?.status === "pending") return;
+  if (launchTurn.runtime?.status === "conflict") {
+    const message = `A different live build of this project already owns the UI runtime (PID ${launchTurn.runtime.pid}). Stop it before starting this build.`;
+    console.error(message);
+    process.exitCode = 4;
+    return;
+  }
+  if (launchTurn.runtime) {
+    logEvent("reuse-existing", {
+      pid: launchTurn.runtime.identity.pid,
+      url: launchTurn.runtime.url,
+      message: `Reused the instance started by a concurrent launcher (${launchTurn.runtime.identity.instanceId}).`,
+    });
+    await openUrl(launchTurn.runtime.url);
+    return;
+  }
+  if (!launchTurn.acquired) {
+    logEvent("reuse-starting", {
+      pid: launchTurn.pendingPid || process.pid,
+      url: readCurrentUrl() || null,
+      message: "Another launcher still owns the bounded server-start turn; no duplicate server was spawned.",
+    });
+    return;
+  }
+
+  try {
+    const previousUrl = urlState();
+    const serverArgs = [serverEntryPath, "--no-auto-close"];
+    if (process.env.DOUYIN_LAUNCHER_NO_OPEN !== "1") serverArgs.push("--open");
+    const child = await spawnDetached(process.execPath, serverArgs, {
+      cwd: __dirname,
+      detached: true,
+      stdio: "ignore",
+      windowsHide: true,
+    });
+    const startedUrl = await waitForUpdatedUrl(previousUrl, 15_000);
+    logEvent("spawn-server", {
+      pid: child.pid,
+      url: startedUrl || null,
+      message: startedUrl ? "Started a new local UI service." : "Started a new local UI service; URL is pending.",
+    });
+  } finally {
+    releaseServerLaunchLock();
+  }
 }
 
 try {
