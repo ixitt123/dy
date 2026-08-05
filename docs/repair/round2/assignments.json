@@ -111,7 +111,24 @@
       ],
       "evidenceDir": ".data/repair-evidence/R2-02.04/",
       "researchRecord": "docs/repair/round2/research/R2-02.04.md"
+    },
+    {
+      "itemId": "R2-01.15",
+      "machine": "B",
+      "complexity": "simple",
+      "status": "active",
+      "branch": "repair/b-r2-01-15",
+      "allowedPaths": [
+        "start-ui-hidden.vbs",
+        "launch-ui.mjs",
+        "ui-server.mjs",
+        "test-launcher-single-instance.mjs",
+        "docs/repair/round2/research/R2-01.15.md",
+        "docs/repair/round2/records/R2-01.15.md"
+      ],
+      "evidenceDir": ".data/repair-evidence/R2-01.15/",
+      "researchRecord": "docs/repair/round2/research/R2-01.15.md"
     }
   ],
-  "updatedAt": "2026-08-05T07:58:00.901Z"
+  "updatedAt": "2026-08-05T08:01:31.146Z"
 }
