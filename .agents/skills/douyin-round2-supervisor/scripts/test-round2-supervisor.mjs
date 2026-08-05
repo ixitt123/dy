@@ -60,6 +60,16 @@ function forceRow(text, id, changes) {
   return replaceRow(text, row, changes);
 }
 
+function resetActiveBusinessRows(text) {
+  let reset = text;
+  const activeRows = parseRows(reset).filter((candidate) => !candidate.id.startsWith("R2-00.") && ["进行中", "待复验"].includes(candidate.state));
+  for (const row of activeRows) {
+    reset = withoutItemLogs(reset, row.id);
+    reset = forceRow(reset, row.id, { state: "未开始", attempts: 0 });
+  }
+  return reset;
+}
+
 function writeFailureEvidence(attempt, valid = true) {
   const directory = path.join(tempRoot, ".data", "repair-evidence", "R2-00.03", `attempt-${attempt}`);
   fs.mkdirSync(directory, { recursive: true });
@@ -95,10 +105,14 @@ try {
   const tamperedProvenanceResult = run(checker, ["--plan", planPath, "--specs", specsPath, "--evidence-provenance", tamperedProvenancePath]);
   check(tamperedProvenanceResult.status !== 0 && `${tamperedProvenanceResult.stdout}${tamperedProvenanceResult.stderr}`.includes("not present in recorded commit"), "portable control evidence rejects a provenance pointer that is not anchored in its recorded commit");
 
-  let synthetic = withoutItemLogs(planText, "R2-00.03");
-  for (const row of parseRows(synthetic).filter((candidate) => !candidate.id.startsWith("R2-00.") && ["进行中", "待复验"].includes(candidate.state))) {
-    synthetic = forceRow(synthetic, row.id, { state: "未开始", attempts: 0 });
-  }
+  const loggedBusinessPlan = `${forceRow(planText, "R2-02.02", { state: "待复验", attempts: 1 }).trimEnd()}\n\n### LOG-ATTEMPT-TEST｜项目 R2-02.02\n\n#### ATTEMPT-1-R2-02.02｜失败\n\n- 失败证据路径：.data/repair-evidence/R2-02.02/test-fixture\n`;
+  const resetBusinessPlan = resetActiveBusinessRows(loggedBusinessPlan);
+  const resetBusinessRow = parseRows(resetBusinessPlan).find((row) => row.id === "R2-02.02");
+  check(resetBusinessRow?.state === "未开始" && resetBusinessRow.attempts === 0
+    && !resetBusinessPlan.includes("LOG-ATTEMPT-TEST") && !resetBusinessPlan.includes("ATTEMPT-1-R2-02.02"),
+  "self-test isolation removes existing business attempt logs before resetting the row");
+
+  let synthetic = resetActiveBusinessRows(withoutItemLogs(planText, "R2-00.03"));
   synthetic = forceRow(synthetic, "R2-00.03", { state: "进行中", attempts: 0 });
   synthetic = forceRow(synthetic, "R2-00.04", { state: "未开始", attempts: 0 });
   synthetic = forceRow(synthetic, "R2-00.06", { state: "未开始", attempts: 0 });
