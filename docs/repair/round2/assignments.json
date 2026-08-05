@@ -47,6 +47,7 @@
         "ui-server.mjs",
         "test-launcher-project-identity.mjs",
         "test-launcher-log-rotation.mjs",
+        "test-page-lifecycle.mjs",
         "docs/repair/round2/research/R2-01.14.md",
         "docs/repair/round2/records/R2-01.14.md"
       ],
