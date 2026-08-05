@@ -14,6 +14,7 @@ const state = {
   timelineDraftSegments: null,
   materialPlan: null,
   task: null,
+  taskVideosMarkup: "",
   pollTimer: 0,
   pollInFlight: false,
   pollErrorCount: 0,
@@ -401,9 +402,13 @@ function renderTask() {
         <a id="moneyPrinterFinalDownload" href="${escapeAttr(finalUrls.downloadUrl)}" download>下载最终成片</a>
       </div>
     </div>` : "";
-  els.taskVideos.innerHTML = regularRows || finalRow
+  const taskVideosMarkup = regularRows || finalRow
     ? `${regularRows}${finalRow}`
     : "<p>预览完成后这里会显示官方混剪和最终视频。</p>";
+  if (state.taskVideosMarkup !== taskVideosMarkup) {
+    els.taskVideos.innerHTML = taskVideosMarkup;
+    state.taskVideosMarkup = taskVideosMarkup;
+  }
   els.materialSummary.textContent = state.segments.length
     ? `字幕 ${state.segments.length} 段 · 已匹配 ${matchedMaterialCount()} 段 · 复用 ${state.segments.filter((item) => item.materialReused).length} 段`
     : "等待匹配";

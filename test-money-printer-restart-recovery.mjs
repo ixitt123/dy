@@ -61,6 +61,16 @@ async function waitForMoneyPrinter() {
   throw new Error("MoneyPrinterTurbo 8080 未在 60 秒内恢复健康");
 }
 
+async function waitForPortPid(port, timeoutMs = 10000) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const pid = findPidByPort(port);
+    if (pid) return pid;
+    await new Promise((resolve) => setTimeout(resolve, 200));
+  }
+  return null;
+}
+
 async function deleteOfficialTask(taskId) {
   if (!taskId) return { deleted: false, reason: "missing task id" };
   const deadline = Date.now() + 60000;
@@ -83,6 +93,15 @@ async function cleanupProbe(result) {
   const assetId = String(result?.assetId || "");
   const managedTaskId = String(result?.managedTaskId || "");
   const officialTaskId = String(result?.officialTaskId || "");
+  let officialTask = { deleted: false, reason: "missing task id" };
+  if (officialTaskId) {
+    try {
+      await waitForMoneyPrinter();
+      officialTask = await deleteOfficialTask(officialTaskId);
+    } catch (error) {
+      officialTask = { deleted: false, error: error instanceof Error ? error.message : String(error) };
+    }
+  }
   const cleanup = {
     handoff: false,
     renderedFile: false,
@@ -90,7 +109,7 @@ async function cleanupProbe(result) {
     finalAsset: false,
     outputFile: false,
     workflowDir: false,
-    officialTask: await deleteOfficialTask(officialTaskId),
+    officialTask,
   };
   cleanup.handoff = Boolean(withDatabase(path.join(ROOT, ".data", "tts", "handoffs.sqlite"), (db) => {
     const row = db.prepare("SELECT id, payload_json FROM tts_handoffs WHERE id=?").get(handoffId);
@@ -255,7 +274,7 @@ try {
   afterPid = findPidByPort(8787);
   assert.ok(afterPid, "8787 重启后没有监听 PID");
   assert.notEqual(afterPid, beforePid, "8787 PID 没有变化，未发生真实重启");
-  moneyPrinterPidAfterRestart = findPidByPort(8080);
+  moneyPrinterPidAfterRestart = await waitForPortPid(8080);
   assert.equal(moneyPrinterPidAfterRestart, moneyPrinterPid, "8787 重启不应替换独立的 MoneyPrinterTurbo 8080 进程");
 
   const afterResponse = await authenticatedFetch(`${BASE}${created.body.videoUrl}`);
@@ -273,7 +292,10 @@ try {
   fs.writeFileSync(retainedMediaPath, afterDownloadBytes);
   const media = verifyMedia(retainedMediaPath, { expectAudio: true, expectVideo: true, minDuration: 1 });
 
-  recoveryBrowser = new BrowserCDP({ debuggingPort: 9245 });
+  recoveryBrowser = new BrowserCDP({
+    debuggingPort: 9245,
+    additionalArgs: ["--autoplay-policy=no-user-gesture-required"],
+  });
   await recoveryBrowser.launch();
   page = await recoveryBrowser.newPage(`${BASE}/#money-printer`);
   await page.waitForFunction("globalThis.moneyPrinterProduction?.showFinalAsset", 30000);
@@ -288,8 +310,41 @@ try {
     };
   })()`);
   await page.waitForFunction("document.querySelector('#moneyPrinterFinalVideo')?.readyState >= 1 && document.querySelector('#moneyPrinterFinalVideo')?.duration > 0", 15000);
-  await page.click("#moneyPrinterFinalVideo");
-  await page.waitForFunction("document.querySelector('#moneyPrinterFinalVideo')?.currentTime > 0.1", 10000);
+  pageRecovery.playRequest = await page.evaluate(`(async function(){
+    const video = document.querySelector('#moneyPrinterFinalVideo');
+    if (!video) return { ok: false, reason: 'missing video' };
+    video.muted = true;
+    try {
+      await video.play();
+      return { ok: true, paused: video.paused, readyState: video.readyState, duration: video.duration };
+    } catch (error) {
+      return { ok: false, reason: String(error?.message || error), paused: video.paused, readyState: video.readyState };
+    }
+  })()`);
+  recovery.pageRecovery = pageRecovery;
+  assert.equal(pageRecovery.playRequest.ok, true, `fresh Chrome 播放请求失败：${pageRecovery.playRequest.reason || "unknown"}`);
+  pageRecovery.playbackSamples = [];
+  for (let attempt = 0; attempt < 60; attempt += 1) {
+    const sample = await page.evaluate(`(function(){
+      const video = document.querySelector('#moneyPrinterFinalVideo');
+      if (!video) return { missing: true };
+      return {
+        currentTime: video.currentTime,
+        duration: video.duration,
+        paused: video.paused,
+        ended: video.ended,
+        readyState: video.readyState,
+        networkState: video.networkState,
+        error: video.error ? { code: video.error.code, message: video.error.message } : null,
+        buffered: Array.from({ length: video.buffered.length }, (_, index) => [video.buffered.start(index), video.buffered.end(index)]),
+      };
+    })()`);
+    pageRecovery.playbackSamples.push(sample);
+    if (sample.currentTime > 0.1) break;
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  }
+  recovery.pageRecovery = pageRecovery;
+  assert.equal(pageRecovery.playbackSamples.at(-1)?.currentTime > 0.1, true, `fresh Chrome 未推进播放：${JSON.stringify(pageRecovery.playbackSamples.at(-1))}`);
   pageRecovery.playbackTime = await page.evaluate("document.querySelector('#moneyPrinterFinalVideo').currentTime");
   await page.screenshot(path.join(browserDir, "money-printer-recovered-after-restart.png"));
   await recoveryBrowser.close();
