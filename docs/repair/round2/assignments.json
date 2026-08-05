@@ -20,6 +20,22 @@
       "researchRecord": "docs/repair/round2/research/R2-01.12.md"
     },
     {
+      "itemId": "R2-01.13",
+      "machine": "A",
+      "complexity": "simple",
+      "status": "active",
+      "branch": "repair/a-r2-01-13",
+      "allowedPaths": [
+        "start-ui-hidden.vbs",
+        "launch-ui.mjs",
+        "test-launcher-log-rotation.mjs",
+        "docs/repair/round2/research/R2-01.13.md",
+        "docs/repair/round2/records/R2-01.13.md"
+      ],
+      "evidenceDir": ".data/repair-evidence/R2-01.13/",
+      "researchRecord": "docs/repair/round2/research/R2-01.13.md"
+    },
+    {
       "itemId": "R2-02.02",
       "machine": "B",
       "complexity": "complex",
@@ -40,5 +56,5 @@
       "researchRecord": "docs/repair/round2/research/R2-02.02.md"
     }
   ],
-  "updatedAt": "2026-08-05T03:26:14.008Z"
+  "updatedAt": "2026-08-05T03:28:46.451Z"
 }
