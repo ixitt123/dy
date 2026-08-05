@@ -128,7 +128,33 @@
       ],
       "evidenceDir": ".data/repair-evidence/R2-01.15/",
       "researchRecord": "docs/repair/round2/research/R2-01.15.md"
+    },
+    {
+      "itemId": "R2-01.01",
+      "machine": "B",
+      "complexity": "simple",
+      "status": "active",
+      "branch": "repair/b-r2-01-01",
+      "allowedPaths": [
+        "server/tts/",
+        "server/tts/tts-handoff-service.mjs",
+        "ui/modules/tts-handoff-store.js",
+        "ui/workbench.js",
+        "package.json",
+        "pnpm-lock.yaml",
+        "server/core/ssrf-guard.mjs",
+        "test-ssrf-guard.mjs",
+        "server/core/settings-center.js",
+        "server/core/task-center.js",
+        "server/core/final-asset-registry.js",
+        "ui-server.mjs",
+        "test-tts-auto-preview.mjs",
+        "docs/repair/round2/research/R2-01.01.md",
+        "docs/repair/round2/records/R2-01.01.md"
+      ],
+      "evidenceDir": ".data/repair-evidence/R2-01.01/",
+      "researchRecord": "docs/repair/round2/research/R2-01.01.md"
     }
   ],
-  "updatedAt": "2026-08-05T08:49:09.900Z"
+  "updatedAt": "2026-08-05T08:57:32.919Z"
 }
