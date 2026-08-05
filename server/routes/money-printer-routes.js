@@ -106,16 +106,17 @@ export function createMoneyPrinterRoutes({ baseDir, sendJson, ffmpegPath, ffprob
           kind: "video",
           source: "money-printer",
           sourceRef: result.id,
-          metadata: { title: result.title, manifestPath: result.manifestPath, bgmMixed: result.bgmMixed === true },
+          metadata: { title: result.title, manifestPath: result.manifestPath, bgmMixed: result.bgmMixed === true, wrapperId: result.id },
         });
         moneyPrinterStore.saveRenderedFile(result.id, {
           filePath: result.outputPath,
           createdAt: new Date().toISOString(),
-          metadata: { title: result.title, manifestPath: result.manifestPath, bgmMixed: result.bgmMixed === true, assetId: finalAsset?.assetId || "" },
+          metadata: { title: result.title, manifestPath: result.manifestPath, bgmMixed: result.bgmMixed === true, wrapperId: result.id, assetId: finalAsset?.assetId || "" },
         });
         sendJson(res, 200, {
           ok: true,
           ...result,
+          wrapperId: result.id,
           assetId: finalAsset?.assetId || "",
           videoUrl: finalAsset?.videoUrl || `/api/money-printer/file?id=${encodeURIComponent(result.id)}`,
           downloadUrl: finalAsset?.downloadUrl || `/api/money-printer/file?id=${encodeURIComponent(result.id)}&download=1`,

@@ -128,6 +128,21 @@ export function createFinalAssetRegistry(baseDir, { dbPath = "" } = {}) {
   return { dbPath: resolvedDbPath, register, get, list, close };
 }
 
+export function parseFinalAssetByteRange(rangeHeader, size) {
+  const total = Number(size);
+  const match = /^bytes=(\d*)-(\d*)$/u.exec(String(rangeHeader || "").trim());
+  if (!Number.isSafeInteger(total) || total <= 0 || !match || (!match[1] && !match[2])) return null;
+  if (!match[1]) {
+    const suffixLength = Number(match[2]);
+    if (!Number.isSafeInteger(suffixLength) || suffixLength <= 0) return null;
+    return { start: Math.max(0, total - suffixLength), end: total - 1 };
+  }
+  const start = Number(match[1]);
+  const requestedEnd = match[2] ? Number(match[2]) : total - 1;
+  if (!Number.isSafeInteger(start) || !Number.isSafeInteger(requestedEnd) || start < 0 || start >= total || requestedEnd < start) return null;
+  return { start, end: Math.min(requestedEnd, total - 1) };
+}
+
 export function sendFinalAssetFile(req, res, asset, { download = false } = {}) {
   const stat = fs.statSync(asset.filePath);
   const range = String(req.headers.range || "");
@@ -144,19 +159,13 @@ export function sendFinalAssetFile(req, res, asset, { download = false } = {}) {
     fs.createReadStream(asset.filePath).pipe(res);
     return;
   }
-  const match = /^bytes=(\d*)-(\d*)$/u.exec(range);
-  if (!match) {
-    res.writeHead(416, { "Content-Range": `bytes */${stat.size}` });
+  const parsed = parseFinalAssetByteRange(range, stat.size);
+  if (!parsed) {
+    res.writeHead(416, { "Accept-Ranges": "bytes", "Content-Range": `bytes */${stat.size}`, "Content-Length": 0 });
     res.end();
     return;
   }
-  const start = match[1] ? Number(match[1]) : 0;
-  const end = match[2] ? Math.min(Number(match[2]), stat.size - 1) : stat.size - 1;
-  if (!Number.isFinite(start) || !Number.isFinite(end) || start < 0 || start > end || start >= stat.size) {
-    res.writeHead(416, { "Content-Range": `bytes */${stat.size}` });
-    res.end();
-    return;
-  }
+  const { start, end } = parsed;
   res.writeHead(206, { ...common, "Content-Length": end - start + 1, "Content-Range": `bytes ${start}-${end}/${stat.size}` });
   fs.createReadStream(asset.filePath, { start, end }).pipe(res);
 }

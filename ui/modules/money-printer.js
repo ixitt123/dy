@@ -391,7 +391,7 @@ function renderTask() {
     ...(Array.isArray(task?.videos) ? task.videos.map((url) => ({ label: "MoneyPrinter 输出", url })) : []),
   ];
   const regularRows = videos.map((item) => `<div class="money-printer-video-row"><a href="${escapeAttr(item.url)}" target="_blank" rel="noreferrer">${escapeHtml(item.label)}</a></div>`).join("");
-  const finalUrls = moneyPrinterFinalAssetUrls(task?.finalVideoUrl);
+  const finalUrls = moneyPrinterFinalAssetUrls(task?.finalVideoUrl, task?.finalAssetId);
   const finalRow = finalUrls.previewUrl ? `
     <div class="money-printer-final-asset" data-final-asset-id="${escapeAttr(finalUrls.assetId)}">
       <strong>${task?.finalTextEffectEnabled ? "最终动态大字成片" : "最终成片"}</strong>
@@ -622,26 +622,36 @@ function showTaskProgress(task = {}) {
   return display;
 }
 
-export function moneyPrinterFinalAssetUrls(videoUrl = "") {
+export function moneyPrinterFinalAssetUrls(videoUrl = "", explicitAssetId = "") {
   const previewUrl = String(videoUrl || "").trim();
   if (!previewUrl) return { previewUrl: "", downloadUrl: "", assetId: "" };
   const separator = previewUrl.includes("?") ? "&" : "?";
-  let assetId = "";
-  try { assetId = new URL(previewUrl, window.location.origin).searchParams.get("id") || ""; } catch {}
+  let urlAssetId = "";
+  try { urlAssetId = new URL(previewUrl, window.location.origin).searchParams.get("id") || ""; } catch {}
+  const assetId = String(explicitAssetId || "").trim() || urlAssetId;
+  if (assetId && urlAssetId && assetId !== urlAssetId) {
+    throw new Error("最终资产 ID 与预览 URL 不一致，已阻止展示错误资产。");
+  }
   return { previewUrl, downloadUrl: `${previewUrl}${separator}download=1`, assetId };
 }
 
 function showFinalAsset(asset = {}) {
+  const wrapperId = String(asset.wrapperId || asset.id || "").trim();
+  const finalVideoUrl = String(asset.videoUrl || asset.finalVideoUrl || "").trim();
+  const finalAssetId = String(asset.assetId || asset.finalAssetId || "").trim();
+  const finalUrls = moneyPrinterFinalAssetUrls(finalVideoUrl, finalAssetId);
   state.task = {
     ...(state.task || {}),
-    task_id: state.task?.task_id || asset.id || "final-asset",
+    task_id: state.task?.task_id || wrapperId || "final-asset",
     stateLabel: "最终成片已就绪",
-    finalVideoUrl: String(asset.videoUrl || asset.finalVideoUrl || "").trim(),
+    finalWrapperId: wrapperId,
+    finalAssetId: finalUrls.assetId,
+    finalVideoUrl: finalUrls.previewUrl,
     finalOutputPath: String(asset.outputPath || asset.finalOutputPath || "").trim(),
     finalTextEffectEnabled: asset.textEffectEnabled === true || asset.finalTextEffectEnabled === true,
   };
   renderTask();
-  return moneyPrinterFinalAssetUrls(state.task.finalVideoUrl);
+  return finalUrls;
 }
 
 function applyTaskMaterials(task = {}) {
@@ -733,6 +743,7 @@ async function renderFinalVideo() {
     });
     showFinalAsset({
       id: data.id,
+      wrapperId: data.wrapperId,
       assetId: data.assetId,
       videoUrl: data.videoUrl,
       outputPath: data.outputPath,
