@@ -16,7 +16,7 @@ import {
   validateHumanConfirmationPath,
 } from "./round2-plan-lib.mjs";
 import { requiredGatesForMode } from "./round2-spec-lib.mjs";
-import { assertMasterWriter, readCoordination } from "./round2-coordination-lib.mjs";
+import { assertMasterWriter, closeAssignment, readCoordination } from "./round2-coordination-lib.mjs";
 
 const args = process.argv.slice(2);
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
@@ -32,6 +32,12 @@ function option(name) {
 function stop(message) {
   console.error(`[round2-completion] FAIL: ${message}`);
   process.exit(1);
+}
+
+function replaceTextAtomically(filePath, text) {
+  const temporary = `${filePath}.${process.pid}.${Date.now()}.tmp`;
+  fs.writeFileSync(temporary, text, "utf8");
+  fs.renameSync(temporary, filePath);
 }
 
 try {
@@ -89,8 +95,15 @@ try {
   if (resolvedHumanEvidence) updated += `- 人工确认路径：${resolvedHumanEvidence}\n`;
   updated += "\n";
 
+  const businessItem = !itemId.startsWith("R2-00.");
+  const originalAssignments = fs.readFileSync(coordination.assignmentsPath, "utf8");
+  const updatedAssignments = businessItem
+    ? closeAssignment(coordination.assignmentDocument, itemId, machine, now.toISOString())
+    : coordination.assignmentDocument;
+  const updatedAssignmentsText = `${JSON.stringify(updatedAssignments, null, 2)}\n`;
   const releaseLock = acquirePlanLock(planPath);
   try {
+    if (businessItem) replaceTextAtomically(coordination.assignmentsPath, updatedAssignmentsText);
     atomicReplacePlan(planPath, original, updated);
     const checkArgs = [
       checker,
@@ -101,9 +114,12 @@ try {
     ];
     const checked = spawnSync(process.execPath, checkArgs, { cwd: process.cwd(), encoding: "utf8" });
     if (checked.status !== 0) {
-      atomicReplacePlan(planPath, updated, original);
-      stop(`plan validation failed; original restored\n${checked.stdout}${checked.stderr}`);
+      throw new Error(`plan validation failed; original files restored\n${checked.stdout}${checked.stderr}`);
     }
+  } catch (error) {
+    if (readPlan(planPath) === updated) atomicReplacePlan(planPath, updated, original);
+    if (businessItem) replaceTextAtomically(coordination.assignmentsPath, originalAssignments);
+    throw error;
   } finally {
     releaseLock();
   }
