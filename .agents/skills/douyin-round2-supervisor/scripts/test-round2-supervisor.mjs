@@ -272,9 +272,10 @@ try {
   const bActivation = run(assignmentActivator, ["--machine", "B", "--items", "R2-01.12,R2-02.02", "--plan", activationPlan, "--assignments", activationAssignments, "--policy", coordination.policyPath]);
   const activatedRows = parseRows(fs.readFileSync(activationPlan, "utf8"));
   const activatedDocument = JSON.parse(fs.readFileSync(activationAssignments, "utf8"));
+  const activatedItemIds = activatedDocument.assignments.filter((entry) => entry.status === "active").map((entry) => entry.itemId).sort();
   check(bActivation.status === 0
     && ["R2-01.12", "R2-02.02"].every((id) => activatedRows.find((row) => row.id === id)?.state === "进行中")
-    && activatedDocument.assignments.every((entry) => entry.status === "active"), "B atomically activates the first non-overlapping A/B pair", `${bActivation.stdout}${bActivation.stderr}`);
+    && JSON.stringify(activatedItemIds) === JSON.stringify(["R2-01.12", "R2-02.02"]), "B atomically activates only the selected non-overlapping A/B pair", `${bActivation.stdout}${bActivation.stderr}`);
 
   const coreScripts = [checker, packetBuilder, failureRecorder, completionRecorder, assignmentActivator, planLibrary, coordinationLibrary].map((file) => fs.readFileSync(file, "utf8")).join("\n");
   check(!coreScripts.includes("01-短视频软件彻底修复执行总表") && coreScripts.includes("master-register.md"), "round-two tools default to the repository master register and never mutate the first-round register");
