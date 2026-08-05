@@ -14,16 +14,33 @@ import net from "node:net";
 import { Readable } from "node:stream";
 
 const PRIVATE_IPV4_RANGES = [
-  { start: "0.0.0.0", end: "0.255.255.255" }, // 0.0.0.0/8
-  { start: "10.0.0.0", end: "10.255.255.255" }, // 10.0.0.0/8
-  { start: "100.64.0.0", end: "100.127.255.255" }, // 100.64.0.0/10 CGNAT
-  { start: "127.0.0.0", end: "127.255.255.255" }, // 127.0.0.0/8 loopback
-  { start: "169.254.0.0", end: "169.254.255.255" }, // 169.254.0.0/16 link-local
-  { start: "172.16.0.0", end: "172.31.255.255" }, // 172.16.0.0/12
-  { start: "192.0.0.0", end: "192.0.0.255" }, // 192.0.0.0/24
-  { start: "192.168.0.0", end: "192.168.255.255" }, // 192.168.0.0/16
-  { start: "198.18.0.0", end: "198.19.255.255" }, // 198.18.0.0/15 benchmark
+  { start: "0.0.0.0", end: "0.255.255.255", prefix: 8 }, // 0.0.0.0/8
+  { start: "10.0.0.0", end: "10.255.255.255", prefix: 8 }, // 10.0.0.0/8
+  { start: "100.64.0.0", end: "100.127.255.255", prefix: 10 }, // 100.64.0.0/10 CGNAT
+  { start: "127.0.0.0", end: "127.255.255.255", prefix: 8 }, // 127.0.0.0/8 loopback
+  { start: "169.254.0.0", end: "169.254.255.255", prefix: 16 }, // 169.254.0.0/16 link-local
+  { start: "172.16.0.0", end: "172.31.255.255", prefix: 12 }, // 172.16.0.0/12
+  { start: "192.0.0.0", end: "192.0.0.255", prefix: 24 }, // 192.0.0.0/24
+  { start: "192.168.0.0", end: "192.168.255.255", prefix: 16 }, // 192.168.0.0/16
+  { start: "198.18.0.0", end: "198.19.255.255", prefix: 15 }, // 198.18.0.0/15 benchmark
+  { start: "224.0.0.0", end: "255.255.255.255", prefix: 4 }, // multicast / reserved / broadcast
 ];
+
+const BLOCKED_IPV6 = new net.BlockList();
+for (const [network, prefix] of [
+  ["::", 128],
+  ["::1", 128],
+  ["fe80::", 10],
+  ["fc00::", 7],
+  ["ff00::", 8],
+]) {
+  BLOCKED_IPV6.addSubnet(network, prefix, "ipv6");
+}
+for (const range of PRIVATE_IPV4_RANGES) {
+  const suffix = ipv4ToHexSuffix(range.start);
+  BLOCKED_IPV6.addSubnet(`::ffff:${suffix}`, 96 + range.prefix, "ipv6");
+  BLOCKED_IPV6.addSubnet(`64:ff9b::${suffix}`, 96 + range.prefix, "ipv6");
+}
 
 const BLOCKED_HOSTNAMES = new Set([
   "localhost", "ip6-localhost", "ip6-loopback",
@@ -61,6 +78,12 @@ function ipv4ToInt(ip) {
   return parts.reduce((acc, p) => (acc << 8) + p, 0) >>> 0;
 }
 
+function ipv4ToHexSuffix(ip) {
+  const value = ipv4ToInt(ip);
+  if (value === null) throw new Error(`SSRF 防护：内部 IPv4 规则无效 ${ip}`);
+  return `${((value >>> 16) & 0xffff).toString(16)}:${(value & 0xffff).toString(16)}`;
+}
+
 function isPrivateIPv4(ip) {
   const val = ipv4ToInt(ip);
   if (val === null) return false;
@@ -72,21 +95,45 @@ function isPrivateIPv4(ip) {
 }
 
 function isPrivateIPv6(ip) {
-  const lower = ip.toLowerCase();
-  if (lower === "::1" || lower === "::") return true; // loopback / unspecified
-  if (lower.startsWith("fe80")) return true; // link-local
-  if (lower.startsWith("fc") || lower.startsWith("fd")) return true; // unique local fc00::/7
-  if (lower.startsWith("::ffff:")) {
-    // IPv4-mapped IPv6
-    const v4 = lower.replace("::ffff:", "");
-    if (v4.includes(".")) return isPrivateIPv4(v4);
-  }
-  return false;
+  return net.isIP(ip) === 6 && BLOCKED_IPV6.check(ip, "ipv6");
 }
 
 function isPrivateIP(ip) {
-  if (ip.includes(":")) return isPrivateIPv6(ip);
-  return isPrivateIPv4(ip);
+  const family = net.isIP(ip);
+  if (family === 6) return isPrivateIPv6(ip);
+  if (family === 4) return isPrivateIPv4(ip);
+  return false;
+}
+
+function normalizeDeclaredFamily(value) {
+  if (value === undefined || value === null || value === "") return 0;
+  if (value === 4 || value === "4" || value === "IPv4") return 4;
+  if (value === 6 || value === "6" || value === "IPv6") return 6;
+  return -1;
+}
+
+function validatedAddressInfo(value, { source = "socket target", hostname = "" } = {}) {
+  const address = String(value?.address || "");
+  const family = net.isIP(address);
+  if (!family) {
+    const label = source === "DNS" ? "DNS 返回无效 IP 地址" : `${source} 无效 IP 地址`;
+    throw new Error(`SSRF 防护：${label} ${address || "<empty>"}`);
+  }
+  const declaredFamily = normalizeDeclaredFamily(value?.family);
+  if (declaredFamily === -1 || (declaredFamily && declaredFamily !== family)) {
+    throw new Error(`SSRF 防护：${source} 地址族 family 不匹配 ${address}`);
+  }
+  if (isPrivateIP(address)) {
+    if (source === "DNS") {
+      throw new Error(`SSRF 防护：域名 ${hostname} 解析到私网地址 ${address}`);
+    }
+    throw new Error(`SSRF 防护：${source} 禁止访问私网地址 ${address}`);
+  }
+  return Object.freeze({ address, family });
+}
+
+export function assertSafeSocketTarget(addressInfo) {
+  return validatedAddressInfo(addressInfo);
 }
 
 function isIPLiteral(hostname) {
@@ -119,12 +166,13 @@ async function resolveSafeUrl(rawUrl, lookup = dns.lookup) {
   }
 
   if (isIPLiteral(hostname)) {
-    if (isPrivateIP(hostname)) {
-      throw new Error(`SSRF 防护：禁止访问私网地址 ${hostname}`);
-    }
+    const addressInfo = validatedAddressInfo(
+      { address: hostname, family: net.isIP(hostname) },
+      { source: "URL 字面量" },
+    );
     return {
       parsed,
-      addresses: [{ address: hostname, family: net.isIP(hostname) }],
+      addresses: [addressInfo],
     };
   }
 
@@ -136,24 +184,15 @@ async function resolveSafeUrl(rawUrl, lookup = dns.lookup) {
   } catch {
     throw new Error(`SSRF 防护：无法解析域名 ${hostname}`);
   }
-  addrs = result.map((row) => {
-    const address = String(row.address || "");
-    const family = net.isIP(address);
-    if (!family) throw new Error(`SSRF 防护：DNS 返回无效 IP 地址 ${address || "<empty>"}`);
-    return { address, family };
-  });
+  addrs = result.map((row) => validatedAddressInfo(row, { source: "DNS", hostname }));
   if (!addrs.length) {
     throw new Error(`SSRF 防护：域名 ${hostname} 无解析结果`);
-  }
-  for (const row of addrs) {
-    if (isPrivateIP(row.address)) {
-      throw new Error(`SSRF 防护：域名 ${hostname} 解析到私网地址 ${row.address}`);
-    }
   }
   return { parsed, addresses: addrs };
 }
 
 function requestPinned(parsed, addressInfo, options) {
+  const pinnedAddress = assertSafeSocketTarget(addressInfo);
   return new Promise((resolve, reject) => {
     const client = parsed.protocol === "https:" ? https : http;
     const headers = new Headers(options.headers || {});
@@ -162,7 +201,7 @@ function requestPinned(parsed, addressInfo, options) {
       method: options.method || "GET",
       headers: Object.fromEntries(headers.entries()),
       lookup(_hostname, _lookupOptions, callback) {
-        callback(null, addressInfo.address, addressInfo.family);
+        callback(null, pinnedAddress.address, pinnedAddress.family);
       },
       signal: options.signal,
     }, (incoming) => {
@@ -223,7 +262,7 @@ export async function safeFetch(rawUrl, options = {}) {
   let currentUrl = rawUrl;
   for (let i = 0; i <= maxRedirects; i++) {
     const { parsed, addresses } = await resolveSafeUrl(currentUrl, options.lookup || dns.lookup);
-    const addressInfo = addresses[0];
+    const addressInfo = assertSafeSocketTarget(addresses[0]);
     const response = options.requestImpl
       ? await options.requestImpl(parsed, addressInfo, {
         method: options.method || "GET",
