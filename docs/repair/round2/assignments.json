@@ -54,7 +54,26 @@
       ],
       "evidenceDir": ".data/repair-evidence/R2-02.02/",
       "researchRecord": "docs/repair/round2/research/R2-02.02.md"
+    },
+    {
+      "itemId": "R2-02.03",
+      "machine": "B",
+      "complexity": "complex",
+      "status": "active",
+      "branch": "repair/b-r2-02-03",
+      "allowedPaths": [
+        "package.json",
+        "server/core/ssrf-guard.mjs",
+        "test-cidr-normalization.mjs",
+        "test-ssrf-guard.mjs",
+        "docs/repair/round2/research/R2-02.03.md",
+        "docs/repair/round2/records/R2-02.03.md",
+        "docs/repair/round2/master-register.md",
+        "docs/repair/round2/assignments.json"
+      ],
+      "evidenceDir": ".data/repair-evidence/R2-02.03/",
+      "researchRecord": "docs/repair/round2/research/R2-02.03.md"
     }
   ],
-  "updatedAt": "2026-08-05T03:37:02.532Z"
+  "updatedAt": "2026-08-05T03:52:29.002Z"
 }
