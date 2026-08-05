@@ -30,7 +30,32 @@ const BLOCKED_HOSTNAMES = new Set([
   "metadata.google.internal", // 云元数据服务
 ]);
 
+function rawAuthorityHostname(rawUrl) {
+  const match = /^[a-zA-Z][a-zA-Z\d+.-]*:\/\/(?<authority>[^/?#]*)/.exec(String(rawUrl).trim());
+  if (!match) return "";
+  let authority = match.groups.authority;
+  const userInfoEnd = authority.lastIndexOf("@");
+  if (userInfoEnd >= 0) authority = authority.slice(userInfoEnd + 1);
+  if (authority.startsWith("[")) return "";
+  const portStart = authority.lastIndexOf(":");
+  if (portStart >= 0) authority = authority.slice(0, portStart);
+  try {
+    return decodeURIComponent(authority).replace(/\.$/, "");
+  } catch {
+    return authority.replace(/\.$/, "");
+  }
+}
+
+function assertUnambiguousIpv4Authority(rawUrl) {
+  const hostname = rawAuthorityHostname(rawUrl);
+  if (!/^\d{1,3}(?:\.\d{1,3}){3}$/.test(hostname)) return;
+  if (hostname.split(".").some((octet) => /^0\d/.test(octet))) {
+    throw new Error(`SSRF 防护：拒绝含前导零的歧义 IPv4 主机 ${hostname}`);
+  }
+}
+
 function ipv4ToInt(ip) {
+  if (!/^(?:0|[1-9]\d{0,2})(?:\.(?:0|[1-9]\d{0,2})){3}$/.test(ip)) return null;
   const parts = ip.split(".").map((p) => Number.parseInt(p, 10));
   if (parts.length !== 4 || parts.some((p) => !Number.isFinite(p) || p < 0 || p > 255)) return null;
   return parts.reduce((acc, p) => (acc << 8) + p, 0) >>> 0;
@@ -65,12 +90,8 @@ function isPrivateIP(ip) {
 }
 
 function isIPLiteral(hostname) {
-  // IPv4
-  if (/^\d{1,3}(\.\d{1,3}){3}$/.test(hostname)) return true;
-  // IPv6 (含 [::1] 形式)
-  const v6 = hostname.startsWith("[") ? hostname.slice(1, -1) : hostname;
-  if (/^[0-9a-fA-F:]+$/.test(v6) && v6.includes(":")) return true;
-  return false;
+  const unbracketed = hostname.startsWith("[") ? hostname.slice(1, -1) : hostname;
+  return net.isIP(unbracketed) !== 0;
 }
 
 // 校验单个 URL 是否安全（不指向私网/localhost）
@@ -80,6 +101,7 @@ export async function assertSafeUrl(rawUrl) {
 }
 
 async function resolveSafeUrl(rawUrl, lookup = dns.lookup) {
+  assertUnambiguousIpv4Authority(rawUrl);
   let parsed;
   try {
     parsed = new URL(rawUrl);
@@ -108,12 +130,18 @@ async function resolveSafeUrl(rawUrl, lookup = dns.lookup) {
 
   // 域名：DNS 解析后校验所有 IP（防 DNS 重绑定）
   let addrs;
+  let result;
   try {
-    const result = await lookup(hostname, { all: true, verbatim: true });
-    addrs = result.map((row) => ({ address: row.address, family: row.family || net.isIP(row.address) }));
+    result = await lookup(hostname, { all: true, verbatim: true });
   } catch {
     throw new Error(`SSRF 防护：无法解析域名 ${hostname}`);
   }
+  addrs = result.map((row) => {
+    const address = String(row.address || "");
+    const family = net.isIP(address);
+    if (!family) throw new Error(`SSRF 防护：DNS 返回无效 IP 地址 ${address || "<empty>"}`);
+    return { address, family };
+  });
   if (!addrs.length) {
     throw new Error(`SSRF 防护：域名 ${hostname} 无解析结果`);
   }
