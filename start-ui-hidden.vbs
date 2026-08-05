@@ -12,7 +12,27 @@ Sub LogLine(message)
   On Error GoTo 0
 End Sub
 
+Function IsConsoleHost()
+  IsConsoleHost = (LCase(fso.GetFileName(WScript.FullName)) = "cscript.exe")
+End Function
+
+Sub FailAndQuit(message, exitCode)
+  LogLine "ERROR: " & message
+  If IsConsoleHost() Then
+    WScript.StdErr.WriteLine message
+  Else
+    shell.Popup message, 15, "Short Video Workbench - Startup Error", 16
+  End If
+  WScript.Quit exitCode
+End Sub
+
 Function FindNode()
+  configuredNode = Trim(shell.ExpandEnvironmentStrings("%DOUYIN_LAUNCHER_NODE%"))
+  If configuredNode <> "" And configuredNode <> "%DOUYIN_LAUNCHER_NODE%" Then
+    FindNode = configuredNode
+    Exit Function
+  End If
+
   candidates = Array( _
     shell.ExpandEnvironmentStrings("%ProgramFiles%") & "\nodejs\node.exe", _
     shell.ExpandEnvironmentStrings("%ProgramFiles(x86)%") & "\nodejs\node.exe" _
@@ -41,17 +61,25 @@ Function FindNode()
 End Function
 
 nodePath = FindNode()
-If nodePath = "" Then
-  LogLine "Node.js was not found. Install Node.js 22 or newer, then run the dependency installer."
-  WScript.Quit 1
+If nodePath = "" Or Not fso.FileExists(nodePath) Then
+  FailAndQuit "Node.js was not found. Install the supported Node.js version, then run pnpm install.", 1
 End If
 
 packagePath = base & "\node_modules\@yc-w-cn\douyin-mcp-server\package.json"
 If Not fso.FileExists(packagePath) Then
-  LogLine "Dependencies are missing. Run pnpm install before launching the workbench."
+  FailAndQuit "Dependencies are missing. Run pnpm install before launching the workbench.", 2
 End If
 
-cmd = """" & nodePath & """ """ & base & "\launch-ui.mjs"""
+launcherPath = base & "\launch-ui.mjs"
+If Not fso.FileExists(launcherPath) Then
+  FailAndQuit "The launch-ui.mjs startup entry is missing. Restore the application files before launching.", 3
+End If
+
+cmd = """" & nodePath & """ """ & launcherPath & """"
 shell.CurrentDirectory = base
 LogLine "Launching UI in hidden mode."
-shell.Run cmd, 0, False
+exitCode = shell.Run(cmd, 0, True)
+If exitCode <> 0 Then
+  FailAndQuit "The UI launcher failed with exit code " & exitCode & ". Check .data\launcher.log and restore missing dependencies or application files.", exitCode
+End If
+LogLine "UI launcher completed successfully."
