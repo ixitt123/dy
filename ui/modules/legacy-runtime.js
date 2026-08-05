@@ -4827,6 +4827,10 @@ async function refreshTtsJobs() {
       renderTtsCentralTimeline(latest, { preserveDraft: true });
       const linkedBgm = linkedTtsBgmJob(latest);
       if (linkedBgm) showTtsBgmPreview(linkedBgm);
+      else if (!ttsIsMusicJob(latest) && latest.status === "completed") {
+        clearTtsBgmPreview();
+        showTtsBgmMissing();
+      }
     }
   }
 }
@@ -4926,8 +4930,16 @@ function showTtsBgmPreview(job, { reveal = false, play = false } = {}) {
 function clearTtsBgmPreview() {
   if (ttsBgmPreview) ttsBgmPreview.hidden = true;
   if (ttsBgmAudio) {
+    ttsBgmAudio.pause();
     ttsBgmAudio.removeAttribute("src");
     ttsBgmAudio.load();
+    // Chromium can retain the previous read-only currentSrc after a no-source load.
+    // Replace the source-free element so a later task cannot expose that stale URL.
+    const clearedAudio = ttsBgmAudio.cloneNode(true);
+    clearedAudio.removeAttribute("src");
+    ttsBgmAudio.replaceWith(clearedAudio);
+    ttsBgmAudio = clearedAudio;
+    syncTtsBgmVolume();
   }
 }
 
@@ -5930,7 +5942,10 @@ function showTtsPreview(job, { reveal = false, autoPlay = false } = {}) {
   renderTtsAlignmentEditor(job);
   const linkedBgm = linkedTtsBgmJob(job);
   if (linkedBgm) showTtsBgmPreview(linkedBgm);
-  else if (!ttsIsMusicJob(job) && job?.status === "completed") showTtsBgmMissing();
+  else if (!ttsIsMusicJob(job) && job?.status === "completed") {
+    clearTtsBgmPreview();
+    showTtsBgmMissing();
+  }
   if (reveal) {
     window.requestAnimationFrame(() => {
       ttsPreview?.scrollIntoView?.({ behavior: "smooth", block: "center" });
@@ -5957,7 +5972,10 @@ function showTtsAudioFile(job) {
   }
   const linkedBgm = linkedTtsBgmJob(job);
   if (linkedBgm) showTtsBgmPreview(linkedBgm);
-  else if (!ttsIsMusicJob(job) && job?.status === "completed") showTtsBgmMissing();
+  else if (!ttsIsMusicJob(job) && job?.status === "completed") {
+    clearTtsBgmPreview();
+    showTtsBgmMissing();
+  }
   ttsPreview?.scrollIntoView?.({ behavior: "smooth", block: "center" });
 }
 
