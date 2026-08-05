@@ -81,6 +81,7 @@ try {
   const planText = readPlan(planPath);
   const specs = JSON.parse(fs.readFileSync(specsPath, "utf8"));
   const rows = parseRows(planText);
+  const coordination = readCoordination([]);
   check(rows.length === 73 && specs.items.length === 73, "73 repair rows and 73 execution specifications exist");
   check(new Set(rows.map((row) => row.id)).size === 73 && new Set(specs.items.map((item) => item.id)).size === 73, "all row and specification ids are unique");
 
@@ -95,32 +96,40 @@ try {
   check(tamperedProvenanceResult.status !== 0 && `${tamperedProvenanceResult.stdout}${tamperedProvenanceResult.stderr}`.includes("not present in recorded commit"), "portable control evidence rejects a provenance pointer that is not anchored in its recorded commit");
 
   let synthetic = withoutItemLogs(planText, "R2-00.03");
+  for (const row of parseRows(synthetic).filter((candidate) => !candidate.id.startsWith("R2-00.") && ["进行中", "待复验"].includes(candidate.state))) {
+    synthetic = forceRow(synthetic, row.id, { state: "未开始", attempts: 0 });
+  }
   synthetic = forceRow(synthetic, "R2-00.03", { state: "进行中", attempts: 0 });
   synthetic = forceRow(synthetic, "R2-00.04", { state: "未开始", attempts: 0 });
   synthetic = forceRow(synthetic, "R2-00.06", { state: "未开始", attempts: 0 });
   const syntheticPlan = path.join(tempRoot, "synthetic-plan.md");
+  const isolatedAssignmentsPath = path.join(tempRoot, "isolated-assignments.json");
+  const isolatedAssignments = structuredClone(coordination.assignmentDocument);
+  for (const entry of isolatedAssignments.assignments) entry.status = "planned";
+  fs.writeFileSync(isolatedAssignmentsPath, `${JSON.stringify(isolatedAssignments, null, 2)}\n`, "utf8");
+  const isolatedCoordinationArgs = ["--assignments", isolatedAssignmentsPath, "--policy", coordination.policyPath];
   fs.writeFileSync(syntheticPlan, synthetic, "utf8");
   const packetPath = path.join(tempRoot, "packet", "current-work-packet.md");
-  const packet = run(packetBuilder, ["--plan", syntheticPlan, "--specs", specsPath, "--output", packetPath]);
+  const packet = run(packetBuilder, ["--plan", syntheticPlan, "--specs", specsPath, "--output", packetPath, ...isolatedCoordinationArgs]);
   const packetText = fs.existsSync(packetPath) ? fs.readFileSync(packetPath, "utf8") : "";
   check(packet.status === 0 && packetText.includes("# 第二轮当前维修任务包｜R2-00.03") && packetText.includes("## RUN-R2-00.03"), "packet builder selects an active synthetic item and writes an isolated baseline", `${packet.stdout}${packet.stderr}`);
 
   const dummyPlan = path.join(tempRoot, "dummy-plan.md");
   fs.writeFileSync(dummyPlan, synthetic, "utf8");
-  const dummy = run(failureRecorder, ["--plan", dummyPlan, "--specs", specsPath, "--item", "R2-00.03", "--evidence", writeFailureEvidence("dummy", false), "--summary", "伪造的一字节证据"]);
+  const dummy = run(failureRecorder, ["--plan", dummyPlan, "--specs", specsPath, "--item", "R2-00.03", "--evidence", writeFailureEvidence("dummy", false), "--summary", "伪造的一字节证据", ...isolatedCoordinationArgs]);
   check(dummy.status !== 0 && `${dummy.stdout}${dummy.stderr}`.includes("verification-result.json") && fs.readFileSync(dummyPlan, "utf8") === synthetic, "dummy failure evidence is rejected without changing the plan", `${dummy.stdout}${dummy.stderr}`);
 
   const attemptPlan = path.join(tempRoot, "attempt-plan.md");
   fs.writeFileSync(attemptPlan, synthetic, "utf8");
   for (let attempt = 1; attempt <= 4; attempt += 1) {
-    const result = run(failureRecorder, ["--plan", attemptPlan, "--specs", specsPath, "--item", "R2-00.03", "--evidence", writeFailureEvidence(attempt), "--summary", `第 ${attempt} 次完整复验未达到全部验收条件`]);
+    const result = run(failureRecorder, ["--plan", attemptPlan, "--specs", specsPath, "--item", "R2-00.03", "--evidence", writeFailureEvidence(attempt), "--summary", `第 ${attempt} 次完整复验未达到全部验收条件`, ...isolatedCoordinationArgs]);
     const after = fs.readFileSync(attemptPlan, "utf8");
     const expectedState = attempt < 4 ? "待复验" : "四次失败待最终收尾";
     check(result.status === 0 && after.includes(`| \`R2-00.03\` | 控制 | ${expectedState} | ${attempt}/4 |`) && after.includes(`#### ATTEMPT-${attempt}-R2-00.03｜失败`), `attempt ${attempt} is recorded with state ${expectedState}`, `${result.stdout}${result.stderr}`);
   }
   const afterFourth = fs.readFileSync(attemptPlan, "utf8");
   check(afterFourth.includes("- 下一就绪项：R2-00.04") && afterFourth.includes("- 硬门禁资格：无；该状态只解锁排程"), "fourth failure advances scheduling without claiming completion");
-  const fifth = run(failureRecorder, ["--plan", attemptPlan, "--specs", specsPath, "--item", "R2-00.03", "--evidence", writeFailureEvidence(5), "--summary", "禁止的第五次普通维修"]);
+  const fifth = run(failureRecorder, ["--plan", attemptPlan, "--specs", specsPath, "--item", "R2-00.03", "--evidence", writeFailureEvidence(5), "--summary", "禁止的第五次普通维修", ...isolatedCoordinationArgs]);
   check(fifth.status !== 0 && `${fifth.stdout}${fifth.stderr}`.includes("fifth ordinary repair is forbidden") && fs.readFileSync(attemptPlan, "utf8") === afterFourth, "fifth repair is rejected without changing the plan", `${fifth.stdout}${fifth.stderr}`);
 
   const completionPlan = path.join(tempRoot, "completion-plan.md");
@@ -150,7 +159,7 @@ try {
     evidenceFiles: ["evidence.md", "completion-gates.json"].map((file) => ({ path: file, sha256: sha256(path.join(completionDir, file)) })),
     rollbackEvidence: ["evidence.md"],
   }, null, 2)}\n`, "utf8");
-  const completed = run(completionRecorder, ["--plan", completionPlan, "--specs", specsPath, "--item", "R2-00.03", "--evidence", completionDir, "--gates", gatesPath, "--summary", "独立四次状态机与73项规格全部复验通过"]);
+  const completed = run(completionRecorder, ["--plan", completionPlan, "--specs", specsPath, "--item", "R2-00.03", "--evidence", completionDir, "--gates", gatesPath, "--summary", "独立四次状态机与73项规格全部复验通过", ...isolatedCoordinationArgs]);
   const completionText = fs.readFileSync(completionPlan, "utf8");
   check(completed.status === 0 && completionText.includes("| `R2-00.03` | 控制 | 完成 | 1/4 |") && completionText.includes("#### EVIDENCE-R2-00.03｜七道门"), "completion recorder requires gates and writes a validated completion record", `${completed.stdout}${completed.stderr}`);
 
@@ -217,7 +226,6 @@ try {
   }
   check(injectionRejected, "placeholder values cannot inject shell control operators into completion commands");
 
-  const coordination = readCoordination([]);
   check(validateCoordination(coordination.policy, coordination.assignmentDocument, rows).length === 0, "B-primary dual-machine policy and planned assignments are valid");
   check(pathsOverlap("ui/modules", "ui/modules/tts.js") && !pathsOverlap("launch-ui.mjs", "server/core/ssrf-guard.mjs"), "path ownership detects directory overlap without false overlap across separate files");
   let aWriterRejected = false;
@@ -230,8 +238,12 @@ try {
 
   const activationPlan = path.join(tempRoot, "activation-plan.md");
   const activationAssignments = path.join(tempRoot, "assignments.json");
-  fs.writeFileSync(activationPlan, planText, "utf8");
-  fs.copyFileSync(coordination.assignmentsPath, activationAssignments);
+  let activationReadyPlan = planText;
+  for (const id of ["R2-01.12", "R2-02.02"]) activationReadyPlan = forceRow(activationReadyPlan, id, { state: "未开始", attempts: 0 });
+  fs.writeFileSync(activationPlan, activationReadyPlan, "utf8");
+  const activationReadyAssignments = structuredClone(coordination.assignmentDocument);
+  for (const entry of activationReadyAssignments.assignments) entry.status = "planned";
+  fs.writeFileSync(activationAssignments, `${JSON.stringify(activationReadyAssignments, null, 2)}\n`, "utf8");
   const aActivation = run(assignmentActivator, ["--machine", "A", "--items", "R2-01.12,R2-02.02", "--plan", activationPlan, "--assignments", activationAssignments, "--policy", coordination.policyPath]);
   check(aActivation.status !== 0 && `${aActivation.stdout}${aActivation.stderr}`.includes("only B may activate assignments"), "A cannot activate source assignments");
   const bActivation = run(assignmentActivator, ["--machine", "B", "--items", "R2-01.12,R2-02.02", "--plan", activationPlan, "--assignments", activationAssignments, "--policy", coordination.policyPath]);

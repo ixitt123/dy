@@ -35,7 +35,14 @@ function optionalUpstream(parameters) {
 }
 
 try {
-  const checked = spawnSync(process.execPath, [checker, "--plan", planPath, "--specs", specsPath], { cwd: process.cwd(), encoding: "utf8" });
+  const coordination = readCoordination(args);
+  const checked = spawnSync(process.execPath, [
+    checker,
+    "--plan", planPath,
+    "--specs", specsPath,
+    "--assignments", coordination.assignmentsPath,
+    "--policy", coordination.policyPath,
+  ], { cwd: process.cwd(), encoding: "utf8" });
   if (checked.status !== 0) stop(`plan validation failed\n${checked.stdout}${checked.stderr}`);
 
   const planText = readPlan(planPath);
@@ -47,7 +54,6 @@ try {
   let assignment = null;
   if (!current.id.startsWith("R2-00.")) {
     if (!new Set(["A", "B"]).has(machine)) stop("business work packets require --machine A or --machine B");
-    const coordination = readCoordination(args);
     assignment = assignmentFor(coordination.assignmentDocument, current.id, machine);
     if (!assignment) stop(`item ${current.id} is not assigned to machine ${machine}`);
     const ready = getReadyQueue(rows).some((row) => row.id === current.id);

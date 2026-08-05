@@ -92,6 +92,7 @@ try {
     atomicReplacePlan(planPath, original, updated);
     const checkArgs = [checker, "--plan", planPath];
     if (specs) checkArgs.push("--specs", path.resolve(specs));
+    checkArgs.push("--assignments", coordination.assignmentsPath, "--policy", coordination.policyPath);
     const checked = spawnSync(process.execPath, checkArgs, { cwd: process.cwd(), encoding: "utf8" });
     if (checked.status !== 0) {
       atomicReplacePlan(planPath, updated, original);

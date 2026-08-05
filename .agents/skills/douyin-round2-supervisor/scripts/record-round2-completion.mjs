@@ -92,7 +92,13 @@ try {
   const releaseLock = acquirePlanLock(planPath);
   try {
     atomicReplacePlan(planPath, original, updated);
-    const checkArgs = [checker, "--plan", planPath, "--specs", specsPath];
+    const checkArgs = [
+      checker,
+      "--plan", planPath,
+      "--specs", specsPath,
+      "--assignments", coordination.assignmentsPath,
+      "--policy", coordination.policyPath,
+    ];
     const checked = spawnSync(process.execPath, checkArgs, { cwd: process.cwd(), encoding: "utf8" });
     if (checked.status !== 0) {
       atomicReplacePlan(planPath, updated, original);
