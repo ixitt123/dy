@@ -1,0 +1,103 @@
+{
+  "schemaVersion": 1,
+  "itemId": "R2-01.04",
+  "originMachine": "B",
+  "availability": "origin-machine-local-not-synchronized",
+  "originalEvidencePath": "D:\\cs1\\dy-b-primary-20260805-102410\\.data\\repair-evidence\\R2-01.04\\20260805-190802\\attempt-1",
+  "sourceRepairCommit": "9edb53c1a738f7ac5ec2f7b92b43ce0fdcef9bf5",
+  "completionManifestSha256": "4ba90394135c1a73d4a960904ca78a039bcafb3ebe9addb01c597a4da409a9d9",
+  "receiptGeneratedAt": "2026-08-05T11:33:00.000Z",
+  "completionManifest": {
+    "itemId": "R2-01.04",
+    "verificationMode": "browser-real",
+    "completedVerification": true,
+    "completedAt": "2026-08-05T11:28:28.000Z",
+    "sourceRepairCommit": "9edb53c1a738f7ac5ec2f7b92b43ce0fdcef9bf5",
+    "attempt": 1,
+    "commands": [
+      {
+        "expectedCommand": "node test-tts-bgm-player.mjs",
+        "command": "node test-tts-bgm-player.mjs",
+        "exitCode": 0,
+        "outputPath": "01-tts-bgm-player.log",
+        "outputSha256": "5d0e844907683bd1d42476a9bafcc226baed94574d3bf1f829ff9bd4b42e815d"
+      },
+      {
+        "expectedCommand": "node test-tts-bundle-labels.mjs",
+        "command": "node test-tts-bundle-labels.mjs",
+        "exitCode": 0,
+        "outputPath": "02-tts-bundle-labels-compat.log",
+        "outputSha256": "8fa2f00d846880bcd298e65225f2c26851a8fc7142daee0b97be3b1226474393"
+      },
+      {
+        "expectedCommand": "node test-tts-bgm-option.mjs",
+        "command": "node test-tts-bgm-option.mjs",
+        "exitCode": 0,
+        "outputPath": "03-tts-bgm-option-compat.log",
+        "outputSha256": "6f6efa1b3f9e2da6b90c14cc73852073f51516cb5b29b4c6c49e1796d67f1974"
+      },
+      {
+        "expectedCommand": "pnpm.cmd run check:gate",
+        "command": "pnpm.cmd run check:gate",
+        "exitCode": 0,
+        "outputPath": "04-check-gate.log",
+        "outputSha256": "a792c864b0d029168d2953fe6707ae27cdc0dcb86b33eee072909670f8c17e14"
+      },
+      {
+        "expectedCommand": "pnpm.cmd run repair:r2:check",
+        "command": "pnpm.cmd run repair:r2:check",
+        "exitCode": 0,
+        "outputPath": "05-round2-check.log",
+        "outputSha256": "c7cb820882419fc5a5e0f5b9d5e21f1c2725a16751a7473b4beb1c28d22a3c43"
+      },
+      {
+        "expectedCommand": "pnpm.cmd run repair:r2:test-supervisor",
+        "command": "pnpm.cmd run repair:r2:test-supervisor",
+        "exitCode": 0,
+        "outputPath": "06-supervisor.log",
+        "outputSha256": "ac6edc141360884ca78fd8688c6f3160d734078bef11d638812c304ba7d79beb"
+      },
+      {
+        "expectedCommand": "git diff --check",
+        "command": "git diff --check",
+        "exitCode": 0,
+        "outputPath": "07-diff-submodule.log",
+        "outputSha256": "cfa2ce804ad149185cdbe22426946995a6d0aada5a7c2a929136dad0b0c007f0"
+      }
+    ],
+    "evidenceFiles": [
+      { "path": "01-tts-bgm-player.log", "sha256": "5d0e844907683bd1d42476a9bafcc226baed94574d3bf1f829ff9bd4b42e815d" },
+      { "path": "02-tts-bundle-labels-compat.log", "sha256": "8fa2f00d846880bcd298e65225f2c26851a8fc7142daee0b97be3b1226474393" },
+      { "path": "03-tts-bgm-option-compat.log", "sha256": "6f6efa1b3f9e2da6b90c14cc73852073f51516cb5b29b4c6c49e1796d67f1974" },
+      { "path": "04-check-gate.log", "sha256": "a792c864b0d029168d2953fe6707ae27cdc0dcb86b33eee072909670f8c17e14" },
+      { "path": "05-round2-check.log", "sha256": "c7cb820882419fc5a5e0f5b9d5e21f1c2725a16751a7473b4beb1c28d22a3c43" },
+      { "path": "06-supervisor.log", "sha256": "ac6edc141360884ca78fd8688c6f3160d734078bef11d638812c304ba7d79beb" },
+      { "path": "07-diff-submodule.log", "sha256": "cfa2ce804ad149185cdbe22426946995a6d0aada5a7c2a929136dad0b0c007f0" },
+      { "path": "08-service-restore.log", "sha256": "4045444bf696ba58052aee1569f29df0a4e7994c73ecd20d96a2018eb87b77ff" },
+      { "path": "browser/bgm-a-to-b-to-none-cleared.png", "sha256": "8c77b4cbcfb73fcaf524c22d1e0c7e8aece707d1cc3e6bc2d61455dbb8508b79" },
+      { "path": "browser/four-piece-86.png", "sha256": "f35eeb1d84ca249fe258533c34257f308680229a97b3f516037c548c5246398e" },
+      { "path": "browser/three-piece-84.png", "sha256": "65cee106513f857471dcfbe97fe5b56d11891de143cc5986d51d1216a2312a37" },
+      { "path": "compat-r2-01-02/browser/tts-bgm-explicit-association.png", "sha256": "e969c6a2a0afab200bd59cde284e8d988c8aeb543fd943ac7bb94f67930b0d97" },
+      { "path": "compat-r2-01-02/tests/tts-bgm-option.json", "sha256": "c9692dbc34289f7f0651c1e0ccecac23e56c5ba231e144cfd15aab01e7e1d068" },
+      { "path": "tests/tts-bgm-player.json", "sha256": "3587e3872c299c2b117756cbb90d01089d9d2bc465b6cc6cbe679b26a60a6a72" },
+      { "path": "tests/tts-bundle-labels.json", "sha256": "465ba329a576d0146187ab707f2e3d927393512bb646c891b356163b5c32ba7c" },
+      { "path": "completion-gates.json", "sha256": "ea765f29a7672297e3d9133a3c7289d31661136d6036420bae1fe68ef9954b2f" },
+      { "path": "verification-result.json", "sha256": "7b29a03de45bc0f927944c8dff9d7eb6ecd4a6aa6875580de0a34ffb9561f252" },
+      { "path": "verification-summary.md", "sha256": "5cf8c512a3a6ced6ef865cb446437f31891f1bcdb5638cad67af9c818eef1b42" },
+      { "path": "rollback-plan.md", "sha256": "5f53887581a28438c356d9577a42285ffca4dc1afd37c693c1cdabfdf57f4fb1" }
+    ],
+    "actualEvidence": [
+      "tests/tts-bgm-player.json",
+      "browser/bgm-a-to-b-to-none-cleared.png",
+      "verification-summary.md"
+    ],
+    "securityEvidence": [
+      "tests/tts-bgm-player.json",
+      "compat-r2-01-02/tests/tts-bgm-option.json"
+    ],
+    "rollbackEvidence": [
+      "rollback-plan.md",
+      "08-service-restore.log"
+    ]
+  }
+}
