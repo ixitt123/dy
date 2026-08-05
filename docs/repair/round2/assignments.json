@@ -283,7 +283,25 @@
       ],
       "evidenceDir": ".data/repair-evidence/R2-02.01/",
       "researchRecord": "docs/repair/round2/research/R2-02.01.md"
+    },
+    {
+      "itemId": "R2-02.06",
+      "machine": "B",
+      "complexity": "complex",
+      "status": "active",
+      "branch": "repair/b-r2-02-06",
+      "allowedPaths": [
+        "package.json",
+        "pnpm-lock.yaml",
+        "test-brace-expansion-dos.mjs",
+        "docs/repair/round2/research/R2-02.06.md",
+        "docs/repair/round2/records/R2-02.06.md",
+        "docs/repair/round2/master-register.md",
+        "docs/repair/round2/assignments.json"
+      ],
+      "evidenceDir": ".data/repair-evidence/R2-02.06/",
+      "researchRecord": "docs/repair/round2/research/R2-02.06.md"
     }
   ],
-  "updatedAt": "2026-08-05T14:26:41.023Z"
+  "updatedAt": "2026-08-05T14:33:19.522Z"
 }
