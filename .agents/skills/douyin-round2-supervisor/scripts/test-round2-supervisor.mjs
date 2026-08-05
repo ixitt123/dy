@@ -31,6 +31,7 @@ const planLibrary = path.join(scriptDir, "round2-plan-lib.mjs");
 const coordinationLibrary = path.join(scriptDir, "round2-coordination-lib.mjs");
 const planPath = resolvePlanPath(process.argv.slice(2));
 const specsPath = path.join(scriptDir, "..", "references", "round2-execution-specs.json");
+const provenancePath = path.join(scriptDir, "..", "..", "..", "..", "docs", "repair", "round2", "evidence-provenance.json");
 const firstRoundPath = path.join(os.homedir(), "Desktop", "01-短视频软件彻底修复执行总表.md");
 const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "douyin-round2-supervisor-"));
 
@@ -85,6 +86,13 @@ try {
 
   const normal = run(checker, ["--plan", planPath, "--specs", specsPath]);
   check(normal.status === 0 && normal.stdout.includes("items=73"), "current second-round plan passes independently of which item is current", `${normal.stdout}${normal.stderr}`);
+
+  const tamperedProvenancePath = path.join(tempRoot, "tampered-evidence-provenance.json");
+  const tamperedProvenance = JSON.parse(fs.readFileSync(provenancePath, "utf8"));
+  tamperedProvenance.records[0].recordedAtCommit = "0000000000000000000000000000000000000000";
+  fs.writeFileSync(tamperedProvenancePath, `${JSON.stringify(tamperedProvenance, null, 2)}\n`, "utf8");
+  const tamperedProvenanceResult = run(checker, ["--plan", planPath, "--specs", specsPath, "--evidence-provenance", tamperedProvenancePath]);
+  check(tamperedProvenanceResult.status !== 0 && `${tamperedProvenanceResult.stdout}${tamperedProvenanceResult.stderr}`.includes("not present in recorded commit"), "portable control evidence rejects a provenance pointer that is not anchored in its recorded commit");
 
   let synthetic = withoutItemLogs(planText, "R2-00.03");
   synthetic = forceRow(synthetic, "R2-00.03", { state: "进行中", attempts: 0 });

@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import {
   ACTIVE_STATES,
@@ -21,12 +22,21 @@ import { ACTIVE_ASSIGNMENT_STATES, readCoordination, validateCoordination } from
 const args = process.argv.slice(2);
 const planPath = resolvePlanPath(args);
 const specsIndex = args.indexOf("--specs");
+const provenanceIndex = args.indexOf("--evidence-provenance");
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
+const repoRoot = path.resolve(scriptDir, "..", "..", "..", "..");
 const specsPath = path.resolve(specsIndex >= 0 && args[specsIndex + 1]
   ? args[specsIndex + 1]
   : path.join(scriptDir, "..", "references", "round2-execution-specs.json"));
+const provenancePath = path.resolve(provenanceIndex >= 0 && args[provenanceIndex + 1]
+  ? args[provenanceIndex + 1]
+  : path.join(repoRoot, "docs", "repair", "round2", "evidence-provenance.json"));
 const problems = [];
 const legacyCompletedIds = new Set(["R2-00.01", "R2-00.02", "R2-00.05"]);
+let evidenceProvenance = null;
+try {
+  evidenceProvenance = JSON.parse(fs.readFileSync(provenancePath, "utf8"));
+} catch {}
 let previewSpecs = null;
 if (fs.existsSync(specsPath)) {
   try { previewSpecs = JSON.parse(fs.readFileSync(specsPath, "utf8")); } catch {}
@@ -35,6 +45,31 @@ const previewSpecById = new Map((previewSpecs?.items || []).map((item) => [item.
 
 function requireText(value, label) {
   if (typeof value !== "string" || !value.trim()) problems.push(`missing ${label}`);
+}
+
+function validateImportedControlEvidence(itemId, evidencePath, originalError) {
+  if (!String(originalError?.message || "").startsWith("missing evidence path:")) throw originalError;
+  if (!itemId.startsWith("R2-00.")) throw originalError;
+  if (evidenceProvenance?.schemaVersion !== 1 || !Array.isArray(evidenceProvenance?.records)) {
+    throw new Error(`missing or invalid evidence provenance: ${provenancePath}`);
+  }
+  const record = evidenceProvenance.records.find((entry) => entry.itemId === itemId);
+  if (!record || record.originMachine !== "A" || record.availability !== "origin-machine-local-not-synchronized"
+    || record.evidencePath !== evidencePath || !/^[a-f0-9]{40}$/i.test(record.recordedAtCommit || "")) {
+    throw originalError;
+  }
+  const normalized = path.win32.resolve(record.evidencePath).toLowerCase();
+  const marker = `\\.data\\repair-evidence\\${itemId.toLowerCase()}\\`;
+  if (!normalized.includes(marker)) throw new Error(`${itemId} imported evidence pointer is outside its item directory`);
+  const source = spawnSync("git", ["show", `${record.recordedAtCommit}:docs/repair/round2/master-register.md`], {
+    cwd: repoRoot,
+    encoding: "utf8",
+    windowsHide: true,
+  });
+  if (source.status !== 0 || !source.stdout.includes(`- 真实证据路径：${record.evidencePath}`)) {
+    throw new Error(`${itemId} imported evidence pointer is not present in recorded commit ${record.recordedAtCommit}`);
+  }
+  console.warn(`[round2-plan] NOTE: ${itemId} evidence remains local to A; immutable pointer verified at ${record.recordedAtCommit}`);
 }
 
 try {
@@ -106,7 +141,11 @@ try {
             if (legacyCompletedIds.has(row.id)) validateEvidencePath(row.id, rawEvidencePath);
             else validateCompletionEvidencePath(row.id, rawEvidencePath, mode, requiredGates, spec?.run?.commands || []);
           } catch (error) {
-            problems.push(`${row.id} invalid evidence: ${error.message}`);
+            try {
+              validateImportedControlEvidence(row.id, rawEvidencePath, error);
+            } catch (finalError) {
+              problems.push(`${row.id} invalid evidence: ${finalError.message}`);
+            }
           }
         }
         if (row.manual) {

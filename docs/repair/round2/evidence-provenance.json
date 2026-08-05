@@ -1,0 +1,48 @@
+{
+  "schemaVersion": 1,
+  "purpose": "Portable pointers for completed control evidence that remains local to A and is intentionally not synchronized to GitHub.",
+  "records": [
+    {
+      "itemId": "R2-00.01",
+      "originMachine": "A",
+      "availability": "origin-machine-local-not-synchronized",
+      "recordedAtCommit": "9fd9c89dec7422a3d8c7f46d451d9c1e6d3b15f8",
+      "evidencePath": "C:\\Users\\Admin\\Desktop\\短视频\\douyin-video-tool-source-code\\douyin-mcp-local\\.data\\repair-evidence\\R2-00.01\\20260804-165000"
+    },
+    {
+      "itemId": "R2-00.02",
+      "originMachine": "A",
+      "availability": "origin-machine-local-not-synchronized",
+      "recordedAtCommit": "9fd9c89dec7422a3d8c7f46d451d9c1e6d3b15f8",
+      "evidencePath": "C:\\Users\\Admin\\Desktop\\短视频\\douyin-video-tool-source-code\\douyin-mcp-local\\.data\\repair-evidence\\R2-00.02\\20260804-165000"
+    },
+    {
+      "itemId": "R2-00.03",
+      "originMachine": "A",
+      "availability": "origin-machine-local-not-synchronized",
+      "recordedAtCommit": "9fd9c89dec7422a3d8c7f46d451d9c1e6d3b15f8",
+      "evidencePath": "C:\\Users\\Admin\\Desktop\\短视频\\douyin-video-tool-source-code\\douyin-mcp-local\\.data\\repair-evidence\\R2-00.03\\20260804-170000"
+    },
+    {
+      "itemId": "R2-00.04",
+      "originMachine": "A",
+      "availability": "origin-machine-local-not-synchronized",
+      "recordedAtCommit": "9fd9c89dec7422a3d8c7f46d451d9c1e6d3b15f8",
+      "evidencePath": "C:\\Users\\Admin\\Desktop\\短视频\\douyin-video-tool-source-code\\douyin-mcp-local\\.data\\repair-evidence\\R2-00.04\\20260805-093605\\completion"
+    },
+    {
+      "itemId": "R2-00.05",
+      "originMachine": "A",
+      "availability": "origin-machine-local-not-synchronized",
+      "recordedAtCommit": "9fd9c89dec7422a3d8c7f46d451d9c1e6d3b15f8",
+      "evidencePath": "C:\\Users\\Admin\\Desktop\\短视频\\douyin-video-tool-source-code\\douyin-mcp-local\\.data\\repair-evidence\\R2-00.05\\20260804-165000"
+    },
+    {
+      "itemId": "R2-00.06",
+      "originMachine": "A",
+      "availability": "origin-machine-local-not-synchronized",
+      "recordedAtCommit": "9fd9c89dec7422a3d8c7f46d451d9c1e6d3b15f8",
+      "evidencePath": "C:\\Users\\Admin\\Desktop\\短视频\\douyin-video-tool-source-code\\douyin-mcp-local\\.data\\repair-evidence\\R2-00.06\\20260805-100200\\completion"
+    }
+  ]
+}
