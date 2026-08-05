@@ -39,7 +39,7 @@
       "itemId": "R2-01.14",
       "machine": "B",
       "complexity": "simple",
-      "status": "planned",
+      "status": "active",
       "branch": "repair/b-r2-01-14",
       "allowedPaths": [
         "start-ui-hidden.vbs",
@@ -111,5 +111,5 @@
       "researchRecord": "docs/repair/round2/research/R2-02.04.md"
     }
   ],
-  "updatedAt": "2026-08-05T07:35:40.668Z"
+  "updatedAt": "2026-08-05T07:39:18.761Z"
 }
