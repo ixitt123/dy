@@ -139,6 +139,7 @@
         "server/tts/",
         "server/tts/tts-handoff-service.mjs",
         "ui/modules/tts-handoff-store.js",
+        "ui/modules/legacy-runtime.js",
         "ui/workbench.js",
         "package.json",
         "pnpm-lock.yaml",
@@ -156,5 +157,5 @@
       "researchRecord": "docs/repair/round2/research/R2-01.01.md"
     }
   ],
-  "updatedAt": "2026-08-05T08:57:32.919Z"
+  "updatedAt": "2026-08-05T09:17:12.396Z"
 }
