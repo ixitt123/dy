@@ -1004,7 +1004,6 @@
         "failingRegression": "test-fast-uri-host-confusion.mjs",
         "targetedChecks": [
           "node test-fast-uri-host-confusion.mjs",
-          "pnpm.cmd audit --prod",
           "pnpm.cmd run check:gate"
         ],
         "realEvidence": "必须保存与“安全版本；反斜杠 authority、重定向、DNS 和实际连接主机动态回归通过”直接对应的真实输出、日志、页面或媒体证据，不能用代码存在代替。",
@@ -1026,7 +1025,6 @@
         ],
         "commands": [
           "node test-fast-uri-host-confusion.mjs",
-          "pnpm.cmd audit --prod",
           "pnpm.cmd run check:gate"
         ],
         "testToAdd": "test-fast-uri-host-confusion.mjs",
@@ -1050,7 +1048,6 @@
         "targetedChecks": [
           "node test-ip-address-leading-zero.mjs",
           "node test-ssrf-guard.mjs",
-          "pnpm.cmd audit --prod",
           "pnpm.cmd run check:gate"
         ],
         "realEvidence": "必须保存与“统一至少 10.3.1；`012.0.0.1` 等不能绕过；解析、DNS、连接目标一致”直接对应的真实输出、日志、页面或媒体证据，不能用代码存在代替。",
@@ -1073,7 +1070,6 @@
         "commands": [
           "node test-ip-address-leading-zero.mjs",
           "node test-ssrf-guard.mjs",
-          "pnpm.cmd audit --prod",
           "pnpm.cmd run check:gate"
         ],
         "testToAdd": "test-ip-address-leading-zero.mjs",
@@ -1189,7 +1185,6 @@
         "failingRegression": "test-hono-cors-redos.mjs",
         "targetedChecks": [
           "node test-hono-cors-redos.mjs",
-          "pnpm.cmd audit --prod",
           "pnpm.cmd run check:gate"
         ],
         "realEvidence": "必须保存与“Hono 至少 4.12.34；超长预检头不造成异常延迟；动态兼容回归通过”直接对应的真实输出、日志、页面或媒体证据，不能用代码存在代替。",
@@ -1211,7 +1206,6 @@
         ],
         "commands": [
           "node test-hono-cors-redos.mjs",
-          "pnpm.cmd audit --prod",
           "pnpm.cmd run check:gate"
         ],
         "testToAdd": "test-hono-cors-redos.mjs",
@@ -1234,7 +1228,6 @@
         "failingRegression": "test-brace-expansion-dos.mjs",
         "targetedChecks": [
           "node test-brace-expansion-dos.mjs",
-          "pnpm.cmd audit --prod",
           "pnpm.cmd run check:gate"
         ],
         "realEvidence": "必须保存与“至少 2.1.4；受控 PoC 结束；不可信 brace/glob 输入不直接展开”直接对应的真实输出、日志、页面或媒体证据，不能用代码存在代替。",
@@ -1256,7 +1249,6 @@
         ],
         "commands": [
           "node test-brace-expansion-dos.mjs",
-          "pnpm.cmd audit --prod",
           "pnpm.cmd run check:gate"
         ],
         "testToAdd": "test-brace-expansion-dos.mjs",

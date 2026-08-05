@@ -206,9 +206,11 @@ try {
     && byId.get("R2-01.01").run.testToAdd === "test-tts-auto-preview.mjs"
     && byId.get("R2-02.05").run.testToAdd === "test-hono-cors-redos.mjs"
     && byId.get("R2-02.06").run.testToAdd === "test-brace-expansion-dos.mjs"
+    && ["R2-02.01", "R2-02.02", "R2-02.05", "R2-02.06"].every((id) => !byId.get(id).run.commands.includes("pnpm.cmd audit --prod"))
+    && byId.get("R2-02.07").run.commands.includes("pnpm.cmd audit --prod")
     && byId.get("R2-04.01").run.commands.some((command) => command.includes("--line cs1") && !command.includes("--bgm"))
     && byId.get("R2-04.02").run.commands.some((command) => command.includes("--line cs1") && command.includes("--bgm"))
-    && byId.get("R2-03.04").run.commands.some((command) => command.startsWith("gh pr checks")), "browser, security, production-media and remote-gate items use specific evidence commands");
+    && byId.get("R2-03.04").run.commands.some((command) => command.startsWith("gh pr checks")), "browser, item-scoped security, global dependency audit, production-media and remote-gate items use specific evidence commands");
 
   const mediaSpec = byId.get("R2-04.01");
   const injectionDir = path.join(tempRoot, ".data", "repair-evidence", "R2-04.01", "injection");
