@@ -1,0 +1,58 @@
+{
+  "schemaVersion": 1,
+  "itemId": "R2-02.03",
+  "originMachine": "B",
+  "availability": "origin-machine-local-not-synchronized",
+  "originalEvidencePath": "D:\\cs1\\dy-b-primary-20260805-102410\\.data\\repair-evidence\\R2-02.03\\20260805-120100\\attempt-1",
+  "sourceRepairCommit": "ecd6d1c709c205dced1996d3b1ccee1800ec9fee",
+  "completionManifestSha256": "f2cc2a8a5f08eaf79c2c2a7870b17b263a8797795a5cb1f375e6f4492d26a542",
+  "receiptGeneratedAt": "2026-08-05T04:04:30.000Z",
+  "completionManifest": {
+    "itemId": "R2-02.03",
+    "verificationMode": "security-dynamic",
+    "completedVerification": true,
+    "completedAt": "2026-08-05T04:01:46.894Z",
+    "commands": [
+      {
+        "expectedCommand": "node test-cidr-normalization.mjs",
+        "command": "node test-cidr-normalization.mjs",
+        "exitCode": 0,
+        "outputPath": "01-cidr-normalization.log",
+        "outputSha256": "b3b06e72b21f623fabc311a1241a2207470dc8702d362b633920fd1116b0414f"
+      },
+      {
+        "expectedCommand": "node test-ssrf-guard.mjs",
+        "command": "node test-ssrf-guard.mjs",
+        "exitCode": 0,
+        "outputPath": "02-ssrf-guard.log",
+        "outputSha256": "b907b750c62a6f582e3ea122fa2b3540d97ee7865a8405c384c803c8b6f55572"
+      },
+      {
+        "expectedCommand": "pnpm.cmd run check:gate",
+        "command": "pnpm.cmd run check:gate",
+        "exitCode": 0,
+        "outputPath": "03-check-gate.log",
+        "outputSha256": "7908a0daad74695e5d6608c08cd85f16320f93a5ab4a253848427ffd8d316ab1"
+      }
+    ],
+    "evidenceFiles": [
+      { "path": "01-cidr-normalization.log", "sha256": "b3b06e72b21f623fabc311a1241a2207470dc8702d362b633920fd1116b0414f" },
+      { "path": "02-ssrf-guard.log", "sha256": "b907b750c62a6f582e3ea122fa2b3540d97ee7865a8405c384c803c8b6f55572" },
+      { "path": "03-check-gate.log", "sha256": "7908a0daad74695e5d6608c08cd85f16320f93a5ab4a253848427ffd8d316ab1" },
+      { "path": "04-round2-check.log", "sha256": "ef02e9a52e31c607770525688be67927c71b05894720b3eda7a577b13b2cb13c" },
+      { "path": "05-supervisor.log", "sha256": "4f41c96649ac719b946d70c7a73900bf6cbcc55713fcb35f125c575d0624babe" },
+      { "path": "06-diff-check.log", "sha256": "56fd3f51a6904d48b3d9c55b9d77a370a9072b020f6411f72dc1860b6d12e65e" },
+      { "path": "completion-gates.json", "sha256": "7f355cc5be69400e964befaea884864bb87b5432183090b8822683668a09ac77" },
+      { "path": "rollback-plan.md", "sha256": "903d80a725c24f110c197aedd80156a7176ca47e5a787a6335d79fcf750e23dc" },
+      { "path": "verification-summary.md", "sha256": "e292b34380fb845bcce986348f4b93f2cd0719d45538bea66006512467ba9396" }
+    ],
+    "securityEvidence": [
+      "01-cidr-normalization.log",
+      "02-ssrf-guard.log",
+      "verification-summary.md"
+    ],
+    "rollbackEvidence": [
+      "rollback-plan.md"
+    ]
+  }
+}
