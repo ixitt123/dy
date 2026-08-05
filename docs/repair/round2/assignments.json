@@ -221,7 +221,27 @@
       ],
       "evidenceDir": ".data/repair-evidence/R2-01.04/",
       "researchRecord": "docs/repair/round2/research/R2-01.04.md"
+    },
+    {
+      "itemId": "R2-01.07",
+      "machine": "B",
+      "complexity": "complex",
+      "status": "active",
+      "branch": "repair/b-r2-01-07",
+      "allowedPaths": [
+        "server/tts/",
+        "ui/modules/tts-handoff-store.js",
+        "ui/workbench.js",
+        "server/kinetic-text/kinetic-text-service.js",
+        "server/routes/kinetic-text-routes.js",
+        "ui/modules/kinetic-text.js",
+        "test-kinetic-bgm-player-browser.mjs",
+        "docs/repair/round2/research/R2-01.07.md",
+        "docs/repair/round2/records/R2-01.07.md"
+      ],
+      "evidenceDir": ".data/repair-evidence/R2-01.07/",
+      "researchRecord": "docs/repair/round2/research/R2-01.07.md"
     }
   ],
-  "updatedAt": "2026-08-05T11:32:15.906Z"
+  "updatedAt": "2026-08-05T11:41:15.482Z"
 }
