@@ -1,0 +1,60 @@
+{
+  "schemaVersion": 1,
+  "itemId": "R2-01.01",
+  "originMachine": "B",
+  "availability": "origin-machine-local-not-synchronized",
+  "originalEvidencePath": "D:\\cs1\\dy-b-primary-20260805-102410\\.data\\repair-evidence\\R2-01.01\\20260805-165909\\attempt-1",
+  "sourceRepairCommit": "3af8a20674d8388a682df8586f626a386aa8d8ad",
+  "completionManifestSha256": "3e1c39bc7e30fb988c4fec64989057334dceeaea9eaaefd4ce1a182732b5b73f",
+  "receiptGeneratedAt": "2026-08-05T09:35:35.862Z",
+  "completionManifest": {
+    "itemId": "R2-01.01",
+    "verificationMode": "browser-real",
+    "completedVerification": true,
+    "completedAt": "2026-08-05T09:31:32.258Z",
+    "sourceRepairCommit": "3af8a20674d8388a682df8586f626a386aa8d8ad",
+    "attempt": 1,
+    "commands": [
+      {
+        "expectedCommand": "node test-tts-auto-preview.mjs",
+        "command": "node test-tts-auto-preview.mjs",
+        "exitCode": 0,
+        "outputPath": "01-tts-auto-preview.log",
+        "outputSha256": "8722ed0893d454d60079d48f8d5dd46e5dd58b42c83a7db4626e505e577ed072"
+      },
+      {
+        "expectedCommand": "pnpm.cmd run check:gate",
+        "command": "pnpm.cmd run check:gate",
+        "exitCode": 0,
+        "outputPath": "02-check-gate.log",
+        "outputSha256": "a33bee36daaf945bef1158af7ed29c7cfdccb4126c62b73d9d56e26f3cf53af3"
+      }
+    ],
+    "evidenceFiles": [
+      { "path": "01-tts-auto-preview.log", "sha256": "8722ed0893d454d60079d48f8d5dd46e5dd58b42c83a7db4626e505e577ed072" },
+      { "path": "02-check-gate.log", "sha256": "a33bee36daaf945bef1158af7ed29c7cfdccb4126c62b73d9d56e26f3cf53af3" },
+      { "path": "03-round2-check.log", "sha256": "85dcb05d65ef28c8238ee5eb91901ebca7f8b1203024a304691464da72843f00" },
+      { "path": "04-supervisor.log", "sha256": "6450de18ae0b80dcbe8d1d54f8f7f54925cf1d3c05f268fe3f916052120a265c" },
+      { "path": "05-diff-git-submodule.log", "sha256": "0f289420220c31e2c28a0666b45c2d28b1f9227e4935a5fdf73c3110bb573dce" },
+      { "path": "06-service-restore.log", "sha256": "5bf9c1984c2f398c1c107fa6f66a011a1b9973d4a9d42824eee7cd244a927c85" },
+      { "path": "completion-gates.json", "sha256": "e111cfa7c0c224107b3213fc407d87a6ef0800106e912d164d13047bd4b19e12" },
+      { "path": "verification-summary.md", "sha256": "2e5de9da79c57603d6ce131efd48ef7be4cd13c6c5e2f135b48ec9acc16f0524" },
+      { "path": "rollback-plan.md", "sha256": "65a6cbc09c3274c8995903c1a804fc0864c5dad9ff8a2775fc0dfd0473960ea0" },
+      { "path": "verification-result.json", "sha256": "2b15f4f761eca869601487a20e5852a073d3818fee1372708e04ba8087e5e0ef" },
+      { "path": "tests/tts-auto-preview.json", "sha256": "a02ca3a88a289a24d813cefdefd16d8f2317fa7a748fe07a543b32674188c790" },
+      { "path": "browser/tts-auto-preview.png", "sha256": "7dec19b7d7d201319f019d411903a07e1ed5969567a607e1fb8dc90bd8f0bb57" }
+    ],
+    "actualEvidence": [
+      "tests/tts-auto-preview.json",
+      "browser/tts-auto-preview.png",
+      "verification-summary.md"
+    ],
+    "securityEvidence": [
+      "tests/tts-auto-preview.json"
+    ],
+    "rollbackEvidence": [
+      "rollback-plan.md",
+      "06-service-restore.log"
+    ]
+  }
+}
