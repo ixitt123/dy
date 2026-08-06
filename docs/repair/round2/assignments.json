@@ -288,7 +288,7 @@
       "itemId": "R2-02.06",
       "machine": "B",
       "complexity": "complex",
-      "status": "active",
+      "status": "closed",
       "branch": "repair/b-r2-02-06",
       "allowedPaths": [
         "package.json",
@@ -303,5 +303,5 @@
       "researchRecord": "docs/repair/round2/research/R2-02.06.md"
     }
   ],
-  "updatedAt": "2026-08-05T14:33:19.522Z"
+  "updatedAt": "2026-08-06T01:22:19.840Z"
 }
