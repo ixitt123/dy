@@ -301,7 +301,25 @@
       ],
       "evidenceDir": ".data/repair-evidence/R2-02.06/",
       "researchRecord": "docs/repair/round2/research/R2-02.06.md"
+    },
+    {
+      "itemId": "R2-02.05",
+      "machine": "B",
+      "complexity": "complex",
+      "status": "active",
+      "branch": "repair/b-r2-02-05",
+      "allowedPaths": [
+        "package.json",
+        "pnpm-lock.yaml",
+        "test-hono-cors-redos.mjs",
+        "docs/repair/round2/research/R2-02.05.md",
+        "docs/repair/round2/records/R2-02.05.md",
+        "docs/repair/round2/master-register.md",
+        "docs/repair/round2/assignments.json"
+      ],
+      "evidenceDir": ".data/repair-evidence/R2-02.05/",
+      "researchRecord": "docs/repair/round2/research/R2-02.05.md"
     }
   ],
-  "updatedAt": "2026-08-06T01:22:19.840Z"
+  "updatedAt": "2026-08-06T01:30:15.169Z"
 }
