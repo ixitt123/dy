@@ -49,6 +49,10 @@ import {
 } from "./server/core/desktop-date-folder.js";
 import { formatOriginalMomentsPost } from "./server/core/moments-original.js";
 import { parseJsonFromModelText as parseStructuredJsonFromModelText } from "./server/core/structured-json.js";
+import { runRewriteGenerationWithRetry } from "./server/core/rewrite-generation-retry.js";
+import {
+  runRewriteStructuredJson,
+} from "./server/core/rewrite-structured-completion.js";
 import { createPageLifecycle } from "./server/core/page-lifecycle.js";
 import { HttpBodyError, readBody, readJsonBody } from "./server/utils/http-body.js";
 import { isPathInsideRoot, resolveStaticRequestPath } from "./server/core/static-path-safety.js";
@@ -73,6 +77,12 @@ import { AUTO_MODEL_VALUE, REWRITE_PROVIDER_ORDER, REWRITE_PROVIDER_PRESETS } fr
 const runtimeSourcePath = fileURLToPath(import.meta.url);
 const runtimeSourceMtimeMs = fs.statSync(runtimeSourcePath).mtimeMs;
 const __dirname = path.dirname(runtimeSourcePath);
+const runtimeStartedAt = new Date().toISOString();
+const runtimeInstanceId = randomUUID();
+const runtimeProjectRoot = fs.realpathSync.native(__dirname);
+const runtimeNormalizedProjectRoot = process.platform === "win32" ? runtimeProjectRoot.toLowerCase() : runtimeProjectRoot;
+const runtimeProjectRootSha256 = createHash("sha256").update(runtimeNormalizedProjectRoot).digest("hex");
+const runtimeSourceSha256 = createHash("sha256").update(fs.readFileSync(runtimeSourcePath)).digest("hex");
 const uiDir = path.join(__dirname, "ui");
 const skillsDir = path.join(__dirname, "skills");
 const promptsDir = path.join(__dirname, "prompts");
@@ -106,7 +116,11 @@ const browserDownloadsDir = path.join(browserDownloadsRoot, `session-${process.p
 const localMediaDir = path.join(__dirname, "local-media");
 const pidPath = path.join(__dirname, "ui-server.pid");
 const urlPath = path.join(__dirname, "ui-server.url");
+const identityStatePath = path.join(__dirname, ".data", "ui-server.identity.json");
+const legacyIdentityStatePath = path.join(__dirname, "ui-server.identity.json");
 const settingsPath = path.join(__dirname, "settings.json");
+let runtimeReady = false;
+let runtimeUrl = "";
 const ffprobePath = ffprobeStatic?.path || "";
 // Cookies are scoped by host, not port. A port-specific name keeps multiple
 // local workbench instances from overwriting one another's API session.
@@ -422,6 +436,26 @@ function sendJson(res, status, value, headers = {}) {
     ...headers,
   });
   res.end(body);
+}
+
+function runtimeIdentitySnapshot() {
+  return {
+    ok: true,
+    protocolVersion: 1,
+    projectRootSha256: runtimeProjectRootSha256,
+    sourceSha256: runtimeSourceSha256,
+    commit: runtimeVersion.commit,
+    instanceId: runtimeInstanceId,
+    pid: process.pid,
+    startedAt: runtimeStartedAt,
+    health: runtimeReady ? "ready" : "starting",
+    url: runtimeUrl || null,
+  };
+}
+
+function writeRuntimeIdentityState() {
+  fs.mkdirSync(path.dirname(identityStatePath), { recursive: true });
+  fs.writeFileSync(identityStatePath, `${JSON.stringify(runtimeIdentitySnapshot(), null, 2)}\n`, "utf8");
 }
 
 function sendCodedError(res, error, options = {}) {
@@ -4432,6 +4466,17 @@ async function chatCompletion(provider, messages, signal, {
   }
 }
 
+function rewriteStructuredJson(provider, messages, signal, options = {}) {
+  return runRewriteStructuredJson(
+    chatCompletion,
+    parseJsonFromModelText,
+    provider,
+    messages,
+    signal,
+    options,
+  );
+}
+
 async function generateStructuredJson({
   providerId,
   messages,
@@ -5966,7 +6011,7 @@ async function repairRewriteWordCounts(provider, versions, specs, signal) {
         : count < range.min
           ? `当前少 ${range.min - count} 字。请补充原文能够支持的具体细节和完整收尾，不得编造事实。`
           : `当前超过允许上限 ${count - softMax} 字。请智能压缩重复内容，但必须保留核心观点、行动号召和完整结尾。`;
-      const correctedContent = await chatCompletion(provider, [
+      const corrected = await rewriteStructuredJson(provider, [
         {
           role: "system",
           content: "你是中文文案字数与完整性校准器。只输出 JSON，不要 Markdown，不要解释。",
@@ -5989,8 +6034,10 @@ async function repairRewriteWordCounts(provider, versions, specs, signal) {
             `输出格式：{"versions":{"${spec.key}":"修正后的完整文案"}}`,
           ].join("\n\n"),
         },
-      ], signal, { temperature: 0.25 });
-      const corrected = parseJsonFromModelText(correctedContent);
+      ], signal, {
+        temperature: 0.25,
+        requestName: "文案字数校准",
+      });
       const replacement = normalizeRewriteVersionContent(
         readVersionValue({ versions: corrected.versions || corrected }, spec)
       );
@@ -6039,7 +6086,7 @@ async function ensureRewriteCoherence(provider, versions, specs, sourceText, sig
         content: version.content,
       };
     });
-    const reviewContent = await chatCompletion(provider, [
+    const review = await rewriteStructuredJson(provider, [
       {
         role: "system",
         content: "你是中文文章连贯性质检与修复器。只输出严格 JSON，不要 Markdown，不要解释。",
@@ -6066,8 +6113,10 @@ async function ensureRewriteCoherence(provider, versions, specs, sourceText, sig
           '{"versions":{"版本key":{"pass":true,"issues":[],"content":"检查或修复后的完整文章","conversionStructure":{"hook":"","painConflict":"","turn":"","climax":"","ending":""}}}}',
         ].join("\n\n"),
       },
-    ], signal, { temperature: 0.2 });
-    const review = parseJsonFromModelText(reviewContent);
+    ], signal, {
+      temperature: 0.2,
+      requestName: "文案连贯性质检",
+    });
     const next = current.map((item) => ({ ...item }));
     let allPassed = true;
     lastIssues = [];
@@ -6201,7 +6250,7 @@ async function rewriteTranscriptWithProvider({ providerId, transcriptText, analy
       skill_rewrite_douyin_education: assets.skills.rewriteEducation,
       skill_boss_style: assets.skills.bossStyle,
     });
-    const draftContent = await chatCompletion(provider, [
+    const draft = await rewriteStructuredJson(provider, [
       {
         role: "system",
         content: [
@@ -6215,8 +6264,7 @@ async function rewriteTranscriptWithProvider({ providerId, transcriptText, analy
         role: "user",
         content: pipelinePrompt,
       },
-    ], signal);
-    const draft = parseJsonFromModelText(draftContent);
+    ], signal, { requestName: "文案初稿" });
     let batchRewrite = normalizeRewrite(draft.versions ? { versions: draft.versions } : draft, {
       provider: provider.id,
       model: provider.model,
@@ -6247,7 +6295,7 @@ async function rewriteTranscriptWithProvider({ providerId, transcriptText, analy
           versions: Object.fromEntries(batchRewrite.versions.map((item) => [item.key, item.content])),
         }, null, 2),
       });
-      const humanizedContent = await chatCompletion(provider, [
+      const humanized = await rewriteStructuredJson(provider, [
         {
           role: "system",
           content: "你是中文去 AI 味二次处理器。只输出 JSON，不要 Markdown，不要解释。",
@@ -6256,8 +6304,7 @@ async function rewriteTranscriptWithProvider({ providerId, transcriptText, analy
           role: "user",
           content: humanizePrompt,
         },
-      ], signal);
-      const humanized = parseJsonFromModelText(humanizedContent);
+      ], signal, { requestName: "文案去 AI 味" });
       batchRewrite = normalizeRewrite(humanized.versions || humanized, {
         provider: provider.id,
         model: provider.model,
@@ -7522,6 +7569,10 @@ const server = http.createServer(async (req, res) => {
 
   try {
     if (rejectHttpHost(req, res)) return;
+    if (req.method === "GET" && url.pathname === "/.well-known/douyin-runtime") {
+      sendJson(res, 200, runtimeIdentitySnapshot());
+      return;
+    }
     if (url.pathname.startsWith("/api/") && rejectLocalApiRequest(req, res)) return;
 
     if (req.method === "GET" && url.pathname === "/api/status") {
@@ -8161,7 +8212,7 @@ const server = http.createServer(async (req, res) => {
         sendJson(res, 400, { ok: false, message: "文案为空，无法改写" });
         return;
       }
-      const rewrite = await rewriteTranscriptWithProvider({
+      const generationResult = await runRewriteGenerationWithRetry(() => rewriteTranscriptWithProvider({
         providerId: body.provider,
         transcriptText,
         analysis: safeJsonParse(task.ai_json),
@@ -8174,11 +8225,25 @@ const server = http.createServer(async (req, res) => {
         versionSpecs: body.versionSpecs || body.versions || [],
         revisionInstruction: String(body.revisionInstruction || ""),
         task,
+      }), {
+        onRetry: ({ nextAttempt, delayMs, error }) => {
+          const versionKeys = (body.versionSpecs || body.versions || [])
+            .map((item) => String(item?.key || "").trim())
+            .filter(Boolean)
+            .join(",") || "default";
+          const reason = error?.status || error?.code || error?.name || "retryable";
+          console.warn(`[rewrite] task=${id} versions=${versionKeys} retry=${nextAttempt}/2 delay=${delayMs}ms reason=${reason}`);
+        },
       });
+      const rewrite = generationResult.value;
       const updatedTask = body.previewOnly ? task : saveRewriteForTask(task, rewrite, "md");
       sendJson(res, 200, {
         ok: true,
         rewrite,
+        generation: {
+          attempts: generationResult.attempts,
+          retried: generationResult.retried,
+        },
         task: updatedTask,
         transcripts: transcriptRows(),
       });
@@ -10009,7 +10074,7 @@ function acquireRuntimeLock() {
   if (existingPid && existingPid !== process.pid && processIsRunning(existingPid)) {
     return { acquired: false, existingPid };
   }
-  for (const filePath of [pidPath, urlPath]) {
+  for (const filePath of [pidPath, urlPath, identityStatePath, legacyIdentityStatePath]) {
     try {
       if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
     } catch {
@@ -10073,11 +10138,14 @@ async function start() {
 
   localApiCookieName = `__dy_local_api_${port}`;
   const url = `http://127.0.0.1:${port}`;
+  runtimeUrl = url;
+  startTaskQueue();
+  runtimeReady = true;
+  writeRuntimeIdentityState();
   fs.writeFileSync(urlPath, url, "utf8");
   console.log(`Douyin page: ${url}`);
   console.log(`Download folder: ${downloadsDir}`);
   console.log("Keep this window open while using the page.");
-  startTaskQueue();
 
   if (process.argv.includes("--open")) {
     spawn("cmd", ["/c", "start", "", url], { detached: true, stdio: "ignore" }).unref();
@@ -10088,7 +10156,8 @@ function cleanupRuntimeFiles() {
   if (!ownsRuntimeLock) return;
   const ownerPid = runtimeOwnerPid();
   if (ownerPid && ownerPid !== process.pid) return;
-  for (const filePath of [pidPath, urlPath]) {
+  runtimeReady = false;
+  for (const filePath of [pidPath, urlPath, identityStatePath, legacyIdentityStatePath]) {
     try {
       if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
     } catch {

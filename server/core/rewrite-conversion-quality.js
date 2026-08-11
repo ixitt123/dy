@@ -39,6 +39,21 @@ export function conversionStructureEvidenceIsGrounded(content, structure = {}) {
   });
 }
 
+function groundedEvidenceContext(content, evidence, nextEvidence = "", radius = 72) {
+  const text = String(content || "");
+  const phrase = String(evidence || "").trim();
+  if (!text || !phrase) return phrase;
+  const index = text.indexOf(phrase);
+  if (index < 0) return phrase;
+  const nextPhrase = String(nextEvidence || "").trim();
+  const nextIndex = nextPhrase ? text.indexOf(nextPhrase, index + phrase.length) : -1;
+  const endBoundary = nextIndex >= 0 ? nextIndex : text.length;
+  return text.slice(
+    Math.max(0, index - radius),
+    Math.min(endBoundary, index + phrase.length + radius),
+  );
+}
+
 export function parentConversionLocalQuality({
   content,
   conversionStructure = {},
@@ -48,6 +63,11 @@ export function parentConversionLocalQuality({
   const issues = [];
   const compactHook = compactRewriteEvidence(conversionStructure.hook);
   const compactClimax = compactRewriteEvidence(conversionStructure.climax);
+  const climaxContext = groundedEvidenceContext(
+    content,
+    conversionStructure.climax,
+    conversionStructure.ending,
+  );
   const endingWindow = `${conversionStructure.ending || ""}\n${String(content || "").slice(-140)}`;
 
   if (!conversionStructureEvidenceIsGrounded(content, conversionStructure)) {
@@ -56,7 +76,7 @@ export function parentConversionLocalQuality({
   if (compactHook.length < 8) {
     issues.push("钩子不够具体");
   }
-  if (compactClimax.length < 6 || !CLIMAX_PATTERN.test(String(conversionStructure.climax || ""))) {
+  if (compactClimax.length < 6 || !CLIMAX_PATTERN.test(climaxContext)) {
     issues.push("高潮没有体现孩子或家长的选择、能力或长期代价");
   }
   if ((ctaMode === "consult" || ctaMode === "action") && !SAFE_CTA_PATTERN.test(endingWindow)) {

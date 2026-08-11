@@ -154,8 +154,16 @@ assert.match(
   "A late analysis response must stay bound to the task that started it.",
 );
 assert.match(workbench, /short-video-workbench-page/u, "The active feature page must be restored after refresh.");
-assert.match(launcher, /const url = await existingServerUrl\(\)/u, "The launcher must always reuse an existing backend.");
-assert.match(launcher, /const response = await fetch\(url\);/u, "The launcher liveness probe must use the public HTML entry rather than the cookie-protected API.");
+assert.match(
+  launcher,
+  /const existing = await existingServerUrl\(\)[\s\S]*if \(existing\)[\s\S]*reuse-existing[\s\S]*openUrl\(existing\.url\)/u,
+  "The launcher must reuse a backend only after existingServerUrl returns a verified runtime.",
+);
+assert.match(
+  launcher,
+  /runtimeIdentityRoute = "\/\.well-known\/douyin-runtime"[\s\S]*async function probeRuntimeUrl[\s\S]*projectRootSha256[\s\S]*sourceSha256[\s\S]*instanceId[\s\S]*identity\.health !== "ready"/u,
+  "The launcher liveness probe must bind the public identity response to this project, source, instance and health state.",
+);
 assert.doesNotMatch(launcher, /fetch\(`\$\{url\}\/api\/status`\)/u, "The launcher must not treat the protected status API as an unauthenticated liveness probe.");
 assert.doesNotMatch(launcher, /syncChanged\s*\?\s*""\s*:\s*await existingServerUrl/u, "A repository sync must never bypass single-instance reuse.");
 assert.match(server, /fs\.openSync\(pidPath, "wx"\)/u, "The backend must use an exclusive single-instance lock.");

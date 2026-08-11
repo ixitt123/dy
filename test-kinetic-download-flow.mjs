@@ -3,10 +3,10 @@ import fs from "node:fs";
 
 const source = fs.readFileSync(new URL("./ui/modules/kinetic-text.js", import.meta.url), "utf8");
 
-assert.match(
+assert.doesNotMatch(
   source,
-  /function triggerKineticVideoDownload[\s\S]*mediaUrl\("video",\s*\{\s*download:\s*true\s*\}\)/u,
-  "dynamic text video must have a browser-native download action",
+  /function triggerKineticVideoDownload/u,
+  "dynamic text must not duplicate a file already written to the unified download directory",
 );
 
 const clickStart = source.indexOf('$("#kineticRenderFinal").addEventListener("click"');
@@ -19,19 +19,19 @@ assert.ok(existingOutputCheck >= 0, "download button must check for an existing 
 assert.ok(renderRequest > existingOutputCheck, "existing final video must be checked before starting a render");
 assert.match(
   clickHandler,
-  /outputs\?\.finalVideo[\s\S]*triggerKineticVideoDownload\(\)[\s\S]*return/u,
-  "an existing final video must download directly without another render",
+  /outputs\?\.finalVideo[\s\S]*postJson\("\/api\/open-path"[\s\S]*return/u,
+  "an existing final video must reveal the already-saved file without creating a duplicate browser download",
 );
 
-assert.match(
+assert.doesNotMatch(
   source,
   /job\.status === "completed"[\s\S]*options\.downloadOnComplete[\s\S]*triggerKineticVideoDownload\(\)/u,
-  "the first completed render must automatically start the browser download",
+  "a completed render is already in the unified download directory and must not be downloaded a second time",
 );
-assert.match(
+assert.doesNotMatch(
   source,
   /saveActiveJob\(data\.job,\s*\{\s*renderOnComplete:\s*true,\s*downloadOnComplete:\s*true\s*\}\)/u,
-  "download intent must survive render polling",
+  "render polling must not persist a second browser-download intent",
 );
 
 console.log("kinetic browser download flow: OK");

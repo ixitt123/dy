@@ -56,4 +56,20 @@ assert.equal(conversionStructureEvidenceIsGrounded(content, {
   climax: "正文里不存在的高潮证据",
 }), false);
 
+const contextualClimaxContent = "孩子背单词总是今天记住、明天忘，真不一定是不努力。家长只催他反复抄写，往往越抄越烦。先建立认读词汇量，再训练听读和默写。方法和顺序不对，再努力也容易原地打转。留言说说孩子目前卡在哪里，我们一起分析。";
+const contextualClimaxStructure = {
+  hook: "孩子背单词总是今天记住、明天忘，真不一定是不努力。",
+  painConflict: "家长只催他反复抄写，往往越抄越烦。",
+  turn: "先建立认读词汇量，再训练听读和默写。",
+  climax: "方法和顺序不对，再努力也容易原地打转。",
+  ending: "留言说说孩子目前卡在哪里，我们一起分析。",
+};
+assert.equal(conversionStructureEvidenceIsGrounded(contextualClimaxContent, contextualClimaxStructure), true);
+assert.equal(parentConversionLocalQuality({
+  content: contextualClimaxContent,
+  conversionStructure: contextualClimaxStructure,
+  ctaMode: "action",
+  sourceText: "孩子背单词总是今天记住、明天忘。先建立认读词汇量，再训练听读和默写。",
+}).pass, true, "高潮由相邻句共同表达时，不应只因单句缺少固定关键词而丢弃整篇好文案");
+
 console.log("Rewrite conversion quality: OK");

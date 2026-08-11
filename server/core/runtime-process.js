@@ -10,6 +10,7 @@ export function windowsProcessCommandLine(pid) {
   const normalizedPid = Number(pid);
   if (!Number.isInteger(normalizedPid) || normalizedPid <= 0) return "";
   const script = [
+    "[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)",
     `$runtimeProcess = Get-CimInstance Win32_Process -Filter 'ProcessId = ${normalizedPid}' -ErrorAction SilentlyContinue`,
     "if ($null -ne $runtimeProcess) { [Console]::Out.Write($runtimeProcess.CommandLine) }",
   ].join("; ");

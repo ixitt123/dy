@@ -49,4 +49,7 @@ assert.match(pipelinePrompt, /Parent Emotion and Conversion Template/u);
 assert.match(pipelinePrompt, /painConflict/u);
 assert.match(runtime, /已保留 \$\{generatedVersions\.length\} 篇通过质检的成品/u);
 
+await import("./test-rewrite-generation-retry.mjs");
+await import("./test-rewrite-structured-completion.mjs");
+
 console.log("Rewrite completeness: OK");

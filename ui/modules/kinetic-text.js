@@ -418,18 +418,6 @@ function mediaUrl(kind, { download = false } = {}) {
   return `/api/kinetic-text/file?id=${encodeURIComponent(state.project.id)}&kind=${encodeURIComponent(kind)}&v=${encodeURIComponent(state.project.updatedAt || Date.now())}${suffix}`;
 }
 
-function triggerKineticVideoDownload() {
-  if (!state.project?.outputs?.finalVideo) return false;
-  const link = document.createElement("a");
-  link.href = mediaUrl("video", { download: true });
-  link.download = shortFileName(state.project.outputs.finalVideo) || "dynamic-text-video.mp4";
-  link.hidden = true;
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  return true;
-}
-
 function kineticDownloadDirectory() {
   return String(state.downloadsDir || "").replace(/[\\/]+$/, "");
 }
@@ -2026,8 +2014,7 @@ async function pollJob(jobId, options = {}) {
         await globalThis.ttsHandoffStore.updateReceipt("kinetic-text", "rendered", { handoffId: receiptHandoffId, assetId: finalAssetId });
         await globalThis.ttsHandoffStore.updateReceipt("kinetic-text", "verified", { handoffId: receiptHandoffId, assetId: finalAssetId });
       }
-      const downloadStarted = options.downloadOnComplete && triggerKineticVideoDownload();
-      setProgress(100, downloadStarted ? "成片完成，浏览器下载已开始" : `视频已保存：${videoPath}`);
+      setProgress(100, `成片已保存：${videoPath}`);
       setRenderButtonBusy(false);
     }
     if (typeof options.onComplete === "function") options.onComplete(job);
@@ -2416,7 +2403,13 @@ function bindEvents() {
   $("#kineticRenderFinal").addEventListener("click", async () => {
     if (!state.project) return;
     if (state.project?.outputs?.finalVideo) {
-      if (triggerKineticVideoDownload()) setProgress(100, "已使用现有成片，浏览器下载已开始");
+      const filePath = state.project.outputs.finalVideo;
+      try {
+        await postJson("/api/open-path", { filePath });
+        setProgress(100, `成片已保存在下载目录：${filePath}`);
+      } catch (error) {
+        setProgress(100, `成片已保存，但打开位置失败：${error.message}`);
+      }
       return;
     }
     setRenderButtonBusy(true);
@@ -2424,8 +2417,8 @@ function bindEvents() {
     try {
       await saveProjectImmediately();
       const data = await postJson("/api/kinetic-text/render", { projectId: state.project.id });
-      saveActiveJob(data.job, { renderOnComplete: true, downloadOnComplete: true });
-      pollJob(data.job.id, { renderOnComplete: true, downloadOnComplete: true }).catch((error) => {
+      saveActiveJob(data.job, { renderOnComplete: true });
+      pollJob(data.job.id, { renderOnComplete: true }).catch((error) => {
         setRenderButtonBusy(false);
         setProgress(0, error.message);
       });

@@ -103,9 +103,9 @@
 | `R2-01.10` | 外部人工 | 未开始 | 0/4 | P0 | 是 | R2-01.04 | 真实国内 TTS 供应商任务 | 授权账号生成非敏感旁白；API/SQLite/文件/页面/刷新/handoff 全链，密钥不入日志 |
 | `R2-01.11` | 外部人工 | 未开始 | 0/4 | P0 | 是 | R2-01.10 | 真实 BGM 供应商任务 | 授权生成真实独立 BGM；时长、尾部、响度、播放、持久化和发送通过 |
 | `R2-01.12` | 启动可靠性 | 完成 | 1/4 | P0 | 否 | R2-00.06 | VBS 缺依赖时可见失败并停止 | 缺 Node/依赖/入口时显示可操作错误、写日志、非零退出且不启动半残服务 |
-| `R2-01.13` | 启动可靠性 | 进行中 | 0/4 | P0 | 否 | R2-01.12 | 修复 launcher 日志可靠性与轮转 | 正常启动/复用/错误均有时间、项目、PID、URL；并发写不丢；大小受限且轮转可恢复 |
-| `R2-01.14` | 启动可靠性 | 未开始 | 0/4 | P0 | 否 | R2-01.13 | 拒绝错误项目或陈旧 `ui-server.url` | 复用前核对项目根、实例标识/commit、PID 与健康信息；错误 URL 被清理并启动正确实例 |
-| `R2-01.15` | 启动可靠性 | 未开始 | 0/4 | P0 | 否 | R2-01.14 | 单实例并发与竞态验收 | 多次同时启动只留下一个 8787/8080 实例；URL/日志不互相覆盖，失败实例可回收，刷新恢复通过 |
+| `R2-01.13` | 启动可靠性 | 完成 | 1/4 | P0 | 否 | R2-01.12 | 修复 launcher 日志可靠性与轮转 | 正常启动/复用/错误均有时间、项目、PID、URL；并发写不丢；大小受限且轮转可恢复 |
+| `R2-01.14` | 启动可靠性 | 完成 | 3/4 | P0 | 否 | R2-01.13 | 拒绝错误项目或陈旧 `ui-server.url` | 复用前核对项目根、实例标识/commit、PID 与健康信息；错误 URL 被清理并启动正确实例 |
+| `R2-01.15` | 启动可靠性 | 完成 | 3/4 | P0 | 否 | R2-01.14 | 单实例并发与竞态验收 | 多次同时启动只留下一个 8787/8080 实例；URL/日志不互相覆盖，失败实例可回收，刷新恢复通过 |
 | `R2-02.01` | 安全 | 未开始 | 0/4 | P0 | 否 | R2-00.06 | 修复 `fast-uri` 主机混淆漏洞 | 安全版本；反斜杠 authority、重定向、DNS 和实际连接主机动态回归通过 |
 | `R2-02.02` | 安全 | 完成 | 3/4 | P0 | 否 | R2-00.06 | 升级 `ip-address` 并阻断前导零混淆 | 统一至少 10.3.1；`012.0.0.1` 等不能绕过；解析、DNS、连接目标一致 |
 | `R2-02.03` | 安全 | 未开始 | 0/4 | P1 | 否 | R2-02.02 | 强化 CIDR 后缀与规范化后再校验 | `/0`、短前缀的 IPv4/IPv6 内网目标被拒绝；公告用例和应用层回归通过 |
@@ -346,3 +346,95 @@
 - Gate F 数据与回滚：通过
 - Gate G 发布：不适用：全仓生产依赖审计与发布验收仍由后续独立门禁执行
 - 真实证据路径：D:\cs1\dy-b-primary-20260805-102410\.data\repair-evidence\R2-02.02\20260805-113500\integration-review
+
+### LOG-COMPLETE-20260811003310｜项目 R2-01.13
+- 完成时间：2026-08-11T00:33:10.131Z
+- 完整维修复验次数：1/4
+- 结论：B机独立干净工作树复核通过：跨进程锁覆盖轮转与追加，错误、新启动、复用、并发、轮转和陈旧锁恢复全部通过，完整门禁通过
+
+#### EVIDENCE-R2-01.13｜七道门
+- Gate A 代码：通过
+- Gate B 逻辑：通过
+- Gate C 功能：通过
+- Gate D 真实使用：不适用：本项通过真实 Windows Script Host、多进程和本地 HTTP fixture 验证，不涉及用户业务页面或媒体产物
+- Gate E 安全：不适用：本项未扩大网络、命令执行、密钥或数据访问边界，相关安全门禁已作为兼容检查通过
+- Gate F 数据与回滚：通过
+- Gate G 发布：不适用：本项候选提交尚未获得合并或发布授权
+- 真实证据路径：C:\Users\Admin\Desktop\短视频\douyin-video-tool-source-code\douyin-mcp-local\.data\repair-evidence\R2-01.13\20260811-083600-b-audit
+
+### LOG-ATTEMPT-20260811011054｜项目 R2-01.14
+- 记录时间：2026-08-11T01:10:54.014Z
+- 本次结果：第 1 次完整维修并完整复验仍失败
+- 失败结论：目标身份回归与真实服务通过，但完整门禁被 test-page-lifecycle.mjs 的旧源码变量名断言阻断。
+
+#### ATTEMPT-1-R2-01.14｜失败
+- 真实证据路径：C:\Users\Admin\Desktop\短视频\douyin-video-tool-source-code\douyin-mcp-local\.data\repair-evidence\R2-01.14\20260811-090500-b-final
+- 复验结果清单：C:\Users\Admin\Desktop\短视频\douyin-video-tool-source-code\douyin-mcp-local\.data\repair-evidence\R2-01.14\20260811-090500-b-final\verification-result.json
+- 清单 SHA-256：eb595887dacc226f7764d554f4c97348c03d13d80397087cafa8e63d8c39c56a
+- 失败摘要：目标身份回归与真实服务通过，但完整门禁被 test-page-lifecycle.mjs 的旧源码变量名断言阻断。
+- 状态：待复验
+### LOG-ATTEMPT-20260811011356｜项目 R2-01.14
+- 记录时间：2026-08-11T01:13:56.981Z
+- 本次结果：第 2 次完整维修并完整复验仍失败
+- 失败结论：业务门禁全部通过，但最终 git diff --check 被 master-register.md 末尾空白行阻断。
+
+#### ATTEMPT-2-R2-01.14｜失败
+- 真实证据路径：C:\Users\Admin\Desktop\短视频\douyin-video-tool-source-code\douyin-mcp-local\.data\repair-evidence\R2-01.14\20260811-091500-b-final-attempt2
+- 复验结果清单：C:\Users\Admin\Desktop\短视频\douyin-video-tool-source-code\douyin-mcp-local\.data\repair-evidence\R2-01.14\20260811-091500-b-final-attempt2\verification-result.json
+- 清单 SHA-256：7eced2c5f60553f208f0834174b1ffbd20587e26ba6f1d137ac6d1c19954620a
+- 失败摘要：业务门禁全部通过，但最终 git diff --check 被 master-register.md 末尾空白行阻断。
+- 状态：待复验
+
+### LOG-COMPLETE-20260811012047｜项目 R2-01.14
+- 完成时间：2026-08-11T01:20:47.179Z
+- 完整维修复验次数：3/4
+- 结论：根因修复完成：错误 URL 不再凭 HTTP 200 复用；项目、源文件、commit、实例、PID、中文路径命令行与健康状态全部绑定，第三次完整复验通过。
+
+#### EVIDENCE-R2-01.14｜七道门
+- Gate A 代码：通过
+- Gate B 逻辑：通过
+- Gate C 功能：通过
+- Gate D 真实使用：通过
+- Gate E 安全：通过
+- Gate F 数据与回滚：通过
+- Gate G 发布：不适用：本项未获得暂存、提交、推送、合并或发布授权
+- 真实证据路径：C:\Users\Admin\Desktop\短视频\douyin-video-tool-source-code\douyin-mcp-local\.data\repair-evidence\R2-01.14\20260811-092000-b-final-attempt3
+
+### LOG-ATTEMPT-20260811020844｜项目 R2-01.15
+- 记录时间：2026-08-11T02:08:44.754Z
+- 本次结果：第 1 次完整维修并完整复验仍失败
+- 失败结论：完整复验发现相对路径启动的同项目健康服务被绝对路径命令行校验误拒，导致 8787 与 8788 双实例；目标锁修复有效，但真实启动身份兼容仍未满足。
+
+#### ATTEMPT-1-R2-01.15｜失败
+- 真实证据路径：C:\Users\Admin\Desktop\短视频\douyin-video-tool-source-code\douyin-mcp-local\.data\repair-evidence\R2-01.15\20260811-092311\attempt1
+- 复验结果清单：C:\Users\Admin\Desktop\短视频\douyin-video-tool-source-code\douyin-mcp-local\.data\repair-evidence\R2-01.15\20260811-092311\attempt1\verification-result.json
+- 清单 SHA-256：aba3b68b393b4654bd1cc4351d9c00e0d3caeace74d3066565032974262ccaf5
+- 失败摘要：完整复验发现相对路径启动的同项目健康服务被绝对路径命令行校验误拒，导致 8787 与 8788 双实例；目标锁修复有效，但真实启动身份兼容仍未满足。
+- 状态：待复验
+
+### LOG-ATTEMPT-20260811021228｜项目 R2-01.15
+- 记录时间：2026-08-11T02:12:28.751Z
+- 本次结果：第 2 次完整维修并完整复验仍失败
+- 失败结论：业务、重启及真实十并发均通过；最终仅因第二轮失败记录器在 master-register.md 末尾追加空行导致 git diff --check 失败。
+
+#### ATTEMPT-2-R2-01.15｜失败
+- 真实证据路径：C:\Users\Admin\Desktop\短视频\douyin-video-tool-source-code\douyin-mcp-local\.data\repair-evidence\R2-01.15\20260811-092311\attempt2
+- 复验结果清单：C:\Users\Admin\Desktop\短视频\douyin-video-tool-source-code\douyin-mcp-local\.data\repair-evidence\R2-01.15\20260811-092311\attempt2\verification-result.json
+- 清单 SHA-256：16e9a7bd623d1a4ec05c01db4409132ca778eabe74de4abff1fcfa86ba0844ec
+- 失败摘要：业务、重启及真实十并发均通过；最终仅因第二轮失败记录器在 master-register.md 末尾追加空行导致 git diff --check 失败。
+- 状态：待复验
+
+### LOG-COMPLETE-20260811021705｜项目 R2-01.15
+- 完成时间：2026-08-11T02:17:05.834Z
+- 完整维修复验次数：3/4
+- 结论：根因修复完成：启动事务跨进程互斥，死 owner 可安全回收，相对/绝对入口均复用同一已验证服务；真实重启后十次并发保持同一 8787 PID，刷新恢复与完整门禁通过。
+
+#### EVIDENCE-R2-01.15｜七道门
+- Gate A 代码：通过
+- Gate B 逻辑：通过
+- Gate C 功能：通过
+- Gate D 真实使用：通过
+- Gate E 安全：不适用：本项未改变外部网络、鉴权或用户数据安全边界
+- Gate F 数据与回滚：通过
+- Gate G 发布：不适用：本项未获得暂存、提交、推送、合并或发布授权
+- 真实证据路径：C:\Users\Admin\Desktop\短视频\douyin-video-tool-source-code\douyin-mcp-local\.data\repair-evidence\R2-01.15\20260811-092311\attempt3

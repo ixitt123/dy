@@ -1,6 +1,5 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import http from "node:http";
 import os from "node:os";
 import path from "node:path";
 import { spawn, spawnSync } from "node:child_process";
@@ -35,7 +34,40 @@ function makeFixture(name, { packagePresent = true, vbs = true, launcher = true,
       path.join(fixtureDir, "ui-server.mjs"),
       [
         'import fs from "node:fs";',
-        'fs.writeFileSync(new URL("./ui-server.url", import.meta.url), "http://127.0.0.1:48787", "utf8");',
+        'import http from "node:http";',
+        'import path from "node:path";',
+        'import { createHash, randomUUID } from "node:crypto";',
+        'import { spawnSync } from "node:child_process";',
+        'import { fileURLToPath } from "node:url";',
+        'const sourcePath = fileURLToPath(import.meta.url);',
+        'const root = path.dirname(sourcePath);',
+        'const canonicalRoot = fs.realpathSync.native(root);',
+        'const normalizedRoot = process.platform === "win32" ? canonicalRoot.toLowerCase() : canonicalRoot;',
+        'const projectRootSha256 = createHash("sha256").update(normalizedRoot).digest("hex");',
+        'const sourceSha256 = createHash("sha256").update(fs.readFileSync(sourcePath)).digest("hex");',
+        'const commit = String(spawnSync("git", ["rev-parse", "--short", "HEAD"], { cwd: root, encoding: "utf8" }).stdout || "").trim() || "unknown";',
+        'const instanceId = randomUUID();',
+        'const startedAt = new Date().toISOString();',
+        'const pidPath = path.join(root, "ui-server.pid");',
+        'const urlPath = path.join(root, "ui-server.url");',
+        'const server = http.createServer((request, response) => {',
+        '  if (request.url === "/.well-known/douyin-runtime") {',
+        '    const body = JSON.stringify({ ok: true, protocolVersion: 1, projectRootSha256, sourceSha256, commit, instanceId, pid: process.pid, startedAt, health: "ready" });',
+        '    response.writeHead(200, { "content-type": "application/json", "content-length": Buffer.byteLength(body) });',
+        '    response.end(body);',
+        '    return;',
+        '  }',
+        '  response.writeHead(200, { "content-type": "text/plain" });',
+        '  response.end("fixture");',
+        '});',
+        'server.listen(0, "127.0.0.1", () => {',
+        '  const address = server.address();',
+        '  fs.writeFileSync(pidPath, String(process.pid), "utf8");',
+        '  fs.writeFileSync(urlPath, `http://127.0.0.1:${address.port}`, "utf8");',
+        '});',
+        'function cleanup() { for (const file of [pidPath, urlPath]) { try { fs.rmSync(file, { force: true }); } catch {} } }',
+        'process.on("exit", cleanup);',
+        'process.on("SIGTERM", () => { cleanup(); process.exit(0); });',
       ].join("\n"),
       "utf8",
     );
@@ -77,7 +109,7 @@ function runAsync(command, args, fixtureDir, env) {
     let stderr = "";
     child.stdout.setEncoding("utf8").on("data", (chunk) => { stdout += chunk; });
     child.stderr.setEncoding("utf8").on("data", (chunk) => { stderr += chunk; });
-    const timer = setTimeout(() => child.kill(), 15_000);
+    const timer = setTimeout(() => child.kill(), 30_000);
     child.on("error", (error) => {
       clearTimeout(timer);
       resolve({ status: 1, stdout, stderr: `${stderr}${error.message}` });
@@ -87,6 +119,37 @@ function runAsync(command, args, fixtureDir, env) {
       resolve({ status: Number.isInteger(code) ? code : 1, signal, stdout, stderr });
     });
   });
+}
+
+async function waitForFile(filePath, timeoutMs = 8_000) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    try {
+      const value = fs.readFileSync(filePath, "utf8").trim();
+      if (value) return value;
+    } catch {}
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  return "";
+}
+
+async function stopFixtureServer(fixtureDir) {
+  let pid = 0;
+  try { pid = Number(fs.readFileSync(path.join(fixtureDir, "ui-server.pid"), "utf8")); } catch {}
+  if (pid <= 0) return;
+  try { process.kill(pid, "SIGTERM"); } catch { return; }
+  const deadline = Date.now() + 5_000;
+  while (Date.now() < deadline) {
+    try { process.kill(pid, 0); } catch { return; }
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+}
+
+async function stopAllFixtureServers() {
+  if (!fs.existsSync(fixtureRoot)) return;
+  for (const entry of fs.readdirSync(fixtureRoot, { withFileTypes: true })) {
+    if (entry.isDirectory()) await stopFixtureServer(path.join(fixtureRoot, entry.name));
+  }
 }
 
 function logFiles(fixtureDir) {
@@ -168,30 +231,30 @@ try {
   const spawned = newServerRecords.find((entry) => entry.runId === "new-server-run" && entry.event === "spawn-server");
   assert.ok(spawned, "New service launch must be logged.");
   assert.ok(spawned.pid > 0, "New service log must contain the child PID.");
-  assert.equal(spawned.url, "http://127.0.0.1:48787");
+  assert.match(spawned.url, /^http:\/\/127\.0\.0\.1:\d+$/u);
   saveEvidence("new-server", newServer, { exitCode: newServerResult.status, records: newServerRecords.length });
+  await stopFixtureServer(newServer);
 
   const reuse = makeFixture("reuse", { vbs: false, server: true });
-  const reuseServer = http.createServer((_request, response) => {
-    response.writeHead(200, { "content-type": "text/plain" });
-    response.end("ok");
+  const reuseServer = spawn(process.execPath, [path.join(reuse, "ui-server.mjs")], {
+    cwd: reuse,
+    env: launcherEnv("reuse-server"),
+    detached: false,
+    stdio: "ignore",
+    windowsHide: true,
   });
-  await new Promise((resolve, reject) => {
-    reuseServer.once("error", reject);
-    reuseServer.listen(0, "127.0.0.1", resolve);
-  });
-  const reuseAddress = reuseServer.address();
-  const reuseUrl = `http://127.0.0.1:${reuseAddress.port}`;
-  fs.writeFileSync(path.join(reuse, "ui-server.url"), reuseUrl, "utf8");
+  const reuseUrl = await waitForFile(path.join(reuse, "ui-server.url"));
+  assert.ok(reuseUrl, "Reuse fixture server did not publish a URL.");
   const reuseResult = await runAsync(
     process.execPath,
     [path.join(reuse, "launch-ui.mjs")],
     reuse,
     launcherEnv("reuse-run"),
   );
-  await new Promise((resolve) => reuseServer.close(resolve));
-  assert.equal(reuseResult.status, 0, `Reuse fixture failed: ${reuseResult.stderr}`);
+  await stopFixtureServer(reuse);
+  if (reuseServer.exitCode === null) reuseServer.kill();
   const reuseRecords = readRecords(reuse);
+  assert.equal(reuseResult.status, 0, `Reuse fixture failed: ${reuseResult.stderr}\n${JSON.stringify(reuseRecords, null, 2)}`);
   const reused = reuseRecords.find((entry) => entry.runId === "reuse-run" && entry.event === "reuse-existing");
   assert.ok(reused, "Existing service reuse must be logged.");
   assert.equal(reused.url, reuseUrl);
@@ -274,6 +337,7 @@ try {
 
   console.log("Launcher log rotation: OK");
 } finally {
+  await stopAllFixtureServers();
   try {
     fs.rmSync(fixtureRoot, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
   } catch {

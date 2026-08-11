@@ -1,4 +1,7 @@
-import { resolveFolderNameSelection } from "./desktop-folder-selection.js";
+import {
+  resolveFolderNameSelection,
+  resolveUniqueReferenceFolder,
+} from "./desktop-folder-selection.js";
 
 const state = {
   config: null,
@@ -2005,33 +2008,53 @@ async function addLatestFolderImages(button) {
     setButtonFeedback(button, "error", "第一张不是 (1)");
     return;
   }
-  const suffix = resolveFolderNameSelection({
+  let suffix = resolveFolderNameSelection({
     names: folderNames,
     currentValue: els.folderNameSelect?.value,
     cachedValue: state.desktopFolderName,
   });
-  if (!suffix) {
-    setStatus("请先选择文件夹名称", "存在多个名称时，请先选择保存图片的文件夹名称。", 0, true);
-    setButtonFeedback(button, "error", "未选文件夹");
-    return;
-  }
-  state.desktopFolderName = suffix;
-  if (els.folderNameSelect) els.folderNameSelect.value = suffix;
-  syncFolderNameButtons();
   setButtonFeedback(button, "loading", "扫描中");
   try {
     const shots = [...(state.plan?.shots || [])]
       .sort((left, right) => Number(left.index) - Number(right.index));
     const maxSequence = Math.max(1, ...shots.map((shot) => Number(shot.index) || 0));
-    const data = await fetchJson("/api/desktop-folder-reference-images", {
+    const findImages = (candidateSuffix, folderPath = "") => fetchJson("/api/desktop-folder-reference-images", {
       method: "POST",
       body: JSON.stringify({
-        suffix,
-        folderPath: state.desktopFolderPath,
+        suffix: candidateSuffix,
+        folderPath,
         referenceFileName: reference.fileName,
         maxSequence,
       }),
     });
+    let data;
+    if (suffix) {
+      data = await findImages(suffix, state.desktopFolderPath);
+    } else {
+      const results = await Promise.all(folderNames.map(async (candidateSuffix) => {
+        try {
+          return { suffix: candidateSuffix, data: await findImages(candidateSuffix) };
+        } catch {
+          return null;
+        }
+      }));
+      const resolved = resolveUniqueReferenceFolder(results);
+      if (resolved.status === "ambiguous") {
+        setStatus("图片素材1存在于多个文件夹", "请选择正确的文件夹名称后再试，避免误加另一组图片。", 0, true);
+        setButtonFeedback(button, "error", "需选择文件夹");
+        return;
+      }
+      if (resolved.status !== "matched") {
+        setStatus("未找到图片素材1所在文件夹", "请确认图片素材1位于今天创建的命名文件夹中。", 0, true);
+        setButtonFeedback(button, "error", "未找到文件夹");
+        return;
+      }
+      suffix = resolved.suffix;
+      data = resolved.data;
+    }
+    state.desktopFolderName = suffix;
+    if (els.folderNameSelect) els.folderNameSelect.value = suffix;
+    syncFolderNameButtons();
     state.desktopFolderPath = data.folderPath || state.desktopFolderPath;
     const candidates = Array.isArray(data.images) ? data.images : [];
     if (!candidates.length) {
