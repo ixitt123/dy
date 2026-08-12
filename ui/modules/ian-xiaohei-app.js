@@ -1,3 +1,8 @@
+import {
+  resolveFolderNameSelection,
+  resolveUniqueReferenceFolder,
+} from "./desktop-folder-selection.js";
+
 const state = {
   config: null,
   plan: null,
@@ -15,6 +20,11 @@ const state = {
   referenceCloneDraft: null,
   referenceStylePresets: [],
   pendingUploads: new Map(),
+  localMaterialPool: [],
+  materialBindings: new Map(),
+  folderSequenceReference: null,
+  desktopFolderPath: "",
+  desktopFolderName: "",
   confirmingUploads: new Set(),
   generatingImages: new Set(),
   imageBatchGenerating: false,
@@ -26,6 +36,13 @@ const state = {
   previewFrame: 0,
   renderedVideo: null,
   backgroundAudio: null,
+  handoffBgm: null,
+  handoffId: "",
+  previewBgmAudio: null,
+  includeBgm: false,
+  timelineDraftRows: null,
+  planGenerating: false,
+  planRestorePromise: null,
   projectId: localStorage.getItem("ian-xiaohei-project-id") || `xiaohei-${Date.now()}`,
 };
 const embeddedMode = new URLSearchParams(window.location.search).get("embedded") === "1";
@@ -35,6 +52,12 @@ const PROMPT_PLAN_CACHE_PREFIX = "ian-xiaohei-prompt-plan";
 const PROMPT_PLAN_LATEST_KEY = `${PROMPT_PLAN_CACHE_PREFIX}:latest`;
 const PURPOSE_STORAGE_KEY = "ian-xiaohei-selected-purpose";
 const COMPOSE_SETTINGS_KEY = "ian-xiaohei-compose-settings-v1";
+const FOLDER_NAMES_API = "/api/folder-names";
+const FOLDER_CREATE_API = "/api/desktop-folder-named";
+const FOLDER_NAMES_CHANGED_STORAGE_KEY = "ian-folder-names-changed";
+let folderNames = [];
+let folderNamePromptActive = false;
+let parentHandoffRevision = 0;
 
 function startStandalonePageSession() {
   if (embeddedMode) return;
@@ -198,12 +221,16 @@ const els = {
   speedSelect: document.querySelector("#speedSelect"),
   aspectRatioSelect: document.querySelector("#aspectRatioSelect"),
   frameRate: document.querySelector("#xiaoheiFrameRate"),
+  playbackSpeed: document.querySelector("#xiaoheiPlaybackSpeed"),
   imageFit: document.querySelector("#xiaoheiImageFit"),
   ttsVolume: document.querySelector("#xiaoheiTtsVolume"),
   ttsVolumeValue: document.querySelector("#xiaoheiTtsVolumeValue"),
+  includeBgm: document.querySelector("#xiaoheiIncludeBgm"),
   chooseBgm: document.querySelector("#chooseXiaoheiBgm"),
   bgmFile: document.querySelector("#xiaoheiBgmFile"),
   bgmName: document.querySelector("#xiaoheiBgmName"),
+  bgmPlayerWrap: document.querySelector("#xiaoheiBgmPlayerWrap"),
+  bgmPlayer: document.querySelector("#xiaoheiBgmPlayer"),
   bgmVolume: document.querySelector("#xiaoheiBgmVolume"),
   bgmVolumeValue: document.querySelector("#xiaoheiBgmVolumeValue"),
   showSubtitles: document.querySelector("#xiaoheiShowSubtitles"),
@@ -261,6 +288,12 @@ const els = {
   generateImages: document.querySelector("#generateImages"),
   planPrompts: document.querySelector("#planPrompts"),
   copyPrompts: document.querySelector("#copyPrompts"),
+  copyImageConstraint1: document.querySelector("#copyImageConstraint1"),
+  copyImageConstraint2: document.querySelector("#copyImageConstraint2"),
+  createDesktopFolder: document.querySelector("#createDesktopFolder"),
+  folderNameSelect: document.querySelector("#folderNameSelect"),
+  editFolderName: document.querySelector("#editFolderName"),
+  deleteFolderName: document.querySelector("#deleteFolderName"),
   openOutputDir: document.querySelector("#openOutputDir"),
   refreshOutputs: document.querySelector("#refreshOutputs"),
   statusLabel: document.querySelector("#statusLabel"),
@@ -287,7 +320,8 @@ const els = {
   videoTransitionMode: document.querySelector("#videoTransitionMode"),
   videoRenderStatus: document.querySelector("#videoRenderStatus"),
   downloadXiaoheiVideo: document.querySelector("#downloadXiaoheiVideo"),
-  timelineRefresh: document.querySelector("#xiaoheiTimelineRefresh"),
+  timelineConfirm: document.querySelector("#xiaoheiConfirmTimeline"),
+  timelineDraftStatus: document.querySelector("#xiaoheiTimelineDraftStatus"),
   timelineRuleStatus: document.querySelector("#xiaoheiTimelineRuleStatus"),
   subtitleTimeline: document.querySelector("#xiaoheiSubtitleTimeline"),
   timelineStatus: document.querySelector("#xiaoheiTimelineStatus"),
@@ -306,13 +340,19 @@ async function init() {
   hydratePurposeSelect();
   renderPurposeTemplates();
   bindEvents();
-  restoreComposeSettings();
+  syncImageConstraintButtons();
   window.addEventListener("message", handleParentHandoff);
+  window.addEventListener("storage", (event) => {
+    if (event.key === FOLDER_NAMES_CHANGED_STORAGE_KEY) void loadFolderNames();
+  });
   window.addEventListener("focus", () => {
     if (state.localImagePickerActive) setTimeout(() => { state.localImagePickerActive = false; }, 250);
   });
-  await Promise.all([loadConfig(), loadAudioJobs()]);
-  const restored = restorePromptPlanCache();
+  await Promise.all([loadConfig(), loadAudioJobs(), loadFolderNames()]);
+  restoreComposeSettings();
+  let restored = restorePromptPlanCache();
+  if (!restored) restored = await restorePromptPlanFromServer();
+  syncPromptActionButtons();
   if (restored) {
     setStatus("已恢复提示词计划", `刷新前生成的 ${state.plan?.shots?.length || 0} 个分镜提示词已恢复。`, 100, false, "本地缓存");
   }
@@ -322,40 +362,80 @@ async function init() {
 
 async function handleParentHandoff(event) {
   if (event.origin !== window.location.origin || event.data?.type !== "video-factory:xiaohei-handoff") return;
+  const revision = ++parentHandoffRevision;
   const handoff = event.data.handoff || {};
   const job = handoff.ttsJob || {};
-  if (!job.id || job.status !== "completed" || !isTtsAlignmentConfirmed(job)) {
+  const previousProjectId = String(state.projectId || "");
+  const previousJobId = Number((state.selectedTtsJob || state.ttsJob)?.id || 0);
+  if (!job.id || job.status !== "completed" || !isTtsAlignmentConfirmed(job) || !timelineRows(job).length) {
+    clearTtsTimelineState();
+    resetVisualWorkflow();
     setStatus("缺少已确认音频", "请先在 TTS 语音页检查并确认最终文案和字幕时间轴。", 0, true);
     return;
   }
   state.projectId = String(handoff.projectId || state.projectId);
+  state.handoffId = String(handoff.handoffId || handoff.handoff_id || job.handoff_id || "");
   localStorage.setItem("ian-xiaohei-project-id", state.projectId);
   const handoffTitle = handoff.title || handoff.projectTitle || "小黑配图视频";
   const handoffText = handoff.text || confirmedTtsText(job);
   els.titleInput.value = handoffTitle;
   els.copyInput.value = handoffText;
+  state.handoffBgm = handoff.bgm_path || job.bgm_path
+    ? {
+      path: handoff.bgm_path || job.bgm_path,
+      url: handoff.bgm_url || job.bgm_url || "",
+      name: handoff.bgm_name || job.bgm_name || "清爽教育 BGM",
+    }
+    : null;
+  const handedBgmVolume = Number(
+    handoff.bgm_volume_percent
+    ?? job.bgm_volume_percent
+    ?? (Number(handoff.bgm_volume ?? job.bgm_volume) * 100),
+  );
+  if (state.handoffBgm && Number.isFinite(handedBgmVolume) && els.bgmVolume) {
+    els.bgmVolume.value = String(Math.max(0, Math.min(100, Math.round(handedBgmVolume))));
+    handleComposeSettingsChange();
+  }
+  state.includeBgm = Boolean(state.handoffBgm);
+  syncHandoffBgmControl();
   state.ttsJob = job;
   try {
     const data = await fetchJson("/api/ian-xiaohei/audio-select", {
       method: "POST",
       body: JSON.stringify({ project_id: state.projectId, job_id: job.id }),
     });
+    if (revision !== parentHandoffRevision) return;
     state.selectedTtsJob = data.job;
     state.ttsJob = data.job;
+    if (!timelineRows(data.job).length) {
+      clearTtsTimelineState();
+      setStatus("TTS 参数无效", "已清空小黑字幕时间轴，请从 TTS 页面重新发送已确认参数。", 0, true);
+      return;
+    }
     syncTtsSource(data.job, { title: handoffTitle, text: handoffText });
-    resetVisualWorkflow();
+    const sameTtsSource = previousProjectId === String(state.projectId)
+      && previousJobId === Number(data.job.id);
+    if (!sameTtsSource) resetVisualWorkflow();
     await loadAudioJobs();
-    const restored = false;
+    if (revision !== parentHandoffRevision) return;
+    let restored = sameTtsSource && Boolean(state.plan?.shots?.length);
+    if (!restored) restored = restorePromptPlanCache();
+    if (!restored) restored = await restorePromptPlanFromServer();
+    if (revision !== parentHandoffRevision) return;
+    syncPromptActionButtons();
     setStatus(
       restored ? "已恢复提示词计划" : "已接收 TTS 资产",
       restored
         ? `刷新前生成的 ${state.plan?.shots?.length || 0} 个分镜提示词已恢复。`
-        : "文案、音频和同步时间戳已绑定，可以根据真实时间轴分析分镜配图。",
+        : state.handoffBgm
+          ? "文案、音频、同步时间戳和独立 BGM 已绑定；合成时会按旁白时长循环或裁切 BGM。"
+          : "文案、音频和同步时间戳已绑定，可以根据真实时间轴分析分镜配图。",
       100,
       false,
       restored ? "本地缓存" : "等待分镜分析",
     );
   } catch (error) {
+    if (revision !== parentHandoffRevision) return;
     setStatus("TTS 资产接收失败", error.payload?.message || error.message || String(error), 100, true);
   }
 }
@@ -422,7 +502,19 @@ function normalizeTimelineRow(item = {}, index = 0) {
 }
 
 function timelineRows(job = state.selectedTtsJob || state.ttsJob) {
-  return timelineSource(job).map((item, index) => normalizeTimelineRow(item, index));
+  return timelineSource(job)
+    .map((item, index) => normalizeTimelineRow(item, index))
+    .filter((row) => row.text.trim() && row.end > row.start);
+}
+
+function clearTtsTimelineState() {
+  state.ttsJob = null;
+  state.selectedTtsJob = null;
+  state.timelineDraftRows = null;
+  if (els.copyInput) els.copyInput.value = "";
+  if (els.timelineConfirm) els.timelineConfirm.disabled = true;
+  if (els.timelineDraftStatus) els.timelineDraftStatus.hidden = true;
+  syncTtsSource(null);
 }
 
 function formatTimelineValue(value) {
@@ -438,6 +530,8 @@ function renderSubtitleTimeline(job = state.selectedTtsJob || state.ttsJob) {
     els.subtitleTimeline.textContent = "等待 TTS 语音页发送已确认的字幕时间轴。";
     if (els.timelineStatus) els.timelineStatus.textContent = "小黑页面只接收 TTS 语音页发送的最终文案、音频和同步时间戳。";
     if (els.timelineRuleStatus) els.timelineRuleStatus.hidden = true;
+    if (els.timelineConfirm) els.timelineConfirm.disabled = true;
+    if (els.timelineDraftStatus) els.timelineDraftStatus.hidden = true;
     return;
   }
   if (!rows.length) {
@@ -453,7 +547,7 @@ function renderSubtitleTimeline(job = state.selectedTtsJob || state.ttsJob) {
       <span class="xiaohei-row-index">${row.index + 1}</span>
       <input data-field="start" inputmode="decimal" value="${escapeAttr(formatTimelineValue(row.start))}" readonly aria-readonly="true" />
       <input data-field="end" inputmode="decimal" value="${escapeAttr(formatTimelineValue(row.end))}" readonly aria-readonly="true" />
-      <textarea data-field="text" rows="2">${escapeHtml(row.text)}</textarea>
+      <textarea data-field="text" rows="2" data-no-draft-persist readonly aria-readonly="true" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-1p-ignore="true">${escapeHtml(row.text)}</textarea>
       <input data-field="keywords" value="${escapeAttr(row.keywords)}" />
       <input data-field="breakAt" placeholder="如 6,12" value="${escapeAttr(row.breakAt)}" />
       <input data-field="position" placeholder="如 5,88" value="${escapeAttr(row.position)}" />
@@ -461,7 +555,10 @@ function renderSubtitleTimeline(job = state.selectedTtsJob || state.ttsJob) {
     </div>
   `).join("");
   const duration = Math.max(0, ...rows.map((row) => Number(row.end || 0)));
-  if (els.timelineStatus) els.timelineStatus.textContent = `共 ${rows.length} 段字幕 / ${duration.toFixed(1)} 秒，修改字幕文字后会同步小黑文案和分镜输入。`;
+  if (els.timelineStatus) els.timelineStatus.textContent = `共 ${rows.length} 段 TTS 字幕 / ${duration.toFixed(1)} 秒；字幕文字只读，可调整重点词和视觉参数。`;
+  if (els.timelineConfirm) els.timelineConfirm.disabled = true;
+  if (els.timelineDraftStatus) els.timelineDraftStatus.hidden = true;
+  state.timelineDraftRows = null;
   updateTimelineRuleStatus(rows);
 }
 
@@ -480,12 +577,13 @@ function updateTimelineRuleStatus(rows = timelineRows()) {
 }
 
 function collectSubtitleTimelineRows() {
+  const sourceRows = timelineRows();
   return [...(els.subtitleTimeline?.querySelectorAll(".xiaohei-timeline-row") || [])].map((row, index) => {
     const value = (field) => row.querySelector(`[data-field="${field}"]`)?.value || "";
     return normalizeTimelineRow({
       start: value("start"),
       end: value("end"),
-      text: value("text"),
+      text: sourceRows[index]?.text || "",
       keywords: value("keywords"),
       breakAt: value("breakAt"),
       position: value("position"),
@@ -525,70 +623,25 @@ function applySubtitleTimelineRows(rows = []) {
 
 function handleSubtitleTimelineInput(event) {
   if (!event.target.closest("[data-field]")) return;
-  const rows = collectSubtitleTimelineRows();
-  applySubtitleTimelineRows(rows);
-  if (els.timelineStatus) els.timelineStatus.textContent = `已同步 ${rows.length} 段字幕到小黑当前文案。`;
+  if (event.target.dataset.field === "text") return;
+  state.timelineDraftRows = collectSubtitleTimelineRows();
+  if (els.timelineConfirm) els.timelineConfirm.disabled = false;
+  if (els.timelineDraftStatus) els.timelineDraftStatus.hidden = false;
+  if (els.timelineStatus) els.timelineStatus.textContent = "有未确定修改";
 }
 
-async function persistSharedSubtitleText() {
+function confirmSubtitleTimelineChanges() {
   const job = state.selectedTtsJob || state.ttsJob;
-  const rows = collectSubtitleTimelineRows();
+  const rows = state.timelineDraftRows || [];
   if (!job?.id || !rows.length) return;
-  if (els.timelineStatus) els.timelineStatus.textContent = "正在自动保存字幕...";
-  try {
-    const timeline = rows.map((row) => ({
-      start: row.start,
-      end: row.end,
-      text: row.text.trim(),
-    }));
-    const finalText = timeline.map((row) => row.text).join("");
-    const data = await fetchJson("/api/tts/alignment/sync", {
-      method: "POST",
-      body: JSON.stringify({
-        id: job.id,
-        title: els.titleInput?.value || job.title || "",
-        text: finalText,
-        sentenceTimeline: timeline,
-        subtitleTimeline: timeline,
-        duration: Number(job.audio_duration || job.duration || 0),
-        source: "xiaohei-video",
-        confirmationMode: "shared_production_timeline",
-      }),
-    });
-    state.selectedTtsJob = data.job;
-    state.ttsJob = data.job;
-    syncTtsSource(data.job, { title: els.titleInput?.value || "", text: data.job?.final_text || finalText });
-    if (embeddedMode) {
-      window.parent.postMessage({
-        type: "video-factory:xiaohei-shared-timeline-updated",
-        payload: data.job,
-      }, window.location.origin);
-    }
-    if (els.timelineStatus) els.timelineStatus.textContent = `已自动保存 ${timeline.length} 段字幕，原时间戳保持不变。`;
-  } catch (error) {
-    if (els.timelineStatus) els.timelineStatus.textContent = `自动保存失败：${error.payload?.message || error.message || error}`;
-  }
-}
-
-async function refreshSubtitleTimelineFromTts() {
-  const job = state.selectedTtsJob || state.ttsJob;
-  if (!job?.id) {
-    setStatus("缺少 TTS 资产", "请先从 TTS 语音页发送已确认的文案、音频和字幕时间轴。", 0, true);
-    setButtonFeedback(els.timelineRefresh, "error", "缺少 TTS");
+  if (rows.some((row) => !row.text.trim())) {
+    if (els.timelineStatus) els.timelineStatus.textContent = "字幕文字不能为空";
     return;
   }
-  setButtonFeedback(els.timelineRefresh, "loading", "同步中");
-  try {
-    const data = await fetchJson(`/api/ian-xiaohei/tts-job?id=${encodeURIComponent(job.id)}`);
-    state.selectedTtsJob = data.job;
-    state.ttsJob = data.job;
-    syncTtsSource(data.job, { title: els.titleInput?.value || "", text: confirmedTtsText(data.job) });
-    resetVisualWorkflow("已同步最新字幕时间轴，请重新分析分镜配图。");
-    setButtonFeedback(els.timelineRefresh, "success", "已同步");
-  } catch (error) {
-    setStatus("同步时间轴失败", error.payload?.message || error.message || String(error), 0, true);
-    setButtonFeedback(els.timelineRefresh, "error", "同步失败");
-  }
+  applySubtitleTimelineRows(rows);
+  state.timelineDraftRows = null;
+  renderSubtitleTimeline(job);
+  if (els.timelineStatus) els.timelineStatus.textContent = `已确定 ${rows.length} 段字幕修改；仅应用于小黑生产线。`;
 }
 
 function bindEvents() {
@@ -597,11 +650,8 @@ function bindEvents() {
   els.testMinimaxSettings.addEventListener("click", () => testMinimaxSettings());
   els.deleteMinimaxApi.addEventListener("click", () => deleteMinimaxApi());
   els.generateImages.addEventListener("click", () => generateCompleteWorkflow());
-  els.timelineRefresh?.addEventListener("click", () => refreshSubtitleTimelineFromTts());
   els.subtitleTimeline?.addEventListener("input", handleSubtitleTimelineInput);
-  els.subtitleTimeline?.addEventListener("focusout", (event) => {
-    if (event.target.matches('[data-field="text"]')) persistSharedSubtitleText();
-  });
+  els.timelineConfirm?.addEventListener("click", confirmSubtitleTimelineChanges);
   els.generateAudio.addEventListener("click", () => generateAudioOnly());
   els.confirmAudio.addEventListener("click", () => confirmCurrentAudio());
   els.generateMusic.addEventListener("click", () => generateMusicMaterial());
@@ -622,7 +672,14 @@ function bindEvents() {
   els.aspectRatioSelect.addEventListener("change", () => resetVisualWorkflow("视频比例已改变，请重新生成分镜计划。"));
   els.chooseBgm.addEventListener("click", () => els.bgmFile.click());
   els.bgmFile.addEventListener("change", (event) => uploadXiaoheiBgm(event.target.files?.[0]));
-  for (const element of [els.frameRate, els.imageFit, els.showSubtitles, els.subtitleColor, els.keywordColor, els.subtitleLines, els.subtitleOutline, els.subtitleShadow, els.introEnabled, els.introPreset, els.introText, els.outroEnabled, els.outroPreset, els.outroText]) {
+  els.includeBgm?.addEventListener("change", () => {
+    state.includeBgm = Boolean(els.includeBgm.checked && (state.handoffBgm || state.backgroundAudio));
+    syncHandoffBgmControl();
+    syncPreviewBgmAudio();
+    state.renderedVideo = null;
+    updateVideoDownloadState();
+  });
+  for (const element of [els.frameRate, els.playbackSpeed, els.imageFit, els.showSubtitles, els.subtitleColor, els.keywordColor, els.subtitleLines, els.subtitleOutline, els.subtitleShadow, els.introEnabled, els.introPreset, els.introText, els.outroEnabled, els.outroPreset, els.outroText]) {
     element.addEventListener("change", handleComposeSettingsChange);
   }
   for (const element of [els.ttsVolume, els.bgmVolume, els.subtitleSize, els.subtitleSpeed]) {
@@ -634,6 +691,15 @@ function bindEvents() {
     resetVisualWorkflow("视觉模板已改变，请重新生成分镜计划。");
   });
   els.copyPrompts.addEventListener("click", () => copyAllPrompts());
+  els.copyImageConstraint1.addEventListener("click", () => copyImageConstraint(1));
+  els.copyImageConstraint2.addEventListener("click", () => copyImageConstraint(2));
+  els.createDesktopFolder.addEventListener("click", () => createDesktopFolder());
+  els.folderNameSelect.addEventListener("change", () => {
+    onFolderNameSelectChange();
+    syncFolderNameButtons();
+  });
+  els.editFolderName.addEventListener("click", () => editFolderName());
+  els.deleteFolderName.addEventListener("click", () => deleteFolderName());
   els.openOutputDir.addEventListener("click", () => openOutputDir());
   els.refreshOutputs.addEventListener("click", () => loadOutputs());
   els.audioJobs.addEventListener("click", handleAudioJobAction);
@@ -651,9 +717,18 @@ function bindEvents() {
     drawVideoPreview();
   });
   els.downloadXiaoheiVideo.addEventListener("click", downloadRenderedVideo);
-  els.audioPreview.addEventListener("play", startVideoPreviewLoop);
-  els.audioPreview.addEventListener("pause", stopVideoPreviewLoop);
-  els.audioPreview.addEventListener("ended", stopVideoPreviewLoop);
+  els.audioPreview.addEventListener("play", () => {
+    startVideoPreviewLoop();
+    void playPreviewBgm();
+  });
+  els.audioPreview.addEventListener("pause", () => {
+    pausePreviewBgm();
+    stopVideoPreviewLoop();
+  });
+  els.audioPreview.addEventListener("ended", () => {
+    pausePreviewBgm({ reset: true });
+    stopVideoPreviewLoop();
+  });
   els.audioPreview.addEventListener("loadedmetadata", syncVideoPreview);
   els.audioPreview.addEventListener("timeupdate", syncVideoPreviewTime);
 }
@@ -1294,6 +1369,7 @@ async function deleteCurrentVoice() {
 }
 
 async function createPlan() {
+  if (state.planGenerating) return null;
   setButtonFeedback(els.planPrompts, "loading", "正在分析");
   const payload = formPayload();
   if (!payload.text) {
@@ -1310,7 +1386,9 @@ async function createPlan() {
     setButtonFeedback(els.planPrompts, "error", "请先从 TTS 发送");
     return null;
   }
+  state.planGenerating = true;
   setBusy(true);
+  syncPromptActionButtons();
   setStatus("正在按 TTS 时间轴分析分镜", "正在结合已确认音频时长、同步字幕和文案语义生成分镜提示词。", 35, false, "TTS 时间轴分析");
   try {
     const data = await fetchJson("/api/ian-xiaohei/timeline-plan", {
@@ -1326,6 +1404,9 @@ async function createPlan() {
     state.previewImageCache.clear();
     state.renderedVideo = null;
     state.pendingUploads.clear();
+    state.localMaterialPool = [];
+    state.materialBindings.clear();
+    state.folderSequenceReference = null;
     renderPlan(data);
     renderImages([], []);
     savePromptPlanCache(data, payload);
@@ -1337,7 +1418,9 @@ async function createPlan() {
     setButtonFeedback(els.planPrompts, "error", "分析失败");
     return null;
   } finally {
+    state.planGenerating = false;
     setBusy(false);
+    syncPromptActionButtons();
   }
 }
 
@@ -1445,20 +1528,36 @@ async function generateCompleteWorkflow() {
         images: state.images,
         transition_mode: els.videoTransitionMode.value || "smart",
         compose: composeSettings(),
-        background_audio: state.backgroundAudio,
+        background_audio: state.includeBgm ? state.backgroundAudio : null,
+        tts_bgm_path: state.includeBgm ? (state.handoffBgm?.path || "") : "",
       }),
     });
     state.renderedVideo = exported;
+    const receiptStore = globalThis.ttsHandoffStore || globalThis.parent?.ttsHandoffStore;
+    const receiptHandoffId = String(state.handoffId || "");
+    const receiptAssetId = String(exported.assetId || "");
+    let receiptWarning = "";
+    if (receiptHandoffId && receiptAssetId && receiptStore?.updateReceipt) {
+      try {
+        await receiptStore.updateReceipt("xiaohei-video", "rendered", { handoffId: receiptHandoffId, assetId: receiptAssetId });
+        await receiptStore.updateReceipt("xiaohei-video", "verified", { handoffId: receiptHandoffId, assetId: receiptAssetId });
+      } catch (error) {
+        receiptWarning = error?.message || String(error);
+        console.warn("[xiaohei] 视频已生成，但生产线回执更新失败:", error);
+      }
+    }
     updateVideoDownloadState();
     await loadOutputs();
     if (!exported.videoUrl) throw new Error("视频已经处理，但没有返回 MP4 地址。");
-    els.videoRenderStatus.textContent = `MP4 已生成 · ${exported.width}×${exported.height} · ${exported.fps}fps`;
+    els.videoRenderStatus.textContent = `MP4 已生成 · ${exported.width}×${exported.height} · ${exported.fps}fps · ${Number(exported.playbackSpeed || 1).toFixed(1)}×`;
     setStatus(
       "小黑视频已生成",
-      "请在预览确认后点击右侧“下载视频”。",
+      receiptWarning
+        ? `成片已生成并可下载；生产线回执更新失败：${receiptWarning}`
+        : "请在预览确认后点击右侧“下载视频”。",
       100,
       false,
-      "MP4 完成",
+      receiptWarning ? "MP4 完成 · 回执警告" : "MP4 完成",
     );
   } catch (error) {
     els.videoRenderStatus.textContent = error.payload?.message || error.message || String(error);
@@ -1527,10 +1626,26 @@ async function uploadAndValidateAudio(payload) {
 async function loadAudioJobs() {
   const data = await fetchJson(`/api/ian-xiaohei/audio-jobs?project_id=${encodeURIComponent(state.projectId)}`);
   state.audioJobs = data.jobs || [];
-  state.selectedTtsJob = data.selected || null;
-  if (!state.ttsJob && state.selectedTtsJob) state.ttsJob = state.selectedTtsJob;
-  if (state.selectedTtsJob) syncTtsSource(state.selectedTtsJob, { title: els.titleInput?.value || "" });
-  else if (!state.ttsJob) syncTtsSource(null);
+  if (!state.selectedTtsJob && !state.ttsJob) {
+    const selectedCandidate = data.selected || state.audioJobs.find((job) => (
+      job.metadata?.selected_for_project
+    ));
+    const selected = selectedCandidate?.status === "completed"
+      && isTtsAlignmentConfirmed(selectedCandidate)
+      && timelineRows(selectedCandidate).length
+      ? selectedCandidate
+      : null;
+    if (selected) {
+      state.selectedTtsJob = selected;
+      state.ttsJob = selected;
+      syncTtsSource(selected, {
+        title: selected.title || selected.seo_title || "",
+        text: confirmedTtsText(selected),
+      });
+    } else {
+      syncTtsSource(null);
+    }
+  }
   renderAudioJobs();
 }
 
@@ -1614,6 +1729,9 @@ async function handlePromptFileChange(event) {
   const file = input.files[0];
   const dataUrl = await readFileDataUrl(file);
   state.pendingUploads.set(index, { dataUrl, mimeType: file.type, fileName: file.name });
+  if (index === 1) {
+    state.folderSequenceReference = { fileName: file.name, mimeType: file.type };
+  }
   input.value = "";
   renderPlan(state.plan);
 }
@@ -1645,6 +1763,16 @@ async function handlePromptAction(event) {
     await generateAllMissingShotImages(button);
     return;
   }
+  if (action === "add-folder-images") {
+    if (!ensurePromptPlanAvailable()) return;
+    await addLatestFolderImages(button);
+    return;
+  }
+  if (action === "bind-folder-images") {
+    if (!ensurePromptPlanAvailable()) return;
+    await bindConfirmedFolderImages(button);
+    return;
+  }
   if (action === "choose-image") {
     if (!ensurePromptPlanAvailable()) return;
     savePromptPlanCache(state.plan);
@@ -1657,7 +1785,7 @@ async function handlePromptAction(event) {
     const shot = state.plan?.shots?.find((item) => Number(item.index) === index);
     if (!shot) return;
     try {
-      await navigator.clipboard.writeText(shotPromptBlock(shot, state.plan));
+      await writeClipboardText(shotPromptBlock(shot, state.plan));
       setStatus("已复制单张提示词", `#${index} 会作为独立任务生成 1 张图片。`, 100);
       setButtonFeedback(button, "success", "已复制");
     } catch (error) {
@@ -1669,6 +1797,7 @@ async function handlePromptAction(event) {
   if (action === "cancel-image") {
     if (!ensurePromptPlanAvailable()) return;
     state.pendingUploads.delete(index);
+    if (index === 1) state.folderSequenceReference = null;
     savePromptPlanCache(state.plan);
     renderPlan(state.plan);
     return;
@@ -1830,23 +1959,28 @@ async function generateAllMissingShotImages(button) {
 
 async function uploadAllPendingShotImages(button) {
   const indexes = pendingUploadIndexes(state.plan);
-  if (!indexes.length) {
+  const pendingMaterials = state.localMaterialPool.filter((item) => !item.confirmed);
+  if (!indexes.length && !pendingMaterials.length) {
     setButtonFeedback(button, "success", "全部已确认");
     setStatus("全部图片已确认", "当前没有待确认的图片。", 100);
     return;
   }
-  setButtonFeedback(button, "loading", `确认中 0/${indexes.length}`);
-  let successCount = 0;
+  const total = indexes.length + pendingMaterials.length;
+  setButtonFeedback(button, "loading", `确认中 0/${total}`);
+  for (const item of pendingMaterials) item.confirmed = true;
+  let successCount = pendingMaterials.length;
   const failed = [];
   for (const [position, index] of indexes.entries()) {
-    setButtonFeedback(button, "loading", `确认中 ${position + 1}/${indexes.length}`);
-    setStatus("正在批量确认图片", `正在确认分镜 #${index}（${position + 1}/${indexes.length}）。`, Math.round(((position + 1) / indexes.length) * 90), false, "本地图片");
+    const current = pendingMaterials.length + position + 1;
+    setButtonFeedback(button, "loading", `确认中 ${current}/${total}`);
+    setStatus("正在批量确认图片", `正在确认分镜 #${index}（${current}/${total}）。`, Math.round((current / total) * 90), false, "本地图片");
     const ok = await uploadShotImage(index, { render: false, silent: true });
     if (ok) successCount += 1;
     else failed.push(index);
   }
   renderPlan(state.plan);
   renderImages(state.images, []);
+  savePromptPlanCache(state.plan);
   const latestButton = els.promptResults.querySelector('[data-prompt-action="confirm-all-images"]') || button;
   if (failed.length) {
     setStatus("部分图片确认失败", `已确认 ${successCount} 张，失败：#${failed.join("、#")}。`, 100, true);
@@ -1855,6 +1989,240 @@ async function uploadAllPendingShotImages(button) {
   }
   setStatus("全部图片已确认", `已确认 ${successCount} 张本地图片，后续生成视频会使用这些图片。`, 100, false, "完成");
   setButtonFeedback(latestButton, "success", "全部已确认", 2400);
+}
+
+async function addLatestFolderImages(button) {
+  const reference = state.pendingUploads.get(1) || state.folderSequenceReference;
+  if (!reference?.fileName) {
+    setStatus(
+      "请先手动添加图片素材1",
+      "先在分镜 #1 选择文件名末尾为 (1) 的本地图片，再点击“一键添加图片素材”。",
+      0,
+      true,
+    );
+    setButtonFeedback(button, "error", "缺少图片1");
+    return;
+  }
+  if (!/\(1\)\.(png|jpe?g|webp)$/iu.test(reference.fileName)) {
+    setStatus("图片素材1编号无效", "第一张图片文件名必须以 (1) 结尾，且必须是 PNG、JPG、JPEG 或 WEBP。", 0, true);
+    setButtonFeedback(button, "error", "第一张不是 (1)");
+    return;
+  }
+  let suffix = resolveFolderNameSelection({
+    names: folderNames,
+    currentValue: els.folderNameSelect?.value,
+    cachedValue: state.desktopFolderName,
+  });
+  setButtonFeedback(button, "loading", "扫描中");
+  try {
+    const shots = [...(state.plan?.shots || [])]
+      .sort((left, right) => Number(left.index) - Number(right.index));
+    const maxSequence = Math.max(1, ...shots.map((shot) => Number(shot.index) || 0));
+    const findImages = (candidateSuffix, folderPath = "") => fetchJson("/api/desktop-folder-reference-images", {
+      method: "POST",
+      body: JSON.stringify({
+        suffix: candidateSuffix,
+        folderPath,
+        referenceFileName: reference.fileName,
+        maxSequence,
+      }),
+    });
+    let data;
+    if (suffix) {
+      data = await findImages(suffix, state.desktopFolderPath);
+    } else {
+      const results = await Promise.all(folderNames.map(async (candidateSuffix) => {
+        try {
+          return { suffix: candidateSuffix, data: await findImages(candidateSuffix) };
+        } catch {
+          return null;
+        }
+      }));
+      const resolved = resolveUniqueReferenceFolder(results);
+      if (resolved.status === "ambiguous") {
+        setStatus("图片素材1存在于多个文件夹", "请选择正确的文件夹名称后再试，避免误加另一组图片。", 0, true);
+        setButtonFeedback(button, "error", "需选择文件夹");
+        return;
+      }
+      if (resolved.status !== "matched") {
+        setStatus("未找到图片素材1所在文件夹", "请确认图片素材1位于今天创建的命名文件夹中。", 0, true);
+        setButtonFeedback(button, "error", "未找到文件夹");
+        return;
+      }
+      suffix = resolved.suffix;
+      data = resolved.data;
+    }
+    state.desktopFolderName = suffix;
+    if (els.folderNameSelect) els.folderNameSelect.value = suffix;
+    syncFolderNameButtons();
+    state.desktopFolderPath = data.folderPath || state.desktopFolderPath;
+    const candidates = Array.isArray(data.images) ? data.images : [];
+    if (!candidates.length) {
+      setStatus(
+        "没有匹配到后续图片",
+        "没有找到与图片素材1同文件夹、同扩展名、同一轮时间段的 (2)(3)(4)… 图片。",
+        0,
+        true,
+      );
+      setButtonFeedback(button, "error", "没有图片");
+      return;
+    }
+    const shotIndexes = new Set(shots.map((shot) => Number(shot.index)));
+    const occupied = (sequence) => (
+      state.pendingUploads.has(sequence)
+      || state.images.some((image) => Number(image.index) === sequence && image.assetId)
+      || state.localMaterialPool.some((item) => Number(item.boundShotIndex) === sequence)
+    );
+    let addedCount = 0;
+    let skippedCount = 0;
+    const failed = [];
+    for (const [position, item] of candidates.entries()) {
+      const sequence = Number(item.sequence);
+      if (!shotIndexes.has(sequence) || occupied(sequence)) {
+        skippedCount += 1;
+        continue;
+      }
+      const latestButton = els.promptResults.querySelector('[data-prompt-action="add-folder-images"]') || button;
+      setButtonFeedback(latestButton, "loading", `添加 ${position + 1}/${candidates.length}`);
+      setStatus(
+        "正在按图片素材1添加后续图片",
+        `正在把 (${sequence}) 添加到分镜 #${sequence}，只进入待确认状态。`,
+        Math.round(((position + 1) / candidates.length) * 90),
+        false,
+        "本地图片",
+      );
+      try {
+        const response = await fetch(item.imageUrl);
+        if (!response.ok) throw new Error(`读取图片失败 ${response.status}`);
+        const blob = await response.blob();
+        const dataUrl = await readFileDataUrl(blob);
+        state.pendingUploads.set(sequence, {
+          dataUrl,
+          mimeType: blob.type || "application/octet-stream",
+          fileName: item.name,
+          sourcePath: item.path,
+        });
+        addedCount += 1;
+        renderPlan(state.plan);
+      } catch (error) {
+        failed.push({ sequence, message: error.message || String(error) });
+      }
+    }
+    savePromptPlanCache(state.plan);
+    const matched = new Set(candidates.map((item) => Number(item.sequence)));
+    const missing = shots
+      .map((shot) => Number(shot.index))
+      .filter((sequence) => sequence > 1 && !matched.has(sequence) && !occupied(sequence));
+    const detail = [
+      `已添加 ${addedCount} 张到对应分镜的待确认区域`,
+      skippedCount ? `跳过 ${skippedCount} 个已有素材位` : "",
+      missing.length ? `未识别：#${missing.join("、#")}（保持空白）` : "",
+      failed.length ? `读取失败：#${failed.map((item) => item.sequence).join("、#")}` : "",
+      "请由你手动确认和绑定",
+    ].filter(Boolean).join("；");
+    const latestButton = els.promptResults.querySelector('[data-prompt-action="add-folder-images"]') || button;
+    setStatus(
+      failed.length ? "图片素材部分添加完成" : "图片素材已按编号添加",
+      `${detail}。`,
+      100,
+      Boolean(failed.length),
+      "等待手动确认",
+    );
+    setButtonFeedback(
+      latestButton,
+      failed.length ? "error" : "success",
+      addedCount ? `已添加 ${addedCount} 张` : "没有新增",
+    );
+  } catch (error) {
+    setStatus("添加图片素材失败", error.payload?.message || error.message || String(error), 0, true);
+    setButtonFeedback(button, "error", "添加失败");
+  }
+}
+
+function shotImageMaterialCount(shot = {}) {
+  const explicit = Number(shot.imageCount || shot.image_count || shot.materialCount || 0);
+  if (Number.isInteger(explicit) && explicit >= 1 && explicit <= 3) return explicit;
+  const text = [
+    shot.materialInstruction,
+    shot.prompt,
+    shot.topic,
+    shot.sourceText,
+  ].filter(Boolean).join("\n");
+  const match = /图\s*([1-3])(?!\d)/u.exec(text);
+  return match ? Number(match[1]) : 0;
+}
+
+async function bindConfirmedFolderImages(button) {
+  const available = state.localMaterialPool
+    .filter((item) => item.confirmed && !item.boundShotIndex)
+    .sort((left, right) => Number(left.sequence) - Number(right.sequence));
+  if (!available.length) {
+    setStatus("没有可绑定素材", "请先一键添加图片素材，再点击“全部确认使用”。", 0, true);
+    setButtonFeedback(button, "error", "没有已确认素材");
+    return;
+  }
+  const shots = [...(state.plan?.shots || [])].sort((left, right) => Number(left.index) - Number(right.index));
+  let boundCount = 0;
+  let skippedCount = 0;
+  let cursor = 0;
+  setButtonFeedback(button, "loading", "绑定中");
+  for (const shot of shots) {
+    const shotIndex = Number(shot.index);
+    if (state.images.some((image) => Number(image.index) === shotIndex && image.assetId)) continue;
+    const required = shotImageMaterialCount(shot);
+    if (!required) {
+      skippedCount += 1;
+      continue;
+    }
+    if (cursor + required > available.length) {
+      skippedCount += 1;
+      break;
+    }
+    const selected = available.slice(cursor, cursor + required);
+    try {
+      const data = await fetchJson("/api/ian-xiaohei/bind-local-materials", {
+        method: "POST",
+        body: JSON.stringify({
+          batchId: state.plan.batchId,
+          plan: state.plan,
+          shot,
+          aspectRatio: state.plan.aspectRatio,
+          folder_path: state.desktopFolderPath,
+          material_paths: selected.map((item) => item.path),
+        }),
+      });
+      state.images = [
+        ...state.images.filter((image) => Number(image.index) !== shotIndex),
+        data.image,
+      ].sort((left, right) => Number(left.index) - Number(right.index));
+      state.materialBindings.set(shotIndex, data.image.materials || []);
+      for (const [materialIndex, item] of selected.entries()) {
+        item.boundShotIndex = shotIndex;
+        item.imageUrl = data.image.materials?.[materialIndex]?.imageUrl || item.imageUrl;
+      }
+      cursor += required;
+      boundCount += required;
+    } catch (error) {
+      setStatus("绑定图片素材失败", `分镜 #${shotIndex}：${error.payload?.message || error.message || String(error)}`, 100, true);
+      setButtonFeedback(button, "error", "绑定失败");
+      renderPlan(state.plan);
+      savePromptPlanCache(state.plan);
+      return;
+    }
+  }
+  state.renderedVideo = null;
+  renderPlan(state.plan);
+  renderImages(state.images, []);
+  savePromptPlanCache(state.plan);
+  const unusedCount = available.length - cursor;
+  setStatus(
+    "图片素材绑定完成",
+    `已绑定 ${boundCount} 张；已有绑定已跳过；${skippedCount} 条未识别“图 n”或素材不足，保持空白；${unusedCount} 张多余素材保留未绑定。`,
+    100,
+    false,
+    "完成",
+  );
+  setButtonFeedback(button, "success", `已绑定 ${boundCount} 张`);
 }
 
 async function loadOutputs() {
@@ -1899,7 +2267,15 @@ function formPayload() {
   };
 }
 
-function promptPlanCacheKey(projectId = state.projectId) {
+function promptPlanCacheKey(
+  projectId = state.projectId,
+  job = state.selectedTtsJob || state.ttsJob,
+) {
+  const ttsJobId = Number(job?.id || 0);
+  return `${PROMPT_PLAN_CACHE_PREFIX}:v${PROMPT_PLAN_CACHE_VERSION}:${String(projectId || "default")}:tts-${ttsJobId}`;
+}
+
+function legacyPromptPlanCacheKey(projectId = state.projectId) {
   return `${PROMPT_PLAN_CACHE_PREFIX}:v${PROMPT_PLAN_CACHE_VERSION}:${String(projectId || "default")}`;
 }
 
@@ -1924,6 +2300,8 @@ function promptPlanCacheMatches(cached) {
   const currentJob = state.selectedTtsJob || state.ttsJob;
   if (String(signature.projectId || "") !== String(state.projectId || "")) return false;
   if (Number(signature.ttsJobId || 0) !== Number(currentJob?.id || 0)) return false;
+  if (String(signature.purpose || "article") !== String(formPayload().purpose || "article")) return false;
+  if (String(signature.aspectRatio || "16:9") !== String(formPayload().aspectRatio || "16:9")) return false;
   const currentText = normalizeComparableText(confirmedTtsText(currentJob) || formPayload().text);
   const cachedText = normalizeComparableText(cached?.plan?.sourceText || signature.text);
   return !currentText || !cachedText || currentText === cachedText;
@@ -1939,21 +2317,43 @@ function savePromptPlanCache(plan, payload = formPayload()) {
       signature: promptPlanCacheSignature(payload),
       plan,
       boundImages: cacheableBoundImages(state.images),
+      localMaterialPool: state.localMaterialPool.map((item) => ({
+        name: String(item.name || ""),
+        path: String(item.path || ""),
+        imageUrl: String(item.imageUrl || ""),
+        sequence: Number(item.sequence || 0),
+        capturedAt: Number(item.capturedAt || 0),
+        confirmed: Boolean(item.confirmed),
+        boundShotIndex: Number(item.boundShotIndex || 0),
+      })),
+      desktopFolderPath: state.desktopFolderPath,
+      desktopFolderName: state.desktopFolderName,
     }));
     localStorage.setItem(PROMPT_PLAN_LATEST_KEY, key);
-    removeOlderPromptPlanCaches(key);
+    prunePromptPlanCaches(key);
   } catch {
     // The plan remains usable in memory even if browser storage is unavailable.
   }
 }
 
-function removeOlderPromptPlanCaches(keepKey) {
-  for (let index = localStorage.length - 1; index >= 0; index -= 1) {
+function prunePromptPlanCaches(keepKey, maximumEntries = 40) {
+  const entries = [];
+  for (let index = 0; index < localStorage.length; index += 1) {
     const key = localStorage.key(index);
-    if (key?.startsWith(`${PROMPT_PLAN_CACHE_PREFIX}:`) && key !== PROMPT_PLAN_LATEST_KEY && key !== keepKey) {
-      localStorage.removeItem(key);
+    if (!key?.startsWith(`${PROMPT_PLAN_CACHE_PREFIX}:`) || key === PROMPT_PLAN_LATEST_KEY) continue;
+    let savedAt = 0;
+    try {
+      savedAt = Date.parse(JSON.parse(localStorage.getItem(key) || "null")?.savedAt || "") || 0;
+    } catch {
+      savedAt = 0;
     }
+    entries.push({ key, savedAt });
   }
+  entries
+    .filter((entry) => entry.key !== keepKey)
+    .sort((left, right) => right.savedAt - left.savedAt)
+    .slice(Math.max(0, maximumEntries - 1))
+    .forEach((entry) => localStorage.removeItem(entry.key));
 }
 
 function cacheableBoundImages(images = []) {
@@ -1972,6 +2372,15 @@ function cacheableBoundImages(images = []) {
       source: String(image.source || "local_upload"),
       aspectRatio: String(image.aspectRatio || ""),
       confirmed: true,
+      materials: Array.isArray(image.materials)
+        ? image.materials.map((material) => ({
+          assetId: String(material.assetId || ""),
+          name: String(material.name || ""),
+          imagePath: String(material.imagePath || ""),
+          imageUrl: String(material.imageUrl || ""),
+          sequence: Number(material.sequence || 0),
+        }))
+        : [],
     }))
     .sort((left, right) => left.index - right.index);
 }
@@ -1980,17 +2389,18 @@ function restorePromptPlanCache() {
   if (!state.projectId || !(state.selectedTtsJob || state.ttsJob)) return false;
   const key = promptPlanCacheKey();
   try {
-    const latestKey = localStorage.getItem(PROMPT_PLAN_LATEST_KEY);
-    if (latestKey && latestKey !== key) return false;
-    const cached = JSON.parse(localStorage.getItem(key) || "null");
+    const legacyKey = legacyPromptPlanCacheKey();
+    const sourceKey = localStorage.getItem(key) ? key : legacyKey;
+    const cached = JSON.parse(localStorage.getItem(sourceKey) || "null");
     if (
       cached?.version !== PROMPT_PLAN_CACHE_VERSION
       || !promptPlanCacheMatches(cached)
       || !cached.plan?.shots?.length
       || cached.plan.skillProfileVersion !== 2
     ) return false;
+    if (sourceKey !== key) localStorage.setItem(key, JSON.stringify(cached));
     localStorage.setItem(PROMPT_PLAN_LATEST_KEY, key);
-    removeOlderPromptPlanCaches(key);
+    prunePromptPlanCaches(key);
     state.plan = cached.plan;
     const cachedPurpose = String(cached.plan.purpose || "article");
     if ([...els.purposeSelect.options].some((option) => option.value === cachedPurpose)) {
@@ -2005,14 +2415,76 @@ function restorePromptPlanCache() {
     if (els.titleInput && !els.titleInput.value.trim()) els.titleInput.value = cached.plan.title || "";
     if (els.copyInput && !els.copyInput.value.trim()) els.copyInput.value = cached.plan.sourceText || "";
     state.images = cacheableBoundImages(cached.boundImages || []);
+    state.localMaterialPool = Array.isArray(cached.localMaterialPool) ? cached.localMaterialPool : [];
+    state.desktopFolderPath = String(cached.desktopFolderPath || "");
+    state.desktopFolderName = String(cached.desktopFolderName || "");
+    renderFolderNameSelect();
+    state.materialBindings = new Map(
+      state.images
+        .filter((image) => Array.isArray(image.materials) && image.materials.length)
+        .map((image) => [Number(image.index), image.materials]),
+    );
     state.pendingUploads.clear();
     renderPlan(state.plan);
     renderImages(state.images, []);
+    syncPromptActionButtons();
     return true;
   } catch {
     localStorage.removeItem(key);
     return false;
   }
+}
+
+async function restorePromptPlanFromServer() {
+  const job = state.selectedTtsJob || state.ttsJob;
+  if (!state.projectId || !job?.id) return false;
+  if (state.planRestorePromise) return state.planRestorePromise;
+  state.planRestorePromise = (async () => {
+    try {
+      const data = await fetchJson(
+        `/api/ian-xiaohei/plan-restore?project_id=${encodeURIComponent(state.projectId)}&tts_job_id=${encodeURIComponent(job.id)}`,
+      );
+      const plan = data.plan;
+      if (
+        !plan?.shots?.length
+        || Number(plan.ttsJobId || 0) !== Number(job.id)
+        || String(plan.projectId || "") !== String(state.projectId)
+      ) return false;
+      state.plan = plan;
+      state.images = [];
+      state.localMaterialPool = [];
+      state.materialBindings.clear();
+      state.pendingUploads.clear();
+      state.folderSequenceReference = null;
+      const purpose = String(plan.purpose || "article");
+      if ([...els.purposeSelect.options].some((option) => option.value === purpose)) {
+        els.purposeSelect.value = purpose;
+        localStorage.setItem(PURPOSE_STORAGE_KEY, purpose);
+        renderPurposeTemplates();
+      }
+      const aspectRatio = String(plan.aspectRatio || "16:9");
+      if ([...els.aspectRatioSelect.options].some((option) => option.value === aspectRatio)) {
+        els.aspectRatioSelect.value = aspectRatio;
+      }
+      if (els.titleInput) els.titleInput.value = plan.title || els.titleInput.value;
+      if (els.copyInput) els.copyInput.value = plan.sourceText || confirmedTtsText(job);
+      renderPlan(plan);
+      renderImages([], []);
+      savePromptPlanCache(plan, {
+        title: plan.title,
+        text: plan.sourceText,
+        purpose: plan.purpose,
+        aspectRatio: plan.aspectRatio,
+      });
+      syncPromptActionButtons();
+      return true;
+    } catch {
+      return false;
+    } finally {
+      state.planRestorePromise = null;
+    }
+  })();
+  return state.planRestorePromise;
 }
 
 function ensurePromptPlanAvailable() {
@@ -2038,24 +2510,41 @@ function promptAspectRatio(plan = state.plan) {
 
 function shotPromptBlock(shot = {}, plan = state.plan) {
   const ratio = promptAspectRatio(plan);
+  const skillName = shot.skillName || plan?.skillName || shot.skillId || "";
   return [
-    `#${shot.index} ${shot.topic || ""}`,
-    `锁定 Skill：${shot.skillName || plan?.skillName || shot.skillId || ""}`,
+    "单张图片素材生成任务",
+    "",
+    "复制下面整段到生图工具：",
+    "",
+    "请直接生成一张图片素材。",
+    "不要解释，不要分析，不要复述提示词，不要给优化建议，直接出图。",
+    "只生成一张图，不要拼图，不要多宫格，不要组图，不要缩略图合集。",
+    `本次只生成当前这一张独立的 ${ratio} 图片素材。`,
+    "不要把多个画面、多个编号、多个镜头合并到同一张画布。",
+    "图片里不要出现数字编号角标，不要出现分格边框。",
+    "",
+    "项目：小黑视频风格生成",
+    `锁定 Skill：${skillName}`,
+    `本镜头任务：${shot.topic || ""}`,
+    `本镜头角色：${shot.role || ""}`,
+    `结构类型（只作为理解，不写进画面）：${shot.structureType || ""}`,
+    `核心意思：${shot.coreIdea || ""}`,
+    `主体动作：${shot.xiaoheiAction || ""}`,
+    `视觉隐喻：${shot.visualMetaphor || ""}`,
+    `构图：${shot.composition || ""}`,
     `对应原文：${shot.sourceText || ""}`,
+    "",
+    "画面文字规则：保留当前 Skill 原本允许的少量中文手写标注；不要把整段原文、标题、编号或说明文字写进画面。",
+    "单张约束：只输出一张高质量图片；禁止 Collage（拼贴图）、Contact Sheet（缩略图合集）、九宫格、拼图、组图、分屏故事板。",
+    "",
     String(shot.prompt || "").trim(),
-    [
-      `本编号 #${shot.index} 是一个独立任务(Job)。`,
-      `只生成编号 #${shot.index} 这一张独立的 ${ratio} 图片素材。`,
-      "禁止将多个编号合并到同一张画布。",
-      "禁止自动创建 Collage（拼贴图）。",
-      "禁止自动创建 Contact Sheet（缩略图合集）。",
-      "禁止九宫格、缩略图合集、拼图、组图。",
-    ].join("\n"),
+    "",
+    "输出要求：单张高质量图片素材，主体明确，风格统一，符合锁定 Skill；画面可以直接用于短视频剪辑。",
   ].filter(Boolean).join("\n");
 }
 
 function promptPlanText(shots = [], plan = state.plan) {
-  return shots.map((shot) => shotPromptBlock(shot, plan)).join("\n\n--- NEXT INDEPENDENT JOB ---\n\n");
+  return shots.map((shot) => shotPromptBlock(shot, plan)).join("\n\n--- 下一张图片：必须单独复制这一段，不要和上一段一起发送 ---\n\n");
 }
 
 function pendingUploadIndexes(plan = state.plan) {
@@ -2068,12 +2557,20 @@ function pendingUploadIndexes(plan = state.plan) {
 
 function promptBatchActionMarkup(plan = state.plan) {
   const shots = plan?.shots || [];
-  const pendingCount = pendingUploadIndexes(plan).length;
+  const pendingCount = pendingUploadIndexes(plan).length
+    + state.localMaterialPool.filter((item) => !item.confirmed).length;
+  const confirmedFolderCount = state.localMaterialPool.filter((item) => item.confirmed && !item.boundShotIndex).length;
   const generationCount = missingImageGenerationIndexes(plan).length;
   const allConfirmed = Boolean(shots.length && pendingCount === 0 && !missingShotImages(plan, state.images).length);
-  const label = pendingCount > 0 ? `全部确认使用（${pendingCount}）` : allConfirmed ? "全部已确认" : "等待添加图片";
+  const label = pendingCount > 0
+    ? `全部确认使用（${pendingCount}）`
+    : confirmedFolderCount > 0
+      ? `已确认素材（${confirmedFolderCount}）`
+      : allConfirmed ? "全部已确认" : "等待添加图片";
   const hint = pendingCount > 0
     ? "会按编号逐张确认当前已添加的本地图片。"
+    : confirmedFolderCount > 0
+      ? "素材已确认，请点击“绑定图片素材”。"
     : allConfirmed
       ? "所有分镜图片都已绑定。"
       : "添加本地图片素材后可批量确认。";
@@ -2081,8 +2578,23 @@ function promptBatchActionMarkup(plan = state.plan) {
     <div class="prompt-batch-actions">
       <button type="button" data-prompt-action="confirm-all-images" ${pendingCount > 0 ? "" : "disabled"} class="${allConfirmed ? "is-confirmed action-feedback is-success" : ""}">${label}</button>
       <button type="button" class="primary" data-prompt-action="generate-all-images" ${generationCount > 0 && !state.imageBatchGenerating ? "" : "disabled"}>${state.imageBatchGenerating ? `正在生成 ${state.imageBatchProgress?.current || 0}/${state.imageBatchProgress?.total || generationCount}` : generationCount > 0 ? `一键生成图片（${generationCount}）` : "图片已齐全"}</button>
+      <button type="button" data-prompt-action="add-folder-images">一键添加图片素材</button>
+      <button type="button" data-prompt-action="bind-folder-images" ${confirmedFolderCount > 0 ? "" : "disabled"}>绑定图片素材${confirmedFolderCount ? `（${confirmedFolderCount}）` : ""}</button>
       <span>${hint}</span>
     </div>
+    ${state.localMaterialPool.length ? `
+      <div class="local-material-pool" aria-label="本地图片素材">
+        ${state.localMaterialPool.map((item) => `
+          <figure class="${item.confirmed ? "is-confirmed" : "is-pending"}">
+            <img src="${escapeAttr(item.imageUrl || "")}" alt="${escapeAttr(item.name || "图片素材")}" />
+            <figcaption>
+              <strong>(${Number(item.sequence) || "-"})</strong>
+              ${item.boundShotIndex ? `已绑定 #${Number(item.boundShotIndex)}` : item.confirmed ? "已确认" : "待确认"}
+            </figcaption>
+          </figure>
+        `).join("")}
+      </div>
+    ` : ""}
   `;
 }
 
@@ -2090,6 +2602,7 @@ function renderPlan(plan) {
   const shots = plan?.shots || [];
   els.planCount.textContent = String(shots.length);
   state.promptsText = promptPlanText(shots, plan);
+  syncPromptActionButtons();
   if (!shots.length) {
     els.promptResults.className = "prompt-list empty";
     els.promptResults.textContent = "还没有生成提示词。";
@@ -2129,8 +2642,15 @@ function renderPlan(plan) {
         </div>
         ${image ? `
           <div class="shot-image-state">
-            <strong>本分镜当前使用图片</strong>
-            <img style="${ratioStyle}" src="${escapeAttr(image.imageUrl || image.thumbnailUrl || "")}" alt="${escapeAttr(shot.topic)}" />
+            <strong>本分镜已绑定图片${image.materials?.length > 1 ? `（${image.materials.length} 张，视频只使用第 1 张）` : ""}</strong>
+            <div class="bound-material-grid">
+              ${(image.materials?.length ? image.materials : [image]).map((material, materialIndex) => `
+                <figure>
+                  <img style="${ratioStyle}" src="${escapeAttr(material.imageUrl || material.thumbnailUrl || image.imageUrl || image.thumbnailUrl || "")}" alt="${escapeAttr(shot.topic)}" />
+                  <figcaption>${materialIndex === 0 ? "第 1 张 · 视频使用" : `第 ${materialIndex + 1} 张 · 参考素材`}</figcaption>
+                </figure>
+              `).join("")}
+            </div>
             <span class="path">${escapeHtml(image.imagePath || "")}</span>
           </div>
         ` : ""}
@@ -2228,16 +2748,59 @@ async function handleOutputHistoryAction(event) {
   }
 }
 
+async function writeClipboardText(value) {
+  const text = String(value || "");
+  if (!text) throw new Error("没有可复制的内容。");
+  try {
+    if (!navigator.clipboard?.writeText || !document.hasFocus()) {
+      throw new Error("clipboard-focus-required");
+    }
+    await navigator.clipboard.writeText(text);
+    return;
+  } catch {
+    const textarea = document.createElement("textarea");
+    const selection = document.getSelection();
+    const selectedRange = selection?.rangeCount ? selection.getRangeAt(0) : null;
+    textarea.value = text;
+    textarea.setAttribute("readonly", "");
+    textarea.style.position = "fixed";
+    textarea.style.left = "-9999px";
+    textarea.style.top = "0";
+    document.body.appendChild(textarea);
+    let copied = false;
+    try {
+      window.focus();
+      textarea.focus({ preventScroll: true });
+      textarea.select();
+      try {
+        copied = Boolean(document.execCommand("copy"));
+      } catch {
+        copied = false;
+      }
+    } finally {
+      textarea.remove();
+      if (selectedRange && selection) {
+        selection.removeAllRanges();
+        selection.addRange(selectedRange);
+      }
+    }
+    if (!copied) throw new Error("浏览器未允许写入剪贴板，请重新点击复制按钮。");
+  }
+}
+
 async function copyAllPrompts() {
+  if (state.planGenerating) return;
   setButtonFeedback(els.copyPrompts, "loading", "正在复制");
-  if (!state.promptsText) await createPlan();
+  if (!state.plan?.shots?.length && !restorePromptPlanCache()) {
+    await restorePromptPlanFromServer();
+  }
   if (!state.promptsText) {
     setButtonFeedback(els.copyPrompts, "error", "没有可复制内容");
     return;
   }
   try {
-    await navigator.clipboard.writeText(promptClipboardText());
-    setStatus("已复制提示词", "已按独立 Job 格式复制，生图时应逐个编号生成。", 100);
+    await writeClipboardText(promptClipboardText());
+    setStatus("已复制全部提示词", "已一次性复制当前全部生图提示词。", 100);
     setButtonFeedback(els.copyPrompts, "success", "已复制");
   } catch (error) {
     setStatus("复制失败", error.message || String(error), 0, true);
@@ -2256,16 +2819,301 @@ function promptClipboardText() {
     ? promptPlanText(shots.slice(0, imageCount), state.plan)
     : fallbackPromptText;
   return [
-    "批量任务协议：每一个编号就是一个独立任务(Job)。",
-    "禁止将多个编号合并到同一张画布。",
-    "禁止自动创建 Collage（拼贴图）。",
-    "禁止自动创建 Contact Sheet（缩略图合集）。",
-    "禁止九宫格、缩略图合集、拼图、组图。",
+    "小黑视频风格生成 - 单张 Scene 生图版",
+    "",
+    "重要：以下是多张图片提示词。每一段对应一张独立图片。",
+    "每段都已经写成直接生图命令：生图工具应该直接生成图片，不要先解释、不要总结、不要给建议。",
+    "统一要求：每个 Scene 只生成一张独立图片素材；禁止把多个 Scene 合并成一张图、组图、拼图、九宫格或缩略图合集。",
+    "文字规则：保留对应 Skill 允许的少量中文手写标注；不要把整段原文、标题、编号或说明文字画进图片。",
     "",
     promptText,
     "",
-    `请按编号逐张生成，共生成${imageCount}次；每次只生成1张独立的${ratio}图片，不要拼图，不要组图。`,
+    `共 ${imageCount} 个 Scene。`,
   ].join("\n");
+}
+
+function imageConstraintCounts() {
+  const shots = Array.isArray(state.plan?.shots) ? state.plan.shots : [];
+  const parsedCount = (String(state.promptsText || "").match(/^#\d+/gm) || []).length;
+  const total = shots.length > 0 ? shots.length : parsedCount;
+  return {
+    total,
+    first: total > 10 ? 10 : total,
+    rest: total > 10 ? total - 10 : 0,
+  };
+}
+
+function imageConstraintText(which, { first, rest }) {
+  const segment = which === 2 ? `后${rest}` : `${first}`;
+  return `请按提示词生成分镜图片素材，${segment}张，逐步一张一张地给我，一张都不要少，不要组图或者一张图。`;
+}
+
+async function copyImageConstraint(which) {
+  const button = which === 1 ? els.copyImageConstraint1 : els.copyImageConstraint2;
+  if (state.planGenerating) return;
+  setButtonFeedback(button, "loading", "正在复制");
+  if (!state.plan?.shots?.length && !restorePromptPlanCache()) {
+    await restorePromptPlanFromServer();
+  }
+  const counts = imageConstraintCounts();
+  const available = which === 1 ? counts.first > 0 : counts.rest > 0;
+  if (!available) {
+    setButtonFeedback(button, "error", which === 1 ? "请先生成分镜" : "没有剩余分镜");
+    if (which === 1) setStatus("图片约束词1不可用", "请先点击“根据 TTS 时间轴分析分镜配图”生成分镜计划。", 0, true);
+    else setStatus("图片约束词2不可用", "当前分镜数量不超过 10 个，用图片约束词1即可。", 0, true);
+    return;
+  }
+  try {
+    await writeClipboardText(imageConstraintText(which, counts));
+    const copiedCount = which === 1 ? counts.first : counts.rest;
+    const segment = which === 2 ? `后${copiedCount}` : `${copiedCount}`;
+    setStatus(
+      `已复制图片约束词${which}`,
+      `已复制：请按提示词生成分镜图片素材，${segment}张……（当前共 ${counts.total} 个分镜）`,
+      100,
+    );
+    setButtonFeedback(button, "success", "已复制");
+  } catch (error) {
+    setStatus("复制失败", error.message || String(error), 0, true);
+    setButtonFeedback(button, "error", "复制失败");
+  }
+}
+
+function syncPromptActionButtons() {
+  const promptsAvailable = Boolean(state.plan?.shots?.length && state.promptsText);
+  if (els.planPrompts) els.planPrompts.disabled = state.planGenerating;
+  if (els.copyPrompts) els.copyPrompts.disabled = state.planGenerating || !promptsAvailable;
+  syncImageConstraintButtons();
+}
+
+function syncImageConstraintButtons() {
+  if (!els.copyImageConstraint1 || !els.copyImageConstraint2) return;
+  const { total, first, rest } = imageConstraintCounts();
+  els.copyImageConstraint1.disabled = state.planGenerating || total <= 0;
+  els.copyImageConstraint1.title = total > 0
+    ? `复制“${first}张”约束词（当前共 ${total} 个分镜）`
+    : "请先生成分镜提示词";
+  els.copyImageConstraint2.disabled = state.planGenerating || rest <= 0;
+  els.copyImageConstraint2.title = rest > 0
+    ? `复制"后${rest}张"约束词（当前共 ${total} 个分镜）`
+    : "分镜不超过 10 个时无需约束词2";
+}
+
+/* ── 新建文件夹（桌面日期文件夹） ── */
+
+async function loadFolderNames() {
+  try {
+    const res = await fetch(FOLDER_NAMES_API);
+    if (res.ok) {
+      const data = await res.json();
+      folderNames = Array.isArray(data.names) ? data.names : [];
+    }
+  } catch { /* 首次使用或服务不可用时忽略 */ }
+  renderFolderNameSelect();
+}
+
+function renderFolderNameSelect() {
+  const sel = els.folderNameSelect;
+  if (!sel) return;
+  const selectedName = resolveFolderNameSelection({
+    names: folderNames,
+    currentValue: sel.value,
+    cachedValue: state.desktopFolderName,
+  });
+  sel.innerHTML = "";
+  const placeholder = document.createElement("option");
+  placeholder.value = "";
+  placeholder.textContent = folderNames.length ? "选择文件夹名称" : "请选择“＋ 添加名称…”";
+  placeholder.selected = !selectedName;
+  sel.appendChild(placeholder);
+  for (const name of folderNames) {
+    const opt = document.createElement("option");
+    opt.value = name;
+    opt.textContent = name;
+    sel.appendChild(opt);
+  }
+  const newOpt = document.createElement("option");
+  newOpt.value = "__new__";
+  newOpt.textContent = "＋ 添加名称…";
+  sel.appendChild(newOpt);
+  if (selectedName) {
+    sel.value = selectedName;
+    state.desktopFolderName = selectedName;
+  }
+  syncFolderNameButtons();
+}
+
+function onFolderNameSelectChange() {
+  const selected = String(els.folderNameSelect?.value || "");
+  if (selected === "__new__") {
+    state.desktopFolderName = "";
+    state.desktopFolderPath = "";
+    els.folderNameSelect.value = "";
+    void promptNewFolderName();
+    return;
+  }
+  if (selected !== state.desktopFolderName) state.desktopFolderPath = "";
+  state.desktopFolderName = selected;
+  if (state.plan) savePromptPlanCache(state.plan);
+}
+
+function notifyFolderNamesChanged() {
+  localStorage.setItem(
+    FOLDER_NAMES_CHANGED_STORAGE_KEY,
+    `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+  );
+}
+
+async function promptNewFolderName(defaultValue = "") {
+  if (folderNamePromptActive) return "";
+  folderNamePromptActive = true;
+  document.activeElement?.blur();
+  try {
+    return await runFolderNamePrompt(defaultValue);
+  } finally {
+    setTimeout(() => { folderNamePromptActive = false; }, 350);
+  }
+}
+
+async function runFolderNamePrompt(defaultValue = "") {
+  const input = prompt(
+    defaultValue
+      ? `编辑文件夹名称：`
+      : `输入新文件夹名称（将创建为 日期-名称）：`,
+    defaultValue,
+  );
+  if (input === null) {
+    els.folderNameSelect.value = defaultValue || "";
+    syncFolderNameButtons();
+    return "";
+  }
+  const trimmed = input.trim();
+  if (!trimmed) {
+    els.folderNameSelect.value = defaultValue || "";
+    setStatus("名称不能为空", "请输入有效的文件夹名称。", 0, true);
+    syncFolderNameButtons();
+    return "";
+  }
+
+  try {
+    let data;
+    if (defaultValue) {
+      data = await fetchJson("/api/desktop-folder-named/rename", {
+        method: "POST",
+        body: JSON.stringify({ current: defaultValue, next: trimmed }),
+      });
+    } else {
+      const nextNames = folderNames.includes(trimmed) ? folderNames : [...folderNames, trimmed];
+      data = await saveFolderNames(nextNames);
+    }
+    folderNames = Array.isArray(data.names) ? data.names : folderNames;
+    state.desktopFolderName = trimmed;
+    state.desktopFolderPath = String(data.folderPath || "");
+    renderFolderNameSelect();
+    els.folderNameSelect.value = trimmed;
+    syncFolderNameButtons();
+    notifyFolderNamesChanged();
+    if (state.plan) savePromptPlanCache(state.plan);
+    setStatus(
+      defaultValue ? "名称已更新" : "名称已添加",
+      defaultValue && data.folderPath
+        ? `桌面文件夹已同步改名为“${data.folderName}”。`
+        : `已选择“${trimmed}”，现在可以点击“新建文件夹”。`,
+      100,
+    );
+    return trimmed;
+  } catch (error) {
+    renderFolderNameSelect();
+    setStatus("保存名称失败", error.message || String(error), 0, true);
+    return "";
+  }
+}
+
+async function saveFolderNames(names) {
+  const response = await fetch(FOLDER_NAMES_API, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ names }),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok || data.ok === false) {
+    throw new Error(data.message || `保存失败 ${response.status}`);
+  }
+  return data;
+}
+
+function syncFolderNameButtons() {
+  const hasSelection = els.folderNameSelect && els.folderNameSelect.value && els.folderNameSelect.value !== "__new__";
+  if (els.createDesktopFolder) els.createDesktopFolder.disabled = false;
+  if (els.editFolderName) els.editFolderName.disabled = !hasSelection;
+  if (els.deleteFolderName) els.deleteFolderName.disabled = !hasSelection;
+}
+
+function editFolderName() {
+  const current = els.folderNameSelect?.value;
+  if (!current || current === "__new__") return;
+  void promptNewFolderName(current);
+}
+
+async function deleteFolderName() {
+  const current = els.folderNameSelect?.value;
+  if (!current || current === "__new__") return;
+  if (!confirm(`确定删除“${current}”吗？\n文件夹中已有素材时会阻止删除。`)) return;
+
+  try {
+    const data = await fetchJson("/api/desktop-folder-named/delete", {
+      method: "POST",
+      body: JSON.stringify({ suffix: current }),
+    });
+    folderNames = Array.isArray(data.names) ? data.names : folderNames.filter((name) => name !== current);
+    state.desktopFolderName = "";
+    state.desktopFolderPath = "";
+    renderFolderNameSelect();
+    notifyFolderNamesChanged();
+    setStatus(
+      "文件夹已删除",
+      data.deleted
+        ? `空文件夹和名称“${current}”已删除。`
+        : `名称“${current}”已删除；桌面上没有对应文件夹。`,
+      100,
+    );
+  } catch (error) {
+    setStatus("删除名称失败", error.message || String(error), 0, true);
+  }
+}
+
+async function createDesktopFolder() {
+  let name = els.folderNameSelect?.value;
+  if (!name || name === "__new__") {
+    name = await promptNewFolderName();
+    if (!name) return;
+  }
+
+  const btn = els.createDesktopFolder;
+  setButtonFeedback(btn, "loading", "创建中");
+
+  try {
+    const res = await fetch(FOLDER_CREATE_API, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ suffix: name }),
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ message: "请求失败" }));
+      throw new Error(err.message || `HTTP ${res.status}`);
+    }
+
+    const data = await res.json();
+    state.desktopFolderPath = String(data.folderPath || "");
+    state.desktopFolderName = name;
+    if (state.plan) savePromptPlanCache(state.plan);
+    setStatus(`文件夹已创建`, `${data.folderName} → ${data.folderPath}`, 100);
+    setButtonFeedback(btn, "success", "已创建");
+  } catch (error) {
+    setStatus("创建失败", error.message || String(error), 0, true);
+    setButtonFeedback(btn, "error", "失败");
+  }
 }
 
 function syncVideoPreview() {
@@ -2280,8 +3128,10 @@ function syncVideoPreview() {
   }
   els.videoPreviewSeek.max = String(Math.max(0, duration));
   els.videoPreviewDuration.textContent = formatPreviewClock(duration);
+  const playbackSpeed = Number(els.playbackSpeed?.value || 1);
+  const outputDuration = duration / playbackSpeed;
   els.videoPreviewSpec.textContent = shots.length
-    ? `${ratio} · ${Number(els.frameRate.value) === 60 ? 60 : 30}fps · ${shots.length} 个分镜 · ${duration.toFixed(1)} 秒`
+    ? `${ratio} · ${Number(els.frameRate.value) === 60 ? 60 : 30}fps · ${shots.length} 个分镜 · 导出 ${playbackSpeed.toFixed(1)}×（约 ${outputDuration.toFixed(1)} 秒）`
     : "等待分镜图片和 TTS 时间轴";
   const ready = Boolean(shots.length && state.images.length && !missingShotImages(state.plan, state.images).length);
   els.videoPreviewEmpty.hidden = ready;
@@ -2563,10 +3413,14 @@ function resetVisualWorkflow(message = "") {
   state.previewImageCache.clear();
   state.renderedVideo = null;
   state.pendingUploads.clear();
+  state.localMaterialPool = [];
+  state.materialBindings.clear();
+  state.folderSequenceReference = null;
   state.promptsText = "";
   renderPlan(null);
   renderImages([], []);
   syncVideoPreview();
+  syncPromptActionButtons();
   if (message) setStatus("需要重新生成分镜", message, 0);
 }
 
@@ -2574,12 +3428,85 @@ function showAudio(url, title = "当前试听音频") {
   els.audioPreview.src = url;
   els.audioPreviewTitle.textContent = title;
   els.audioPreviewPanel.hidden = false;
+  syncPreviewBgmAudio();
 }
 
 function hideAudio() {
+  pausePreviewBgm({ reset: true });
+  if (state.previewBgmAudio) state.previewBgmAudio.removeAttribute("src");
+  state.previewBgmAudio = null;
+  if (els.bgmPlayerWrap) els.bgmPlayerWrap.hidden = true;
   els.audioPreview.removeAttribute("src");
   els.audioPreview.load();
   els.audioPreviewPanel.hidden = true;
+}
+
+function previewBgmUrl() {
+  if (!state.includeBgm) return "";
+  const url = state.handoffBgm?.url || "";
+  return url ? `${url}${url.includes("?") ? "&" : "?"}preview_bgm=1` : "";
+}
+
+function syncPreviewBgmAudio({ force = false } = {}) {
+  const url = previewBgmUrl();
+  const resolvedUrl = url ? new URL(url, window.location.href).href : "";
+  if (!force && state.previewBgmAudio?.src === resolvedUrl) {
+    state.previewBgmAudio.volume = Math.max(0, Math.min(1, Number(els.bgmVolume?.value || 18) / 100));
+    if (els.bgmPlayerWrap) els.bgmPlayerWrap.hidden = false;
+    return;
+  }
+  pausePreviewBgm({ reset: true });
+  const audio = els.bgmPlayer;
+  if (!audio) return;
+  audio.removeAttribute("src");
+  audio.load();
+  if (els.bgmPlayerWrap) els.bgmPlayerWrap.hidden = true;
+  state.previewBgmAudio = null;
+  if (!url) return;
+  audio.src = url;
+  audio.dataset.previewBgmAudio = "true";
+  audio.loop = true;
+  audio.volume = Math.max(0, Math.min(1, Number(els.bgmVolume?.value || 18) / 100));
+  if (els.bgmPlayerWrap) els.bgmPlayerWrap.hidden = false;
+  audio.load();
+  state.previewBgmAudio = audio;
+}
+
+function syncPreviewBgmTime(time = Number(els.audioPreview.currentTime || 0)) {
+  const audio = state.previewBgmAudio;
+  if (!audio || audio.dataset.previewBgmStarted !== "true") return;
+  const target = Math.max(0, Number(time || 0));
+  if (target <= 0.001) return;
+  if (audio.readyState < 1) {
+    audio.addEventListener("loadedmetadata", () => syncPreviewBgmTime(target), { once: true });
+    return;
+  }
+  try {
+    audio.currentTime = Number.isFinite(Number(audio.duration)) && audio.duration > 0
+      ? target % audio.duration
+      : 0;
+  } catch {}
+}
+
+async function playPreviewBgm() {
+  if (state.previewBgmAudio?.dataset.previewBgmStarted !== "true") syncPreviewBgmAudio({ force: true });
+  const audio = state.previewBgmAudio;
+  if (!audio || els.audioPreview.paused) return;
+  try {
+    await audio.play();
+    audio.dataset.previewBgmStarted = "true";
+  } catch (error) {
+    console.warn("BGM preview playback was blocked by the browser", error);
+  }
+}
+
+function pausePreviewBgm({ reset = false } = {}) {
+  const audio = state.previewBgmAudio;
+  if (!audio) return;
+  audio.pause();
+  if (reset) {
+    try { audio.currentTime = 0; } catch {}
+  }
 }
 
 function setBusy(busy) {
@@ -2599,11 +3526,11 @@ function setBusy(busy) {
     els.confirmAudio,
     els.planPrompts,
     els.copyPrompts,
-    els.timelineRefresh,
     els.previewVoice,
     els.setDefaultVoice,
     els.deleteVoice,
     els.downloadXiaoheiVideo,
+    els.playbackSpeed,
   ].filter(Boolean)) {
     element.disabled = busy;
   }
@@ -2611,12 +3538,14 @@ function setBusy(busy) {
     renderVoiceDescription();
     renderReferenceStyleChoices();
     updateVideoDownloadState();
+    syncPromptActionButtons();
   }
 }
 
 function composeSettings() {
   return {
     fps: Number(els.frameRate.value) === 60 ? 60 : 30,
+    playbackSpeed: [1, 1.1, 1.2, 1.3].includes(Number(els.playbackSpeed?.value)) ? Number(els.playbackSpeed.value) : 1,
     imageFit: els.imageFit.value === "contain" ? "contain" : "cover",
     ttsVolume: Number(els.ttsVolume.value || 100),
     bgmVolume: Number(els.bgmVolume.value || 18),
@@ -2628,9 +3557,25 @@ function composeSettings() {
     animationSpeed: Number(els.subtitleSpeed.value || 100) / 100,
     outline: els.subtitleOutline.checked,
     shadow: els.subtitleShadow.checked,
+    introPreset: els.introPreset?.value || "custom",
+    outroPreset: els.outroPreset?.value || "custom",
     intro: { enabled: els.introEnabled.checked, text: resolvedBookendText("intro") },
     outro: { enabled: els.outroEnabled.checked, text: resolvedBookendText("outro") },
   };
+}
+
+function syncHandoffBgmControl() {
+  const available = Boolean(state.handoffBgm || state.backgroundAudio);
+  if (els.includeBgm) {
+    els.includeBgm.disabled = !available;
+    els.includeBgm.checked = Boolean(state.includeBgm && available);
+  }
+  if (state.handoffBgm && els.bgmName) {
+    els.bgmName.textContent = state.includeBgm
+      ? `当前：${state.handoffBgm.name}（随 TTS 四件套加入）`
+      : `已接收：${state.handoffBgm.name}（未加入）`;
+  }
+  syncPreviewBgmAudio();
 }
 
 function resolvedBookendText(kind) {
@@ -2646,6 +3591,7 @@ function resolvedBookendText(kind) {
 function handleComposeSettingsChange() {
   els.ttsVolumeValue.textContent = `${els.ttsVolume.value}%`;
   els.bgmVolumeValue.textContent = `${els.bgmVolume.value}%`;
+  if (state.previewBgmAudio) state.previewBgmAudio.volume = Math.max(0, Math.min(1, Number(els.bgmVolume.value || 18) / 100));
   els.subtitleSizeValue.textContent = els.subtitleSize.value;
   els.subtitleSpeedValue.textContent = `${(Number(els.subtitleSpeed.value) / 100).toFixed(2)}×`;
   localStorage.setItem(COMPOSE_SETTINGS_KEY, JSON.stringify(composeSettings()));
@@ -2656,21 +3602,32 @@ function handleComposeSettingsChange() {
 function restoreComposeSettings() {
   try {
     const saved = JSON.parse(localStorage.getItem(COMPOSE_SETTINGS_KEY) || "{}");
-    if (saved.fps) els.frameRate.value = String(saved.fps);
-    if (saved.imageFit) els.imageFit.value = saved.imageFit;
-    if (saved.ttsVolume !== undefined) els.ttsVolume.value = String(saved.ttsVolume);
-    if (saved.bgmVolume !== undefined) els.bgmVolume.value = String(saved.bgmVolume);
-    if (saved.showSubtitles !== undefined) els.showSubtitles.checked = Boolean(saved.showSubtitles);
-    if (saved.subtitleSize) els.subtitleSize.value = String(saved.subtitleSize);
-    if (saved.subtitleColor) els.subtitleColor.value = saved.subtitleColor;
-    if (saved.keywordColor) els.keywordColor.value = saved.keywordColor;
-    if (saved.maxLines) els.subtitleLines.value = String(saved.maxLines);
-    if (saved.animationSpeed) els.subtitleSpeed.value = String(Math.round(saved.animationSpeed * 100));
-    if (saved.outline !== undefined) els.subtitleOutline.checked = Boolean(saved.outline);
-    if (saved.shadow !== undefined) els.subtitleShadow.checked = Boolean(saved.shadow);
-    if (saved.intro) { els.introEnabled.checked = Boolean(saved.intro.enabled); els.introText.value = saved.intro.text || ""; }
-    if (saved.outro) { els.outroEnabled.checked = Boolean(saved.outro.enabled); els.outroText.value = saved.outro.text || ""; }
-  } catch {}
+    if (saved.fps && els.frameRate) els.frameRate.value = String(saved.fps);
+    if ([1, 1.1, 1.2, 1.3].includes(Number(saved.playbackSpeed)) && els.playbackSpeed) els.playbackSpeed.value = String(saved.playbackSpeed);
+    if (saved.imageFit && els.imageFit) els.imageFit.value = saved.imageFit;
+    if (saved.ttsVolume !== undefined && els.ttsVolume) els.ttsVolume.value = String(saved.ttsVolume);
+    if (saved.bgmVolume !== undefined && els.bgmVolume) els.bgmVolume.value = String(saved.bgmVolume);
+    if (saved.showSubtitles !== undefined && els.showSubtitles) els.showSubtitles.checked = Boolean(saved.showSubtitles);
+    if (saved.subtitleSize && els.subtitleSize) els.subtitleSize.value = String(saved.subtitleSize);
+    if (saved.subtitleColor && els.subtitleColor) els.subtitleColor.value = saved.subtitleColor;
+    if (saved.keywordColor && els.keywordColor) els.keywordColor.value = saved.keywordColor;
+    if (saved.maxLines && els.subtitleLines) els.subtitleLines.value = String(saved.maxLines);
+    if (saved.animationSpeed && els.subtitleSpeed) els.subtitleSpeed.value = String(Math.round(saved.animationSpeed * 100));
+    if (saved.outline !== undefined && els.subtitleOutline) els.subtitleOutline.checked = Boolean(saved.outline);
+    if (saved.shadow !== undefined && els.subtitleShadow) els.subtitleShadow.checked = Boolean(saved.shadow);
+    if (saved.introPreset && els.introPreset) els.introPreset.value = saved.introPreset;
+    if (saved.outroPreset && els.outroPreset) els.outroPreset.value = saved.outroPreset;
+    if (saved.intro) {
+      if (els.introEnabled) els.introEnabled.checked = Boolean(saved.intro.enabled);
+      if (els.introText) els.introText.value = saved.intro.text || "";
+    }
+    if (saved.outro) {
+      if (els.outroEnabled) els.outroEnabled.checked = Boolean(saved.outro.enabled);
+      if (els.outroText) els.outroText.value = saved.outro.text || "";
+    }
+  } catch (e) {
+    console.warn("[xiaohei] restoreComposeSettings failed:", e);
+  }
   handleComposeSettingsChange();
 }
 
@@ -2683,11 +3640,14 @@ async function uploadXiaoheiBgm(file) {
       body: JSON.stringify({ project_id: state.projectId, file_name: file.name, audio_mime: file.type, audio_data: await readFileDataUrl(file) }),
     });
     state.backgroundAudio = data.audio;
+    state.includeBgm = true;
+    syncHandoffBgmControl();
     els.bgmName.textContent = `当前：${data.audio.name}`;
     state.renderedVideo = null;
     updateVideoDownloadState();
   } catch (error) {
     state.backgroundAudio = null;
+    syncHandoffBgmControl();
     els.bgmName.textContent = error.payload?.message || error.message || "背景音乐上传失败";
   } finally {
     els.bgmFile.value = "";

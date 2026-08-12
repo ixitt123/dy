@@ -1,0 +1,50 @@
+{
+  "schemaVersion": 1,
+  "itemId": "R2-01.12",
+  "originMachine": "B",
+  "availability": "origin-machine-local-not-synchronized",
+  "originalEvidencePath": "D:\\cs1\\dy-b-primary-20260805-102410\\.data\\repair-evidence\\R2-01.12\\20260805-112300\\b-review",
+  "sourceRepairCommit": "cf40343df6a9d0e533531cb38bdf34f496e5c18c",
+  "reviewedIntegrationCommit": "b127031cb745f417a770982c1a9c617410099b55",
+  "completionManifestSha256": "36c347aa104466fd908b8ba1fb86446ec951ca0cdb0188956775a863f3903801",
+  "receiptGeneratedAt": "2026-08-05T03:41:46.127Z",
+  "completionManifest": {
+    "itemId": "R2-01.12",
+    "verificationMode": "automated",
+    "completedVerification": true,
+    "completedAt": "2026-08-05T03:25:00.000Z",
+    "commands": [
+      {
+        "expectedCommand": "node test-launcher-missing-dependency.mjs",
+        "command": "node test-launcher-missing-dependency.mjs",
+        "exitCode": 0,
+        "outputPath": "01-launcher-exact.log",
+        "outputSha256": "3f69298b8bd060b3beff6df6f63142504d1b9673ffb6ca455dfceab17b365b60"
+      },
+      {
+        "expectedCommand": "pnpm.cmd run check:gate",
+        "command": "pnpm.cmd run check:gate",
+        "exitCode": 0,
+        "outputPath": "04-check-gate.log",
+        "outputSha256": "0d8339026748e6376c56e225b4d3512ed520f652d5381d8e7df4e418a174897a"
+      }
+    ],
+    "evidenceFiles": [
+      { "path": "01-launcher-exact.log", "sha256": "3f69298b8bd060b3beff6df6f63142504d1b9673ffb6ca455dfceab17b365b60" },
+      { "path": "01-launcher.log", "sha256": "3f69298b8bd060b3beff6df6f63142504d1b9673ffb6ca455dfceab17b365b60" },
+      { "path": "02-safe-sync.log", "sha256": "10a5a47929e27624c4691377d74aa5865328458702543ad8ca1a2182c09bc6e3" },
+      { "path": "03-page-lifecycle.log", "sha256": "fad79a03df44b6fb0b2cf43e26ccc12ead0db128eada5f894d669f29e15859d9" },
+      { "path": "04-check-gate.log", "sha256": "0d8339026748e6376c56e225b4d3512ed520f652d5381d8e7df4e418a174897a" },
+      { "path": "05-round2-check.log", "sha256": "115e9dec2097ddd823f248f793bc8d2a3d2a99c5a5e64061cc576abbcc40dec0" },
+      { "path": "06-supervisor.log", "sha256": "79f596d1d8f3054853647a052193945327b424a1b0d695ecee2140a9900a5d6b" },
+      { "path": "07-diff-check.log", "sha256": "fd34d560b2808894055f7ab9dfb981c11489abb4a2bff4d603b64b38b12798d7" },
+      { "path": "launcher/launcher-fixtures.json", "sha256": "84969edd667001a26c3142336fd40372363207ee5707619280e04a535b6ecab0" },
+      { "path": "completion-gates.json", "sha256": "aaefacd532bb5669bbabd2470679ab07adfc141157de277065cd9b5d43f7684e" },
+      { "path": "rollback-plan.md", "sha256": "c457409210a3579c8359e948955b4780a5c373cf01f660a0ae607862289ae6ae" },
+      { "path": "verification-summary.md", "sha256": "4cb171afdc86f5264187f3af3a903ee5be82607adce13ec2c4ca9798bc89f457" }
+    ],
+    "rollbackEvidence": [
+      "rollback-plan.md"
+    ]
+  }
+}

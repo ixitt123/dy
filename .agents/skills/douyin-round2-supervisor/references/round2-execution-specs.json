@@ -1,0 +1,3402 @@
+{
+  "schemaVersion": 1,
+  "plan": "docs/repair/round2/master-register.md",
+  "definitionSha256": "b9f4decd6e286c64d9077ca5ca56640cd30d1098b0382b85a0b350be99e92918",
+  "generatedBy": ".agents/skills/douyin-round2-supervisor/scripts/build-round2-specs.mjs",
+  "itemCount": 73,
+  "items": [
+    {
+      "id": "R2-00.01",
+      "card": {
+        "scope": "控制｜固化仓库、进程和脏工作树快照",
+        "verificationMode": "control",
+        "orderedActions": [
+          "冻结 R2-00.01 开工时的 Git、运行状态、输入与输出证据",
+          "沿 package.json、.agents/skills/、scripts/、scripts/release-gate.mjs、scripts/service-restart.mjs、docs/ 定位真实状态所有者和调用链",
+          "建立失败判据：不适用：只读快照项不制造修复前失败",
+          "逐项复验完成判定：`.data/repair-evidence/R2-PREFLIGHT/20260804-144904/` 已记录分支、HEAD、上游、子模块、状态、路径、大小和哈希",
+          "执行目标回归、完整门禁，并把真实产物写入 .data/repair-evidence/R2-00.01/<YYYYMMDD-HHMMSS>/"
+        ],
+        "failingRegression": "不适用：只读快照项不制造修复前失败",
+        "targetedChecks": [
+          "node .agents/skills/douyin-repair-supervisor/scripts/capture-repair-baseline.mjs R2-PREFLIGHT --plan <02表绝对路径>",
+          "pnpm.cmd run check:gate"
+        ],
+        "realEvidence": "必须保存与“`.data/repair-evidence/R2-PREFLIGHT/20260804-144904/` 已记录分支、HEAD、上游、子模块、状态、路径、大小和哈希”直接对应的真实输出、日志、页面或媒体证据，不能用代码存在代替。",
+        "prohibitedShortcuts": [
+          "不得以提示词、延时、默认值、假数据或静态断言掩盖根因",
+          "不得修改第一轮总表、第一轮证据或第一轮两次状态机",
+          "不得触碰 MoneyPrinterTurbo 子模块内部；相关项只改主程序集成边界",
+          "不得把四次失败待最终收尾计为完成或满足硬门禁"
+        ],
+        "rollback": "只回滚本项目明确列出的本轮文件；先保护用户数据、历史输出、设置、SQLite、证据和子模块指针。",
+        "escalation": "连续第 4 次完整维修复验仍失败时登记为四次失败待最终收尾并推进；禁止第 5 次普通维修。"
+      },
+      "run": {
+        "sourceAnchors": [
+          "package.json",
+          ".agents/skills/",
+          "scripts/",
+          "scripts/release-gate.mjs",
+          "scripts/service-restart.mjs",
+          "docs/"
+        ],
+        "commands": [
+          "node .agents/skills/douyin-repair-supervisor/scripts/capture-repair-baseline.mjs R2-PREFLIGHT --plan <02表绝对路径>",
+          "pnpm.cmd run check:gate"
+        ],
+        "testToAdd": "不新增：复验 manifest.sha256、git-state.json 与 file-inventory.json",
+        "requiredEvidence": "`.data/repair-evidence/R2-PREFLIGHT/20260804-144904/` 已记录分支、HEAD、上游、子模块、状态、路径、大小和哈希",
+        "evidenceDir": ".data/repair-evidence/R2-00.01/<YYYYMMDD-HHMMSS>/"
+      }
+    },
+    {
+      "id": "R2-00.02",
+      "card": {
+        "scope": "控制｜备份设置、SQLite、JSON 与资产清单",
+        "verificationMode": "control",
+        "orderedActions": [
+          "冻结 R2-00.02 开工时的 Git、运行状态、输入与输出证据",
+          "沿 package.json、.agents/skills/、scripts/、scripts/release-gate.mjs、scripts/service-restart.mjs、docs/、server/core/settings-center.js、server/core/task-center.js、server/core/final-asset-registry.js、ui-server.mjs 定位真实状态所有者和调用链",
+          "建立失败判据：不适用：可恢复备份项以恢复校验为失败判据",
+          "逐项复验完成判定：仓库外备份含 15 个 SQLite、3 个配置和 118 个资产清单；恢复校验与两表哈希通过",
+          "执行目标回归、完整门禁，并把真实产物写入 .data/repair-evidence/R2-00.02/<YYYYMMDD-HHMMSS>/"
+        ],
+        "failingRegression": "不适用：可恢复备份项以恢复校验为失败判据",
+        "targetedChecks": [
+          "node .agents/skills/douyin-repair-supervisor/scripts/verify-runtime-backup.mjs <备份目录>",
+          "pnpm.cmd run check:gate"
+        ],
+        "realEvidence": "必须保存与“仓库外备份含 15 个 SQLite、3 个配置和 118 个资产清单；恢复校验与两表哈希通过”直接对应的真实输出、日志、页面或媒体证据，不能用代码存在代替。",
+        "prohibitedShortcuts": [
+          "不得以提示词、延时、默认值、假数据或静态断言掩盖根因",
+          "不得修改第一轮总表、第一轮证据或第一轮两次状态机",
+          "不得触碰 MoneyPrinterTurbo 子模块内部；相关项只改主程序集成边界",
+          "不得把四次失败待最终收尾计为完成或满足硬门禁"
+        ],
+        "rollback": "只回滚本项目明确列出的本轮文件；先保护用户数据、历史输出、设置、SQLite、证据和子模块指针。",
+        "escalation": "连续第 4 次完整维修复验仍失败时登记为四次失败待最终收尾并推进；禁止第 5 次普通维修。"
+      },
+      "run": {
+        "sourceAnchors": [
+          "package.json",
+          ".agents/skills/",
+          "scripts/",
+          "scripts/release-gate.mjs",
+          "scripts/service-restart.mjs",
+          "docs/",
+          "server/core/settings-center.js",
+          "server/core/task-center.js",
+          "server/core/final-asset-registry.js",
+          "ui-server.mjs"
+        ],
+        "commands": [
+          "node .agents/skills/douyin-repair-supervisor/scripts/verify-runtime-backup.mjs <备份目录>",
+          "pnpm.cmd run check:gate"
+        ],
+        "testToAdd": "不新增：运行备份与恢复校验脚本",
+        "requiredEvidence": "仓库外备份含 15 个 SQLite、3 个配置和 118 个资产清单；恢复校验与两表哈希通过",
+        "evidenceDir": ".data/repair-evidence/R2-00.02/<YYYYMMDD-HHMMSS>/"
+      }
+    },
+    {
+      "id": "R2-00.03",
+      "card": {
+        "scope": "控制｜建立独立第二轮监督器和 72 项执行规格",
+        "verificationMode": "control",
+        "orderedActions": [
+          "冻结 R2-00.03 开工时的 Git、运行状态、输入与输出证据",
+          "沿 package.json、.agents/skills/、scripts/ 定位真实状态所有者和调用链",
+          "建立失败判据：独立监督器自测必须证明第5次被拒绝且第一轮哈希不变",
+          "逐项复验完成判定：新 checker/packet/failure recorder 只读 02 表；1–3 次保留、第 4 次推进、第 5 次拒绝；72 个执行卡和 `RUN-R2-*` 全部校验；第一轮状态/证据不变",
+          "执行目标回归、完整门禁，并把真实产物写入 .data/repair-evidence/R2-00.03/<YYYYMMDD-HHMMSS>/"
+        ],
+        "failingRegression": "独立监督器自测必须证明第5次被拒绝且第一轮哈希不变",
+        "targetedChecks": [
+          "pnpm.cmd run repair:r2:test-supervisor",
+          "pnpm.cmd run repair:r2:check",
+          "pnpm.cmd run check:gate"
+        ],
+        "realEvidence": "必须保存与“新 checker/packet/failure recorder 只读 02 表；1–3 次保留、第 4 次推进、第 5 次拒绝；72 个执行卡和 `RUN-R2-*` 全部校验；第一轮状态/证据不变”直接对应的真实输出、日志、页面或媒体证据，不能用代码存在代替。",
+        "prohibitedShortcuts": [
+          "不得以提示词、延时、默认值、假数据或静态断言掩盖根因",
+          "不得修改第一轮总表、第一轮证据或第一轮两次状态机",
+          "不得触碰 MoneyPrinterTurbo 子模块内部；相关项只改主程序集成边界",
+          "不得把四次失败待最终收尾计为完成或满足硬门禁"
+        ],
+        "rollback": "只回滚本项目明确列出的本轮文件；先保护用户数据、历史输出、设置、SQLite、证据和子模块指针。",
+        "escalation": "连续第 4 次完整维修复验仍失败时登记为四次失败待最终收尾并推进；禁止第 5 次普通维修。"
+      },
+      "run": {
+        "sourceAnchors": [
+          "package.json",
+          ".agents/skills/",
+          "scripts/"
+        ],
+        "commands": [
+          "pnpm.cmd run repair:r2:test-supervisor",
+          "pnpm.cmd run repair:r2:check",
+          "pnpm.cmd run check:gate"
+        ],
+        "testToAdd": ".agents/skills/douyin-round2-supervisor/scripts/test-round2-supervisor.mjs",
+        "requiredEvidence": "新 checker/packet/failure recorder 只读 02 表；1–3 次保留、第 4 次推进、第 5 次拒绝；72 个执行卡和 `RUN-R2-*` 全部校验；第一轮状态/证据不变",
+        "evidenceDir": ".data/repair-evidence/R2-00.03/<YYYYMMDD-HHMMSS>/"
+      }
+    },
+    {
+      "id": "R2-00.04",
+      "card": {
+        "scope": "控制｜建立隔离的完整 F01–F24 补充运行器",
+        "verificationMode": "control",
+        "orderedActions": [
+          "冻结 R2-00.04 开工时的 Git、运行状态、输入与输出证据",
+          "沿 package.json、.agents/skills/、scripts/、server/routes/cs1-video-routes.js、ui/modules/cs1-video.js、skills/cs1/SKILL.md、server/routes/ian-xiaohei-routes.js、server/xiaohei-video-renderer.js、ui/modules/xiaohei-production.js、start-ui-hidden.vbs、launch-ui.mjs、ui-server.mjs、server/core/settings-center.js、server/core/task-center.js、server/core/final-asset-registry.js、.data/repair-evidence/R2-CLEANUP-AUDIT/、.gitignore、docs/ 定位真实状态所有者和调用链",
+          "建立失败判据：现有41项不能逐项隔离、超时和恢复服务时失败",
+          "逐项复验完成判定：41 项逐项独立进程、超时、临时目录和日志；失败后恢复 8787 并继续；8 个遗漏测试正式接入；含小黑四档倍速和 CS1 备份排除；输出 JSON 且恢复原服务状态",
+          "执行目标回归、完整门禁，并把真实产物写入 .data/repair-evidence/R2-00.04/<YYYYMMDD-HHMMSS>/"
+        ],
+        "failingRegression": "现有41项不能逐项隔离、超时和恢复服务时失败",
+        "targetedChecks": [
+          "node test-round2-complete-runner.mjs",
+          "node test-release-gate-scope.mjs",
+          "pnpm.cmd run check:gate"
+        ],
+        "realEvidence": "必须保存与“41 项逐项独立进程、超时、临时目录和日志；失败后恢复 8787 并继续；8 个遗漏测试正式接入；含小黑四档倍速和 CS1 备份排除；输出 JSON 且恢复原服务状态”直接对应的真实输出、日志、页面或媒体证据，不能用代码存在代替。",
+        "prohibitedShortcuts": [
+          "不得以提示词、延时、默认值、假数据或静态断言掩盖根因",
+          "不得修改第一轮总表、第一轮证据或第一轮两次状态机",
+          "不得触碰 MoneyPrinterTurbo 子模块内部；相关项只改主程序集成边界",
+          "不得把四次失败待最终收尾计为完成或满足硬门禁"
+        ],
+        "rollback": "只回滚本项目明确列出的本轮文件；先保护用户数据、历史输出、设置、SQLite、证据和子模块指针。",
+        "escalation": "连续第 4 次完整维修复验仍失败时登记为四次失败待最终收尾并推进；禁止第 5 次普通维修。"
+      },
+      "run": {
+        "sourceAnchors": [
+          "package.json",
+          ".agents/skills/",
+          "scripts/",
+          "server/routes/cs1-video-routes.js",
+          "ui/modules/cs1-video.js",
+          "skills/cs1/SKILL.md",
+          "server/routes/ian-xiaohei-routes.js",
+          "server/xiaohei-video-renderer.js",
+          "ui/modules/xiaohei-production.js",
+          "start-ui-hidden.vbs",
+          "launch-ui.mjs",
+          "ui-server.mjs",
+          "server/core/settings-center.js",
+          "server/core/task-center.js",
+          "server/core/final-asset-registry.js",
+          ".data/repair-evidence/R2-CLEANUP-AUDIT/",
+          ".gitignore",
+          "docs/"
+        ],
+        "commands": [
+          "node test-round2-complete-runner.mjs",
+          "node test-release-gate-scope.mjs",
+          "pnpm.cmd run check:gate"
+        ],
+        "testToAdd": "test-round2-complete-runner.mjs",
+        "requiredEvidence": "41 项逐项独立进程、超时、临时目录和日志；失败后恢复 8787 并继续；8 个遗漏测试正式接入；含小黑四档倍速和 CS1 备份排除；输出 JSON 且恢复原服务状态",
+        "evidenceDir": ".data/repair-evidence/R2-00.04/<YYYYMMDD-HHMMSS>/"
+      }
+    },
+    {
+      "id": "R2-00.05",
+      "card": {
+        "scope": "控制｜Skills 与浏览器能力预检",
+        "verificationMode": "control",
+        "orderedActions": [
+          "冻结 R2-00.05 开工时的 Git、运行状态、输入与输出证据",
+          "沿 package.json、.agents/skills/、scripts/ 定位真实状态所有者和调用链",
+          "建立失败判据：不适用：能力预检以真实安装和阻塞登记为判据",
+          "逐项复验完成判定：两项官方 Skill 已安装、三项项目 Skill 已创建并全局安装且校验通过；Playwright 阻塞原因已登记且不阻塞现有 Chrome CDP 维修",
+          "执行目标回归、完整门禁，并把真实产物写入 .data/repair-evidence/R2-00.05/<YYYYMMDD-HHMMSS>/"
+        ],
+        "failingRegression": "不适用：能力预检以真实安装和阻塞登记为判据",
+        "targetedChecks": [
+          "pnpm.cmd run repair:r2:check",
+          "node test-browser-behavior-scope.mjs",
+          "pnpm.cmd run check:gate"
+        ],
+        "realEvidence": "必须保存与“两项官方 Skill 已安装、三项项目 Skill 已创建并全局安装且校验通过；Playwright 阻塞原因已登记且不阻塞现有 Chrome CDP 维修”直接对应的真实输出、日志、页面或媒体证据，不能用代码存在代替。",
+        "prohibitedShortcuts": [
+          "不得以提示词、延时、默认值、假数据或静态断言掩盖根因",
+          "不得修改第一轮总表、第一轮证据或第一轮两次状态机",
+          "不得触碰 MoneyPrinterTurbo 子模块内部；相关项只改主程序集成边界",
+          "不得把四次失败待最终收尾计为完成或满足硬门禁"
+        ],
+        "rollback": "只回滚本项目明确列出的本轮文件；先保护用户数据、历史输出、设置、SQLite、证据和子模块指针。",
+        "escalation": "连续第 4 次完整维修复验仍失败时登记为四次失败待最终收尾并推进；禁止第 5 次普通维修。"
+      },
+      "run": {
+        "sourceAnchors": [
+          "package.json",
+          ".agents/skills/",
+          "scripts/"
+        ],
+        "commands": [
+          "pnpm.cmd run repair:r2:check",
+          "node test-browser-behavior-scope.mjs",
+          "pnpm.cmd run check:gate"
+        ],
+        "testToAdd": "不新增：分别运行 Skill quick_validate 和浏览器能力探针",
+        "requiredEvidence": "两项官方 Skill 已安装、三项项目 Skill 已创建并全局安装且校验通过；Playwright 阻塞原因已登记且不阻塞现有 Chrome CDP 维修",
+        "evidenceDir": ".data/repair-evidence/R2-00.05/<YYYYMMDD-HHMMSS>/"
+      }
+    },
+    {
+      "id": "R2-00.06",
+      "card": {
+        "scope": "控制｜建立 B 主机双机并行控制基线",
+        "verificationMode": "control",
+        "orderedActions": [
+          "冻结 R2-00.06 开工时的 Git、运行状态、输入与输出证据",
+          "沿 package.json、.agents/skills/、scripts/、scripts/release-gate.mjs、scripts/service-restart.mjs、docs/ 定位真实状态所有者和调用链",
+          "建立失败判据：旧规则仍允许 A 写总表/合并、A 超过2次、双机路径重叠或业务项未先研究",
+          "逐项复验完成判定：总表与维修记录迁入仓库；B 唯一写表和合并；A 最多 2 次、B 总计最多 4 次；双机最多两项且路径不重叠；每项先全网研究；失败详细交接；敏感和本地数据不上传；监督器自动拒绝冲突、越权和第 5 次",
+          "执行目标回归、完整门禁，并把真实产物写入 .data/repair-evidence/R2-00.06/<YYYYMMDD-HHMMSS>/"
+        ],
+        "failingRegression": "旧规则仍允许 A 写总表/合并、A 超过2次、双机路径重叠或业务项未先研究",
+        "targetedChecks": [
+          "pnpm.cmd run repair:r2:test-supervisor",
+          "pnpm.cmd run repair:r2:check",
+          "pnpm.cmd run check:gate"
+        ],
+        "realEvidence": "必须保存与“总表与维修记录迁入仓库；B 唯一写表和合并；A 最多 2 次、B 总计最多 4 次；双机最多两项且路径不重叠；每项先全网研究；失败详细交接；敏感和本地数据不上传；监督器自动拒绝冲突、越权和第 5 次”直接对应的真实输出、日志、页面或媒体证据，不能用代码存在代替。",
+        "prohibitedShortcuts": [
+          "不得以提示词、延时、默认值、假数据或静态断言掩盖根因",
+          "不得修改第一轮总表、第一轮证据或第一轮两次状态机",
+          "不得触碰 MoneyPrinterTurbo 子模块内部；相关项只改主程序集成边界",
+          "不得把四次失败待最终收尾计为完成或满足硬门禁"
+        ],
+        "rollback": "只回滚本项目明确列出的本轮文件；先保护用户数据、历史输出、设置、SQLite、证据和子模块指针。",
+        "escalation": "连续第 4 次完整维修复验仍失败时登记为四次失败待最终收尾并推进；禁止第 5 次普通维修。"
+      },
+      "run": {
+        "sourceAnchors": [
+          "package.json",
+          ".agents/skills/",
+          "scripts/",
+          "scripts/release-gate.mjs",
+          "scripts/service-restart.mjs",
+          "docs/"
+        ],
+        "commands": [
+          "pnpm.cmd run repair:r2:test-supervisor",
+          "pnpm.cmd run repair:r2:check",
+          "pnpm.cmd run check:gate"
+        ],
+        "testToAdd": ".agents/skills/douyin-round2-supervisor/scripts/test-round2-supervisor.mjs",
+        "requiredEvidence": "总表与维修记录迁入仓库；B 唯一写表和合并；A 最多 2 次、B 总计最多 4 次；双机最多两项且路径不重叠；每项先全网研究；失败详细交接；敏感和本地数据不上传；监督器自动拒绝冲突、越权和第 5 次",
+        "evidenceDir": ".data/repair-evidence/R2-00.06/<YYYYMMDD-HHMMSS>/"
+      }
+    },
+    {
+      "id": "R2-01.01",
+      "card": {
+        "scope": "本地缺陷｜修复旁白生成后自动预览不播放",
+        "verificationMode": "browser-real",
+        "orderedActions": [
+          "冻结 R2-01.01 开工时的 Git、运行状态、输入与输出证据",
+          "沿 server/tts/、server/tts/tts-handoff-service.mjs、ui/modules/tts-handoff-store.js、ui/workbench.js、package.json、pnpm-lock.yaml、server/core/ssrf-guard.mjs、test-ssrf-guard.mjs、server/core/settings-center.js、server/core/task-center.js、server/core/final-asset-registry.js、ui-server.mjs 定位真实状态所有者和调用链",
+          "建立失败判据：test-tts-auto-preview.mjs 在修复前稳定失败",
+          "逐项复验完成判定：真实页面安全 fixture 播放 15 秒内 `currentTime>0.15`；切任务、刷新仍可播放",
+          "执行目标回归、完整门禁，并把真实产物写入 .data/repair-evidence/R2-01.01/<YYYYMMDD-HHMMSS>/"
+        ],
+        "failingRegression": "test-tts-auto-preview.mjs",
+        "targetedChecks": [
+          "node test-tts-auto-preview.mjs",
+          "pnpm.cmd run check:gate"
+        ],
+        "realEvidence": "必须保存与“真实页面安全 fixture 播放 15 秒内 `currentTime>0.15`；切任务、刷新仍可播放”直接对应的真实输出、日志、页面或媒体证据，不能用代码存在代替。",
+        "prohibitedShortcuts": [
+          "不得以提示词、延时、默认值、假数据或静态断言掩盖根因",
+          "不得修改第一轮总表、第一轮证据或第一轮两次状态机",
+          "不得触碰 MoneyPrinterTurbo 子模块内部；相关项只改主程序集成边界",
+          "不得把四次失败待最终收尾计为完成或满足硬门禁"
+        ],
+        "rollback": "只回滚本项目明确列出的本轮文件；先保护用户数据、历史输出、设置、SQLite、证据和子模块指针。",
+        "escalation": "连续第 4 次完整维修复验仍失败时登记为四次失败待最终收尾并推进；禁止第 5 次普通维修。"
+      },
+      "run": {
+        "sourceAnchors": [
+          "server/tts/",
+          "server/tts/tts-handoff-service.mjs",
+          "ui/modules/tts-handoff-store.js",
+          "ui/workbench.js",
+          "package.json",
+          "pnpm-lock.yaml",
+          "server/core/ssrf-guard.mjs",
+          "test-ssrf-guard.mjs",
+          "server/core/settings-center.js",
+          "server/core/task-center.js",
+          "server/core/final-asset-registry.js",
+          "ui-server.mjs"
+        ],
+        "commands": [
+          "node test-tts-auto-preview.mjs",
+          "pnpm.cmd run check:gate"
+        ],
+        "testToAdd": "test-tts-auto-preview.mjs",
+        "requiredEvidence": "真实页面安全 fixture 播放 15 秒内 `currentTime>0.15`；切任务、刷新仍可播放",
+        "evidenceDir": ".data/repair-evidence/R2-01.01/<YYYYMMDD-HHMMSS>/"
+      }
+    },
+    {
+      "id": "R2-01.02",
+      "card": {
+        "scope": "本地缺陷｜修复未勾选 BGM 仍绑定历史/关联 BGM",
+        "verificationMode": "browser-real",
+        "orderedActions": [
+          "冻结 R2-01.02 开工时的 Git、运行状态、输入与输出证据",
+          "沿 server/tts/、server/tts/tts-handoff-service.mjs、ui/modules/tts-handoff-store.js、ui/workbench.js、server/core/settings-center.js、server/core/task-center.js、server/core/final-asset-registry.js、ui-server.mjs 定位真实状态所有者和调用链",
+          "建立失败判据：test-tts-bgm-option.mjs 在修复前稳定失败",
+          "逐项复验完成判定：新旁白只有三件套；不能按文本或历史误关联；SQLite/API/DOM 一致",
+          "执行目标回归、完整门禁，并把真实产物写入 .data/repair-evidence/R2-01.02/<YYYYMMDD-HHMMSS>/"
+        ],
+        "failingRegression": "test-tts-bgm-option.mjs",
+        "targetedChecks": [
+          "node test-tts-bgm-option.mjs",
+          "node test-tts-bgm-persistence.mjs",
+          "pnpm.cmd run check:gate"
+        ],
+        "realEvidence": "必须保存与“新旁白只有三件套；不能按文本或历史误关联；SQLite/API/DOM 一致”直接对应的真实输出、日志、页面或媒体证据，不能用代码存在代替。",
+        "prohibitedShortcuts": [
+          "不得以提示词、延时、默认值、假数据或静态断言掩盖根因",
+          "不得修改第一轮总表、第一轮证据或第一轮两次状态机",
+          "不得触碰 MoneyPrinterTurbo 子模块内部；相关项只改主程序集成边界",
+          "不得把四次失败待最终收尾计为完成或满足硬门禁"
+        ],
+        "rollback": "只回滚本项目明确列出的本轮文件；先保护用户数据、历史输出、设置、SQLite、证据和子模块指针。",
+        "escalation": "连续第 4 次完整维修复验仍失败时登记为四次失败待最终收尾并推进；禁止第 5 次普通维修。"
+      },
+      "run": {
+        "sourceAnchors": [
+          "server/tts/",
+          "server/tts/tts-handoff-service.mjs",
+          "ui/modules/tts-handoff-store.js",
+          "ui/workbench.js",
+          "server/core/settings-center.js",
+          "server/core/task-center.js",
+          "server/core/final-asset-registry.js",
+          "ui-server.mjs"
+        ],
+        "commands": [
+          "node test-tts-bgm-option.mjs",
+          "node test-tts-bgm-persistence.mjs",
+          "pnpm.cmd run check:gate"
+        ],
+        "testToAdd": "test-tts-bgm-option.mjs",
+        "requiredEvidence": "新旁白只有三件套；不能按文本或历史误关联；SQLite/API/DOM 一致",
+        "evidenceDir": ".data/repair-evidence/R2-01.02/<YYYYMMDD-HHMMSS>/"
+      }
+    },
+    {
+      "id": "R2-01.03",
+      "card": {
+        "scope": "本地缺陷｜修正三件套/四件套标签与按钮显隐",
+        "verificationMode": "browser-real",
+        "orderedActions": [
+          "冻结 R2-01.03 开工时的 Git、运行状态、输入与输出证据",
+          "沿 server/tts/、server/tts/tts-handoff-service.mjs、ui/modules/tts-handoff-store.js、ui/workbench.js 定位真实状态所有者和调用链",
+          "建立失败判据：test-tts-bundle-labels.mjs 在修复前稳定失败",
+          "逐项复验完成判定：无 BGM 不显示按钮且全处为三件套；有效 BGM 才为四件套；刷新一致",
+          "执行目标回归、完整门禁，并把真实产物写入 .data/repair-evidence/R2-01.03/<YYYYMMDD-HHMMSS>/"
+        ],
+        "failingRegression": "test-tts-bundle-labels.mjs",
+        "targetedChecks": [
+          "node test-tts-bundle-labels.mjs",
+          "node test-tts-bgm-persistence.mjs",
+          "pnpm.cmd run check:gate"
+        ],
+        "realEvidence": "必须保存与“无 BGM 不显示按钮且全处为三件套；有效 BGM 才为四件套；刷新一致”直接对应的真实输出、日志、页面或媒体证据，不能用代码存在代替。",
+        "prohibitedShortcuts": [
+          "不得以提示词、延时、默认值、假数据或静态断言掩盖根因",
+          "不得修改第一轮总表、第一轮证据或第一轮两次状态机",
+          "不得触碰 MoneyPrinterTurbo 子模块内部；相关项只改主程序集成边界",
+          "不得把四次失败待最终收尾计为完成或满足硬门禁"
+        ],
+        "rollback": "只回滚本项目明确列出的本轮文件；先保护用户数据、历史输出、设置、SQLite、证据和子模块指针。",
+        "escalation": "连续第 4 次完整维修复验仍失败时登记为四次失败待最终收尾并推进；禁止第 5 次普通维修。"
+      },
+      "run": {
+        "sourceAnchors": [
+          "server/tts/",
+          "server/tts/tts-handoff-service.mjs",
+          "ui/modules/tts-handoff-store.js",
+          "ui/workbench.js"
+        ],
+        "commands": [
+          "node test-tts-bundle-labels.mjs",
+          "node test-tts-bgm-persistence.mjs",
+          "pnpm.cmd run check:gate"
+        ],
+        "testToAdd": "test-tts-bundle-labels.mjs",
+        "requiredEvidence": "无 BGM 不显示按钮且全处为三件套；有效 BGM 才为四件套；刷新一致",
+        "evidenceDir": ".data/repair-evidence/R2-01.03/<YYYYMMDD-HHMMSS>/"
+      }
+    },
+    {
+      "id": "R2-01.04",
+      "card": {
+        "scope": "本地缺陷｜修复 TTS BGM 可见播放器加载",
+        "verificationMode": "browser-real",
+        "orderedActions": [
+          "冻结 R2-01.04 开工时的 Git、运行状态、输入与输出证据",
+          "沿 server/tts/、server/tts/tts-handoff-service.mjs、ui/modules/tts-handoff-store.js、ui/workbench.js、server/core/settings-center.js、server/core/task-center.js、server/core/final-asset-registry.js、ui-server.mjs 定位真实状态所有者和调用链",
+          "建立失败判据：test-tts-bgm-player.mjs 在修复前稳定失败",
+          "逐项复验完成判定：30 秒内播放器可见、可播放、source 指向目标 job；切任务不串音",
+          "执行目标回归、完整门禁，并把真实产物写入 .data/repair-evidence/R2-01.04/<YYYYMMDD-HHMMSS>/"
+        ],
+        "failingRegression": "test-tts-bgm-player.mjs",
+        "targetedChecks": [
+          "node test-tts-bgm-player.mjs",
+          "pnpm.cmd run check:gate"
+        ],
+        "realEvidence": "必须保存与“30 秒内播放器可见、可播放、source 指向目标 job；切任务不串音”直接对应的真实输出、日志、页面或媒体证据，不能用代码存在代替。",
+        "prohibitedShortcuts": [
+          "不得以提示词、延时、默认值、假数据或静态断言掩盖根因",
+          "不得修改第一轮总表、第一轮证据或第一轮两次状态机",
+          "不得触碰 MoneyPrinterTurbo 子模块内部；相关项只改主程序集成边界",
+          "不得把四次失败待最终收尾计为完成或满足硬门禁"
+        ],
+        "rollback": "只回滚本项目明确列出的本轮文件；先保护用户数据、历史输出、设置、SQLite、证据和子模块指针。",
+        "escalation": "连续第 4 次完整维修复验仍失败时登记为四次失败待最终收尾并推进；禁止第 5 次普通维修。"
+      },
+      "run": {
+        "sourceAnchors": [
+          "server/tts/",
+          "server/tts/tts-handoff-service.mjs",
+          "ui/modules/tts-handoff-store.js",
+          "ui/workbench.js",
+          "server/core/settings-center.js",
+          "server/core/task-center.js",
+          "server/core/final-asset-registry.js",
+          "ui-server.mjs"
+        ],
+        "commands": [
+          "node test-tts-bgm-player.mjs",
+          "pnpm.cmd run check:gate"
+        ],
+        "testToAdd": "test-tts-bgm-player.mjs",
+        "requiredEvidence": "30 秒内播放器可见、可播放、source 指向目标 job；切任务不串音",
+        "evidenceDir": ".data/repair-evidence/R2-01.04/<YYYYMMDD-HHMMSS>/"
+      }
+    },
+    {
+      "id": "R2-01.05",
+      "card": {
+        "scope": "本地缺陷｜恢复声音资产导航激活",
+        "verificationMode": "browser-real",
+        "orderedActions": [
+          "冻结 R2-01.05 开工时的 Git、运行状态、输入与输出证据",
+          "沿 server/tts/、server/tts/tts-handoff-service.mjs、ui/modules/tts-handoff-store.js、ui/workbench.js、server/core/settings-center.js、server/core/task-center.js、server/core/final-asset-registry.js、ui-server.mjs 定位真实状态所有者和调用链",
+          "建立失败判据：test-round2-voices-navigation-browser.mjs 在修复前稳定失败",
+          "逐项复验完成判定：唯一入口、点击激活、焦点/刷新/返回正确；XSS 防线不退回",
+          "执行目标回归、完整门禁，并把真实产物写入 .data/repair-evidence/R2-01.05/<YYYYMMDD-HHMMSS>/"
+        ],
+        "failingRegression": "test-round2-voices-navigation-browser.mjs",
+        "targetedChecks": [
+          "node test-round2-voices-navigation-browser.mjs",
+          "node test-dom-xss-dataflow.mjs",
+          "pnpm.cmd run check:gate"
+        ],
+        "realEvidence": "必须保存与“唯一入口、点击激活、焦点/刷新/返回正确；XSS 防线不退回”直接对应的真实输出、日志、页面或媒体证据，不能用代码存在代替。",
+        "prohibitedShortcuts": [
+          "不得以提示词、延时、默认值、假数据或静态断言掩盖根因",
+          "不得修改第一轮总表、第一轮证据或第一轮两次状态机",
+          "不得触碰 MoneyPrinterTurbo 子模块内部；相关项只改主程序集成边界",
+          "不得把四次失败待最终收尾计为完成或满足硬门禁"
+        ],
+        "rollback": "只回滚本项目明确列出的本轮文件；先保护用户数据、历史输出、设置、SQLite、证据和子模块指针。",
+        "escalation": "连续第 4 次完整维修复验仍失败时登记为四次失败待最终收尾并推进；禁止第 5 次普通维修。"
+      },
+      "run": {
+        "sourceAnchors": [
+          "server/tts/",
+          "server/tts/tts-handoff-service.mjs",
+          "ui/modules/tts-handoff-store.js",
+          "ui/workbench.js",
+          "server/core/settings-center.js",
+          "server/core/task-center.js",
+          "server/core/final-asset-registry.js",
+          "ui-server.mjs"
+        ],
+        "commands": [
+          "node test-round2-voices-navigation-browser.mjs",
+          "node test-dom-xss-dataflow.mjs",
+          "pnpm.cmd run check:gate"
+        ],
+        "testToAdd": "test-round2-voices-navigation-browser.mjs",
+        "requiredEvidence": "唯一入口、点击激活、焦点/刷新/返回正确；XSS 防线不退回",
+        "evidenceDir": ".data/repair-evidence/R2-01.05/<YYYYMMDD-HHMMSS>/"
+      }
+    },
+    {
+      "id": "R2-01.06",
+      "card": {
+        "scope": "本地缺陷｜恢复文件/下载管理导航",
+        "verificationMode": "browser-real",
+        "orderedActions": [
+          "冻结 R2-01.06 开工时的 Git、运行状态、输入与输出证据",
+          "沿 ui-server.mjs、ui/workbench.js、server/core/ 定位真实状态所有者和调用链",
+          "建立失败判据：test-round2-files-navigation-browser.mjs 在修复前稳定失败",
+          "逐项复验完成判定：明确入口可激活；下载、打开、删除仍受允许目录约束",
+          "执行目标回归、完整门禁，并把真实产物写入 .data/repair-evidence/R2-01.06/<YYYYMMDD-HHMMSS>/"
+        ],
+        "failingRegression": "test-round2-files-navigation-browser.mjs",
+        "targetedChecks": [
+          "node test-round2-files-navigation-browser.mjs",
+          "node test-download-safety.mjs",
+          "pnpm.cmd run check:gate"
+        ],
+        "realEvidence": "必须保存与“明确入口可激活；下载、打开、删除仍受允许目录约束”直接对应的真实输出、日志、页面或媒体证据，不能用代码存在代替。",
+        "prohibitedShortcuts": [
+          "不得以提示词、延时、默认值、假数据或静态断言掩盖根因",
+          "不得修改第一轮总表、第一轮证据或第一轮两次状态机",
+          "不得触碰 MoneyPrinterTurbo 子模块内部；相关项只改主程序集成边界",
+          "不得把四次失败待最终收尾计为完成或满足硬门禁"
+        ],
+        "rollback": "只回滚本项目明确列出的本轮文件；先保护用户数据、历史输出、设置、SQLite、证据和子模块指针。",
+        "escalation": "连续第 4 次完整维修复验仍失败时登记为四次失败待最终收尾并推进；禁止第 5 次普通维修。"
+      },
+      "run": {
+        "sourceAnchors": [
+          "ui-server.mjs",
+          "ui/workbench.js",
+          "server/core/"
+        ],
+        "commands": [
+          "node test-round2-files-navigation-browser.mjs",
+          "node test-download-safety.mjs",
+          "pnpm.cmd run check:gate"
+        ],
+        "testToAdd": "test-round2-files-navigation-browser.mjs",
+        "requiredEvidence": "明确入口可激活；下载、打开、删除仍受允许目录约束",
+        "evidenceDir": ".data/repair-evidence/R2-01.06/<YYYYMMDD-HHMMSS>/"
+      }
+    },
+    {
+      "id": "R2-01.07",
+      "card": {
+        "scope": "本地缺陷｜修复动态大字主预览与 BGM seek 同步",
+        "verificationMode": "browser-real",
+        "orderedActions": [
+          "冻结 R2-01.07 开工时的 Git、运行状态、输入与输出证据",
+          "沿 server/tts/、server/tts/tts-handoff-service.mjs、ui/modules/tts-handoff-store.js、ui/workbench.js、server/kinetic-text/kinetic-text-service.js、server/routes/kinetic-text-routes.js、ui/modules/kinetic-text.js 定位真实状态所有者和调用链",
+          "建立失败判据：test-kinetic-bgm-player-browser.mjs 在修复前稳定失败",
+          "逐项复验完成判定：拖动后 BGM 时间与主时间一致；播放/暂停/二次拖动/刷新通过真实浏览器",
+          "执行目标回归、完整门禁，并把真实产物写入 .data/repair-evidence/R2-01.07/<YYYYMMDD-HHMMSS>/"
+        ],
+        "failingRegression": "test-kinetic-bgm-player-browser.mjs",
+        "targetedChecks": [
+          "node test-kinetic-bgm-player-browser.mjs",
+          "pnpm.cmd run check:gate"
+        ],
+        "realEvidence": "必须保存与“拖动后 BGM 时间与主时间一致；播放/暂停/二次拖动/刷新通过真实浏览器”直接对应的真实输出、日志、页面或媒体证据，不能用代码存在代替。",
+        "prohibitedShortcuts": [
+          "不得以提示词、延时、默认值、假数据或静态断言掩盖根因",
+          "不得修改第一轮总表、第一轮证据或第一轮两次状态机",
+          "不得触碰 MoneyPrinterTurbo 子模块内部；相关项只改主程序集成边界",
+          "不得把四次失败待最终收尾计为完成或满足硬门禁"
+        ],
+        "rollback": "只回滚本项目明确列出的本轮文件；先保护用户数据、历史输出、设置、SQLite、证据和子模块指针。",
+        "escalation": "连续第 4 次完整维修复验仍失败时登记为四次失败待最终收尾并推进；禁止第 5 次普通维修。"
+      },
+      "run": {
+        "sourceAnchors": [
+          "server/tts/",
+          "server/tts/tts-handoff-service.mjs",
+          "ui/modules/tts-handoff-store.js",
+          "ui/workbench.js",
+          "server/kinetic-text/kinetic-text-service.js",
+          "server/routes/kinetic-text-routes.js",
+          "ui/modules/kinetic-text.js"
+        ],
+        "commands": [
+          "node test-kinetic-bgm-player-browser.mjs",
+          "pnpm.cmd run check:gate"
+        ],
+        "testToAdd": "test-kinetic-bgm-player-browser.mjs",
+        "requiredEvidence": "拖动后 BGM 时间与主时间一致；播放/暂停/二次拖动/刷新通过真实浏览器",
+        "evidenceDir": ".data/repair-evidence/R2-01.07/<YYYYMMDD-HHMMSS>/"
+      }
+    },
+    {
+      "id": "R2-01.08",
+      "card": {
+        "scope": "本地缺陷｜统一 MoneyPrinter 包装任务 ID 与最终资产 ID",
+        "verificationMode": "browser-real",
+        "orderedActions": [
+          "冻结 R2-01.08 开工时的 Git、运行状态、输入与输出证据",
+          "沿 server/routes/money-printer-routes.js、server/core/money-printer-store.js、ui/modules/money-printer.js、server/core/settings-center.js、server/core/task-center.js、server/core/final-asset-registry.js、ui-server.mjs 定位真实状态所有者和调用链",
+          "建立失败判据：test-money-printer-final-asset-browser.mjs 在修复前稳定失败",
+          "逐项复验完成判定：仅主程序集成；页面资产 ID 等于注册表 ID，包装 ID 独立；预览/下载哈希一致，重启恢复通过",
+          "执行目标回归、完整门禁，并把真实产物写入 .data/repair-evidence/R2-01.08/<YYYYMMDD-HHMMSS>/"
+        ],
+        "failingRegression": "test-money-printer-final-asset-browser.mjs",
+        "targetedChecks": [
+          "node test-money-printer-final-asset-browser.mjs",
+          "node test-money-printer-restart-recovery.mjs",
+          "pnpm.cmd run check:gate"
+        ],
+        "realEvidence": "必须保存与“仅主程序集成；页面资产 ID 等于注册表 ID，包装 ID 独立；预览/下载哈希一致，重启恢复通过”直接对应的真实输出、日志、页面或媒体证据，不能用代码存在代替。",
+        "prohibitedShortcuts": [
+          "不得以提示词、延时、默认值、假数据或静态断言掩盖根因",
+          "不得修改第一轮总表、第一轮证据或第一轮两次状态机",
+          "不得触碰 MoneyPrinterTurbo 子模块内部；相关项只改主程序集成边界",
+          "不得把四次失败待最终收尾计为完成或满足硬门禁"
+        ],
+        "rollback": "只回滚本项目明确列出的本轮文件；先保护用户数据、历史输出、设置、SQLite、证据和子模块指针。",
+        "escalation": "连续第 4 次完整维修复验仍失败时登记为四次失败待最终收尾并推进；禁止第 5 次普通维修。"
+      },
+      "run": {
+        "sourceAnchors": [
+          "server/routes/money-printer-routes.js",
+          "server/core/money-printer-store.js",
+          "ui/modules/money-printer.js",
+          "server/core/settings-center.js",
+          "server/core/task-center.js",
+          "server/core/final-asset-registry.js",
+          "ui-server.mjs"
+        ],
+        "commands": [
+          "node test-money-printer-final-asset-browser.mjs",
+          "node test-money-printer-restart-recovery.mjs",
+          "pnpm.cmd run check:gate"
+        ],
+        "testToAdd": "test-money-printer-final-asset-browser.mjs",
+        "requiredEvidence": "仅主程序集成；页面资产 ID 等于注册表 ID，包装 ID 独立；预览/下载哈希一致，重启恢复通过",
+        "evidenceDir": ".data/repair-evidence/R2-01.08/<YYYYMMDD-HHMMSS>/"
+      }
+    },
+    {
+      "id": "R2-01.09",
+      "card": {
+        "scope": "外部人工｜微信桌面端与移动端表情复制验收",
+        "verificationMode": "external-real",
+        "orderedActions": [
+          "冻结 R2-01.09 开工时的 Git、运行状态、输入与输出证据",
+          "沿 ui/workbench.js、ui/modules/legacy-runtime.js、ui-server.mjs 定位真实状态所有者和调用链",
+          "建立失败判据：真实微信桌面端到移动端粘贴仍出现乱码、缺字或样式丢失",
+          "逐项复验完成判定：真实粘贴无乱码/缺字/风格丢失，保留输入、截图或录屏；阻塞不影响其他车道",
+          "执行目标回归、完整门禁，并把真实产物写入 .data/repair-evidence/R2-01.09/<YYYYMMDD-HHMMSS>/"
+        ],
+        "failingRegression": "真实微信桌面端到移动端粘贴仍出现乱码、缺字或样式丢失",
+        "targetedChecks": [
+          "node test-moments-emoji-audit.mjs",
+          "node test-moments-emoji-platform.mjs",
+          "pnpm.cmd run check:gate"
+        ],
+        "realEvidence": "必须保存与“真实粘贴无乱码/缺字/风格丢失，保留输入、截图或录屏；阻塞不影响其他车道”直接对应的真实输出、日志、页面或媒体证据，不能用代码存在代替。",
+        "prohibitedShortcuts": [
+          "不得以提示词、延时、默认值、假数据或静态断言掩盖根因",
+          "不得修改第一轮总表、第一轮证据或第一轮两次状态机",
+          "不得触碰 MoneyPrinterTurbo 子模块内部；相关项只改主程序集成边界",
+          "不得把四次失败待最终收尾计为完成或满足硬门禁"
+        ],
+        "rollback": "只回滚本项目明确列出的本轮文件；先保护用户数据、历史输出、设置、SQLite、证据和子模块指针。",
+        "escalation": "需要人工、账号、付费、PR、CI、main 或用户验收时登记证据；5 分钟无人介入则顺移到其他就绪项。"
+      },
+      "run": {
+        "sourceAnchors": [
+          "ui/workbench.js",
+          "ui/modules/legacy-runtime.js",
+          "ui-server.mjs"
+        ],
+        "commands": [
+          "node test-moments-emoji-audit.mjs",
+          "node test-moments-emoji-platform.mjs",
+          "pnpm.cmd run check:gate"
+        ],
+        "testToAdd": "不新增自动化替代：保存真实微信输入、桌面粘贴和移动端结果截图或录屏",
+        "requiredEvidence": "真实粘贴无乱码/缺字/风格丢失，保留输入、截图或录屏；阻塞不影响其他车道",
+        "evidenceDir": ".data/repair-evidence/R2-01.09/<YYYYMMDD-HHMMSS>/"
+      }
+    },
+    {
+      "id": "R2-01.10",
+      "card": {
+        "scope": "外部人工｜真实国内 TTS 供应商任务",
+        "verificationMode": "external-real",
+        "orderedActions": [
+          "冻结 R2-01.10 开工时的 Git、运行状态、输入与输出证据",
+          "沿 server/tts/、server/tts/tts-handoff-service.mjs、ui/modules/tts-handoff-store.js、ui/workbench.js、server/core/settings-center.js、server/core/task-center.js、server/core/final-asset-registry.js、ui-server.mjs 定位真实状态所有者和调用链",
+          "建立失败判据：授权供应商生成任务未形成API、SQLite、文件、页面、刷新和handoff闭环",
+          "逐项复验完成判定：授权账号生成非敏感旁白；API/SQLite/文件/页面/刷新/handoff 全链，密钥不入日志",
+          "执行目标回归、完整门禁，并把真实产物写入 .data/repair-evidence/R2-01.10/<YYYYMMDD-HHMMSS>/"
+        ],
+        "failingRegression": "授权供应商生成任务未形成API、SQLite、文件、页面、刷新和handoff闭环",
+        "targetedChecks": [
+          "node test-tts-auto-preview.mjs",
+          "node test-production-tts-integrity.mjs",
+          "pnpm.cmd run check:gate"
+        ],
+        "realEvidence": "必须保存与“授权账号生成非敏感旁白；API/SQLite/文件/页面/刷新/handoff 全链，密钥不入日志”直接对应的真实输出、日志、页面或媒体证据，不能用代码存在代替。",
+        "prohibitedShortcuts": [
+          "不得以提示词、延时、默认值、假数据或静态断言掩盖根因",
+          "不得修改第一轮总表、第一轮证据或第一轮两次状态机",
+          "不得触碰 MoneyPrinterTurbo 子模块内部；相关项只改主程序集成边界",
+          "不得把四次失败待最终收尾计为完成或满足硬门禁"
+        ],
+        "rollback": "只回滚本项目明确列出的本轮文件；先保护用户数据、历史输出、设置、SQLite、证据和子模块指针。",
+        "escalation": "需要人工、账号、付费、PR、CI、main 或用户验收时登记证据；5 分钟无人介入则顺移到其他就绪项。"
+      },
+      "run": {
+        "sourceAnchors": [
+          "server/tts/",
+          "server/tts/tts-handoff-service.mjs",
+          "ui/modules/tts-handoff-store.js",
+          "ui/workbench.js",
+          "server/core/settings-center.js",
+          "server/core/task-center.js",
+          "server/core/final-asset-registry.js",
+          "ui-server.mjs"
+        ],
+        "commands": [
+          "node test-tts-auto-preview.mjs",
+          "node test-production-tts-integrity.mjs",
+          "pnpm.cmd run check:gate"
+        ],
+        "testToAdd": "test-tts-auto-preview.mjs（使用本轮授权账号和新任务ID）",
+        "requiredEvidence": "授权账号生成非敏感旁白；API/SQLite/文件/页面/刷新/handoff 全链，密钥不入日志",
+        "evidenceDir": ".data/repair-evidence/R2-01.10/<YYYYMMDD-HHMMSS>/"
+      }
+    },
+    {
+      "id": "R2-01.11",
+      "card": {
+        "scope": "外部人工｜真实 BGM 供应商任务",
+        "verificationMode": "external-real",
+        "orderedActions": [
+          "冻结 R2-01.11 开工时的 Git、运行状态、输入与输出证据",
+          "沿 server/tts/、server/tts/tts-handoff-service.mjs、ui/modules/tts-handoff-store.js、ui/workbench.js、server/core/settings-center.js、server/core/task-center.js、server/core/final-asset-registry.js、ui-server.mjs 定位真实状态所有者和调用链",
+          "建立失败判据：授权BGM任务未形成独立文件、正确关联和完整发送闭环",
+          "逐项复验完成判定：授权生成真实独立 BGM；时长、尾部、响度、播放、持久化和发送通过",
+          "执行目标回归、完整门禁，并把真实产物写入 .data/repair-evidence/R2-01.11/<YYYYMMDD-HHMMSS>/"
+        ],
+        "failingRegression": "授权BGM任务未形成独立文件、正确关联和完整发送闭环",
+        "targetedChecks": [
+          "node test-tts-bgm-generation.mjs",
+          "node test-tts-bgm-tail.mjs",
+          "node test-tts-bgm-loudness.mjs",
+          "pnpm.cmd run check:gate"
+        ],
+        "realEvidence": "必须保存与“授权生成真实独立 BGM；时长、尾部、响度、播放、持久化和发送通过”直接对应的真实输出、日志、页面或媒体证据，不能用代码存在代替。",
+        "prohibitedShortcuts": [
+          "不得以提示词、延时、默认值、假数据或静态断言掩盖根因",
+          "不得修改第一轮总表、第一轮证据或第一轮两次状态机",
+          "不得触碰 MoneyPrinterTurbo 子模块内部；相关项只改主程序集成边界",
+          "不得把四次失败待最终收尾计为完成或满足硬门禁"
+        ],
+        "rollback": "只回滚本项目明确列出的本轮文件；先保护用户数据、历史输出、设置、SQLite、证据和子模块指针。",
+        "escalation": "需要人工、账号、付费、PR、CI、main 或用户验收时登记证据；5 分钟无人介入则顺移到其他就绪项。"
+      },
+      "run": {
+        "sourceAnchors": [
+          "server/tts/",
+          "server/tts/tts-handoff-service.mjs",
+          "ui/modules/tts-handoff-store.js",
+          "ui/workbench.js",
+          "server/core/settings-center.js",
+          "server/core/task-center.js",
+          "server/core/final-asset-registry.js",
+          "ui-server.mjs"
+        ],
+        "commands": [
+          "node test-tts-bgm-generation.mjs",
+          "node test-tts-bgm-tail.mjs",
+          "node test-tts-bgm-loudness.mjs",
+          "pnpm.cmd run check:gate"
+        ],
+        "testToAdd": "test-tts-bgm-generation.mjs（使用本轮授权账号和新任务ID）",
+        "requiredEvidence": "授权生成真实独立 BGM；时长、尾部、响度、播放、持久化和发送通过",
+        "evidenceDir": ".data/repair-evidence/R2-01.11/<YYYYMMDD-HHMMSS>/"
+      }
+    },
+    {
+      "id": "R2-01.12",
+      "card": {
+        "scope": "启动可靠性｜VBS 缺依赖时可见失败并停止",
+        "verificationMode": "automated",
+        "orderedActions": [
+          "冻结 R2-01.12 开工时的 Git、运行状态、输入与输出证据",
+          "沿 start-ui-hidden.vbs、launch-ui.mjs、ui-server.mjs 定位真实状态所有者和调用链",
+          "建立失败判据：test-launcher-missing-dependency.mjs 在修复前稳定失败",
+          "逐项复验完成判定：缺 Node/依赖/入口时显示可操作错误、写日志、非零退出且不启动半残服务",
+          "执行目标回归、完整门禁，并把真实产物写入 .data/repair-evidence/R2-01.12/<YYYYMMDD-HHMMSS>/"
+        ],
+        "failingRegression": "test-launcher-missing-dependency.mjs",
+        "targetedChecks": [
+          "node test-launcher-missing-dependency.mjs",
+          "pnpm.cmd run check:gate"
+        ],
+        "realEvidence": "必须保存与“缺 Node/依赖/入口时显示可操作错误、写日志、非零退出且不启动半残服务”直接对应的真实输出、日志、页面或媒体证据，不能用代码存在代替。",
+        "prohibitedShortcuts": [
+          "不得以提示词、延时、默认值、假数据或静态断言掩盖根因",
+          "不得修改第一轮总表、第一轮证据或第一轮两次状态机",
+          "不得触碰 MoneyPrinterTurbo 子模块内部；相关项只改主程序集成边界",
+          "不得把四次失败待最终收尾计为完成或满足硬门禁"
+        ],
+        "rollback": "只回滚本项目明确列出的本轮文件；先保护用户数据、历史输出、设置、SQLite、证据和子模块指针。",
+        "escalation": "连续第 4 次完整维修复验仍失败时登记为四次失败待最终收尾并推进；禁止第 5 次普通维修。"
+      },
+      "run": {
+        "sourceAnchors": [
+          "start-ui-hidden.vbs",
+          "launch-ui.mjs",
+          "ui-server.mjs"
+        ],
+        "commands": [
+          "node test-launcher-missing-dependency.mjs",
+          "pnpm.cmd run check:gate"
+        ],
+        "testToAdd": "test-launcher-missing-dependency.mjs",
+        "requiredEvidence": "缺 Node/依赖/入口时显示可操作错误、写日志、非零退出且不启动半残服务",
+        "evidenceDir": ".data/repair-evidence/R2-01.12/<YYYYMMDD-HHMMSS>/"
+      }
+    },
+    {
+      "id": "R2-01.13",
+      "card": {
+        "scope": "启动可靠性｜修复 launcher 日志可靠性与轮转",
+        "verificationMode": "automated",
+        "orderedActions": [
+          "冻结 R2-01.13 开工时的 Git、运行状态、输入与输出证据",
+          "沿 start-ui-hidden.vbs、launch-ui.mjs、ui-server.mjs 定位真实状态所有者和调用链",
+          "建立失败判据：test-launcher-log-rotation.mjs 在修复前稳定失败",
+          "逐项复验完成判定：正常启动/复用/错误均有时间、项目、PID、URL；并发写不丢；大小受限且轮转可恢复",
+          "执行目标回归、完整门禁，并把真实产物写入 .data/repair-evidence/R2-01.13/<YYYYMMDD-HHMMSS>/"
+        ],
+        "failingRegression": "test-launcher-log-rotation.mjs",
+        "targetedChecks": [
+          "node test-launcher-log-rotation.mjs",
+          "pnpm.cmd run check:gate"
+        ],
+        "realEvidence": "必须保存与“正常启动/复用/错误均有时间、项目、PID、URL；并发写不丢；大小受限且轮转可恢复”直接对应的真实输出、日志、页面或媒体证据，不能用代码存在代替。",
+        "prohibitedShortcuts": [
+          "不得以提示词、延时、默认值、假数据或静态断言掩盖根因",
+          "不得修改第一轮总表、第一轮证据或第一轮两次状态机",
+          "不得触碰 MoneyPrinterTurbo 子模块内部；相关项只改主程序集成边界",
+          "不得把四次失败待最终收尾计为完成或满足硬门禁"
+        ],
+        "rollback": "只回滚本项目明确列出的本轮文件；先保护用户数据、历史输出、设置、SQLite、证据和子模块指针。",
+        "escalation": "连续第 4 次完整维修复验仍失败时登记为四次失败待最终收尾并推进；禁止第 5 次普通维修。"
+      },
+      "run": {
+        "sourceAnchors": [
+          "start-ui-hidden.vbs",
+          "launch-ui.mjs",
+          "ui-server.mjs"
+        ],
+        "commands": [
+          "node test-launcher-log-rotation.mjs",
+          "pnpm.cmd run check:gate"
+        ],
+        "testToAdd": "test-launcher-log-rotation.mjs",
+        "requiredEvidence": "正常启动/复用/错误均有时间、项目、PID、URL；并发写不丢；大小受限且轮转可恢复",
+        "evidenceDir": ".data/repair-evidence/R2-01.13/<YYYYMMDD-HHMMSS>/"
+      }
+    },
+    {
+      "id": "R2-01.14",
+      "card": {
+        "scope": "启动可靠性｜拒绝错误项目或陈旧 `ui-server.url`",
+        "verificationMode": "automated",
+        "orderedActions": [
+          "冻结 R2-01.14 开工时的 Git、运行状态、输入与输出证据",
+          "沿 start-ui-hidden.vbs、launch-ui.mjs、ui-server.mjs、.data/repair-evidence/R2-CLEANUP-AUDIT/、.gitignore、docs/ 定位真实状态所有者和调用链",
+          "建立失败判据：test-launcher-project-identity.mjs 在修复前稳定失败",
+          "逐项复验完成判定：复用前核对项目根、实例标识/commit、PID 与健康信息；错误 URL 被清理并启动正确实例",
+          "执行目标回归、完整门禁，并把真实产物写入 .data/repair-evidence/R2-01.14/<YYYYMMDD-HHMMSS>/"
+        ],
+        "failingRegression": "test-launcher-project-identity.mjs",
+        "targetedChecks": [
+          "node test-launcher-project-identity.mjs",
+          "pnpm.cmd run check:gate"
+        ],
+        "realEvidence": "必须保存与“复用前核对项目根、实例标识/commit、PID 与健康信息；错误 URL 被清理并启动正确实例”直接对应的真实输出、日志、页面或媒体证据，不能用代码存在代替。",
+        "prohibitedShortcuts": [
+          "不得以提示词、延时、默认值、假数据或静态断言掩盖根因",
+          "不得修改第一轮总表、第一轮证据或第一轮两次状态机",
+          "不得触碰 MoneyPrinterTurbo 子模块内部；相关项只改主程序集成边界",
+          "不得把四次失败待最终收尾计为完成或满足硬门禁"
+        ],
+        "rollback": "只回滚本项目明确列出的本轮文件；先保护用户数据、历史输出、设置、SQLite、证据和子模块指针。",
+        "escalation": "连续第 4 次完整维修复验仍失败时登记为四次失败待最终收尾并推进；禁止第 5 次普通维修。"
+      },
+      "run": {
+        "sourceAnchors": [
+          "start-ui-hidden.vbs",
+          "launch-ui.mjs",
+          "ui-server.mjs",
+          ".data/repair-evidence/R2-CLEANUP-AUDIT/",
+          ".gitignore",
+          "docs/"
+        ],
+        "commands": [
+          "node test-launcher-project-identity.mjs",
+          "pnpm.cmd run check:gate"
+        ],
+        "testToAdd": "test-launcher-project-identity.mjs",
+        "requiredEvidence": "复用前核对项目根、实例标识/commit、PID 与健康信息；错误 URL 被清理并启动正确实例",
+        "evidenceDir": ".data/repair-evidence/R2-01.14/<YYYYMMDD-HHMMSS>/"
+      }
+    },
+    {
+      "id": "R2-01.15",
+      "card": {
+        "scope": "启动可靠性｜单实例并发与竞态验收",
+        "verificationMode": "restart-real",
+        "orderedActions": [
+          "冻结 R2-01.15 开工时的 Git、运行状态、输入与输出证据",
+          "沿 start-ui-hidden.vbs、launch-ui.mjs、ui-server.mjs 定位真实状态所有者和调用链",
+          "建立失败判据：test-launcher-single-instance.mjs 在修复前稳定失败",
+          "逐项复验完成判定：多次同时启动只留下一个 8787/8080 实例；URL/日志不互相覆盖，失败实例可回收，刷新恢复通过",
+          "执行目标回归、完整门禁，并把真实产物写入 .data/repair-evidence/R2-01.15/<YYYYMMDD-HHMMSS>/"
+        ],
+        "failingRegression": "test-launcher-single-instance.mjs",
+        "targetedChecks": [
+          "node test-launcher-single-instance.mjs",
+          "pnpm.cmd run test:restart",
+          "pnpm.cmd run check:gate"
+        ],
+        "realEvidence": "必须保存与“多次同时启动只留下一个 8787/8080 实例；URL/日志不互相覆盖，失败实例可回收，刷新恢复通过”直接对应的真实输出、日志、页面或媒体证据，不能用代码存在代替。",
+        "prohibitedShortcuts": [
+          "不得以提示词、延时、默认值、假数据或静态断言掩盖根因",
+          "不得修改第一轮总表、第一轮证据或第一轮两次状态机",
+          "不得触碰 MoneyPrinterTurbo 子模块内部；相关项只改主程序集成边界",
+          "不得把四次失败待最终收尾计为完成或满足硬门禁"
+        ],
+        "rollback": "只回滚本项目明确列出的本轮文件；先保护用户数据、历史输出、设置、SQLite、证据和子模块指针。",
+        "escalation": "连续第 4 次完整维修复验仍失败时登记为四次失败待最终收尾并推进；禁止第 5 次普通维修。"
+      },
+      "run": {
+        "sourceAnchors": [
+          "start-ui-hidden.vbs",
+          "launch-ui.mjs",
+          "ui-server.mjs"
+        ],
+        "commands": [
+          "node test-launcher-single-instance.mjs",
+          "pnpm.cmd run test:restart",
+          "pnpm.cmd run check:gate"
+        ],
+        "testToAdd": "test-launcher-single-instance.mjs",
+        "requiredEvidence": "多次同时启动只留下一个 8787/8080 实例；URL/日志不互相覆盖，失败实例可回收，刷新恢复通过",
+        "evidenceDir": ".data/repair-evidence/R2-01.15/<YYYYMMDD-HHMMSS>/"
+      }
+    },
+    {
+      "id": "R2-02.01",
+      "card": {
+        "scope": "安全｜修复 `fast-uri` 主机混淆漏洞",
+        "verificationMode": "security-dynamic",
+        "orderedActions": [
+          "冻结 R2-02.01 开工时的 Git、运行状态、输入与输出证据",
+          "沿 package.json、pnpm-lock.yaml、server/core/ssrf-guard.mjs、test-ssrf-guard.mjs 定位真实状态所有者和调用链",
+          "建立失败判据：test-fast-uri-host-confusion.mjs 在修复前稳定失败",
+          "逐项复验完成判定：安全版本；反斜杠 authority、重定向、DNS 和实际连接主机动态回归通过",
+          "执行目标回归、完整门禁，并把真实产物写入 .data/repair-evidence/R2-02.01/<YYYYMMDD-HHMMSS>/"
+        ],
+        "failingRegression": "test-fast-uri-host-confusion.mjs",
+        "targetedChecks": [
+          "node test-fast-uri-host-confusion.mjs",
+          "pnpm.cmd run check:gate"
+        ],
+        "realEvidence": "必须保存与“安全版本；反斜杠 authority、重定向、DNS 和实际连接主机动态回归通过”直接对应的真实输出、日志、页面或媒体证据，不能用代码存在代替。",
+        "prohibitedShortcuts": [
+          "不得以提示词、延时、默认值、假数据或静态断言掩盖根因",
+          "不得修改第一轮总表、第一轮证据或第一轮两次状态机",
+          "不得触碰 MoneyPrinterTurbo 子模块内部；相关项只改主程序集成边界",
+          "不得把四次失败待最终收尾计为完成或满足硬门禁"
+        ],
+        "rollback": "只回滚本项目明确列出的本轮文件；先保护用户数据、历史输出、设置、SQLite、证据和子模块指针。",
+        "escalation": "连续第 4 次完整维修复验仍失败时登记为四次失败待最终收尾并推进；禁止第 5 次普通维修。"
+      },
+      "run": {
+        "sourceAnchors": [
+          "package.json",
+          "pnpm-lock.yaml",
+          "server/core/ssrf-guard.mjs",
+          "test-ssrf-guard.mjs"
+        ],
+        "commands": [
+          "node test-fast-uri-host-confusion.mjs",
+          "pnpm.cmd run check:gate"
+        ],
+        "testToAdd": "test-fast-uri-host-confusion.mjs",
+        "requiredEvidence": "安全版本；反斜杠 authority、重定向、DNS 和实际连接主机动态回归通过",
+        "evidenceDir": ".data/repair-evidence/R2-02.01/<YYYYMMDD-HHMMSS>/"
+      }
+    },
+    {
+      "id": "R2-02.02",
+      "card": {
+        "scope": "安全｜升级 `ip-address` 并阻断前导零混淆",
+        "verificationMode": "security-dynamic",
+        "orderedActions": [
+          "冻结 R2-02.02 开工时的 Git、运行状态、输入与输出证据",
+          "沿 package.json、pnpm-lock.yaml、server/core/ssrf-guard.mjs、test-ssrf-guard.mjs 定位真实状态所有者和调用链",
+          "建立失败判据：test-ip-address-leading-zero.mjs 在修复前稳定失败",
+          "逐项复验完成判定：统一至少 10.3.1；`012.0.0.1` 等不能绕过；解析、DNS、连接目标一致",
+          "执行目标回归、完整门禁，并把真实产物写入 .data/repair-evidence/R2-02.02/<YYYYMMDD-HHMMSS>/"
+        ],
+        "failingRegression": "test-ip-address-leading-zero.mjs",
+        "targetedChecks": [
+          "node test-ip-address-leading-zero.mjs",
+          "node test-ssrf-guard.mjs",
+          "pnpm.cmd run check:gate"
+        ],
+        "realEvidence": "必须保存与“统一至少 10.3.1；`012.0.0.1` 等不能绕过；解析、DNS、连接目标一致”直接对应的真实输出、日志、页面或媒体证据，不能用代码存在代替。",
+        "prohibitedShortcuts": [
+          "不得以提示词、延时、默认值、假数据或静态断言掩盖根因",
+          "不得修改第一轮总表、第一轮证据或第一轮两次状态机",
+          "不得触碰 MoneyPrinterTurbo 子模块内部；相关项只改主程序集成边界",
+          "不得把四次失败待最终收尾计为完成或满足硬门禁"
+        ],
+        "rollback": "只回滚本项目明确列出的本轮文件；先保护用户数据、历史输出、设置、SQLite、证据和子模块指针。",
+        "escalation": "连续第 4 次完整维修复验仍失败时登记为四次失败待最终收尾并推进；禁止第 5 次普通维修。"
+      },
+      "run": {
+        "sourceAnchors": [
+          "package.json",
+          "pnpm-lock.yaml",
+          "server/core/ssrf-guard.mjs",
+          "test-ssrf-guard.mjs"
+        ],
+        "commands": [
+          "node test-ip-address-leading-zero.mjs",
+          "node test-ssrf-guard.mjs",
+          "pnpm.cmd run check:gate"
+        ],
+        "testToAdd": "test-ip-address-leading-zero.mjs",
+        "requiredEvidence": "统一至少 10.3.1；`012.0.0.1` 等不能绕过；解析、DNS、连接目标一致",
+        "evidenceDir": ".data/repair-evidence/R2-02.02/<YYYYMMDD-HHMMSS>/"
+      }
+    },
+    {
+      "id": "R2-02.03",
+      "card": {
+        "scope": "安全｜强化 CIDR 后缀与规范化后再校验",
+        "verificationMode": "security-dynamic",
+        "orderedActions": [
+          "冻结 R2-02.03 开工时的 Git、运行状态、输入与输出证据",
+          "沿 package.json、pnpm-lock.yaml、server/core/ssrf-guard.mjs、test-ssrf-guard.mjs、scripts/release-gate.mjs、scripts/service-restart.mjs、docs/ 定位真实状态所有者和调用链",
+          "建立失败判据：test-cidr-normalization.mjs 在修复前稳定失败",
+          "逐项复验完成判定：`/0`、短前缀的 IPv4/IPv6 内网目标被拒绝；公告用例和应用层回归通过",
+          "执行目标回归、完整门禁，并把真实产物写入 .data/repair-evidence/R2-02.03/<YYYYMMDD-HHMMSS>/"
+        ],
+        "failingRegression": "test-cidr-normalization.mjs",
+        "targetedChecks": [
+          "node test-cidr-normalization.mjs",
+          "node test-ssrf-guard.mjs",
+          "pnpm.cmd run check:gate"
+        ],
+        "realEvidence": "必须保存与“`/0`、短前缀的 IPv4/IPv6 内网目标被拒绝；公告用例和应用层回归通过”直接对应的真实输出、日志、页面或媒体证据，不能用代码存在代替。",
+        "prohibitedShortcuts": [
+          "不得以提示词、延时、默认值、假数据或静态断言掩盖根因",
+          "不得修改第一轮总表、第一轮证据或第一轮两次状态机",
+          "不得触碰 MoneyPrinterTurbo 子模块内部；相关项只改主程序集成边界",
+          "不得把四次失败待最终收尾计为完成或满足硬门禁"
+        ],
+        "rollback": "只回滚本项目明确列出的本轮文件；先保护用户数据、历史输出、设置、SQLite、证据和子模块指针。",
+        "escalation": "连续第 4 次完整维修复验仍失败时登记为四次失败待最终收尾并推进；禁止第 5 次普通维修。"
+      },
+      "run": {
+        "sourceAnchors": [
+          "package.json",
+          "pnpm-lock.yaml",
+          "server/core/ssrf-guard.mjs",
+          "test-ssrf-guard.mjs",
+          "scripts/release-gate.mjs",
+          "scripts/service-restart.mjs",
+          "docs/"
+        ],
+        "commands": [
+          "node test-cidr-normalization.mjs",
+          "node test-ssrf-guard.mjs",
+          "pnpm.cmd run check:gate"
+        ],
+        "testToAdd": "test-cidr-normalization.mjs",
+        "requiredEvidence": "`/0`、短前缀的 IPv4/IPv6 内网目标被拒绝；公告用例和应用层回归通过",
+        "evidenceDir": ".data/repair-evidence/R2-02.03/<YYYYMMDD-HHMMSS>/"
+      }
+    },
+    {
+      "id": "R2-02.04",
+      "card": {
+        "scope": "安全｜强化 IPv4-mapped/NAT64 与 socket 目标再校验",
+        "verificationMode": "security-dynamic",
+        "orderedActions": [
+          "冻结 R2-02.04 开工时的 Git、运行状态、输入与输出证据",
+          "沿 package.json、pnpm-lock.yaml、server/core/ssrf-guard.mjs、test-ssrf-guard.mjs 定位真实状态所有者和调用链",
+          "建立失败判据：test-socket-target-revalidation.mjs 在修复前稳定失败",
+          "逐项复验完成判定：`::ffff:`、NAT64、link-local、metadata 均阻断；解析后 socket 地址二次校验",
+          "执行目标回归、完整门禁，并把真实产物写入 .data/repair-evidence/R2-02.04/<YYYYMMDD-HHMMSS>/"
+        ],
+        "failingRegression": "test-socket-target-revalidation.mjs",
+        "targetedChecks": [
+          "node test-socket-target-revalidation.mjs",
+          "node test-ssrf-guard.mjs",
+          "pnpm.cmd run check:gate"
+        ],
+        "realEvidence": "必须保存与“`::ffff:`、NAT64、link-local、metadata 均阻断；解析后 socket 地址二次校验”直接对应的真实输出、日志、页面或媒体证据，不能用代码存在代替。",
+        "prohibitedShortcuts": [
+          "不得以提示词、延时、默认值、假数据或静态断言掩盖根因",
+          "不得修改第一轮总表、第一轮证据或第一轮两次状态机",
+          "不得触碰 MoneyPrinterTurbo 子模块内部；相关项只改主程序集成边界",
+          "不得把四次失败待最终收尾计为完成或满足硬门禁"
+        ],
+        "rollback": "只回滚本项目明确列出的本轮文件；先保护用户数据、历史输出、设置、SQLite、证据和子模块指针。",
+        "escalation": "连续第 4 次完整维修复验仍失败时登记为四次失败待最终收尾并推进；禁止第 5 次普通维修。"
+      },
+      "run": {
+        "sourceAnchors": [
+          "package.json",
+          "pnpm-lock.yaml",
+          "server/core/ssrf-guard.mjs",
+          "test-ssrf-guard.mjs"
+        ],
+        "commands": [
+          "node test-socket-target-revalidation.mjs",
+          "node test-ssrf-guard.mjs",
+          "pnpm.cmd run check:gate"
+        ],
+        "testToAdd": "test-socket-target-revalidation.mjs",
+        "requiredEvidence": "`::ffff:`、NAT64、link-local、metadata 均阻断；解析后 socket 地址二次校验",
+        "evidenceDir": ".data/repair-evidence/R2-02.04/<YYYYMMDD-HHMMSS>/"
+      }
+    },
+    {
+      "id": "R2-02.05",
+      "card": {
+        "scope": "安全｜修复 Hono CORS ReDoS",
+        "verificationMode": "security-dynamic",
+        "orderedActions": [
+          "冻结 R2-02.05 开工时的 Git、运行状态、输入与输出证据",
+          "沿 package.json、pnpm-lock.yaml、server/core/ssrf-guard.mjs、test-ssrf-guard.mjs 定位真实状态所有者和调用链",
+          "建立失败判据：test-hono-cors-redos.mjs 在修复前稳定失败",
+          "逐项复验完成判定：Hono 至少 4.12.34；超长预检头不造成异常延迟；动态兼容回归通过",
+          "执行目标回归、完整门禁，并把真实产物写入 .data/repair-evidence/R2-02.05/<YYYYMMDD-HHMMSS>/"
+        ],
+        "failingRegression": "test-hono-cors-redos.mjs",
+        "targetedChecks": [
+          "node test-hono-cors-redos.mjs",
+          "pnpm.cmd run check:gate"
+        ],
+        "realEvidence": "必须保存与“Hono 至少 4.12.34；超长预检头不造成异常延迟；动态兼容回归通过”直接对应的真实输出、日志、页面或媒体证据，不能用代码存在代替。",
+        "prohibitedShortcuts": [
+          "不得以提示词、延时、默认值、假数据或静态断言掩盖根因",
+          "不得修改第一轮总表、第一轮证据或第一轮两次状态机",
+          "不得触碰 MoneyPrinterTurbo 子模块内部；相关项只改主程序集成边界",
+          "不得把四次失败待最终收尾计为完成或满足硬门禁"
+        ],
+        "rollback": "只回滚本项目明确列出的本轮文件；先保护用户数据、历史输出、设置、SQLite、证据和子模块指针。",
+        "escalation": "连续第 4 次完整维修复验仍失败时登记为四次失败待最终收尾并推进；禁止第 5 次普通维修。"
+      },
+      "run": {
+        "sourceAnchors": [
+          "package.json",
+          "pnpm-lock.yaml",
+          "server/core/ssrf-guard.mjs",
+          "test-ssrf-guard.mjs"
+        ],
+        "commands": [
+          "node test-hono-cors-redos.mjs",
+          "pnpm.cmd run check:gate"
+        ],
+        "testToAdd": "test-hono-cors-redos.mjs",
+        "requiredEvidence": "Hono 至少 4.12.34；超长预检头不造成异常延迟；动态兼容回归通过",
+        "evidenceDir": ".data/repair-evidence/R2-02.05/<YYYYMMDD-HHMMSS>/"
+      }
+    },
+    {
+      "id": "R2-02.06",
+      "card": {
+        "scope": "安全｜修复 `brace-expansion` 资源耗尽",
+        "verificationMode": "security-dynamic",
+        "orderedActions": [
+          "冻结 R2-02.06 开工时的 Git、运行状态、输入与输出证据",
+          "沿 package.json、pnpm-lock.yaml、server/core/ssrf-guard.mjs、test-ssrf-guard.mjs 定位真实状态所有者和调用链",
+          "建立失败判据：test-brace-expansion-dos.mjs 在修复前稳定失败",
+          "逐项复验完成判定：至少 2.1.4；受控 PoC 结束；不可信 brace/glob 输入不直接展开",
+          "执行目标回归、完整门禁，并把真实产物写入 .data/repair-evidence/R2-02.06/<YYYYMMDD-HHMMSS>/"
+        ],
+        "failingRegression": "test-brace-expansion-dos.mjs",
+        "targetedChecks": [
+          "node test-brace-expansion-dos.mjs",
+          "pnpm.cmd run check:gate"
+        ],
+        "realEvidence": "必须保存与“至少 2.1.4；受控 PoC 结束；不可信 brace/glob 输入不直接展开”直接对应的真实输出、日志、页面或媒体证据，不能用代码存在代替。",
+        "prohibitedShortcuts": [
+          "不得以提示词、延时、默认值、假数据或静态断言掩盖根因",
+          "不得修改第一轮总表、第一轮证据或第一轮两次状态机",
+          "不得触碰 MoneyPrinterTurbo 子模块内部；相关项只改主程序集成边界",
+          "不得把四次失败待最终收尾计为完成或满足硬门禁"
+        ],
+        "rollback": "只回滚本项目明确列出的本轮文件；先保护用户数据、历史输出、设置、SQLite、证据和子模块指针。",
+        "escalation": "连续第 4 次完整维修复验仍失败时登记为四次失败待最终收尾并推进；禁止第 5 次普通维修。"
+      },
+      "run": {
+        "sourceAnchors": [
+          "package.json",
+          "pnpm-lock.yaml",
+          "server/core/ssrf-guard.mjs",
+          "test-ssrf-guard.mjs"
+        ],
+        "commands": [
+          "node test-brace-expansion-dos.mjs",
+          "pnpm.cmd run check:gate"
+        ],
+        "testToAdd": "test-brace-expansion-dos.mjs",
+        "requiredEvidence": "至少 2.1.4；受控 PoC 结束；不可信 brace/glob 输入不直接展开",
+        "evidenceDir": ".data/repair-evidence/R2-02.06/<YYYYMMDD-HHMMSS>/"
+      }
+    },
+    {
+      "id": "R2-02.07",
+      "card": {
+        "scope": "安全｜生产依赖审计与 PR 依赖审查入门禁",
+        "verificationMode": "security-dynamic",
+        "orderedActions": [
+          "冻结 R2-02.07 开工时的 Git、运行状态、输入与输出证据",
+          "沿 package.json、pnpm-lock.yaml、server/core/ssrf-guard.mjs、test-ssrf-guard.mjs、scripts/release-gate.mjs、scripts/service-restart.mjs、docs/ 定位真实状态所有者和调用链",
+          "建立失败判据：生产依赖仍有未接受中高危或PR未留下独立审查记录",
+          "逐项复验完成判定：无未接受高/中危；每个升级有兼容回归和回滚点；本地 audit 与 PR review 独立记录",
+          "执行目标回归、完整门禁，并把真实产物写入 .data/repair-evidence/R2-02.07/<YYYYMMDD-HHMMSS>/"
+        ],
+        "failingRegression": "生产依赖仍有未接受中高危或PR未留下独立审查记录",
+        "targetedChecks": [
+          "pnpm.cmd audit --prod",
+          "node test-production-dependency-audit-scope.mjs",
+          "pnpm.cmd run check:gate"
+        ],
+        "realEvidence": "必须保存与“无未接受高/中危；每个升级有兼容回归和回滚点；本地 audit 与 PR review 独立记录”直接对应的真实输出、日志、页面或媒体证据，不能用代码存在代替。",
+        "prohibitedShortcuts": [
+          "不得以提示词、延时、默认值、假数据或静态断言掩盖根因",
+          "不得修改第一轮总表、第一轮证据或第一轮两次状态机",
+          "不得触碰 MoneyPrinterTurbo 子模块内部；相关项只改主程序集成边界",
+          "不得把四次失败待最终收尾计为完成或满足硬门禁"
+        ],
+        "rollback": "只回滚本项目明确列出的本轮文件；先保护用户数据、历史输出、设置、SQLite、证据和子模块指针。",
+        "escalation": "连续第 4 次完整维修复验仍失败时登记为四次失败待最终收尾并推进；禁止第 5 次普通维修。"
+      },
+      "run": {
+        "sourceAnchors": [
+          "package.json",
+          "pnpm-lock.yaml",
+          "server/core/ssrf-guard.mjs",
+          "test-ssrf-guard.mjs",
+          "scripts/release-gate.mjs",
+          "scripts/service-restart.mjs",
+          "docs/"
+        ],
+        "commands": [
+          "pnpm.cmd audit --prod",
+          "node test-production-dependency-audit-scope.mjs",
+          "pnpm.cmd run check:gate"
+        ],
+        "testToAdd": "test-production-dependency-audit-scope.mjs",
+        "requiredEvidence": "无未接受高/中危；每个升级有兼容回归和回滚点；本地 audit 与 PR review 独立记录",
+        "evidenceDir": ".data/repair-evidence/R2-02.07/<YYYYMMDD-HHMMSS>/"
+      }
+    },
+    {
+      "id": "R2-03.01",
+      "card": {
+        "scope": "本地发布｜全新隔离目录冻结安装",
+        "verificationMode": "release-local",
+        "orderedActions": [
+          "冻结 R2-03.01 开工时的 Git、运行状态、输入与输出证据",
+          "沿 package.json、scripts/release-gate.mjs、scripts/service-restart.mjs、docs/、.data/repair-evidence/R2-CLEANUP-AUDIT/、.gitignore 定位真实状态所有者和调用链",
+          "建立失败判据：test-isolated-frozen-install.mjs 在修复前稳定失败",
+          "逐项复验完成判定：不复制本地状态/密钥/依赖；冻结安装、postinstall、基础门禁通过",
+          "执行目标回归、完整门禁，并把真实产物写入 .data/repair-evidence/R2-03.01/<YYYYMMDD-HHMMSS>/"
+        ],
+        "failingRegression": "test-isolated-frozen-install.mjs",
+        "targetedChecks": [
+          "node test-isolated-frozen-install.mjs",
+          "pnpm.cmd run test:gate",
+          "pnpm.cmd run check:gate"
+        ],
+        "realEvidence": "必须保存与“不复制本地状态/密钥/依赖；冻结安装、postinstall、基础门禁通过”直接对应的真实输出、日志、页面或媒体证据，不能用代码存在代替。",
+        "prohibitedShortcuts": [
+          "不得以提示词、延时、默认值、假数据或静态断言掩盖根因",
+          "不得修改第一轮总表、第一轮证据或第一轮两次状态机",
+          "不得触碰 MoneyPrinterTurbo 子模块内部；相关项只改主程序集成边界",
+          "不得把四次失败待最终收尾计为完成或满足硬门禁"
+        ],
+        "rollback": "只回滚本项目明确列出的本轮文件；先保护用户数据、历史输出、设置、SQLite、证据和子模块指针。",
+        "escalation": "连续第 4 次完整维修复验仍失败时登记为四次失败待最终收尾并推进；禁止第 5 次普通维修。"
+      },
+      "run": {
+        "sourceAnchors": [
+          "package.json",
+          "scripts/release-gate.mjs",
+          "scripts/service-restart.mjs",
+          "docs/",
+          ".data/repair-evidence/R2-CLEANUP-AUDIT/",
+          ".gitignore"
+        ],
+        "commands": [
+          "node test-isolated-frozen-install.mjs",
+          "pnpm.cmd run test:gate",
+          "pnpm.cmd run check:gate"
+        ],
+        "testToAdd": "test-isolated-frozen-install.mjs",
+        "requiredEvidence": "不复制本地状态/密钥/依赖；冻结安装、postinstall、基础门禁通过",
+        "evidenceDir": ".data/repair-evidence/R2-03.01/<YYYYMMDD-HHMMSS>/"
+      }
+    },
+    {
+      "id": "R2-03.02",
+      "card": {
+        "scope": "本地发布｜干净浏览器与干净数据发布门禁",
+        "verificationMode": "release-local",
+        "orderedActions": [
+          "冻结 R2-03.02 开工时的 Git、运行状态、输入与输出证据",
+          "沿 package.json、pnpm-lock.yaml、server/core/ssrf-guard.mjs、test-ssrf-guard.mjs、scripts/release-gate.mjs、scripts/service-restart.mjs、docs/ 定位真实状态所有者和调用链",
+          "建立失败判据：test-clean-browser-release-gate.mjs 在修复前稳定失败",
+          "逐项复验完成判定：完整 F01–F24、41 项、媒体、重启、安全通过；external 单独报告",
+          "执行目标回归、完整门禁，并把真实产物写入 .data/repair-evidence/R2-03.02/<YYYYMMDD-HHMMSS>/"
+        ],
+        "failingRegression": "test-clean-browser-release-gate.mjs",
+        "targetedChecks": [
+          "node test-clean-browser-release-gate.mjs",
+          "node test-round2-complete-runner.mjs",
+          "pnpm.cmd run check:gate"
+        ],
+        "realEvidence": "必须保存与“完整 F01–F24、41 项、媒体、重启、安全通过；external 单独报告”直接对应的真实输出、日志、页面或媒体证据，不能用代码存在代替。",
+        "prohibitedShortcuts": [
+          "不得以提示词、延时、默认值、假数据或静态断言掩盖根因",
+          "不得修改第一轮总表、第一轮证据或第一轮两次状态机",
+          "不得触碰 MoneyPrinterTurbo 子模块内部；相关项只改主程序集成边界",
+          "不得把四次失败待最终收尾计为完成或满足硬门禁"
+        ],
+        "rollback": "只回滚本项目明确列出的本轮文件；先保护用户数据、历史输出、设置、SQLite、证据和子模块指针。",
+        "escalation": "连续第 4 次完整维修复验仍失败时登记为四次失败待最终收尾并推进；禁止第 5 次普通维修。"
+      },
+      "run": {
+        "sourceAnchors": [
+          "package.json",
+          "pnpm-lock.yaml",
+          "server/core/ssrf-guard.mjs",
+          "test-ssrf-guard.mjs",
+          "scripts/release-gate.mjs",
+          "scripts/service-restart.mjs",
+          "docs/"
+        ],
+        "commands": [
+          "node test-clean-browser-release-gate.mjs",
+          "node test-round2-complete-runner.mjs",
+          "pnpm.cmd run check:gate"
+        ],
+        "testToAdd": "test-clean-browser-release-gate.mjs",
+        "requiredEvidence": "完整 F01–F24、41 项、媒体、重启、安全通过；external 单独报告",
+        "evidenceDir": ".data/repair-evidence/R2-03.02/<YYYYMMDD-HHMMSS>/"
+      }
+    },
+    {
+      "id": "R2-03.03",
+      "card": {
+        "scope": "PR/CI｜整理最小可审查 PR 切片",
+        "verificationMode": "remote-gate",
+        "orderedActions": [
+          "冻结 R2-03.03 开工时的 Git、运行状态、输入与输出证据",
+          "沿 package.json、scripts/release-gate.mjs、scripts/service-restart.mjs、docs/ 定位真实状态所有者和调用链",
+          "建立失败判据：PR候选清单含未授权、敏感、证据、用户资产或子模块文件",
+          "逐项复验完成判定：只含授权文件；不用 `git add -A`；用户确认 staged、迁移、子模块和敏感排除",
+          "执行目标回归、完整门禁，并把真实产物写入 .data/repair-evidence/R2-03.03/<YYYYMMDD-HHMMSS>/"
+        ],
+        "failingRegression": "PR候选清单含未授权、敏感、证据、用户资产或子模块文件",
+        "targetedChecks": [
+          "node test-round2-pr-slice-policy.mjs",
+          "git diff --cached --name-status",
+          "pnpm.cmd run check:gate"
+        ],
+        "realEvidence": "必须保存与“只含授权文件；不用 `git add -A`；用户确认 staged、迁移、子模块和敏感排除”直接对应的真实输出、日志、页面或媒体证据，不能用代码存在代替。",
+        "prohibitedShortcuts": [
+          "不得以提示词、延时、默认值、假数据或静态断言掩盖根因",
+          "不得修改第一轮总表、第一轮证据或第一轮两次状态机",
+          "不得触碰 MoneyPrinterTurbo 子模块内部；相关项只改主程序集成边界",
+          "不得把四次失败待最终收尾计为完成或满足硬门禁"
+        ],
+        "rollback": "只回滚本项目明确列出的本轮文件；先保护用户数据、历史输出、设置、SQLite、证据和子模块指针。",
+        "escalation": "需要人工、账号、付费、PR、CI、main 或用户验收时登记证据；5 分钟无人介入则顺移到其他就绪项。"
+      },
+      "run": {
+        "sourceAnchors": [
+          "package.json",
+          "scripts/release-gate.mjs",
+          "scripts/service-restart.mjs",
+          "docs/"
+        ],
+        "commands": [
+          "node test-round2-pr-slice-policy.mjs",
+          "git diff --cached --name-status",
+          "pnpm.cmd run check:gate"
+        ],
+        "testToAdd": "test-round2-pr-slice-policy.mjs",
+        "requiredEvidence": "只含授权文件；不用 `git add -A`；用户确认 staged、迁移、子模块和敏感排除",
+        "evidenceDir": ".data/repair-evidence/R2-03.03/<YYYYMMDD-HHMMSS>/"
+      }
+    },
+    {
+      "id": "R2-03.04",
+      "card": {
+        "scope": "PR/CI｜当前提交通过远程 CI",
+        "verificationMode": "remote-gate",
+        "orderedActions": [
+          "冻结 R2-03.04 开工时的 Git、运行状态、输入与输出证据",
+          "沿 package.json、scripts/release-gate.mjs、scripts/service-restart.mjs、docs/ 定位真实状态所有者和调用链",
+          "建立失败判据：当前PR head任一必需检查失败、缺失或对应旧提交",
+          "逐项复验完成判定：PR head 与本地候选一致；必需检查和产物可追溯，不使用旧提交绿灯",
+          "执行目标回归、完整门禁，并把真实产物写入 .data/repair-evidence/R2-03.04/<YYYYMMDD-HHMMSS>/"
+        ],
+        "failingRegression": "当前PR head任一必需检查失败、缺失或对应旧提交",
+        "targetedChecks": [
+          "gh pr checks",
+          "gh pr view --json headRefOid,statusCheckRollup",
+          "pnpm.cmd run check:gate"
+        ],
+        "realEvidence": "必须保存与“PR head 与本地候选一致；必需检查和产物可追溯，不使用旧提交绿灯”直接对应的真实输出、日志、页面或媒体证据，不能用代码存在代替。",
+        "prohibitedShortcuts": [
+          "不得以提示词、延时、默认值、假数据或静态断言掩盖根因",
+          "不得修改第一轮总表、第一轮证据或第一轮两次状态机",
+          "不得触碰 MoneyPrinterTurbo 子模块内部；相关项只改主程序集成边界",
+          "不得把四次失败待最终收尾计为完成或满足硬门禁"
+        ],
+        "rollback": "只回滚本项目明确列出的本轮文件；先保护用户数据、历史输出、设置、SQLite、证据和子模块指针。",
+        "escalation": "需要人工、账号、付费、PR、CI、main 或用户验收时登记证据；5 分钟无人介入则顺移到其他就绪项。"
+      },
+      "run": {
+        "sourceAnchors": [
+          "package.json",
+          "scripts/release-gate.mjs",
+          "scripts/service-restart.mjs",
+          "docs/"
+        ],
+        "commands": [
+          "gh pr checks",
+          "gh pr view --json headRefOid,statusCheckRollup",
+          "pnpm.cmd run check:gate"
+        ],
+        "testToAdd": "不新增本地替代：保存 gh pr checks 与当前PR head SHA",
+        "requiredEvidence": "PR head 与本地候选一致；必需检查和产物可追溯，不使用旧提交绿灯",
+        "evidenceDir": ".data/repair-evidence/R2-03.04/<YYYYMMDD-HHMMSS>/"
+      }
+    },
+    {
+      "id": "R2-03.05",
+      "card": {
+        "scope": "正式合并｜合并 `main` 并验证运行版本",
+        "verificationMode": "remote-gate",
+        "orderedActions": [
+          "冻结 R2-03.05 开工时的 Git、运行状态、输入与输出证据",
+          "沿 package.json、pnpm-lock.yaml、server/core/ssrf-guard.mjs、test-ssrf-guard.mjs、scripts/release-gate.mjs、scripts/service-restart.mjs、docs/ 定位真实状态所有者和调用链",
+          "建立失败判据：未授权合并或main运行commit、迁移、锁文件、子模块指针不一致",
+          "逐项复验完成判定：授权合并；安全更新后页面 commit、迁移、锁文件和子模块指针一致",
+          "执行目标回归、完整门禁，并把真实产物写入 .data/repair-evidence/R2-03.05/<YYYYMMDD-HHMMSS>/"
+        ],
+        "failingRegression": "未授权合并或main运行commit、迁移、锁文件、子模块指针不一致",
+        "targetedChecks": [
+          "git rev-parse main",
+          "node test-main-runtime-identity.mjs",
+          "pnpm.cmd run check:gate"
+        ],
+        "realEvidence": "必须保存与“授权合并；安全更新后页面 commit、迁移、锁文件和子模块指针一致”直接对应的真实输出、日志、页面或媒体证据，不能用代码存在代替。",
+        "prohibitedShortcuts": [
+          "不得以提示词、延时、默认值、假数据或静态断言掩盖根因",
+          "不得修改第一轮总表、第一轮证据或第一轮两次状态机",
+          "不得触碰 MoneyPrinterTurbo 子模块内部；相关项只改主程序集成边界",
+          "不得把四次失败待最终收尾计为完成或满足硬门禁"
+        ],
+        "rollback": "只回滚本项目明确列出的本轮文件；先保护用户数据、历史输出、设置、SQLite、证据和子模块指针。",
+        "escalation": "需要人工、账号、付费、PR、CI、main 或用户验收时登记证据；5 分钟无人介入则顺移到其他就绪项。"
+      },
+      "run": {
+        "sourceAnchors": [
+          "package.json",
+          "pnpm-lock.yaml",
+          "server/core/ssrf-guard.mjs",
+          "test-ssrf-guard.mjs",
+          "scripts/release-gate.mjs",
+          "scripts/service-restart.mjs",
+          "docs/"
+        ],
+        "commands": [
+          "git rev-parse main",
+          "node test-main-runtime-identity.mjs",
+          "pnpm.cmd run check:gate"
+        ],
+        "testToAdd": "test-main-runtime-identity.mjs",
+        "requiredEvidence": "授权合并；安全更新后页面 commit、迁移、锁文件和子模块指针一致",
+        "evidenceDir": ".data/repair-evidence/R2-03.05/<YYYYMMDD-HHMMSS>/"
+      }
+    },
+    {
+      "id": "R2-04.01",
+      "card": {
+        "scope": "CS1｜`main` 生成 CS1 三件套",
+        "verificationMode": "production-media",
+        "orderedActions": [
+          "冻结 R2-04.01 开工时的 Git、运行状态、输入与输出证据",
+          "沿 server/tts/、server/tts/tts-handoff-service.mjs、ui/modules/tts-handoff-store.js、ui/workbench.js、server/routes/cs1-video-routes.js、ui/modules/cs1-video.js、skills/cs1/SKILL.md 定位真实状态所有者和调用链",
+          "建立失败判据：本轮三件套真实成片的流、时长、解码、混音特征、asset ID 或预览/下载哈希不满足验收",
+          "逐项复验完成判定：最终文件无 BGM 特征；MP4 可解码且同步；最近生成排除原片备份；预览/下载哈希一致",
+          "执行目标回归、完整门禁，并把真实产物写入 .data/repair-evidence/R2-04.01/<YYYYMMDD-HHMMSS>/"
+        ],
+        "failingRegression": "本轮三件套真实成片的流、时长、解码、混音特征、asset ID 或预览/下载哈希不满足验收",
+        "targetedChecks": [
+          "node scripts/verify-production-media.mjs --line cs1 --artifact <本轮最终文件> --narration <本轮旁白> --report <本项证据目录>/production-media.json",
+          "node test-cs1-complete-acceptance.mjs",
+          "pnpm.cmd run check:gate"
+        ],
+        "realEvidence": "必须保存与“最终文件无 BGM 特征；MP4 可解码且同步；最近生成排除原片备份；预览/下载哈希一致”直接对应的真实输出、日志、页面或媒体证据，不能用代码存在代替。",
+        "prohibitedShortcuts": [
+          "不得以提示词、延时、默认值、假数据或静态断言掩盖根因",
+          "不得修改第一轮总表、第一轮证据或第一轮两次状态机",
+          "不得触碰 MoneyPrinterTurbo 子模块内部；相关项只改主程序集成边界",
+          "不得把四次失败待最终收尾计为完成或满足硬门禁"
+        ],
+        "rollback": "只回滚本项目明确列出的本轮文件；先保护用户数据、历史输出、设置、SQLite、证据和子模块指针。",
+        "escalation": "需要人工、账号、付费、PR、CI、main 或用户验收时登记证据；5 分钟无人介入则顺移到其他就绪项。"
+      },
+      "run": {
+        "sourceAnchors": [
+          "server/tts/",
+          "server/tts/tts-handoff-service.mjs",
+          "ui/modules/tts-handoff-store.js",
+          "ui/workbench.js",
+          "server/routes/cs1-video-routes.js",
+          "ui/modules/cs1-video.js",
+          "skills/cs1/SKILL.md"
+        ],
+        "commands": [
+          "node scripts/verify-production-media.mjs --line cs1 --artifact <本轮最终文件> --narration <本轮旁白> --report <本项证据目录>/production-media.json",
+          "node test-cs1-complete-acceptance.mjs",
+          "pnpm.cmd run check:gate"
+        ],
+        "testToAdd": "test-r2-04-01-production.mjs",
+        "requiredEvidence": "最终文件无 BGM 特征；MP4 可解码且同步；最近生成排除原片备份；预览/下载哈希一致",
+        "evidenceDir": ".data/repair-evidence/R2-04.01/<YYYYMMDD-HHMMSS>/"
+      }
+    },
+    {
+      "id": "R2-04.02",
+      "card": {
+        "scope": "CS1｜`main` 生成 CS1 四件套",
+        "verificationMode": "production-media",
+        "orderedActions": [
+          "冻结 R2-04.02 开工时的 Git、运行状态、输入与输出证据",
+          "沿 server/tts/、server/tts/tts-handoff-service.mjs、ui/modules/tts-handoff-store.js、ui/workbench.js、server/routes/cs1-video-routes.js、ui/modules/cs1-video.js、skills/cs1/SKILL.md 定位真实状态所有者和调用链",
+          "建立失败判据：本轮四件套真实成片的流、时长、解码、混音特征、asset ID 或预览/下载哈希不满足验收",
+          "逐项复验完成判定：最终 MP4 有目标 BGM 特征；响度/淡出/时长通过；输入/输出/预览/下载哈希齐全",
+          "执行目标回归、完整门禁，并把真实产物写入 .data/repair-evidence/R2-04.02/<YYYYMMDD-HHMMSS>/"
+        ],
+        "failingRegression": "本轮四件套真实成片的流、时长、解码、混音特征、asset ID 或预览/下载哈希不满足验收",
+        "targetedChecks": [
+          "node scripts/verify-production-media.mjs --line cs1 --artifact <本轮最终文件> --narration <本轮旁白> --bgm <本轮独立BGM> --report <本项证据目录>/production-media.json",
+          "node test-cs1-complete-acceptance.mjs",
+          "pnpm.cmd run check:gate"
+        ],
+        "realEvidence": "必须保存与“最终 MP4 有目标 BGM 特征；响度/淡出/时长通过；输入/输出/预览/下载哈希齐全”直接对应的真实输出、日志、页面或媒体证据，不能用代码存在代替。",
+        "prohibitedShortcuts": [
+          "不得以提示词、延时、默认值、假数据或静态断言掩盖根因",
+          "不得修改第一轮总表、第一轮证据或第一轮两次状态机",
+          "不得触碰 MoneyPrinterTurbo 子模块内部；相关项只改主程序集成边界",
+          "不得把四次失败待最终收尾计为完成或满足硬门禁"
+        ],
+        "rollback": "只回滚本项目明确列出的本轮文件；先保护用户数据、历史输出、设置、SQLite、证据和子模块指针。",
+        "escalation": "需要人工、账号、付费、PR、CI、main 或用户验收时登记证据；5 分钟无人介入则顺移到其他就绪项。"
+      },
+      "run": {
+        "sourceAnchors": [
+          "server/tts/",
+          "server/tts/tts-handoff-service.mjs",
+          "ui/modules/tts-handoff-store.js",
+          "ui/workbench.js",
+          "server/routes/cs1-video-routes.js",
+          "ui/modules/cs1-video.js",
+          "skills/cs1/SKILL.md"
+        ],
+        "commands": [
+          "node scripts/verify-production-media.mjs --line cs1 --artifact <本轮最终文件> --narration <本轮旁白> --bgm <本轮独立BGM> --report <本项证据目录>/production-media.json",
+          "node test-cs1-complete-acceptance.mjs",
+          "pnpm.cmd run check:gate"
+        ],
+        "testToAdd": "test-r2-04-02-production.mjs",
+        "requiredEvidence": "最终 MP4 有目标 BGM 特征；响度/淡出/时长通过；输入/输出/预览/下载哈希齐全",
+        "evidenceDir": ".data/repair-evidence/R2-04.02/<YYYYMMDD-HHMMSS>/"
+      }
+    },
+    {
+      "id": "R2-04.03",
+      "card": {
+        "scope": "小黑｜`main` 生成小黑三件套",
+        "verificationMode": "production-media",
+        "orderedActions": [
+          "冻结 R2-04.03 开工时的 Git、运行状态、输入与输出证据",
+          "沿 server/tts/、server/tts/tts-handoff-service.mjs、ui/modules/tts-handoff-store.js、ui/workbench.js、server/routes/ian-xiaohei-routes.js、server/xiaohei-video-renderer.js、ui/modules/xiaohei-production.js、server/image/image-service.js、ui/modules/ian-xiaohei-app.js 定位真实状态所有者和调用链",
+          "建立失败判据：本轮三件套真实成片的流、时长、解码、混音特征、asset ID 或预览/下载哈希不满足验收",
+          "逐项复验完成判定：无 BGM 特征；图片/字幕/旁白同步；1.0/1.1/1.2/1.3 四档矩阵完整",
+          "执行目标回归、完整门禁，并把真实产物写入 .data/repair-evidence/R2-04.03/<YYYYMMDD-HHMMSS>/"
+        ],
+        "failingRegression": "本轮三件套真实成片的流、时长、解码、混音特征、asset ID 或预览/下载哈希不满足验收",
+        "targetedChecks": [
+          "node scripts/verify-production-media.mjs --line xiaohei --artifact <本轮最终文件> --narration <本轮旁白> --report <本项证据目录>/production-media.json",
+          "node test-xiaohei-sync-matrix.mjs",
+          "pnpm.cmd run check:gate"
+        ],
+        "realEvidence": "必须保存与“无 BGM 特征；图片/字幕/旁白同步；1.0/1.1/1.2/1.3 四档矩阵完整”直接对应的真实输出、日志、页面或媒体证据，不能用代码存在代替。",
+        "prohibitedShortcuts": [
+          "不得以提示词、延时、默认值、假数据或静态断言掩盖根因",
+          "不得修改第一轮总表、第一轮证据或第一轮两次状态机",
+          "不得触碰 MoneyPrinterTurbo 子模块内部；相关项只改主程序集成边界",
+          "不得把四次失败待最终收尾计为完成或满足硬门禁"
+        ],
+        "rollback": "只回滚本项目明确列出的本轮文件；先保护用户数据、历史输出、设置、SQLite、证据和子模块指针。",
+        "escalation": "需要人工、账号、付费、PR、CI、main 或用户验收时登记证据；5 分钟无人介入则顺移到其他就绪项。"
+      },
+      "run": {
+        "sourceAnchors": [
+          "server/tts/",
+          "server/tts/tts-handoff-service.mjs",
+          "ui/modules/tts-handoff-store.js",
+          "ui/workbench.js",
+          "server/routes/ian-xiaohei-routes.js",
+          "server/xiaohei-video-renderer.js",
+          "ui/modules/xiaohei-production.js",
+          "server/image/image-service.js",
+          "ui/modules/ian-xiaohei-app.js"
+        ],
+        "commands": [
+          "node scripts/verify-production-media.mjs --line xiaohei --artifact <本轮最终文件> --narration <本轮旁白> --report <本项证据目录>/production-media.json",
+          "node test-xiaohei-sync-matrix.mjs",
+          "pnpm.cmd run check:gate"
+        ],
+        "testToAdd": "test-r2-04-03-production.mjs",
+        "requiredEvidence": "无 BGM 特征；图片/字幕/旁白同步；1.0/1.1/1.2/1.3 四档矩阵完整",
+        "evidenceDir": ".data/repair-evidence/R2-04.03/<YYYYMMDD-HHMMSS>/"
+      }
+    },
+    {
+      "id": "R2-04.04",
+      "card": {
+        "scope": "小黑｜`main` 生成小黑四件套",
+        "verificationMode": "production-media",
+        "orderedActions": [
+          "冻结 R2-04.04 开工时的 Git、运行状态、输入与输出证据",
+          "沿 server/tts/、server/tts/tts-handoff-service.mjs、ui/modules/tts-handoff-store.js、ui/workbench.js、server/routes/ian-xiaohei-routes.js、server/xiaohei-video-renderer.js、ui/modules/xiaohei-production.js 定位真实状态所有者和调用链",
+          "建立失败判据：本轮四件套真实成片的流、时长、解码、混音特征、asset ID 或预览/下载哈希不满足验收",
+          "逐项复验完成判定：四档最终文件均有目标 BGM 特征；媒体结束点、响度、淡出、哈希通过",
+          "执行目标回归、完整门禁，并把真实产物写入 .data/repair-evidence/R2-04.04/<YYYYMMDD-HHMMSS>/"
+        ],
+        "failingRegression": "本轮四件套真实成片的流、时长、解码、混音特征、asset ID 或预览/下载哈希不满足验收",
+        "targetedChecks": [
+          "node scripts/verify-production-media.mjs --line xiaohei --artifact <本轮最终文件> --narration <本轮旁白> --bgm <本轮独立BGM> --report <本项证据目录>/production-media.json",
+          "node test-xiaohei-sync-matrix.mjs",
+          "pnpm.cmd run check:gate"
+        ],
+        "realEvidence": "必须保存与“四档最终文件均有目标 BGM 特征；媒体结束点、响度、淡出、哈希通过”直接对应的真实输出、日志、页面或媒体证据，不能用代码存在代替。",
+        "prohibitedShortcuts": [
+          "不得以提示词、延时、默认值、假数据或静态断言掩盖根因",
+          "不得修改第一轮总表、第一轮证据或第一轮两次状态机",
+          "不得触碰 MoneyPrinterTurbo 子模块内部；相关项只改主程序集成边界",
+          "不得把四次失败待最终收尾计为完成或满足硬门禁"
+        ],
+        "rollback": "只回滚本项目明确列出的本轮文件；先保护用户数据、历史输出、设置、SQLite、证据和子模块指针。",
+        "escalation": "需要人工、账号、付费、PR、CI、main 或用户验收时登记证据；5 分钟无人介入则顺移到其他就绪项。"
+      },
+      "run": {
+        "sourceAnchors": [
+          "server/tts/",
+          "server/tts/tts-handoff-service.mjs",
+          "ui/modules/tts-handoff-store.js",
+          "ui/workbench.js",
+          "server/routes/ian-xiaohei-routes.js",
+          "server/xiaohei-video-renderer.js",
+          "ui/modules/xiaohei-production.js"
+        ],
+        "commands": [
+          "node scripts/verify-production-media.mjs --line xiaohei --artifact <本轮最终文件> --narration <本轮旁白> --bgm <本轮独立BGM> --report <本项证据目录>/production-media.json",
+          "node test-xiaohei-sync-matrix.mjs",
+          "pnpm.cmd run check:gate"
+        ],
+        "testToAdd": "test-r2-04-04-production.mjs",
+        "requiredEvidence": "四档最终文件均有目标 BGM 特征；媒体结束点、响度、淡出、哈希通过",
+        "evidenceDir": ".data/repair-evidence/R2-04.04/<YYYYMMDD-HHMMSS>/"
+      }
+    },
+    {
+      "id": "R2-04.05",
+      "card": {
+        "scope": "MoneyPrinter 集成｜`main` 生成 MoneyPrinter 三件套",
+        "verificationMode": "production-media",
+        "orderedActions": [
+          "冻结 R2-04.05 开工时的 Git、运行状态、输入与输出证据",
+          "沿 server/tts/、server/tts/tts-handoff-service.mjs、ui/modules/tts-handoff-store.js、ui/workbench.js、server/routes/money-printer-routes.js、server/core/money-printer-store.js、ui/modules/money-printer.js、ui/modules/、test-page-lifecycle.mjs 定位真实状态所有者和调用链",
+          "建立失败判据：本轮三件套真实成片的流、时长、解码、混音特征、asset ID 或预览/下载哈希不满足验收",
+          "逐项复验完成判定：仅主程序集成；最终文件无 BGM 特征；包装、轮询、注册、预览/下载、重启通过",
+          "执行目标回归、完整门禁，并把真实产物写入 .data/repair-evidence/R2-04.05/<YYYYMMDD-HHMMSS>/"
+        ],
+        "failingRegression": "本轮三件套真实成片的流、时长、解码、混音特征、asset ID 或预览/下载哈希不满足验收",
+        "targetedChecks": [
+          "node scripts/verify-production-media.mjs --line money-printer --artifact <本轮最终文件> --narration <本轮旁白> --report <本项证据目录>/production-media.json",
+          "node test-money-printer-final-asset-browser.mjs",
+          "pnpm.cmd run check:gate"
+        ],
+        "realEvidence": "必须保存与“仅主程序集成；最终文件无 BGM 特征；包装、轮询、注册、预览/下载、重启通过”直接对应的真实输出、日志、页面或媒体证据，不能用代码存在代替。",
+        "prohibitedShortcuts": [
+          "不得以提示词、延时、默认值、假数据或静态断言掩盖根因",
+          "不得修改第一轮总表、第一轮证据或第一轮两次状态机",
+          "不得触碰 MoneyPrinterTurbo 子模块内部；相关项只改主程序集成边界",
+          "不得把四次失败待最终收尾计为完成或满足硬门禁"
+        ],
+        "rollback": "只回滚本项目明确列出的本轮文件；先保护用户数据、历史输出、设置、SQLite、证据和子模块指针。",
+        "escalation": "需要人工、账号、付费、PR、CI、main 或用户验收时登记证据；5 分钟无人介入则顺移到其他就绪项。"
+      },
+      "run": {
+        "sourceAnchors": [
+          "server/tts/",
+          "server/tts/tts-handoff-service.mjs",
+          "ui/modules/tts-handoff-store.js",
+          "ui/workbench.js",
+          "server/routes/money-printer-routes.js",
+          "server/core/money-printer-store.js",
+          "ui/modules/money-printer.js",
+          "ui/modules/",
+          "test-page-lifecycle.mjs"
+        ],
+        "commands": [
+          "node scripts/verify-production-media.mjs --line money-printer --artifact <本轮最终文件> --narration <本轮旁白> --report <本项证据目录>/production-media.json",
+          "node test-money-printer-final-asset-browser.mjs",
+          "pnpm.cmd run check:gate"
+        ],
+        "testToAdd": "test-r2-04-05-production.mjs",
+        "requiredEvidence": "仅主程序集成；最终文件无 BGM 特征；包装、轮询、注册、预览/下载、重启通过",
+        "evidenceDir": ".data/repair-evidence/R2-04.05/<YYYYMMDD-HHMMSS>/"
+      }
+    },
+    {
+      "id": "R2-04.06",
+      "card": {
+        "scope": "MoneyPrinter 集成｜`main` 生成 MoneyPrinter 四件套",
+        "verificationMode": "production-media",
+        "orderedActions": [
+          "冻结 R2-04.06 开工时的 Git、运行状态、输入与输出证据",
+          "沿 server/tts/、server/tts/tts-handoff-service.mjs、ui/modules/tts-handoff-store.js、ui/workbench.js、server/routes/money-printer-routes.js、server/core/money-printer-store.js、ui/modules/money-printer.js 定位真实状态所有者和调用链",
+          "建立失败判据：本轮四件套真实成片的流、时长、解码、混音特征、asset ID 或预览/下载哈希不满足验收",
+          "逐项复验完成判定：主程序传递 BGM/音量/revision；最终文件有旁白+BGM 特征；不改子模块内部",
+          "执行目标回归、完整门禁，并把真实产物写入 .data/repair-evidence/R2-04.06/<YYYYMMDD-HHMMSS>/"
+        ],
+        "failingRegression": "本轮四件套真实成片的流、时长、解码、混音特征、asset ID 或预览/下载哈希不满足验收",
+        "targetedChecks": [
+          "node scripts/verify-production-media.mjs --line money-printer --artifact <本轮最终文件> --narration <本轮旁白> --bgm <本轮独立BGM> --report <本项证据目录>/production-media.json",
+          "node test-money-printer-final-asset-browser.mjs",
+          "pnpm.cmd run check:gate"
+        ],
+        "realEvidence": "必须保存与“主程序传递 BGM/音量/revision；最终文件有旁白+BGM 特征；不改子模块内部”直接对应的真实输出、日志、页面或媒体证据，不能用代码存在代替。",
+        "prohibitedShortcuts": [
+          "不得以提示词、延时、默认值、假数据或静态断言掩盖根因",
+          "不得修改第一轮总表、第一轮证据或第一轮两次状态机",
+          "不得触碰 MoneyPrinterTurbo 子模块内部；相关项只改主程序集成边界",
+          "不得把四次失败待最终收尾计为完成或满足硬门禁"
+        ],
+        "rollback": "只回滚本项目明确列出的本轮文件；先保护用户数据、历史输出、设置、SQLite、证据和子模块指针。",
+        "escalation": "需要人工、账号、付费、PR、CI、main 或用户验收时登记证据；5 分钟无人介入则顺移到其他就绪项。"
+      },
+      "run": {
+        "sourceAnchors": [
+          "server/tts/",
+          "server/tts/tts-handoff-service.mjs",
+          "ui/modules/tts-handoff-store.js",
+          "ui/workbench.js",
+          "server/routes/money-printer-routes.js",
+          "server/core/money-printer-store.js",
+          "ui/modules/money-printer.js"
+        ],
+        "commands": [
+          "node scripts/verify-production-media.mjs --line money-printer --artifact <本轮最终文件> --narration <本轮旁白> --bgm <本轮独立BGM> --report <本项证据目录>/production-media.json",
+          "node test-money-printer-final-asset-browser.mjs",
+          "pnpm.cmd run check:gate"
+        ],
+        "testToAdd": "test-r2-04-06-production.mjs",
+        "requiredEvidence": "主程序传递 BGM/音量/revision；最终文件有旁白+BGM 特征；不改子模块内部",
+        "evidenceDir": ".data/repair-evidence/R2-04.06/<YYYYMMDD-HHMMSS>/"
+      }
+    },
+    {
+      "id": "R2-04.07",
+      "card": {
+        "scope": "动态大字｜`main` 生成动态大字三件套",
+        "verificationMode": "production-media",
+        "orderedActions": [
+          "冻结 R2-04.07 开工时的 Git、运行状态、输入与输出证据",
+          "沿 server/tts/、server/tts/tts-handoff-service.mjs、ui/modules/tts-handoff-store.js、ui/workbench.js、server/kinetic-text/kinetic-text-service.js、server/routes/kinetic-text-routes.js、ui/modules/kinetic-text.js 定位真实状态所有者和调用链",
+          "建立失败判据：本轮三件套真实成片的流、时长、解码、混音特征、asset ID 或预览/下载哈希不满足验收",
+          "逐项复验完成判定：最终文件无 BGM 特征；时间轴/关键词/字幕/旁白/下载通过",
+          "执行目标回归、完整门禁，并把真实产物写入 .data/repair-evidence/R2-04.07/<YYYYMMDD-HHMMSS>/"
+        ],
+        "failingRegression": "本轮三件套真实成片的流、时长、解码、混音特征、asset ID 或预览/下载哈希不满足验收",
+        "targetedChecks": [
+          "node scripts/verify-production-media.mjs --line kinetic-text --artifact <本轮最终文件> --narration <本轮旁白> --report <本项证据目录>/production-media.json",
+          "node test-kinetic-bgm-player-browser.mjs",
+          "pnpm.cmd run check:gate"
+        ],
+        "realEvidence": "必须保存与“最终文件无 BGM 特征；时间轴/关键词/字幕/旁白/下载通过”直接对应的真实输出、日志、页面或媒体证据，不能用代码存在代替。",
+        "prohibitedShortcuts": [
+          "不得以提示词、延时、默认值、假数据或静态断言掩盖根因",
+          "不得修改第一轮总表、第一轮证据或第一轮两次状态机",
+          "不得触碰 MoneyPrinterTurbo 子模块内部；相关项只改主程序集成边界",
+          "不得把四次失败待最终收尾计为完成或满足硬门禁"
+        ],
+        "rollback": "只回滚本项目明确列出的本轮文件；先保护用户数据、历史输出、设置、SQLite、证据和子模块指针。",
+        "escalation": "需要人工、账号、付费、PR、CI、main 或用户验收时登记证据；5 分钟无人介入则顺移到其他就绪项。"
+      },
+      "run": {
+        "sourceAnchors": [
+          "server/tts/",
+          "server/tts/tts-handoff-service.mjs",
+          "ui/modules/tts-handoff-store.js",
+          "ui/workbench.js",
+          "server/kinetic-text/kinetic-text-service.js",
+          "server/routes/kinetic-text-routes.js",
+          "ui/modules/kinetic-text.js"
+        ],
+        "commands": [
+          "node scripts/verify-production-media.mjs --line kinetic-text --artifact <本轮最终文件> --narration <本轮旁白> --report <本项证据目录>/production-media.json",
+          "node test-kinetic-bgm-player-browser.mjs",
+          "pnpm.cmd run check:gate"
+        ],
+        "testToAdd": "test-r2-04-07-production.mjs",
+        "requiredEvidence": "最终文件无 BGM 特征；时间轴/关键词/字幕/旁白/下载通过",
+        "evidenceDir": ".data/repair-evidence/R2-04.07/<YYYYMMDD-HHMMSS>/"
+      }
+    },
+    {
+      "id": "R2-04.08",
+      "card": {
+        "scope": "动态大字｜`main` 生成动态大字四件套",
+        "verificationMode": "production-media",
+        "orderedActions": [
+          "冻结 R2-04.08 开工时的 Git、运行状态、输入与输出证据",
+          "沿 server/tts/、server/tts/tts-handoff-service.mjs、ui/modules/tts-handoff-store.js、ui/workbench.js、server/kinetic-text/kinetic-text-service.js、server/routes/kinetic-text-routes.js、ui/modules/kinetic-text.js 定位真实状态所有者和调用链",
+          "建立失败判据：本轮四件套真实成片的流、时长、解码、混音特征、asset ID 或预览/下载哈希不满足验收",
+          "逐项复验完成判定：seek 同步；最终文件有 BGM 特征；响度/频段/淡出、预览/下载哈希通过",
+          "执行目标回归、完整门禁，并把真实产物写入 .data/repair-evidence/R2-04.08/<YYYYMMDD-HHMMSS>/"
+        ],
+        "failingRegression": "本轮四件套真实成片的流、时长、解码、混音特征、asset ID 或预览/下载哈希不满足验收",
+        "targetedChecks": [
+          "node scripts/verify-production-media.mjs --line kinetic-text --artifact <本轮最终文件> --narration <本轮旁白> --bgm <本轮独立BGM> --report <本项证据目录>/production-media.json",
+          "node test-kinetic-bgm-player-browser.mjs",
+          "pnpm.cmd run check:gate"
+        ],
+        "realEvidence": "必须保存与“seek 同步；最终文件有 BGM 特征；响度/频段/淡出、预览/下载哈希通过”直接对应的真实输出、日志、页面或媒体证据，不能用代码存在代替。",
+        "prohibitedShortcuts": [
+          "不得以提示词、延时、默认值、假数据或静态断言掩盖根因",
+          "不得修改第一轮总表、第一轮证据或第一轮两次状态机",
+          "不得触碰 MoneyPrinterTurbo 子模块内部；相关项只改主程序集成边界",
+          "不得把四次失败待最终收尾计为完成或满足硬门禁"
+        ],
+        "rollback": "只回滚本项目明确列出的本轮文件；先保护用户数据、历史输出、设置、SQLite、证据和子模块指针。",
+        "escalation": "需要人工、账号、付费、PR、CI、main 或用户验收时登记证据；5 分钟无人介入则顺移到其他就绪项。"
+      },
+      "run": {
+        "sourceAnchors": [
+          "server/tts/",
+          "server/tts/tts-handoff-service.mjs",
+          "ui/modules/tts-handoff-store.js",
+          "ui/workbench.js",
+          "server/kinetic-text/kinetic-text-service.js",
+          "server/routes/kinetic-text-routes.js",
+          "ui/modules/kinetic-text.js"
+        ],
+        "commands": [
+          "node scripts/verify-production-media.mjs --line kinetic-text --artifact <本轮最终文件> --narration <本轮旁白> --bgm <本轮独立BGM> --report <本项证据目录>/production-media.json",
+          "node test-kinetic-bgm-player-browser.mjs",
+          "pnpm.cmd run check:gate"
+        ],
+        "testToAdd": "test-r2-04-08-production.mjs",
+        "requiredEvidence": "seek 同步；最终文件有 BGM 特征；响度/频段/淡出、预览/下载哈希通过",
+        "evidenceDir": ".data/repair-evidence/R2-04.08/<YYYYMMDD-HHMMSS>/"
+      }
+    },
+    {
+      "id": "R2-04.09",
+      "card": {
+        "scope": "发布｜生成正式发布清单",
+        "verificationMode": "release-local",
+        "orderedActions": [
+          "冻结 R2-04.09 开工时的 Git、运行状态、输入与输出证据",
+          "沿 package.json、scripts/release-gate.mjs、scripts/service-restart.mjs、docs/ 定位真实状态所有者和调用链",
+          "建立失败判据：test-release-manifest-r2.mjs 在修复前稳定失败",
+          "逐项复验完成判定：版本、commit、依赖、迁移、8 个 asset ID/路径/哈希、限制、历史范围完整",
+          "执行目标回归、完整门禁，并把真实产物写入 .data/repair-evidence/R2-04.09/<YYYYMMDD-HHMMSS>/"
+        ],
+        "failingRegression": "test-release-manifest-r2.mjs",
+        "targetedChecks": [
+          "node test-release-manifest-r2.mjs",
+          "node scripts/release-gate.mjs",
+          "pnpm.cmd run check:gate"
+        ],
+        "realEvidence": "必须保存与“版本、commit、依赖、迁移、8 个 asset ID/路径/哈希、限制、历史范围完整”直接对应的真实输出、日志、页面或媒体证据，不能用代码存在代替。",
+        "prohibitedShortcuts": [
+          "不得以提示词、延时、默认值、假数据或静态断言掩盖根因",
+          "不得修改第一轮总表、第一轮证据或第一轮两次状态机",
+          "不得触碰 MoneyPrinterTurbo 子模块内部；相关项只改主程序集成边界",
+          "不得把四次失败待最终收尾计为完成或满足硬门禁"
+        ],
+        "rollback": "只回滚本项目明确列出的本轮文件；先保护用户数据、历史输出、设置、SQLite、证据和子模块指针。",
+        "escalation": "连续第 4 次完整维修复验仍失败时登记为四次失败待最终收尾并推进；禁止第 5 次普通维修。"
+      },
+      "run": {
+        "sourceAnchors": [
+          "package.json",
+          "scripts/release-gate.mjs",
+          "scripts/service-restart.mjs",
+          "docs/"
+        ],
+        "commands": [
+          "node test-release-manifest-r2.mjs",
+          "node scripts/release-gate.mjs",
+          "pnpm.cmd run check:gate"
+        ],
+        "testToAdd": "test-release-manifest-r2.mjs",
+        "requiredEvidence": "版本、commit、依赖、迁移、8 个 asset ID/路径/哈希、限制、历史范围完整",
+        "evidenceDir": ".data/repair-evidence/R2-04.09/<YYYYMMDD-HHMMSS>/"
+      }
+    },
+    {
+      "id": "R2-04.10",
+      "card": {
+        "scope": "发布｜可恢复真实回滚演练",
+        "verificationMode": "user-assisted",
+        "orderedActions": [
+          "冻结 R2-04.10 开工时的 Git、运行状态、输入与输出证据",
+          "沿 package.json、scripts/release-gate.mjs、scripts/service-restart.mjs、docs/、server/core/settings-center.js、server/core/task-center.js、server/core/final-asset-registry.js、ui-server.mjs 定位真实状态所有者和调用链",
+          "建立失败判据：回滚或恢复演练造成代码、设置、数据库、项目或资产指针丢失",
+          "逐项复验完成判定：先备份；最小回滚与恢复不丢代码、设置、数据库、历史项目或资产指针",
+          "执行目标回归、完整门禁，并把真实产物写入 .data/repair-evidence/R2-04.10/<YYYYMMDD-HHMMSS>/"
+        ],
+        "failingRegression": "回滚或恢复演练造成代码、设置、数据库、项目或资产指针丢失",
+        "targetedChecks": [
+          "node test-round2-rollback-restore.mjs",
+          "pnpm.cmd run test:restart",
+          "pnpm.cmd run check:gate"
+        ],
+        "realEvidence": "必须保存与“先备份；最小回滚与恢复不丢代码、设置、数据库、历史项目或资产指针”直接对应的真实输出、日志、页面或媒体证据，不能用代码存在代替。",
+        "prohibitedShortcuts": [
+          "不得以提示词、延时、默认值、假数据或静态断言掩盖根因",
+          "不得修改第一轮总表、第一轮证据或第一轮两次状态机",
+          "不得触碰 MoneyPrinterTurbo 子模块内部；相关项只改主程序集成边界",
+          "不得把四次失败待最终收尾计为完成或满足硬门禁"
+        ],
+        "rollback": "只回滚本项目明确列出的本轮文件；先保护用户数据、历史输出、设置、SQLite、证据和子模块指针。",
+        "escalation": "需要人工、账号、付费、PR、CI、main 或用户验收时登记证据；5 分钟无人介入则顺移到其他就绪项。"
+      },
+      "run": {
+        "sourceAnchors": [
+          "package.json",
+          "scripts/release-gate.mjs",
+          "scripts/service-restart.mjs",
+          "docs/",
+          "server/core/settings-center.js",
+          "server/core/task-center.js",
+          "server/core/final-asset-registry.js",
+          "ui-server.mjs"
+        ],
+        "commands": [
+          "node test-round2-rollback-restore.mjs",
+          "pnpm.cmd run test:restart",
+          "pnpm.cmd run check:gate"
+        ],
+        "testToAdd": "test-round2-rollback-restore.mjs",
+        "requiredEvidence": "先备份；最小回滚与恢复不丢代码、设置、数据库、历史项目或资产指针",
+        "evidenceDir": ".data/repair-evidence/R2-04.10/<YYYYMMDD-HHMMSS>/"
+      }
+    },
+    {
+      "id": "R2-04.11",
+      "card": {
+        "scope": "发布｜用户最终验收稳定版",
+        "verificationMode": "user-acceptance",
+        "orderedActions": [
+          "冻结 R2-04.11 开工时的 Git、运行状态、输入与输出证据",
+          "沿 package.json、scripts/release-gate.mjs、scripts/service-restart.mjs、docs/、server/core/settings-center.js、server/core/task-center.js、server/core/final-asset-registry.js、ui-server.mjs 定位真实状态所有者和调用链",
+          "建立失败判据：用户尚未按真实工作流明确验收稳定版",
+          "逐项复验完成判定：用户按真实工作流明确确认；未确认不得代签完成",
+          "执行目标回归、完整门禁，并把真实产物写入 .data/repair-evidence/R2-04.11/<YYYYMMDD-HHMMSS>/"
+        ],
+        "failingRegression": "用户尚未按真实工作流明确验收稳定版",
+        "targetedChecks": [
+          "node scripts/release-gate.mjs",
+          "pnpm.cmd run repair:r2:check",
+          "pnpm.cmd run check:gate"
+        ],
+        "realEvidence": "必须保存与“用户按真实工作流明确确认；未确认不得代签完成”直接对应的真实输出、日志、页面或媒体证据，不能用代码存在代替。",
+        "prohibitedShortcuts": [
+          "不得以提示词、延时、默认值、假数据或静态断言掩盖根因",
+          "不得修改第一轮总表、第一轮证据或第一轮两次状态机",
+          "不得触碰 MoneyPrinterTurbo 子模块内部；相关项只改主程序集成边界",
+          "不得把四次失败待最终收尾计为完成或满足硬门禁"
+        ],
+        "rollback": "只回滚本项目明确列出的本轮文件；先保护用户数据、历史输出、设置、SQLite、证据和子模块指针。",
+        "escalation": "需要人工、账号、付费、PR、CI、main 或用户验收时登记证据；5 分钟无人介入则顺移到其他就绪项。"
+      },
+      "run": {
+        "sourceAnchors": [
+          "package.json",
+          "scripts/release-gate.mjs",
+          "scripts/service-restart.mjs",
+          "docs/",
+          "server/core/settings-center.js",
+          "server/core/task-center.js",
+          "server/core/final-asset-registry.js",
+          "ui-server.mjs"
+        ],
+        "commands": [
+          "node scripts/release-gate.mjs",
+          "pnpm.cmd run repair:r2:check",
+          "pnpm.cmd run check:gate"
+        ],
+        "testToAdd": "不新增自动化代签：保存用户确认与对应commit/证据目录",
+        "requiredEvidence": "用户按真实工作流明确确认；未确认不得代签完成",
+        "evidenceDir": ".data/repair-evidence/R2-04.11/<YYYYMMDD-HHMMSS>/"
+      }
+    },
+    {
+      "id": "R2-04.12",
+      "card": {
+        "scope": "清理隔离｜无用文件/死代码可恢复隔离审计",
+        "verificationMode": "cleanup-audit",
+        "orderedActions": [
+          "冻结 R2-04.12 开工时的 Git、运行状态、输入与输出证据",
+          "沿 .data/repair-evidence/R2-CLEANUP-AUDIT/、.gitignore、docs/ 定位真实状态所有者和调用链",
+          "建立失败判据：候选仍有引用、无恢复映射或隔离后任一完整门禁失败",
+          "逐项复验完成判定：四道门槛全通过才可隔离；保存原路径/哈希/恢复；完整门禁、历史项目重开和真实页面通过；本项不永久删除",
+          "执行目标回归、完整门禁，并把真实产物写入 .data/repair-evidence/R2-04.12/<YYYYMMDD-HHMMSS>/"
+        ],
+        "failingRegression": "候选仍有引用、无恢复映射或隔离后任一完整门禁失败",
+        "targetedChecks": [
+          "node test-cleanup-quarantine-roundtrip.mjs",
+          "node test-round2-complete-runner.mjs",
+          "pnpm.cmd run check:gate"
+        ],
+        "realEvidence": "必须保存与“四道门槛全通过才可隔离；保存原路径/哈希/恢复；完整门禁、历史项目重开和真实页面通过；本项不永久删除”直接对应的真实输出、日志、页面或媒体证据，不能用代码存在代替。",
+        "prohibitedShortcuts": [
+          "不得以提示词、延时、默认值、假数据或静态断言掩盖根因",
+          "不得修改第一轮总表、第一轮证据或第一轮两次状态机",
+          "不得触碰 MoneyPrinterTurbo 子模块内部；相关项只改主程序集成边界",
+          "不得把四次失败待最终收尾计为完成或满足硬门禁"
+        ],
+        "rollback": "只回滚本项目明确列出的本轮文件；先保护用户数据、历史输出、设置、SQLite、证据和子模块指针。",
+        "escalation": "需要人工、账号、付费、PR、CI、main 或用户验收时登记证据；5 分钟无人介入则顺移到其他就绪项。"
+      },
+      "run": {
+        "sourceAnchors": [
+          ".data/repair-evidence/R2-CLEANUP-AUDIT/",
+          ".gitignore",
+          "docs/"
+        ],
+        "commands": [
+          "node test-cleanup-quarantine-roundtrip.mjs",
+          "node test-round2-complete-runner.mjs",
+          "pnpm.cmd run check:gate"
+        ],
+        "testToAdd": "test-cleanup-quarantine-roundtrip.mjs",
+        "requiredEvidence": "四道门槛全通过才可隔离；保存原路径/哈希/恢复；完整门禁、历史项目重开和真实页面通过；本项不永久删除",
+        "evidenceDir": ".data/repair-evidence/R2-04.12/<YYYYMMDD-HHMMSS>/"
+      }
+    },
+    {
+      "id": "R2-05.01",
+      "card": {
+        "scope": "结构基线｜冻结合格稳定版契约",
+        "verificationMode": "behavior-preserving-refactor",
+        "orderedActions": [
+          "冻结 R2-05.01 开工时的 Git、运行状态、输入与输出证据",
+          "沿 package.json、scripts/release-gate.mjs、scripts/service-restart.mjs、docs/、server/core/settings-center.js、server/core/task-center.js、server/core/final-asset-registry.js、ui-server.mjs 定位真实状态所有者和调用链",
+          "建立失败判据：test-r2-05-01.mjs 必须在变更前暴露“冻结合格稳定版契约”当前契约缺口或在重构前冻结零行为差异基线",
+          "逐项复验完成判定：以已验收 `main` 记录 UI/API/SQLite/导出/媒体/兼容基线",
+          "执行目标回归、完整门禁，并把真实产物写入 .data/repair-evidence/R2-05.01/<YYYYMMDD-HHMMSS>/"
+        ],
+        "failingRegression": "test-r2-05-01.mjs 必须在变更前暴露“冻结合格稳定版契约”当前契约缺口或在重构前冻结零行为差异基线",
+        "targetedChecks": [
+          "node test-r2-05-01.mjs",
+          "pnpm.cmd run check:gate"
+        ],
+        "realEvidence": "必须保存与“以已验收 `main` 记录 UI/API/SQLite/导出/媒体/兼容基线”直接对应的真实输出、日志、页面或媒体证据，不能用代码存在代替。",
+        "prohibitedShortcuts": [
+          "不得以提示词、延时、默认值、假数据或静态断言掩盖根因",
+          "不得修改第一轮总表、第一轮证据或第一轮两次状态机",
+          "不得触碰 MoneyPrinterTurbo 子模块内部；相关项只改主程序集成边界",
+          "不得把四次失败待最终收尾计为完成或满足硬门禁"
+        ],
+        "rollback": "只回滚本项目明确列出的本轮文件；先保护用户数据、历史输出、设置、SQLite、证据和子模块指针。",
+        "escalation": "需要人工、账号、付费、PR、CI、main 或用户验收时登记证据；5 分钟无人介入则顺移到其他就绪项。"
+      },
+      "run": {
+        "sourceAnchors": [
+          "package.json",
+          "scripts/release-gate.mjs",
+          "scripts/service-restart.mjs",
+          "docs/",
+          "server/core/settings-center.js",
+          "server/core/task-center.js",
+          "server/core/final-asset-registry.js",
+          "ui-server.mjs"
+        ],
+        "commands": [
+          "node test-r2-05-01.mjs",
+          "pnpm.cmd run check:gate"
+        ],
+        "testToAdd": "test-r2-05-01.mjs",
+        "requiredEvidence": "以已验收 `main` 记录 UI/API/SQLite/导出/媒体/兼容基线",
+        "evidenceDir": ".data/repair-evidence/R2-05.01/<YYYYMMDD-HHMMSS>/"
+      }
+    },
+    {
+      "id": "R2-05.02",
+      "card": {
+        "scope": "结构-内容｜文案改写单一状态所有者",
+        "verificationMode": "behavior-preserving-refactor",
+        "orderedActions": [
+          "冻结 R2-05.02 开工时的 Git、运行状态、输入与输出证据",
+          "沿 ui/workbench.js、ui/modules/legacy-runtime.js、ui-server.mjs、server/core/settings-center.js、server/core/task-center.js、server/core/final-asset-registry.js 定位真实状态所有者和调用链",
+          "建立失败判据：test-r2-05-02.mjs 必须在变更前暴露“文案改写单一状态所有者”当前契约缺口或在重构前冻结零行为差异基线",
+          "逐项复验完成判定：独立模块和作用域草稿；改写/切任务/刷新/handoff 零行为差异",
+          "执行目标回归、完整门禁，并把真实产物写入 .data/repair-evidence/R2-05.02/<YYYYMMDD-HHMMSS>/"
+        ],
+        "failingRegression": "test-r2-05-02.mjs 必须在变更前暴露“文案改写单一状态所有者”当前契约缺口或在重构前冻结零行为差异基线",
+        "targetedChecks": [
+          "node test-r2-05-02.mjs",
+          "pnpm.cmd run check:gate"
+        ],
+        "realEvidence": "必须保存与“独立模块和作用域草稿；改写/切任务/刷新/handoff 零行为差异”直接对应的真实输出、日志、页面或媒体证据，不能用代码存在代替。",
+        "prohibitedShortcuts": [
+          "不得以提示词、延时、默认值、假数据或静态断言掩盖根因",
+          "不得修改第一轮总表、第一轮证据或第一轮两次状态机",
+          "不得触碰 MoneyPrinterTurbo 子模块内部；相关项只改主程序集成边界",
+          "不得把四次失败待最终收尾计为完成或满足硬门禁"
+        ],
+        "rollback": "只回滚本项目明确列出的本轮文件；先保护用户数据、历史输出、设置、SQLite、证据和子模块指针。",
+        "escalation": "连续第 4 次完整维修复验仍失败时登记为四次失败待最终收尾并推进；禁止第 5 次普通维修。"
+      },
+      "run": {
+        "sourceAnchors": [
+          "ui/workbench.js",
+          "ui/modules/legacy-runtime.js",
+          "ui-server.mjs",
+          "server/core/settings-center.js",
+          "server/core/task-center.js",
+          "server/core/final-asset-registry.js"
+        ],
+        "commands": [
+          "node test-r2-05-02.mjs",
+          "pnpm.cmd run check:gate"
+        ],
+        "testToAdd": "test-r2-05-02.mjs",
+        "requiredEvidence": "独立模块和作用域草稿；改写/切任务/刷新/handoff 零行为差异",
+        "evidenceDir": ".data/repair-evidence/R2-05.02/<YYYYMMDD-HHMMSS>/"
+      }
+    },
+    {
+      "id": "R2-05.03",
+      "card": {
+        "scope": "结构-内容｜朋友圈单一状态所有者",
+        "verificationMode": "behavior-preserving-refactor",
+        "orderedActions": [
+          "冻结 R2-05.03 开工时的 Git、运行状态、输入与输出证据",
+          "沿 ui/workbench.js、ui/modules/legacy-runtime.js、ui-server.mjs、server/image/image-service.js、server/routes/ian-xiaohei-routes.js、ui/modules/ian-xiaohei-app.js 定位真实状态所有者和调用链",
+          "建立失败判据：test-r2-05-03.mjs 必须在变更前暴露“朋友圈单一状态所有者”当前契约缺口或在重构前冻结零行为差异基线",
+          "逐项复验完成判定：原文/改写/表情/图片提示/草稿/复制/导航通过，不共享可变状态",
+          "执行目标回归、完整门禁，并把真实产物写入 .data/repair-evidence/R2-05.03/<YYYYMMDD-HHMMSS>/"
+        ],
+        "failingRegression": "test-r2-05-03.mjs 必须在变更前暴露“朋友圈单一状态所有者”当前契约缺口或在重构前冻结零行为差异基线",
+        "targetedChecks": [
+          "node test-r2-05-03.mjs",
+          "pnpm.cmd run check:gate"
+        ],
+        "realEvidence": "必须保存与“原文/改写/表情/图片提示/草稿/复制/导航通过，不共享可变状态”直接对应的真实输出、日志、页面或媒体证据，不能用代码存在代替。",
+        "prohibitedShortcuts": [
+          "不得以提示词、延时、默认值、假数据或静态断言掩盖根因",
+          "不得修改第一轮总表、第一轮证据或第一轮两次状态机",
+          "不得触碰 MoneyPrinterTurbo 子模块内部；相关项只改主程序集成边界",
+          "不得把四次失败待最终收尾计为完成或满足硬门禁"
+        ],
+        "rollback": "只回滚本项目明确列出的本轮文件；先保护用户数据、历史输出、设置、SQLite、证据和子模块指针。",
+        "escalation": "连续第 4 次完整维修复验仍失败时登记为四次失败待最终收尾并推进；禁止第 5 次普通维修。"
+      },
+      "run": {
+        "sourceAnchors": [
+          "ui/workbench.js",
+          "ui/modules/legacy-runtime.js",
+          "ui-server.mjs",
+          "server/image/image-service.js",
+          "server/routes/ian-xiaohei-routes.js",
+          "ui/modules/ian-xiaohei-app.js"
+        ],
+        "commands": [
+          "node test-r2-05-03.mjs",
+          "pnpm.cmd run check:gate"
+        ],
+        "testToAdd": "test-r2-05-03.mjs",
+        "requiredEvidence": "原文/改写/表情/图片提示/草稿/复制/导航通过，不共享可变状态",
+        "evidenceDir": ".data/repair-evidence/R2-05.03/<YYYYMMDD-HHMMSS>/"
+      }
+    },
+    {
+      "id": "R2-05.04",
+      "card": {
+        "scope": "结构-TTS｜TTS 任务页单一状态所有者",
+        "verificationMode": "behavior-preserving-refactor",
+        "orderedActions": [
+          "冻结 R2-05.04 开工时的 Git、运行状态、输入与输出证据",
+          "沿 server/tts/、server/tts/tts-handoff-service.mjs、ui/modules/tts-handoff-store.js、ui/workbench.js、server/core/settings-center.js、server/core/task-center.js、server/core/final-asset-registry.js、ui-server.mjs 定位真实状态所有者和调用链",
+          "建立失败判据：test-r2-05-04.mjs 必须在变更前暴露“TTS 任务页单一状态所有者”当前契约缺口或在重构前冻结零行为差异基线",
+          "逐项复验完成判定：历史/播放/切换/隐藏删除/刷新/字幕/handoff 不依赖全局 DOM 扫描",
+          "执行目标回归、完整门禁，并把真实产物写入 .data/repair-evidence/R2-05.04/<YYYYMMDD-HHMMSS>/"
+        ],
+        "failingRegression": "test-r2-05-04.mjs 必须在变更前暴露“TTS 任务页单一状态所有者”当前契约缺口或在重构前冻结零行为差异基线",
+        "targetedChecks": [
+          "node test-r2-05-04.mjs",
+          "pnpm.cmd run check:gate"
+        ],
+        "realEvidence": "必须保存与“历史/播放/切换/隐藏删除/刷新/字幕/handoff 不依赖全局 DOM 扫描”直接对应的真实输出、日志、页面或媒体证据，不能用代码存在代替。",
+        "prohibitedShortcuts": [
+          "不得以提示词、延时、默认值、假数据或静态断言掩盖根因",
+          "不得修改第一轮总表、第一轮证据或第一轮两次状态机",
+          "不得触碰 MoneyPrinterTurbo 子模块内部；相关项只改主程序集成边界",
+          "不得把四次失败待最终收尾计为完成或满足硬门禁"
+        ],
+        "rollback": "只回滚本项目明确列出的本轮文件；先保护用户数据、历史输出、设置、SQLite、证据和子模块指针。",
+        "escalation": "连续第 4 次完整维修复验仍失败时登记为四次失败待最终收尾并推进；禁止第 5 次普通维修。"
+      },
+      "run": {
+        "sourceAnchors": [
+          "server/tts/",
+          "server/tts/tts-handoff-service.mjs",
+          "ui/modules/tts-handoff-store.js",
+          "ui/workbench.js",
+          "server/core/settings-center.js",
+          "server/core/task-center.js",
+          "server/core/final-asset-registry.js",
+          "ui-server.mjs"
+        ],
+        "commands": [
+          "node test-r2-05-04.mjs",
+          "pnpm.cmd run check:gate"
+        ],
+        "testToAdd": "test-r2-05-04.mjs",
+        "requiredEvidence": "历史/播放/切换/隐藏删除/刷新/字幕/handoff 不依赖全局 DOM 扫描",
+        "evidenceDir": ".data/repair-evidence/R2-05.04/<YYYYMMDD-HHMMSS>/"
+      }
+    },
+    {
+      "id": "R2-05.05",
+      "card": {
+        "scope": "结构-TTS｜BGM 单一状态所有者",
+        "verificationMode": "behavior-preserving-refactor",
+        "orderedActions": [
+          "冻结 R2-05.05 开工时的 Git、运行状态、输入与输出证据",
+          "沿 server/tts/、server/tts/tts-handoff-service.mjs、ui/modules/tts-handoff-store.js、ui/workbench.js 定位真实状态所有者和调用链",
+          "建立失败判据：test-r2-05-05.mjs 必须在变更前暴露“BGM 单一状态所有者”当前契约缺口或在重构前冻结零行为差异基线",
+          "逐项复验完成判定：includeBgm/关联/播放器/进度/音量/持久化只有一套模型",
+          "执行目标回归、完整门禁，并把真实产物写入 .data/repair-evidence/R2-05.05/<YYYYMMDD-HHMMSS>/"
+        ],
+        "failingRegression": "test-r2-05-05.mjs 必须在变更前暴露“BGM 单一状态所有者”当前契约缺口或在重构前冻结零行为差异基线",
+        "targetedChecks": [
+          "node test-r2-05-05.mjs",
+          "pnpm.cmd run check:gate"
+        ],
+        "realEvidence": "必须保存与“includeBgm/关联/播放器/进度/音量/持久化只有一套模型”直接对应的真实输出、日志、页面或媒体证据，不能用代码存在代替。",
+        "prohibitedShortcuts": [
+          "不得以提示词、延时、默认值、假数据或静态断言掩盖根因",
+          "不得修改第一轮总表、第一轮证据或第一轮两次状态机",
+          "不得触碰 MoneyPrinterTurbo 子模块内部；相关项只改主程序集成边界",
+          "不得把四次失败待最终收尾计为完成或满足硬门禁"
+        ],
+        "rollback": "只回滚本项目明确列出的本轮文件；先保护用户数据、历史输出、设置、SQLite、证据和子模块指针。",
+        "escalation": "连续第 4 次完整维修复验仍失败时登记为四次失败待最终收尾并推进；禁止第 5 次普通维修。"
+      },
+      "run": {
+        "sourceAnchors": [
+          "server/tts/",
+          "server/tts/tts-handoff-service.mjs",
+          "ui/modules/tts-handoff-store.js",
+          "ui/workbench.js"
+        ],
+        "commands": [
+          "node test-r2-05-05.mjs",
+          "pnpm.cmd run check:gate"
+        ],
+        "testToAdd": "test-r2-05-05.mjs",
+        "requiredEvidence": "includeBgm/关联/播放器/进度/音量/持久化只有一套模型",
+        "evidenceDir": ".data/repair-evidence/R2-05.05/<YYYYMMDD-HHMMSS>/"
+      }
+    },
+    {
+      "id": "R2-05.06",
+      "card": {
+        "scope": "结构-媒体｜公共媒体契约与验证接口",
+        "verificationMode": "behavior-preserving-refactor",
+        "orderedActions": [
+          "冻结 R2-05.06 开工时的 Git、运行状态、输入与输出证据",
+          "沿 ui-server.mjs、ui/workbench.js、server/core/ 定位真实状态所有者和调用链",
+          "建立失败判据：test-r2-05-06.mjs 必须在变更前暴露“公共媒体契约与验证接口”当前契约缺口或在重构前冻结零行为差异基线",
+          "逐项复验完成判定：音量/时长/淡出/asset/receipt/预览下载/schema 只定义一份，各线策略独立",
+          "执行目标回归、完整门禁，并把真实产物写入 .data/repair-evidence/R2-05.06/<YYYYMMDD-HHMMSS>/"
+        ],
+        "failingRegression": "test-r2-05-06.mjs 必须在变更前暴露“公共媒体契约与验证接口”当前契约缺口或在重构前冻结零行为差异基线",
+        "targetedChecks": [
+          "node test-r2-05-06.mjs",
+          "pnpm.cmd run check:gate"
+        ],
+        "realEvidence": "必须保存与“音量/时长/淡出/asset/receipt/预览下载/schema 只定义一份，各线策略独立”直接对应的真实输出、日志、页面或媒体证据，不能用代码存在代替。",
+        "prohibitedShortcuts": [
+          "不得以提示词、延时、默认值、假数据或静态断言掩盖根因",
+          "不得修改第一轮总表、第一轮证据或第一轮两次状态机",
+          "不得触碰 MoneyPrinterTurbo 子模块内部；相关项只改主程序集成边界",
+          "不得把四次失败待最终收尾计为完成或满足硬门禁"
+        ],
+        "rollback": "只回滚本项目明确列出的本轮文件；先保护用户数据、历史输出、设置、SQLite、证据和子模块指针。",
+        "escalation": "连续第 4 次完整维修复验仍失败时登记为四次失败待最终收尾并推进；禁止第 5 次普通维修。"
+      },
+      "run": {
+        "sourceAnchors": [
+          "ui-server.mjs",
+          "ui/workbench.js",
+          "server/core/"
+        ],
+        "commands": [
+          "node test-r2-05-06.mjs",
+          "pnpm.cmd run check:gate"
+        ],
+        "testToAdd": "test-r2-05-06.mjs",
+        "requiredEvidence": "音量/时长/淡出/asset/receipt/预览下载/schema 只定义一份，各线策略独立",
+        "evidenceDir": ".data/repair-evidence/R2-05.06/<YYYYMMDD-HHMMSS>/"
+      }
+    },
+    {
+      "id": "R2-05.07",
+      "card": {
+        "scope": "结构-媒体｜CS1 迁移公共媒体层",
+        "verificationMode": "behavior-preserving-refactor",
+        "orderedActions": [
+          "冻结 R2-05.07 开工时的 Git、运行状态、输入与输出证据",
+          "沿 server/routes/cs1-video-routes.js、ui/modules/cs1-video.js、skills/cs1/SKILL.md、package.json、pnpm-lock.yaml、server/core/ssrf-guard.mjs、test-ssrf-guard.mjs 定位真实状态所有者和调用链",
+          "建立失败判据：test-r2-05-07.mjs 必须在变更前暴露“CS1 迁移公共媒体层”当前契约缺口或在重构前冻结零行为差异基线",
+          "逐项复验完成判定：三/四件套、重试、manifest 和安全替换零行为差异",
+          "执行目标回归、完整门禁，并把真实产物写入 .data/repair-evidence/R2-05.07/<YYYYMMDD-HHMMSS>/"
+        ],
+        "failingRegression": "test-r2-05-07.mjs 必须在变更前暴露“CS1 迁移公共媒体层”当前契约缺口或在重构前冻结零行为差异基线",
+        "targetedChecks": [
+          "node test-r2-05-07.mjs",
+          "pnpm.cmd run check:gate"
+        ],
+        "realEvidence": "必须保存与“三/四件套、重试、manifest 和安全替换零行为差异”直接对应的真实输出、日志、页面或媒体证据，不能用代码存在代替。",
+        "prohibitedShortcuts": [
+          "不得以提示词、延时、默认值、假数据或静态断言掩盖根因",
+          "不得修改第一轮总表、第一轮证据或第一轮两次状态机",
+          "不得触碰 MoneyPrinterTurbo 子模块内部；相关项只改主程序集成边界",
+          "不得把四次失败待最终收尾计为完成或满足硬门禁"
+        ],
+        "rollback": "只回滚本项目明确列出的本轮文件；先保护用户数据、历史输出、设置、SQLite、证据和子模块指针。",
+        "escalation": "连续第 4 次完整维修复验仍失败时登记为四次失败待最终收尾并推进；禁止第 5 次普通维修。"
+      },
+      "run": {
+        "sourceAnchors": [
+          "server/routes/cs1-video-routes.js",
+          "ui/modules/cs1-video.js",
+          "skills/cs1/SKILL.md",
+          "package.json",
+          "pnpm-lock.yaml",
+          "server/core/ssrf-guard.mjs",
+          "test-ssrf-guard.mjs"
+        ],
+        "commands": [
+          "node test-r2-05-07.mjs",
+          "pnpm.cmd run check:gate"
+        ],
+        "testToAdd": "test-r2-05-07.mjs",
+        "requiredEvidence": "三/四件套、重试、manifest 和安全替换零行为差异",
+        "evidenceDir": ".data/repair-evidence/R2-05.07/<YYYYMMDD-HHMMSS>/"
+      }
+    },
+    {
+      "id": "R2-05.08",
+      "card": {
+        "scope": "结构-媒体｜小黑迁移公共媒体层",
+        "verificationMode": "behavior-preserving-refactor",
+        "orderedActions": [
+          "冻结 R2-05.08 开工时的 Git、运行状态、输入与输出证据",
+          "沿 server/tts/、server/tts/tts-handoff-service.mjs、ui/modules/tts-handoff-store.js、ui/workbench.js、server/routes/ian-xiaohei-routes.js、server/xiaohei-video-renderer.js、ui/modules/xiaohei-production.js、server/core/settings-center.js、server/core/task-center.js、server/core/final-asset-registry.js、ui-server.mjs、server/image/image-service.js、ui/modules/ian-xiaohei-app.js 定位真实状态所有者和调用链",
+          "建立失败判据：test-r2-05-08.mjs 必须在变更前暴露“小黑迁移公共媒体层”当前契约缺口或在重构前冻结零行为差异基线",
+          "逐项复验完成判定：图片/倍速/字幕/TTS-BGM 对齐/最终资产零行为差异",
+          "执行目标回归、完整门禁，并把真实产物写入 .data/repair-evidence/R2-05.08/<YYYYMMDD-HHMMSS>/"
+        ],
+        "failingRegression": "test-r2-05-08.mjs 必须在变更前暴露“小黑迁移公共媒体层”当前契约缺口或在重构前冻结零行为差异基线",
+        "targetedChecks": [
+          "node test-r2-05-08.mjs",
+          "pnpm.cmd run check:gate"
+        ],
+        "realEvidence": "必须保存与“图片/倍速/字幕/TTS-BGM 对齐/最终资产零行为差异”直接对应的真实输出、日志、页面或媒体证据，不能用代码存在代替。",
+        "prohibitedShortcuts": [
+          "不得以提示词、延时、默认值、假数据或静态断言掩盖根因",
+          "不得修改第一轮总表、第一轮证据或第一轮两次状态机",
+          "不得触碰 MoneyPrinterTurbo 子模块内部；相关项只改主程序集成边界",
+          "不得把四次失败待最终收尾计为完成或满足硬门禁"
+        ],
+        "rollback": "只回滚本项目明确列出的本轮文件；先保护用户数据、历史输出、设置、SQLite、证据和子模块指针。",
+        "escalation": "连续第 4 次完整维修复验仍失败时登记为四次失败待最终收尾并推进；禁止第 5 次普通维修。"
+      },
+      "run": {
+        "sourceAnchors": [
+          "server/tts/",
+          "server/tts/tts-handoff-service.mjs",
+          "ui/modules/tts-handoff-store.js",
+          "ui/workbench.js",
+          "server/routes/ian-xiaohei-routes.js",
+          "server/xiaohei-video-renderer.js",
+          "ui/modules/xiaohei-production.js",
+          "server/core/settings-center.js",
+          "server/core/task-center.js",
+          "server/core/final-asset-registry.js",
+          "ui-server.mjs",
+          "server/image/image-service.js",
+          "ui/modules/ian-xiaohei-app.js"
+        ],
+        "commands": [
+          "node test-r2-05-08.mjs",
+          "pnpm.cmd run check:gate"
+        ],
+        "testToAdd": "test-r2-05-08.mjs",
+        "requiredEvidence": "图片/倍速/字幕/TTS-BGM 对齐/最终资产零行为差异",
+        "evidenceDir": ".data/repair-evidence/R2-05.08/<YYYYMMDD-HHMMSS>/"
+      }
+    },
+    {
+      "id": "R2-05.09",
+      "card": {
+        "scope": "结构-媒体｜动态大字迁移公共媒体层",
+        "verificationMode": "behavior-preserving-refactor",
+        "orderedActions": [
+          "冻结 R2-05.09 开工时的 Git、运行状态、输入与输出证据",
+          "沿 server/tts/、server/tts/tts-handoff-service.mjs、ui/modules/tts-handoff-store.js、ui/workbench.js、server/kinetic-text/kinetic-text-service.js、server/routes/kinetic-text-routes.js、ui/modules/kinetic-text.js 定位真实状态所有者和调用链",
+          "建立失败判据：test-r2-05-09.mjs 必须在变更前暴露“动态大字迁移公共媒体层”当前契约缺口或在重构前冻结零行为差异基线",
+          "逐项复验完成判定：恢复/预览 seek/BGM/时间轴/渲染零行为差异",
+          "执行目标回归、完整门禁，并把真实产物写入 .data/repair-evidence/R2-05.09/<YYYYMMDD-HHMMSS>/"
+        ],
+        "failingRegression": "test-r2-05-09.mjs 必须在变更前暴露“动态大字迁移公共媒体层”当前契约缺口或在重构前冻结零行为差异基线",
+        "targetedChecks": [
+          "node test-r2-05-09.mjs",
+          "pnpm.cmd run check:gate"
+        ],
+        "realEvidence": "必须保存与“恢复/预览 seek/BGM/时间轴/渲染零行为差异”直接对应的真实输出、日志、页面或媒体证据，不能用代码存在代替。",
+        "prohibitedShortcuts": [
+          "不得以提示词、延时、默认值、假数据或静态断言掩盖根因",
+          "不得修改第一轮总表、第一轮证据或第一轮两次状态机",
+          "不得触碰 MoneyPrinterTurbo 子模块内部；相关项只改主程序集成边界",
+          "不得把四次失败待最终收尾计为完成或满足硬门禁"
+        ],
+        "rollback": "只回滚本项目明确列出的本轮文件；先保护用户数据、历史输出、设置、SQLite、证据和子模块指针。",
+        "escalation": "连续第 4 次完整维修复验仍失败时登记为四次失败待最终收尾并推进；禁止第 5 次普通维修。"
+      },
+      "run": {
+        "sourceAnchors": [
+          "server/tts/",
+          "server/tts/tts-handoff-service.mjs",
+          "ui/modules/tts-handoff-store.js",
+          "ui/workbench.js",
+          "server/kinetic-text/kinetic-text-service.js",
+          "server/routes/kinetic-text-routes.js",
+          "ui/modules/kinetic-text.js"
+        ],
+        "commands": [
+          "node test-r2-05-09.mjs",
+          "pnpm.cmd run check:gate"
+        ],
+        "testToAdd": "test-r2-05-09.mjs",
+        "requiredEvidence": "恢复/预览 seek/BGM/时间轴/渲染零行为差异",
+        "evidenceDir": ".data/repair-evidence/R2-05.09/<YYYYMMDD-HHMMSS>/"
+      }
+    },
+    {
+      "id": "R2-05.10",
+      "card": {
+        "scope": "结构-媒体｜MoneyPrinter 主程序集成迁移",
+        "verificationMode": "behavior-preserving-refactor",
+        "orderedActions": [
+          "冻结 R2-05.10 开工时的 Git、运行状态、输入与输出证据",
+          "沿 server/routes/money-printer-routes.js、server/core/money-printer-store.js、ui/modules/money-printer.js、server/core/settings-center.js、server/core/task-center.js、server/core/final-asset-registry.js、ui-server.mjs、ui/workbench.js、ui/modules/、test-page-lifecycle.mjs 定位真实状态所有者和调用链",
+          "建立失败判据：test-r2-05-10.mjs 必须在变更前暴露“MoneyPrinter 主程序集成迁移”当前契约缺口或在重构前冻结零行为差异基线",
+          "逐项复验完成判定：只改主程序 adapter；包装/轮询/资产 ID/重启零行为差异",
+          "执行目标回归、完整门禁，并把真实产物写入 .data/repair-evidence/R2-05.10/<YYYYMMDD-HHMMSS>/"
+        ],
+        "failingRegression": "test-r2-05-10.mjs 必须在变更前暴露“MoneyPrinter 主程序集成迁移”当前契约缺口或在重构前冻结零行为差异基线",
+        "targetedChecks": [
+          "node test-r2-05-10.mjs",
+          "pnpm.cmd run check:gate"
+        ],
+        "realEvidence": "必须保存与“只改主程序 adapter；包装/轮询/资产 ID/重启零行为差异”直接对应的真实输出、日志、页面或媒体证据，不能用代码存在代替。",
+        "prohibitedShortcuts": [
+          "不得以提示词、延时、默认值、假数据或静态断言掩盖根因",
+          "不得修改第一轮总表、第一轮证据或第一轮两次状态机",
+          "不得触碰 MoneyPrinterTurbo 子模块内部；相关项只改主程序集成边界",
+          "不得把四次失败待最终收尾计为完成或满足硬门禁"
+        ],
+        "rollback": "只回滚本项目明确列出的本轮文件；先保护用户数据、历史输出、设置、SQLite、证据和子模块指针。",
+        "escalation": "连续第 4 次完整维修复验仍失败时登记为四次失败待最终收尾并推进；禁止第 5 次普通维修。"
+      },
+      "run": {
+        "sourceAnchors": [
+          "server/routes/money-printer-routes.js",
+          "server/core/money-printer-store.js",
+          "ui/modules/money-printer.js",
+          "server/core/settings-center.js",
+          "server/core/task-center.js",
+          "server/core/final-asset-registry.js",
+          "ui-server.mjs",
+          "ui/workbench.js",
+          "ui/modules/",
+          "test-page-lifecycle.mjs"
+        ],
+        "commands": [
+          "node test-r2-05-10.mjs",
+          "pnpm.cmd run check:gate"
+        ],
+        "testToAdd": "test-r2-05-10.mjs",
+        "requiredEvidence": "只改主程序 adapter；包装/轮询/资产 ID/重启零行为差异",
+        "evidenceDir": ".data/repair-evidence/R2-05.10/<YYYYMMDD-HHMMSS>/"
+      }
+    },
+    {
+      "id": "R2-05.11",
+      "card": {
+        "scope": "结构-路由｜拆采集/下载/文件路由",
+        "verificationMode": "behavior-preserving-refactor",
+        "orderedActions": [
+          "冻结 R2-05.11 开工时的 Git、运行状态、输入与输出证据",
+          "沿 package.json、pnpm-lock.yaml、server/core/ssrf-guard.mjs、test-ssrf-guard.mjs、ui-server.mjs、server/routes/、server/core/ 定位真实状态所有者和调用链",
+          "建立失败判据：test-r2-05-11.mjs 必须在变更前暴露“拆采集/下载/文件路由”当前契约缺口或在重构前冻结零行为差异基线",
+          "逐项复验完成判定：路径/删除/流式响应安全与真实页面通过",
+          "执行目标回归、完整门禁，并把真实产物写入 .data/repair-evidence/R2-05.11/<YYYYMMDD-HHMMSS>/"
+        ],
+        "failingRegression": "test-r2-05-11.mjs 必须在变更前暴露“拆采集/下载/文件路由”当前契约缺口或在重构前冻结零行为差异基线",
+        "targetedChecks": [
+          "node test-r2-05-11.mjs",
+          "pnpm.cmd run check:gate"
+        ],
+        "realEvidence": "必须保存与“路径/删除/流式响应安全与真实页面通过”直接对应的真实输出、日志、页面或媒体证据，不能用代码存在代替。",
+        "prohibitedShortcuts": [
+          "不得以提示词、延时、默认值、假数据或静态断言掩盖根因",
+          "不得修改第一轮总表、第一轮证据或第一轮两次状态机",
+          "不得触碰 MoneyPrinterTurbo 子模块内部；相关项只改主程序集成边界",
+          "不得把四次失败待最终收尾计为完成或满足硬门禁"
+        ],
+        "rollback": "只回滚本项目明确列出的本轮文件；先保护用户数据、历史输出、设置、SQLite、证据和子模块指针。",
+        "escalation": "连续第 4 次完整维修复验仍失败时登记为四次失败待最终收尾并推进；禁止第 5 次普通维修。"
+      },
+      "run": {
+        "sourceAnchors": [
+          "package.json",
+          "pnpm-lock.yaml",
+          "server/core/ssrf-guard.mjs",
+          "test-ssrf-guard.mjs",
+          "ui-server.mjs",
+          "server/routes/",
+          "server/core/"
+        ],
+        "commands": [
+          "node test-r2-05-11.mjs",
+          "pnpm.cmd run check:gate"
+        ],
+        "testToAdd": "test-r2-05-11.mjs",
+        "requiredEvidence": "路径/删除/流式响应安全与真实页面通过",
+        "evidenceDir": ".data/repair-evidence/R2-05.11/<YYYYMMDD-HHMMSS>/"
+      }
+    },
+    {
+      "id": "R2-05.12",
+      "card": {
+        "scope": "结构-路由｜拆改写/朋友圈路由",
+        "verificationMode": "behavior-preserving-refactor",
+        "orderedActions": [
+          "冻结 R2-05.12 开工时的 Git、运行状态、输入与输出证据",
+          "沿 ui/workbench.js、ui/modules/legacy-runtime.js、ui-server.mjs、server/routes/、server/core/ 定位真实状态所有者和调用链",
+          "建立失败判据：test-r2-05-12.mjs 必须在变更前暴露“拆改写/朋友圈路由”当前契约缺口或在重构前冻结零行为差异基线",
+          "逐项复验完成判定：schema/错误码/草稿/输出兼容，真实页面通过",
+          "执行目标回归、完整门禁，并把真实产物写入 .data/repair-evidence/R2-05.12/<YYYYMMDD-HHMMSS>/"
+        ],
+        "failingRegression": "test-r2-05-12.mjs 必须在变更前暴露“拆改写/朋友圈路由”当前契约缺口或在重构前冻结零行为差异基线",
+        "targetedChecks": [
+          "node test-r2-05-12.mjs",
+          "pnpm.cmd run check:gate"
+        ],
+        "realEvidence": "必须保存与“schema/错误码/草稿/输出兼容，真实页面通过”直接对应的真实输出、日志、页面或媒体证据，不能用代码存在代替。",
+        "prohibitedShortcuts": [
+          "不得以提示词、延时、默认值、假数据或静态断言掩盖根因",
+          "不得修改第一轮总表、第一轮证据或第一轮两次状态机",
+          "不得触碰 MoneyPrinterTurbo 子模块内部；相关项只改主程序集成边界",
+          "不得把四次失败待最终收尾计为完成或满足硬门禁"
+        ],
+        "rollback": "只回滚本项目明确列出的本轮文件；先保护用户数据、历史输出、设置、SQLite、证据和子模块指针。",
+        "escalation": "连续第 4 次完整维修复验仍失败时登记为四次失败待最终收尾并推进；禁止第 5 次普通维修。"
+      },
+      "run": {
+        "sourceAnchors": [
+          "ui/workbench.js",
+          "ui/modules/legacy-runtime.js",
+          "ui-server.mjs",
+          "server/routes/",
+          "server/core/"
+        ],
+        "commands": [
+          "node test-r2-05-12.mjs",
+          "pnpm.cmd run check:gate"
+        ],
+        "testToAdd": "test-r2-05-12.mjs",
+        "requiredEvidence": "schema/错误码/草稿/输出兼容，真实页面通过",
+        "evidenceDir": ".data/repair-evidence/R2-05.12/<YYYYMMDD-HHMMSS>/"
+      }
+    },
+    {
+      "id": "R2-05.13",
+      "card": {
+        "scope": "结构-路由｜拆 TTS/声音/BGM 路由",
+        "verificationMode": "behavior-preserving-refactor",
+        "orderedActions": [
+          "冻结 R2-05.13 开工时的 Git、运行状态、输入与输出证据",
+          "沿 server/tts/、server/tts/tts-handoff-service.mjs、ui/modules/tts-handoff-store.js、ui/workbench.js、ui-server.mjs、server/routes/、server/core/ 定位真实状态所有者和调用链",
+          "建立失败判据：test-r2-05-13.mjs 必须在变更前暴露“拆 TTS/声音/BGM 路由”当前契约缺口或在重构前冻结零行为差异基线",
+          "逐项复验完成判定：adapter/密钥/历史/音频/handoff 契约不变",
+          "执行目标回归、完整门禁，并把真实产物写入 .data/repair-evidence/R2-05.13/<YYYYMMDD-HHMMSS>/"
+        ],
+        "failingRegression": "test-r2-05-13.mjs 必须在变更前暴露“拆 TTS/声音/BGM 路由”当前契约缺口或在重构前冻结零行为差异基线",
+        "targetedChecks": [
+          "node test-r2-05-13.mjs",
+          "pnpm.cmd run check:gate"
+        ],
+        "realEvidence": "必须保存与“adapter/密钥/历史/音频/handoff 契约不变”直接对应的真实输出、日志、页面或媒体证据，不能用代码存在代替。",
+        "prohibitedShortcuts": [
+          "不得以提示词、延时、默认值、假数据或静态断言掩盖根因",
+          "不得修改第一轮总表、第一轮证据或第一轮两次状态机",
+          "不得触碰 MoneyPrinterTurbo 子模块内部；相关项只改主程序集成边界",
+          "不得把四次失败待最终收尾计为完成或满足硬门禁"
+        ],
+        "rollback": "只回滚本项目明确列出的本轮文件；先保护用户数据、历史输出、设置、SQLite、证据和子模块指针。",
+        "escalation": "连续第 4 次完整维修复验仍失败时登记为四次失败待最终收尾并推进；禁止第 5 次普通维修。"
+      },
+      "run": {
+        "sourceAnchors": [
+          "server/tts/",
+          "server/tts/tts-handoff-service.mjs",
+          "ui/modules/tts-handoff-store.js",
+          "ui/workbench.js",
+          "ui-server.mjs",
+          "server/routes/",
+          "server/core/"
+        ],
+        "commands": [
+          "node test-r2-05-13.mjs",
+          "pnpm.cmd run check:gate"
+        ],
+        "testToAdd": "test-r2-05-13.mjs",
+        "requiredEvidence": "adapter/密钥/历史/音频/handoff 契约不变",
+        "evidenceDir": ".data/repair-evidence/R2-05.13/<YYYYMMDD-HHMMSS>/"
+      }
+    },
+    {
+      "id": "R2-05.14",
+      "card": {
+        "scope": "结构-路由｜拆项目/任务/工作流/设置路由",
+        "verificationMode": "behavior-preserving-refactor",
+        "orderedActions": [
+          "冻结 R2-05.14 开工时的 Git、运行状态、输入与输出证据",
+          "沿 server/core/settings-center.js、server/core/task-center.js、server/core/final-asset-registry.js、ui-server.mjs、server/routes/、server/core/ 定位真实状态所有者和调用链",
+          "建立失败判据：test-r2-05-14.mjs 必须在变更前暴露“拆项目/任务/工作流/设置路由”当前契约缺口或在重构前冻结零行为差异基线",
+          "逐项复验完成判定：SQLite/revision/events/并发设置/原子写不变",
+          "执行目标回归、完整门禁，并把真实产物写入 .data/repair-evidence/R2-05.14/<YYYYMMDD-HHMMSS>/"
+        ],
+        "failingRegression": "test-r2-05-14.mjs 必须在变更前暴露“拆项目/任务/工作流/设置路由”当前契约缺口或在重构前冻结零行为差异基线",
+        "targetedChecks": [
+          "node test-r2-05-14.mjs",
+          "pnpm.cmd run check:gate"
+        ],
+        "realEvidence": "必须保存与“SQLite/revision/events/并发设置/原子写不变”直接对应的真实输出、日志、页面或媒体证据，不能用代码存在代替。",
+        "prohibitedShortcuts": [
+          "不得以提示词、延时、默认值、假数据或静态断言掩盖根因",
+          "不得修改第一轮总表、第一轮证据或第一轮两次状态机",
+          "不得触碰 MoneyPrinterTurbo 子模块内部；相关项只改主程序集成边界",
+          "不得把四次失败待最终收尾计为完成或满足硬门禁"
+        ],
+        "rollback": "只回滚本项目明确列出的本轮文件；先保护用户数据、历史输出、设置、SQLite、证据和子模块指针。",
+        "escalation": "连续第 4 次完整维修复验仍失败时登记为四次失败待最终收尾并推进；禁止第 5 次普通维修。"
+      },
+      "run": {
+        "sourceAnchors": [
+          "server/core/settings-center.js",
+          "server/core/task-center.js",
+          "server/core/final-asset-registry.js",
+          "ui-server.mjs",
+          "server/routes/",
+          "server/core/"
+        ],
+        "commands": [
+          "node test-r2-05-14.mjs",
+          "pnpm.cmd run check:gate"
+        ],
+        "testToAdd": "test-r2-05-14.mjs",
+        "requiredEvidence": "SQLite/revision/events/并发设置/原子写不变",
+        "evidenceDir": ".data/repair-evidence/R2-05.14/<YYYYMMDD-HHMMSS>/"
+      }
+    },
+    {
+      "id": "R2-05.15",
+      "card": {
+        "scope": "结构-路由｜拆四线装配路由",
+        "verificationMode": "behavior-preserving-refactor",
+        "orderedActions": [
+          "冻结 R2-05.15 开工时的 Git、运行状态、输入与输出证据",
+          "沿 ui-server.mjs、server/routes/、server/core/ 定位真实状态所有者和调用链",
+          "建立失败判据：test-r2-05-15.mjs 必须在变更前暴露“拆四线装配路由”当前契约缺口或在重构前冻结零行为差异基线",
+          "逐项复验完成判定：每线 adapter 独立，公共媒体统一，现有 URL/方法/响应兼容",
+          "执行目标回归、完整门禁，并把真实产物写入 .data/repair-evidence/R2-05.15/<YYYYMMDD-HHMMSS>/"
+        ],
+        "failingRegression": "test-r2-05-15.mjs 必须在变更前暴露“拆四线装配路由”当前契约缺口或在重构前冻结零行为差异基线",
+        "targetedChecks": [
+          "node test-r2-05-15.mjs",
+          "pnpm.cmd run check:gate"
+        ],
+        "realEvidence": "必须保存与“每线 adapter 独立，公共媒体统一，现有 URL/方法/响应兼容”直接对应的真实输出、日志、页面或媒体证据，不能用代码存在代替。",
+        "prohibitedShortcuts": [
+          "不得以提示词、延时、默认值、假数据或静态断言掩盖根因",
+          "不得修改第一轮总表、第一轮证据或第一轮两次状态机",
+          "不得触碰 MoneyPrinterTurbo 子模块内部；相关项只改主程序集成边界",
+          "不得把四次失败待最终收尾计为完成或满足硬门禁"
+        ],
+        "rollback": "只回滚本项目明确列出的本轮文件；先保护用户数据、历史输出、设置、SQLite、证据和子模块指针。",
+        "escalation": "连续第 4 次完整维修复验仍失败时登记为四次失败待最终收尾并推进；禁止第 5 次普通维修。"
+      },
+      "run": {
+        "sourceAnchors": [
+          "ui-server.mjs",
+          "server/routes/",
+          "server/core/"
+        ],
+        "commands": [
+          "node test-r2-05-15.mjs",
+          "pnpm.cmd run check:gate"
+        ],
+        "testToAdd": "test-r2-05-15.mjs",
+        "requiredEvidence": "每线 adapter 独立，公共媒体统一，现有 URL/方法/响应兼容",
+        "evidenceDir": ".data/repair-evidence/R2-05.15/<YYYYMMDD-HHMMSS>/"
+      }
+    },
+    {
+      "id": "R2-05.16",
+      "card": {
+        "scope": "结构-路由｜拆小黑/图片/Director/APS/VFO 路由族",
+        "verificationMode": "behavior-preserving-refactor",
+        "orderedActions": [
+          "冻结 R2-05.16 开工时的 Git、运行状态、输入与输出证据",
+          "沿 server/routes/ian-xiaohei-routes.js、server/xiaohei-video-renderer.js、ui/modules/xiaohei-production.js、server/image/image-service.js、ui/modules/ian-xiaohei-app.js、ui-server.mjs、server/routes/、server/core/ 定位真实状态所有者和调用链",
+          "建立失败判据：test-r2-05-16.mjs 必须在变更前暴露“拆小黑/图片/Director/APS/VFO 路由族”当前契约缺口或在重构前冻结零行为差异基线",
+          "逐项复验完成判定：各域有独立路由、服务、测试和装配点，不再由单文件承担多域职责",
+          "执行目标回归、完整门禁，并把真实产物写入 .data/repair-evidence/R2-05.16/<YYYYMMDD-HHMMSS>/"
+        ],
+        "failingRegression": "test-r2-05-16.mjs 必须在变更前暴露“拆小黑/图片/Director/APS/VFO 路由族”当前契约缺口或在重构前冻结零行为差异基线",
+        "targetedChecks": [
+          "node test-r2-05-16.mjs",
+          "pnpm.cmd run check:gate"
+        ],
+        "realEvidence": "必须保存与“各域有独立路由、服务、测试和装配点，不再由单文件承担多域职责”直接对应的真实输出、日志、页面或媒体证据，不能用代码存在代替。",
+        "prohibitedShortcuts": [
+          "不得以提示词、延时、默认值、假数据或静态断言掩盖根因",
+          "不得修改第一轮总表、第一轮证据或第一轮两次状态机",
+          "不得触碰 MoneyPrinterTurbo 子模块内部；相关项只改主程序集成边界",
+          "不得把四次失败待最终收尾计为完成或满足硬门禁"
+        ],
+        "rollback": "只回滚本项目明确列出的本轮文件；先保护用户数据、历史输出、设置、SQLite、证据和子模块指针。",
+        "escalation": "连续第 4 次完整维修复验仍失败时登记为四次失败待最终收尾并推进；禁止第 5 次普通维修。"
+      },
+      "run": {
+        "sourceAnchors": [
+          "server/routes/ian-xiaohei-routes.js",
+          "server/xiaohei-video-renderer.js",
+          "ui/modules/xiaohei-production.js",
+          "server/image/image-service.js",
+          "ui/modules/ian-xiaohei-app.js",
+          "ui-server.mjs",
+          "server/routes/",
+          "server/core/"
+        ],
+        "commands": [
+          "node test-r2-05-16.mjs",
+          "pnpm.cmd run check:gate"
+        ],
+        "testToAdd": "test-r2-05-16.mjs",
+        "requiredEvidence": "各域有独立路由、服务、测试和装配点，不再由单文件承担多域职责",
+        "evidenceDir": ".data/repair-evidence/R2-05.16/<YYYYMMDD-HHMMSS>/"
+      }
+    },
+    {
+      "id": "R2-05.17",
+      "card": {
+        "scope": "结构-生命周期｜建立 workbench 导航生命周期",
+        "verificationMode": "behavior-preserving-refactor",
+        "orderedActions": [
+          "冻结 R2-05.17 开工时的 Git、运行状态、输入与输出证据",
+          "沿 ui/workbench.js、ui/modules/、test-page-lifecycle.mjs 定位真实状态所有者和调用链",
+          "建立失败判据：test-r2-05-17.mjs 必须在变更前暴露“建立 workbench 导航生命周期”当前契约缺口或在重构前冻结零行为差异基线",
+          "逐项复验完成判定：页面初始化一次；切页/刷新无重复监听；voices/files 正确",
+          "执行目标回归、完整门禁，并把真实产物写入 .data/repair-evidence/R2-05.17/<YYYYMMDD-HHMMSS>/"
+        ],
+        "failingRegression": "test-r2-05-17.mjs 必须在变更前暴露“建立 workbench 导航生命周期”当前契约缺口或在重构前冻结零行为差异基线",
+        "targetedChecks": [
+          "node test-r2-05-17.mjs",
+          "pnpm.cmd run check:gate"
+        ],
+        "realEvidence": "必须保存与“页面初始化一次；切页/刷新无重复监听；voices/files 正确”直接对应的真实输出、日志、页面或媒体证据，不能用代码存在代替。",
+        "prohibitedShortcuts": [
+          "不得以提示词、延时、默认值、假数据或静态断言掩盖根因",
+          "不得修改第一轮总表、第一轮证据或第一轮两次状态机",
+          "不得触碰 MoneyPrinterTurbo 子模块内部；相关项只改主程序集成边界",
+          "不得把四次失败待最终收尾计为完成或满足硬门禁"
+        ],
+        "rollback": "只回滚本项目明确列出的本轮文件；先保护用户数据、历史输出、设置、SQLite、证据和子模块指针。",
+        "escalation": "连续第 4 次完整维修复验仍失败时登记为四次失败待最终收尾并推进；禁止第 5 次普通维修。"
+      },
+      "run": {
+        "sourceAnchors": [
+          "ui/workbench.js",
+          "ui/modules/",
+          "test-page-lifecycle.mjs"
+        ],
+        "commands": [
+          "node test-r2-05-17.mjs",
+          "pnpm.cmd run check:gate"
+        ],
+        "testToAdd": "test-r2-05-17.mjs",
+        "requiredEvidence": "页面初始化一次；切页/刷新无重复监听；voices/files 正确",
+        "evidenceDir": ".data/repair-evidence/R2-05.17/<YYYYMMDD-HHMMSS>/"
+      }
+    },
+    {
+      "id": "R2-05.18",
+      "card": {
+        "scope": "结构-生命周期｜清理改写/朋友圈旧监听和双轨状态",
+        "verificationMode": "behavior-preserving-refactor",
+        "orderedActions": [
+          "冻结 R2-05.18 开工时的 Git、运行状态、输入与输出证据",
+          "沿 ui/workbench.js、ui/modules/legacy-runtime.js、ui-server.mjs、ui/modules/、test-page-lifecycle.mjs、.data/repair-evidence/R2-CLEANUP-AUDIT/、.gitignore、docs/ 定位真实状态所有者和调用链",
+          "建立失败判据：test-r2-05-18.mjs 必须在变更前暴露“清理改写/朋友圈旧监听和双轨状态”当前契约缺口或在重构前冻结零行为差异基线",
+          "逐项复验完成判定：dispose 无遗留 timer/listener；旧路径只作显式迁移",
+          "执行目标回归、完整门禁，并把真实产物写入 .data/repair-evidence/R2-05.18/<YYYYMMDD-HHMMSS>/"
+        ],
+        "failingRegression": "test-r2-05-18.mjs 必须在变更前暴露“清理改写/朋友圈旧监听和双轨状态”当前契约缺口或在重构前冻结零行为差异基线",
+        "targetedChecks": [
+          "node test-r2-05-18.mjs",
+          "pnpm.cmd run check:gate"
+        ],
+        "realEvidence": "必须保存与“dispose 无遗留 timer/listener；旧路径只作显式迁移”直接对应的真实输出、日志、页面或媒体证据，不能用代码存在代替。",
+        "prohibitedShortcuts": [
+          "不得以提示词、延时、默认值、假数据或静态断言掩盖根因",
+          "不得修改第一轮总表、第一轮证据或第一轮两次状态机",
+          "不得触碰 MoneyPrinterTurbo 子模块内部；相关项只改主程序集成边界",
+          "不得把四次失败待最终收尾计为完成或满足硬门禁"
+        ],
+        "rollback": "只回滚本项目明确列出的本轮文件；先保护用户数据、历史输出、设置、SQLite、证据和子模块指针。",
+        "escalation": "连续第 4 次完整维修复验仍失败时登记为四次失败待最终收尾并推进；禁止第 5 次普通维修。"
+      },
+      "run": {
+        "sourceAnchors": [
+          "ui/workbench.js",
+          "ui/modules/legacy-runtime.js",
+          "ui-server.mjs",
+          "ui/modules/",
+          "test-page-lifecycle.mjs",
+          ".data/repair-evidence/R2-CLEANUP-AUDIT/",
+          ".gitignore",
+          "docs/"
+        ],
+        "commands": [
+          "node test-r2-05-18.mjs",
+          "pnpm.cmd run check:gate"
+        ],
+        "testToAdd": "test-r2-05-18.mjs",
+        "requiredEvidence": "dispose 无遗留 timer/listener；旧路径只作显式迁移",
+        "evidenceDir": ".data/repair-evidence/R2-05.18/<YYYYMMDD-HHMMSS>/"
+      }
+    },
+    {
+      "id": "R2-05.19",
+      "card": {
+        "scope": "结构-生命周期｜清理 TTS/BGM 旧监听和双轨状态",
+        "verificationMode": "behavior-preserving-refactor",
+        "orderedActions": [
+          "冻结 R2-05.19 开工时的 Git、运行状态、输入与输出证据",
+          "沿 server/tts/、server/tts/tts-handoff-service.mjs、ui/modules/tts-handoff-store.js、ui/workbench.js、ui/modules/、test-page-lifecycle.mjs、.data/repair-evidence/R2-CLEANUP-AUDIT/、.gitignore、docs/ 定位真实状态所有者和调用链",
+          "建立失败判据：test-r2-05-19.mjs 必须在变更前暴露“清理 TTS/BGM 旧监听和双轨状态”当前契约缺口或在重构前冻结零行为差异基线",
+          "逐项复验完成判定：渲染/播放器/进度/handoff 各一事件源；反复进页不重复",
+          "执行目标回归、完整门禁，并把真实产物写入 .data/repair-evidence/R2-05.19/<YYYYMMDD-HHMMSS>/"
+        ],
+        "failingRegression": "test-r2-05-19.mjs 必须在变更前暴露“清理 TTS/BGM 旧监听和双轨状态”当前契约缺口或在重构前冻结零行为差异基线",
+        "targetedChecks": [
+          "node test-r2-05-19.mjs",
+          "pnpm.cmd run check:gate"
+        ],
+        "realEvidence": "必须保存与“渲染/播放器/进度/handoff 各一事件源；反复进页不重复”直接对应的真实输出、日志、页面或媒体证据，不能用代码存在代替。",
+        "prohibitedShortcuts": [
+          "不得以提示词、延时、默认值、假数据或静态断言掩盖根因",
+          "不得修改第一轮总表、第一轮证据或第一轮两次状态机",
+          "不得触碰 MoneyPrinterTurbo 子模块内部；相关项只改主程序集成边界",
+          "不得把四次失败待最终收尾计为完成或满足硬门禁"
+        ],
+        "rollback": "只回滚本项目明确列出的本轮文件；先保护用户数据、历史输出、设置、SQLite、证据和子模块指针。",
+        "escalation": "连续第 4 次完整维修复验仍失败时登记为四次失败待最终收尾并推进；禁止第 5 次普通维修。"
+      },
+      "run": {
+        "sourceAnchors": [
+          "server/tts/",
+          "server/tts/tts-handoff-service.mjs",
+          "ui/modules/tts-handoff-store.js",
+          "ui/workbench.js",
+          "ui/modules/",
+          "test-page-lifecycle.mjs",
+          ".data/repair-evidence/R2-CLEANUP-AUDIT/",
+          ".gitignore",
+          "docs/"
+        ],
+        "commands": [
+          "node test-r2-05-19.mjs",
+          "pnpm.cmd run check:gate"
+        ],
+        "testToAdd": "test-r2-05-19.mjs",
+        "requiredEvidence": "渲染/播放器/进度/handoff 各一事件源；反复进页不重复",
+        "evidenceDir": ".data/repair-evidence/R2-05.19/<YYYYMMDD-HHMMSS>/"
+      }
+    },
+    {
+      "id": "R2-05.20",
+      "card": {
+        "scope": "结构-生命周期｜清理动态大字监听/RAF/timer/媒体对象",
+        "verificationMode": "behavior-preserving-refactor",
+        "orderedActions": [
+          "冻结 R2-05.20 开工时的 Git、运行状态、输入与输出证据",
+          "沿 server/kinetic-text/kinetic-text-service.js、server/routes/kinetic-text-routes.js、ui/modules/kinetic-text.js、ui/workbench.js、ui/modules/、test-page-lifecycle.mjs、.data/repair-evidence/R2-CLEANUP-AUDIT/、.gitignore、docs/ 定位真实状态所有者和调用链",
+          "建立失败判据：test-r2-05-20.mjs 必须在变更前暴露“清理动态大字监听/RAF/timer/媒体对象”当前契约缺口或在重构前冻结零行为差异基线",
+          "逐项复验完成判定：进入/退出/刷新无悬挂 RAF、后台音频或重复处理",
+          "执行目标回归、完整门禁，并把真实产物写入 .data/repair-evidence/R2-05.20/<YYYYMMDD-HHMMSS>/"
+        ],
+        "failingRegression": "test-r2-05-20.mjs 必须在变更前暴露“清理动态大字监听/RAF/timer/媒体对象”当前契约缺口或在重构前冻结零行为差异基线",
+        "targetedChecks": [
+          "node test-r2-05-20.mjs",
+          "pnpm.cmd run check:gate"
+        ],
+        "realEvidence": "必须保存与“进入/退出/刷新无悬挂 RAF、后台音频或重复处理”直接对应的真实输出、日志、页面或媒体证据，不能用代码存在代替。",
+        "prohibitedShortcuts": [
+          "不得以提示词、延时、默认值、假数据或静态断言掩盖根因",
+          "不得修改第一轮总表、第一轮证据或第一轮两次状态机",
+          "不得触碰 MoneyPrinterTurbo 子模块内部；相关项只改主程序集成边界",
+          "不得把四次失败待最终收尾计为完成或满足硬门禁"
+        ],
+        "rollback": "只回滚本项目明确列出的本轮文件；先保护用户数据、历史输出、设置、SQLite、证据和子模块指针。",
+        "escalation": "连续第 4 次完整维修复验仍失败时登记为四次失败待最终收尾并推进；禁止第 5 次普通维修。"
+      },
+      "run": {
+        "sourceAnchors": [
+          "server/kinetic-text/kinetic-text-service.js",
+          "server/routes/kinetic-text-routes.js",
+          "ui/modules/kinetic-text.js",
+          "ui/workbench.js",
+          "ui/modules/",
+          "test-page-lifecycle.mjs",
+          ".data/repair-evidence/R2-CLEANUP-AUDIT/",
+          ".gitignore",
+          "docs/"
+        ],
+        "commands": [
+          "node test-r2-05-20.mjs",
+          "pnpm.cmd run check:gate"
+        ],
+        "testToAdd": "test-r2-05-20.mjs",
+        "requiredEvidence": "进入/退出/刷新无悬挂 RAF、后台音频或重复处理",
+        "evidenceDir": ".data/repair-evidence/R2-05.20/<YYYYMMDD-HHMMSS>/"
+      }
+    },
+    {
+      "id": "R2-05.21",
+      "card": {
+        "scope": "结构-生命周期｜清理 MoneyPrinter 主程序监听与轮询",
+        "verificationMode": "behavior-preserving-refactor",
+        "orderedActions": [
+          "冻结 R2-05.21 开工时的 Git、运行状态、输入与输出证据",
+          "沿 server/routes/money-printer-routes.js、server/core/money-printer-store.js、ui/modules/money-printer.js、server/core/settings-center.js、server/core/task-center.js、server/core/final-asset-registry.js、ui-server.mjs、ui/workbench.js、ui/modules/、test-page-lifecycle.mjs、.data/repair-evidence/R2-CLEANUP-AUDIT/、.gitignore、docs/ 定位真实状态所有者和调用链",
+          "建立失败判据：test-r2-05-21.mjs 必须在变更前暴露“清理 MoneyPrinter 主程序监听与轮询”当前契约缺口或在重构前冻结零行为差异基线",
+          "逐项复验完成判定：单任务单轮询；切页/重启不重复、不串任务；不改子模块内部",
+          "执行目标回归、完整门禁，并把真实产物写入 .data/repair-evidence/R2-05.21/<YYYYMMDD-HHMMSS>/"
+        ],
+        "failingRegression": "test-r2-05-21.mjs 必须在变更前暴露“清理 MoneyPrinter 主程序监听与轮询”当前契约缺口或在重构前冻结零行为差异基线",
+        "targetedChecks": [
+          "node test-r2-05-21.mjs",
+          "pnpm.cmd run check:gate"
+        ],
+        "realEvidence": "必须保存与“单任务单轮询；切页/重启不重复、不串任务；不改子模块内部”直接对应的真实输出、日志、页面或媒体证据，不能用代码存在代替。",
+        "prohibitedShortcuts": [
+          "不得以提示词、延时、默认值、假数据或静态断言掩盖根因",
+          "不得修改第一轮总表、第一轮证据或第一轮两次状态机",
+          "不得触碰 MoneyPrinterTurbo 子模块内部；相关项只改主程序集成边界",
+          "不得把四次失败待最终收尾计为完成或满足硬门禁"
+        ],
+        "rollback": "只回滚本项目明确列出的本轮文件；先保护用户数据、历史输出、设置、SQLite、证据和子模块指针。",
+        "escalation": "连续第 4 次完整维修复验仍失败时登记为四次失败待最终收尾并推进；禁止第 5 次普通维修。"
+      },
+      "run": {
+        "sourceAnchors": [
+          "server/routes/money-printer-routes.js",
+          "server/core/money-printer-store.js",
+          "ui/modules/money-printer.js",
+          "server/core/settings-center.js",
+          "server/core/task-center.js",
+          "server/core/final-asset-registry.js",
+          "ui-server.mjs",
+          "ui/workbench.js",
+          "ui/modules/",
+          "test-page-lifecycle.mjs",
+          ".data/repair-evidence/R2-CLEANUP-AUDIT/",
+          ".gitignore",
+          "docs/"
+        ],
+        "commands": [
+          "node test-r2-05-21.mjs",
+          "pnpm.cmd run check:gate"
+        ],
+        "testToAdd": "test-r2-05-21.mjs",
+        "requiredEvidence": "单任务单轮询；切页/重启不重复、不串任务；不改子模块内部",
+        "evidenceDir": ".data/repair-evidence/R2-05.21/<YYYYMMDD-HHMMSS>/"
+      }
+    },
+    {
+      "id": "R2-05.22",
+      "card": {
+        "scope": "结构-生命周期｜全页面 owner/dispose 注册表",
+        "verificationMode": "behavior-preserving-refactor",
+        "orderedActions": [
+          "冻结 R2-05.22 开工时的 Git、运行状态、输入与输出证据",
+          "沿 ui/workbench.js、ui/modules/、test-page-lifecycle.mjs 定位真实状态所有者和调用链",
+          "建立失败判据：test-r2-05-22.mjs 必须在变更前暴露“全页面 owner/dispose 注册表”当前契约缺口或在重构前冻结零行为差异基线",
+          "逐项复验完成判定：每页一个 owner/init/dispose；重复 listener/timer/observer/state writer 为 0",
+          "执行目标回归、完整门禁，并把真实产物写入 .data/repair-evidence/R2-05.22/<YYYYMMDD-HHMMSS>/"
+        ],
+        "failingRegression": "test-r2-05-22.mjs 必须在变更前暴露“全页面 owner/dispose 注册表”当前契约缺口或在重构前冻结零行为差异基线",
+        "targetedChecks": [
+          "node test-r2-05-22.mjs",
+          "pnpm.cmd run check:gate"
+        ],
+        "realEvidence": "必须保存与“每页一个 owner/init/dispose；重复 listener/timer/observer/state writer 为 0”直接对应的真实输出、日志、页面或媒体证据，不能用代码存在代替。",
+        "prohibitedShortcuts": [
+          "不得以提示词、延时、默认值、假数据或静态断言掩盖根因",
+          "不得修改第一轮总表、第一轮证据或第一轮两次状态机",
+          "不得触碰 MoneyPrinterTurbo 子模块内部；相关项只改主程序集成边界",
+          "不得把四次失败待最终收尾计为完成或满足硬门禁"
+        ],
+        "rollback": "只回滚本项目明确列出的本轮文件；先保护用户数据、历史输出、设置、SQLite、证据和子模块指针。",
+        "escalation": "连续第 4 次完整维修复验仍失败时登记为四次失败待最终收尾并推进；禁止第 5 次普通维修。"
+      },
+      "run": {
+        "sourceAnchors": [
+          "ui/workbench.js",
+          "ui/modules/",
+          "test-page-lifecycle.mjs"
+        ],
+        "commands": [
+          "node test-r2-05-22.mjs",
+          "pnpm.cmd run check:gate"
+        ],
+        "testToAdd": "test-r2-05-22.mjs",
+        "requiredEvidence": "每页一个 owner/init/dispose；重复 listener/timer/observer/state writer 为 0",
+        "evidenceDir": ".data/repair-evidence/R2-05.22/<YYYYMMDD-HHMMSS>/"
+      }
+    },
+    {
+      "id": "R2-06.01",
+      "card": {
+        "scope": "结构发布｜结构版完整 F01–F24",
+        "verificationMode": "release-local",
+        "orderedActions": [
+          "冻结 R2-06.01 开工时的 Git、运行状态、输入与输出证据",
+          "沿 package.json、pnpm-lock.yaml、server/core/ssrf-guard.mjs、test-ssrf-guard.mjs、scripts/release-gate.mjs、scripts/service-restart.mjs、docs/ 定位真实状态所有者和调用链",
+          "建立失败判据：test-structural-complete-runner.mjs 在修复前稳定失败",
+          "逐项复验完成判定：基础、HTTP、41 项 F01–F24 补充矩阵、媒体、重启、安全全部通过，不能只跑 smoke",
+          "执行目标回归、完整门禁，并把真实产物写入 .data/repair-evidence/R2-06.01/<YYYYMMDD-HHMMSS>/"
+        ],
+        "failingRegression": "test-structural-complete-runner.mjs",
+        "targetedChecks": [
+          "node test-structural-complete-runner.mjs",
+          "node scripts/release-gate.mjs",
+          "pnpm.cmd run check:gate"
+        ],
+        "realEvidence": "必须保存与“基础、HTTP、41 项 F01–F24 补充矩阵、媒体、重启、安全全部通过，不能只跑 smoke”直接对应的真实输出、日志、页面或媒体证据，不能用代码存在代替。",
+        "prohibitedShortcuts": [
+          "不得以提示词、延时、默认值、假数据或静态断言掩盖根因",
+          "不得修改第一轮总表、第一轮证据或第一轮两次状态机",
+          "不得触碰 MoneyPrinterTurbo 子模块内部；相关项只改主程序集成边界",
+          "不得把四次失败待最终收尾计为完成或满足硬门禁"
+        ],
+        "rollback": "只回滚本项目明确列出的本轮文件；先保护用户数据、历史输出、设置、SQLite、证据和子模块指针。",
+        "escalation": "连续第 4 次完整维修复验仍失败时登记为四次失败待最终收尾并推进；禁止第 5 次普通维修。"
+      },
+      "run": {
+        "sourceAnchors": [
+          "package.json",
+          "pnpm-lock.yaml",
+          "server/core/ssrf-guard.mjs",
+          "test-ssrf-guard.mjs",
+          "scripts/release-gate.mjs",
+          "scripts/service-restart.mjs",
+          "docs/"
+        ],
+        "commands": [
+          "node test-structural-complete-runner.mjs",
+          "node scripts/release-gate.mjs",
+          "pnpm.cmd run check:gate"
+        ],
+        "testToAdd": "test-structural-complete-runner.mjs",
+        "requiredEvidence": "基础、HTTP、41 项 F01–F24 补充矩阵、媒体、重启、安全全部通过，不能只跑 smoke",
+        "evidenceDir": ".data/repair-evidence/R2-06.01/<YYYYMMDD-HHMMSS>/"
+      }
+    },
+    {
+      "id": "R2-06.02",
+      "card": {
+        "scope": "结构外部｜external 门禁真实非空并通过",
+        "verificationMode": "external-real",
+        "orderedActions": [
+          "冻结 R2-06.02 开工时的 Git、运行状态、输入与输出证据",
+          "沿 server/tts/、server/tts/tts-handoff-service.mjs、ui/modules/tts-handoff-store.js、ui/workbench.js、server/core/settings-center.js、server/core/task-center.js、server/core/final-asset-registry.js、ui-server.mjs 定位真实状态所有者和调用链",
+          "建立失败判据：external结果为空、沿用旧任务或本轮授权任务任一失败",
+          "逐项复验完成判定：授权 TTS/BGM/四线外部任务均有本轮真实 ID、文件、页面证据",
+          "执行目标回归、完整门禁，并把真实产物写入 .data/repair-evidence/R2-06.02/<YYYYMMDD-HHMMSS>/"
+        ],
+        "failingRegression": "external结果为空、沿用旧任务或本轮授权任务任一失败",
+        "targetedChecks": [
+          "node test-structural-external-gate.mjs",
+          "pnpm.cmd run check:gate"
+        ],
+        "realEvidence": "必须保存与“授权 TTS/BGM/四线外部任务均有本轮真实 ID、文件、页面证据”直接对应的真实输出、日志、页面或媒体证据，不能用代码存在代替。",
+        "prohibitedShortcuts": [
+          "不得以提示词、延时、默认值、假数据或静态断言掩盖根因",
+          "不得修改第一轮总表、第一轮证据或第一轮两次状态机",
+          "不得触碰 MoneyPrinterTurbo 子模块内部；相关项只改主程序集成边界",
+          "不得把四次失败待最终收尾计为完成或满足硬门禁"
+        ],
+        "rollback": "只回滚本项目明确列出的本轮文件；先保护用户数据、历史输出、设置、SQLite、证据和子模块指针。",
+        "escalation": "需要人工、账号、付费、PR、CI、main 或用户验收时登记证据；5 分钟无人介入则顺移到其他就绪项。"
+      },
+      "run": {
+        "sourceAnchors": [
+          "server/tts/",
+          "server/tts/tts-handoff-service.mjs",
+          "ui/modules/tts-handoff-store.js",
+          "ui/workbench.js",
+          "server/core/settings-center.js",
+          "server/core/task-center.js",
+          "server/core/final-asset-registry.js",
+          "ui-server.mjs"
+        ],
+        "commands": [
+          "node test-structural-external-gate.mjs",
+          "pnpm.cmd run check:gate"
+        ],
+        "testToAdd": "test-structural-external-gate.mjs（仅接受本轮真实任务ID与文件）",
+        "requiredEvidence": "授权 TTS/BGM/四线外部任务均有本轮真实 ID、文件、页面证据",
+        "evidenceDir": ".data/repair-evidence/R2-06.02/<YYYYMMDD-HHMMSS>/"
+      }
+    },
+    {
+      "id": "R2-06.03",
+      "card": {
+        "scope": "结构本地｜结构版完全干净安装",
+        "verificationMode": "release-local",
+        "orderedActions": [
+          "冻结 R2-06.03 开工时的 Git、运行状态、输入与输出证据",
+          "沿 package.json、scripts/release-gate.mjs、scripts/service-restart.mjs、docs/ 定位真实状态所有者和调用链",
+          "建立失败判据：test-structural-clean-install.mjs 在修复前稳定失败",
+          "逐项复验完成判定：无开发机残留；本地门禁和恢复通过；external 状态独立报告",
+          "执行目标回归、完整门禁，并把真实产物写入 .data/repair-evidence/R2-06.03/<YYYYMMDD-HHMMSS>/"
+        ],
+        "failingRegression": "test-structural-clean-install.mjs",
+        "targetedChecks": [
+          "node test-structural-clean-install.mjs",
+          "node scripts/release-gate.mjs",
+          "pnpm.cmd run check:gate"
+        ],
+        "realEvidence": "必须保存与“无开发机残留；本地门禁和恢复通过；external 状态独立报告”直接对应的真实输出、日志、页面或媒体证据，不能用代码存在代替。",
+        "prohibitedShortcuts": [
+          "不得以提示词、延时、默认值、假数据或静态断言掩盖根因",
+          "不得修改第一轮总表、第一轮证据或第一轮两次状态机",
+          "不得触碰 MoneyPrinterTurbo 子模块内部；相关项只改主程序集成边界",
+          "不得把四次失败待最终收尾计为完成或满足硬门禁"
+        ],
+        "rollback": "只回滚本项目明确列出的本轮文件；先保护用户数据、历史输出、设置、SQLite、证据和子模块指针。",
+        "escalation": "连续第 4 次完整维修复验仍失败时登记为四次失败待最终收尾并推进；禁止第 5 次普通维修。"
+      },
+      "run": {
+        "sourceAnchors": [
+          "package.json",
+          "scripts/release-gate.mjs",
+          "scripts/service-restart.mjs",
+          "docs/"
+        ],
+        "commands": [
+          "node test-structural-clean-install.mjs",
+          "node scripts/release-gate.mjs",
+          "pnpm.cmd run check:gate"
+        ],
+        "testToAdd": "test-structural-clean-install.mjs",
+        "requiredEvidence": "无开发机残留；本地门禁和恢复通过；external 状态独立报告",
+        "evidenceDir": ".data/repair-evidence/R2-06.03/<YYYYMMDD-HHMMSS>/"
+      }
+    },
+    {
+      "id": "R2-06.04",
+      "card": {
+        "scope": "结构成片｜核对结构版 8 个 `main` 成片",
+        "verificationMode": "production-media",
+        "orderedActions": [
+          "冻结 R2-06.04 开工时的 Git、运行状态、输入与输出证据",
+          "沿 package.json、scripts/release-gate.mjs、scripts/service-restart.mjs、docs/ 定位真实状态所有者和调用链",
+          "建立失败判据：8个main成片任一缺失、复用资产或最终混音/页面哈希不一致",
+          "逐项复验完成判定：四线三/四件套各一；8 个独立 asset/path/hash，最终混音特征和页面一致",
+          "执行目标回归、完整门禁，并把真实产物写入 .data/repair-evidence/R2-06.04/<YYYYMMDD-HHMMSS>/"
+        ],
+        "failingRegression": "8个main成片任一缺失、复用资产或最终混音/页面哈希不一致",
+        "targetedChecks": [
+          "node test-structural-eight-production-assets.mjs",
+          "node scripts/verify-production-media.mjs --line <line> --artifact <本轮最终文件> --narration <本轮旁白> --bgm <四件套BGM> --report <本轮证据JSON>",
+          "pnpm.cmd run check:gate"
+        ],
+        "realEvidence": "必须保存与“四线三/四件套各一；8 个独立 asset/path/hash，最终混音特征和页面一致”直接对应的真实输出、日志、页面或媒体证据，不能用代码存在代替。",
+        "prohibitedShortcuts": [
+          "不得以提示词、延时、默认值、假数据或静态断言掩盖根因",
+          "不得修改第一轮总表、第一轮证据或第一轮两次状态机",
+          "不得触碰 MoneyPrinterTurbo 子模块内部；相关项只改主程序集成边界",
+          "不得把四次失败待最终收尾计为完成或满足硬门禁"
+        ],
+        "rollback": "只回滚本项目明确列出的本轮文件；先保护用户数据、历史输出、设置、SQLite、证据和子模块指针。",
+        "escalation": "需要人工、账号、付费、PR、CI、main 或用户验收时登记证据；5 分钟无人介入则顺移到其他就绪项。"
+      },
+      "run": {
+        "sourceAnchors": [
+          "package.json",
+          "scripts/release-gate.mjs",
+          "scripts/service-restart.mjs",
+          "docs/"
+        ],
+        "commands": [
+          "node test-structural-eight-production-assets.mjs",
+          "node scripts/verify-production-media.mjs --line <line> --artifact <本轮最终文件> --narration <本轮旁白> --bgm <四件套BGM> --report <本轮证据JSON>",
+          "pnpm.cmd run check:gate"
+        ],
+        "testToAdd": "test-structural-eight-production-assets.mjs",
+        "requiredEvidence": "四线三/四件套各一；8 个独立 asset/path/hash，最终混音特征和页面一致",
+        "evidenceDir": ".data/repair-evidence/R2-06.04/<YYYYMMDD-HHMMSS>/"
+      }
+    },
+    {
+      "id": "R2-06.05",
+      "card": {
+        "scope": "结构发布｜PR/CI/main/清单/回滚",
+        "verificationMode": "remote-gate",
+        "orderedActions": [
+          "冻结 R2-06.05 开工时的 Git、运行状态、输入与输出证据",
+          "沿 package.json、scripts/release-gate.mjs、scripts/service-restart.mjs、docs/ 定位真实状态所有者和调用链",
+          "建立失败判据：PR/CI/main/清单/回滚任一证据不对应当前结构版commit",
+          "逐项复验完成判定：当前提交 CI 通过；合并运行版本一致；发布与回滚演练完整",
+          "执行目标回归、完整门禁，并把真实产物写入 .data/repair-evidence/R2-06.05/<YYYYMMDD-HHMMSS>/"
+        ],
+        "failingRegression": "PR/CI/main/清单/回滚任一证据不对应当前结构版commit",
+        "targetedChecks": [
+          "gh pr checks",
+          "node test-structural-release-identity.mjs",
+          "pnpm.cmd run check:gate"
+        ],
+        "realEvidence": "必须保存与“当前提交 CI 通过；合并运行版本一致；发布与回滚演练完整”直接对应的真实输出、日志、页面或媒体证据，不能用代码存在代替。",
+        "prohibitedShortcuts": [
+          "不得以提示词、延时、默认值、假数据或静态断言掩盖根因",
+          "不得修改第一轮总表、第一轮证据或第一轮两次状态机",
+          "不得触碰 MoneyPrinterTurbo 子模块内部；相关项只改主程序集成边界",
+          "不得把四次失败待最终收尾计为完成或满足硬门禁"
+        ],
+        "rollback": "只回滚本项目明确列出的本轮文件；先保护用户数据、历史输出、设置、SQLite、证据和子模块指针。",
+        "escalation": "需要人工、账号、付费、PR、CI、main 或用户验收时登记证据；5 分钟无人介入则顺移到其他就绪项。"
+      },
+      "run": {
+        "sourceAnchors": [
+          "package.json",
+          "scripts/release-gate.mjs",
+          "scripts/service-restart.mjs",
+          "docs/"
+        ],
+        "commands": [
+          "gh pr checks",
+          "node test-structural-release-identity.mjs",
+          "pnpm.cmd run check:gate"
+        ],
+        "testToAdd": "test-structural-release-identity.mjs",
+        "requiredEvidence": "当前提交 CI 通过；合并运行版本一致；发布与回滚演练完整",
+        "evidenceDir": ".data/repair-evidence/R2-06.05/<YYYYMMDD-HHMMSS>/"
+      }
+    },
+    {
+      "id": "R2-06.06",
+      "card": {
+        "scope": "关闭｜用户最终复验并关闭第二轮",
+        "verificationMode": "user-acceptance",
+        "orderedActions": [
+          "冻结 R2-06.06 开工时的 Git、运行状态、输入与输出证据",
+          "沿 package.json、scripts/release-gate.mjs、scripts/service-restart.mjs、docs/ 定位真实状态所有者和调用链",
+          "建立失败判据：用户未确认或总表、Git/PR/CI、8成片、回滚任一缺证",
+          "逐项复验完成判定：用户确认；总表、证据、Git/PR/CI、8 成片和回滚齐全；无未登记失败",
+          "执行目标回归、完整门禁，并把真实产物写入 .data/repair-evidence/R2-06.06/<YYYYMMDD-HHMMSS>/"
+        ],
+        "failingRegression": "用户未确认或总表、Git/PR/CI、8成片、回滚任一缺证",
+        "targetedChecks": [
+          "pnpm.cmd run repair:r2:check",
+          "node scripts/release-gate.mjs",
+          "pnpm.cmd run check:gate"
+        ],
+        "realEvidence": "必须保存与“用户确认；总表、证据、Git/PR/CI、8 成片和回滚齐全；无未登记失败”直接对应的真实输出、日志、页面或媒体证据，不能用代码存在代替。",
+        "prohibitedShortcuts": [
+          "不得以提示词、延时、默认值、假数据或静态断言掩盖根因",
+          "不得修改第一轮总表、第一轮证据或第一轮两次状态机",
+          "不得触碰 MoneyPrinterTurbo 子模块内部；相关项只改主程序集成边界",
+          "不得把四次失败待最终收尾计为完成或满足硬门禁"
+        ],
+        "rollback": "只回滚本项目明确列出的本轮文件；先保护用户数据、历史输出、设置、SQLite、证据和子模块指针。",
+        "escalation": "需要人工、账号、付费、PR、CI、main 或用户验收时登记证据；5 分钟无人介入则顺移到其他就绪项。"
+      },
+      "run": {
+        "sourceAnchors": [
+          "package.json",
+          "scripts/release-gate.mjs",
+          "scripts/service-restart.mjs",
+          "docs/"
+        ],
+        "commands": [
+          "pnpm.cmd run repair:r2:check",
+          "node scripts/release-gate.mjs",
+          "pnpm.cmd run check:gate"
+        ],
+        "testToAdd": "不新增自动化代签：保存用户最终确认和全证据索引",
+        "requiredEvidence": "用户确认；总表、证据、Git/PR/CI、8 成片和回滚齐全；无未登记失败",
+        "evidenceDir": ".data/repair-evidence/R2-06.06/<YYYYMMDD-HHMMSS>/"
+      }
+    }
+  ]
+}

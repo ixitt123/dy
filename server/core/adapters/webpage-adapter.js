@@ -9,6 +9,7 @@
  */
 
 import { BaseAdapter } from "./base-adapter.js";
+import { safeFetch } from "../ssrf-guard.mjs";
 
 export class WebpageAdapter extends BaseAdapter {
   static name = "WebpageAdapter";
@@ -35,16 +36,17 @@ export class WebpageAdapter extends BaseAdapter {
 
     let html = "";
     try {
-      const response = await fetch(url, {
+      // 10.02 SSRF 防护：用 safeFetch 替代裸 fetch（校验私网/DNS重绑定 + 手动重定向 + 限制响应体）
+      const result = await safeFetch(url, {
         headers: {
           "User-Agent":
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
           Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
         },
-        redirect: "follow",
-        signal: AbortSignal.timeout(15000),
+        timeoutMs: 15000,
+        maxBytes: 5 * 1024 * 1024,
       });
-      html = await response.text();
+      html = result.text;
     } catch (err) {
       throw new Error(`WebpageAdapter: 无法获取网页内容: ${err.message}`);
     }

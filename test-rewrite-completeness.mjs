@@ -5,6 +5,8 @@ const server = fs.readFileSync(new URL("./ui-server.mjs", import.meta.url), "utf
 const runtime = fs.readFileSync(new URL("./ui/modules/legacy-runtime.js", import.meta.url), "utf8");
 const pipelinePrompt = fs.readFileSync(new URL("./prompts/rewrite_pipeline.md", import.meta.url), "utf8");
 const humanizePrompt = fs.readFileSync(new URL("./prompts/humanize_zh.md", import.meta.url), "utf8");
+const rewritePresets = fs.readFileSync(new URL("./server/config/rewrite-presets.js", import.meta.url), "utf8");
+const rewritePage = fs.readFileSync(new URL("./ui/index.html", import.meta.url), "utf8");
 
 assert.doesNotMatch(server, /function truncateRewriteToLimit/u);
 assert.doesNotMatch(server, /function padRewriteToMinimum/u);
@@ -26,5 +28,28 @@ assert.match(pipelinePrompt, /Coherence contract: \{\{coherence_contract\}\}/u);
 assert.match(pipelinePrompt, /factual accuracy and a complete, coherent article come first/u);
 assert.match(humanizePrompt, /Never cut or truncate at a character boundary/u);
 assert.match(humanizePrompt, /Do not turn paragraphs into disconnected punchlines/u);
+assert.match(rewritePresets, /PARENT_CONVERSION_VERSION_DEFS/u);
+assert.match(rewritePresets, /parentConsultation/u);
+assert.match(rewritePresets, /parentAction/u);
+assert.match(rewritePage, /id="rewriteParentConversionTemplate"[^>]*checked/u);
+assert.match(runtime, /家长触动与转化模板/u);
+assert.match(runtime, /触动咨询版/u);
+assert.match(runtime, /行动号召版/u);
+assert.match(runtime, /conversionStructure/u);
+assert.match(runtime, /parentConversionTemplateEnabled\(\)[\s\S]*?parentConversionVersionOptions/u);
+assert.match(runtime, /:\s*\[rewriteVersionAt\(0\)\]/u);
+assert.match(server, /parent_conversion_template/u);
+assert.match(server, /conversionStructure/u);
+assert.match(server, /hasCompleteConversionStructure/u);
+assert.match(server, /parentTemplate && !structureComplete/u);
+assert.match(server, /parentConversionLocalQuality/u);
+assert.match(server, /reviewIssuesAreOnlyParentAdvisory/u);
+assert.match(server, /不得编造学校、老师、课程、试听/u);
+assert.match(pipelinePrompt, /Parent Emotion and Conversion Template/u);
+assert.match(pipelinePrompt, /painConflict/u);
+assert.match(runtime, /已保留 \$\{generatedVersions\.length\} 篇通过质检的成品/u);
+
+await import("./test-rewrite-generation-retry.mjs");
+await import("./test-rewrite-structured-completion.mjs");
 
 console.log("Rewrite completeness: OK");

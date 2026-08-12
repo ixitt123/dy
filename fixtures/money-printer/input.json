@@ -1,0 +1,32 @@
+{
+  "scenario": "money-printer-final-bgm-loss",
+  "description": "冻结的 MoneyPrinter 最终二次合成 BGM 丢失回归输入。媒体均由本地 FFmpeg 合成，不含用户数据。",
+  "title": "money-printer-final-bgm-loss",
+  "narration": "narration.wav",
+  "bgm": "feature-bgm.wav",
+  "background": "background.mp4",
+  "segments": [
+    {
+      "start": 0,
+      "end": 2,
+      "text": "固定回归字幕"
+    }
+  ],
+  "settings": {
+    "aspectRatio": "9:16",
+    "frameRate": 30,
+    "textEffectEnabled": false,
+    "showBottomSubtitles": false
+  },
+  "feature": {
+    "narrationFrequencyHz": 440,
+    "bgmFrequencyHz": 110,
+    "bgmVolume": 0.18,
+    "expectedCurrentFinalPayloadOmits": [
+      "includeBgm",
+      "bgm_file",
+      "bgm_volume",
+      "revision"
+    ]
+  }
+}

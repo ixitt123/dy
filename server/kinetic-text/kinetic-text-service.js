@@ -11,6 +11,8 @@ import {
   normalizeEffectId,
 } from "./effects.js";
 import { generateIllustrationBackground, normalizeIllustrationConfig } from "./generative-illustration.js";
+import { mergeSourceConstrainedRows } from "../tts/source-constrained-repair.js";
+import { readJsonWithRecovery, writeJsonAtomic } from "../core/atomic-write.mjs";
 
 const FPS = 30;
 const DEFAULT_FONT = "Microsoft YaHei";
@@ -49,16 +51,11 @@ function frameRateForProject(project = {}) {
 }
 
 function readJson(filePath, fallback = null) {
-  try {
-    return JSON.parse(fs.readFileSync(filePath, "utf8"));
-  } catch {
-    return fallback;
-  }
+  return readJsonWithRecovery(filePath, { fallback });
 }
 
 function writeJson(filePath, value) {
-  fs.mkdirSync(path.dirname(filePath), { recursive: true });
-  fs.writeFileSync(filePath, `${JSON.stringify(value, null, 2)}\n`, "utf8");
+  writeJsonAtomic(filePath, value);
 }
 
 function normalizeText(value) {
@@ -491,7 +488,137 @@ function normalizeSegments(rawSegments, text, duration = 0) {
   });
 }
 
+function kineticVoiceScriptText(input = {}, tts = {}, fallback = "") {
+  return normalizeText(
+    tts.final_text
+    || tts.tts_prepared_text
+    || tts.prepared_text
+    || tts.voice_text
+    || tts.voiceScript
+    || tts.voice_script
+    || tts.script_text
+    || tts.original_text
+    || tts.text
+    || input.final_text
+    || input.tts_prepared_text
+    || input.prepared_text
+    || input.voice_text
+    || input.voiceScript
+    || input.voice_script
+    || input.script_text
+    || input.original_text
+    || input.text
+    || fallback
+  );
+}
+
+function kineticProjectVoiceScriptText(project = {}) {
+  return normalizeText(
+    project.originalText
+    || project.original_text
+    || project.finalText
+    || project.final_text
+    || project.ttsPreparedText
+    || project.tts_prepared_text
+    || project.voiceScript
+    || project.voice_script
+    || project.text
+  );
+}
+
+function kineticPlainText(value = "") {
+  return normalizeText(value).replace(/[^\p{L}\p{N}]/gu, "");
+}
+
+function compactVoiceScriptText(value = "") {
+  return normalizeText(value).replace(/\s+/g, "");
+}
+
+function proportionalVoiceScriptRows(timeline = [], sourceText = "") {
+  const chars = [...compactVoiceScriptText(sourceText)];
+  if (!chars.length) return timeline.map((row) => ({ ...row }));
+  const weights = timeline.map((row) => {
+    const textWeight = [...kineticPlainText(row?.text || "")].length;
+    const durationWeight = Math.max(1, Math.round((Number(row?.end || 0) - Number(row?.start || 0)) * 8));
+    return Math.max(1, textWeight || durationWeight);
+  });
+  const totalWeight = weights.reduce((sum, item) => sum + item, 0);
+  let cursor = 0;
+  let consumedWeight = 0;
+  return timeline.map((row, index) => {
+    consumedWeight += weights[index];
+    const targetEnd = index === timeline.length - 1
+      ? chars.length
+      : Math.max(cursor + 1, Math.round((consumedWeight / totalWeight) * chars.length));
+    const text = chars.slice(cursor, Math.min(chars.length, targetEnd)).join("");
+    cursor = Math.min(chars.length, targetEnd);
+    return { ...row, index: Number(row?.index || index + 1), text: text || String(row?.text || ""), words: [] };
+  });
+}
+
+export function constrainKineticTimelineToVoiceScript(timeline = [], sourceText = "") {
+  if (!Array.isArray(timeline) || !timeline.length) return [];
+  const source = normalizeText(sourceText);
+  if (!source) return timeline.map((row) => ({ ...row }));
+  const repaired = mergeSourceConstrainedRows({ sourceText: source, asrRows: timeline });
+  const rows = repaired.rows.map((row, index) => {
+    const original = timeline[index] || {};
+    return {
+      ...original,
+      ...row,
+      id: original.id || row.id || `segment-${index + 1}`,
+      index: Number(original.index || row.index || index + 1),
+      start: original.start ?? original.start_time ?? original.begin ?? row.start,
+      end: original.end ?? original.end_time ?? original.finish ?? row.end,
+      text: row.text,
+      words: [],
+    };
+  });
+  if (kineticPlainText(rows.map((row) => row.text).join("")) !== kineticPlainText(source)) {
+    return proportionalVoiceScriptRows(timeline, source);
+  }
+  return rows;
+}
+
+function repairSharedVoiceScriptTimeline(project = {}) {
+  if (String(project.subtitleSource || project.subtitle_source || "") !== "shared-production-timeline") return project;
+  if (
+    String(project.timelineAuthority || "") === "tts-confirmed"
+    || project.timelineLocked === true
+    || String(project.ttsHandoffRevision || "")
+  ) {
+    return project;
+  }
+  const source = kineticProjectVoiceScriptText(project);
+  if (!source) return project;
+  const sourcePlain = kineticPlainText(source);
+  const manualSourcePlain = kineticPlainText(project.timelineManualSourceText || "");
+  if ((project.timelineManualEditedAt || project.manualTimelineEditedAt) && manualSourcePlain && manualSourcePlain === sourcePlain) return project;
+  const segments = Array.isArray(project.segments) ? project.segments : [];
+  if (kineticPlainText(segments.map((row) => row?.text || "").join("")) === sourcePlain) return project;
+  const baseTimeline = Array.isArray(project.sentenceTimeline) && project.sentenceTimeline.length
+    ? project.sentenceTimeline
+    : segments;
+  if (!baseTimeline.length) return project;
+  const repaired = constrainKineticTimelineToVoiceScript(baseTimeline, source);
+  const rows = repaired.map((row, index) => ({
+    ...row,
+    id: row.id || `segment-${index + 1}`,
+    index: index + 1,
+    words: [],
+  }));
+  return {
+    ...project,
+    text: source,
+    segments: rows,
+    sentenceTimeline: rows.map(({ id, index, start, end, text }) => ({ id, index, start, end, text })),
+    subtitleTimeline: rows.map(({ id, index, start, end, text }) => ({ id, index, start, end, text })),
+    wordTimeline: [],
+  };
+}
+
 function normalizeProject(project) {
+  project = repairSharedVoiceScriptTimeline(project);
   const effectId = normalizeEffectId(project.effectId);
   const duration = safeNumber(project.duration, 0, 0);
   const wordTimeline = normalizeWordRows(project.wordTimeline || project.word_timeline);
@@ -1081,6 +1208,8 @@ export function buildAss(project, options = {}) {
   const shadow = params.shadowEnabled === false ? 0 : Math.max(1, Math.round(fontSize * 0.02));
   const offset = safeNumber(options.offset, 0);
   const limitToId = options.segmentId ? String(options.segmentId) : "";
+  const includeMainText = options.includeMainText !== false;
+  const includeBookends = options.includeBookends !== false;
   const maxChars = normalized.aspectRatio === "16:9" ? 24 : normalized.aspectRatio === "1:1" ? 16 : 13;
   const maxLines = Math.round(safeNumber(params.maxLines, 2, 1, 3));
   const events = [];
@@ -1105,7 +1234,7 @@ export function buildAss(project, options = {}) {
     const wrappedText = wrapSubtitleText(segment.text, maxChars, maxLines);
     const enterMs = Math.min(220, Math.max(90, Math.round(150 / safeNumber(params.animationSpeed, 1, 0.5, 2))));
 
-    if (template.renderMode === "rolling-focus-left") {
+    if (includeMainText && template.renderMode === "rolling-focus-left") {
       const leadSeconds = safeNumber(params.leadMs, 90, 0, 180) / 1000;
       const transitionMs = Math.round(safeNumber(params.transitionMs, 220, 180, 260) / safeNumber(params.animationSpeed, 1, 0.5, 2));
       const resetGap = safeNumber(params.resetGapMs, 1200, 500, 3000) / 1000;
@@ -1152,7 +1281,7 @@ export function buildAss(project, options = {}) {
           }
         }
       }
-    } else if (template.renderMode === "rolling-focus") {
+    } else if (includeMainText && template.renderMode === "rolling-focus") {
       const lineGapBoost = safeNumber(params.lineGapBoost, 0, 0, 1.2);
       const lineGap = Math.round(fontSize * (1.32 + lineGapBoost));
       const neighbors = [
@@ -1188,7 +1317,7 @@ export function buildAss(project, options = {}) {
     }
   });
 
-  if (!limitToId && offset === 0) {
+  if (includeMainText && includeBookends && !limitToId && offset === 0) {
     events.push(...buildBookendAssEvents({
       project: normalized,
       template,
@@ -1292,6 +1421,32 @@ function projectPublic(project) {
   };
 }
 
+function projectSummary(project) {
+  if (!project) return null;
+  const effectId = normalizeEffectId(project.effectId);
+  const audioMix = project.audioMix && typeof project.audioMix === "object" ? project.audioMix : {};
+  return {
+    id: String(project.id || ""),
+    title: normalizeText(project.title) || "动态大字视频",
+    status: String(project.status || "editing"),
+    stage: String(project.stage || "编辑中"),
+    progress: safeNumber(project.progress, 0, 0, 100),
+    ttsJobId: Number(project.ttsJobId || 0),
+    ttsHandoffRevision: String(project.ttsHandoffRevision || ""),
+    duration: safeNumber(project.duration, 0, 0),
+    effectId,
+    effect: effectById(effectId),
+    audioMix: {
+      source: ["none", "video", "local"].includes(audioMix.source) ? audioMix.source : "none",
+      localPath: String(audioMix.localPath || ""),
+      localName: String(audioMix.localName || ""),
+      ttsVolume: safeNumber(audioMix.ttsVolume, 100, 0, 200),
+      backgroundVolume: safeNumber(audioMix.backgroundVolume, 18, 0, 100),
+    },
+    updatedAt: String(project.updatedAt || ""),
+  };
+}
+
 export function createKineticTextService({
   baseDir,
   downloadsDir,
@@ -1300,6 +1455,7 @@ export function createKineticTextService({
   ffprobePath,
   modelRouter,
   imageService,
+  finalAssetRegistry = null,
   onOutput = () => {},
 }) {
   const rootDir = path.join(baseDir, ".data", "kinetic-text");
@@ -1329,15 +1485,62 @@ export function createKineticTextService({
     return projectPublic(normalized);
   }
 
+  function ensureFinalAsset(project) {
+    const outputPath = String(project?.outputs?.finalVideo || "");
+    if (!finalAssetRegistry || !outputPath || !fs.existsSync(outputPath)) return project;
+    const existingAssetId = String(project.outputs?.finalAssetId || "").trim();
+    if (existingAssetId && typeof finalAssetRegistry.get === "function") {
+      const existingAsset = finalAssetRegistry.get(existingAssetId);
+      const outputStat = fs.statSync(outputPath);
+      const sameFile = existingAsset
+        && path.resolve(existingAsset.filePath) === path.resolve(outputPath)
+        && Number(existingAsset.size || 0) === outputStat.size;
+      if (sameFile) {
+        const sameUrls = project.outputs?.finalVideoUrl === existingAsset.videoUrl
+          && project.outputs?.finalDownloadUrl === existingAsset.downloadUrl;
+        if (sameUrls) return project;
+        const updated = {
+          ...project,
+          outputs: {
+            ...(project.outputs || {}),
+            finalVideoUrl: existingAsset.videoUrl,
+            finalDownloadUrl: existingAsset.downloadUrl,
+          },
+        };
+        writeJson(projectPath(updated.id), updated);
+        return updated;
+      }
+    }
+    const finalAsset = finalAssetRegistry.register({
+      filePath: outputPath,
+      kind: "video",
+      source: "kinetic-text",
+      sourceRef: project.id,
+      metadata: { title: project.title, duration: project.duration, effectId: project.effectId, discoveredFromHistory: true },
+    });
+    if (project.outputs?.finalAssetId === finalAsset.assetId) return project;
+    const updated = {
+      ...project,
+      outputs: {
+        ...(project.outputs || {}),
+        finalAssetId: finalAsset.assetId,
+        finalVideoUrl: finalAsset.videoUrl,
+        finalDownloadUrl: finalAsset.downloadUrl,
+      },
+    };
+    writeJson(projectPath(updated.id), updated);
+    return updated;
+  }
+
   function get(id) {
     const project = readJson(projectPath(id), null);
-    return project ? projectPublic(normalizeProject(project)) : null;
+    return project ? projectPublic(ensureFinalAsset(normalizeProject(project))) : null;
   }
 
   function list() {
     return fs.readdirSync(projectsDir, { withFileTypes: true })
       .filter((entry) => entry.isDirectory())
-      .map((entry) => get(entry.name))
+      .map((entry) => projectSummary(readJson(projectPath(entry.name), null)))
       .filter(Boolean)
       .sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt)));
   }
@@ -1387,7 +1590,25 @@ export function createKineticTextService({
       || (hasTimedTimeline ? "estimated" : "estimated")
     );
     const effectId = normalizeEffectId(input.effectId);
-    const finalText = String(tts.final_text || tts.text || input.text || "");
+    const finalText = kineticVoiceScriptText(input, tts);
+    const confirmedTtsTimeline = Boolean(
+      tts.id
+      && String(tts.alignment_status || tts.metadata?.alignment_status || "") === "confirmed"
+      && payloadTimeline.length,
+    );
+    const productionTimeline = confirmedTtsTimeline
+      ? payloadTimeline.map((row) => ({ ...row }))
+      : hasTimedTimeline
+        ? constrainKineticTimelineToVoiceScript(timeline, finalText)
+        : timeline;
+    const receivedBgmPath = String(tts.bgm_path || tts.bgmPath || "").trim();
+    const receivedBgmEnabled = Boolean(receivedBgmPath) && tts.include_bgm !== false && tts.includeBgm !== false;
+    const receivedBgmVolume = safeNumber(
+      tts.bgm_volume_percent ?? tts.bgmVolumePercent ?? (Number(tts.bgm_volume ?? tts.bgmVolume ?? 0.18) * 100),
+      18,
+      0,
+      100,
+    );
     return save({
       id,
       title: input.title || tts.title || `动态大字视频 ${new Date().toLocaleString("zh-CN", { hour12: false })}`,
@@ -1402,15 +1623,21 @@ export function createKineticTextService({
       subtitlePath,
       timestampedTextPath,
       text: finalText,
-      originalText: String(tts.original_text || ""),
+      originalText: String(tts.original_text || tts.final_text || tts.finalText || finalText || ""),
       recognizedText: String(tts.recognized_text || ""),
       wordTimeline: Array.isArray(tts.word_timeline) ? tts.word_timeline : [],
-      sentenceTimeline: payloadTimeline,
+      sentenceTimeline: payloadTimeline.length ? productionTimeline : [],
+      subtitleTimeline: payloadTimeline.length ? productionTimeline : [],
       alignmentStatus: String(tts.alignment_status || ""),
       alignmentConfirmedAt: String(tts.alignment_confirmed_at || ""),
       duration,
-      subtitleSource,
-      segments: normalizeSegments(timeline, finalText, duration),
+      subtitleSource: confirmedTtsTimeline ? "shared-production-timeline" : subtitleSource,
+      timelineAuthority: confirmedTtsTimeline ? "tts-confirmed" : "",
+      timelineLocked: confirmedTtsTimeline,
+      ttsHandoffId: String(tts.handoff_id || ""),
+      ttsHandoffRevision: String(tts.handoff_revision || ""),
+      ttsSharedUpdatedAt: String(tts.sharedUpdatedAt || tts.sent_at || tts.sentAt || ""),
+      segments: normalizeSegments(productionTimeline, finalText, duration),
       effectId,
       effectParams: defaultEffectParams(effectId),
       aspectRatio: Object.hasOwn(OUTPUT_SIZES, input.aspectRatio) ? input.aspectRatio : "9:16",
@@ -1421,7 +1648,13 @@ export function createKineticTextService({
       bookends: input.bookends && typeof input.bookends === "object" ? input.bookends : {},
       background: { mode: "black", path: "", name: "" },
       dynamicIllustration: { config: normalizeIllustrationConfig({}, { duration }), outputs: {} },
-      audioMix: { source: "none", localPath: "", localName: "", ttsVolume: 100, backgroundVolume: 18 },
+      audioMix: {
+        source: receivedBgmEnabled ? "local" : "none",
+        localPath: receivedBgmPath,
+        localName: String(tts.bgm_name || tts.bgmName || (receivedBgmPath ? "清爽教育 BGM" : "")),
+        ttsVolume: 100,
+        backgroundVolume: receivedBgmVolume,
+      },
       outputs: {},
       createdAt: nowIso(),
       updatedAt: nowIso(),
@@ -1431,6 +1664,63 @@ export function createKineticTextService({
   function update(id, changes = {}) {
     const current = get(id);
     if (!current) throw new Error("动态大字项目不存在。");
+    const normalizedChanges = { ...changes };
+    const incomingConfirmedTtsTimeline = (
+      normalizedChanges.subtitleSource === "shared-production-timeline"
+      && Array.isArray(normalizedChanges.segments)
+      && normalizedChanges.segments.length
+    );
+    if (
+      Array.isArray(normalizedChanges.segments)
+      && normalizedChanges.segments.length
+      && !Object.hasOwn(normalizedChanges, "subtitleSource")
+      && String(current.timelineAuthority || "") !== "tts-confirmed"
+      && current.timelineLocked !== true
+    ) {
+      normalizedChanges.timelineManualEditedAt = nowIso();
+      normalizedChanges.timelineManualSourceText = kineticProjectVoiceScriptText(current);
+    }
+    if (incomingConfirmedTtsTimeline) {
+      const sourceText = kineticVoiceScriptText(normalizedChanges, normalizedChanges, kineticProjectVoiceScriptText(current));
+      normalizedChanges.text = sourceText;
+      normalizedChanges.originalText = normalizeText(normalizedChanges.originalText || sourceText);
+      normalizedChanges.timelineAuthority = "tts-confirmed";
+      normalizedChanges.timelineLocked = true;
+      if (!Array.isArray(normalizedChanges.sentenceTimeline) || !normalizedChanges.sentenceTimeline.length) {
+        normalizedChanges.sentenceTimeline = normalizedChanges.segments.map((row) => ({ ...row }));
+      }
+      if (!Array.isArray(normalizedChanges.subtitleTimeline) || !normalizedChanges.subtitleTimeline.length) {
+        normalizedChanges.subtitleTimeline = normalizedChanges.segments.map((row) => ({ ...row }));
+      }
+    } else if (
+      String(current.timelineAuthority || "") === "tts-confirmed"
+      || current.timelineLocked === true
+    ) {
+      delete normalizedChanges.text;
+      delete normalizedChanges.originalText;
+      delete normalizedChanges.finalText;
+      delete normalizedChanges.final_text;
+      delete normalizedChanges.sentenceTimeline;
+      delete normalizedChanges.subtitleTimeline;
+      delete normalizedChanges.wordTimeline;
+      if (Array.isArray(normalizedChanges.segments) && normalizedChanges.segments.length) {
+        normalizedChanges.segments = current.segments.map((currentRow, index) => {
+          const incomingRow = normalizedChanges.segments.find((row) => String(row?.id || "") === String(currentRow.id || ""))
+            || normalizedChanges.segments[index]
+            || {};
+          return {
+            ...currentRow,
+            ...incomingRow,
+            id: currentRow.id,
+            index: currentRow.index,
+            start: currentRow.start,
+            end: currentRow.end,
+            text: currentRow.text,
+            words: currentRow.words,
+          };
+        });
+      }
+    }
     const shouldInvalidateOutputs = [
       "text",
       "segments",
@@ -1447,30 +1737,30 @@ export function createKineticTextService({
       "background",
       "audioMix",
       "bookends",
-    ].some((key) => Object.hasOwn(changes, key));
-    const nextOutputs = changes.outputs
-      ? { ...current.outputs, ...(changes.outputs || {}) }
+    ].some((key) => Object.hasOwn(normalizedChanges, key));
+    const nextOutputs = normalizedChanges.outputs
+      ? { ...current.outputs, ...(normalizedChanges.outputs || {}) }
       : shouldInvalidateOutputs
         ? {}
         : { ...current.outputs };
     const merged = {
       ...current,
-      ...changes,
+      ...normalizedChanges,
       id: current.id,
-      background: { ...current.background, ...(changes.background || {}) },
+      background: { ...current.background, ...(normalizedChanges.background || {}) },
       dynamicIllustration: {
         ...current.dynamicIllustration,
-        ...(changes.dynamicIllustration || {}),
-        config: { ...current.dynamicIllustration?.config, ...(changes.dynamicIllustration?.config || {}) },
-        outputs: { ...current.dynamicIllustration?.outputs, ...(changes.dynamicIllustration?.outputs || {}) },
+        ...(normalizedChanges.dynamicIllustration || {}),
+        config: { ...current.dynamicIllustration?.config, ...(normalizedChanges.dynamicIllustration?.config || {}) },
+        outputs: { ...current.dynamicIllustration?.outputs, ...(normalizedChanges.dynamicIllustration?.outputs || {}) },
       },
-      audioMix: { ...current.audioMix, ...(changes.audioMix || {}) },
-      effectParams: { ...current.effectParams, ...(changes.effectParams || {}) },
+      audioMix: { ...current.audioMix, ...(normalizedChanges.audioMix || {}) },
+      effectParams: { ...current.effectParams, ...(normalizedChanges.effectParams || {}) },
       bookends: {
-        intro: { ...current.bookends?.intro, ...(changes.bookends?.intro || {}) },
-        outro: { ...current.bookends?.outro, ...(changes.bookends?.outro || {}) },
+        intro: { ...current.bookends?.intro, ...(normalizedChanges.bookends?.intro || {}) },
+        outro: { ...current.bookends?.outro, ...(normalizedChanges.bookends?.outro || {}) },
       },
-      bottomSubtitlePosition: { ...current.bottomSubtitlePosition, ...(changes.bottomSubtitlePosition || {}) },
+      bottomSubtitlePosition: { ...current.bottomSubtitlePosition, ...(normalizedChanges.bottomSubtitlePosition || {}) },
       outputs: nextOutputs,
     };
     return save(merged);
@@ -1670,8 +1960,9 @@ export function createKineticTextService({
       const bgVolume = (project.audioMix.backgroundVolume / 100).toFixed(3);
       const filters = [videoFilter, `[1:a]volume=${ttsVolume}[tts]`];
       if (backgroundAudioIndex >= 0) {
-        const fadeOut = Math.max(0, duration - 0.8).toFixed(3);
-        filters.push(`[${backgroundAudioIndex}:a]volume=${bgVolume},afade=t=in:st=0:d=0.5,afade=t=out:st=${fadeOut}:d=0.8[bgm]`);
+        // 04.07 BGM 收尾淡出 2.0s（执行总表建议 2-3s，避免突停）
+        const fadeOut = Math.max(0, duration - 2.0).toFixed(3);
+        filters.push(`[${backgroundAudioIndex}:a]volume=${bgVolume},afade=t=in:st=0:d=0.5,afade=t=out:st=${fadeOut}:d=2.0[bgm]`);
         filters.push("[tts][bgm]amix=inputs=2:duration=first:dropout_transition=0:normalize=0[a]");
       }
       args.push("-filter_complex", filters.join(";"), "-map", "[v]", "-map", backgroundAudioIndex >= 0 ? "[a]" : "[tts]");
@@ -1684,9 +1975,31 @@ export function createKineticTextService({
         updateJob(jobId, { progress: Math.min(94, 42 + Math.round((elapsed / duration) * 50)), stage: "合成 MP4" });
       } });
       updateJob(jobId, { progress: 97, stage: "归档完成" });
-      project = update(projectId, { status: "completed", stage: "成片完成", progress: 100, outputs: { finalVideo: outputPath } });
-      await Promise.resolve(onOutput(project, { videoPath: outputPath, materialZip: project.outputs.materialZip, srtPath: project.outputs.srtPath }));
-      updateJob(jobId, { status: "completed", progress: 100, stage: "成片完成", result: { videoPath: outputPath, project } });
+      const finalAsset = finalAssetRegistry?.register({
+        filePath: outputPath,
+        kind: "video",
+        source: "kinetic-text",
+        sourceRef: projectId,
+        metadata: { title: project.title, duration: project.duration, effectId: project.effectId },
+      });
+      project = update(projectId, {
+        status: "completed",
+        stage: "成片完成",
+        progress: 100,
+        outputs: {
+          finalVideo: outputPath,
+          finalAssetId: finalAsset?.assetId || "",
+          finalVideoUrl: finalAsset?.videoUrl || "",
+          finalDownloadUrl: finalAsset?.downloadUrl || "",
+        },
+      });
+      await Promise.resolve(onOutput(project, {
+        videoPath: outputPath,
+        assetId: finalAsset?.assetId || "",
+        materialZip: project.outputs.materialZip,
+        srtPath: project.outputs.srtPath,
+      }));
+      updateJob(jobId, { status: "completed", progress: 100, stage: "成片完成", result: { videoPath: outputPath, assetId: finalAsset?.assetId || "", project } });
       return project;
     } catch (error) {
       updateJob(jobId, { status: "failed", stage: "成片生成失败", error: error instanceof Error ? error.message : String(error) });

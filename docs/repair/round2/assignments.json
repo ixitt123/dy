@@ -1,0 +1,103 @@
+{
+  "schemaVersion": 1,
+  "updatedBy": "B",
+  "primaryMachine": "B",
+  "assignments": [
+    {
+      "itemId": "R2-01.12",
+      "machine": "A",
+      "complexity": "simple",
+      "status": "closed",
+      "branch": "repair/a-r2-01-12",
+      "allowedPaths": [
+        "start-ui-hidden.vbs",
+        "launch-ui.mjs",
+        "test-launcher-missing-dependency.mjs",
+        "docs/repair/round2/research/R2-01.12.md",
+        "docs/repair/round2/records/R2-01.12.md"
+      ],
+      "evidenceDir": ".data/repair-evidence/R2-01.12/",
+      "researchRecord": "docs/repair/round2/research/R2-01.12.md"
+    },
+    {
+      "itemId": "R2-01.13",
+      "machine": "A",
+      "complexity": "simple",
+      "status": "closed",
+      "branch": "repair/a-r2-01-13",
+      "allowedPaths": [
+        "start-ui-hidden.vbs",
+        "launch-ui.mjs",
+        "test-launcher-log-rotation.mjs",
+        "docs/repair/round2/research/R2-01.13.md",
+        "docs/repair/round2/records/R2-01.13.md"
+      ],
+      "evidenceDir": ".data/repair-evidence/R2-01.13/",
+      "researchRecord": "docs/repair/round2/research/R2-01.13.md"
+    },
+    {
+      "itemId": "R2-02.02",
+      "machine": "B",
+      "complexity": "complex",
+      "status": "closed",
+      "branch": "repair/b-r2-02-02",
+      "allowedPaths": [
+        "package.json",
+        "pnpm-lock.yaml",
+        "server/core/ssrf-guard.mjs",
+        "test-ip-address-leading-zero.mjs",
+        "test-ssrf-guard.mjs",
+        "docs/repair/round2/research/R2-02.02.md",
+        "docs/repair/round2/records/R2-02.02.md",
+        "docs/repair/round2/master-register.md",
+        "docs/repair/round2/assignments.json"
+      ],
+      "evidenceDir": ".data/repair-evidence/R2-02.02/",
+      "researchRecord": "docs/repair/round2/research/R2-02.02.md"
+    },
+    {
+      "itemId": "R2-01.14",
+      "machine": "B",
+      "complexity": "complex",
+      "status": "closed",
+      "branch": "repair/b-r2-01-14",
+      "allowedPaths": [
+        "launch-ui.mjs",
+        "ui-server.mjs",
+        "server/core/runtime-process.js",
+        "test-launcher-project-identity.mjs",
+        "test-launcher-log-rotation.mjs",
+        "test-page-lifecycle.mjs",
+        "docs/repair/round2/research/R2-01.14.md",
+        "docs/repair/round2/records/R2-01.14.md",
+        "docs/repair/round2/master-register.md",
+        "docs/repair/round2/assignments.json"
+      ],
+      "evidenceDir": ".data/repair-evidence/R2-01.14/",
+      "researchRecord": "docs/repair/round2/research/R2-01.14.md"
+    },
+    {
+      "itemId": "R2-01.15",
+      "machine": "B",
+      "complexity": "complex",
+      "status": "closed",
+      "branch": "repair/b-r2-01-15",
+      "allowedPaths": [
+        "launch-ui.mjs",
+        "ui-server.mjs",
+        "server/core/runtime-process.js",
+        "test-launcher-single-instance.mjs",
+        "test-launcher-project-identity.mjs",
+        "test-launcher-log-rotation.mjs",
+        "test-page-lifecycle.mjs",
+        "docs/repair/round2/research/R2-01.15.md",
+        "docs/repair/round2/records/R2-01.15.md",
+        "docs/repair/round2/master-register.md",
+        "docs/repair/round2/assignments.json"
+      ],
+      "evidenceDir": ".data/repair-evidence/R2-01.15/",
+      "researchRecord": "docs/repair/round2/research/R2-01.15.md"
+    }
+  ],
+  "updatedAt": "2026-08-11T02:17:05.834Z"
+}

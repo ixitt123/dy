@@ -1,0 +1,26 @@
+{
+  "scenario": "cs1",
+  "description": "CS1 生产线测试 fixture。固定模板和三/四件套引用，用于验证 CS1 模板、时间轴、预览、混音、渲染、导出。",
+  "template": "default-education",
+  "threePiece": {
+    "narration": { "refScenario": "tts", "note": "引用 TTS fixture 生成的旁白音频" },
+    "script": { "refScenario": "rewrite-crossover", "field": "taskA.rewriteText" },
+    "subtitle": { "type": "srt", "note": "由字幕对齐生成，含时间戳" }
+  },
+  "fourPiece": {
+    "extends": "threePiece",
+    "bgm": { "refScenario": "bgm", "note": "引用 BGM fixture 生成的独立 BGM" }
+  },
+  "bgmRule": {
+    "threePiece": "BGM 关闭",
+    "fourPiece": "BGM 自动开启，可手动关闭",
+    "autoEnableCondition": "BGM 文件存在、可探测、可解码"
+  },
+  "expectedBehavior": "三件套和四件套均能生成可播放 MP4；预览与下载对应同一最终文件；BGM 响度和收尾合格",
+  "verificationPoints": [
+    "CS1 BGM 默认规则：三件套关闭，四件套自动开启可手动关闭",
+    "安全替换混音成片：新文件验证成功前不删除原成片",
+    "混音 manifest：输入哈希、音量、淡出、时长、输出哈希齐全",
+    "预览、最终 MP4、刷新、失败重试全部通过"
+  ]
+}

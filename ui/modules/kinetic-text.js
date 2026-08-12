@@ -8,8 +8,7 @@ import {
 
 const PREF_KEY = "dy:kinetic-text:preferences";
 const FAVORITES_KEY = "dy:subtitle-template:favorites";
-const HANDOFF_KEY = "dy:handoff:kinetic-text:audio";
-const TEXT_HANDOFF_KEY = "dy:handoff:kinetic-text:text";
+const ACTIVE_JOB_KEY = "dy:kinetic-text:active-job";
 const BOOKEND_MIN_SECONDS = 0.18;
 const BOOKEND_PRESET_TEXT = {
   intro: {
@@ -41,9 +40,12 @@ const state = {
   raf: 0,
   saveTimer: 0,
   pendingSaveChanges: {},
+  pendingTimelineChanges: {},
   pollTimer: 0,
   downloadsDir: "",
   audio: null,
+  bgmAudio: null,
+  bgmPreviewStarted: false,
   backgroundMedia: null,
   seekResumePlaying: false,
   seekCommitUntil: 0,
@@ -54,6 +56,7 @@ const state = {
   draggingOverlay: null,
   suppressCanvasClick: false,
   illustrationPlan: null,
+  routeActive: false,
 };
 
 function $(selector, root = state.page || document) {
@@ -82,13 +85,17 @@ function toggleFavorite(templateId) {
   renderEffects();
 }
 
-async function jsonFetch(url, options = {}) {
+async function jsonFetch(url, options = {}, retryLocalSession = true) {
   const response = await fetch(url, {
     cache: "no-store",
+    credentials: "same-origin",
     ...options,
     headers: { "Content-Type": "application/json", ...(options.headers || {}) },
   });
   const data = await response.json();
+  if (response.status === 401 && retryLocalSession && /local session token/i.test(String(data.message || data.error || ""))) {
+    return jsonFetch(url, options, false);
+  }
   if (!response.ok || data.ok === false) throw new Error(data.message || `请求失败：${response.status}`);
   return data;
 }
@@ -121,6 +128,16 @@ function mergeProjectChanges(base = {}, changes = {}) {
       outro: { ...(base.bookends?.outro || {}), ...(changes.bookends?.outro || {}) },
     };
   }
+  return next;
+}
+
+function acceptServerProject(project, { preserveTimelineDraft = true } = {}) {
+  const next = preserveTimelineDraft && hasTimelineDraft()
+    ? mergeProjectChanges(project, state.pendingTimelineChanges)
+    : project;
+  state.project = next;
+  const index = state.projects.findIndex((item) => item.id === next?.id);
+  if (index >= 0) state.projects[index] = next;
   return next;
 }
 
@@ -161,6 +178,11 @@ function syncPreviewMediaTime(time, { trustMs = SEEK_LOCK_MS } = {}) {
       state.audio.currentTime = Math.min(targetTime, Math.max(0, Number(state.audio.duration || 0)));
     } else if (state.audio) {
       state.audio.currentTime = targetTime;
+    }
+  } catch {}
+  try {
+    if (state.bgmAudio && state.bgmAudio.readyState >= 1 && Number.isFinite(Number(state.bgmAudio.duration)) && state.bgmAudio.duration > 0) {
+      state.bgmAudio.currentTime = targetTime % state.bgmAudio.duration;
     }
   } catch {}
   try {
@@ -291,10 +313,10 @@ function setProgress(progress = 0, stage = "等待开始") {
 function renderProjects() {
   const select = $("#kineticTextProjectSelect");
   if (!select) return;
-  select.innerHTML = state.projects.length
-    ? state.projects.map((project) => `<option value="${escapeHtml(project.id)}">${escapeHtml(project.title)} · ${escapeHtml(project.effect?.name || "")}</option>`).join("")
+  select.innerHTML = state.project
+    ? `<option value="${escapeHtml(state.project.id)}">${escapeHtml(state.project.title)} · ${escapeHtml(state.project.effect?.name || "")}</option>`
     : '<option value="">等待 TTS 发送</option>';
-  if (state.project) select.value = state.project.id;
+  select.disabled = true;
 }
 
 function renderEffects() {
@@ -328,10 +350,12 @@ function renderTimeline() {
   const container = $("#kineticTimeline");
   if (!container) return;
   if (!state.project?.segments?.length) {
-    container.innerHTML = '<p class="kinetic-empty">发送已确认的 TTS 后，这里会显示可编辑字幕时间轴。</p>';
+    container.innerHTML = '<p class="kinetic-empty">发送已确认的 TTS 后，这里会显示只读字幕和可调视觉参数。</p>';
+    renderTimelineDraftStatus();
     return;
   }
-  container.innerHTML = state.project.segments.map((segment, index) => {
+  const segments = hasTimelineDraft() ? state.pendingTimelineChanges.segments : state.project.segments;
+  container.innerHTML = segments.map((segment, index) => {
     const overrides = segment.overrides || {};
     const x = Number(overrides.x ?? state.project.effectParams?.x ?? 50);
     const y = Number(overrides.y ?? state.project.effectParams?.y ?? 50);
@@ -341,7 +365,7 @@ function renderTimeline() {
         <span class="kinetic-segment-index">${index + 1}</span>
         <input data-field="start" type="number" min="0" step="0.01" value="${Number(segment.start).toFixed(2)}" readonly aria-readonly="true" />
         <input data-field="end" type="number" min="0" step="0.01" value="${Number(segment.end).toFixed(2)}" readonly aria-readonly="true" />
-        <textarea data-field="text" rows="2">${escapeHtml(segment.text)}</textarea>
+        <textarea data-field="text" rows="2" data-no-draft-persist readonly aria-readonly="true" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-1p-ignore="true">${escapeHtml(segment.text)}</textarea>
         <input data-field="keywords" type="text" value="${escapeHtml((segment.keywords || []).join("、"))}" placeholder="每段1-2个，关键词不相邻" />
         <input data-field="lineBreaks" type="text" value="${escapeHtml((segment.lineBreaks || []).join(","))}" placeholder="如 6,12" title="按字符序号设置换行位置" />
         <div class="kinetic-position-inputs"><input data-field="x" type="number" min="5" max="95" value="${x}" /><input data-field="y" type="number" min="5" max="95" value="${y}" /></div>
@@ -349,6 +373,22 @@ function renderTimeline() {
       </div>
     `;
   }).join("");
+  renderTimelineDraftStatus();
+}
+
+function hasTimelineDraft() {
+  return Array.isArray(state.pendingTimelineChanges?.segments) && state.pendingTimelineChanges.segments.length > 0;
+}
+
+function renderTimelineDraftStatus() {
+  const button = $("#kineticConfirmTimeline");
+  const status = $("#kineticTimelineDraftStatus");
+  const dirty = Boolean(state.project && hasTimelineDraft());
+  if (button) button.disabled = !dirty;
+  if (status) {
+    status.hidden = !dirty;
+    status.textContent = dirty ? "有未确定修改" : "";
+  }
 }
 
 function renderTimelineRuleStatus() {
@@ -371,6 +411,9 @@ function renderTimelineRuleStatus() {
 
 function mediaUrl(kind, { download = false } = {}) {
   if (!state.project) return "";
+  if (kind === "video" && state.project.outputs?.finalAssetId) {
+    return `/api/final-assets/file?id=${encodeURIComponent(state.project.outputs.finalAssetId)}${download ? "&download=1" : ""}`;
+  }
   const suffix = download ? "&download=1" : "";
   return `/api/kinetic-text/file?id=${encodeURIComponent(state.project.id)}&kind=${encodeURIComponent(kind)}&v=${encodeURIComponent(state.project.updatedAt || Date.now())}${suffix}`;
 }
@@ -383,7 +426,7 @@ function renderDownloadDirectory() {
   const container = $("#kineticDownloadPath");
   if (!container) return;
   const directory = kineticDownloadDirectory();
-  container.textContent = directory ? `下载地址：${directory}` : "尚未选择下载地址";
+  container.textContent = directory ? `下载地址：${directory}` : "下载地址：浏览器默认下载位置";
   container.title = directory;
 }
 
@@ -392,7 +435,9 @@ function syncGlobalDownloadDirectory(directory) {
   const input = document.querySelector("#downloadDirInput");
   const label = document.querySelector("#savePath");
   if (input) input.value = state.downloadsDir;
-  if (label) label.textContent = `下载位置：${state.downloadsDir}`;
+  if (label) label.textContent = state.downloadsDir
+    ? `下载位置：${state.downloadsDir}`
+    : "下载位置：浏览器默认下载位置";
   renderDownloadDirectory();
 }
 
@@ -449,10 +494,42 @@ function syncAudio() {
     if (state.audio !== audio) return;
     state.currentTime = previewDuration();
     state.playing = false;
+    state.bgmAudio?.pause();
     cancelAnimationFrame(state.raf);
     $("#kineticPreviewPlay").textContent = "播放预览";
     drawPreview();
   });
+}
+
+function syncPreviewBgmAudio({ force = false } = {}) {
+  const mix = state.project?.audioMix || {};
+  const source = mix.source === "local" && mix.localPath ? mediaUrl("bgm") : "";
+  const player = $("#kineticBgmPlayer");
+  const playerWrap = $("#kineticBgmPlayerWrap");
+  if (!player || !playerWrap) return;
+  const absoluteSource = source ? new URL(source, window.location.href).href : "";
+  if (!force && source && player.src === absoluteSource) {
+    player.volume = Math.max(0, Math.min(1, Number(mix.backgroundVolume ?? 18) / 100));
+    playerWrap.hidden = false;
+    state.bgmAudio = player;
+    return;
+  }
+  if (state.bgmAudio) {
+    state.bgmAudio.pause();
+  }
+  player.pause();
+  player.removeAttribute("src");
+  player.load();
+  playerWrap.hidden = true;
+  state.bgmAudio = null;
+  state.bgmPreviewStarted = false;
+  if (!source) return;
+  player.src = source;
+  player.loop = true;
+  player.volume = Math.max(0, Math.min(1, Number(mix.backgroundVolume ?? 18) / 100));
+  playerWrap.hidden = false;
+  player.load();
+  state.bgmAudio = player;
 }
 
 function syncBackgroundMedia() {
@@ -1292,6 +1369,7 @@ function previewTick(timestamp) {
     state.currentTime = duration;
     state.playing = false;
     state.audio?.pause();
+    state.bgmAudio?.pause();
     if (state.backgroundMedia instanceof HTMLVideoElement) state.backgroundMedia.pause();
     $("#kineticPreviewPlay").textContent = "播放预览";
     drawPreview();
@@ -1322,6 +1400,19 @@ function startPreviewPlayback() {
       drawPreview();
     });
   }
+  if (state.bgmAudio) {
+    if (!state.bgmPreviewStarted) {
+      syncPreviewBgmAudio();
+      syncPreviewMediaTime(state.currentTime);
+    }
+    const bgmAudio = state.bgmAudio;
+    bgmAudio?.play().then(() => {
+      if (state.bgmAudio === bgmAudio) state.bgmPreviewStarted = true;
+    }).catch(() => {
+      if (state.bgmAudio !== bgmAudio) return;
+      console.warn("BGM preview playback was blocked by the browser");
+    });
+  }
   if (state.backgroundMedia instanceof HTMLVideoElement) { state.backgroundMedia.currentTime = state.currentTime % Math.max(state.backgroundMedia.duration || 1, 1); state.backgroundMedia.play().catch(() => {}); }
   cancelAnimationFrame(state.raf);
   state.raf = requestAnimationFrame(previewTick);
@@ -1333,6 +1424,7 @@ function playPreview() {
     state.playing = false;
     $("#kineticPreviewPlay").textContent = "播放预览";
     state.audio?.pause();
+    state.bgmAudio?.pause();
     if (state.backgroundMedia instanceof HTMLVideoElement) state.backgroundMedia.pause();
     cancelAnimationFrame(state.raf);
     return;
@@ -1442,6 +1534,7 @@ function beginPreviewSeek(event) {
   if (!state.playing) return;
   state.playing = false;
   state.audio?.pause();
+  state.bgmAudio?.pause();
   if (state.backgroundMedia instanceof HTMLVideoElement) state.backgroundMedia.pause();
   cancelAnimationFrame(state.raf);
 }
@@ -1597,9 +1690,7 @@ async function setIllustrationEnabled(enabled) {
   savePreferences({ illustration: config });
   try {
     const data = await postJson("/api/kinetic-text/update", { projectId: state.project.id, changes });
-    state.project = data.project;
-    const index = state.projects.findIndex((item) => item.id === state.project.id);
-    if (index >= 0) state.projects[index] = state.project;
+    acceptServerProject(data.project);
     renderProject();
     status.textContent = enabled
       ? (generatedPath ? "动态背景特效已启用并应用。" : "已启用；请生成一次动态背景素材。")
@@ -1627,6 +1718,7 @@ async function generateIllustration(force = false, sourceMode = "api") {
   setProgress(2, "准备官方动态插画工作流");
   try {
     const data = await postJson("/api/kinetic-text/illustration", { projectId: state.project.id, config: { ...config, sourceMode }, force });
+    saveActiveJob(data.job);
     pollJob(data.job.id, {
       onComplete: () => {
         button.disabled = false;
@@ -1668,6 +1760,8 @@ function renderProject() {
   $("#kineticBackgroundMode").value = project.background?.mode || "black";
   $("#kineticBackgroundName").textContent = project.background?.name ? `当前：${project.background.name}` : "当前：纯黑背景";
   $("#kineticAudioSource").value = project.audioMix?.source || "none";
+  $("#kineticIncludeBgm").checked = project.audioMix?.source === "local";
+  $("#kineticIncludeBgm").disabled = !project.audioMix?.localPath;
   $("#kineticBgmName").textContent = project.audioMix?.localName || "未上传背景音乐";
   $("#kineticTtsVolume").value = String(project.audioMix?.ttsVolume ?? 100);
   $("#kineticBgVolume").value = String(project.audioMix?.backgroundVolume ?? 18);
@@ -1698,6 +1792,7 @@ function renderProject() {
   renderOutputs();
   renderReceivedFiles();
   syncAudio();
+  syncPreviewBgmAudio();
   syncBackgroundMedia();
   drawPreview();
 }
@@ -1705,10 +1800,33 @@ function renderProject() {
 async function refreshProjects(preferredId = "") {
   const data = await jsonFetch("/api/kinetic-text/projects");
   state.projects = data.projects || [];
-  const id = preferredId || state.project?.id || localStorage.getItem("dy:kinetic-text:project-id") || state.projects[0]?.id;
-  state.project = state.projects.find((project) => project.id === id) || state.projects[0] || null;
-  if (state.project) localStorage.setItem("dy:kinetic-text:project-id", state.project.id);
+  const id = preferredId || state.project?.id || "";
+  if (id && state.projects.some((project) => project.id === id)) {
+    const projectData = await jsonFetch(`/api/kinetic-text/project?id=${encodeURIComponent(id)}`);
+    state.project = projectData.project || null;
+  } else {
+    state.project = null;
+  }
+  state.pendingTimelineChanges = {};
+  localStorage.removeItem("dy:kinetic-text:project-id");
   renderProject();
+}
+
+function clearTimelineState(message = "等待 TTS 发送已确认字幕时间轴") {
+  clearTimeout(state.saveTimer);
+  state.saveTimer = 0;
+  state.project = null;
+  state.pendingTimelineChanges = {};
+  state.pendingSaveChanges = {};
+  state.currentTime = 0;
+  state.playing = false;
+  localStorage.removeItem("dy:kinetic-text:project-id");
+  localStorage.removeItem("dy:handoff:kinetic-text:audio");
+  localStorage.removeItem("dy:handoff:kinetic-text:text");
+  localStorage.removeItem("dy:kinetic-text:last-text-handoff");
+  syncAudio();
+  renderProject();
+  setProgress(0, message);
 }
 
 function scheduleSave(changes = {}) {
@@ -1724,9 +1842,7 @@ function scheduleSave(changes = {}) {
     state.pendingSaveChanges = {};
     try {
       const data = await postJson("/api/kinetic-text/update", { projectId: state.project.id, changes: changesToSave });
-      state.project = data.project;
-      const index = state.projects.findIndex((item) => item.id === state.project.id);
-      if (index >= 0) state.projects[index] = state.project;
+      acceptServerProject(data.project);
       renderProjects();
       renderTimelineRuleStatus();
     } catch (error) {
@@ -1741,7 +1857,9 @@ function applyTimelineInput(input) {
   const index = Number(row?.dataset.segmentIndex);
   if (!Number.isInteger(index) || !state.project?.segments[index]) return;
   const field = input.dataset.field;
-  const segments = state.project.segments.map((segment, segmentIndex) => {
+  if (field === "text") return;
+  const baseSegments = hasTimelineDraft() ? state.pendingTimelineChanges.segments : state.project.segments;
+  const segments = baseSegments.map((segment, segmentIndex) => {
     if (segmentIndex !== index) return segment;
     if (field === "keywords") return { ...segment, keywords: input.value.split(/[、,，]/).map((item) => item.trim()).filter(Boolean) };
     if (field === "lineBreaks") return { ...segment, lineBreaks: [...new Set(input.value.split(/[,，、\s]+/).map(Number).filter((value) => Number.isInteger(value) && value > 0 && value < String(segment.text || "").length))].sort((a, b) => a - b) };
@@ -1749,7 +1867,10 @@ function applyTimelineInput(input) {
     if (["start", "end"].includes(field)) return { ...segment, [field]: Number(input.value) };
     return { ...segment, [field]: input.value };
   });
-  scheduleSave({ segments, duration: Math.max(...segments.map((item) => Number(item.end || 0)), state.project.duration || 0) });
+  const changes = { segments, duration: Math.max(...segments.map((item) => Number(item.end || 0)), state.project.duration || 0) };
+  state.pendingTimelineChanges = mergeProjectChanges(state.pendingTimelineChanges, changes);
+  renderTimelineDraftStatus();
+  setProgress(state.project.progress || 0, "字幕已修改，点击“确定修改”后保存");
 }
 
 function sharedTimelineFromPayload(payload = {}) {
@@ -1764,7 +1885,18 @@ function sharedTimelineFromPayload(payload = {}) {
     start: Number(row.start || 0),
     end: Number(row.end || 0),
     text: String(row.text || ""),
-  })).filter((row) => row.text && row.end > row.start);
+  })).filter((row) => row.text.trim() && row.end > row.start);
+}
+
+function projectMatchesSharedTimeline(project = {}, rows = []) {
+  const segments = Array.isArray(project.segments) ? project.segments : [];
+  if (segments.length !== rows.length) return false;
+  return rows.every((row, index) => {
+    const segment = segments[index] || {};
+    return Math.abs(Number(segment.start || 0) - Number(row.start || 0)) < 0.001
+      && Math.abs(Number(segment.end || 0) - Number(row.end || 0)) < 0.001
+      && String(segment.text || "") === String(row.text || "");
+  });
 }
 
 async function applySharedTimelineToKineticProject(payload = {}) {
@@ -1772,11 +1904,14 @@ async function applySharedTimelineToKineticProject(payload = {}) {
   const rows = sharedTimelineFromPayload(payload);
   if (!project || !rows.length) return null;
   const segments = rows.map((row, index) => ({
-    ...(project.segments?.[index] || {}),
     ...row,
-    id: project.segments?.[index]?.id || row.id || `segment-${index + 1}`,
+    id: row.id || `segment-${index + 1}`,
+    keywords: Array.isArray(row.keywords) ? row.keywords : [],
+    lineBreaks: Array.isArray(row.lineBreaks) ? row.lineBreaks : [],
+    overrides: {},
   }));
   const finalText = String(payload.final_text || payload.text || segments.map((item) => item.text || "").join("") || project.text || "");
+  const sourceText = String(payload.original_text || payload.final_text || project.originalText || finalText || "");
   const data = await postJson("/api/kinetic-text/update", {
     projectId: project.id,
     changes: {
@@ -1787,41 +1922,51 @@ async function applySharedTimelineToKineticProject(payload = {}) {
       scriptPath: String(payload.script_path || ""),
       subtitlePath: String(payload.subtitle_path || payload.timed_subtitle_path || ""),
       timestampedTextPath: String(payload.timestamped_text_path || payload.timed_subtitle_path || ""),
-      originalText: String(payload.original_text || ""),
+      originalText: sourceText,
       recognizedText: String(payload.recognized_text || ""),
       wordTimeline: Array.isArray(payload.word_timeline) ? payload.word_timeline : [],
       sentenceTimeline: rows,
+      subtitleTimeline: rows,
       alignmentStatus: String(payload.alignment_status || ""),
       alignmentConfirmedAt: String(payload.alignment_confirmed_at || ""),
       ttsHandoffId: String(payload.handoff_id || ""),
       ttsHandoffRevision: String(payload.handoff_revision || ""),
       ttsSharedUpdatedAt: String(payload.sharedUpdatedAt || payload.sent_at || payload.sentAt || ""),
       segments,
-      duration: Math.max(...segments.map((item) => Number(item.end || 0)), project.duration || 0),
+      duration: Math.max(...segments.map((item) => Number(item.end || 0)), Number(payload.audio_duration || payload.duration || 0)),
       subtitleSource: "shared-production-timeline",
+      timelineAuthority: "tts-confirmed",
+      timelineLocked: true,
     },
   });
   const projectIndex = state.projects.findIndex((item) => item.id === data.project.id);
   if (projectIndex >= 0) state.projects[projectIndex] = data.project;
   if (state.project?.id === data.project.id) {
-    state.project = data.project;
+    acceptServerProject(data.project);
     renderProject();
   }
   return data.project;
 }
 
-async function syncKineticSubtitleText() {
-  if (!state.project?.ttsJobId || !state.project.segments?.length) return;
-  setProgress(state.project.progress || 0, "正在自动保存字幕...");
+async function confirmTimelineChanges() {
+  if (!state.project || !hasTimelineDraft()) {
+    setProgress(state.project?.progress || 0, "没有待确认的字幕修改");
+    return;
+  }
+  const changesToSave = state.pendingTimelineChanges;
+  state.pendingTimelineChanges = {};
+  renderTimelineDraftStatus();
+  setProgress(state.project.progress || 0, "正在保存已确认字幕修改...");
   try {
-    const payload = await window.sharedTtsHandoff.syncTimeline(state.project.segments, {
-      sourceTarget: "kinetic-text",
-      title: state.project.title,
-    });
-    await applySharedTimelineToKineticProject(payload);
-    setProgress(state.project.progress || 0, "字幕已保存：原时间戳和已生成视频保持不变");
+    const data = await postJson("/api/kinetic-text/update", { projectId: state.project.id, changes: changesToSave });
+    acceptServerProject(data.project, { preserveTimelineDraft: false });
+    renderProjects();
+    renderProject();
+    setProgress(state.project.progress || 0, "字幕修改已确认保存");
   } catch (error) {
-    setProgress(state.project.progress || 0, `字幕自动保存失败：${error.message || error}`);
+    state.pendingTimelineChanges = mergeProjectChanges(changesToSave, state.pendingTimelineChanges);
+    renderTimelineDraftStatus();
+    setProgress(state.project.progress || 0, `字幕保存失败：${error.message || error}`);
   }
 }
 
@@ -1839,14 +1984,14 @@ async function uploadFile(kind, file) {
   setProgress(5, `上传${kind === "background" ? "背景" : "背景音乐"}`);
   const dataUrl = await fileToDataUrl(file);
   const data = await postJson("/api/kinetic-text/upload", { projectId: state.project.id, kind, name: file.name, data: dataUrl });
-  state.project = data.project;
+  acceptServerProject(data.project);
   if (kind === "background" && state.project.dynamicIllustration?.config?.enabled) {
     const config = { ...state.project.dynamicIllustration.config, enabled: false };
     const updated = await postJson("/api/kinetic-text/update", {
       projectId: state.project.id,
       changes: { dynamicIllustration: { config, previousBackground: state.project.background } },
     });
-    state.project = updated.project;
+    acceptServerProject(updated.project);
     savePreferences({ illustration: config });
   }
   savePreferences({ backgroundMode: state.project.background.mode, audioSource: state.project.audioMix.source });
@@ -1859,16 +2004,24 @@ async function pollJob(jobId, options = {}) {
   const job = data.job;
   setProgress(job.progress, job.stage);
   if (job.status === "completed") {
+    clearActiveJob(job.id);
     await refreshProjects(job.projectId);
     if (options.renderOnComplete && job.type === "render") {
       const videoPath = job.result?.videoPath || state.project?.outputs?.finalVideo || kineticDownloadDirectory();
-      setProgress(100, `视频已保存：${videoPath}`);
+      const finalAssetId = job.result?.assetId || state.project?.outputs?.finalAssetId || "";
+      const receiptHandoffId = String(state.project?.ttsHandoffId || "");
+      if (receiptHandoffId && finalAssetId && globalThis.ttsHandoffStore?.updateReceipt) {
+        await globalThis.ttsHandoffStore.updateReceipt("kinetic-text", "rendered", { handoffId: receiptHandoffId, assetId: finalAssetId });
+        await globalThis.ttsHandoffStore.updateReceipt("kinetic-text", "verified", { handoffId: receiptHandoffId, assetId: finalAssetId });
+      }
+      setProgress(100, `成片已保存：${videoPath}`);
       setRenderButtonBusy(false);
     }
     if (typeof options.onComplete === "function") options.onComplete(job);
     return job;
   }
   if (job.status === "failed") {
+    clearActiveJob(job.id);
     setProgress(job.progress || 0, `${job.stage}：${job.error}`);
     if (options.renderOnComplete) setRenderButtonBusy(false);
     if (typeof options.onFailed === "function") options.onFailed(job);
@@ -1880,6 +2033,60 @@ async function pollJob(jobId, options = {}) {
   }), 1000);
 }
 
+function saveActiveJob(job, options = {}) {
+  try {
+    if (!job?.id) return;
+    localStorage.setItem(ACTIVE_JOB_KEY, JSON.stringify({
+      id: String(job.id),
+      type: String(job.type || ""),
+      renderOnComplete: options.renderOnComplete === true,
+      downloadOnComplete: options.downloadOnComplete === true,
+    }));
+  } catch {}
+}
+
+function clearActiveJob(jobId = "") {
+  try {
+    // 用户可叠加多个任务（如 materials 与 render 并发），先完成的 job
+    // 不能清掉后启动 job 的持久化 ID，否则刷新后后者无法恢复。
+    if (jobId) {
+      const saved = readActiveJob();
+      if (saved?.id && String(saved.id) !== String(jobId)) return;
+    }
+    localStorage.removeItem(ACTIVE_JOB_KEY);
+  } catch {}
+}
+
+function readActiveJob() {
+  try { return JSON.parse(localStorage.getItem(ACTIVE_JOB_KEY) || "null"); } catch { return null; }
+}
+
+async function restoreActiveJob() {
+  const saved = readActiveJob();
+  if (!saved?.id) return;
+  try {
+    const data = await jsonFetch(`/api/kinetic-text/job?id=${encodeURIComponent(saved.id)}`);
+    const job = data.job;
+    if (!job || job.status === "completed" || job.status === "failed") {
+      clearActiveJob();
+      return;
+    }
+    if (saved.renderOnComplete && job.type === "render") setRenderButtonBusy(true);
+    setProgress(job.progress || 0, job.stage || "已恢复上次任务");
+    state.pollTimer = setTimeout(() => pollJob(job.id, {
+      renderOnComplete: saved.renderOnComplete && job.type === "render",
+      downloadOnComplete: saved.downloadOnComplete === true && job.type === "render",
+    }).catch((error) => {
+      setProgress(0, error.message);
+      if (saved.renderOnComplete) setRenderButtonBusy(false);
+    }), 1000);
+  } catch (error) {
+    // 同上：只有任务明确不存在才清除；服务暂时不可达时保留 ID。
+    const message = String(error?.message || "");
+    if (/不存在|没有|not.?found|404/i.test(message)) clearActiveJob();
+  }
+}
+
 async function saveProjectImmediately() {
   if (!state.project) return null;
   clearTimeout(state.saveTimer);
@@ -1887,20 +2094,48 @@ async function saveProjectImmediately() {
   state.pendingSaveChanges = {};
   state.project = mergeProjectChanges(state.project, changesToSave);
   const data = await postJson("/api/kinetic-text/update", { projectId: state.project.id, changes: changesToSave });
-  state.project = data.project;
-  const index = state.projects.findIndex((item) => item.id === state.project.id);
-  if (index >= 0) state.projects[index] = state.project;
+  acceptServerProject(data.project);
   return state.project;
 }
 
-async function receiveTts(payload) {
-  if (!payload?.id) throw new Error("没有可用的 TTS 音频。");
+async function receiveTts(payload, { navigate = true } = {}) {
+  const rows = sharedTimelineFromPayload(payload || {});
+  const confirmed = String(payload?.alignment_status || payload?.metadata?.alignment_status || "") === "confirmed";
+  if (!payload?.id || !confirmed || !rows.length) {
+    clearTimelineState("TTS 参数为空或无效，字幕时间轴已清空");
+    return null;
+  }
   const existing = state.projects.find((project) => String(project.ttsJobId) === String(payload.id));
+  const receivedBgm = payload?.bgm_path
+    ? {
+      source: "local",
+      localPath: payload.bgm_path,
+      localName: payload.bgm_name || "清爽教育 BGM",
+      backgroundVolume: Math.max(0, Math.min(100, Number(payload.bgm_volume_percent ?? (Number(payload.bgm_volume ?? 0.28) * 100)))),
+    }
+    : null;
+  const handoffRevision = String(payload.handoff_revision || "");
+  if (
+    existing
+    && handoffRevision
+    && String(existing.ttsHandoffRevision || "") === handoffRevision
+    && projectMatchesSharedTimeline(existing, rows)
+  ) {
+    state.project = existing;
+    renderProject();
+    if (navigate) window.workbenchNavigate?.("kinetic-text");
+    return state.project;
+  }
+  clearTimelineState("正在接收新的 TTS 参数");
   if (existing) {
     state.project = await applySharedTimelineToKineticProject(payload) || existing;
+    if (receivedBgm && state.project?.id) {
+      const updated = await postJson("/api/kinetic-text/update", { projectId: state.project.id, changes: { audioMix: receivedBgm } });
+      state.project = updated.project || state.project;
+    }
     await refreshProjects(state.project.id);
     renderProject();
-    window.workbenchNavigate?.("kinetic-text");
+    if (navigate) window.workbenchNavigate?.("kinetic-text");
     return state.project;
   }
   const preferences = readPreferences();
@@ -1911,30 +2146,22 @@ async function receiveTts(payload) {
     frameRate: Number(preferences.frameRate) === 60 ? 60 : 30,
     videoProjectId: window.videoProjects?.current?.()?.id || localStorage.getItem("active-video-project-id") || "",
   });
+  state.pendingTimelineChanges = {};
   state.project = data.project;
   await refreshProjects(state.project.id);
-  window.workbenchNavigate?.("kinetic-text");
+  if (navigate) window.workbenchNavigate?.("kinetic-text");
   return state.project;
 }
 
+async function restoreStoredTtsHandoff() {
+  const payload = await globalThis.ttsHandoffStore?.hydrate("kinetic-text");
+  return payload?.id ? receiveTts(payload, { navigate: false }) : null;
+}
+
 async function receiveText(payload = {}) {
-  const text = String(payload.text || "").trim();
-  if (!text) throw new Error("没有可用的文案。");
-  const preferences = readPreferences();
-  const data = await postJson("/api/kinetic-text/create", {
-    title: payload.title || "文案动态大字视频",
-    text,
-    source: payload.source || "rewrite",
-    effectId: preferences.effectId,
-    aspectRatio: preferences.aspectRatio || "9:16",
-    frameRate: Number(preferences.frameRate) === 60 ? 60 : 30,
-    videoProjectId: payload.videoProjectId || window.videoProjects?.current?.()?.id || localStorage.getItem("active-video-project-id") || "",
-  });
-  state.project = data.project;
-  await refreshProjects(state.project.id);
-  if (payload.sentAt) localStorage.setItem("dy:kinetic-text:last-text-handoff", String(payload.sentAt));
+  clearTimelineState("文案直传不会生成字幕时间轴，请从 TTS 页面发送已确认参数");
   window.workbenchNavigate?.("kinetic-text");
-  return state.project;
+  return null;
 }
 
 function bindBookendControl(kind) {
@@ -1958,12 +2185,6 @@ function bindEvents() {
   bindBookendControl("intro");
   bindBookendControl("outro");
   $("#kineticTextRefresh").addEventListener("click", () => refreshProjects().catch((error) => setProgress(0, error.message)));
-  $("#kineticTextProjectSelect").addEventListener("change", (event) => {
-    state.project = state.projects.find((item) => item.id === event.target.value) || null;
-    if (state.project) localStorage.setItem("dy:kinetic-text:project-id", state.project.id);
-    state.currentTime = 0;
-    renderProject();
-  });
   $("#kineticEffectGrid").addEventListener("click", (event) => {
     const card = event.target.closest("[data-effect-id]");
     if (!card || !state.project) return;
@@ -1995,9 +2216,7 @@ function bindEvents() {
     if (video) { video.pause(); video.currentTime = 0; }
   });
   $("#kineticTimeline").addEventListener("input", (event) => { if (event.target.dataset.field) applyTimelineInput(event.target); });
-  $("#kineticTimeline").addEventListener("focusout", (event) => {
-    if (event.target.matches('[data-field="text"]')) syncKineticSubtitleText();
-  });
+  $("#kineticConfirmTimeline").addEventListener("click", () => confirmTimelineChanges());
   $("#kineticTextTitle").addEventListener("input", (event) => {
     const title = event.target.value;
     const intro = state.project?.bookends?.intro;
@@ -2087,8 +2306,17 @@ function bindEvents() {
     });
   });
   $("#kineticAudioSource").addEventListener("change", (event) => {
+    if (event.target.value !== "local") $("#kineticIncludeBgm").checked = false;
+    else if (state.project?.audioMix?.localPath) $("#kineticIncludeBgm").checked = true;
     savePreferences({ audioSource: event.target.value });
     scheduleSave({ audioMix: { source: event.target.value } });
+  });
+  $("#kineticIncludeBgm").addEventListener("change", (event) => {
+    const hasLocalBgm = Boolean(state.project?.audioMix?.localPath);
+    const source = event.target.checked && hasLocalBgm ? "local" : "none";
+    $("#kineticAudioSource").value = source;
+    savePreferences({ audioSource: source });
+    scheduleSave({ audioMix: { source } });
   });
   $("#kineticTtsVolume").addEventListener("input", (event) => {
     $("#kineticTtsVolumeValue").value = `${event.target.value}%`;
@@ -2098,7 +2326,16 @@ function bindEvents() {
   $("#kineticBgVolume").addEventListener("input", (event) => {
     $("#kineticBgVolumeValue").value = `${event.target.value}%`;
     savePreferences({ backgroundVolume: Number(event.target.value) });
+    if (state.bgmAudio) state.bgmAudio.volume = Math.max(0, Math.min(1, Number(event.target.value) / 100));
     scheduleSave({ audioMix: { backgroundVolume: Number(event.target.value) } });
+  });
+  $("#kineticBgmPlayer").addEventListener("volumechange", (event) => {
+    if (!state.project || state.bgmAudio !== event.currentTarget) return;
+    const percentage = Math.round(event.currentTarget.volume * 100);
+    const slider = $("#kineticBgVolume");
+    if (slider && Number(slider.value) !== percentage) slider.value = String(percentage);
+    $("#kineticBgVolumeValue").value = `${percentage}%`;
+    scheduleSave({ audioMix: { backgroundVolume: percentage } });
   });
   $("#kineticBottomSubtitles").addEventListener("change", (event) => {
     savePreferences({ showBottomSubtitles: event.target.checked });
@@ -2108,26 +2345,6 @@ function bindEvents() {
   $("#kineticChooseBgm").addEventListener("click", () => $("#kineticBgmFile").click());
   $("#kineticBackgroundFile").addEventListener("change", (event) => uploadFile("background", event.target.files?.[0]).catch((error) => setProgress(0, error.message)));
   $("#kineticBgmFile").addEventListener("change", (event) => uploadFile("bgm", event.target.files?.[0]).catch((error) => setProgress(0, error.message)));
-  $("#kineticAnalyze").addEventListener("click", async () => {
-    if (!state.project) return;
-    const button = $("#kineticAnalyze");
-    button.disabled = true;
-    setProgress(5, "正在本地识别每句关键词（不调用 API）");
-    try {
-      const data = await postJson("/api/kinetic-text/analyze", {
-        projectId: state.project.id,
-        provider: $("#kineticTextProvider").value,
-        keywordsOnly: true,
-      });
-      state.project = data.project;
-      renderProject();
-      setProgress(100, data.aiUsed ? `关键词识别完成 · ${data.provider}` : "关键词识别完成 · 本地规则");
-    } catch (error) {
-      setProgress(0, error.message);
-    } finally {
-      button.disabled = false;
-    }
-  });
   $("#kineticPreviewPlay").addEventListener("click", playPreview);
   $("#kineticPreviewCanvas").addEventListener("pointerdown", beginOverlayDrag);
   $("#kineticPreviewCanvas").addEventListener("pointermove", moveOverlayDrag);
@@ -2171,6 +2388,7 @@ function bindEvents() {
   $("#kineticGenerateMaterials").addEventListener("click", async () => {
     if (!state.project) return;
     const data = await postJson("/api/kinetic-text/materials", { projectId: state.project.id });
+    saveActiveJob(data.job);
     pollJob(data.job.id).catch((error) => setProgress(0, error.message));
   });
   $("#kineticChooseDownloadDir").addEventListener("click", () => {
@@ -2184,11 +2402,22 @@ function bindEvents() {
   });
   $("#kineticRenderFinal").addEventListener("click", async () => {
     if (!state.project) return;
+    if (state.project?.outputs?.finalVideo) {
+      const filePath = state.project.outputs.finalVideo;
+      try {
+        await postJson("/api/open-path", { filePath });
+        setProgress(100, `成片已保存在下载目录：${filePath}`);
+      } catch (error) {
+        setProgress(100, `成片已保存，但打开位置失败：${error.message}`);
+      }
+      return;
+    }
     setRenderButtonBusy(true);
     setProgress(3, "保存当前编辑");
     try {
       await saveProjectImmediately();
       const data = await postJson("/api/kinetic-text/render", { projectId: state.project.id });
+      saveActiveJob(data.job, { renderOnComplete: true });
       pollJob(data.job.id, { renderOnComplete: true }).catch((error) => {
         setRenderButtonBusy(false);
         setProgress(0, error.message);
@@ -2200,9 +2429,14 @@ function bindEvents() {
   });
   window.addEventListener("kinetic-text-handoff", (event) => receiveTts(event.detail).catch((error) => setProgress(0, error.message)));
   window.addEventListener("kinetic-text-text-handoff", (event) => receiveText(event.detail).catch((error) => setProgress(0, error.message)));
-  window.addEventListener("tts-shared-handoff-updated", (event) => {
-    if (event.detail?.sourceTarget === "kinetic-text") return;
-    applySharedTimelineToKineticProject(event.detail?.payload).catch((error) => setProgress(state.project?.progress || 0, `字幕同步失败：${error.message}`));
+  document.addEventListener("workbench:route", (event) => {
+    const nextActive = event.detail?.page === "kinetic-text";
+    if (nextActive) {
+      restoreStoredTtsHandoff().catch((error) => setProgress(0, error.message));
+    } else if (state.routeActive) {
+      clearTimelineState();
+    }
+    state.routeActive = nextActive;
   });
 }
 
@@ -2222,17 +2456,8 @@ export async function initKineticTextModule() {
   if ([...providerSelect.options].some((option) => option.value === preferences.provider)) providerSelect.value = preferences.provider;
   providerSelect.addEventListener("change", () => savePreferences({ provider: providerSelect.value }));
   bindEvents();
-  window.kineticTextProduction = { receiveTts, receiveText, refresh: refreshProjects };
+  window.kineticTextProduction = { receiveTts, receiveText, refresh: refreshProjects, restoreStoredTtsHandoff };
   await refreshProjects();
-  try {
-    const payload = JSON.parse(localStorage.getItem(HANDOFF_KEY) || "null");
-    if (payload?.id) await receiveTts(payload);
-  } catch {}
-  try {
-    const payload = JSON.parse(localStorage.getItem(TEXT_HANDOFF_KEY) || "null");
-    if (payload?.text && String(payload.sentAt || "") !== localStorage.getItem("dy:kinetic-text:last-text-handoff")) {
-      await receiveText(payload);
-      if (payload.sentAt) localStorage.setItem("dy:kinetic-text:last-text-handoff", String(payload.sentAt));
-    }
-  } catch {}
+  await restoreActiveJob();
+  await restoreStoredTtsHandoff();
 }

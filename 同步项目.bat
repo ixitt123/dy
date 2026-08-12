@@ -3,17 +3,16 @@ chcp 65001 >nul
 cd /d "%~dp0"
 
 echo.
-echo 正在同步当前项目...
-echo 项目位置：%cd%
+echo 安全上传已改为“明确文件清单”模式。
+echo 本窗口不会自动暂存、提交、拉取、变基或上传任何文件。
 echo.
-
-node sync-project.mjs upload
-
+echo 1. 由维修任务创建仅包含本次源文件的 JSON 清单，例如：
+echo    {"files":["sync-project.mjs","test-safe-sync-policy.mjs"],"message":"fix: safe explicit staging"}
+echo 2. 检查清单后，在 PowerShell 中明确执行：
+echo    node sync-project.mjs upload --files-file "相对清单路径"
+echo 3. 若远程有新提交或暂存区包含清单外文件，工具会停止，不会自动 pull、rebase 或混入提交。
 echo.
-if errorlevel 1 (
-  echo 同步没有完成。请把上面的提示或 .data\sync.log 发给我，我会继续处理。
-) else (
-  echo 同步完成。另一台电脑拉取后就是同一份最新版本。
-)
+echo 当前分支：
+git branch --show-current
 echo.
 pause

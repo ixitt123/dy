@@ -1,0 +1,39 @@
+{
+  "description": "期望输出特征清单。存放各场景期望的输出特征（非大文件），用于回归测试断言。",
+  "scenarios": {
+    "tts": {
+      "expectedOutput": "mp3 音频文件",
+      "checks": ["文件存在", "FFprobe 可读", "时长 18-22 秒", "采样率 24000", "可解码"]
+    },
+    "bgm": {
+      "expectedOutput": "mp3 独立 BGM 文件",
+      "checks": ["文件存在", "FFprobe 可读", "时长 23-24 秒（旁白+3-4s）", "淡出 2-3 秒", "响度以人声为主，默认约 18% 起点"]
+    },
+    "cs1": {
+      "expectedOutput": "mp4 视频文件",
+      "checks": ["文件存在", "FFprobe 可读", "含旁白音轨", "四件套时含 BGM 音轨", "预览与下载同一文件"]
+    },
+    "xiaohei": {
+      "expectedOutput": "mp4 视频文件",
+      "checks": ["文件存在", "FFprobe 可读", "含旁白+BGM", "倍速正确写入", "字幕/画面/TTS/BGM 结束点同步"]
+    },
+    "moneyprinter": {
+      "expectedOutput": "mp4 视频文件",
+      "checks": ["文件存在", "FFprobe 可读", "含旁白+BGM（不只人声）", "预览与下载同一文件", "8787 重启后任务映射可恢复"]
+    },
+    "kinetic-text": {
+      "expectedOutput": "mp4 视频文件",
+      "checks": ["文件存在", "FFprobe 可读", "含旁白+BGM", "BGM 原子写入（无 audioMix:none 中间态）", "刷新/重启后 handoff 不丢失"]
+    }
+  },
+  "fixtureHashes": {
+    "rewrite-crossover/input.json": "1fc3a6f53daf3a208f98a745bb98b4da851509019babd7af31e9aa6bf2faa5cc",
+    "tts/input.json": "a93d9facfddb55fd3c2d3a51830fcfe6349e974d6ae9500130eb863a437e6e86",
+    "bgm/input.json": "039b2741d90cc1e23a13caf07285e7d6457e2bdb52b2cb03414001b1a5b9e1b7",
+    "cs1/input.json": "2624c5eab5c7de8127c984fce7ade33211773dda9aeb0ce370b05ff26b7155d3",
+    "kinetic-text/input.json": "f03e7aa459f7ad814a3a77397acbd4cd1dec00dac9461dd8572794491b93d667",
+    "moneyprinter/input.json": "4bf67e4e472636921f2542a9aa849bc7a900c6679fbf78a76ca2f85ef15e3b01",
+    "xiaohei/input.json": "d549986caba03968db84b233d904f1f3d727c350f7abe31a44619b5085facf45"
+  },
+  "note": "期望输出特征用于后续维修编号的回归测试断言。真实媒体检测在对应维修编号完成时执行。"
+}

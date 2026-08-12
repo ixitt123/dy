@@ -1,0 +1,19 @@
+{
+  "description": "06.01-06.04 动态大字三件套、四件套和手动关闭 BGM 的非敏感固定输入",
+  "narration": {
+    "file": "narration-440.wav",
+    "frequencyHz": 440,
+    "durationSeconds": 1.2,
+    "sha256": "500bf610949920f9686a4ce7e8576dbb8ccd2f3479fce3ec69e7637f611c7e9b"
+  },
+  "bgm": {
+    "file": "bgm-110.wav",
+    "frequencyHz": 110,
+    "durationSeconds": 4.7,
+    "sha256": "a72cd22ac75e444f063f030b8b599d004095ee38d109f1ec88836a6872b6d099",
+    "volume": 0.18
+  },
+  "timeline": [
+    { "start": 0, "end": 1.2, "text": "动态大字原子 BGM 回归。" }
+  ]
+}

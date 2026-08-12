@@ -2,6 +2,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { PIPELINE_STAGES } from "./PipelineEvents.js";
+import { readJsonWithRecovery, writeJsonAtomic } from "../atomic-write.mjs";
 
 const STAGE_STATUS = {
   PENDING: "pending",
@@ -20,24 +21,18 @@ export class PipelineState {
   }
 
   _load() {
-    try {
-      if (fs.existsSync(this._stateFile)) {
-        const data = JSON.parse(fs.readFileSync(this._stateFile, "utf8"));
-        for (const [k, v] of Object.entries(data)) {
-          this._states.set(k, v);
-        }
+    if (fs.existsSync(this._stateFile) || fs.existsSync(`${this._stateFile}.bak`)) {
+      const data = readJsonWithRecovery(this._stateFile, { fallback: {} });
+      for (const [k, v] of Object.entries(data)) {
+        this._states.set(k, v);
       }
-    } catch {}
+    }
   }
 
   _save() {
-    try {
-      const dir = path.dirname(this._stateFile);
-      fs.mkdirSync(dir, { recursive: true });
-      const obj = {};
-      for (const [k, v] of this._states) { obj[k] = v; }
-      fs.writeFileSync(this._stateFile, JSON.stringify(obj, null, 2), "utf8");
-    } catch {}
+    const obj = {};
+    for (const [k, v] of this._states) { obj[k] = v; }
+    writeJsonAtomic(this._stateFile, obj);
   }
 
   initJob(jobId, sourceId = "") {

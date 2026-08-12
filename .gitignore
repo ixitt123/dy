@@ -1,5 +1,6 @@
 node_modules/
 .data/
+backups/
 downloads/*
 !downloads/.gitkeep
 rewrites/*
@@ -37,9 +38,22 @@ ui-server.url
 .agents/skills/*
 !.agents/skills/generative-illustration/
 !.agents/skills/generative-illustration/**
+!.agents/skills/douyin-safe-change/
+!.agents/skills/douyin-safe-change/**
+!.agents/skills/douyin-repair-supervisor/
+!.agents/skills/douyin-repair-supervisor/**
+!.agents/skills/douyin-round2-supervisor/
+!.agents/skills/douyin-round2-supervisor/**
+!.agents/skills/douyin-media-acceptance/
+!.agents/skills/douyin-media-acceptance/**
+!.agents/skills/douyin-release-auditor/
+!.agents/skills/douyin-release-auditor/**
+!.agents/skills/douyin-cleanup-auditor/
+!.agents/skills/douyin-cleanup-auditor/**
 
 *.log
 *.tmp
+*.bak
 *.sqlite
 *.sqlite-shm
 *.sqlite-wal

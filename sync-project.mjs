@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { spawn } from "node:child_process";
@@ -7,6 +8,7 @@ const rootDir = path.dirname(fileURLToPath(import.meta.url));
 const dataDir = path.join(rootDir, ".data");
 const logPath = path.join(dataDir, "sync.log");
 const watchPidPath = path.join(dataDir, "sync-watch.pid");
+const syncLockPath = path.join(dataDir, "git-sync.lock");
 const isWindows = process.platform === "win32";
 const supportsRecursiveWatch = isWindows || process.platform === "darwin";
 
@@ -36,6 +38,7 @@ function runCommand(command, args, options = {}) {
     const child = spawn(command, args, {
       cwd: rootDir,
       windowsHide: true,
+      shell: Boolean(options.shell),
       stdio: ["ignore", "pipe", "pipe"],
       env: {
         ...process.env,
@@ -121,12 +124,59 @@ function writeWatchPid() {
   fs.writeFileSync(watchPidPath, String(process.pid), "utf8");
 }
 
-function clearWatchPid() {
+function clearWatchPid(force = false) {
   try {
-    if (readWatchPid() === process.pid) fs.unlinkSync(watchPidPath);
+    if (force || readWatchPid() === process.pid) fs.unlinkSync(watchPidPath);
   } catch {
     // Best effort cleanup only.
   }
+}
+
+function readSyncLock() {
+  try {
+    return JSON.parse(fs.readFileSync(syncLockPath, "utf8"));
+  } catch {
+    return null;
+  }
+}
+
+function releaseSyncLock() {
+  try {
+    const lock = readSyncLock();
+    if (!lock || Number(lock.pid) === process.pid) fs.unlinkSync(syncLockPath);
+  } catch {
+    // Best effort cleanup only.
+  }
+}
+
+function acquireSyncLock(result, quiet) {
+  ensureDataDir();
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      const fd = fs.openSync(syncLockPath, "wx");
+      fs.writeFileSync(fd, JSON.stringify({ pid: process.pid, startedAt: new Date().toISOString() }), "utf8");
+      fs.closeSync(fd);
+      return true;
+    } catch (error) {
+      if (error?.code !== "EEXIST") throw error;
+      const lock = readSyncLock();
+      if (lock?.pid && isProcessRunning(Number(lock.pid))) {
+        result.ok = false;
+        pushMessage(result, `另一个安全同步正在运行（PID：${lock.pid}），本次已停止。`, quiet);
+        return false;
+      }
+      try {
+        fs.unlinkSync(syncLockPath);
+      } catch {
+        result.ok = false;
+        pushMessage(result, "发现无法清理的同步锁，请关闭其他同步窗口后重试。", quiet);
+        return false;
+      }
+    }
+  }
+  result.ok = false;
+  pushMessage(result, "无法取得安全同步锁，本次已停止。", quiet);
+  return false;
 }
 
 function rebaseInProgress() {
@@ -271,7 +321,112 @@ async function hasStagedChanges() {
   return diff.code === 1;
 }
 
-async function uploadChanges(result, quiet, commitMessage) {
+async function remoteBranchExists(branch) {
+  const result = await git(["ls-remote", "--exit-code", "--heads", "origin", `refs/heads/${branch}`], {
+    timeoutMs: 120_000,
+  });
+  if (result.code === 0) return true;
+  if (result.code === 2) return false;
+  throw new Error(result.stderr || result.stdout || "无法检查远程分支");
+}
+
+async function restoreIndex(tree) {
+  if (!tree) return;
+  const restored = await git(["read-tree", "--reset", tree], { timeoutMs: 20_000 });
+  if (!restored.ok) writeLog(`恢复暂存区失败：${restored.stderr || restored.stdout}`);
+}
+
+async function runCheckGate(result, quiet, stage = "提交前") {
+  pushMessage(result, `${stage}正在运行离线测试闸门，请稍候...`, quiet);
+  const gate = isWindows
+    ? await runCommand(process.env.ComSpec || "C:\\Windows\\System32\\cmd.exe", ["/d", "/s", "/c", "npm.cmd run check:gate"], {
+        timeoutMs: 180_000,
+      })
+    : await runCommand("npm", ["run", "check:gate"], { timeoutMs: 180_000 });
+  if (!gate.ok) {
+    result.ok = false;
+    pushMessage(result, "测试闸门未通过，已阻止提交或上传。请把提示发给 Codex 处理。", quiet);
+    writeLog(`check:gate 失败 (exit ${gate.code}):\n${gate.stdout || ""}\n${gate.stderr || ""}`);
+    return false;
+  }
+  pushMessage(result, "测试闸门已通过。", quiet);
+  return true;
+}
+
+export function isProtectedPublishBranch(branch) {
+  return ["main", "master"].includes(String(branch || "").trim().toLowerCase());
+}
+
+export function gitTreesMatch(candidateTree, verifiedTree) {
+  return Boolean(candidateTree) && candidateTree === verifiedTree;
+}
+
+const disallowedStageRoots = new Set([".git", ".data", "assets", "backups", "downloads", "jianying-exports", "node_modules", "voices"]);
+const disallowedStageNames = new Set(["settings.json"]);
+
+export function normalizeExplicitStageFiles(files) {
+  if (!Array.isArray(files) || files.length === 0) throw new Error("发布清单必须包含至少一个源代码文件");
+  const normalized = files.map((value) => {
+    if (typeof value !== "string" || !value.trim()) throw new Error("发布清单包含空文件名");
+    const input = value.trim().replaceAll("\\", "/");
+    if (path.posix.isAbsolute(input)) throw new Error(`发布清单不允许绝对路径：${value}`);
+    const output = path.posix.normalize(input);
+    if (output === "." || output === ".." || output.startsWith("../")) throw new Error(`发布清单路径越界：${value}`);
+    const parts = output.split("/");
+    if (disallowedStageRoots.has(parts[0]) || disallowedStageNames.has(parts.at(-1)) || /\.(?:sqlite|sqlite-wal|sqlite-shm)$/i.test(output)) {
+      throw new Error(`发布清单禁止包含本地数据或素材：${value}`);
+    }
+    return output;
+  });
+  const unique = [...new Set(normalized)].sort((a, b) => a.localeCompare(b));
+  if (unique.length !== normalized.length) throw new Error("发布清单包含重复文件");
+  return unique;
+}
+
+function selectedFileFingerprint(files) {
+  return files.map((relativePath) => {
+    const absolutePath = path.join(rootDir, relativePath);
+    if (!fs.existsSync(absolutePath)) return `${relativePath}:missing`;
+    const stat = fs.statSync(absolutePath);
+    if (!stat.isFile()) return `${relativePath}:non-file`;
+    const digest = crypto.createHash("sha256").update(fs.readFileSync(absolutePath)).digest("hex");
+    return `${relativePath}:${stat.size}:${digest}`;
+  });
+}
+
+async function readStageManifest(manifestPath, cliMessage) {
+  if (!manifestPath) throw new Error("检测到未提交改动，但没有明确文件清单。请使用 --files-file <manifest.json> 指定本次要提交的源文件。");
+  if (path.isAbsolute(manifestPath)) throw new Error("发布清单必须位于项目目录内，并使用相对路径指定");
+  const absolutePath = path.resolve(rootDir, manifestPath);
+  if (!absolutePath.startsWith(`${rootDir}${path.sep}`) || !fs.existsSync(absolutePath)) throw new Error("发布清单不存在或不在项目目录内");
+  const manifest = JSON.parse(fs.readFileSync(absolutePath, "utf8"));
+  const files = normalizeExplicitStageFiles(manifest.files);
+  const message = cliMessage || (typeof manifest.message === "string" ? manifest.message.trim() : "");
+  return { files, message };
+}
+
+async function readStagedPaths() {
+  const result = await git(["diff", "--cached", "--name-only", "-z", "--no-renames"], { timeoutMs: 20_000 });
+  if (!result.ok) throw new Error(result.stderr || result.stdout || "无法读取暂存区");
+  return result.stdout.split("\0").filter(Boolean).sort((a, b) => a.localeCompare(b));
+}
+
+async function validateStageFiles(files) {
+  for (const relativePath of files) {
+    const absolutePath = path.join(rootDir, relativePath);
+    const tracked = await git(["ls-files", "--error-unmatch", "--", relativePath], { timeoutMs: 20_000 });
+    if (!fs.existsSync(absolutePath) && !tracked.ok) throw new Error(`发布清单文件不存在：${relativePath}`);
+    if (fs.existsSync(absolutePath) && !fs.statSync(absolutePath).isFile()) throw new Error(`发布清单只能包含文件：${relativePath}`);
+    const ignored = await git(["check-ignore", "--quiet", "--", relativePath], { timeoutMs: 20_000 });
+    if (ignored.code === 0) throw new Error(`发布清单文件被忽略，不能提交：${relativePath}`);
+  }
+}
+
+function samePaths(left, right) {
+  return left.length === right.length && left.every((value, index) => value === right[index]);
+}
+
+async function uploadChanges(result, quiet, commitMessage, manifestPath) {
   if (!(await isGitRepo())) {
     result.ok = false;
     pushMessage(result, "当前文件夹不是 GitHub 项目，无法同步。", quiet);
@@ -285,50 +440,126 @@ async function uploadChanges(result, quiet, commitMessage) {
   }
 
   const branch = await currentBranch();
+  if (isProtectedPublishBranch(branch)) {
+    result.ok = false;
+    pushMessage(result, "正式分支禁止直接上传。请在 fix/dev 分支完成修复，再通过 GitHub PR 合并。", quiet);
+    return;
+  }
+
   const status = await workingTreeStatus();
+  let manifest = null;
   if (status) {
-    const add = await git(["add", "-A"], { timeoutMs: 120_000 });
-    if (!add.ok) {
+    try {
+      manifest = await readStageManifest(manifestPath, commitMessage);
+      await validateStageFiles(manifest.files);
+    } catch (error) {
       result.ok = false;
-      pushMessage(result, "整理待上传文件失败。", quiet);
-      writeLog(add.stderr || add.stdout);
+      pushMessage(result, error instanceof Error ? error.message : String(error), quiet);
+      return;
+    }
+  }
+
+  if (!acquireSyncLock(result, quiet)) return;
+  try {
+    const initialIndexTree = await gitText(["write-tree"], { allowFailure: true, timeoutMs: 20_000 });
+    if (status) {
+      const initiallyStaged = await readStagedPaths();
+      const unexpectedInitiallyStaged = initiallyStaged.filter((file) => !manifest.files.includes(file));
+      if (unexpectedInitiallyStaged.length > 0) {
+        result.ok = false;
+        pushMessage(result, `暂存区存在未列入本次清单的文件，已停止：${unexpectedInitiallyStaged.join(", ")}`, quiet);
+        return;
+      }
+
+      const add = await git(["add", "--", ...manifest.files], { timeoutMs: 120_000 });
+      if (!add.ok) {
+        result.ok = false;
+        pushMessage(result, "按明确清单暂存文件失败。", quiet);
+        writeLog(add.stderr || add.stdout);
+        return;
+      }
+
+      const stagedAfterAdd = await readStagedPaths();
+      if (!samePaths(stagedAfterAdd, manifest.files)) {
+        result.ok = false;
+        await restoreIndex(initialIndexTree);
+        pushMessage(result, "暂存区与明确清单不一致，已停止并恢复原暂存区。", quiet);
+        return;
+      }
+
+      const candidateTree = await gitText(["write-tree"], { timeoutMs: 20_000 });
+      const beforeGateFingerprint = selectedFileFingerprint(manifest.files);
+      if (!(await runCheckGate(result, quiet))) {
+        await restoreIndex(initialIndexTree);
+        return;
+      }
+
+      const afterGateFingerprint = selectedFileFingerprint(manifest.files);
+      if (JSON.stringify(beforeGateFingerprint) !== JSON.stringify(afterGateFingerprint)) {
+        result.ok = false;
+        await restoreIndex(initialIndexTree);
+        pushMessage(result, "测试期间明确清单中的源文件发生变化，已停止并恢复原暂存区。", quiet);
+        return;
+      }
+      const verifiedTree = await gitText(["write-tree"], { timeoutMs: 20_000 });
+      if (!gitTreesMatch(candidateTree, verifiedTree)) {
+        result.ok = false;
+        await restoreIndex(initialIndexTree);
+        pushMessage(result, "测试期间文件发生了变化，已停止提交。请等待修改完成后重新点击安全同步。", quiet);
+        return;
+      }
+
+      if (await hasStagedChanges()) {
+        const message = manifest.message || `安全同步 ${timestamp()}`;
+        const commit = await git(["commit", "-m", message], { timeoutMs: 120_000 });
+        if (!commit.ok) {
+          result.ok = false;
+          await restoreIndex(initialIndexTree);
+          pushMessage(result, "创建同步记录失败，请检查 Git 用户信息是否已配置。", quiet);
+          writeLog(commit.stderr || commit.stdout);
+          return;
+        }
+        pushMessage(result, `本机改动已完整提交：${message}`, quiet);
+      }
+    } else if (!(await runCheckGate(result, quiet, "上传前"))) {
+      return;
+    } else {
+      pushMessage(result, "本机没有未提交改动，将核对远程分支后上传已有提交。", quiet);
+    }
+
+    const hasRemoteBranch = await remoteBranchExists(branch);
+    if (hasRemoteBranch) {
+      const fetch = await git(["fetch", "origin", branch], { timeoutMs: 120_000 });
+      if (!fetch.ok) {
+        result.ok = false;
+        pushMessage(result, "读取远程分支失败，已停止，未执行拉取、变基或上传。", quiet);
+        writeLog(fetch.stderr || fetch.stdout);
+        return;
+      }
+      const countsText = await gitText(["rev-list", "--left-right", "--count", `HEAD...origin/${branch}`], { timeoutMs: 20_000 });
+      const [ahead = 0, behind = 0] = countsText.split(/\s+/).map((value) => Number(value || 0));
+      if (behind > 0) {
+        result.ok = false;
+        pushMessage(result, `远程分支比本地多 ${behind} 个提交，已停止。请人工处理差异后再运行上传；本工具不会自动 pull 或 rebase。`, quiet);
+        return;
+      }
+    } else {
+      pushMessage(result, "远程尚无同名修复分支，将安全创建。", quiet);
+    }
+
+    const pushArgs = hasRemoteBranch ? ["push", "origin", branch] : ["push", "-u", "origin", branch];
+    const push = await git(pushArgs, { timeoutMs: 120_000 });
+    if (!push.ok) {
+      result.ok = false;
+      pushMessage(result, "上传到 GitHub 失败，请检查 GitHub 登录状态或网络连接。", quiet);
+      writeLog(push.stderr || push.stdout);
       return;
     }
 
-    if (await hasStagedChanges()) {
-      const message = commitMessage || `自动同步 ${timestamp()}`;
-      const commit = await git(["commit", "-m", message], {
-        timeoutMs: 120_000,
-      });
-      if (!commit.ok) {
-        result.ok = false;
-        pushMessage(result, "创建同步记录失败，请检查 Git 用户信息是否已配置。", quiet);
-        writeLog(commit.stderr || commit.stdout);
-        return;
-      }
-      pushMessage(result, `本机改动已提交：${message}`, quiet);
-    }
-  } else {
-    pushMessage(result, "本机没有需要提交的新改动。", quiet);
+    pushMessage(result, "修复分支已安全上传到 GitHub；正式版仍需通过 PR 合并。", quiet);
+  } finally {
+    releaseSyncLock();
   }
-
-  const pull = await git(["pull", "--rebase", "origin", branch], { timeoutMs: 120_000 });
-  if (!pull.ok) {
-    result.ok = false;
-    pushMessage(result, "同步 GitHub 最新内容时遇到冲突，已停止，避免覆盖另一台电脑的改动。", quiet);
-    writeLog(pull.stderr || pull.stdout);
-    return;
-  }
-
-  const push = await git(["push", "origin", branch], { timeoutMs: 120_000 });
-  if (!push.ok) {
-    result.ok = false;
-    pushMessage(result, "上传到 GitHub 失败，请检查 GitHub 登录状态或网络连接。", quiet);
-    writeLog(push.stderr || push.stdout);
-    return;
-  }
-
-  pushMessage(result, "已同步并上传到 GitHub。", quiet);
 }
 
 function shouldIgnoreWatchEvent(fileName) {
@@ -350,53 +581,24 @@ async function watchProject(result, options = {}) {
   }
 
   writeWatchPid();
-  pushMessage(result, `自动同步监控已启动，PID：${process.pid}`, quiet);
+  pushMessage(result, `改动提醒监控已启动，PID：${process.pid}。它不会拉取、提交或上传代码。`, quiet);
 
-  let busy = false;
-  let pending = false;
   let debounceTimer = null;
 
   const debounceMs = Number(options.debounceMs || DEFAULT_WATCH_DEBOUNCE_MS);
-  const pullIntervalMs = Number(options.pullIntervalMs || DEFAULT_PULL_INTERVAL_MS);
-
-  const runCycle = async (reason) => {
-    if (busy) {
-      pending = true;
-      return;
-    }
-
-    busy = true;
-    try {
-      const status = await workingTreeStatus();
-      if (status) {
-        const message = reason === "watch" ? `自动同步 ${timestamp()}` : "";
-        await uploadChanges(result, quiet, message);
-      } else if (reason === "interval") {
-        await pullLatest(result, quiet);
-      }
-    } catch (error) {
-      result.ok = false;
-      const message = error instanceof Error ? error.message : String(error);
-      pushMessage(result, `自动同步发生错误：${message}`, quiet);
-      writeLog(error instanceof Error && error.stack ? error.stack : message);
-    } finally {
-      busy = false;
-      if (pending) {
-        pending = false;
-        scheduleUpload();
-      }
-    }
-  };
 
   const scheduleUpload = () => {
     clearTimeout(debounceTimer);
     debounceTimer = setTimeout(() => {
-      void runCycle("watch");
+      void workingTreeStatus().then((status) => {
+        if (status) {
+          pushMessage(result, "检测到本地改动：后台自动提交和上传已停用，请完成后手动运行“同步项目.bat”。", quiet);
+        }
+      }).catch((error) => writeLog(error instanceof Error ? error.stack || error.message : String(error)));
     }, debounceMs);
   };
 
   try {
-    await pullLatest(result, quiet);
     fs.watch(rootDir, { recursive: supportsRecursiveWatch }, (_eventType, fileName) => {
       if (shouldIgnoreWatchEvent(fileName)) return;
       scheduleUpload();
@@ -409,12 +611,7 @@ async function watchProject(result, options = {}) {
     return;
   }
 
-  const interval = setInterval(() => {
-    void runCycle("interval");
-  }, pullIntervalMs);
-
   const stop = () => {
-    clearInterval(interval);
     clearTimeout(debounceTimer);
     clearWatchPid();
     process.exit(0);
@@ -430,6 +627,7 @@ async function watchProject(result, options = {}) {
 async function stopWatch(result, quiet) {
   const pid = readWatchPid();
   if (!isProcessRunning(pid)) {
+    clearWatchPid(true);
     result.skipped = true;
     pushMessage(result, "没有发现正在运行的自动同步监控。", quiet);
     return;
@@ -437,6 +635,7 @@ async function stopWatch(result, quiet) {
 
   try {
     process.kill(pid);
+    clearWatchPid(true);
     pushMessage(result, `已停止自动同步监控，PID：${pid}`, quiet);
   } catch (error) {
     result.ok = false;
@@ -447,7 +646,7 @@ async function stopWatch(result, quiet) {
 
 export async function runSync(options = {}) {
   const quiet = Boolean(options.quiet);
-  const mode = options.mode || "startup";
+  const mode = options.mode || "status";
   const result = { ok: true, changed: false, skipped: false, messages: [] };
 
   if (!(await isGitRepo())) {
@@ -457,13 +656,16 @@ export async function runSync(options = {}) {
   }
 
   if (mode === "upload") {
-    await uploadChanges(result, quiet, options.commitMessage);
+    await uploadChanges(result, quiet, options.commitMessage, options.filesFile);
   } else if (mode === "watch") {
     await watchProject(result, options);
   } else if (mode === "stop-watch") {
     await stopWatch(result, quiet);
-  } else {
+  } else if (mode === "pull") {
     await pullLatest(result, quiet);
+  } else {
+    result.skipped = true;
+    pushMessage(result, "未执行代码更新。安全更新请明确使用 pull，上传请使用 upload。", quiet);
   }
 
   return result;
@@ -479,9 +681,11 @@ function readNumberOption(args, name, fallback) {
 function cliOptions() {
   const args = process.argv.slice(2);
   const messageIndex = args.findIndex((arg) => arg === "--message" || arg === "-m");
+  const filesIndex = args.findIndex((arg) => arg === "--files-file");
   const commitMessage = messageIndex >= 0 ? args[messageIndex + 1] : "";
-  let mode = "startup";
+  let mode = "status";
   if (args.includes("upload") || args.includes("--upload")) mode = "upload";
+  if (args.includes("pull") || args.includes("--pull")) mode = "pull";
   if (args.includes("watch") || args.includes("--watch")) mode = "watch";
   if (args.includes("stop-watch") || args.includes("--stop-watch")) mode = "stop-watch";
 
@@ -489,6 +693,7 @@ function cliOptions() {
     mode,
     quiet: args.includes("--quiet"),
     commitMessage,
+    filesFile: filesIndex >= 0 ? args[filesIndex + 1] : "",
     debounceMs: readNumberOption(args, "--debounce-ms", DEFAULT_WATCH_DEBOUNCE_MS),
     pullIntervalMs: readNumberOption(args, "--pull-interval-ms", DEFAULT_PULL_INTERVAL_MS),
   };

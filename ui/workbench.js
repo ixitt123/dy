@@ -17,7 +17,7 @@ const workbenchPages = {
   },
   rewrite: {
     title: "文案定制改写",
-    description: "选择视频类型，默认生成 1 个版本，需要时可增加输出框。",
+    description: "家长触动与转化模板默认开启，生成两篇可直接发送到生产线的口播稿。",
   },
   "moments-copy": {
     title: "朋友圈文案定制",
@@ -166,7 +166,14 @@ async function projectApi(path, options = {}) {
     },
   });
   const data = await response.json().catch(() => ({}));
-  if (!response.ok || data.ok === false) throw new Error(data.message || data.error || `HTTP ${response.status}`);
+  if (!response.ok || data.ok === false) {
+    const error = new Error(data.message || data.error || `HTTP ${response.status}`);
+    error.code = data.code || "UNKNOWN";
+    error.category = data.category || "unknown";
+    error.retryable = Boolean(data.retryable);
+    error.retryAfterMs = Number(data.retryAfterMs || 0);
+    throw error;
+  }
   return data;
 }
 
@@ -755,9 +762,12 @@ function setupTtsStudio() {
   if (!lab || !oldWorkbench || lab.querySelector(".tts-studio-grid")) return;
 
   const scriptColumn = oldWorkbench.querySelector(".tts-script-column");
+  const timelineColumn = oldWorkbench.querySelector("#ttsTimelineColumn");
   const controlColumn = oldWorkbench.querySelector(".tts-control-column");
   const settings = lab.querySelector(".tts-settings");
   const preview = lab.querySelector(".tts-preview");
+  const bgmPreview = lab.querySelector("#ttsBgmPreview");
+  const bgmMissing = lab.querySelector("#ttsBgmMissing");
   const alignmentEditor = lab.querySelector("#ttsAlignmentEditor");
   const audioHandoff = lab.querySelector("#ttsAudioHandoff");
   const historyPanel = lab.querySelector(".tts-history-panel");
@@ -768,15 +778,20 @@ function setupTtsStudio() {
 
   const inputLane = document.createElement("section");
   inputLane.className = "studio-lane tts-input-lane";
+  const timelineLane = document.createElement("section");
+  timelineLane.className = "studio-lane tts-timeline-lane";
   const settingsLane = document.createElement("section");
   settingsLane.className = "studio-lane tts-settings-lane";
   const resultLane = document.createElement("section");
   resultLane.className = "studio-lane tts-result-lane";
 
   if (scriptColumn) inputLane.appendChild(scriptColumn);
+  if (timelineColumn) timelineLane.appendChild(timelineColumn);
   if (settings) settingsLane.appendChild(settings);
   if (controlColumn) settingsLane.appendChild(controlColumn);
   if (preview) resultLane.appendChild(preview);
+  if (bgmPreview) resultLane.appendChild(bgmPreview);
+  if (bgmMissing) resultLane.appendChild(bgmMissing);
   if (alignmentEditor) resultLane.appendChild(alignmentEditor);
   if (audioHandoff) resultLane.appendChild(audioHandoff);
   if (historyHead) resultLane.appendChild(historyHead);
@@ -785,11 +800,10 @@ function setupTtsStudio() {
 
   addLaneHeading(inputLane, "项目文案", "手动输入或从当前项目的最佳改写带入");
   addLaneHeading(settingsLane, "选择声音", "我的克隆音色、平台预设和最近使用");
-  addLaneHeading(resultLane, "试听与发送", "确认语音后发送到保留生产线");
 
+  studio.append(inputLane, timelineLane, settingsLane, resultLane);
+  oldWorkbench.before(studio);
   oldWorkbench.remove();
-  studio.append(inputLane, settingsLane, resultLane);
-  lab.querySelector(".tts-head")?.after(studio);
 
   const projectSource = document.createElement("div");
   projectSource.className = "tts-project-source";
@@ -903,6 +917,7 @@ function setupCodexTaskWorkbench(settingsPage) {
     settingsCard.appendChild(batchHead);
   }
   if (batchControls) settingsCard.appendChild(batchControls);
+  if (!rail && batchActions) settingsCard.appendChild(batchActions);
   settingsPage.appendChild(settingsCard);
 
   if (rail) {
@@ -1285,14 +1300,33 @@ async function updateWorkbenchConnection() {
   try {
     const response = await fetch("/api/status", { cache: "no-store" });
     if (!response.ok) throw new Error("offline");
+    const data = await response.json();
     status.classList.add("online");
     status.classList.remove("offline");
     status.querySelector("span").textContent = "系统正常";
+    updateRuntimeVersionBadge(data?.runtimeVersion);
   } catch {
     status.classList.remove("online");
     status.classList.add("offline");
     status.querySelector("span").textContent = "后台未连接";
   }
+}
+
+function updateRuntimeVersionBadge(rv) {
+  const badge = document.querySelector("#runtimeVersionBadge");
+  if (!badge || !rv) return;
+  const fmtTime = (iso) => {
+    try {
+      const d = new Date(iso);
+      const p = (n) => String(n).padStart(2, "0");
+      return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+    } catch { return iso || "unknown"; }
+  };
+  badge.querySelector(".rv-branch").textContent = rv.branch || "unknown";
+  badge.querySelector(".rv-commit").textContent = rv.commit || "unknown";
+  badge.querySelector(".rv-buildtime").textContent = fmtTime(rv.buildTime);
+  badge.querySelector(".rv-submodule").textContent = "MPT:" + (rv.submoduleCommit || "unknown");
+  badge.style.display = "";
 }
 
 async function openLatestOutputLocation() {
@@ -1515,7 +1549,8 @@ function initWorkbench() {
 
   // WebSocket 进度监听
   try {
-    const ws = new WebSocket(`ws://127.0.0.1:${location.port}/ws/progress`);
+    const wsProtocol = location.protocol === "https:" ? "wss:" : "ws:";
+    const ws = new WebSocket(`${wsProtocol}//${location.host}/ws/progress`);
     ws.onmessage = (e) => {
       const data = JSON.parse(e.data);
       if (data.taskId) {
@@ -1547,6 +1582,22 @@ function setupImageStudio() {
 
   function imageAssetPath(asset = {}) {
     return asset.original_path || asset.file_path || asset.path || "";
+  }
+
+  function imageAssetId(asset = {}) {
+    return asset.assetId || asset.asset_id || asset.id || "";
+  }
+
+  function imageFileUrl(asset = {}) {
+    const id = imageAssetId(asset);
+    if (id) return `/api/image/file?id=${encodeURIComponent(id)}`;
+    return `/api/image/file?path=${encodeURIComponent(imageAssetPath(asset))}`;
+  }
+
+  function imageThumbnailUrl(asset = {}, width = 360) {
+    const id = imageAssetId(asset);
+    if (id) return `/api/image/thumbnail?width=${encodeURIComponent(width)}&id=${encodeURIComponent(id)}`;
+    return `/api/image/thumbnail?width=${encodeURIComponent(width)}&path=${encodeURIComponent(imageAssetPath(asset))}`;
   }
 
   function closeImageAssetPreview() {
@@ -1599,8 +1650,7 @@ function setupImageStudio() {
     activeImagePreview = { groupId, index };
     const modal = ensureImagePreviewModal();
     const asset = rows[index];
-    const filePath = imageAssetPath(asset);
-    const url = `/api/image/file?path=${encodeURIComponent(filePath)}`;
+    const url = imageFileUrl(asset);
     modal.querySelector("#imagePreviewTitle").textContent = asset.folder_name || asset.filename || `图片 ${index + 1}`;
     modal.querySelector("#imagePreviewFull").src = url;
     modal.querySelector("#imagePreviewCounter").textContent = `${index + 1} / ${rows.length}`;
@@ -1970,24 +2020,24 @@ function setupImageStudio() {
     if (!results.length) { grid.innerHTML = '<div class="empty-state">无结果</div>'; return; }
     grid.innerHTML = `${
       results.map((r, i) => {
-      const safePrompt = String(sourcePrompt || r.prompt || "").replace(/\\/g, "\\\\").replace(/'/g, "\\'");
+      const prompt = String(sourcePrompt || r.prompt || "");
       if (!r.success) return `<div class="img-card error">
         <div class="img-meta"><span>第${i + 1}张生成失败</span><small>${escapeHtml(r.error || "失败")}</small></div>
         <div class="img-actions">
-          <button class="btn-sm danger-action" type="button" onclick="this.closest('.img-card').remove()">删除</button>
-          <button class="btn-sm" type="button" onclick="document.getElementById('imagePrompt').value='${safePrompt}';document.getElementById('imageGenerateBtn').click()">重新生成</button>
+          <button class="btn-sm danger-action" type="button" data-image-action="remove">删除</button>
+          <button class="btn-sm" type="button" data-image-action="retry" data-image-prompt="${escapeHtml(prompt)}">重新生成</button>
         </div>
       </div>`;
-      const originalUrl = `/api/image/file?path=${encodeURIComponent(r.imagePath || "")}`;
-      const thumbUrl = r.thumbnailUrl || `/api/image/thumbnail?width=360&path=${encodeURIComponent(r.imagePath || "")}`;
-      return `<div class="img-card" data-asset-id="${r.assetId || ""}">
-        <button class="img-preview" type="button" onclick="window.open('${originalUrl}')">
-          <img src="${thumbUrl}" alt="生成图片缩略图" loading="lazy" />
+      const originalUrl = imageFileUrl(r);
+      const thumbUrl = r.thumbnailUrl || imageThumbnailUrl(r);
+      return `<div class="img-card" data-asset-id="${escapeHtml(r.assetId || "")}">
+        <button class="img-preview" type="button" data-image-action="open" data-image-url="${escapeHtml(originalUrl)}">
+          <img src="${escapeHtml(thumbUrl)}" alt="生成图片缩略图" loading="lazy" />
         </button>
         <div class="img-actions">
-          <button class="btn-sm" type="button" onclick="window.open('${originalUrl}')">预览原图</button>
-          <button class="btn-sm" type="button" onclick="fetch('/api/image/assets/${r.assetId}/delete',{method:'POST'}).then(()=>this.closest('.img-card').remove())">删除</button>
-          <button class="btn-sm" type="button" onclick="document.getElementById('imagePrompt').value='${safePrompt}';document.getElementById('imageGenerateBtn').click()">重新生成</button>
+          <button class="btn-sm" type="button" data-image-action="open" data-image-url="${escapeHtml(originalUrl)}">预览原图</button>
+          <button class="btn-sm" type="button" data-image-action="delete" data-image-asset-id="${escapeHtml(r.assetId || "")}">删除</button>
+          <button class="btn-sm" type="button" data-image-action="retry" data-image-prompt="${escapeHtml(prompt)}">重新生成</button>
         </div>
       </div>`;
     }).join("")}`;
@@ -2023,16 +2073,16 @@ function setupImageStudio() {
             ${sortedRows.map((a, assetIndex) => `
               <div class="img-card">
                 <button class="img-preview" type="button" data-image-preview-group="${groupId}" data-image-preview-index="${assetIndex}">
-                  <img src="${a.thumbnail_url || `/api/image/thumbnail?width=360&path=${encodeURIComponent(imageAssetPath(a))}`}" alt="图片资产缩略图" loading="lazy" />
+                  <img src="${escapeHtml(imageThumbnailUrl(a))}" alt="图片资产缩略图" loading="lazy" />
                 </button>
                 <div class="img-meta">
-                  <span>#${Number(a.scene_index || 0) || "-"} ${(a.prompt || "").slice(0, 30)}</span>
-                  <span class="text-xs text-secondary">${(a.created_at || "").slice(0, 10)} · ${a.width || 1080}x${a.height || 1080}</span>
+                  <span>#${Number(a.scene_index || 0) || "-"} ${escapeHtml((a.prompt || "").slice(0, 30))}</span>
+                  <span class="text-xs text-secondary">${escapeHtml((a.created_at || "").slice(0, 10))} · ${Number(a.width || 1080)}x${Number(a.height || 1080)}</span>
                 </div>
                 <div class="img-actions">
                   <button class="btn-sm" type="button" data-image-preview-group="${groupId}" data-image-preview-index="${assetIndex}">预览原图</button>
-                  <button class="btn-sm" onclick="document.getElementById('imagePrompt').value='${String(a.prompt || "").replace(/\\/g, "\\\\").replace(/'/g, "\\'")}';document.getElementById('imageGenerateBtn').click()">重新生成</button>
-                  <button class="btn-sm danger-action" onclick="fetch('/api/image/assets/${a.id}/delete',{method:'POST'}).then(()=>this.closest('.img-card').remove())">删除</button>
+                  <button class="btn-sm" type="button" data-image-action="retry" data-image-prompt="${escapeHtml(String(a.prompt || ""))}">重新生成</button>
+                  <button class="btn-sm danger-action" type="button" data-image-action="delete" data-image-asset-id="${escapeHtml(a.id || "")}">删除</button>
                 </div>
               </div>
             `).join("")}
@@ -2041,7 +2091,7 @@ function setupImageStudio() {
       `;
       }).join("");
     } catch (e) {
-      grid.innerHTML = `<div class="empty-state">加载失败: ${e.message}</div>`;
+      grid.innerHTML = `<div class="empty-state">加载失败: ${escapeHtml(e.message)}</div>`;
     }
   }
 
@@ -2052,7 +2102,29 @@ function setupImageStudio() {
       loadImageAssets();
     }
   };
-  document.addEventListener("click", (e) => {
+  document.addEventListener("click", async (e) => {
+    const imageAction = e.target.closest("[data-image-action]");
+    if (imageAction) {
+      e.preventDefault();
+      const card = imageAction.closest(".img-card");
+      if (imageAction.dataset.imageAction === "remove") card?.remove();
+      if (imageAction.dataset.imageAction === "retry") {
+        if (promptInput) promptInput.value = imageAction.dataset.imagePrompt || "";
+        document.getElementById("imageGenerateBtn")?.click();
+      }
+      if (imageAction.dataset.imageAction === "open") {
+        const url = String(imageAction.dataset.imageUrl || "");
+        if (url.startsWith("/api/image/")) window.open(url, "_blank", "noopener");
+      }
+      if (imageAction.dataset.imageAction === "delete") {
+        const assetId = String(imageAction.dataset.imageAssetId || "");
+        if (assetId) {
+          const response = await fetch(`/api/image/assets/${encodeURIComponent(assetId)}/delete`, { method: "POST" });
+          if (response.ok) card?.remove();
+        }
+      }
+      return;
+    }
     const previewTrigger = e.target.closest("[data-image-preview-group]");
     if (previewTrigger) {
       e.preventDefault();

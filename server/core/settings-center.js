@@ -1,29 +1,46 @@
 // 统一设置中心
-import fs from "node:fs";
 import path from "node:path";
-import { DEFAULT_MODEL_MAPPING } from "../config/model-defaults.js";
+import { normalizeModelMapping } from "../config/model-defaults.js";
+import { readJsonWithRecovery, writeJsonAtomic } from "./atomic-write.mjs";
 
 export function createSettingsCenter(baseDir, settingsPath) {
   const settingsPathResolved = settingsPath || path.join(baseDir, "settings.json");
+  let updateQueue = Promise.resolve();
 
   function read() {
-    try { return JSON.parse(fs.readFileSync(settingsPathResolved, "utf8") || "{}"); }
-    catch { return {}; }
+    return readJsonWithRecovery(settingsPathResolved, { fallback: {} });
   }
 
   function write(data) {
-    fs.writeFileSync(settingsPathResolved, JSON.stringify(data, null, 2), "utf8");
+    // 09.04 原子写入：写临时文件 → fsync → rename，避免写入失败破坏旧设置
+    writeJsonAtomic(settingsPathResolved, data);
+  }
+
+  function update(mutator) {
+    if (typeof mutator !== "function") throw new TypeError("settings update 必须提供函数");
+    const operation = updateQueue.then(async () => {
+      const current = read();
+      const draft = typeof structuredClone === "function"
+        ? structuredClone(current)
+        : JSON.parse(JSON.stringify(current));
+      const returned = await mutator(draft);
+      const next = returned && typeof returned === "object" ? returned : draft;
+      write(next);
+      return read();
+    });
+    updateQueue = operation.catch(() => {});
+    return operation;
   }
 
   function getModelMapping() {
     const settings = read();
     const mapping = settings.modelMap || settings.modelMapping || {};
-    return Object.keys(mapping).length > 0 ? { ...DEFAULT_MODEL_MAPPING, ...mapping } : DEFAULT_MODEL_MAPPING;
+    return normalizeModelMapping(mapping);
   }
 
   function setModelMapping(mapping) {
     const settings = read();
-    settings.modelMap = { ...DEFAULT_MODEL_MAPPING, ...(mapping || {}) };
+    settings.modelMap = normalizeModelMapping(mapping);
     settings.modelMapping = settings.modelMap;
     write(settings);
   }
@@ -69,7 +86,7 @@ export function createSettingsCenter(baseDir, settingsPath) {
   }
 
   return {
-    read, write,
+    read, write, update,
     getModelMapping, setModelMapping,
     getProviderConfig, setProviderConfig,
     testProviderConnection, getAllProviders,

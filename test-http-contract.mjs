@@ -1,12 +1,48 @@
-// 端到端 API 测试
-// 运行: 先启动服务器 node ui-server.mjs，然后 node test-e2e.mjs
+// HTTP / 源码契约测试（test:http-contract）
+//
+// 本文件曾用名 test-e2e.mjs / script 名 test:e2e，但实际并不启动真实浏览器，
+// 仅通过本地 HTTP API + 读取源码字符串的方式校验契约，因此命名为“HTTP/源码契约测试”。
+// 真实浏览器 E2E 由 01.02 建立的 Playwright 套件（test-browser-*.mjs）承担，请勿混淆。
+//
+// 本测试能证明的范围（不可冒充浏览器 E2E）：
+//   - 本地 API 端点返回结构符合契约；
+//   - 页面 HTML / 模块 JS / 服务端源码包含约定 ID、函数名或字符串；
+//   - 设置安全、TTS 交接、四件套协议等“源码契约”存在。
+//
+// 本测试不能证明的范围（必须由浏览器 E2E / 媒体 E2E 兜底）：
+//   - 真实浏览器中元素是否可见、可点击、可播放；
+//   - MutationObserver / 异步恢复 / localStorage 隔离的实际行为；
+//   - 四条生产线真实成片的媒体特征。
+//
+// 运行: 先启动服务器 node ui-server.mjs，然后 node test-http-contract.mjs
+//       或: npm run test:http-contract
 
 import { readFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
 
 const BASE = "http://127.0.0.1:8787";
 const tests = [];
+const nativeFetch = globalThis.fetch.bind(globalThis);
+let localApiCookie = "";
 
 function test(name, fn) { tests.push({ name, fn }); }
+
+async function establishLocalSession() {
+  const response = await nativeFetch(`${BASE}/`);
+  localApiCookie = String(response.headers.get("set-cookie") || "").split(";")[0];
+  if (!response.ok || !localApiCookie) throw new Error("Unable to establish local API session");
+}
+
+globalThis.fetch = async (input, options = {}) => {
+  const url = typeof input === "string" ? input : input?.url || "";
+  if (!String(url).startsWith(`${BASE}/api/`)) return nativeFetch(input, options);
+  const headers = new Headers(options.headers || {});
+  headers.set("cookie", localApiCookie);
+  if (!headers.has("origin")) headers.set("origin", BASE);
+  return nativeFetch(input, { ...options, headers });
+};
+
+await establishLocalSession();
 
 test("Status API", async () => {
   const r = await fetch(`${BASE}/api/status`);
@@ -20,10 +56,12 @@ test("Provider List", async () => {
   if (!d.providers?.length) throw new Error("No providers");
 });
 
-test("Settings API", async () => {
+test("Settings dump disabled", async () => {
   const r = await fetch(`${BASE}/api/settings/all`);
   const d = await r.json();
-  if (!d.ok) throw new Error("Settings not OK");
+  if (r.status !== 404 || d.ok !== false || JSON.stringify(d).includes("api_key")) {
+    throw new Error("Settings dump endpoint must stay disabled and must not expose secrets");
+  }
 });
 
 test("Model Mapping", async () => {
@@ -48,6 +86,24 @@ test("Task Center Stats", async () => {
   const r = await fetch(`${BASE}/api/task-center/stats`);
   const d = await r.json();
   if (d.total === undefined) throw new Error("No task stats");
+});
+
+test("Unified task center jobs and events", async () => {
+  const collectorResponse = await fetch(`${BASE}/api/task-center/list?view=collector&limit=5`);
+  const collector = await collectorResponse.json();
+  if (!collectorResponse.ok || !collector.ok || !Array.isArray(collector.tasks) || !collector.summary) {
+    throw new Error("Collector page is not reading the unified task-center endpoint");
+  }
+  const jobsResponse = await fetch(`${BASE}/api/task-center/list?limit=5`);
+  const jobs = await jobsResponse.json();
+  if (!jobsResponse.ok || !jobs.ok || !Array.isArray(jobs.tasks)) throw new Error("Unified jobs list unavailable");
+  if (jobs.tasks[0]?.id) {
+    const eventsResponse = await fetch(`${BASE}/api/task-center/events?id=${encodeURIComponent(jobs.tasks[0].id)}`);
+    const events = await eventsResponse.json();
+    if (!eventsResponse.ok || !events.ok || !Array.isArray(events.events) || !events.events.length) {
+      throw new Error("Durable job events unavailable");
+    }
+  }
 });
 
 test("Moments Generation Progress", async () => {
@@ -205,8 +261,154 @@ test("Xiaohei prompt plan refresh cache", async () => {
     || !source.includes('els.purposeSelect.value = cachedPurpose')
     || !source.includes('currentBatch?.boundImages || []')
     || !source.includes('const PROMPT_PLAN_LATEST_KEY')
-    || !source.includes('removeOlderPromptPlanCaches(key)')) {
+    || !source.includes('function prunePromptPlanCaches(')
+    || !source.includes('prunePromptPlanCaches(key)')
+    || !source.includes(':tts-${ttsJobId}')
+    || !source.includes('restorePromptPlanFromServer()')
+    || !source.includes('/api/ian-xiaohei/plan-restore?project_id=')) {
     throw new Error("Xiaohei prompt plan refresh cache is incomplete");
+  }
+});
+
+test("Moments emoji packs are source-built and cross-platform safe", async () => {
+  const [pageResponse, legacyResponse, server, emojiSkill] = await Promise.all([
+    fetch(`${BASE}/`),
+    fetch(`${BASE}/modules/legacy-runtime.js`),
+    readFile(new URL("./ui-server.mjs", import.meta.url), "utf8"),
+    readFile(new URL("./skills/wechat-moments-copy-emoji/SKILL.md", import.meta.url), "utf8"),
+  ]);
+  const [page, legacy] = await Promise.all([pageResponse.text(), legacyResponse.text()]);
+  const requiredStyles = ["gentle", "lively", "professional", "warm"];
+  if (!page.includes('id="momentsEmojiStyle"')
+    || !page.includes('id="momentsEmojiCount"')
+    || !page.includes("智能适量（3–6 个，默认）")
+    || !page.includes('id="momentsEmojiPalette"')
+    || !requiredStyles.every((style) => page.includes(`value="${style}"`))
+    || !page.includes('value="auto"')
+    || page.includes('<option value="3-5">')
+    || page.includes('<option value="5-10">')
+    || !legacy.includes("MOMENTS_EMOJI_STYLE_PREVIEWS")
+    || !legacy.includes("emojiStyle: momentsEmojiStyle?.value")
+    || !legacy.includes("emojiCount: momentsEmojiCount?.value")
+    || !legacy.includes("syncMomentsEmojiStyle")
+    || !server.includes("MOMENTS_CROSS_PLATFORM_EMOJIS")
+    || !server.includes("...styleConfig.signature, ...matched, ...styleConfig.defaults")
+    || !server.includes("MOMENTS_EMOJI_COUNT_OPTIONS")
+    || !server.includes('auto: { label: "智能适量（3–6 个）", min: 3, max: 6 }')
+    || server.includes('"3-5": { label: "3–5 个"')
+    || server.includes('"5-10": { label: "5–10 个"')
+    || !server.includes('String(emoji).includes("\\u200D")')
+    || !server.includes("applyPresetMomentsEmojis(post, emojiStyle, emojiCount)")
+    || !emojiSkill.includes("表情库必须直接内置在源代码中")) {
+    throw new Error("Moments emoji packs are not fully source-built or cross-platform guarded");
+  }
+});
+
+test("Completed TTS generation reveals its audio preview", async () => {
+  const legacy = await (await fetch(`${BASE}/modules/legacy-runtime.js`)).text();
+  if (!legacy.includes('const hasCompletedAudio = job?.status === "completed" && Boolean(job?.audio_url);')
+    || !legacy.includes('const show = hasCompletedAudio || ttsTopIssuePanelShouldShow(job);')
+    || !legacy.includes('showTtsPreview(displayJob, { reveal: true });')
+    || !legacy.includes('showTtsPreview(completedMusicJob || musicJob, { reveal: true });')
+    || !legacy.includes('ttsPreview?.scrollIntoView?.({ behavior: "smooth", block: "center" })')) {
+    throw new Error("Completed TTS generation does not reliably reveal the audio preview");
+  }
+});
+
+test("Optional clean-education BGM is a separate fourth handoff asset", async () => {
+  const [pageResponse, legacyResponse, cssResponse, workbenchResponse, cs1Response, moneyResponse, kineticResponse, xiaoheiResponse, xiaoheiRoute, cs1Route] = await Promise.all([
+    fetch(`${BASE}/`),
+    fetch(`${BASE}/modules/legacy-runtime.js`),
+    fetch(`${BASE}/app.css`),
+    fetch(`${BASE}/workbench.js`),
+    fetch(`${BASE}/modules/cs1-video.js`),
+    fetch(`${BASE}/modules/money-printer.js`),
+    fetch(`${BASE}/modules/kinetic-text.js`),
+    fetch(`${BASE}/modules/ian-xiaohei-app.js`),
+    readFile(new URL("./server/routes/ian-xiaohei-routes.js", import.meta.url), "utf8"),
+    readFile(new URL("./server/routes/cs1-video-routes.js", import.meta.url), "utf8"),
+  ]);
+  const [page, legacy, css, workbench, cs1, money, kinetic, xiaohei] = await Promise.all([
+    pageResponse.text(), legacyResponse.text(), cssResponse.text(), workbenchResponse.text(), cs1Response.text(), moneyResponse.text(), kineticResponse.text(), xiaoheiResponse.text(),
+  ]);
+  if (!page.includes('id="ttsGenerateCleanEducationBgm"')
+    || !page.includes('data-no-choice-persist')
+    || !page.includes('id="ttsBgmSelectionState"')
+    || page.includes('点“确定修改”后发送当前三件套。')
+    || !page.includes('id="ttsBgmVolume"')
+    || !page.includes('id="ttsBgmVolumeValue"')
+    || !page.includes('min="10" max="50" step="1" value="18"')
+    || !page.includes('id="ttsBgmPreview"')
+    || !page.includes('id="generateTtsBgmForCurrent"')
+    || !legacy.includes('function generateCleanEducationBgm(parentJob, text, { previewPromise = null } = {})')
+    || !legacy.includes('id = "ttsBgmProgress"')
+    || !legacy.includes('function ensureTtsBgmPreview()')
+    || !legacy.includes('ttsBgmJobsByParentId.clear()')
+    || !legacy.includes('function isTtsLinkedBgmJob(job = {})')
+    || !legacy.includes('data-tts-load-file="bgm"')
+    || !legacy.includes('const handoffBundleLabel = linkedBgm ?')
+    || !legacy.includes('const bundleFilesLabel = linkedBgm')
+    || !legacy.includes('async function resolveTtsBgmJob(parentJob)')
+    || !legacy.includes('const data = await fetchJson("/api/tts/jobs?limit=500");')
+    || !legacy.includes('showTtsBgmPreview(bgmJob, { reveal: true, play: true });')
+    || !legacy.includes('if (ttsOutputColumn) ttsOutputColumn.hidden = false;')
+    || !legacy.includes('tts-history-files${linkedBgm ? " has-bgm" : ""}')
+    || !css.includes('.tts-history-files.has-bgm::before')
+    || !css.includes('content: "四件套";')
+    || !page.includes('src="/workbench.js?v=2026073011"')
+    || !workbench.includes('const bgmPreview = lab.querySelector("#ttsBgmPreview");')
+    || !workbench.includes('if (bgmPreview) resultLane.appendChild(bgmPreview);')
+    || !legacy.includes('function ensureTtsBgmMissingPanel()')
+    || !page.includes('src="/modules/legacy-runtime.js?v=2026080102"')
+    || !legacy.includes('function setTtsBgmProgress({ completedSteps = 0, totalSteps = 2')
+    || !legacy.includes('state: "completed"')
+    || !legacy.includes('state: "failed"')
+    || !legacy.includes('ttsBgmProgress.dataset.completedSteps = String(completed)')
+    || /setTtsBgmProgress\(\s*(?:10|45|82|100)\s*,/.test(legacy)
+    || !legacy.includes('function requestCleanEducationBgmPreview(asset, text, targetDuration)')
+    || !legacy.includes('bgmPreviewPromise = requestCleanEducationBgmPreview')
+    || !legacy.includes('function ensureTtsBgmPreview()')
+    || !legacy.includes('function syncTtsBgmSelectionState()')
+    || !legacy.includes('function selectedTtsBgmVolume()')
+    || !legacy.includes('background_volume: selectedTtsBgmVolume()')
+    || !legacy.includes('ttsBgmAudio.volume = volume')
+    || !legacy.includes('async function resolveTtsBgmForHandoff(job = activeTtsRailJob)')
+    || !legacy.includes('await resolveTtsBgmForHandoff(job);')
+    || !legacy.includes('function ttsHandoffBundleLabel(job = activeTtsRailJob)')
+    || !legacy.includes('function syncTtsCentralHandoffBundle(job = activeTtsRailJob)')
+    || !legacy.includes('function refreshTtsCentralHandoffBundle(job = activeTtsRailJob)')
+    || !legacy.includes('确定修改并发送${bundleLabel}到：')
+    || !legacy.includes('bgm_path: payload.bgm_path || ""')
+    || !legacy.includes('return new Promise((resolve) => {')
+    || !legacy.includes('.then(resolve)')
+    || !legacy.includes('generateCleanEducationBgm(job, text)')
+    || !legacy.includes('parent_tts_job_id: parentJob.id')
+    || !legacy.includes('type: "bgm"')
+    || !legacy.includes('payload.has_bgm ?')
+    || !cs1.includes('payload.bgm_path || ""')
+    || !page.includes('id="cs1VideoIncludeBgm"')
+    || !page.includes('id="moneyPrinterIncludeBgm"')
+    || !page.includes('id="kineticIncludeBgm"')
+    || !cs1.includes('includeBgm: Boolean(includeBgmInput?.checked)')
+    || !cs1.includes('ttsAudioPath: includeBgmInput?.checked')
+    || !cs1Route.includes('await mixCs1BgmIntoVideo({')
+    || !cs1Route.includes('afade=t=out:st=${fadeStart}:d=2.0')
+    || !money.includes('state.includeBgm && state.handoff?.bgm_path ? "custom" : "none"')
+    || !money.includes('state.includeBgm && hasBgm ? "四件套（含独立 BGM）" : "三件套"')
+    || !money.includes('等待已确认 TTS 交接包')
+    || !kinetic.includes('localPath: payload.bgm_path')
+    || !kinetic.includes('function syncPreviewBgmAudio({ force = false } = {})')
+    || !kinetic.includes('state.bgmAudio?.pause()')
+    || !kinetic.includes('bgmAudio?.play()')
+    || !kinetic.includes('async function jsonFetch(url, options = {}, retryLocalSession = true)')
+    || !kinetic.includes('return jsonFetch(url, options, false);')
+    || !xiaohei.includes('tts_bgm_path: state.includeBgm ? (state.handoffBgm?.path || "") : ""')
+    || !xiaohei.includes('function playPreviewBgm()')
+    || !xiaohei.includes('handoff.bgm_url || job.bgm_url || ""')
+    || !legacy.includes('bgm_url: payload.bgm_url || ""')
+    || !xiaohei.includes('includeBgm: document.querySelector("#xiaoheiIncludeBgm")')
+    || !xiaoheiRoute.includes('const handoffBgmPath = String(body.tts_bgm_path || "").trim();')) {
+    throw new Error("Optional clean-education BGM four-asset handoff is incomplete");
   }
 });
 
@@ -220,7 +422,7 @@ test("Xiaohei fast preview and cache restore", async () => {
   if (!assetResponse.ok
     || !assetResponse.headers.get("cache-control")?.includes("max-age=86400")
     || !source.includes("hydratePurposeSelect();")
-    || !source.includes("await Promise.all([loadConfig(), loadAudioJobs()]);")
+    || !source.includes("await Promise.all([loadConfig(), loadAudioJobs(), loadFolderNames()]);")
     || !source.includes("void loadOutputs().catch(() => {});")
     || !source.includes('decoding="async"')
     || !css.includes("content-visibility: auto")) {
@@ -258,12 +460,14 @@ test("Xiaohei video preview, transitions and MP4 download", async () => {
     || !page.includes('id="videoTransitionMode"')
     || !page.includes('id="downloadXiaoheiVideo"')
     || !page.includes('id="xiaoheiFrameRate"')
+    || !page.includes('id="xiaoheiPlaybackSpeed"')
     || !page.includes('id="xiaoheiBgmFile"')
     || !page.includes('id="xiaoheiIntroEnabled"')
     || !page.includes('id="xiaoheiOutroEnabled"')
     || !page.includes('id="xiaoheiShowSubtitles"')
     || !source.includes('function drawVideoPreview()')
     || !source.includes('function composeSettings()')
+    || !source.includes('playbackSpeed: [1, 1.1, 1.2, 1.3]')
     || !source.includes('/api/ian-xiaohei/upload-video-bgm')
     || !source.includes('/api/ian-xiaohei/render-video')
     || !source.includes('function downloadRenderedVideo()')
@@ -338,7 +542,7 @@ test("Kinetic text production line", async () => {
     || !page.includes('id="kineticPreviewCanvas"')
     || !page.includes('aria-label="点击画面播放或暂停"')
     || !page.includes('id="kineticTimeline"')
-    || !page.includes('id="kineticAnalyze"')
+    || page.includes('id="kineticAnalyze"')
     || !page.includes('id="kineticChooseDownloadDir"')
     || !page.includes('id="kineticRenderFinal" class="primary" type="button">下载视频</button>')
     || renderButtonIndex <= previewToolbarIndex
@@ -357,7 +561,7 @@ test("Kinetic text production line", async () => {
     || !moduleSource.includes("receiveTts")
     || !moduleSource.includes("pollJob")
     || !moduleSource.includes('data-field="lineBreaks"')
-    || !moduleSource.includes("keywordsOnly: true")
+    || moduleSource.includes("keywordsOnly: true")
     || !moduleSource.includes("renderOnComplete: true")
     || !moduleSource.includes("视频已保存：")
     || !kineticServiceSource.includes("normalizeSegmentKeywords")
@@ -378,9 +582,31 @@ test("Kinetic text production line", async () => {
     || !moduleSource.includes("const audioDuration = Number(state.audio?.duration)")
     || !moduleSource.includes("function finishPreviewSeek(event)")
     || !moduleSource.includes("startPreviewPlayback()")
-    || !legacySource.includes('targets.includes("kinetic-text")')
+    || !legacySource.includes('"kinetic-text": "动态大字视频"')
+    || !legacySource.includes("await deliverTtsPayloadToTarget(target, sharedPayload)")
     || !packageJson.scripts?.["test:subtitle-templates"]) {
     throw new Error("Kinetic text production line is incomplete");
+  }
+});
+
+test("Unified final asset preview and download", async () => {
+  const listResponse = await fetch(`${BASE}/api/final-assets/list?source=cs1-video&limit=100`);
+  const list = await listResponse.json();
+  const asset = (list.assets || []).find((item) => item.fileName?.endsWith(".mp4") && !item.fileName.includes(".pre-bgm-"));
+  if (!listResponse.ok || !asset?.assetId || !asset.videoUrl || !asset.downloadUrl) throw new Error("No registered final asset");
+  const [previewResponse, downloadResponse] = await Promise.all([
+    fetch(`${BASE}${asset.videoUrl}`),
+    fetch(`${BASE}${asset.downloadUrl}`),
+  ]);
+  const [previewBytes, downloadBytes] = await Promise.all([previewResponse.arrayBuffer(), downloadResponse.arrayBuffer()]);
+  const previewHash = createHash("sha256").update(Buffer.from(previewBytes)).digest("hex");
+  const downloadHash = createHash("sha256").update(Buffer.from(downloadBytes)).digest("hex");
+  if (!previewResponse.ok || !downloadResponse.ok
+    || previewResponse.headers.get("x-final-asset-id") !== asset.assetId
+    || downloadResponse.headers.get("x-final-asset-id") !== asset.assetId
+    || previewHash !== downloadHash
+    || previewHash !== asset.sha256) {
+    throw new Error("Preview, download and registry do not resolve the same final file");
   }
 });
 

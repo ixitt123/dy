@@ -21,11 +21,11 @@ Produce a compact HyperFrames explanation video, following the proven workflow u
 
 ## Workflow
 
-1. Sync the project before editing:
+1. Inspect the project before editing; do not automatically pull or change branches:
 
 ```powershell
-git pull --ff-only origin main
-git status --short
+git status --short --branch
+git remote -v
 ```
 
 2. Read the HyperFrames instructions before authoring:
@@ -90,14 +90,14 @@ ffprobe -v error -show_entries format=duration,size -show_entries stream=codec_t
 
 Optionally extract and inspect a representative frame.
 
-10. Commit and push source changes only:
+10. Prepare source changes only. Commit and push require explicit user authorization and an explicit file list:
 
 ```powershell
 git status --short
-git add -A
-git commit -m "HyperFrames explainer video <yyyy-MM-dd HH:mm>"
-git push origin main
+git add <only the reviewed source files>
 ```
+
+Never use `git add -A`, never push directly to `main`, and do not run `pull`, `commit`, or `push` automatically. If a maintainer uses `sync-project.mjs upload`, it must receive a reviewed `--files-file` manifest; the tool rejects ignored data, media, settings, database files, and staged files outside that manifest.
 
 ## Content Pattern
 

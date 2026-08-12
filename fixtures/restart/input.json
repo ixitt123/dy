@@ -1,0 +1,31 @@
+{
+  "scenario": "service-restart",
+  "description": "8787/8080/浏览器刷新恢复测试的固定非敏感任务、交接和资产输入。",
+  "job": {
+    "kind": "restart-probe",
+    "taskAction": "download",
+    "urlTemplate": "https://restart-probe.invalid/{{probeId}}",
+    "sourceTextTemplate": "restart-probe:{{probeId}}",
+    "transcriptEnabled": false,
+    "audioEnabled": false,
+    "analysisEnabled": false
+  },
+  "asset": {
+    "relativeDirectory": "downloads",
+    "fileNameTemplate": "restart-probe-{{probeId}}.txt",
+    "contentTemplate": "restart-probe:{{probeId}}\n",
+    "role": "final"
+  },
+  "handoff": {
+    "consumer": "/api/tasks",
+    "taskIdField": "id",
+    "assetPathField": "video_path",
+    "requiredAfterRestart": true
+  },
+  "completion": {
+    "status": "done",
+    "progress": 100,
+    "titleTemplate": "restart-probe-{{probeId}}"
+  },
+  "expectedBehavior": "8787 重启后按同一任务 ID 恢复 handoff/job/final asset 映射并能打开最终文件；浏览器刷新仍恢复；8080 能真实停止与重启。"
+}

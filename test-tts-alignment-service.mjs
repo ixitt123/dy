@@ -7,6 +7,7 @@ import ffmpegPath from "ffmpeg-static";
 import ffprobeStatic from "ffprobe-static";
 import { createTtsService } from "./server/tts/tts-service.js";
 import { tokenizeAlignmentText } from "./server/tts/alignment.js";
+import { measureLoudness } from "./scripts/media-verifier.mjs";
 
 const PROMPT_FILES = ["tts_script_prepare.md", "tts_emotion_prompt.md", "seo_title_generation.md"];
 
@@ -86,14 +87,14 @@ function createTempProject() {
   return baseDir;
 }
 
-function createAudioFile(baseDir, name) {
+function createAudioFile(baseDir, name, duration = 1.6) {
   const audioPath = path.join(baseDir, "voices", name);
   const result = spawnSync(ffmpegPath, [
     "-y",
     "-f",
     "lavfi",
     "-i",
-    "sine=frequency=440:sample_rate=24000:duration=1.6",
+    `sine=frequency=440:sample_rate=24000:duration=${duration}`,
     "-q:a",
     "9",
     "-acodec",
@@ -103,6 +104,19 @@ function createAudioFile(baseDir, name) {
   assert.equal(result.status, 0, result.stderr || result.stdout);
   assert.equal(fs.existsSync(audioPath), true);
   return audioPath;
+}
+
+function audioMaxVolumeDb(audioPath) {
+  const result = spawnSync(ffmpegPath, [
+    "-i", audioPath,
+    "-af", "volumedetect",
+    "-f", "null",
+    "-",
+  ], { encoding: "utf8", windowsHide: true });
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  const match = String(result.stderr || "").match(/max_volume:\s*(-?[\d.]+) dB/u);
+  assert.ok(match, `Could not measure maximum volume: ${result.stderr || result.stdout}`);
+  return Number(match[1]);
 }
 
 function timedWords(text, duration = 1.6) {
@@ -180,6 +194,28 @@ const audioLyrics = "你问我 AI 怎么拍成片 我用一段旋律唱给你听
   assert.equal(JSON.parse(fs.readFileSync(corrected.job.timeline_json_path, "utf8"))[0].text, spokenText);
   assert.match(fs.readFileSync(corrected.job.subtitle_vtt_path, "utf8"), /^WEBVTT\n\n/u);
   assert.equal(calls(), 1, "send-time correction must reuse the existing word timeline");
+
+  const manualRows = [
+    { id: "manual-1", index: 1, start: 0, end: 0.8, text: "第一句已经核对。" },
+    { id: "manual-2", index: 2, start: 0.8, end: 1.6, text: "第二句也没问题。" },
+  ];
+  const manualFinalText = manualRows.map((row) => row.text).join("");
+  const synced = await service.syncConfirmedTimeline(corrected.job.id, {
+    title: "TTS 页面字幕核对",
+    text: manualFinalText,
+    sentenceTimeline: manualRows,
+    subtitleTimeline: manualRows,
+    wordTimeline: timedWords(manualFinalText),
+    source: "tts_page_timeline_editor",
+    confirmationMode: "tts_page_timeline_editor",
+    preserveTimelineValues: true,
+  });
+  assert.equal(synced.error, undefined);
+  assert.equal(synced.job.final_text, manualFinalText);
+  assert.equal(synced.job.shared_sync_source, "tts_page_timeline_editor");
+  assert.equal(synced.job.alignment_confirmation_mode, "tts_page_timeline_editor");
+  assert.deepEqual(synced.job.subtitle_timeline.map((row) => [row.start, row.end]), manualRows.map((row) => [row.start, row.end]));
+  assert.equal(JSON.parse(fs.readFileSync(synced.job.timeline_json_path, "utf8"))[1].text, "第二句也没问题。");
 }
 
 {
@@ -269,6 +305,69 @@ const audioLyrics = "你问我 AI 怎么拍成片 我用一段旋律唱给你听
   assert.equal(calls(), 3);
   assert.equal(result.job.alignment_status, "failed");
   assert.equal(result.job.alignment_failure_action, "rewrite_script_required");
+}
+
+{
+  const baseDir = createTempProject();
+  const sourcePath = createAudioFile(baseDir, "background-music-source.mp3", 7.4);
+  const taskStore = new MemoryTaskStore();
+  const { service } = createService({
+    baseDir,
+    taskStore,
+    transcript: originalScript,
+  });
+  const imported = await service.importGenerated({
+    audio_path: sourcePath,
+    text: originalScript,
+    provider: "minimax",
+    voice_id: "music:clean_education_bgm",
+    voice_name: "清爽教育 BGM",
+    emotion: "music",
+    source: "minimax_music_bgm",
+    metadata: {
+      audio_role: "background_music",
+      requested_duration: 5.1,
+      fade_out_seconds: 2.5,
+      background_volume: 0.35,
+    },
+  });
+  assert.equal(imported.error, undefined);
+  assert.ok(imported.job.audio_duration >= 4.9 && imported.job.audio_duration <= 5.25, `Expected 5.1s BGM, received ${imported.job.audio_duration}s`);
+  const normalizedLoudness = measureLoudness(imported.job.audio_path);
+  assert.ok(normalizedLoudness.integratedLufs >= -24 && normalizedLoudness.integratedLufs <= -17, `BGM source must be normalized near -20 LUFS before final mix gain: ${normalizedLoudness.integratedLufs}`);
+  assert.equal(imported.job.metadata.background_volume, 0.35, "Selected volume must remain the final mix gain");
+  assert.equal(imported.job.metadata.background_volume_is_mix_gain, true);
+}
+
+{
+  const baseDir = createTempProject();
+  const sourcePath = createAudioFile(baseDir, "short-background-music-source.mp3", 2.2);
+  const taskStore = new MemoryTaskStore();
+  const { service } = createService({
+    baseDir,
+    taskStore,
+    transcript: originalScript,
+  });
+  const imported = await service.importGenerated({
+    audio_path: sourcePath,
+    text: originalScript,
+    provider: "minimax",
+    voice_id: "music:clean_education_bgm",
+    voice_name: "清爽教育 BGM",
+    emotion: "music",
+    source: "minimax_music_bgm",
+    metadata: {
+      audio_role: "background_music",
+      requested_duration: 5.1,
+      fade_out_seconds: 2.5,
+      background_volume: 0.35,
+    },
+  });
+  assert.equal(imported.error, undefined);
+  assert.ok(imported.job.audio_duration >= 4.9 && imported.job.audio_duration <= 5.25, `Short BGM source must loop to 5.1s, received ${imported.job.audio_duration}s`);
+  const normalizedLoudness = measureLoudness(imported.job.audio_path);
+  assert.ok(normalizedLoudness.integratedLufs >= -24 && normalizedLoudness.integratedLufs <= -17, `Looped BGM source must be normalized near -20 LUFS: ${normalizedLoudness.integratedLufs}`);
+  assert.equal(imported.job.metadata.background_volume, 0.35, "Looped BGM must preserve final mix gain");
 }
 
 console.log("TTS alignment service tests passed");

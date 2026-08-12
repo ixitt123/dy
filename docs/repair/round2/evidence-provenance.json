@@ -1,0 +1,68 @@
+{
+  "schemaVersion": 1,
+  "purpose": "Portable pointers and immutable SHA-256 receipts for completed evidence that remains local to its origin machine and is intentionally not synchronized to GitHub.",
+  "records": [
+    {
+      "itemId": "R2-00.01",
+      "originMachine": "A",
+      "availability": "origin-machine-local-not-synchronized",
+      "recordedAtCommit": "9fd9c89dec7422a3d8c7f46d451d9c1e6d3b15f8",
+      "evidencePath": "C:\\Users\\Admin\\Desktop\\短视频\\douyin-video-tool-source-code\\douyin-mcp-local\\.data\\repair-evidence\\R2-00.01\\20260804-165000"
+    },
+    {
+      "itemId": "R2-00.02",
+      "originMachine": "A",
+      "availability": "origin-machine-local-not-synchronized",
+      "recordedAtCommit": "9fd9c89dec7422a3d8c7f46d451d9c1e6d3b15f8",
+      "evidencePath": "C:\\Users\\Admin\\Desktop\\短视频\\douyin-video-tool-source-code\\douyin-mcp-local\\.data\\repair-evidence\\R2-00.02\\20260804-165000"
+    },
+    {
+      "itemId": "R2-00.03",
+      "originMachine": "A",
+      "availability": "origin-machine-local-not-synchronized",
+      "recordedAtCommit": "9fd9c89dec7422a3d8c7f46d451d9c1e6d3b15f8",
+      "evidencePath": "C:\\Users\\Admin\\Desktop\\短视频\\douyin-video-tool-source-code\\douyin-mcp-local\\.data\\repair-evidence\\R2-00.03\\20260804-170000"
+    },
+    {
+      "itemId": "R2-00.04",
+      "originMachine": "A",
+      "availability": "origin-machine-local-not-synchronized",
+      "recordedAtCommit": "9fd9c89dec7422a3d8c7f46d451d9c1e6d3b15f8",
+      "evidencePath": "C:\\Users\\Admin\\Desktop\\短视频\\douyin-video-tool-source-code\\douyin-mcp-local\\.data\\repair-evidence\\R2-00.04\\20260805-093605\\completion"
+    },
+    {
+      "itemId": "R2-00.05",
+      "originMachine": "A",
+      "availability": "origin-machine-local-not-synchronized",
+      "recordedAtCommit": "9fd9c89dec7422a3d8c7f46d451d9c1e6d3b15f8",
+      "evidencePath": "C:\\Users\\Admin\\Desktop\\短视频\\douyin-video-tool-source-code\\douyin-mcp-local\\.data\\repair-evidence\\R2-00.05\\20260804-165000"
+    },
+    {
+      "itemId": "R2-00.06",
+      "originMachine": "A",
+      "availability": "origin-machine-local-not-synchronized",
+      "recordedAtCommit": "9fd9c89dec7422a3d8c7f46d451d9c1e6d3b15f8",
+      "evidencePath": "C:\\Users\\Admin\\Desktop\\短视频\\douyin-video-tool-source-code\\douyin-mcp-local\\.data\\repair-evidence\\R2-00.06\\20260805-100200\\completion"
+    },
+    {
+      "itemId": "R2-01.12",
+      "originMachine": "B",
+      "availability": "origin-machine-local-not-synchronized",
+      "recordedAtCommit": "f7306b418f98e242b378de76dc2f11c5f1e70163",
+      "evidencePath": "D:\\cs1\\dy-b-primary-20260805-102410\\.data\\repair-evidence\\R2-01.12\\20260805-112300\\b-review",
+      "receiptPath": "docs/repair/round2/evidence-receipts/R2-01.12.json",
+      "receiptSha256": "4f8b878697812d2d8d5c772beb7193304bb980f20873642b1de788d0371c1b5c",
+      "manifestSha256": "36c347aa104466fd908b8ba1fb86446ec951ca0cdb0188956775a863f3903801"
+    },
+    {
+      "itemId": "R2-02.02",
+      "originMachine": "B",
+      "availability": "origin-machine-local-not-synchronized",
+      "recordedAtCommit": "f7306b418f98e242b378de76dc2f11c5f1e70163",
+      "evidencePath": "D:\\cs1\\dy-b-primary-20260805-102410\\.data\\repair-evidence\\R2-02.02\\20260805-113500\\integration-review",
+      "receiptPath": "docs/repair/round2/evidence-receipts/R2-02.02.json",
+      "receiptSha256": "5ac36dd66a73841d57f4cb251f1af055df4191d9d90b861f51cd3d952493dccb",
+      "manifestSha256": "b71c8917c67e4853ef1befc972f8608a21cb4fac4781045148c6d32599421918"
+    }
+  ]
+}

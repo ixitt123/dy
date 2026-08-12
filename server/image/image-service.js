@@ -5,6 +5,7 @@ import { DatabaseSync } from "node:sqlite";
 import { randomUUID } from "node:crypto";
 import { createImageProvider } from "./providers/index.js";
 import { callProviderGenerate } from "./provider-adapter.js";
+import { writeJsonAtomic } from "../core/atomic-write.mjs";
 
 const DEFAULT_IMAGE_PROVIDER = "volcengine_ark";
 const DEFAULT_IMAGE_MODEL = "doubao-seedream-5-0-lite-260128";
@@ -47,6 +48,13 @@ function safeFolderName(value, fallback = "image-job") {
     .trim()
     .slice(0, 64);
   return cleaned || fallback;
+}
+
+function isPathInside(rootPath, targetPath) {
+  const root = path.resolve(rootPath);
+  const target = path.resolve(targetPath);
+  const relative = path.relative(root, target);
+  return Boolean(relative) && !relative.startsWith(`..${path.sep}`) && relative !== ".." && !path.isAbsolute(relative);
 }
 
 function imageJobFolderName({ jobId = "", prompt = "", sourceType = "", sourceId = "", folderName = "" } = {}) {
@@ -127,6 +135,7 @@ function sceneIndexFromSourceId(value = "") {
 export function createImageService({ baseDir, getSettings, taskStore = null, ffmpegPath = "" }) {
   const outputDir = path.join(baseDir, "image-assets", "generated");
   const thumbnailDir = path.join(baseDir, "image-assets", "thumbnails");
+  const deletedAssetDir = path.join(baseDir, ".data", "trash", "image-assets");
   const dbPath = path.join(baseDir, ".data", "image-studio.sqlite");
   const styleTemplatePath = path.join(baseDir, "prompts", "storyboard-image", "default-commercial.md");
   const qualityRulesPath = path.join(baseDir, "prompts", "storyboard-image", "quality-rules.md");
@@ -296,7 +305,7 @@ export function createImageService({ baseDir, getSettings, taskStore = null, ffm
       ratio: row.aspect_ratio || "",
       scene_index: Number(row.scene_index || 0),
       asset_order: Number(row.asset_order || 0),
-      thumbnail_url: `/api/image/thumbnail?path=${encodeURIComponent(row.file_path || row.original_path || "")}`,
+      thumbnail_url: `/api/image/thumbnail?id=${encodeURIComponent(row.id || "")}`,
     };
   }
 
@@ -352,6 +361,56 @@ export function createImageService({ baseDir, getSettings, taskStore = null, ffm
       cleanSourceType,
       cleanSourceId,
       folderName,
+      folderPath,
+      parsedSceneIndex,
+      cleanAssetOrder,
+    );
+
+    return publicAsset(db.prepare("SELECT * FROM image_assets WHERE id=?").get(assetId));
+  }
+
+  function linkLocalImageAsset({ filePath, prompt = "", aspectRatio = "9:16", sourceId = "", sourceType = "local-linked", directorProjectId = 0, sceneIndex = 0, assetOrder = 0 } = {}) {
+    const resolved = path.resolve(String(filePath || "").trim());
+    if (!resolved || !fs.existsSync(resolved) || !fs.statSync(resolved).isFile()) {
+      throw new Error("请选择存在的本地图片文件。");
+    }
+    const ext = path.extname(resolved).toLowerCase();
+    const supported = new Set([".png", ".jpg", ".jpeg", ".webp"]);
+    if (!supported.has(ext)) throw new Error("暂只支持 PNG、JPG、WEBP 图片素材。");
+
+    const assetId = randomUUID();
+    const assetPrompt = String(prompt || "").trim() || `本地图片素材：${path.basename(resolved)}`;
+    const parsedSceneIndex = Number(sceneIndex || parseSceneIndexFromFilename(resolved) || sceneIndexFromSourceId(sourceId) || 0);
+    const cleanSourceId = String(sourceId || (directorProjectId && parsedSceneIndex ? `${directorProjectId}:${parsedSceneIndex}` : "")).trim();
+    const cleanAssetOrder = Number(assetOrder || parsedSceneIndex || 0);
+    const size = targetImageSize(aspectRatio);
+    const stats = fs.statSync(resolved);
+    const folderPath = path.dirname(resolved);
+
+    db.prepare(`
+      INSERT INTO image_assets (
+        id, job_id, filename, original_path, file_path, width, height, file_size, provider, model,
+        prompt, revised_prompt, aspect_ratio, source_url, source_type, source_id, folder_name, folder_path, scene_index, asset_order
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      assetId,
+      "",
+      path.basename(resolved),
+      "",
+      resolved,
+      size.width,
+      size.height,
+      stats.size,
+      "local",
+      "local-file-reference",
+      assetPrompt,
+      assetPrompt,
+      aspectRatio,
+      resolved,
+      String(sourceType || "local-linked").trim() || "local-linked",
+      cleanSourceId,
+      path.basename(folderPath),
       folderPath,
       parsedSceneIndex,
       cleanAssetOrder,
@@ -552,7 +611,7 @@ export function createImageService({ baseDir, getSettings, taskStore = null, ffm
           filename,
           imagePath: localPath,
           file_path: localPath,
-          thumbnailUrl: `/api/image/thumbnail?path=${encodeURIComponent(localPath)}`,
+          thumbnailUrl: `/api/image/thumbnail?id=${encodeURIComponent(assetId)}`,
           provider: selected.provider,
           model: result.model || selected.model,
           source_url: result.sourceUrl || result.imageUrl || "",
@@ -746,11 +805,63 @@ export function createImageService({ baseDir, getSettings, taskStore = null, ffm
     return db.prepare("SELECT * FROM image_assets ORDER BY created_at DESC LIMIT ? OFFSET ?").all(limit, offset).map(publicAsset);
   }
 
+  function getAsset(assetId) {
+    return publicAsset(db.prepare("SELECT * FROM image_assets WHERE id=?").get(String(assetId || "")));
+  }
+
   function deleteAsset(assetId) {
-    const asset = db.prepare("SELECT original_path FROM image_assets WHERE id=?").get(assetId);
-    if (asset?.original_path && fs.existsSync(asset.original_path)) fs.unlinkSync(asset.original_path);
-    db.prepare("DELETE FROM image_assets WHERE id=?").run(assetId);
-    return { success: true };
+    const id = String(assetId || "").trim();
+    const asset = db.prepare("SELECT * FROM image_assets WHERE id=?").get(id);
+    if (!asset) return { success: false, error: "图片资产不存在。" };
+
+    const originalPath = String(asset.original_path || asset.file_path || "").trim();
+    const resolvedPath = originalPath ? path.resolve(originalPath) : "";
+    const isLinkedOriginal = String(asset.source_type || "") === "ian-xiaohei-local-linked";
+    const isManagedFile = Boolean(resolvedPath)
+      && !isLinkedOriginal
+      && [outputDir, thumbnailDir].some((root) => isPathInside(root, resolvedPath));
+    let recoveryToken = "";
+    let trashedPath = "";
+    let recoveryRecordPath = "";
+    let originalRetained = false;
+
+    if (resolvedPath && fs.existsSync(resolvedPath)) {
+      if (isManagedFile) {
+        fs.mkdirSync(deletedAssetDir, { recursive: true });
+        recoveryToken = `${Date.now()}-${id.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 48) || randomUUID()}`;
+        trashedPath = path.join(deletedAssetDir, `${recoveryToken}-${path.basename(resolvedPath)}`);
+        recoveryRecordPath = path.join(deletedAssetDir, `${recoveryToken}.json`);
+        fs.renameSync(resolvedPath, trashedPath);
+        try {
+          writeJsonAtomic(recoveryRecordPath, {
+            recoveryToken,
+            deletedAt: new Date().toISOString(),
+            originalPath: resolvedPath,
+            trashedPath,
+            asset,
+          }, { backup: false });
+        } catch (error) {
+          fs.renameSync(trashedPath, resolvedPath);
+          throw error;
+        }
+      } else {
+        originalRetained = true;
+      }
+    }
+
+    try {
+      db.prepare("DELETE FROM image_assets WHERE id=?").run(id);
+    } catch (error) {
+      if (trashedPath && fs.existsSync(trashedPath)) fs.renameSync(trashedPath, resolvedPath);
+      if (recoveryRecordPath && fs.existsSync(recoveryRecordPath)) fs.rmSync(recoveryRecordPath, { force: true });
+      throw error;
+    }
+    return {
+      success: true,
+      originalRetained,
+      recoverable: Boolean(recoveryToken),
+      recoveryToken: recoveryToken || undefined,
+    };
   }
 
   function getStats() {
@@ -765,6 +876,10 @@ export function createImageService({ baseDir, getSettings, taskStore = null, ffm
     return Number(row?.count || 0) > 0;
   }
 
+  function close() {
+    db.close();
+  }
+
   return {
     generateImage,
     generateImageAsync,
@@ -772,13 +887,16 @@ export function createImageService({ baseDir, getSettings, taskStore = null, ffm
     generateStoryboardImagesAsync,
     storyboardImagePrompts,
     addLocalImageAsset,
+    linkLocalImageAsset,
     thumbnailForImage,
     testProviderConnection,
     getJobs,
     getJob,
     getAssets,
+    getAsset,
     deleteAsset,
     getStats,
     isBusy,
+    close,
   };
 }

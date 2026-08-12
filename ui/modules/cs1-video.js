@@ -1,6 +1,5 @@
 import { postJson } from "./api.js";
 
-const HANDOFF_KEY = "dy:handoff:cs1-video:audio";
 const EXAMPLE_TEXT = "看着明天仪征几千名初三学生奔赴考场，新初二、新初三的家长们，你们以为中考离你们还远吗？别等初三，现在就开始查短板、定节奏。";
 const DEFAULT_SCRIPT_FORMAT = [
   "标题：一句话说清主题。",
@@ -9,6 +8,14 @@ const DEFAULT_SCRIPT_FORMAT = [
   "字幕：短句优先，每句 12-20 字，避免长段落。",
   "结尾：给出行动提醒、CTA 或一句总结。",
 ].join("\n");
+
+export function normalizeCs1HandoffBgmVolume(payload = {}) {
+  const percent = Number(payload.bgm_volume_percent);
+  if (Number.isFinite(percent) && percent >= 0) return Math.max(0, Math.min(1, percent / 100));
+  const ratio = Number(payload.bgm_volume);
+  if (Number.isFinite(ratio) && ratio >= 0) return Math.max(0, Math.min(1, ratio));
+  return 0.18;
+}
 
 export function initCs1VideoModule() {
   const form = document.getElementById("cs1VideoForm");
@@ -26,6 +33,7 @@ export function initCs1VideoModule() {
   const copyFormatButton = document.getElementById("cs1VideoCopyFormat");
   const deleteStyleButton = document.getElementById("cs1VideoDeleteStyle");
   const bgmModeSelect = document.getElementById("cs1VideoBgmMode");
+  const includeBgmInput = document.getElementById("cs1VideoIncludeBgm");
   const bgmPathInput = document.getElementById("cs1VideoBgmPath");
   const chooseBgmButton = document.getElementById("cs1VideoChooseBgm");
   const iconVariantSelect = document.getElementById("cs1IconVariant");
@@ -45,6 +53,8 @@ export function initCs1VideoModule() {
   const message = document.getElementById("cs1VideoMessage");
   const resultPanel = document.getElementById("cs1VideoResult");
   const outputPath = document.getElementById("cs1VideoOutputPath");
+  const previewVideo = document.getElementById("cs1VideoPreview");
+  const downloadLink = document.getElementById("cs1VideoDownload");
   const outputList = document.getElementById("cs1VideoOutputList");
   const logPanel = document.getElementById("cs1VideoLog");
   const generateButton = document.getElementById("cs1VideoGenerate");
@@ -58,6 +68,7 @@ export function initCs1VideoModule() {
   const progressFill = document.getElementById("cs1VideoProgressFill");
   const timelineContainer = document.getElementById("cs1SubtitleTimeline");
   const timelineStatus = document.getElementById("cs1TimelineStatus");
+  const confirmTimelineButton = document.getElementById("cs1ConfirmTimeline");
   const progressTrack = progressPanel?.querySelector(".cs1-progress-track");
   let lastResult = null;
   let styleCatalog = [];
@@ -65,6 +76,7 @@ export function initCs1VideoModule() {
   let progressTimer = null;
   let progressValue = 0;
   let currentTtsHandoff = null;
+  let routeActive = false;
 
   if (beatCountSelect && !beatCountSelect.querySelector('option[value="auto"]')) {
     beatCountSelect.insertAdjacentHTML("afterbegin", [
@@ -93,7 +105,7 @@ export function initCs1VideoModule() {
       start: Number(row.start || 0),
       end: Number(row.end || 0),
       text: String(row.text || ""),
-    })).filter((row) => row.text && row.end > row.start);
+    })).filter((row) => row.text.trim() && row.end > row.start);
   };
 
   const renderTimeline = () => {
@@ -102,6 +114,7 @@ export function initCs1VideoModule() {
     if (!rows.length) {
       timelineContainer.innerHTML = '<p class="shared-subtitle-empty">请先从 TTS 语音页发送已确认的字幕时间轴。</p>';
       if (timelineStatus) timelineStatus.textContent = "等待 TTS 字幕";
+      if (confirmTimelineButton) confirmTimelineButton.disabled = true;
       return;
     }
     timelineContainer.innerHTML = rows.map((row, index) => `
@@ -109,46 +122,55 @@ export function initCs1VideoModule() {
         <span>${index + 1}</span>
         <input value="${row.start.toFixed(2)}" readonly aria-readonly="true" />
         <input value="${row.end.toFixed(2)}" readonly aria-readonly="true" />
-        <textarea data-field="text" rows="2">${escapeHtml(row.text)}</textarea>
+        <textarea data-field="text" rows="2" data-no-draft-persist readonly aria-readonly="true" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-1p-ignore="true">${escapeHtml(row.text)}</textarea>
       </div>
     `).join("");
-    if (timelineStatus) timelineStatus.textContent = `共 ${rows.length} 段 · 文字失去焦点自动保存`;
+    if (timelineStatus) timelineStatus.textContent = `共 ${rows.length} 段 · 严格使用 TTS 已确认字幕`;
+    if (confirmTimelineButton) confirmTimelineButton.hidden = true;
+  };
+
+  const clearTimelineState = () => {
+    currentTtsHandoff = null;
+    if (textInput) textInput.value = "";
+    if (textInput) textInput.readOnly = false;
+    if (bgmPathInput) bgmPathInput.value = "";
+    if (bgmModeSelect) bgmModeSelect.value = "none";
+    if (includeBgmInput) includeBgmInput.checked = false;
+    renderTimeline();
   };
 
   const receiveTts = (payload = {}, { navigate = false } = {}) => {
-    if (!payload?.id) return null;
-    currentTtsHandoff = payload;
-    localStorage.setItem(HANDOFF_KEY, JSON.stringify(payload));
-    const text = ttsText(payload);
-    if (text) textInput.value = text;
+    const rows = timelineRows(payload);
+    const confirmed = String(payload?.alignment_status || payload?.metadata?.alignment_status || "") === "confirmed";
+    if (!payload?.id || !confirmed || !rows.length) {
+      clearTimelineState();
+      setStatus("TTS 参数无效", "已清空 CS1 字幕时间轴，请从 TTS 页面重新发送已确认参数。");
+      return null;
+    }
+    currentTtsHandoff = {
+      ...payload,
+      bgm_volume: normalizeCs1HandoffBgmVolume(payload),
+      sentence_timeline: rows,
+      subtitle_timeline: rows,
+    };
+    const text = ttsText(payload) || rows.map((row) => row.text).join("");
+    currentTtsHandoff.text = text;
+    currentTtsHandoff.final_text = text;
+    textInput.value = text;
+    textInput.readOnly = true;
     if (titleInput) titleInput.value = payload.title || payload.seo_title || payload.publish_title || `TTS #${payload.display_number || payload.id}`;
-    if (bgmPathInput) bgmPathInput.value = payload.audio_path || "";
-    if (bgmModeSelect) bgmModeSelect.value = payload.audio_path ? "local" : "auto";
+    if (bgmPathInput) bgmPathInput.value = payload.bgm_path || "";
+    if (bgmModeSelect) bgmModeSelect.value = payload.bgm_path ? "local" : "none";
+    if (includeBgmInput) includeBgmInput.checked = Boolean(payload.bgm_path);
     renderTimeline();
-    setStatus("已接收 TTS 三件套", "CS1 正在使用公共文案、音频和时间戳字幕。");
+    setStatus(
+      payload.has_bgm ? "已接收 TTS 四件套" : "已接收 TTS 三件套",
+      payload.has_bgm
+        ? "CS1 将使用独立 BGM，并按旁白时长自动循环或裁切。"
+        : "CS1 正在使用公共文案、音频和时间戳字幕。",
+    );
     if (navigate) window.workbenchNavigate?.("cs1-video");
     return currentTtsHandoff;
-  };
-
-  const publishTimelineEdit = async () => {
-    if (!currentTtsHandoff?.id || !timelineContainer) return;
-    const rows = timelineRows().map((row, index) => ({
-      ...row,
-      text: timelineContainer.querySelector(`[data-row-index="${index}"] [data-field="text"]`)?.value.trim() || "",
-    }));
-    if (timelineStatus) timelineStatus.textContent = "正在自动保存...";
-    try {
-      currentTtsHandoff = await window.sharedTtsHandoff.syncTimeline(rows, {
-        sourceTarget: "cs1-video",
-        title: titleInput.value.trim() || currentTtsHandoff.title,
-      });
-      textInput.value = ttsText(currentTtsHandoff);
-      renderTimeline();
-      setStatus("字幕已同步", "原时间戳已保留，原字幕文件和其他三条生产线已更新。");
-    } catch (error) {
-      if (timelineStatus) timelineStatus.textContent = `自动保存失败：${error.message || error}`;
-      setStatus("字幕保存失败", error.message || String(error));
-    }
   };
 
   const setProgress = (value, stage = "") => {
@@ -213,6 +235,25 @@ export function initCs1VideoModule() {
 
   const selectedStyle = () => styleSelect?.value || form.querySelector('input[name="cs1VideoStyle"]:checked')?.value || "cs1";
 
+  const showOutputResult = (item = {}) => {
+    if (!item.outputPath && !item.filePath) return;
+    const filePath = item.outputPath || item.filePath;
+    const name = item.name || filePath.split(/[\\/]/u).pop() || "video.mp4";
+    const videoUrl = item.videoUrl || `/api/cs1-video/file?name=${encodeURIComponent(name)}`;
+    const downloadUrl = item.downloadUrl || `${videoUrl}${videoUrl.includes("?") ? "&" : "?"}download=1`;
+    lastResult = { ...lastResult, ...item, outputPath: filePath, videoUrl, downloadUrl };
+    outputPath.textContent = filePath;
+    if (previewVideo && previewVideo.src !== new URL(videoUrl, window.location.href).href) {
+      previewVideo.src = videoUrl;
+      previewVideo.load();
+    }
+    if (downloadLink) {
+      downloadLink.href = downloadUrl;
+      downloadLink.download = name;
+    }
+    resultPanel.hidden = false;
+  };
+
   const renderOutputs = (outputs = []) => {
     if (!outputList) return;
     if (!outputs.length) {
@@ -226,7 +267,11 @@ export function initCs1VideoModule() {
         <strong>${index + 1}. ${escapeHtml(item.name || "video.mp4")}</strong>
         <code>${escapeHtml(item.filePath || "")}</code>
         <small>${escapeHtml([sizeMb, updatedAt].filter(Boolean).join(" · "))}</small>
-        <button class="ghost small" type="button" data-open-output="${escapeHtml(item.filePath || "")}">打开</button>
+        <div class="cs1-output-actions">
+          <button class="ghost small" type="button" data-preview-output="${escapeHtml(item.videoUrl || "")}" data-output-path="${escapeHtml(item.filePath || "")}" data-output-name="${escapeHtml(item.name || "video.mp4")}">预览</button>
+          <a class="ghost small" href="${escapeHtml(item.downloadUrl || "#")}" download="${escapeHtml(item.name || "video.mp4")}">下载</a>
+          <button class="ghost small" type="button" data-open-output="${escapeHtml(item.filePath || "")}">打开</button>
+        </div>
       </div>`;
     }).join("");
   };
@@ -236,7 +281,9 @@ export function initCs1VideoModule() {
       const response = await fetch("/api/cs1-video/outputs", { cache: "no-store" });
       const data = await response.json();
       outputDir = data.outputDir || outputDir;
-      renderOutputs(Array.isArray(data.outputs) ? data.outputs : []);
+      const outputs = Array.isArray(data.outputs) ? data.outputs : [];
+      renderOutputs(outputs);
+      if (outputs[0] && !lastResult?.outputPath) showOutputResult(outputs[0]);
     } catch {
       if (outputList) outputList.innerHTML = "<p>输出记录加载失败，请稍后刷新。</p>";
     }
@@ -249,17 +296,20 @@ export function initCs1VideoModule() {
     });
   });
 
-  window.cs1VideoProduction = { receiveTts };
-  window.addEventListener("tts-shared-handoff-updated", (event) => {
-    if (event.detail?.sourceTarget === "cs1-video") return;
-    receiveTts(event.detail?.payload, { navigate: false });
-  });
+  const restoreStoredTtsHandoff = async () => {
+    const payload = await globalThis.ttsHandoffStore?.hydrate("cs1-video");
+    return payload?.id ? receiveTts(payload, { navigate: false }) : null;
+  };
+
+  window.cs1VideoProduction = { receiveTts, restoreStoredTtsHandoff };
+  restoreStoredTtsHandoff().catch(() => null);
   window.addEventListener("cs1-video-handoff", (event) => receiveTts(event.detail, { navigate: true }));
-  try {
-    const shared = window.sharedTtsHandoff?.read?.();
-    const stored = shared?.id ? shared : JSON.parse(localStorage.getItem(HANDOFF_KEY) || "null");
-    if (stored?.id) receiveTts(stored, { navigate: false });
-  } catch {}
+  document.addEventListener("workbench:route", (event) => {
+    const nextActive = event.detail?.page === "cs1-video";
+    if (nextActive) restoreStoredTtsHandoff().catch(() => null);
+    else if (routeActive) clearTimelineState();
+    routeActive = nextActive;
+  });
 
   const updateStyleDescription = () => {
     const style = styleCatalog.find((item) => item.id === selectedStyle());
@@ -328,6 +378,7 @@ export function initCs1VideoModule() {
       if (data.filePath) {
         bgmPathInput.value = data.filePath;
         if (bgmModeSelect) bgmModeSelect.value = "local";
+        if (includeBgmInput) includeBgmInput.checked = true;
         setStatus("已选择音乐", "生成时会把本地音乐写入 HyperFrames 视频。");
       } else {
         setStatus("未选择音乐", "继续使用默认 128BPM 暗色律动或不添加 BGM。");
@@ -344,13 +395,8 @@ export function initCs1VideoModule() {
     textInput.value = EXAMPLE_TEXT;
     textInput.focus();
   });
-  timelineContainer?.addEventListener("focusout", (event) => {
-    if (event.target.matches('[data-field="text"]')) publishTimelineEdit();
-  });
-
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
-    resultPanel.hidden = true;
     logPanel.textContent = "";
     generateButton.disabled = true;
     startProgress();
@@ -363,8 +409,11 @@ export function initCs1VideoModule() {
         style: selectedStyle(),
         beatCount: beatCountSelect?.value || "auto",
         cardHoldPreset: cardHoldSelect?.value || "auto",
-        bgmMode: bgmModeSelect?.value || "builtin_dark_pulse_128",
+        includeBgm: Boolean(includeBgmInput?.checked),
+        bgmMode: includeBgmInput?.checked ? (bgmModeSelect?.value || "none") : "none",
         bgmPath: bgmPathInput?.value || "",
+        bgmVolume: includeBgmInput?.checked ? normalizeCs1HandoffBgmVolume(currentTtsHandoff) : 0,
+        ttsAudioPath: includeBgmInput?.checked ? (currentTtsHandoff?.audio_path || "") : "",
         iconVariant: iconVariantSelect?.value || "orbit_nodes",
         textPalette: textPaletteSelect?.value || "gold_green",
         layoutVariant: layoutVariantSelect?.value || "left_right",
@@ -379,8 +428,7 @@ export function initCs1VideoModule() {
         watermarkAnimation: watermarkAnimationSelect?.value || "float_y",
         aiRefine: aiInput.checked,
       });
-      lastResult = result;
-      outputPath.textContent = result.outputPath || "";
+      showOutputResult(result);
       outputDir = result.outputDir || outputDir;
       logPanel.textContent = [
         result.aiUsed ? `Structure refinement: AI used · ${result.beatCount || beatCountSelect?.value || "auto"} cards` : `Structure refinement: local parser · ${result.beatCount || beatCountSelect?.value || "auto"} cards`,
@@ -396,6 +444,10 @@ export function initCs1VideoModule() {
       ].join("\n").trim();
       resultPanel.hidden = false;
       await loadOutputs();
+      if (currentTtsHandoff?.handoff_id && result.assetId && globalThis.ttsHandoffStore?.updateReceipt) {
+        await globalThis.ttsHandoffStore.updateReceipt("cs1-video", "rendered", { assetId: result.assetId });
+        await globalThis.ttsHandoffStore.updateReceipt("cs1-video", "verified", { assetId: result.assetId });
+      }
       const style = styleCatalog.find((item) => item.id === result.style);
       completeProgress();
       setStatus("生成完成", `模板：${result.templateName || style?.name || result.style}。视频已输出到本机。`);
@@ -425,6 +477,15 @@ export function initCs1VideoModule() {
   });
 
   outputList?.addEventListener("click", (event) => {
+    const previewButton = event.target instanceof Element ? event.target.closest("[data-preview-output]") : null;
+    if (previewButton) {
+      showOutputResult({
+        videoUrl: previewButton.getAttribute("data-preview-output") || "",
+        filePath: previewButton.getAttribute("data-output-path") || "",
+        name: previewButton.getAttribute("data-output-name") || "video.mp4",
+      });
+      return;
+    }
     const button = event.target instanceof Element ? event.target.closest("[data-open-output]") : null;
     const filePath = button?.getAttribute("data-open-output");
     if (filePath) openPath(filePath);

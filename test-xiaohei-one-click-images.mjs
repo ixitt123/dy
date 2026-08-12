@@ -1,10 +1,22 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
+import { resolveUniqueReferenceFolder } from "./ui/modules/desktop-folder-selection.js";
 
 const routes = fs.readFileSync(new URL("./server/routes/ian-xiaohei-routes.js", import.meta.url), "utf8");
 const app = fs.readFileSync(new URL("./ui/modules/ian-xiaohei-app.js", import.meta.url), "utf8");
 const server = fs.readFileSync(new URL("./ui-server.mjs", import.meta.url), "utf8");
 const workbench = fs.readFileSync(new URL("./ui/workbench.js", import.meta.url), "utf8");
+
+const uniqueReference = resolveUniqueReferenceFolder([
+  { suffix: "方法", data: { folderPath: "C:\\Desktop\\2026-08-10-方法", images: [{ sequence: 1 }] } },
+  { suffix: "测试1", data: { folderPath: "C:\\Desktop\\2026-08-10-测试1", images: [] } },
+]);
+assert.equal(uniqueReference.status, "matched");
+assert.equal(uniqueReference.suffix, "方法");
+assert.equal(resolveUniqueReferenceFolder([
+  { suffix: "方法", data: { folderPath: "C:\\Desktop\\2026-08-10-方法", images: [{ sequence: 1 }] } },
+  { suffix: "测试1", data: { folderPath: "C:\\Desktop\\2026-08-10-测试1", images: [{ sequence: 1 }] } },
+]).status, "ambiguous");
 
 const generateShotRoute = routes.slice(
   routes.indexOf('route === "generate-shot"'),

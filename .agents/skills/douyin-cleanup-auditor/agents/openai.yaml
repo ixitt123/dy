@@ -1,0 +1,4 @@
+interface:
+  display_name: "抖音清理审计"
+  short_description: "识别可隔离候选并执行引用、保护、复验与恢复四道门槛"
+  default_prompt: "Use $douyin-cleanup-auditor to build a reversible quarantine plan for suspected unused files."
