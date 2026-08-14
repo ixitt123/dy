@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>短视频内容生产工厂</title>
-    <link rel="stylesheet" href="/app.css" />
+    <link rel="stylesheet" href="/app.css?v=2026073014" />
   </head>
   <body>
     <div class="workbench-app">
@@ -215,6 +215,12 @@
             <button type="button" data-collector-tab="local">本地视频</button>
             <button type="button" data-collector-tab="copybank">文案库</button>
             <button type="button" data-collector-tab="batch">批量任务</button>
+            <span class="collector-folder-toolbar">
+              <button id="createDesktopDateFolder" type="button">新建文件夹</button>
+              <select id="collectorFolderNameSelect" title="选择文件夹名称" data-no-choice-persist></select>
+              <button id="editCollectorFolderName" type="button" title="编辑名称" disabled>✏️</button>
+              <button id="deleteCollectorFolderName" type="button" title="删除名称" disabled>🗑️</button>
+            </span>
           </div>
 
           <section class="collector-panel active" data-collector-panel="link">
@@ -516,6 +522,13 @@
                   </select>
                 </label>
               </div>
+              <label class="rewrite-parent-template-toggle" for="rewriteParentConversionTemplate">
+                <input id="rewriteParentConversionTemplate" type="checkbox" checked />
+                <span>
+                  <strong>家长触动与转化模板</strong>
+                  <small>默认开启：生成“触动咨询版”和“行动号召版”；关闭后恢复通用改写。</small>
+                </span>
+              </label>
               <details class="rewrite-advanced-settings">
                 <summary>高级微调</summary>
               <div class="rewrite-param-grid">
@@ -561,7 +574,7 @@
           <div class="rewrite-result-head" id="rewriteAnchorName1" data-anchor-name="名称1">
             <div>
               <h3>文案定制成品</h3>
-              <p id="rewriteStatus">选择参数后点击生成，默认生成 3 个可选成品。</p>
+              <p id="rewriteStatus">家长触动与转化模板默认生成两篇成品；关闭后为单篇通用改写。</p>
               <div class="rewrite-unified-actions">
                 <button class="primary small" id="runRewrite" type="button">生成文案定制成品</button>
                 <button class="ghost small" id="saveRewrite" type="button">保存成品</button>
@@ -684,6 +697,32 @@
                   </select>
                 </label>
                 <label>
+                  表情风格
+                  <select id="momentsEmojiStyle" disabled>
+                    <option value="gentle" selected>轻柔日常 · 温和自然</option>
+                    <option value="lively">元气分享 · 轻松有趣</option>
+                    <option value="professional">专业清爽 · 克制可信</option>
+                    <option value="warm">暖心陪伴 · 真诚有温度</option>
+                  </select>
+                  <small>启用后会优先插入本风格的专属表情，再按文案主题补充；只使用常见平台可复制显示的 Unicode 表情。</small>
+                </label>
+                <label>
+                  表情数量
+                  <select id="momentsEmojiCount" disabled>
+                    <option value="auto" selected>智能适量（3–6 个，默认）</option>
+                    <option value="3-5">3–5 个</option>
+                    <option value="5-10">5–10 个</option>
+                  </select>
+                  <small>按文案长度与段落分布，在所选数量范围内自然插入。</small>
+                </label>
+                <div class="moments-emoji-palette" id="momentsEmojiPalette" aria-live="polite" hidden>
+                  <div>
+                    <strong id="momentsEmojiPaletteTitle">轻柔日常</strong>
+                    <small id="momentsEmojiPaletteHint">按语义自动挑选，不会连续堆叠。</small>
+                  </div>
+                  <p id="momentsEmojiPalettePreview" aria-label="表情预览">😊 ☺️ 🌿 ✨ ☀️ ☕ 💛 🌙</p>
+                </div>
+                <label>
                   配图数量
                   <select id="momentsImageCount">
                     <option value="auto" selected>自动 1-3 张</option>
@@ -766,6 +805,7 @@
                 <div class="moments-heading-actions">
                   <h2>图片素材区</h2>
                   <button id="copyMomentsPrompts" class="ghost small" type="button">复制提示词</button>
+                  <button id="copyMomentsImageInstruction" class="ghost small" type="button">图片提示词</button>
                 </div>
               </div>
             </div>
@@ -784,13 +824,6 @@
 
       <section class="workbench-page" data-page="tts" id="ttsPage">
       <section class="tts-area" id="ttsLab">
-        <div class="result-head tts-head">
-          <div>
-            <h2>语音生成与发送</h2>
-            <p>选择项目文案和声音，生成、试听后直接发送到保留生产线。</p>
-          </div>
-        </div>
-
         <div class="tts-settings tts-settings-summary tts-provider-only">
           <label class="tts-provider-picker">
             语音平台
@@ -823,16 +856,52 @@
               </div>
             </div>
             <label for="ttsText">配音文案</label>
-            <textarea id="ttsText" rows="12" placeholder="输入或粘贴文案。系统会先清洗、切句、处理情绪和停顿，再交给语音平台。"></textarea>
+            <textarea id="ttsText" rows="12" placeholder="输入或粘贴文案。系统会先清洗、切句、处理情绪和停顿，再交给语音平台。" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-1p-ignore="true"></textarea>
             <div class="tts-script-foot">
               <span id="ttsCharacterCount">0 字</span>
               <span>支持 mp3 / wav</span>
             </div>
           </div>
 
-          <div class="tts-control-column tts-step-card">
+          <div class="tts-timeline-column tts-step-card" id="ttsTimelineColumn">
             <div class="tts-step-heading">
               <span>2</span>
+              <div>
+                <strong>字幕时间轴</strong>
+                <small>在这里核对音频对应的带时间戳字幕</small>
+              </div>
+            </div>
+            <div class="tts-central-timeline-head">
+              <div>
+                <strong id="ttsTimelineJobTitle">等待生成音频</strong>
+                <span id="ttsTimelineStatus">生成音频后会显示可编辑字幕。</span>
+              </div>
+              <div class="tts-central-timeline-actions">
+                <button class="ghost small" id="ttsReloadTimeline" type="button" disabled>重载</button>
+                <button class="primary small" id="ttsSaveTimeline" type="button" disabled>确定修改并发送到：</button>
+              </div>
+            </div>
+            <div class="tts-central-handoff" id="ttsCentralHandoff">
+              <strong>选择生产线</strong>
+              <div class="tts-central-handoff-options">
+                <label><input class="tts-audio-handoff-choice" type="checkbox" data-target="cs1-video" checked />CS1生成器</label>
+                <label><input class="tts-audio-handoff-choice" type="checkbox" data-target="xiaohei-video" checked />小黑视频风格生成</label>
+                <label><input class="tts-audio-handoff-choice" type="checkbox" data-target="money-printer" checked />MoneyPrinter</label>
+                <label><input class="tts-audio-handoff-choice" type="checkbox" data-target="kinetic-text" checked />动态大字视频</label>
+              </div>
+              <small class="tts-job-handoff-status" id="ttsCentralHandoffStatus">点“确定修改”后会按 BGM 状态发送三件套或四件套。</small>
+            </div>
+            <div class="tts-central-timeline-labels">
+              <span>序号</span><span>开始</span><span>结束</span><span>字幕文字</span>
+            </div>
+            <div class="tts-central-timeline" id="ttsCentralTimeline">
+              <div class="tts-empty">还没有可校对的字幕时间轴。</div>
+            </div>
+          </div>
+
+          <div class="tts-control-column tts-step-card">
+            <div class="tts-step-heading">
+              <span>3</span>
               <div>
                 <strong>选声音</strong>
                 <small>平台、分类、音色和克隆声音</small>
@@ -873,6 +942,19 @@
                 <input id="ttsManualVoice" type="text" placeholder="填写平台提供的 voice_id" />
               </label>
             </div>
+            <label class="tts-bgm-option">
+              <input id="ttsGenerateCleanEducationBgm" type="checkbox" data-no-choice-persist />
+              <span>
+                <strong>同时生成清爽教育 BGM</strong>
+                <small>MiniMax · music-2.6-free · 纯音乐；按当前文案的旁白时长生成，作为独立音轨发送</small>
+                <small id="ttsBgmSelectionState" class="tts-bgm-selection-state">未选择：本次生成将保持原三件套。</small>
+              </span>
+            </label>
+            <label class="tts-bgm-volume-control" for="ttsBgmVolume">
+              <span>成品 BGM 音量 <strong id="ttsBgmVolumeValue">28%</strong></span>
+              <input id="ttsBgmVolume" type="range" min="10" max="50" step="1" value="28" aria-describedby="ttsBgmVolumeHint" />
+              <small id="ttsBgmVolumeHint">默认较低，避免盖住旁白；调整会立即作用于 BGM 预览，并用于之后新生成的 BGM 文件。</small>
+            </label>
             <div class="tts-voice-quick-panel" id="ttsVoiceQuickPanel"></div>
             <div class="tts-music-presets" id="ttsMusicPresetsPanel" hidden></div>
             <details class="tts-advanced-settings">
@@ -951,6 +1033,20 @@
               </div>
               <audio id="ttsAudio" controls preload="metadata"></audio>
             </div>
+            <div class="tts-preview tts-bgm-preview" id="ttsBgmPreview" hidden>
+              <div>
+                <strong id="ttsBgmPreviewTitle">清爽教育 BGM</strong>
+                <span id="ttsBgmPreviewMeta"></span>
+              </div>
+              <audio id="ttsBgmAudio" controls preload="metadata"></audio>
+            </div>
+            <div class="tts-bgm-missing" id="ttsBgmMissing" hidden>
+              <div>
+                <strong>当前旁白尚未生成 BGM</strong>
+                <small id="ttsBgmMissingMessage">可为这条已完成的旁白补生成独立清爽教育 BGM。</small>
+              </div>
+              <button class="ghost small" id="generateTtsBgmForCurrent" type="button">补生成 BGM</button>
+            </div>
             <section class="tts-alignment-editor" id="ttsAlignmentEditor" hidden>
               <div class="tts-alignment-head">
                 <div>
@@ -971,7 +1067,7 @@
                   </details>
                   <label class="tts-final-transcript-field" for="ttsFinalTranscript">
                     发送时使用的最终文案
-                    <textarea id="ttsFinalTranscript" rows="7" placeholder="如有错字或断句问题，可在这里修改后重新对齐。"></textarea>
+                    <textarea id="ttsFinalTranscript" rows="7" placeholder="如有错字或断句问题，可在这里修改后重新对齐。" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-1p-ignore="true"></textarea>
                   </label>
                   <div class="tts-alignment-actions">
                     <button class="ghost small" id="retryTtsAlignment" type="button">重新检查音频</button>
@@ -1156,10 +1252,12 @@
               <section class="cs1-shared-timeline-card">
                 <div class="cs1-shared-timeline-title">
                   <strong>字幕时间轴</strong>
-                  <span id="cs1TimelineStatus">等待 TTS 字幕</span>
+                  <div class="production-timeline-actions">
+                    <span id="cs1TimelineStatus">等待 TTS 字幕</span>
+                  </div>
                 </div>
                 <div class="shared-subtitle-timeline-head">
-                  <span>序号</span><span>开始</span><span>结束</span><span>字幕文字（失去焦点自动保存）</span>
+                  <span>序号</span><span>开始</span><span>结束</span><span>字幕文字</span>
                 </div>
                 <div id="cs1SubtitleTimeline" class="shared-subtitle-timeline"></div>
               </section>
@@ -1212,10 +1310,11 @@
               </div>
               <label>
                 背景音乐
+                <span class="kinetic-check"><input id="cs1VideoIncludeBgm" type="checkbox" /><span>加入对应 BGM 音频</span></span>
                 <select id="cs1VideoBgmMode">
-                  <option value="builtin_dark_pulse_128" selected>默认 128BPM 暗色律动</option>
+                  <option value="none" selected>不添加 BGM</option>
                   <option value="local">使用本地音频</option>
-                  <option value="none">不添加 BGM</option>
+                  <option value="builtin_dark_pulse_128">默认 128BPM 暗色律动</option>
                 </select>
                 <div class="cs1-bgm-row">
                   <input id="cs1VideoBgmPath" type="text" placeholder="本地音频路径，可选" readonly />
@@ -1421,7 +1520,7 @@
                   <button id="moneyPrinterRefresh" class="ghost" type="button">刷新</button>
                   <button id="moneyPrinterOpenDocs" class="ghost" type="button">API 文档</button>
                   <button id="moneyPrinterOpenRoot" class="ghost" type="button">项目目录</button>
-                  <button id="moneyPrinterOpenTasks" class="ghost" type="button">输出目录</button>
+                  <button id="moneyPrinterOpenTasks" class="ghost" type="button">统一下载目录</button>
                 </div>
                 <div class="money-printer-status-line">
                   <strong id="moneyPrinterStatus">检测中</strong>
@@ -1434,6 +1533,14 @@
                   <strong>素材与转场</strong>
                   <span>自动匹配</span>
                 </div>
+                <label>
+                  <span>素材生成模式</span>
+                  <select id="moneyPrinterMaterialMode">
+                    <option value="standard" selected>标准模式 · 分镜更丰富</option>
+                    <option value="fast">快速模式 · 较少长素材</option>
+                  </select>
+                  <small>快速模式按语义合并分镜，约每 12–20 秒使用一个素材。</small>
+                </label>
                 <label>
                   <span>素材来源</span>
                   <select id="moneyPrinterSource">
@@ -1466,7 +1573,11 @@
                   <strong>成片参数</strong>
                   <span>本页缓存</span>
                 </div>
-                <label>
+                <label class="kinetic-check">
+                  <input id="moneyPrinterTextEffectEnabled" type="checkbox" />
+                  <span>开启动态大字文字特效</span>
+                </label>
+                <label data-money-printer-effect-setting>
                   <span>字幕模板</span>
                   <select id="moneyPrinterEffect"></select>
                 </label>
@@ -1485,16 +1596,17 @@
                     <option value="60">60fps 流畅</option>
                   </select>
                 </label>
-                <label class="kinetic-range-row"><span>字号</span><input id="moneyPrinterFontSize" type="range" min="34" max="160" value="88" /><output id="moneyPrinterFontSizeValue">88</output></label>
-                <div class="kinetic-color-row">
+                <label class="kinetic-range-row" data-money-printer-effect-setting><span>字号</span><input id="moneyPrinterFontSize" type="range" min="34" max="160" value="88" /><output id="moneyPrinterFontSizeValue">88</output></label>
+                <div class="kinetic-color-row" data-money-printer-effect-setting>
                   <label><span>文字颜色</span><input id="moneyPrinterPrimaryColor" type="color" value="#ffffff" /></label>
                   <label><span>强调色</span><input id="moneyPrinterAccentColor" type="color" value="#ffd84d" /></label>
                 </div>
-                <label>
+                <label data-money-printer-effect-setting>
                   <span>最大行数</span>
                   <select id="moneyPrinterMaxLines"><option value="1">1 行</option><option value="2" selected>2 行</option><option value="3">3 行</option></select>
                 </label>
                 <label class="kinetic-range-row"><span>TTS 音量</span><input id="moneyPrinterTtsVolume" type="range" min="0" max="200" value="100" /><output id="moneyPrinterTtsVolumeValue">100%</output></label>
+                <label class="kinetic-check"><input id="moneyPrinterIncludeBgm" type="checkbox" /><span>加入对应 BGM 音频</span></label>
                 <label class="kinetic-check"><input id="moneyPrinterBottomSubtitles" type="checkbox" checked /><span>显示底部关键词字幕</span></label>
               </section>
 
@@ -1510,7 +1622,7 @@
                   <div class="kinetic-preview-toolbar-main">
                     <div class="kinetic-preview-title">
                       <strong id="moneyPrinterPreviewTitle">MoneyPrinter 最终预览</strong>
-                      <span id="moneyPrinterPreviewSpec">等待 TTS 三件套</span>
+                      <span id="moneyPrinterPreviewSpec">等待已确认 TTS 交接包</span>
                     </div>
                     <div class="kinetic-preview-actions">
                       <div class="kinetic-preview-buttons">
@@ -1554,7 +1666,9 @@
               <section class="kinetic-card money-printer-card money-printer-timeline-card">
                 <div class="kinetic-card-head">
                   <strong>字幕时间轴 / 素材检查</strong>
-                  <span id="moneyPrinterTimelineSummary">等待 TTS</span>
+                  <div class="production-timeline-actions">
+                    <span id="moneyPrinterTimelineSummary">等待 TTS</span>
+                  </div>
                 </div>
                 <div class="money-printer-timeline-head">
                   <span>序号</span><span>开始</span><span>结束</span><span>字幕文案</span><span>检索词</span><span>素材 / 来源</span><span>转场</span>
@@ -1637,6 +1751,7 @@
 
               <section class="kinetic-card">
                 <div class="kinetic-card-head"><strong>声音与字幕</strong></div>
+                <label class="kinetic-check"><input id="kineticIncludeBgm" type="checkbox" /><span>加入对应 BGM 音频</span></label>
                 <label>
                   <span>背景声音</span>
                   <select id="kineticAudioSource">
@@ -1753,7 +1868,10 @@
               <section class="kinetic-card kinetic-timeline-card">
                 <div class="kinetic-card-head">
                   <strong>字幕时间轴</strong>
-                  <button id="kineticAnalyze" class="ghost" type="button">本地重新识别关键词</button>
+                  <div class="kinetic-timeline-actions">
+                    <span id="kineticTimelineDraftStatus" class="kinetic-draft-status" hidden></span>
+                    <button id="kineticConfirmTimeline" class="primary small" type="button" disabled>确定视觉参数</button>
+                  </div>
                 </div>
                 <div id="kineticTimelineRuleStatus" class="kinetic-rule-status" hidden></div>
                 <div class="kinetic-timeline-head">
@@ -1906,48 +2024,14 @@
       </section>
           </main>
 
-          <aside class="status-rail" aria-label="状态面板">
-            <section class="rail-section">
-              <div class="rail-heading">
-                <span>任务线程</span>
-                <i class="live-dot"></i>
-              </div>
-              <div id="railCurrentTask" class="rail-content">
-                <strong>暂无运行任务</strong>
-                <small>队列进度和最近任务会显示在这里</small>
-              </div>
-            </section>
-
-            <section class="rail-section">
-              <div class="rail-heading"><span>最近生成</span></div>
-              <div id="railRecentOutput" class="rail-list">
-                <div class="rail-empty">还没有生成记录</div>
-              </div>
-            </section>
-
-            <section class="rail-section">
-              <div class="rail-heading"><span>错误提示</span></div>
-              <div id="railErrors" class="rail-list">
-                <div class="rail-empty success-text">当前没有错误</div>
-              </div>
-            </section>
-
-            <section class="rail-section">
-              <div class="rail-heading"><span>快捷操作</span></div>
-              <div class="rail-actions">
-                <button type="button" data-nav="collector">新建采集</button>
-                <button type="button" data-nav="rewrite">定制改写</button>
-                <button type="button" data-nav="tts">生成语音</button>
-</div>
-            </section>
-          </aside>
-
         </div>
       </div>
     </div>
 
-    <script src="/modules/legacy-runtime.js"></script>
-    <script src="/workbench.js"></script>
+    <script src="/modules/tts-handoff-store.js"></script>
+    <script src="/modules/moments-image-instruction.js"></script>
+    <script src="/modules/legacy-runtime.js?v=2026073117"></script>
+    <script src="/workbench.js?v=2026073011"></script>
     <script src="/modules/tts-voice-clone.js"></script>
     <script type="module" src="/app.js"></script>
 </body>

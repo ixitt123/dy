@@ -5,8 +5,27 @@ import { readFile } from "node:fs/promises";
 
 const BASE = "http://127.0.0.1:8787";
 const tests = [];
+const nativeFetch = globalThis.fetch.bind(globalThis);
+let localApiCookie = "";
 
 function test(name, fn) { tests.push({ name, fn }); }
+
+async function establishLocalSession() {
+  const response = await nativeFetch(`${BASE}/`);
+  localApiCookie = String(response.headers.get("set-cookie") || "").split(";")[0];
+  if (!response.ok || !localApiCookie) throw new Error("Unable to establish local API session");
+}
+
+globalThis.fetch = async (input, options = {}) => {
+  const url = typeof input === "string" ? input : input?.url || "";
+  if (!String(url).startsWith(`${BASE}/api/`)) return nativeFetch(input, options);
+  const headers = new Headers(options.headers || {});
+  headers.set("cookie", localApiCookie);
+  if (!headers.has("origin")) headers.set("origin", BASE);
+  return nativeFetch(input, { ...options, headers });
+};
+
+await establishLocalSession();
 
 test("Status API", async () => {
   const r = await fetch(`${BASE}/api/status`);
@@ -20,10 +39,12 @@ test("Provider List", async () => {
   if (!d.providers?.length) throw new Error("No providers");
 });
 
-test("Settings API", async () => {
+test("Settings dump disabled", async () => {
   const r = await fetch(`${BASE}/api/settings/all`);
   const d = await r.json();
-  if (!d.ok) throw new Error("Settings not OK");
+  if (r.status !== 404 || d.ok !== false || JSON.stringify(d).includes("api_key")) {
+    throw new Error("Settings dump endpoint must stay disabled and must not expose secrets");
+  }
 });
 
 test("Model Mapping", async () => {
@@ -205,8 +226,147 @@ test("Xiaohei prompt plan refresh cache", async () => {
     || !source.includes('els.purposeSelect.value = cachedPurpose')
     || !source.includes('currentBatch?.boundImages || []')
     || !source.includes('const PROMPT_PLAN_LATEST_KEY')
-    || !source.includes('removeOlderPromptPlanCaches(key)')) {
+    || !source.includes('function prunePromptPlanCaches(')
+    || !source.includes('prunePromptPlanCaches(key)')
+    || !source.includes(':tts-${ttsJobId}')
+    || !source.includes('restorePromptPlanFromServer()')
+    || !source.includes('/api/ian-xiaohei/plan-restore?project_id=')) {
     throw new Error("Xiaohei prompt plan refresh cache is incomplete");
+  }
+});
+
+test("Moments emoji packs are source-built and cross-platform safe", async () => {
+  const [pageResponse, legacyResponse, server, emojiSkill] = await Promise.all([
+    fetch(`${BASE}/`),
+    fetch(`${BASE}/modules/legacy-runtime.js`),
+    readFile(new URL("./ui-server.mjs", import.meta.url), "utf8"),
+    readFile(new URL("./skills/wechat-moments-copy-emoji/SKILL.md", import.meta.url), "utf8"),
+  ]);
+  const [page, legacy] = await Promise.all([pageResponse.text(), legacyResponse.text()]);
+  const requiredStyles = ["gentle", "lively", "professional", "warm"];
+  if (!page.includes('id="momentsEmojiStyle"')
+    || !page.includes('id="momentsEmojiCount"')
+    || !page.includes("智能适量（3–6 个，默认）")
+    || !page.includes('id="momentsEmojiPalette"')
+    || !requiredStyles.every((style) => page.includes(`value="${style}"`))
+    || !["auto", "3-5", "5-10"].every((count) => page.includes(`value="${count}"`))
+    || !legacy.includes("MOMENTS_EMOJI_STYLE_PREVIEWS")
+    || !legacy.includes("emojiStyle: momentsEmojiStyle?.value")
+    || !legacy.includes("emojiCount: momentsEmojiCount?.value")
+    || !legacy.includes("syncMomentsEmojiStyle")
+    || !server.includes("MOMENTS_CROSS_PLATFORM_EMOJIS")
+    || !server.includes("...styleConfig.signature, ...matched, ...styleConfig.defaults")
+    || !server.includes("MOMENTS_EMOJI_COUNT_OPTIONS")
+    || !server.includes('auto: { label: "智能适量（3–6 个）", min: 3, max: 6 }')
+    || !server.includes('String(emoji).includes("\\u200D")')
+    || !server.includes("applyPresetMomentsEmojis(post, emojiStyle, emojiCount)")
+    || !emojiSkill.includes("表情库必须直接内置在源代码中")) {
+    throw new Error("Moments emoji packs are not fully source-built or cross-platform guarded");
+  }
+});
+
+test("Completed TTS generation reveals its audio preview", async () => {
+  const legacy = await (await fetch(`${BASE}/modules/legacy-runtime.js`)).text();
+  if (!legacy.includes('const hasCompletedAudio = job?.status === "completed" && Boolean(job?.audio_url);')
+    || !legacy.includes('const show = hasCompletedAudio || ttsTopIssuePanelShouldShow(job);')
+    || !legacy.includes('showTtsPreview(displayJob, { reveal: true });')
+    || !legacy.includes('showTtsPreview(completedMusicJob || musicJob, { reveal: true });')
+    || !legacy.includes('ttsPreview?.scrollIntoView?.({ behavior: "smooth", block: "center" })')) {
+    throw new Error("Completed TTS generation does not reliably reveal the audio preview");
+  }
+});
+
+test("Optional clean-education BGM is a separate fourth handoff asset", async () => {
+  const [pageResponse, legacyResponse, cssResponse, workbenchResponse, cs1Response, moneyResponse, kineticResponse, xiaoheiResponse, xiaoheiRoute, cs1Route] = await Promise.all([
+    fetch(`${BASE}/`),
+    fetch(`${BASE}/modules/legacy-runtime.js`),
+    fetch(`${BASE}/app.css`),
+    fetch(`${BASE}/workbench.js`),
+    fetch(`${BASE}/modules/cs1-video.js`),
+    fetch(`${BASE}/modules/money-printer.js`),
+    fetch(`${BASE}/modules/kinetic-text.js`),
+    fetch(`${BASE}/modules/ian-xiaohei-app.js`),
+    readFile(new URL("./server/routes/ian-xiaohei-routes.js", import.meta.url), "utf8"),
+    readFile(new URL("./server/routes/cs1-video-routes.js", import.meta.url), "utf8"),
+  ]);
+  const [page, legacy, css, workbench, cs1, money, kinetic, xiaohei] = await Promise.all([
+    pageResponse.text(), legacyResponse.text(), cssResponse.text(), workbenchResponse.text(), cs1Response.text(), moneyResponse.text(), kineticResponse.text(), xiaoheiResponse.text(),
+  ]);
+  if (!page.includes('id="ttsGenerateCleanEducationBgm"')
+    || !page.includes('data-no-choice-persist')
+    || !page.includes('id="ttsBgmSelectionState"')
+    || page.includes('点“确定修改”后发送当前三件套。')
+    || !page.includes('id="ttsBgmVolume"')
+    || !page.includes('id="ttsBgmVolumeValue"')
+    || !page.includes('min="10" max="50" step="1" value="28"')
+    || !page.includes('id="ttsBgmPreview"')
+    || !page.includes('id="generateTtsBgmForCurrent"')
+    || !legacy.includes('function generateCleanEducationBgm(parentJob, text, { previewPromise = null } = {})')
+    || !legacy.includes('id = "ttsBgmProgress"')
+    || !legacy.includes('function setTtsBgmProgress(percent = 0, label = "")')
+    || !legacy.includes('setTtsBgmProgress(45, previewPromise ?')
+    || !legacy.includes('function ensureTtsBgmPreview()')
+    || !legacy.includes('ttsBgmJobsByParentId.clear()')
+    || !legacy.includes('function isTtsLinkedBgmJob(job = {})')
+    || !legacy.includes('data-tts-load-file="bgm"')
+    || !legacy.includes('const handoffBundleLabel = linkedBgm ?')
+    || !legacy.includes('const bundleFilesLabel = linkedBgm')
+    || !legacy.includes('async function resolveTtsBgmJob(parentJob)')
+    || !legacy.includes('const data = await fetchJson("/api/tts/jobs?limit=500");')
+    || !legacy.includes('showTtsBgmPreview(bgmJob, { reveal: true, play: true });')
+    || !legacy.includes('if (ttsOutputColumn) ttsOutputColumn.hidden = false;')
+    || !legacy.includes('tts-history-files${linkedBgm ? " has-bgm" : ""}')
+    || !css.includes('.tts-history-files.has-bgm::before')
+    || !css.includes('content: "四件套";')
+    || !page.includes('src="/workbench.js?v=2026073011"')
+    || !workbench.includes('const bgmPreview = lab.querySelector("#ttsBgmPreview");')
+    || !workbench.includes('if (bgmPreview) resultLane.appendChild(bgmPreview);')
+    || !legacy.includes('function ensureTtsBgmMissingPanel()')
+    || !legacy.includes('setTtsBgmProgress(100,')
+    || !legacy.includes('function requestCleanEducationBgmPreview(asset, text, targetDuration)')
+    || !legacy.includes('bgmPreviewPromise = requestCleanEducationBgmPreview')
+    || !legacy.includes('function ensureTtsBgmPreview()')
+    || !legacy.includes('function syncTtsBgmSelectionState()')
+    || !legacy.includes('function selectedTtsBgmVolume()')
+    || !legacy.includes('background_volume: selectedTtsBgmVolume()')
+    || !legacy.includes('ttsBgmAudio.volume = volume')
+    || !legacy.includes('async function resolveTtsBgmForHandoff(job = activeTtsRailJob)')
+    || !legacy.includes('await resolveTtsBgmForHandoff(job);')
+    || !legacy.includes('function ttsHandoffBundleLabel(job = activeTtsRailJob)')
+    || !legacy.includes('function syncTtsCentralHandoffBundle(job = activeTtsRailJob)')
+    || !legacy.includes('function refreshTtsCentralHandoffBundle(job = activeTtsRailJob)')
+    || !legacy.includes('确定修改并发送${bundleLabel}到：')
+    || !legacy.includes('bgm_path: payload.bgm_path || ""')
+    || !legacy.includes('return new Promise((resolve) => {')
+    || !legacy.includes('.then(resolve)')
+    || !legacy.includes('generateCleanEducationBgm(job, text)')
+    || !legacy.includes('parent_tts_job_id: parentJob.id')
+    || !legacy.includes('type: "bgm"')
+    || !legacy.includes('payload.has_bgm ?')
+    || !cs1.includes('payload.bgm_path || ""')
+    || !page.includes('id="cs1VideoIncludeBgm"')
+    || !page.includes('id="moneyPrinterIncludeBgm"')
+    || !page.includes('id="kineticIncludeBgm"')
+    || !cs1.includes('includeBgm: Boolean(includeBgmInput?.checked)')
+    || !cs1.includes('ttsAudioPath: includeBgmInput?.checked')
+    || !cs1Route.includes('await mixCs1BgmIntoVideo({')
+    || !cs1Route.includes('afade=t=out:st=${fadeStart}:d=0.8')
+    || !money.includes('state.includeBgm && state.handoff?.bgm_path ? "custom" : "none"')
+    || !money.includes('state.includeBgm && hasBgm ? "四件套（含独立 BGM）" : "三件套"')
+    || !money.includes('等待已确认 TTS 交接包')
+    || !kinetic.includes('localPath: payload.bgm_path')
+    || !kinetic.includes('function syncPreviewBgmAudio({ force = false } = {})')
+    || !kinetic.includes('state.bgmAudio?.pause()')
+    || !kinetic.includes('bgmAudio?.play()')
+    || !kinetic.includes('async function jsonFetch(url, options = {}, retryLocalSession = true)')
+    || !kinetic.includes('return jsonFetch(url, options, false);')
+    || !xiaohei.includes('tts_bgm_path: state.includeBgm ? (state.handoffBgm?.path || "") : ""')
+    || !xiaohei.includes('function playPreviewBgm()')
+    || !xiaohei.includes('handoff.bgm_url || job.bgm_url || ""')
+    || !legacy.includes('bgm_url: payload.bgm_url || ""')
+    || !xiaohei.includes('includeBgm: document.querySelector("#xiaoheiIncludeBgm")')
+    || !xiaoheiRoute.includes('const handoffBgmPath = String(body.tts_bgm_path || "").trim();')) {
+    throw new Error("Optional clean-education BGM four-asset handoff is incomplete");
   }
 });
 
@@ -220,7 +380,7 @@ test("Xiaohei fast preview and cache restore", async () => {
   if (!assetResponse.ok
     || !assetResponse.headers.get("cache-control")?.includes("max-age=86400")
     || !source.includes("hydratePurposeSelect();")
-    || !source.includes("await Promise.all([loadConfig(), loadAudioJobs()]);")
+    || !source.includes("await Promise.all([loadConfig(), loadAudioJobs(), loadFolderNames()]);")
     || !source.includes("void loadOutputs().catch(() => {});")
     || !source.includes('decoding="async"')
     || !css.includes("content-visibility: auto")) {
@@ -258,12 +418,14 @@ test("Xiaohei video preview, transitions and MP4 download", async () => {
     || !page.includes('id="videoTransitionMode"')
     || !page.includes('id="downloadXiaoheiVideo"')
     || !page.includes('id="xiaoheiFrameRate"')
+    || !page.includes('id="xiaoheiPlaybackSpeed"')
     || !page.includes('id="xiaoheiBgmFile"')
     || !page.includes('id="xiaoheiIntroEnabled"')
     || !page.includes('id="xiaoheiOutroEnabled"')
     || !page.includes('id="xiaoheiShowSubtitles"')
     || !source.includes('function drawVideoPreview()')
     || !source.includes('function composeSettings()')
+    || !source.includes('playbackSpeed: [1, 1.1, 1.2, 1.3]')
     || !source.includes('/api/ian-xiaohei/upload-video-bgm')
     || !source.includes('/api/ian-xiaohei/render-video')
     || !source.includes('function downloadRenderedVideo()')
@@ -338,7 +500,7 @@ test("Kinetic text production line", async () => {
     || !page.includes('id="kineticPreviewCanvas"')
     || !page.includes('aria-label="点击画面播放或暂停"')
     || !page.includes('id="kineticTimeline"')
-    || !page.includes('id="kineticAnalyze"')
+    || page.includes('id="kineticAnalyze"')
     || !page.includes('id="kineticChooseDownloadDir"')
     || !page.includes('id="kineticRenderFinal" class="primary" type="button">下载视频</button>')
     || renderButtonIndex <= previewToolbarIndex
@@ -357,7 +519,7 @@ test("Kinetic text production line", async () => {
     || !moduleSource.includes("receiveTts")
     || !moduleSource.includes("pollJob")
     || !moduleSource.includes('data-field="lineBreaks"')
-    || !moduleSource.includes("keywordsOnly: true")
+    || moduleSource.includes("keywordsOnly: true")
     || !moduleSource.includes("renderOnComplete: true")
     || !moduleSource.includes("视频已保存：")
     || !kineticServiceSource.includes("normalizeSegmentKeywords")

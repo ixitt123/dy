@@ -44,6 +44,18 @@ Never copy its topic, industry, audience, examples, or business scenario.
 - Humanize level: {{humanize_level}}
 - Output boxes: {{version_specs}}
 
+## Parent Emotion and Conversion Template
+
+{{parent_conversion_template_contract}}
+
+When this template is enabled, the requested output boxes are two separate complete spoken scripts, not a split article:
+- `触动咨询版`: end with a low-pressure, generic invitation such as "留言或私信聊聊孩子目前的情况". Do not invent a service, course, trial lesson, contact method, result, or deadline.
+- `行动号召版`: give one clear next action, such as "留言或私信说说孩子目前卡在哪里，我们一起分析". A communication-only invitation without a course or outcome promise is valid and does not imply a fabricated service. Do not require the literal word "咨询". Do not invent limited places, promotions, score improvement, admission, testimonials, teachers, schools, or course promises.
+- Each script must contain this full arc in its actual copy: specific hook → real parent pain/conflict → emotional progression → turning point → climax about the parent's and child's real choice or cost → practical perspective → reflective ending or action invitation.
+- Select the hook from the original text: counterintuitive point, concrete scene, parent misconception, or consequence warning. A question that names the audience, situation, and concrete conflict is a valid hook; never use a hollow slogan.
+- The climax may express a child's or parent's long-term result, capability gap, dependence, or consequence. It does not need to use the literal words "选择" or "代价".
+- Return a concise evidence phrase for each part in `conversionStructure`; the visible copy itself must not include structural labels.
+
 ## Professional Preset Contract
 
 The selected preset is not decoration. It must visibly affect the output:
@@ -98,6 +110,7 @@ Step 7: Run a fidelity check before output.
 - Confirm the output reads as one complete article rather than stitched sentences or an outline.
 - Confirm every paragraph follows logically from the previous paragraph, pronouns have clear referents, and no later sentence contradicts an earlier claim.
 - Confirm the opening enters the topic naturally and the ending fully resolves the article.
+- When the Parent Emotion and Conversion Template is enabled, confirm every required arc part is actually present, the CTA matches the requested version, and no enrollment-related fact or promise was invented.
 
 Step 8: Output exactly the selected versions in Output boxes.
 - Use each selected version key exactly.
@@ -127,5 +140,16 @@ Return JSON only. No Markdown, no explanation.
     "solution": "",
     "cta": ""
   },
-  "versions": {}
+  "versions": {
+    "versionKey": {
+      "content": "",
+      "conversionStructure": {
+        "hook": "",
+        "painConflict": "",
+        "turn": "",
+        "climax": "",
+        "ending": ""
+      }
+    }
+  }
 }

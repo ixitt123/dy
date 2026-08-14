@@ -1,8 +1,9 @@
 import http from "node:http";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { spawn, spawnSync } from "node:child_process";
-import { createHash, randomUUID } from "node:crypto";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { once } from "node:events";
 import { fileURLToPath } from "node:url";
 import * as XLSX from "xlsx";
@@ -32,12 +33,38 @@ import { createIanXiaoheiRoutes } from "./server/routes/ian-xiaohei-routes.js";
 import { createMoneyPrinterRoutes } from "./server/routes/money-printer-routes.js";
 import { createKineticTextRoutes } from "./server/routes/kinetic-text-routes.js";
 import { createYtDlpService } from "./server/core/yt-dlp-service.js";
+import {
+  createDesktopDateFolder,
+  deleteEmptyDesktopNamedFolder,
+  findDesktopNamedFolderContainingFile,
+  findLatestDesktopNamedFolder,
+  formatLocalDate,
+  listDesktopImageSequenceFromReference,
+  listLatestDesktopImageBatch,
+  normalizeDesktopFolderName,
+  renameDesktopNamedFolder,
+} from "./server/core/desktop-date-folder.js";
 import { formatOriginalMomentsPost } from "./server/core/moments-original.js";
 import { parseJsonFromModelText as parseStructuredJsonFromModelText } from "./server/core/structured-json.js";
 import { createPageLifecycle } from "./server/core/page-lifecycle.js";
 import { HttpBodyError, readBody, readJsonBody } from "./server/utils/http-body.js";
-import { DEFAULT_REWRITE_REFERENCE, REWRITE_DIRECTIONS, REWRITE_STYLES, REWRITE_VERSION_DEFS, REWRITE_VERSION_DEFAULTS } from "./server/config/rewrite-presets.js";
-import { DEFAULT_MODEL_MAPPING, DEFAULT_VOLCENGINE_ARK_IMAGE_MODEL, SETTINGS_TASKS } from "./server/config/model-defaults.js";
+import { isPathInsideRoot, resolveStaticRequestPath } from "./server/core/static-path-safety.js";
+import { runtimeProcessIsRunning } from "./server/core/runtime-process.js";
+import { deepSeekRequestCompatibility } from "./server/core/model-router/providers/deepseek.js";
+import {
+  parentConversionLocalQuality,
+  reviewIssuesAreOnlyParentAdvisory,
+} from "./server/core/rewrite-conversion-quality.js";
+import {
+  DEFAULT_REWRITE_REFERENCE,
+  PARENT_CONVERSION_VERSION_DEFS,
+  PARENT_CONVERSION_VERSION_DEFAULTS,
+  REWRITE_DIRECTIONS,
+  REWRITE_STYLES,
+  REWRITE_VERSION_DEFS,
+  REWRITE_VERSION_DEFAULTS,
+} from "./server/config/rewrite-presets.js";
+import { DEFAULT_MODEL_MAPPING, DEFAULT_VOLCENGINE_ARK_IMAGE_MODEL, SETTINGS_TASKS, normalizeDeepSeekModelName, normalizeModelMapping } from "./server/config/model-defaults.js";
 import { AUTO_MODEL_VALUE, REWRITE_PROVIDER_ORDER, REWRITE_PROVIDER_PRESETS } from "./server/config/provider-presets.js";
 
 const runtimeSourcePath = fileURLToPath(import.meta.url);
@@ -51,14 +78,23 @@ const personasDir = path.join(__dirname, "personas");
 const momentsPersonasPath = path.join(personasDir, "moments-personas.json");
 const momentsMaterialsDir = path.join(__dirname, "assets", "moments-materials");
 const momentsPublishDir = path.join(__dirname, ".data", "moments-publish");
+const folderNamesPath = path.join(__dirname, ".data", "folder-names.json");
+const desktopFolderImageTokens = new Map();
 const wechatMomentsPublisherScript = path.join(__dirname, "scripts", "wechat_moments_publish.py");
 const referenceExamplesPath = path.join(__dirname, "reference_examples.json");
 const defaultDownloadsDir = path.join(__dirname, "downloads");
+const browserDownloadsRoot = path.join(__dirname, ".data", "browser-downloads");
+const browserDownloadsDir = path.join(browserDownloadsRoot, `session-${process.pid}-${Date.now()}`);
 const localMediaDir = path.join(__dirname, "local-media");
 const pidPath = path.join(__dirname, "ui-server.pid");
 const urlPath = path.join(__dirname, "ui-server.url");
 const settingsPath = path.join(__dirname, "settings.json");
 const ffprobePath = ffprobeStatic?.path || "";
+// Cookies are scoped by host, not port. A port-specific name keeps multiple
+// local workbench instances from overwriting one another's API session.
+let localApiCookieName = "__dy_local_api";
+const localApiSessionToken = randomBytes(32).toString("base64url");
+const localImageExtensions = new Set([".png", ".jpg", ".jpeg", ".gif", ".webp"]);
 const mcpEntry = path.join(
   __dirname,
   "node_modules",
@@ -121,8 +157,8 @@ const pageLifecycle = createPageLifecycle({
   onShutdown: () => shutdownNow(),
 });
 let ownsRuntimeLock = false;
-let downloadsDir = defaultDownloadsDir;
-downloadsDir = setDownloadsDir(readSettings().downloadsDir);
+let selectedDownloadsDir = "";
+let downloadsDir = setDownloadsDir(browserDownloadsDir);
 fs.mkdirSync(downloadsDir, { recursive: true });
 fs.mkdirSync(rewritesDir, { recursive: true });
 const ytDlpService = createYtDlpService({
@@ -193,6 +229,7 @@ const handleMoneyPrinterRoutes = createMoneyPrinterRoutes({
   ffmpegPath,
   ffprobePath,
   getDownloadsDir: () => downloadsDir,
+  modelRouter,
 });
 
 // -----------------------------------------------------------------------------
@@ -271,6 +308,7 @@ const handleIanXiaoheiRoutes = createIanXiaoheiRoutes({
   ffprobePath,
   transcribeLocalMedia: transcribeLocalMediaWithDashScope,
   downloadsDir,
+  getDownloadsDir: () => downloadsDir,
 });
 const handleKineticTextRoutes = createKineticTextRoutes({
   baseDir: __dirname,
@@ -284,11 +322,26 @@ const handleKineticTextRoutes = createKineticTextRoutes({
   projectCenter,
 });
 
-// ModelRouter 统一模型路由
-modelRouter.init(readSettings());
+// ModelRouter 统一模型路由。失败时只降级 AI 路由，其他本地功能继续可用。
+let modelRouterReady = false;
+let modelRouterStartupError = "";
 
-// ProviderRegistry 同步
-providerRegistry.initFromModelRouter();
+function initializeModelRuntime(settings) {
+  try {
+    modelRouter.init(settings);
+    providerRegistry.initFromModelRouter();
+    modelRouterReady = true;
+    modelRouterStartupError = "";
+    return true;
+  } catch (error) {
+    modelRouterReady = false;
+    modelRouterStartupError = error instanceof Error ? error.message : String(error);
+    console.error("[startup] 模型路由初始化失败，AI 路由已降级停用：", modelRouterStartupError);
+    return false;
+  }
+}
+
+initializeModelRuntime(readSettings());
 
 // 统一设置中心
 const settingsCenter = createSettingsCenter(__dirname, settingsPath);
@@ -334,12 +387,13 @@ const mimeTypes = new Map([
 const downloadJobs = new Map();
 const transcriptJobs = new Map();
 
-function sendJson(res, status, value) {
+function sendJson(res, status, value, headers = {}) {
   const body = JSON.stringify(value);
   res.writeHead(status, {
     "content-type": "application/json; charset=utf-8",
     "content-length": Buffer.byteLength(body),
     "cache-control": "no-store",
+    ...headers,
   });
   res.end(body);
 }
@@ -366,6 +420,132 @@ function sendBuffer(res, status, buffer, contentType, fileName = "") {
   }
   res.writeHead(status, headers);
   res.end(buffer);
+}
+
+function sendFileAttachment(res, filePath, fileName = path.basename(filePath)) {
+  const stat = fs.statSync(filePath);
+  const type = mimeTypes.get(path.extname(filePath).toLowerCase()) || "application/octet-stream";
+  res.writeHead(200, {
+    "content-type": type,
+    "content-length": stat.size,
+    "content-disposition": `attachment; filename*=UTF-8''${encodeURIComponent(fileName)}`,
+    "cache-control": "no-store",
+  });
+  fs.createReadStream(filePath).pipe(res);
+}
+
+function localApiPort() {
+  const address = server.address();
+  return address && typeof address === "object" ? Number(address.port || 0) : 0;
+}
+
+function parseLocalHostHeader(value = "") {
+  const host = String(value || "").trim().toLowerCase();
+  const bracketed = host.match(/^\[([^\]]+)\]:(\d+)$/);
+  if (bracketed) return { hostname: bracketed[1], port: Number(bracketed[2] || 0) };
+  const match = host.match(/^([^:\s]+):(\d+)$/);
+  if (!match) return null;
+  return { hostname: match[1], port: Number(match[2] || 0) };
+}
+
+function isAllowedLocalHostname(hostname = "") {
+  return ["127.0.0.1", "localhost", "::1"].includes(String(hostname || "").trim().toLowerCase());
+}
+
+function isAllowedLocalHostHeader(hostHeader = "") {
+  const parsed = parseLocalHostHeader(hostHeader);
+  const port = localApiPort();
+  return Boolean(parsed && port && parsed.port === port && isAllowedLocalHostname(parsed.hostname));
+}
+
+function isAllowedLocalOriginHeader(originHeader = "") {
+  const value = String(originHeader || "").trim();
+  if (!value) return false;
+  try {
+    const origin = new URL(value);
+    return origin.protocol === "http:"
+      && Number(origin.port || 80) === localApiPort()
+      && isAllowedLocalHostname(origin.hostname);
+  } catch {
+    return false;
+  }
+}
+
+function parseCookies(header = "") {
+  const cookies = new Map();
+  for (const part of String(header || "").split(";")) {
+    const index = part.indexOf("=");
+    if (index <= 0) continue;
+    const name = part.slice(0, index).trim();
+    const value = part.slice(index + 1).trim();
+    if (!name) continue;
+    try {
+      cookies.set(name, decodeURIComponent(value));
+    } catch {
+      cookies.set(name, value);
+    }
+  }
+  return cookies;
+}
+
+function requestLocalApiToken(req) {
+  const headerToken = String(req.headers["x-local-api-token"] || "").trim();
+  if (headerToken) return headerToken;
+  return parseCookies(req.headers.cookie || "").get(localApiCookieName) || "";
+}
+
+function hasValidLocalApiToken(req) {
+  return requestLocalApiToken(req) === localApiSessionToken;
+}
+
+function requestHasBody(req) {
+  return Boolean(req.headers["transfer-encoding"]) || Number(req.headers["content-length"] || 0) > 0;
+}
+
+function requestHasJsonContentType(req) {
+  return String(req.headers["content-type"] || "").toLowerCase().split(";")[0].trim() === "application/json";
+}
+
+function isUnsafeHttpMethod(method = "") {
+  return ["POST", "PUT", "PATCH", "DELETE"].includes(String(method || "").toUpperCase());
+}
+
+function setLocalApiCookie(headers = {}) {
+  return {
+    ...headers,
+    "set-cookie": `${localApiCookieName}=${encodeURIComponent(localApiSessionToken)}; Path=/; HttpOnly; SameSite=Strict`,
+  };
+}
+
+function rejectLocalApiRequest(req, res) {
+  if (!isAllowedLocalHostHeader(req.headers.host || "")) {
+    sendJson(res, 403, { ok: false, message: "Forbidden host" });
+    return true;
+  }
+  const origin = String(req.headers.origin || "").trim();
+  if (origin && !isAllowedLocalOriginHeader(origin)) {
+    sendJson(res, 403, { ok: false, message: "Forbidden origin" });
+    return true;
+  }
+  if (isUnsafeHttpMethod(req.method) && !isAllowedLocalOriginHeader(origin)) {
+    sendJson(res, 403, { ok: false, message: "Missing or invalid origin" });
+    return true;
+  }
+  if (!hasValidLocalApiToken(req)) {
+    sendJson(res, 401, { ok: false, message: "Missing or invalid local session token" }, setLocalApiCookie());
+    return true;
+  }
+  if (isUnsafeHttpMethod(req.method) && requestHasBody(req) && !requestHasJsonContentType(req)) {
+    sendJson(res, 415, { ok: false, message: "Content-Type must be application/json" });
+    return true;
+  }
+  return false;
+}
+
+function rejectHttpHost(req, res) {
+  if (isAllowedLocalHostHeader(req.headers.host || "")) return false;
+  sendJson(res, 403, { ok: false, message: "Forbidden host" });
+  return true;
 }
 
 function getFirstUrl(text) {
@@ -487,6 +667,45 @@ function readSettings() {
 
 function writeSettings(settings) {
   fs.writeFileSync(settingsPath, JSON.stringify(normalizeSettings(settings), null, 2), "utf8");
+}
+
+function normalizeFolderNames(value) {
+  if (!Array.isArray(value)) throw new TypeError("文件夹名称列表格式无效");
+  if (value.length > 50) throw new TypeError("最多保存 50 个文件夹名称");
+  const names = [];
+  const seen = new Set();
+  for (const item of value) {
+    const name = normalizeDesktopFolderName(item);
+    const key = name.toLocaleLowerCase("zh-CN");
+    if (seen.has(key)) continue;
+    seen.add(key);
+    names.push(name);
+  }
+  return names;
+}
+
+function readFolderNames() {
+  if (!fs.existsSync(folderNamesPath)) return [];
+  try {
+    const parsed = JSON.parse(fs.readFileSync(folderNamesPath, "utf8"));
+    return normalizeFolderNames(Array.isArray(parsed) ? parsed : parsed?.names);
+  } catch (error) {
+    console.warn("[folder-names] 读取失败，将显示空列表：", error.message || String(error));
+    return [];
+  }
+}
+
+function writeFolderNames(value) {
+  const names = normalizeFolderNames(value);
+  fs.mkdirSync(path.dirname(folderNamesPath), { recursive: true });
+  const tempPath = `${folderNamesPath}.${process.pid}.${Date.now()}.tmp`;
+  try {
+    fs.writeFileSync(tempPath, JSON.stringify({ names }, null, 2), "utf8");
+    fs.renameSync(tempPath, folderNamesPath);
+  } finally {
+    if (fs.existsSync(tempPath)) fs.rmSync(tempPath, { force: true });
+  }
+  return names;
 }
 
 const DEFAULT_MOMENTS_PERSONA = {
@@ -740,9 +959,7 @@ async function publishWechatMomentWithPython({ text = "", imagePaths = [], authC
 
 function saveDownloadsDir(nextDir) {
   const resolved = setDownloadsDir(nextDir);
-  const settings = readSettings();
-  settings.downloadsDir = resolved;
-  writeSettings(settings);
+  selectedDownloadsDir = resolved;
   downloadsDir = resolved;
   return downloadsDir;
 }
@@ -803,7 +1020,7 @@ function chooseDownloadDir() {
       "-File",
       scriptPath,
       outputPath,
-      downloadsDir,
+      selectedDownloadsDir,
     ], {
       windowsHide: true,
       stdio: ["ignore", "ignore", "pipe"],
@@ -1201,7 +1418,9 @@ function normalizeSettings(settings) {
     rewriteProviders[id] = {
       label: preset.label,
       baseUrl: id === "minimax" ? normalizeMiniMaxTextBaseUrl(rawBaseUrl) : rawBaseUrl,
-      model: String(current.model || (id === "dashscope" ? batch.aiModel : "") || preset.model || "").trim(),
+      model: id === "deepseek"
+        ? normalizeDeepSeekModelName(current.model || preset.model)
+        : String(current.model || (id === "dashscope" ? batch.aiModel : "") || preset.model || "").trim(),
       apiKey: String(current.apiKey || (id === "dashscope" ? providers.dashscope.apiKey : "") || "").trim(),
       applyUrl: preset.applyUrl || current.applyUrl || "",
       balanceUrl: preset.balanceUrl || current.balanceUrl || preset.applyUrl || "",
@@ -1212,7 +1431,7 @@ function normalizeSettings(settings) {
   }
 
   delete next.dashscopeApiKey;
-  next.downloadsDir = setDownloadsDir(next.downloadsDir || defaultDownloadsDir);
+  delete next.downloadsDir;
   next.jianyingAppPath = String(next.jianyingAppPath || next.jianying_app_path || jianying.appPath || "").trim();
   next.jianyingDraftDir = String(next.jianyingDraftDir || next.jianying_draft_dir || jianying.draftDir || "").trim();
   next.jianying = {
@@ -1316,7 +1535,7 @@ function normalizeSettings(settings) {
     },
   };
   next.bgmProviders = normalizeBgmProviders(bgmProviders);
-  next.modelMap = { ...DEFAULT_MODEL_MAPPING, ...modelMapping };
+  next.modelMap = normalizeModelMapping(modelMapping);
   if (next.modelMap.image?.provider === "volcengine_ark") {
     next.modelMap.image = {
       ...next.modelMap.image,
@@ -1478,7 +1697,7 @@ function publicRewriteSettings(settings = readSettings()) {
 
 function publicModelMapping(settings = readSettings()) {
   const mapping = settings.modelMap || settings.modelMapping || {};
-  return { ...DEFAULT_MODEL_MAPPING, ...mapping };
+  return normalizeModelMapping(mapping);
 }
 
 function rewriteProviderIdFromMapping(providerId) {
@@ -2031,7 +2250,7 @@ function applyLocalProviderConfig(settings, providerId) {
 }
 
 function applyModelMapping(settings, mapping) {
-  const normalized = { ...DEFAULT_MODEL_MAPPING, ...(mapping || {}) };
+  const normalized = normalizeModelMapping(mapping);
   if (normalized.image?.provider === "volcengine_ark") {
     normalized.image = { ...normalized.image, model: normalizeVolcengineArkImageModel(normalized.image.model) };
   }
@@ -2054,7 +2273,8 @@ function applyModelMapping(settings, mapping) {
     }
   }
 
-  const ttsProvider = String(normalized.tts?.provider || "");
+  const routedTtsProvider = String(normalized.tts?.provider || "");
+  const ttsProvider = routedTtsProvider === "ali-bailian" ? "aliyun_bailian" : routedTtsProvider;
   if (TTS_PROVIDER_LABELS[ttsProvider]) {
     settings.tts.default_provider = ttsProvider;
     if (normalized.tts?.model) {
@@ -2070,8 +2290,7 @@ function applyModelMapping(settings, mapping) {
 function reloadModelRuntime(settings) {
   writeSettings(settings);
   const normalized = readSettings();
-  modelRouter.init(normalized);
-  providerRegistry.initFromModelRouter();
+  initializeModelRuntime(normalized);
   return normalized;
 }
 
@@ -2531,6 +2750,20 @@ function resolveDownloadFilePath(fileName) {
   return isInsideDownloads(filePath) ? filePath : "";
 }
 
+function primaryTaskDownloadPath(task = {}) {
+  const action = String(task.task_action || "").trim();
+  if (action === "audio") {
+    return task.audio_path || task.video_path || "";
+  }
+  if (action === "subtitle") {
+    return task.subtitle_path || task.txt_path || task.video_path || "";
+  }
+  if (action === "transcript") {
+    return task.txt_path || task.subtitle_path || "";
+  }
+  return task.video_path || task.audio_path || task.subtitle_path || task.txt_path || "";
+}
+
 function isInsideManagedFilePath(filePath) {
   const resolved = path.resolve(filePath);
   const roots = [
@@ -2547,7 +2780,48 @@ function isInsideManagedFilePath(filePath) {
     path.join(__dirname, "jianying-exports"),
     path.join(__dirname, ".data", "cs1-video-maker"),
   ].map((item) => path.resolve(item));
-  return roots.some((root) => resolved === root || resolved.startsWith(`${root}${path.sep}`));
+  return roots.some((root) => isPathInsideRoot(root, resolved));
+}
+
+function resolveSafeManagedImagePath(filePath) {
+  const resolved = path.resolve(String(filePath || "").trim());
+  if (!resolved || !fs.existsSync(resolved)) throw new Error("Image file not found");
+  const stat = fs.statSync(resolved);
+  if (!stat.isFile()) throw new Error("Image file not found");
+  if (!localImageExtensions.has(path.extname(resolved).toLowerCase())) throw new Error("Unsupported image file type");
+  if (!isInsideManagedFilePath(resolved)) throw new Error("Image file is outside managed directories");
+  return resolved;
+}
+
+function resolveSafeDesktopLinkedImagePath(filePath) {
+  const desktopRoot = path.resolve(path.join(os.homedir(), "Desktop"));
+  const resolved = path.resolve(String(filePath || "").trim());
+  if (!resolved || !fs.existsSync(resolved) || !fs.statSync(resolved).isFile()) {
+    throw new Error("Image file not found");
+  }
+  if (!isPathInsideRoot(desktopRoot, resolved) || path.dirname(resolved) === desktopRoot) {
+    throw new Error("Image file is outside a desktop project folder");
+  }
+  if (!/^\d{4}-\d{2}-\d{2}-.+/u.test(path.basename(path.dirname(resolved)))) {
+    throw new Error("Image file is outside a dated desktop project folder");
+  }
+  if (!localImageExtensions.has(path.extname(resolved).toLowerCase())) {
+    throw new Error("Unsupported image file type");
+  }
+  return resolved;
+}
+
+function resolveImageRequestPath(url) {
+  const assetId = String(url.searchParams.get("id") || url.searchParams.get("assetId") || "").trim();
+  if (assetId) {
+    const asset = imageService.getAsset(assetId);
+    const assetPath = asset?.file_path || asset?.original_path || "";
+    if (asset?.source_type === "ian-xiaohei-local-linked") {
+      return resolveSafeDesktopLinkedImagePath(assetPath);
+    }
+    return resolveSafeManagedImagePath(assetPath);
+  }
+  return resolveSafeManagedImagePath(url.searchParams.get("path") || "");
 }
 
 function stopChildProcess(child) {
@@ -2594,6 +2868,16 @@ function shutdownNow() {
     stopChildProcess(child);
   }
   cleanupRuntimeFiles();
+  if (
+    path.dirname(browserDownloadsDir) === path.resolve(browserDownloadsRoot)
+    && path.basename(browserDownloadsDir).startsWith("session-")
+  ) {
+    try {
+      fs.rmSync(browserDownloadsDir, { recursive: true, force: true });
+    } catch {
+      // Best effort cleanup only.
+    }
+  }
   process.exit(0);
 }
 
@@ -3644,13 +3928,30 @@ function normalizeRewriteVersionContent(value) {
   return String(value || "").trim();
 }
 
+function normalizeConversionStructure(value) {
+  const source = value && typeof value === "object" && !Array.isArray(value) ? value : {};
+  const clean = (key) => String(source[key] || "").trim().slice(0, 220);
+  return {
+    hook: clean("hook"),
+    painConflict: clean("painConflict") || clean("pain_conflict"),
+    turn: clean("turn"),
+    climax: clean("climax"),
+    ending: clean("ending") || clean("cta"),
+  };
+}
+
+function hasCompleteConversionStructure(value) {
+  const structure = normalizeConversionStructure(value);
+  return [structure.hook, structure.painConflict, structure.turn, structure.climax, structure.ending].every(Boolean);
+}
+
 function normalizeWordCount(input, fallback = "160字左右") {
   const value = String(input || "").trim().replace(/\s+/g, " ");
   return value ? value.slice(0, 32) : fallback;
 }
 
 function normalizeVersionSpecs(input = [], fallbackDirection = "保留原意优化") {
-  const defs = new Map(REWRITE_VERSION_DEFS.map(([key, name]) => [key, { key, name }]));
+  const defs = new Map([...REWRITE_VERSION_DEFS, ...PARENT_CONVERSION_VERSION_DEFS].map(([key, name]) => [key, { key, name }]));
   const rows = Array.isArray(input) && input.length > 0
     ? input
     : REWRITE_VERSION_DEFS.map(([key, name]) => ({ key, name }));
@@ -3662,7 +3963,7 @@ function normalizeVersionSpecs(input = [], fallbackDirection = "保留原意优�
       const key = (known?.key || rawKey || `custom${index + 1}`).replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 48) || `custom${index + 1}`;
       if (seen.has(key)) return null;
       seen.add(key);
-      const defaults = REWRITE_VERSION_DEFAULTS[key] || {};
+      const defaults = REWRITE_VERSION_DEFAULTS[key] || PARENT_CONVERSION_VERSION_DEFAULTS[key] || {};
       const direction = REWRITE_DIRECTIONS.includes(String(item?.direction || "")) ? String(item.direction) : defaults.direction || fallbackDirection;
       const wordCount = normalizeWordCount(item?.wordCount, defaults.wordCount || "160字左右");
       return {
@@ -3673,7 +3974,11 @@ function normalizeVersionSpecs(input = [], fallbackDirection = "保留原意优�
         provider: String(item?.provider || "").trim(),
         style: REWRITE_STYLES.includes(String(item?.style || "")) ? String(item.style) : "",
         referenceStyle: String(item?.referenceStyle || "").trim(),
-        params: item?.params && typeof item.params === "object" ? item.params : {},
+        params: item?.params && typeof item.params === "object"
+          ? item.params
+          : defaults.ctaMode
+            ? { parentConversionTemplate: true, ctaMode: defaults.ctaMode }
+            : {},
         humanizeLevel: String(item?.humanizeLevel || "").trim(),
       };
     })
@@ -3681,11 +3986,17 @@ function normalizeVersionSpecs(input = [], fallbackDirection = "保留原意优�
     .slice(0, 50);
 }
 
-function readVersionValue(source, spec) {
+function readVersionEntry(source, spec) {
   if (Array.isArray(source.versions)) {
-    const match = source.versions.find((item) => item?.key === spec.key || item?.name === spec.name);
-    return match?.content || match?.text || "";
+    return source.versions.find((item) => item?.key === spec.key || item?.name === spec.name) || null;
   }
+  const value = source[spec.key] ?? source[spec.name] ?? source.versions?.[spec.key] ?? source.versions?.[spec.name] ?? null;
+  return value && typeof value === "object" && !Array.isArray(value) ? value : null;
+}
+
+function readVersionValue(source, spec) {
+  const entry = readVersionEntry(source, spec);
+  if (entry) return entry.content ?? entry.text ?? "";
   return source[spec.key] ?? source[spec.name] ?? source.versions?.[spec.key] ?? source.versions?.[spec.name] ?? "";
 }
 
@@ -3694,9 +4005,7 @@ function normalizeRewrite(raw, meta = {}) {
   const versionSpecs = normalizeVersionSpecs(meta.versionSpecs, meta.direction || "保留原意优化");
   const versions = versionSpecs.map((spec) => {
     const value = readVersionValue(source, spec);
-    const sourceVersion = Array.isArray(source.versions)
-      ? source.versions.find((item) => item?.key === spec.key || item?.name === spec.name)
-      : null;
+    const sourceVersion = readVersionEntry(source, spec);
     const content = normalizeRewriteVersionContent(value);
     const range = requestedWordCountRange(spec.wordCount);
     const characterCount = rewriteCharacterCount(content);
@@ -3707,6 +4016,7 @@ function normalizeRewrite(raw, meta = {}) {
         wordCountSoftMax: sourceVersion?.wordCountSoftMax ?? (Number.isFinite(rewriteSoftMaximum(range)) ? rewriteSoftMaximum(range) : null),
         wordCountWarning: String(sourceVersion?.wordCountWarning || rewriteWordCountWarning(content, range, spec.wordCount)).trim(),
         coherencePassed: sourceVersion?.coherencePassed === true,
+        conversionStructure: normalizeConversionStructure(sourceVersion?.conversionStructure || source.conversionStructure?.[spec.key]),
         provider: spec.provider || sourceVersion?.provider || meta.provider || "",
         style: spec.style || sourceVersion?.style || meta.style || "",
         referenceStyle: spec.referenceStyle || sourceVersion?.referenceStyle || meta.referenceStyle || "",
@@ -3739,7 +4049,7 @@ function rewriteFromBody(body = {}, task = {}) {
     versions: Object.fromEntries(
       versionsInput.map((item) => [
         item.key || item.name,
-        item.content,
+        item,
       ])
     ),
   }, {
@@ -4018,6 +4328,7 @@ async function chatCompletion(provider, messages, signal, {
         model: provider.model,
         temperature,
         messages,
+        ...(provider.id === "deepseek" ? deepSeekRequestCompatibility(provider.model) : {}),
         ...(maxTokens > 0 ? { max_tokens: maxTokens } : {}),
         ...(jsonMode ? { response_format: { type: "json_object" } } : {}),
       }),
@@ -4274,37 +4585,88 @@ function countMomentsEmoji(value = "") {
   return (text.match(/[\u{1F1E6}-\u{1F1FF}\u{1F300}-\u{1FAFF}\u{2300}-\u{23FF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}]/gu) || []).length;
 }
 
-function momentsEmojiRule(addEmoji = false) {
-  return addEmoji
-    ? "表情规则：不要在 post 中临时生成或自创 emoji；只需把正文写成适合自然插入表情的节奏和段落。生成完成后，系统会清除模型表情，并从代码预制表情库按主题、篇幅和语义统一插入。"
-    : "表情规则：正文不添加任何 emoji 或颜文字，保持干净自然。";
-}
+const MOMENTS_EMOJI_STYLES = {
+  gentle: {
+    label: "轻柔日常",
+    signature: ["😊", "🌿", "✨"],
+    defaults: ["😊", "☺️", "🌿", "✨", "☀️", "☕", "💛", "🌙", "😉", "😌", "🌷", "🍀"],
+  },
+  lively: {
+    label: "元气分享",
+    signature: ["😄", "🎈", "🌈"],
+    defaults: ["😄", "😉", "😋", "🎈", "🎉", "✨", "🌈", "☕", "😆", "👍", "👏", "🎁"],
+  },
+  professional: {
+    label: "专业清爽",
+    signature: ["📌", "💡", "✅"],
+    defaults: ["📌", "📝", "✅", "💡", "📚", "📈", "🔍", "👍", "💼", "💬", "📩", "💻"],
+  },
+  warm: {
+    label: "暖心陪伴",
+    signature: ["🤗", "💗", "🌷"],
+    defaults: ["😊", "🤗", "❤️", "💛", "💜", "🙏", "👏", "🌷", "☺️", "💗", "🎁", "☕"],
+  },
+};
 
 const MOMENTS_EMOJI_LIBRARY = [
-  { pattern: /学习|课程|课堂|老师|学生|孩子|家长|作业|考试|成绩|规划|知识|阅读|英语|数学|语文|培训/u, emojis: ["📚", "✍️", "📝", "🎯", "💡", "🌱"] },
-  { pattern: /工作|职场|项目|团队|客户|效率|复盘|方案|运营|创业|老板|门店/u, emojis: ["💼", "📊", "✅", "📌", "🤝", "💡"] },
-  { pattern: /产品|服务|体验|功能|品质|使用|购买|优惠|新品|种草/u, emojis: ["✨", "✅", "👍", "🎁", "🛍️", "💛"] },
-  { pattern: /活动|报名|现场|到店|时间|地址|开业|节日|聚会/u, emojis: ["🎉", "📍", "📅", "👋", "🎁", "✨"] },
-  { pattern: /家庭|家人|父母|妈妈|爸爸|亲子|陪伴|成长/u, emojis: ["👨‍👩‍👧‍👦", "❤️", "🌱", "🤝", "😊", "💛"] },
-  { pattern: /情绪|治愈|放松|开心|快乐|温暖|生活|日常|今天|周末|感受/u, emojis: ["🌿", "☀️", "😊", "✨", "💛", "🙂"] },
-  { pattern: /建议|方法|提醒|注意|行动|开始|坚持|改变|计划|目标/u, emojis: ["📌", "✅", "💡", "🎯", "💪", "📝"] },
-  { pattern: /咨询|联系|私信|留言|了解|需要|欢迎/u, emojis: ["📩", "💬", "👋", "🤝"] },
-  { pattern: /AI|人工智能|软件|系统|工具|视频|互联网|技术/iu, emojis: ["💻", "🤖", "⚙️", "✨", "💡", "📱"] },
-  { pattern: /旅行|旅游|出发|风景|美食|餐厅|咖啡|打卡/u, emojis: ["✈️", "🧳", "📸", "🍜", "☕", "😋"] },
+  { pattern: /学习|课程|课堂|老师|学生|孩子|家长|作业|考试|成绩|规划|知识|阅读|英语|数学|语文|培训/u, emojis: { gentle: ["📚", "✏️", "💡", "🌿"], lively: ["📚", "💡", "🎈", "👍"], professional: ["📚", "📝", "📌", "✅"], warm: ["📚", "😊", "👏", "💛"] } },
+  { pattern: /工作|职场|项目|团队|客户|效率|复盘|方案|运营|创业|老板|门店/u, emojis: { gentle: ["💼", "💡", "☕", "🌿"], lively: ["💼", "💪", "👏", "✨"], professional: ["💼", "📈", "✅", "📌"], warm: ["💼", "😊", "👏", "💛"] } },
+  { pattern: /产品|服务|体验|功能|品质|使用|购买|优惠|新品|种草/u, emojis: { gentle: ["✨", "💛", "☕", "😊"], lively: ["🎈", "🎉", "✨", "👍"], professional: ["✅", "📌", "💡", "👍"], warm: ["💛", "🎁", "😊", "👏"] } },
+  { pattern: /活动|报名|现场|到店|时间|地址|开业|节日|聚会/u, emojis: { gentle: ["☀️", "✨", "🌿", "☕"], lively: ["🎉", "🎈", "📍", "👏"], professional: ["📅", "📍", "📌", "✅"], warm: ["🎁", "😊", "💛", "🌷"] } },
+  { pattern: /家庭|家人|父母|妈妈|爸爸|亲子|陪伴|成长/u, emojis: { gentle: ["🌿", "😊", "☀️", "💛"], lively: ["😄", "🎈", "👏", "🌈"], professional: ["📌", "📝", "💡", "✅"], warm: ["❤️", "💛", "🤗", "🌷"] } },
+  { pattern: /情绪|治愈|放松|开心|快乐|温暖|生活|日常|今天|周末|感受/u, emojis: { gentle: ["🌿", "☀️", "😊", "✨"], lively: ["😄", "😉", "🌈", "🎈"], professional: ["💡", "📌", "✅", "☕"], warm: ["😊", "🤗", "💛", "❤️"] } },
+  { pattern: /建议|方法|提醒|注意|行动|开始|坚持|改变|计划|目标/u, emojis: { gentle: ["🌿", "💡", "☀️", "😊"], lively: ["💪", "👏", "✨", "👍"], professional: ["📌", "✅", "📝", "💡"], warm: ["😊", "💛", "👏", "🙏"] } },
+  { pattern: /咨询|联系|私信|留言|了解|需要|欢迎/u, emojis: { gentle: ["😊", "☕", "✨", "💛"], lively: ["😉", "😄", "🎈", "👍"], professional: ["📩", "💬", "📌", "✅"], warm: ["😊", "🤗", "💛", "👏"] } },
+  { pattern: /AI|人工智能|软件|系统|工具|视频|互联网|技术/iu, emojis: { gentle: ["💡", "✨", "☕", "🌿"], lively: ["🤖", "💻", "✨", "🎈"], professional: ["💻", "🤖", "🔍", "📈"], warm: ["💡", "😊", "👏", "💛"] } },
+  { pattern: /旅行|旅游|出发|风景|美食|餐厅|咖啡|打卡/u, emojis: { gentle: ["☀️", "☕", "🌿", "🌙"], lively: ["✈️", "📸", "😋", "🌈"], professional: ["📍", "📝", "📌", "✅"], warm: ["☕", "😊", "💛", "🌷"] } },
 ];
-const MOMENTS_DEFAULT_EMOJIS = ["🌿", "✨", "🙂", "📌", "✅", "💛", "😊", "👍"];
 
-function momentsEmojiCandidates(value = "") {
+const MOMENTS_CROSS_PLATFORM_EMOJIS = new Set([
+  ...Object.values(MOMENTS_EMOJI_STYLES).flatMap((style) => [...style.signature, ...style.defaults]),
+  ...MOMENTS_EMOJI_LIBRARY.flatMap((group) => Object.values(group.emojis).flat()),
+]);
+
+function normalizeMomentsEmojiStyle(value = "") {
+  const style = String(value || "").trim().toLowerCase();
+  return MOMENTS_EMOJI_STYLES[style] ? style : "gentle";
+}
+
+const MOMENTS_EMOJI_COUNT_OPTIONS = {
+  auto: { label: "智能适量（3–6 个）", min: 3, max: 6 },
+  "3-5": { label: "3–5 个", min: 3, max: 5 },
+  "5-10": { label: "5–10 个", min: 5, max: 10 },
+};
+
+function normalizeMomentsEmojiCount(value = "") {
+  const count = String(value || "").trim();
+  return MOMENTS_EMOJI_COUNT_OPTIONS[count] ? count : "auto";
+}
+
+function momentsEmojiRule(addEmoji = false, emojiStyle = "gentle", emojiCount = "auto") {
+  if (!addEmoji) return "表情规则：正文不添加任何 emoji 或颜文字，保持干净自然。";
+  const style = MOMENTS_EMOJI_STYLES[normalizeMomentsEmojiStyle(emojiStyle)];
+  const count = MOMENTS_EMOJI_COUNT_OPTIONS[normalizeMomentsEmojiCount(emojiCount)];
+  return `表情规则：不要在 post 中临时生成或自创 emoji；只需把正文写成适合自然插入表情的节奏和段落。生成完成后，系统会清除模型表情，并从代码预制的“${style.label}”表情库按主题、篇幅和语义统一插入；本次数量为“${count.label}”。表情库仅包含常见平台可复制显示的 Unicode 表情，不使用 ZWJ 组合、旗帜或新版本符号。`;
+}
+
+function isCrossPlatformMomentsEmoji(emoji = "") {
+  return MOMENTS_CROSS_PLATFORM_EMOJIS.has(emoji) && !String(emoji).includes("\u200D");
+}
+
+function momentsEmojiCandidates(value = "", emojiStyle = "gentle") {
   const text = String(value || "");
+  const style = normalizeMomentsEmojiStyle(emojiStyle);
+  const styleConfig = MOMENTS_EMOJI_STYLES[style];
   const matchedGroups = MOMENTS_EMOJI_LIBRARY.filter((group) => group.pattern.test(text));
   const matched = [];
-  const maxGroupSize = Math.max(0, ...matchedGroups.map((group) => group.emojis.length));
+  const maxGroupSize = Math.max(0, ...matchedGroups.map((group) => group.emojis[style].length));
   for (let emojiIndex = 0; emojiIndex < maxGroupSize; emojiIndex += 1) {
     for (const group of matchedGroups) {
-      if (group.emojis[emojiIndex]) matched.push(group.emojis[emojiIndex]);
+      if (group.emojis[style][emojiIndex]) matched.push(group.emojis[style][emojiIndex]);
     }
   }
-  return [...new Set([...matched, ...MOMENTS_DEFAULT_EMOJIS])];
+  return [...new Set([...styleConfig.signature, ...matched, ...styleConfig.defaults])]
+    .filter(isCrossPlatformMomentsEmoji);
 }
 
 function appendMomentsEmoji(value = "", emoji = "") {
@@ -4312,12 +4674,12 @@ function appendMomentsEmoji(value = "", emoji = "") {
   return text && emoji ? `${text}${emoji}` : text;
 }
 
-function ensureMomentsEmojiMinimum(value = "", minimum = 2) {
+function ensureMomentsEmojiMinimum(value = "", minimum = 2, emojiStyle = "gentle") {
   let text = normalizeMomentsPostLayout(value);
   const currentCount = countMomentsEmoji(text);
   if (!text || currentCount >= minimum) return text;
 
-  const candidates = momentsEmojiCandidates(text).filter((emoji) => !text.includes(emoji));
+  const candidates = momentsEmojiCandidates(text, emojiStyle).filter((emoji) => !text.includes(emoji));
   const missing = Math.max(0, minimum - currentCount);
   const additions = candidates.slice(0, missing);
   if (!additions.length) return text;
@@ -4345,20 +4707,29 @@ function ensureMomentsEmojiMinimum(value = "", minimum = 2) {
   return normalizeMomentsPostLayout(sentences.join(""));
 }
 
-function momentsEmojiTargetCount(value = "") {
+function momentsEmojiTargetCount(value = "", emojiCount = "auto") {
   const text = normalizeMomentsPostLayout(stripMomentsEmoji(value));
   const length = Array.from(text.replace(/\s/g, "")).length;
   const paragraphCount = text.split(/\n{2,}/).filter((item) => item.trim()).length;
-  if (length >= 520 || paragraphCount >= 7) return 6;
-  if (length >= 420 || paragraphCount >= 6) return 5;
-  if (length >= 260 || paragraphCount >= 5) return 4;
-  if (length >= 140 || paragraphCount >= 3) return 3;
-  return 2;
+  const normalizedCount = normalizeMomentsEmojiCount(emojiCount);
+  if (normalizedCount === "auto") {
+    if (length >= 520 || paragraphCount >= 7) return 6;
+    if (length >= 420 || paragraphCount >= 6) return 5;
+    if (length >= 260 || paragraphCount >= 5) return 4;
+    if (length >= 140 || paragraphCount >= 3) return 3;
+    return 3;
+  }
+  const option = MOMENTS_EMOJI_COUNT_OPTIONS[normalizedCount];
+  const contentWeight = Math.max(
+    Math.ceil(length / 170),
+    Math.max(1, paragraphCount - 1),
+  );
+  return Math.max(option.min, Math.min(option.max, option.min + contentWeight - 1));
 }
 
-function applyPresetMomentsEmojis(value = "") {
+function applyPresetMomentsEmojis(value = "", emojiStyle = "gentle", emojiCount = "auto") {
   const cleanPost = normalizeMomentsPostLayout(stripMomentsEmoji(value));
-  return ensureMomentsEmojiMinimum(cleanPost, momentsEmojiTargetCount(cleanPost));
+  return ensureMomentsEmojiMinimum(cleanPost, momentsEmojiTargetCount(cleanPost, emojiCount), emojiStyle);
 }
 
 function normalizeMomentsPostLayout(value = "") {
@@ -4636,6 +5007,14 @@ function normalizeMomentsResult(raw = {}, fallback = {}) {
     reference_used: String(raw.reference_used || raw.referenceUsed || "").trim().slice(0, 220),
     reference_style: String(raw.reference_style || raw.referenceStyle || fallback.referenceStyle || "").trim(),
     add_emoji: fallback.addEmoji === true,
+    emoji_style: fallback.addEmoji === true ? normalizeMomentsEmojiStyle(fallback.emojiStyle) : "",
+    emoji_style_label: fallback.addEmoji === true
+      ? MOMENTS_EMOJI_STYLES[normalizeMomentsEmojiStyle(fallback.emojiStyle)].label
+      : "",
+    emoji_count: fallback.addEmoji === true ? normalizeMomentsEmojiCount(fallback.emojiCount) : "",
+    emoji_count_label: fallback.addEmoji === true
+      ? MOMENTS_EMOJI_COUNT_OPTIONS[normalizeMomentsEmojiCount(fallback.emojiCount)].label
+      : "",
     word_count_target: Number(fallback.wordCount?.target || 0) || 0,
     word_count_warning: String(raw.word_count_warning || raw.wordCountWarning || fallback.wordCountWarning || "").trim(),
     main_character: String(fallback.mainCharacter || "").trim().slice(0, 300),
@@ -4824,13 +5203,17 @@ function createMomentsProgressJob(progressId) {
   return id;
 }
 
-function updateMomentsProgressJob(progressId, progress, label, status = "running") {
+function updateMomentsProgressJob(progressId, progress, label, status = "running", extra = null) {
   const id = normalizeMomentsProgressId(progressId);
   const job = id ? momentsProgressJobs.get(id) : null;
   if (!job) return;
   job.progress = Math.max(0, Math.min(100, Math.round(Number(progress) || 0)));
   job.label = String(label || job.label || "正在生成");
   job.status = status;
+  if (extra && typeof extra === "object") {
+    if (extra.result !== undefined) job.result = extra.result;
+    if (extra.fallbackUsed !== undefined) job.fallbackUsed = extra.fallbackUsed === true;
+  }
   job.updatedAt = Date.now();
 }
 
@@ -4854,6 +5237,8 @@ async function generateMomentsPostJsonV2(body = {}, { onProgress = () => {} } = 
   const mainCharacter = String(body.mainCharacter || "").trim().slice(0, 300);
   const wordCount = normalizeMomentsWordCount(body.wordCount, body.wordCountCustom);
   const addEmoji = String(body.addEmoji || "no").trim().toLowerCase() === "yes";
+  const emojiStyle = normalizeMomentsEmojiStyle(body.emojiStyle);
+  const emojiCount = normalizeMomentsEmojiCount(body.emojiCount);
   const localMaterials = String(body.localMaterials || "").trim();
   const tone = String(body.tone || "普通朋友聊天式分享").trim();
   const intent = String(body.intent || "auto-promo").trim();
@@ -4933,7 +5318,7 @@ async function generateMomentsPostJsonV2(body = {}, { onProgress = () => {} } = 
     "主要目标：让读者自然看懂宣传对象、适合人群、具体价值和下一步，但读起来像真人分享，不像广告稿。",
     "推荐结构：真实场景或观察 -> 温和判断 -> 宣传对象解决的问题 -> 适用人群或体验细节 -> 低压力行动邀请 -> 自然收尾。",
     momentsWordCountRule(wordCount),
-    momentsEmojiRule(addEmoji),
+    momentsEmojiRule(addEmoji, emojiStyle, emojiCount),
     momentsCopyPasteRule(),
     `视觉风格方向：${styleRule}`,
     `引用规则：${referenceStyle}；必须把实际引用写进 post 正文，并在 reference_used 填写同一句或清晰转述。`,
@@ -4970,7 +5355,7 @@ async function generateMomentsPostJsonV2(body = {}, { onProgress = () => {} } = 
     reportProgress(35, "正在整理原文格式和表情");
     post = formatOriginalMomentsPost(sourceText);
     post = addEmoji
-      ? ensureMomentsEmojiMinimum(post, momentsEmojiTargetCount(post))
+      ? ensureMomentsEmojiMinimum(post, momentsEmojiTargetCount(post, emojiCount), emojiStyle)
       : post;
     finalPostLength = rewriteCharacterCount(post);
     wordCountWarning = `原文模式不调整字数，实际 ${finalPostLength} 字。`;
@@ -5075,7 +5460,7 @@ async function generateMomentsPostJsonV2(body = {}, { onProgress = () => {} } = 
             "",
             "本页面输出约束：",
             `正文长度必须在 ${wordCount.min}-${wordCount.max} 字之间，${momentsWordCountRule(wordCount)}`,
-            momentsEmojiRule(addEmoji),
+            momentsEmojiRule(addEmoji, emojiStyle, emojiCount),
             momentsCopyPasteRule(),
             momentsCopyEmojiSkill ? `朋友圈文案与表情 Skill：\n${momentsCopyEmojiSkill}` : "",
             `引用素材必须是“${referenceStyle}”，并且实际写入 post 正文，reference_used 填写正文实际使用的内容。`,
@@ -5141,7 +5526,7 @@ async function generateMomentsPostJsonV2(body = {}, { onProgress = () => {} } = 
             "",
             "本页面覆盖规则：对单条朋友圈做编辑，不输出多轮分析、评分、问题清单或多个版本。若缺少事实依据，删除或弱化说法，绝不编造证明、数据、案例、承诺或紧迫感。",
             `正文长度必须在 ${wordCount.min}-${wordCount.max} 字之间。`,
-            momentsEmojiRule(addEmoji),
+            momentsEmojiRule(addEmoji, emojiStyle, emojiCount),
             momentsCopyPasteRule(),
             `引用素材必须是“${referenceStyle}”，并且实际写入 post 正文，reference_used 填写正文实际使用的内容。`,
             "待编辑文案 JSON：",
@@ -5191,7 +5576,7 @@ async function generateMomentsPostJsonV2(body = {}, { onProgress = () => {} } = 
           content: [
             "上一版不合格：太短、太干或缺少专业判断。请重写。",
             `硬性要求：${wordCount.min}-${wordCount.max} 中文字符，允许在范围内自然浮动；${momentsWordCountRule(wordCount)}不得编造事实。`,
-            `表情硬性要求：${momentsEmojiRule(addEmoji)}`,
+            `表情硬性要求：${momentsEmojiRule(addEmoji, emojiStyle, emojiCount)}`,
             momentsCopyPasteRule(),
             momentsCopyEmojiSkill ? `微信朋友圈文案与表情 Skill：\n${momentsCopyEmojiSkill}` : "",
             copyEditingSkill ? "copy-editing 已在本轮前执行；修复时继续保持清晰、自然、可信和可直接发布的终稿标准。" : "",
@@ -5239,7 +5624,7 @@ async function generateMomentsPostJsonV2(body = {}, { onProgress = () => {} } = 
           role: "user",
           content: [
             `请把下面的朋友圈正文压缩或补充到 ${wordCount.min}-${wordCount.max} 个中文字符，${momentsWordCountRule(wordCount)}`,
-            momentsEmojiRule(addEmoji),
+            momentsEmojiRule(addEmoji, emojiStyle, emojiCount),
             momentsCopyPasteRule(),
             `必须保留并自然写入 ${referenceStyle} 引用素材，同时 reference_used 填写正文实际使用的内容。`,
             "只保留原文事实，不新增案例、数据、效果承诺或宣传信息。",
@@ -5263,7 +5648,7 @@ async function generateMomentsPostJsonV2(body = {}, { onProgress = () => {} } = 
     finalPostLength = rewriteCharacterCount(post);
   }
   post = addEmoji
-    ? applyPresetMomentsEmojis(post)
+    ? applyPresetMomentsEmojis(post, emojiStyle, emojiCount)
     : normalizeMomentsPostLayout(stripMomentsEmoji(post));
   finalPostLength = rewriteCharacterCount(post);
   wordCountWarning = finalPostLength < wordCount.min || finalPostLength > wordCount.max
@@ -5370,6 +5755,10 @@ async function generateMomentsPostJsonV2(body = {}, { onProgress = () => {} } = 
     reference_style: referenceStyle,
     reference_used: copyData.reference_used || "",
     add_emoji: addEmoji,
+    emoji_style: addEmoji ? emojiStyle : "",
+    emoji_style_label: addEmoji ? MOMENTS_EMOJI_STYLES[emojiStyle].label : "",
+    emoji_count: addEmoji ? emojiCount : "",
+    emoji_count_label: addEmoji ? MOMENTS_EMOJI_COUNT_OPTIONS[emojiCount].label : "",
     word_count_warning: wordCountWarning,
     notes: [
       ...(Array.isArray(copyData.notes) ? copyData.notes : []),
@@ -5394,6 +5783,8 @@ async function generateMomentsPostJsonV2(body = {}, { onProgress = () => {} } = 
       wordCount: originalMode ? null : wordCount,
       wordCountWarning,
       addEmoji,
+      emojiStyle,
+      emojiCount,
       preserveOriginal: originalMode,
       referenceStyle,
       theme: copyData.theme || "朋友圈图文",
@@ -5559,6 +5950,7 @@ async function ensureRewriteCoherence(provider, versions, specs, sourceText, sig
   let current = versions.map((item) => ({ ...item }));
   let lastIssues = [];
   for (let attempt = 0; attempt < 3; attempt += 1) {
+    const previousIssues = [...lastIssues];
     const reviewInput = specs.map((spec) => {
       const version = current.find((item) => item.key === spec.key) || { ...spec, content: "" };
       const range = requestedWordCountRange(spec.wordCount);
@@ -5569,6 +5961,11 @@ async function ensureRewriteCoherence(provider, versions, specs, sourceText, sig
         direction: spec.direction,
         word_count: spec.wordCount,
         completion_soft_max: Number.isFinite(rewriteSoftMaximum(range)) ? rewriteSoftMaximum(range) : null,
+        parent_conversion_template: version.params?.parentConversionTemplate === true,
+        cta_mode: String(version.params?.ctaMode || ""),
+        required_structure: version.params?.parentConversionTemplate === true
+          ? ["hook", "painConflict", "turn", "climax", "ending"]
+          : [],
         content: version.content,
       };
     });
@@ -5583,13 +5980,20 @@ async function ensureRewriteCoherence(provider, versions, specs, sourceText, sig
           "检查并修复下面所有改写成品。无论使用哪种改写方案，最终都必须是一篇完整文章。",
           "最高优先级：忠于原文事实，主题统一，前后不矛盾，指代清楚，句子有承接，段落有过渡，开头自然进入主题，结尾完整收束。",
           "禁止输出句子拼接、提纲、半句话、孤立口号或互相断裂的段落。强钩子、冲突、短句、情绪和转化要求只能在不破坏连贯性的前提下保留。",
+          "对 parent_conversion_template=true 的版本，必须逐项检查并在 conversionStructure 返回正文中实际存在的证据短语：hook、painConflict、turn、climax、ending。任何一项为空都必须 pass=false 并重写。钩子必须具体，不得是空泛口号；高潮必须回到孩子与家长的真实选择或代价。",
+          "对 parent_conversion_template=true 的版本，还必须逐句对照用户原文：不得编造学校、老师、课程、试听、服务、名额、促销、成绩、录取、案例、见证或联系方式；不得作出任何成绩、录取或课程效果承诺。",
+          "CTA 判定必须统一：cta_mode=consult 使用低压力的留言/私信/评论区聊孩子当前情况；cta_mode=action 给出更清楚的下一步，例如“留言或私信说说孩子目前卡在哪里，我们一起分析”。这类只邀请沟通、没有承诺课程或效果的表达是合规行动，不得仅以“可能隐含服务”为由否决，也不强制正文必须出现“咨询”二字。",
+          "结构判定必须基于正文：钩子只要明确写出对象、场景和矛盾或反差，就不是空泛口号；高潮只要明确写出孩子或家长继续原做法与改变做法的长期结果、能力差异或真实代价即可，不强制出现“选择”或“代价”字样。",
           "字数以用户范围为目标，完整收尾最多可超过建议上限 20%；过长时智能压缩重复意思，绝不能按字符硬截断。",
           "如果文章已经合格，保持原文不动并返回 pass=true；如果不合格，先重写修复，再对修复稿重新检查。只有确认全部规则都满足时才能返回 pass=true。",
+          previousIssues.length
+            ? `上一轮未通过原因：${previousIssues.join("；")}。本轮必须在 content 中逐项修复，再按修复后的 content 判断 pass。`
+            : "这是第一轮检查；如需修复，必须直接返回已经修好的完整 content。",
           "每个 key 都必须返回，content 必须始终是可直接发布的最终完整文章。",
           `用户原文：\n${String(sourceText || "").slice(0, 12000)}`,
           `待检查成品：\n${JSON.stringify(reviewInput, null, 2)}`,
           "输出格式：",
-          '{"versions":{"版本key":{"pass":true,"issues":[],"content":"检查或修复后的完整文章"}}}',
+          '{"versions":{"版本key":{"pass":true,"issues":[],"content":"检查或修复后的完整文章","conversionStructure":{"hook":"","painConflict":"","turn":"","climax":"","ending":""}}}}',
         ].join("\n\n"),
       },
     ], signal, { temperature: 0.2 });
@@ -5614,10 +6018,32 @@ async function ensureRewriteCoherence(provider, versions, specs, sourceText, sig
         ? row.issues.map((item) => String(item || "").trim()).filter(Boolean)
         : [];
       const locallyComplete = rewriteHasNaturalEnding(next[versionIndex].content);
-      const passed = row?.pass === true && locallyComplete;
+      const parentTemplate = next[versionIndex].params?.parentConversionTemplate === true;
+      const conversionStructure = normalizeConversionStructure(row?.conversionStructure);
+      const structureComplete = !parentTemplate || hasCompleteConversionStructure(conversionStructure);
+      next[versionIndex] = { ...next[versionIndex], conversionStructure };
+      const localParentQuality = parentTemplate
+        ? parentConversionLocalQuality({
+          content: next[versionIndex].content,
+          conversionStructure,
+          ctaMode: next[versionIndex].params?.ctaMode,
+          sourceText,
+        })
+        : { pass: true, issues: [] };
+      const parentReviewAccepted = !parentTemplate
+        || (
+          localParentQuality.pass
+          && (row?.pass === true || reviewIssuesAreOnlyParentAdvisory(issues))
+        );
+      const passed = locallyComplete && structureComplete && parentReviewAccepted && (parentTemplate || row?.pass === true);
       if (!passed) {
         allPassed = false;
-        lastIssues.push(...(issues.length ? issues.map((item) => `${spec.name || spec.key}：${item}`) : [`${spec.name || spec.key} 连贯性未确认`]));
+        const fallbackIssue = parentTemplate && !structureComplete
+          ? `${spec.name || spec.key} 缺少钩子、痛点冲突、转折、高峰或结尾的完整结构`
+          : parentTemplate && localParentQuality.issues.length
+            ? `${spec.name || spec.key}：${localParentQuality.issues.join("、")}`
+            : `${spec.name || spec.key} 连贯性未确认`;
+        lastIssues.push(...(issues.length ? issues.map((item) => `${spec.name || spec.key}：${item}`) : [fallbackIssue]));
       }
     }
     current = next;
@@ -5631,6 +6057,7 @@ async function ensureRewriteCoherence(provider, versions, specs, sourceText, sig
           wordCountSoftMax: Number.isFinite(rewriteSoftMaximum(range)) ? rewriteSoftMaximum(range) : null,
           wordCountWarning: rewriteWordCountWarning(version.content, range, spec.wordCount),
           coherencePassed: true,
+          conversionStructure: normalizeConversionStructure(version.conversionStructure),
         };
       });
     }
@@ -5670,6 +6097,15 @@ async function rewriteTranscriptWithProvider({ providerId, transcriptText, analy
 
   for (const specBatch of chunkRowsByWordCount(versionSpecs)) {
     throwIfPaused(signal);
+    const parentTemplateSpecs = specBatch.filter((spec) => spec.params?.parentConversionTemplate === true);
+    const parentConversionTemplateContract = parentTemplateSpecs.length
+      ? [
+        "Enabled. This is an opt-in parent emotion and conversion template; it must not turn unrelated source material into education enrollment copy.",
+        "Generate each requested parent template version as a complete standalone spoken script with the required six-part emotional arc.",
+        `Requested CTA modes: ${parentTemplateSpecs.map((spec) => `${spec.key}=${spec.params?.ctaMode || "consult"}`).join(", ")}.`,
+        "No invented school, teacher, course, service, trial, contact detail, offer, place, score, admission outcome, case study, testimonial, or guarantee is allowed.",
+      ].join("\n")
+      : "Disabled. Keep the selected general rewrite logic; do not force the source into parent-facing or enrollment content.";
     const pipelinePrompt = renderTemplate(assets.prompts.rewritePipeline, {
       original_text: String(transcriptText || "").slice(0, 12000),
       analysis_json: analysisText.slice(0, 6000),
@@ -5689,6 +6125,7 @@ async function rewriteTranscriptWithProvider({ providerId, transcriptText, analy
       persona: String(safeParams.persona || ""),
       tone_preset: String(safeParams.tonePreset || ""),
       purpose: String(safeParams.purpose || safeDirection),
+      parent_conversion_template_contract: parentConversionTemplateContract,
       revision_instruction: String(revisionInstruction || "").trim() || "无，按正常改写要求生成。",
       version_specs: JSON.stringify(specBatch, null, 2),
       skill_rewrite_douyin_education: assets.skills.rewriteEducation,
@@ -6969,10 +7406,9 @@ function tasksToXlsx(rows) {
 
 function serveStatic(req, res) {
   const url = new URL(req.url, "http://127.0.0.1");
-  const pathname = decodeURIComponent(url.pathname === "/" ? "/index.html" : url.pathname);
-  const requested = path.normalize(path.join(uiDir, pathname));
+  const requested = resolveStaticRequestPath(uiDir, url.pathname);
 
-  if (!requested.startsWith(uiDir)) {
+  if (!requested) {
     res.writeHead(403);
     res.end("Forbidden");
     return;
@@ -6990,10 +7426,11 @@ function serveStatic(req, res) {
       .includes(extension)
       ? "public, max-age=86400"
       : "no-store";
-    res.writeHead(200, {
+    const headers = {
       "content-type": type,
       "cache-control": cacheControl,
-    });
+    };
+    res.writeHead(200, extension === ".html" ? setLocalApiCookie(headers) : headers);
     res.end(data);
   });
 }
@@ -7014,8 +7451,288 @@ const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, "http://127.0.0.1");
 
   try {
+    if (rejectHttpHost(req, res)) return;
+    if (url.pathname.startsWith("/api/") && rejectLocalApiRequest(req, res)) return;
+
     if (req.method === "GET" && url.pathname === "/api/status") {
-      sendJson(res, 200, { ok: true, downloadsDir, tasks: queueState(), lifecycle: pageLifecycle.status() });
+      sendJson(res, 200, {
+        ok: true,
+        downloadsDir: selectedDownloadsDir,
+        browserDefaultDownloads: !selectedDownloadsDir,
+        tasks: queueState(),
+        lifecycle: pageLifecycle.status(),
+        modelRouter: {
+          ready: modelRouterReady,
+          error: modelRouterStartupError,
+        },
+      });
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/desktop-date-folder") {
+      const created = createDesktopDateFolder();
+      sendJson(res, 200, { ok: true, ...created });
+      return;
+    }
+
+    if (req.method === "GET" && url.pathname === "/api/folder-names") {
+      sendJson(res, 200, { ok: true, names: readFolderNames() });
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/folder-names") {
+      try {
+        const body = await readJsonBody(req, { maxBytes: 32 * 1024 });
+        const names = writeFolderNames(body.names);
+        sendJson(res, 200, { ok: true, names });
+      } catch (error) {
+        sendJson(res, 400, { ok: false, message: error.message || "保存文件夹名称失败" });
+      }
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/desktop-folder-named") {
+      try {
+        const body = await readJsonBody(req, { maxBytes: 8 * 1024 });
+        const suffix = normalizeDesktopFolderName(body.suffix);
+        const created = createDesktopDateFolder({ suffix });
+        sendJson(res, 200, { ok: true, ...created });
+      } catch (error) {
+        sendJson(res, 400, { ok: false, message: error.message || "创建文件夹失败" });
+      }
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/desktop-folder-named/resolve") {
+      try {
+        const body = await readJsonBody(req, { maxBytes: 8 * 1024 });
+        const suffix = normalizeDesktopFolderName(body.suffix);
+        const desktopDir = path.resolve(path.join(os.homedir(), "Desktop"));
+        const folderPath = findLatestDesktopNamedFolder({ desktopDir, suffix });
+        sendJson(res, 200, {
+          ok: true,
+          suffix,
+          exists: Boolean(folderPath),
+          folderPath,
+          folderName: folderPath ? path.basename(folderPath) : "",
+        });
+      } catch (error) {
+        sendJson(res, 400, { ok: false, message: error.message || "查找文件夹失败" });
+      }
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/desktop-folder-named/rename") {
+      try {
+        const body = await readJsonBody(req, { maxBytes: 8 * 1024 });
+        const current = normalizeDesktopFolderName(body.current);
+        const next = normalizeDesktopFolderName(body.next);
+        const names = readFolderNames();
+        if (!names.includes(current)) throw new Error("需要改名的文件夹名称不存在");
+        if (names.some((name) => name !== current && name.toLocaleLowerCase("zh-CN") === next.toLocaleLowerCase("zh-CN"))) {
+          throw new Error("同名文件夹名称已经存在");
+        }
+        const desktopDir = path.resolve(path.join(os.homedir(), "Desktop"));
+        const currentFolderPath = findLatestDesktopNamedFolder({ desktopDir, suffix: current });
+        let renamed = null;
+        if (currentFolderPath) {
+          renamed = renameDesktopNamedFolder({
+            desktopDir,
+            folderPath: currentFolderPath,
+            fromSuffix: current,
+            toSuffix: next,
+          });
+        }
+        let updatedNames;
+        try {
+          updatedNames = writeFolderNames(names.map((name) => name === current ? next : name));
+        } catch (error) {
+          if (renamed) {
+            renameDesktopNamedFolder({
+              desktopDir,
+              folderPath: renamed.folderPath,
+              fromSuffix: next,
+              toSuffix: current,
+            });
+          }
+          throw error;
+        }
+        if (renamed && path.resolve(selectedDownloadsDir || "") === path.resolve(currentFolderPath)) {
+          saveDownloadsDir(renamed.folderPath);
+        }
+        sendJson(res, 200, {
+          ok: true,
+          names: updatedNames,
+          folderPath: renamed?.folderPath || "",
+          folderName: renamed?.folderName || "",
+        });
+      } catch (error) {
+        sendJson(res, 400, { ok: false, message: error.message || "文件夹改名失败" });
+      }
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/desktop-folder-named/delete") {
+      try {
+        const body = await readJsonBody(req, { maxBytes: 8 * 1024 });
+        const suffix = normalizeDesktopFolderName(body.suffix);
+        const names = readFolderNames();
+        if (!names.includes(suffix)) throw new Error("需要删除的文件夹名称不存在");
+        const desktopDir = path.resolve(path.join(os.homedir(), "Desktop"));
+        const folderPath = findLatestDesktopNamedFolder({ desktopDir, suffix });
+        let deletion = { deleted: false, folderPath: "" };
+        if (folderPath) {
+          deletion = deleteEmptyDesktopNamedFolder({ desktopDir, folderPath, suffix });
+        }
+        const updatedNames = writeFolderNames(names.filter((name) => name !== suffix));
+        if (folderPath && path.resolve(selectedDownloadsDir || "") === path.resolve(folderPath)) {
+          selectedDownloadsDir = "";
+          downloadsDir = setDownloadsDir(browserDownloadsDir);
+        }
+        sendJson(res, 200, {
+          ok: true,
+          names: updatedNames,
+          deleted: deletion.deleted,
+          folderPath: deletion.folderPath,
+        });
+      } catch (error) {
+        sendJson(res, 400, { ok: false, message: error.message || "文件夹删除失败" });
+      }
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/desktop-folder-latest-images") {
+      try {
+        const body = await readJsonBody(req, { maxBytes: 8 * 1024 });
+        const suffix = normalizeDesktopFolderName(body.suffix);
+        const desktopDir = path.resolve(path.join(os.homedir(), "Desktop"));
+        const expectedBaseName = `${formatLocalDate()}-${suffix}`;
+        let folderPath = String(body.folderPath || "").trim();
+        if (folderPath) {
+          folderPath = path.resolve(folderPath);
+          const folderName = path.basename(folderPath);
+          const validName = folderName === expectedBaseName
+            || new RegExp(`^${expectedBaseName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}-\\d+$`, "u").test(folderName);
+          if (!isPathInsideRoot(desktopDir, folderPath) || !validName) {
+            throw new Error("只能扫描当前名称对应的桌面新建文件夹");
+          }
+        } else {
+          folderPath = findLatestDesktopNamedFolder({ desktopDir, suffix });
+        }
+        if (!folderPath || !fs.existsSync(folderPath)) {
+          throw new Error("未找到当前名称对应的桌面新建文件夹，请先点击“新建文件夹”");
+        }
+        const now = Date.now();
+        for (const [token, record] of desktopFolderImageTokens) {
+          if (record.expiresAt <= now) desktopFolderImageTokens.delete(token);
+        }
+        const images = listLatestDesktopImageBatch(folderPath).map((item) => {
+          const token = randomUUID();
+          desktopFolderImageTokens.set(token, {
+            filePath: item.path,
+            expiresAt: now + (60 * 60 * 1000),
+          });
+          return {
+            ...item,
+            imageUrl: `/api/desktop-folder-image?id=${encodeURIComponent(token)}`,
+          };
+        });
+        sendJson(res, 200, {
+          ok: true,
+          folderPath,
+          images,
+          message: images.length ? `找到最新一轮 ${images.length} 张图片` : "最新一轮没有可确定的连续编号图片",
+        });
+      } catch (error) {
+        sendJson(res, 400, { ok: false, message: error.message || "扫描图片素材失败" });
+      }
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/desktop-folder-reference-images") {
+      try {
+        const body = await readJsonBody(req, { maxBytes: 8 * 1024 });
+        const suffix = normalizeDesktopFolderName(body.suffix);
+        const referenceFileName = String(body.referenceFileName || "").trim();
+        const maxSequence = Math.min(Math.max(Number(body.maxSequence || 1), 1), 100);
+        const desktopDir = path.resolve(path.join(os.homedir(), "Desktop"));
+        const expectedBaseName = `${formatLocalDate()}-${suffix}`;
+        const referenceFolderPath = findDesktopNamedFolderContainingFile({
+          desktopDir,
+          suffix,
+          fileName: referenceFileName,
+        });
+        let folderPath = String(body.folderPath || "").trim();
+        if (folderPath) {
+          folderPath = path.resolve(folderPath);
+          const folderName = path.basename(folderPath);
+          const validName = folderName === expectedBaseName
+            || new RegExp(`^${expectedBaseName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}-\\d+$`, "u").test(folderName);
+          if (!isPathInsideRoot(desktopDir, folderPath) || !validName) {
+            throw new Error("只能扫描当前名称对应的桌面新建文件夹");
+          }
+          if (!fs.existsSync(path.join(folderPath, referenceFileName)) && referenceFolderPath) {
+            folderPath = referenceFolderPath;
+          }
+        } else {
+          folderPath = referenceFolderPath || findLatestDesktopNamedFolder({ desktopDir, suffix });
+        }
+        if (!folderPath || !fs.existsSync(folderPath)) {
+          throw new Error("未找到第一张图片所在的桌面新建文件夹");
+        }
+        const now = Date.now();
+        for (const [token, record] of desktopFolderImageTokens) {
+          if (record.expiresAt <= now) desktopFolderImageTokens.delete(token);
+        }
+        const images = listDesktopImageSequenceFromReference(
+          folderPath,
+          referenceFileName,
+          { maxGapMs: 10_000, maxSequence },
+        ).map((item) => {
+          const token = randomUUID();
+          desktopFolderImageTokens.set(token, {
+            filePath: item.path,
+            expiresAt: now + (60 * 60 * 1000),
+          });
+          return {
+            ...item,
+            imageUrl: `/api/desktop-folder-image?id=${encodeURIComponent(token)}`,
+          };
+        });
+        sendJson(res, 200, {
+          ok: true,
+          folderPath,
+          images,
+          message: images.length
+            ? `已按第一张图片匹配 ${images.length} 张后续素材`
+            : "没有识别到同一轮、同扩展名的后续编号图片",
+        });
+      } catch (error) {
+        sendJson(res, 400, { ok: false, message: error.message || "按第一张图片匹配素材失败" });
+      }
+      return;
+    }
+
+    if (req.method === "GET" && url.pathname === "/api/desktop-folder-image") {
+      const token = String(url.searchParams.get("id") || "");
+      const record = desktopFolderImageTokens.get(token);
+      if (!record || record.expiresAt <= Date.now()) {
+        desktopFolderImageTokens.delete(token);
+        sendJson(res, 404, { ok: false, message: "图片预览已过期，请重新添加图片素材" });
+        return;
+      }
+      try {
+        const filePath = resolveSafeDesktopLinkedImagePath(record.filePath);
+        const mime = {
+          ".png": "image/png",
+          ".jpg": "image/jpeg",
+          ".jpeg": "image/jpeg",
+          ".webp": "image/webp",
+        }[path.extname(filePath).toLowerCase()] || "application/octet-stream";
+        sendBuffer(res, 200, fs.readFileSync(filePath), mime);
+      } catch (error) {
+        sendJson(res, 404, { ok: false, message: error.message || "图片不存在" });
+      }
       return;
     }
 
@@ -7044,6 +7761,28 @@ const server = http.createServer(async (req, res) => {
 
     if (req.method === "GET" && url.pathname === "/api/files") {
       sendJson(res, 200, { files: listDownloads() });
+      return;
+    }
+
+    if (req.method === "GET" && url.pathname === "/api/files/download") {
+      const fileName = String(url.searchParams.get("name") || "").trim();
+      const filePath = resolveDownloadFilePath(fileName);
+      if (!filePath || !fs.existsSync(filePath) || !fs.statSync(filePath).isFile()) {
+        sendJson(res, 404, { ok: false, message: "没有找到可下载的文件" });
+        return;
+      }
+      sendFileAttachment(res, filePath, path.basename(filePath));
+      return;
+    }
+
+    if (req.method === "GET" && url.pathname === "/api/task-file/download") {
+      const task = taskStore.getTask(Number(url.searchParams.get("id") || 0));
+      const filePath = primaryTaskDownloadPath(task || {});
+      if (!filePath || !isInsideDownloads(filePath) || !fs.existsSync(filePath) || !fs.statSync(filePath).isFile()) {
+        sendJson(res, 404, { ok: false, message: "没有找到该任务的可下载文件" });
+        return;
+      }
+      sendFileAttachment(res, filePath, path.basename(filePath));
       return;
     }
 
@@ -7282,7 +8021,7 @@ const server = http.createServer(async (req, res) => {
         progressId = createMomentsProgressJob(body.progressId);
         const reportProgress = (progress, label) => updateMomentsProgressJob(progressId, progress, label);
         const result = await generateMomentsPostJsonV2(body, { onProgress: reportProgress });
-        updateMomentsProgressJob(progressId, 100, "朋友圈文案和图片提示词生成完成", "completed");
+        updateMomentsProgressJob(progressId, 100, "朋友圈文案和图片提示词生成完成", "completed", { result: result?.result ?? null, fallbackUsed: result?.fallbackUsed === true });
         sendJson(res, 200, result);
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
@@ -7726,7 +8465,8 @@ const server = http.createServer(async (req, res) => {
         jianying: settings.jianying,
         jianyingAppPath: settings.jianyingAppPath,
         jianyingDraftDir: settings.jianyingDraftDir,
-        downloadsDir,
+        downloadsDir: selectedDownloadsDir,
+        browserDefaultDownloads: !selectedDownloadsDir,
       });
       return;
     }
@@ -8255,7 +8995,7 @@ const server = http.createServer(async (req, res) => {
       const deepseekApiKey = String(body.deepseekApiKey || "").trim();
       if (deepseekApiKey) rewriteProviders.deepseek.apiKey = deepseekApiKey;
       if (body.deepseekModel !== undefined) {
-        rewriteProviders.deepseek.model = String(body.deepseekModel || "deepseek-chat").trim() || "deepseek-chat";
+        rewriteProviders.deepseek.model = normalizeDeepSeekModelName(body.deepseekModel);
       }
 
       if (body.customBaseUrl !== undefined) {
@@ -8546,6 +9286,14 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname.startsWith("/api/router/")) {
       const route = url.pathname.replace("/api/router/", "");
 
+      if (!modelRouterReady) {
+        sendJson(res, 503, {
+          ok: false,
+          error: modelRouterStartupError || "模型路由尚未就绪，请到系统设置检查模型配置。",
+        });
+        return;
+      }
+
       // 统一生成（带自动降级）
       if (req.method === "POST" && route === "generate") {
         const body = await readJsonBody(req);
@@ -8828,7 +9576,20 @@ const server = http.createServer(async (req, res) => {
       const route = url.pathname.replace("/api/providers/", "");
 
       if (req.method === "GET" && route === "list") {
-        sendJson(res, 200, { ok: true, providers: providerRegistry.getAll() });
+        sendJson(res, 200, {
+          ok: true,
+          ready: modelRouterReady,
+          error: modelRouterStartupError,
+          providers: providerRegistry.getAll(),
+        });
+        return;
+      }
+
+      if (!modelRouterReady) {
+        sendJson(res, 503, {
+          ok: false,
+          error: modelRouterStartupError || "模型路由尚未就绪，请到系统设置检查模型配置。",
+        });
         return;
       }
 
@@ -8868,7 +9629,7 @@ const server = http.createServer(async (req, res) => {
       const route = url.pathname.replace("/api/settings/", "");
 
       if (req.method === "GET" && route === "all") {
-        sendJson(res, 200, { ok: true, settings: readSettings() });
+        sendJson(res, 404, { ok: false, message: "Settings dump is disabled" });
         return;
       }
 
@@ -9014,7 +9775,13 @@ const server = http.createServer(async (req, res) => {
       }
 
       if (req.method === "GET" && route === "file") {
-        const filePath = url.searchParams.get("path") || "";
+        let filePath = "";
+        try {
+          filePath = resolveImageRequestPath(url);
+        } catch (error) {
+          sendJson(res, 404, { ok: false, message: error instanceof Error ? error.message : "Image file not found" });
+          return;
+        }
         if (!filePath || !fs.existsSync(filePath)) {
           sendJson(res, 404, { ok: false, message: "文件不存在" });
           return;
@@ -9022,13 +9789,14 @@ const server = http.createServer(async (req, res) => {
         const ext = path.extname(filePath).toLowerCase();
         const mime = { ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".gif": "image/gif", ".webp": "image/webp" };
         const data = fs.readFileSync(filePath);
-        sendBuffer(res, 200, data, mime[ext] || "application/octet-stream");
+        sendBuffer(res, 200, data, mime[ext] || "image/png");
         return;
       }
 
       if (req.method === "GET" && route === "thumbnail") {
-        const filePath = url.searchParams.get("path") || "";
+        let filePath = "";
         try {
+          filePath = resolveImageRequestPath(url);
           const thumbPath = await imageService.thumbnailForImage(filePath, { width: Number(url.searchParams.get("width")) || 360 });
           const ext = path.extname(thumbPath).toLowerCase();
           const mime = { ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".gif": "image/gif", ".webp": "image/webp" };
@@ -9059,7 +9827,15 @@ const server = http.createServer(async (req, res) => {
 });
 
 server.on("upgrade", (request, socket, head) => {
-  if (request.url === "/ws/progress") {
+  const url = new URL(request.url || "/", "http://127.0.0.1");
+  if (url.pathname !== "/ws/progress"
+    || !isAllowedLocalHostHeader(request.headers.host || "")
+    || !isAllowedLocalOriginHeader(request.headers.origin || "")
+    || !hasValidLocalApiToken(request)) {
+    socket.destroy();
+    return;
+  }
+  if (url.pathname === "/ws/progress") {
     wss.handleUpgrade(request, socket, head, (ws) => {
       wsClients.add(ws);
       ws.on("close", () => wsClients.delete(ws));
@@ -9095,13 +9871,7 @@ function runtimeOwnerPid() {
 }
 
 function processIsRunning(pid) {
-  if (!Number.isInteger(pid) || pid <= 0) return false;
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch {
-    return false;
-  }
+  return runtimeProcessIsRunning(pid, { expectedEntryPath: runtimeSourcePath });
 }
 
 function acquireRuntimeLock() {
@@ -9133,7 +9903,7 @@ async function waitForExistingRuntimeUrl() {
     try {
       const url = fs.readFileSync(urlPath, "utf8").trim();
       if (url) {
-        const response = await fetch(`${url}/api/status`);
+        const response = await fetch(url);
         if (response.ok) return url;
       }
     } catch {
@@ -9171,6 +9941,7 @@ async function start() {
     }
   }
 
+  localApiCookieName = `__dy_local_api_${port}`;
   const url = `http://127.0.0.1:${port}`;
   fs.writeFileSync(urlPath, url, "utf8");
   console.log(`Douyin page: ${url}`);

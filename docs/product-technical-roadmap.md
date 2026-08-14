@@ -436,7 +436,7 @@ created
 交付：
 
 - 小黑生产线自行生成分镜、音乐素材、逐段配图和输出记录。
-- CS1 和 MoneyPrinter 接收 TTS 三件套与标题，不依赖旧 `video-product` 中心。
+- CS1 和 MoneyPrinter 接收 TTS 交接包与标题：无 BGM 为三件套，有独立 BGM 为四件套；不依赖旧 `video-product` 中心。
 - 旧 `video-product`、`video-output`、`capcut-cli` 适配层不再作为产品路线。
 
 验收：

@@ -17,7 +17,7 @@ const workbenchPages = {
   },
   rewrite: {
     title: "文案定制改写",
-    description: "选择视频类型，默认生成 1 个版本，需要时可增加输出框。",
+    description: "家长触动与转化模板默认开启，生成两篇可直接发送到生产线的口播稿。",
   },
   "moments-copy": {
     title: "朋友圈文案定制",
@@ -755,9 +755,12 @@ function setupTtsStudio() {
   if (!lab || !oldWorkbench || lab.querySelector(".tts-studio-grid")) return;
 
   const scriptColumn = oldWorkbench.querySelector(".tts-script-column");
+  const timelineColumn = oldWorkbench.querySelector("#ttsTimelineColumn");
   const controlColumn = oldWorkbench.querySelector(".tts-control-column");
   const settings = lab.querySelector(".tts-settings");
   const preview = lab.querySelector(".tts-preview");
+  const bgmPreview = lab.querySelector("#ttsBgmPreview");
+  const bgmMissing = lab.querySelector("#ttsBgmMissing");
   const alignmentEditor = lab.querySelector("#ttsAlignmentEditor");
   const audioHandoff = lab.querySelector("#ttsAudioHandoff");
   const historyPanel = lab.querySelector(".tts-history-panel");
@@ -768,15 +771,20 @@ function setupTtsStudio() {
 
   const inputLane = document.createElement("section");
   inputLane.className = "studio-lane tts-input-lane";
+  const timelineLane = document.createElement("section");
+  timelineLane.className = "studio-lane tts-timeline-lane";
   const settingsLane = document.createElement("section");
   settingsLane.className = "studio-lane tts-settings-lane";
   const resultLane = document.createElement("section");
   resultLane.className = "studio-lane tts-result-lane";
 
   if (scriptColumn) inputLane.appendChild(scriptColumn);
+  if (timelineColumn) timelineLane.appendChild(timelineColumn);
   if (settings) settingsLane.appendChild(settings);
   if (controlColumn) settingsLane.appendChild(controlColumn);
   if (preview) resultLane.appendChild(preview);
+  if (bgmPreview) resultLane.appendChild(bgmPreview);
+  if (bgmMissing) resultLane.appendChild(bgmMissing);
   if (alignmentEditor) resultLane.appendChild(alignmentEditor);
   if (audioHandoff) resultLane.appendChild(audioHandoff);
   if (historyHead) resultLane.appendChild(historyHead);
@@ -785,11 +793,10 @@ function setupTtsStudio() {
 
   addLaneHeading(inputLane, "项目文案", "手动输入或从当前项目的最佳改写带入");
   addLaneHeading(settingsLane, "选择声音", "我的克隆音色、平台预设和最近使用");
-  addLaneHeading(resultLane, "试听与发送", "确认语音后发送到保留生产线");
 
+  studio.append(inputLane, timelineLane, settingsLane, resultLane);
+  oldWorkbench.before(studio);
   oldWorkbench.remove();
-  studio.append(inputLane, settingsLane, resultLane);
-  lab.querySelector(".tts-head")?.after(studio);
 
   const projectSource = document.createElement("div");
   projectSource.className = "tts-project-source";
@@ -903,6 +910,7 @@ function setupCodexTaskWorkbench(settingsPage) {
     settingsCard.appendChild(batchHead);
   }
   if (batchControls) settingsCard.appendChild(batchControls);
+  if (!rail && batchActions) settingsCard.appendChild(batchActions);
   settingsPage.appendChild(settingsCard);
 
   if (rail) {
@@ -1515,7 +1523,8 @@ function initWorkbench() {
 
   // WebSocket 进度监听
   try {
-    const ws = new WebSocket(`ws://127.0.0.1:${location.port}/ws/progress`);
+    const wsProtocol = location.protocol === "https:" ? "wss:" : "ws:";
+    const ws = new WebSocket(`${wsProtocol}//${location.host}/ws/progress`);
     ws.onmessage = (e) => {
       const data = JSON.parse(e.data);
       if (data.taskId) {
@@ -1547,6 +1556,22 @@ function setupImageStudio() {
 
   function imageAssetPath(asset = {}) {
     return asset.original_path || asset.file_path || asset.path || "";
+  }
+
+  function imageAssetId(asset = {}) {
+    return asset.assetId || asset.asset_id || asset.id || "";
+  }
+
+  function imageFileUrl(asset = {}) {
+    const id = imageAssetId(asset);
+    if (id) return `/api/image/file?id=${encodeURIComponent(id)}`;
+    return `/api/image/file?path=${encodeURIComponent(imageAssetPath(asset))}`;
+  }
+
+  function imageThumbnailUrl(asset = {}, width = 360) {
+    const id = imageAssetId(asset);
+    if (id) return `/api/image/thumbnail?width=${encodeURIComponent(width)}&id=${encodeURIComponent(id)}`;
+    return `/api/image/thumbnail?width=${encodeURIComponent(width)}&path=${encodeURIComponent(imageAssetPath(asset))}`;
   }
 
   function closeImageAssetPreview() {
@@ -1599,8 +1624,7 @@ function setupImageStudio() {
     activeImagePreview = { groupId, index };
     const modal = ensureImagePreviewModal();
     const asset = rows[index];
-    const filePath = imageAssetPath(asset);
-    const url = `/api/image/file?path=${encodeURIComponent(filePath)}`;
+    const url = imageFileUrl(asset);
     modal.querySelector("#imagePreviewTitle").textContent = asset.folder_name || asset.filename || `图片 ${index + 1}`;
     modal.querySelector("#imagePreviewFull").src = url;
     modal.querySelector("#imagePreviewCounter").textContent = `${index + 1} / ${rows.length}`;
@@ -1978,8 +2002,8 @@ function setupImageStudio() {
           <button class="btn-sm" type="button" onclick="document.getElementById('imagePrompt').value='${safePrompt}';document.getElementById('imageGenerateBtn').click()">重新生成</button>
         </div>
       </div>`;
-      const originalUrl = `/api/image/file?path=${encodeURIComponent(r.imagePath || "")}`;
-      const thumbUrl = r.thumbnailUrl || `/api/image/thumbnail?width=360&path=${encodeURIComponent(r.imagePath || "")}`;
+      const originalUrl = imageFileUrl(r);
+      const thumbUrl = r.thumbnailUrl || imageThumbnailUrl(r);
       return `<div class="img-card" data-asset-id="${r.assetId || ""}">
         <button class="img-preview" type="button" onclick="window.open('${originalUrl}')">
           <img src="${thumbUrl}" alt="生成图片缩略图" loading="lazy" />
@@ -2023,7 +2047,7 @@ function setupImageStudio() {
             ${sortedRows.map((a, assetIndex) => `
               <div class="img-card">
                 <button class="img-preview" type="button" data-image-preview-group="${groupId}" data-image-preview-index="${assetIndex}">
-                  <img src="${a.thumbnail_url || `/api/image/thumbnail?width=360&path=${encodeURIComponent(imageAssetPath(a))}`}" alt="图片资产缩略图" loading="lazy" />
+                  <img src="${a.thumbnail_url || imageThumbnailUrl(a)}" alt="图片资产缩略图" loading="lazy" />
                 </button>
                 <div class="img-meta">
                   <span>#${Number(a.scene_index || 0) || "-"} ${(a.prompt || "").slice(0, 30)}</span>

@@ -1,7 +1,7 @@
 import { postJson } from "./api.js";
 
-const HANDOFF_KEY = "dy:handoff:money-printer:audio";
 const PREF_KEY = "dy:money-printer:preferences";
+const ACTIVE_TASK_KEY = "dy:money-printer:active-task-id";
 const POLL_INTERVAL_MS = 2500;
 
 const state = {
@@ -9,9 +9,14 @@ const state = {
   effects: [],
   status: null,
   handoff: null,
+  includeBgm: false,
   segments: [],
+  timelineDraftSegments: null,
+  materialPlan: null,
   task: null,
   pollTimer: 0,
+  pollInFlight: false,
+  pollErrorCount: 0,
   raf: 0,
   playing: false,
   currentTime: 0,
@@ -19,6 +24,7 @@ const state = {
   startTime: 0,
   previewReady: false,
   apiStartPromise: null,
+  routeActive: false,
 };
 
 function $(selector) {
@@ -32,8 +38,10 @@ export function initMoneyPrinterModule() {
   if (!state.page) return;
   cacheElements();
   bindEvents();
-  initialize().catch((error) => setStatus("初始化失败", error.message, true));
-  window.moneyPrinterProduction = { receiveTts, refresh: refreshStatus };
+  window.moneyPrinterProduction = { receiveTts, refresh: refreshStatus, restoreStoredTtsHandoff };
+  initialize()
+    .then(() => restoreStoredTtsHandoff())
+    .catch((error) => setStatus("初始化失败", error.message, true));
 }
 
 function cacheElements() {
@@ -49,11 +57,13 @@ function cacheElements() {
     openRoot: $("#moneyPrinterOpenRoot"),
     openTasks: $("#moneyPrinterOpenTasks"),
     subject: $("#moneyPrinterSubject"),
+    materialMode: $("#moneyPrinterMaterialMode"),
     source: $("#moneyPrinterSource"),
     transition: $("#moneyPrinterTransition"),
     localMaterials: $("#moneyPrinterLocalMaterials"),
     submit: $("#moneyPrinterSubmit"),
     effect: $("#moneyPrinterEffect"),
+    textEffectEnabled: $("#moneyPrinterTextEffectEnabled"),
     aspect: $("#moneyPrinterAspect"),
     frameRate: $("#moneyPrinterFrameRate"),
     fontSize: $("#moneyPrinterFontSize"),
@@ -63,6 +73,7 @@ function cacheElements() {
     maxLines: $("#moneyPrinterMaxLines"),
     ttsVolume: $("#moneyPrinterTtsVolume"),
     ttsVolumeValue: $("#moneyPrinterTtsVolumeValue"),
+    includeBgm: $("#moneyPrinterIncludeBgm"),
     bottomSubtitles: $("#moneyPrinterBottomSubtitles"),
     previewTitle: $("#moneyPrinterPreviewTitle"),
     previewSpec: $("#moneyPrinterPreviewSpec"),
@@ -84,6 +95,7 @@ function cacheElements() {
     materialSummary: $("#moneyPrinterMaterialSummary"),
     taskVideos: $("#moneyPrinterTaskVideos"),
     timelineSummary: $("#moneyPrinterTimelineSummary"),
+    confirmTimeline: $("#moneyPrinterConfirmTimeline"),
     timeline: $("#moneyPrinterTimeline"),
     assets: $("#moneyPrinterAssets"),
     apiLogs: $("#moneyPrinterApiLogs"),
@@ -98,10 +110,55 @@ async function initialize() {
   state.effects = effectsData.effects || [];
   renderEffectOptions();
   await applyDefaultPreferences();
-  loadStoredHandoff();
   renderAll();
+  await restoreActiveTask();
   if (state.page.classList.contains("active") || document.body.dataset.activeModule === "money-printer") {
     await ensureApiReady().catch(() => null);
+  }
+}
+
+function saveActiveTaskId(taskId) {
+  try {
+    if (taskId) localStorage.setItem(ACTIVE_TASK_KEY, String(taskId));
+  } catch {}
+}
+
+function clearActiveTaskId() {
+  try { localStorage.removeItem(ACTIVE_TASK_KEY); } catch {}
+}
+
+function readActiveTaskId() {
+  try { return String(localStorage.getItem(ACTIVE_TASK_KEY) || "").trim(); } catch { return ""; }
+}
+
+async function restoreActiveTask() {
+  const taskId = readActiveTaskId();
+  if (!taskId) return;
+  try {
+    const data = await fetchJson(`/api/money-printer/task?id=${encodeURIComponent(taskId)}`);
+    const task = data.task;
+    if (!task?.task_id) throw new Error("任务不存在");
+    state.task = task;
+    renderTask();
+    if (Number(task.state) === 1) {
+      clearActiveTaskId();
+      setProgress(100, "素材匹配完成，可以预览");
+      setStatus("上次任务已完成", "页面刷新前创建的素材任务已完成，可重新发送 TTS 参数后预览合成。");
+    } else if (Number(task.state) === -1) {
+      clearActiveTaskId();
+      setStatus("MoneyPrinterTurbo 任务失败", task.error || "任务失败。", true);
+    } else {
+      setProgress(task.progress || 0, task.stateLabel || "生成中");
+      setStatus("已恢复上次任务", `页面刷新前的任务 ${task.task_id} 仍在运行，继续自动刷新进度。`);
+      state.pollTimer = window.setInterval(() => pollTask(state.task?.task_id), POLL_INTERVAL_MS);
+    }
+  } catch (error) {
+    // 只有任务明确不存在才清除持久化 ID；服务重启中/网络抖动导致的
+    // 一次性失败保留 ID，下次打开页面仍可恢复仍在后台运行的任务。
+    const message = String(error?.message || "");
+    if (/不存在|没有|not.?found|404/i.test(message)) clearActiveTaskId();
+  } finally {
+    updateButtons();
   }
 }
 
@@ -110,7 +167,7 @@ function bindEvents() {
   els.refresh?.addEventListener("click", refreshStatus);
   els.openDocs?.addEventListener("click", () => openTarget("docs"));
   els.openRoot?.addEventListener("click", () => openTarget("root"));
-  els.openTasks?.addEventListener("click", () => openTarget("tasks"));
+  els.openTasks?.addEventListener("click", () => openTarget("downloads"));
   els.submit?.addEventListener("click", submitForPreview);
   els.renderFinal?.addEventListener("click", renderFinalVideo);
   els.source?.addEventListener("change", () => {
@@ -118,7 +175,11 @@ function bindEvents() {
     savePreferences();
     updateButtons();
   });
-  for (const input of [els.effect, els.aspect, els.frameRate, els.fontSize, els.primaryColor, els.accentColor, els.maxLines, els.ttsVolume, els.bottomSubtitles, els.transition]) {
+  els.includeBgm?.addEventListener("change", () => {
+    state.includeBgm = Boolean(els.includeBgm.checked && state.handoff?.bgm_path);
+    renderHandoff();
+  });
+  for (const input of [els.effect, els.textEffectEnabled, els.materialMode, els.aspect, els.frameRate, els.fontSize, els.primaryColor, els.accentColor, els.maxLines, els.ttsVolume, els.bottomSubtitles, els.transition]) {
     input?.addEventListener("input", () => { savePreferences(); updateSettingOutputs(); drawPreview(); renderTimeline(); });
     input?.addEventListener("change", () => { savePreferences(); updateSettingOutputs(); drawPreview(); renderTimeline(); });
   }
@@ -131,27 +192,17 @@ function bindEvents() {
   els.sourceVideo?.addEventListener("seeked", drawPreview);
   els.sourceAudio?.addEventListener("ended", pausePreview);
   window.addEventListener("money-printer-handoff", (event) => receiveTts(event.detail));
-  window.addEventListener("tts-shared-handoff-updated", (event) => {
-    if (event.detail?.sourceTarget === "money-printer") return;
-    receiveTts(event.detail?.payload, { navigate: false });
-  });
-  els.timeline?.addEventListener("input", (event) => {
-    const textarea = event.target.closest('[data-field="text"]');
-    const row = textarea?.closest(".money-printer-timeline-row");
-    const index = Number(row?.dataset.segmentIndex);
-    if (!textarea || !Number.isInteger(index) || !state.segments[index]) return;
-    state.segments[index] = { ...state.segments[index], text: textarea.value };
-    drawPreview();
-  });
-  els.timeline?.addEventListener("focusout", (event) => {
-    if (event.target.matches('[data-field="text"]')) syncTimelineText();
-  });
+  if (els.confirmTimeline) els.confirmTimeline.hidden = true;
   document.addEventListener("workbench:route", (event) => {
-    if (event.detail?.page === "money-printer") {
-      loadStoredHandoff();
+    const nextActive = event.detail?.page === "money-printer";
+    if (nextActive) {
+      restoreStoredTtsHandoff();
       renderAll();
       ensureApiReady().catch((error) => setStatus("API 自动启动失败", error.message, true));
+    } else if (state.routeActive) {
+      clearTimelineState();
     }
+    state.routeActive = nextActive;
   });
 }
 
@@ -182,6 +233,8 @@ async function applyDefaultPreferences() {
     ...(moneyPrefs.effectParams || {}),
   };
   setSelectValue(els.effect, effectId);
+  els.textEffectEnabled.checked = moneyPrefs.textEffectEnabled === true;
+  setSelectValue(els.materialMode, moneyPrefs.materialMode || "standard");
   setSelectValue(els.aspect, moneyPrefs.aspectRatio || "9:16");
   setSelectValue(els.frameRate, String(moneyPrefs.frameRate || 30));
   setSelectValue(els.maxLines, String(params.maxLines || 2));
@@ -196,47 +249,55 @@ async function applyDefaultPreferences() {
   updateSettingOutputs();
 }
 
-function loadStoredHandoff() {
-  const stored = window.sharedTtsHandoff?.read?.() || readJsonStorage(HANDOFF_KEY, null);
-  if (stored?.id && (!state.handoff || String(stored.id) !== String(state.handoff.id) || stored.sharedUpdatedAt !== state.handoff.sharedUpdatedAt)) {
-    receiveTts(stored, { navigate: false });
-  }
-}
-
 function receiveTts(payload = {}, { navigate = true } = {}) {
-  if (!payload?.id) return;
-  const sameJob = String(state.handoff?.id || "") === String(payload.id);
-  const previousSegments = sameJob ? state.segments : [];
-  state.handoff = payload;
-  if (!sameJob) {
-    state.task = null;
-    state.previewReady = false;
-    state.currentTime = 0;
+  const timeline = Array.isArray(payload?.subtitle_timeline) && payload.subtitle_timeline.length
+    ? payload.subtitle_timeline
+    : Array.isArray(payload?.sentence_timeline)
+      ? payload.sentence_timeline
+      : [];
+  const segments = normalizeSegments(timeline, payload);
+  const confirmed = String(payload?.alignment_status || payload?.metadata?.alignment_status || "") === "confirmed";
+  if (!payload?.id || !confirmed || !timeline.length || !segments.length) {
+    clearTimelineState();
+    setStatus("TTS 参数无效", "已清空 MoneyPrinter 字幕时间轴，请从 TTS 页面重新发送已确认参数。", true);
+    return null;
   }
-  state.segments = normalizeSegments(payload.subtitle_timeline?.length ? payload.subtitle_timeline : payload.sentence_timeline, payload)
-    .map((segment, index) => ({ ...(previousSegments[index] || {}), ...segment }));
+  state.handoff = payload;
+  state.includeBgm = Boolean(payload.bgm_path);
+  state.segments = segments;
+  state.timelineDraftSegments = null;
+  state.materialPlan = null;
+  state.task = null;
+  state.previewReady = false;
+  state.currentTime = 0;
   if (els.subject) els.subject.value = payload.title || payload.seo_title || payload.publish_title || `TTS #${payload.display_number || payload.id}`;
   if (payload.audio_url) els.sourceAudio.src = payload.audio_url;
   else els.sourceAudio.removeAttribute("src");
   if (navigate) window.workbenchNavigate?.("money-printer");
   renderAll();
   savePreferences();
+  return state.handoff;
 }
 
-async function syncTimelineText() {
-  if (!state.handoff?.id || !state.segments.length) return;
-  els.timelineSummary.textContent = "正在自动保存字幕...";
-  try {
-    const payload = await window.sharedTtsHandoff.syncTimeline(state.segments, {
-      sourceTarget: "money-printer",
-      title: els.subject.value.trim() || state.handoff.title,
-    });
-    receiveTts(payload, { navigate: false });
-    setStatus("字幕已同步", "原时间戳已保留，原字幕文件和其他三条生产线已更新。");
-  } catch (error) {
-    els.timelineSummary.textContent = `自动保存失败：${error.message || error}`;
-    setStatus("字幕保存失败", error.message || String(error), true);
-  }
+function restoreStoredTtsHandoff() {
+  const payload = globalThis.ttsHandoffStore?.read("money-printer");
+  return payload?.id ? receiveTts(payload, { navigate: false }) : null;
+}
+
+function clearTimelineState() {
+  stopPolling();
+  pausePreview();
+  state.handoff = null;
+  state.includeBgm = false;
+  state.segments = [];
+  state.timelineDraftSegments = null;
+  state.materialPlan = null;
+  state.task = null;
+  state.previewReady = false;
+  state.currentTime = 0;
+  els.sourceAudio?.removeAttribute("src");
+  els.sourceVideo?.removeAttribute("src");
+  renderAll();
 }
 
 function normalizeSegments(timeline = [], payload = {}) {
@@ -249,7 +310,7 @@ function normalizeSegments(timeline = [], payload = {}) {
   return rows.map((item, index) => {
     const start = Number(item.start ?? item.start_time ?? item.startTime ?? 0);
     const end = Number(item.end ?? item.end_time ?? item.endTime ?? start + 1);
-    const text = String(item.text || item.sentence || item.subtitle || "").trim();
+    const text = String(item.text || item.sentence || item.subtitle || "");
     return {
       id: String(item.id || `mpt-segment-${index + 1}`),
       start,
@@ -274,10 +335,15 @@ function renderAll() {
 
 function renderHandoff() {
   const confirmed = hasConfirmedHandoff();
+  const hasBgm = Boolean(state.handoff?.bgm_path);
+  if (els.includeBgm) {
+    els.includeBgm.disabled = !hasBgm;
+    els.includeBgm.checked = Boolean(state.includeBgm && hasBgm);
+  }
   els.handoffBadge.textContent = confirmed ? `音频 #${state.handoff.display_number || state.handoff.id}` : "等待 TTS";
   els.previewSpec.textContent = confirmed
-    ? `${state.segments.length} 段字幕 · ${els.aspect.value} · ${els.frameRate.value}fps`
-    : "等待 TTS 三件套";
+    ? `${state.segments.length} 段字幕 · ${els.aspect.value} · ${els.frameRate.value}fps · ${state.includeBgm && hasBgm ? "四件套（含独立 BGM）" : "三件套"}`
+    : "等待已确认 TTS 交接包";
   if (!confirmed) {
     setStatus("等待已确认 TTS", "请先在 TTS 语音页确认最终文案、音频和字幕时间轴，再发送到 MoneyPrinter。", true);
   }
@@ -285,19 +351,23 @@ function renderHandoff() {
 
 function renderTimeline() {
   if (!els.timeline) return;
-  if (!state.segments.length) {
+  const displaySegments = state.segments;
+  if (!displaySegments.length) {
     els.timelineSummary.textContent = "等待 TTS";
     els.timeline.innerHTML = '<p class="money-printer-empty">尚未接收已确认字幕时间轴。</p>';
+    if (els.confirmTimeline) els.confirmTimeline.disabled = true;
     return;
   }
   const source = els.source?.value || "pexels";
-  els.timelineSummary.textContent = `共 ${state.segments.length} 段字幕 / ${matchedMaterialCount()} 段素材 / 转场${transitionLabel(els.transition.value)}`;
-  els.timeline.innerHTML = state.segments.map((segment, index) => `
+  const modeLabel = els.materialMode?.value === "fast" ? "快速模式" : "标准模式";
+  const plannedScenes = state.materialPlan?.groups?.length || state.segments.length;
+  els.timelineSummary.textContent = `共 ${state.segments.length} 段 TTS 字幕 / ${plannedScenes} 个素材分镜 / ${matchedMaterialCount()} 段已绑定 / ${modeLabel}`;
+  els.timeline.innerHTML = displaySegments.map((segment, index) => `
     <article class="money-printer-timeline-row" data-segment-index="${index}">
       <span class="money-printer-segment-index">${String(index + 1).padStart(2, "0")}</span>
       <span>${formatTime(segment.start)}</span>
       <span>${formatTime(segment.end)}</span>
-      <textarea data-field="text" rows="2">${escapeHtml(segment.text)}</textarea>
+      <textarea data-field="text" rows="2" data-no-draft-persist readonly aria-readonly="true" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-1p-ignore="true">${escapeHtml(segment.text)}</textarea>
       <strong>${escapeHtml(segment.searchTerm || automaticSearchTerm(segment.text, state.handoff))}</strong>
       <div class="money-printer-material-cell">
         ${segment.thumbnail ? `<img src="${escapeAttr(segment.thumbnail)}" alt="" loading="lazy" />` : ""}
@@ -306,6 +376,7 @@ function renderTimeline() {
       <span>${escapeHtml(segment.transition || transitionLabel(els.transition.value))}</span>
     </article>
   `).join("");
+  if (els.confirmTimeline) els.confirmTimeline.disabled = !state.timelineDraftSegments;
 }
 
 function renderTask() {
@@ -315,7 +386,7 @@ function renderTask() {
   const videos = [
     ...(Array.isArray(task?.combined_videos) ? task.combined_videos.map((url) => ({ label: "官方混剪预览", url })) : []),
     ...(Array.isArray(task?.videos) ? task.videos.map((url) => ({ label: "MoneyPrinter 输出", url })) : []),
-    ...(task?.finalVideoUrl ? [{ label: "最终动态大字成片", url: task.finalVideoUrl }] : []),
+    ...(task?.finalVideoUrl ? [{ label: task?.finalTextEffectEnabled ? "最终动态大字成片" : "最终成片", url: task.finalVideoUrl }] : []),
   ];
   els.taskVideos.innerHTML = videos.length
     ? videos.map((item) => `<div class="money-printer-video-row"><a href="${escapeAttr(item.url)}" target="_blank" rel="noreferrer">${escapeHtml(item.label)}</a></div>`).join("")
@@ -349,13 +420,13 @@ function renderStatus(status) {
   els.startApi.disabled = !installed || online || starting;
   els.openDocs.disabled = !online;
   els.openRoot.disabled = !installed;
-  els.openTasks.disabled = !installed;
+  els.openTasks.disabled = !status.downloadDir;
   renderLogs(status.process?.logs || []);
   if (hasConfirmedHandoff()) {
     setStatus(
       online ? "MoneyPrinterTurbo 已就绪" : installed ? "MoneyPrinterTurbo 已安装，等待启动 API" : "未找到 MoneyPrinterTurbo",
       online
-        ? `API：${status.api.baseUrl}；素材备用顺序：${materialSources.length ? materialSources.join(" → ") : "尚未配置"}`
+        ? `API：${status.api.baseUrl}；统一下载目录：${status.downloadDir || "跟随工作台"}；素材备用顺序：${materialSources.length ? materialSources.join(" → ") : "尚未配置"}`
         : installed ? `正在使用 ${status.runtime || "内置环境"} 准备 API。` : "请确认 integrations/moneyprinterturbo 子模块已初始化。",
       !installed,
     );
@@ -405,6 +476,9 @@ async function submitForPreview() {
     const payload = buildMptPayload();
     const data = await postJson("/api/money-printer/generate", payload);
     state.task = data.task;
+    state.materialPlan = data.materialPlan || data.task?.material_plan || null;
+    applyMaterialPlanSearchTerms();
+    saveActiveTaskId(state.task?.task_id);
     setProgress(10, `任务已创建：${state.task?.task_id || "-"}`);
     pollTask(state.task?.task_id);
     state.pollTimer = window.setInterval(() => pollTask(state.task?.task_id), POLL_INTERVAL_MS);
@@ -423,6 +497,14 @@ function buildMptPayload() {
     video_subject: els.subject.value.trim() || state.handoff.title || "MoneyPrinter 视频",
     video_script: state.handoff.text || state.handoff.final_text || state.segments.map((item) => item.text).join("\n"),
     video_terms: state.segments.map((item) => item.searchTerm).filter(Boolean),
+    video_term_texts: state.segments.map((item) => item.text).filter(Boolean),
+    video_term_segments: state.segments.map((item) => ({
+      start: item.start,
+      end: item.end,
+      text: item.text,
+      searchTerm: item.searchTerm,
+    })),
+    material_mode: els.materialMode.value,
     video_source: els.source.value,
     video_materials: els.localMaterials.value.trim(),
     video_aspect: els.aspect.value,
@@ -432,16 +514,24 @@ function buildMptPayload() {
     video_transition_mode: transitionPayloadValue(),
     match_materials_to_script: true,
     custom_audio_file: state.handoff.audio_path || "",
-    bgm_type: "none",
+    bgm_type: state.includeBgm && state.handoff?.bgm_path ? "custom" : "none",
+    bgm_file: state.includeBgm ? (state.handoff?.bgm_path || "") : "",
+    bgm_volume: state.includeBgm && state.handoff?.bgm_path ? 0.18 : 0,
     subtitle_enabled: false,
   };
 }
 
 async function pollTask(taskId) {
-  if (!taskId) return;
+  if (!taskId || state.pollInFlight) return;
+  state.pollInFlight = true;
   try {
     const data = await fetchJson(`/api/money-printer/task?id=${encodeURIComponent(taskId)}`);
+    state.pollErrorCount = 0;
     state.task = data.task;
+    if (state.task?.material_plan) {
+      state.materialPlan = state.task.material_plan;
+      applyMaterialPlanSearchTerms();
+    }
     setProgress(state.task.progress || 0, state.task.stateLabel || "生成中");
     if (state.task.fallback_message) {
       setStatus("正在切换备用素材 API", state.task.fallback_message);
@@ -449,18 +539,28 @@ async function pollTask(taskId) {
     renderTask();
     if (Number(state.task.state) === 1) {
       stopPolling();
+      clearActiveTaskId();
       applyTaskMaterials(state.task);
       bindPreviewVideo(state.task);
       setProgress(100, "素材匹配完成，可以预览");
-      setStatus("预览已就绪", "当前预览使用 MoneyPrinterTurbo 混剪素材、已确认 TTS 音频和动态大字字幕模板。");
+      setStatus(
+        "预览已就绪",
+        `当前预览使用 MoneyPrinterTurbo 混剪素材和已确认 TTS 音频；动态大字特效${els.textEffectEnabled.checked ? "已开启" : "已关闭"}。`,
+      );
     } else if (Number(state.task.state) === -1) {
       stopPolling();
+      clearActiveTaskId();
       setStatus("MoneyPrinterTurbo 任务失败", state.task.error || "全部素材 API 均失败，请检查后台配置。", true);
     }
   } catch (error) {
-    stopPolling();
-    setStatus("任务轮询失败", error.message, true);
+    state.pollErrorCount += 1;
+    setStatus(
+      "任务连接暂时中断，正在自动重试",
+      `${error.message}（第 ${state.pollErrorCount} 次；任务不会因这次连接失败而停止）`,
+      false,
+    );
   } finally {
+    state.pollInFlight = false;
     updateButtons();
   }
 }
@@ -471,9 +571,14 @@ function applyTaskMaterials(task = {}) {
     : Array.isArray(task.materials)
       ? task.materials
       : [];
+  const groupBySegment = new Map();
+  for (const [groupIndex, group] of (state.materialPlan?.groups || []).entries()) {
+    for (const segmentIndex of group.segmentIndexes || []) groupBySegment.set(Number(segmentIndex), groupIndex);
+  }
   let lastMaterial = null;
   state.segments = state.segments.map((segment, index) => {
-    const materialValue = materials[index] || lastMaterial || materials.find(Boolean) || "";
+    const plannedIndex = groupBySegment.has(index) ? groupBySegment.get(index) : index;
+    const materialValue = materials[plannedIndex] || lastMaterial || materials.find(Boolean) || "";
     const material = materialValue ? { url: String(materialValue), name: shortName(materialValue) } : null;
     if (material) lastMaterial = material;
     return {
@@ -485,6 +590,20 @@ function applyTaskMaterials(task = {}) {
   });
   renderTimeline();
   renderTask();
+}
+
+function applyMaterialPlanSearchTerms() {
+  const groups = state.materialPlan?.groups || [];
+  if (!groups.length) return;
+  const termBySegment = new Map();
+  groups.forEach((group) => {
+    (group.segmentIndexes || []).forEach((index) => termBySegment.set(Number(index), group.searchTerm || ""));
+  });
+  state.segments = state.segments.map((segment, index) => ({
+    ...segment,
+    searchTerm: termBySegment.get(index) || segment.searchTerm,
+  }));
+  renderTimeline();
 }
 
 function bindPreviewVideo(task = {}) {
@@ -525,7 +644,12 @@ async function renderFinalVideo() {
       segments: state.segments,
       settings,
     });
-    state.task = { ...state.task, finalVideoUrl: data.videoUrl, finalOutputPath: data.outputPath };
+    state.task = {
+      ...state.task,
+      finalVideoUrl: data.videoUrl,
+      finalOutputPath: data.outputPath,
+      finalTextEffectEnabled: settings.textEffectEnabled,
+    };
     renderTask();
     setProgress(100, "最终视频已保存到统一下载目录");
     setStatus("最终视频已生成", data.outputPath || "已保存。");
@@ -541,6 +665,7 @@ async function renderFinalVideo() {
 function currentSettings() {
   const effect = state.effects.find((item) => item.id === els.effect.value) || state.effects[0] || {};
   return {
+    textEffectEnabled: els.textEffectEnabled.checked,
     effectId: els.effect.value || effect.id,
     aspectRatio: els.aspect.value || "9:16",
     frameRate: Number(els.frameRate.value) === 60 ? 60 : 30,
@@ -560,6 +685,8 @@ function savePreferences() {
   const settings = currentSettings();
   localStorage.setItem(PREF_KEY, JSON.stringify({
     effectId: settings.effectId,
+    textEffectEnabled: settings.textEffectEnabled,
+    materialMode: els.materialMode.value,
     aspectRatio: settings.aspectRatio,
     frameRate: settings.frameRate,
     ttsVolume: Number(els.ttsVolume.value || 100),
@@ -575,8 +702,14 @@ function updateSettingOutputs() {
   els.fontSizeValue.textContent = els.fontSize.value;
   els.ttsVolumeValue.textContent = `${els.ttsVolume.value}%`;
   els.previewSpec.textContent = state.handoff
-    ? `${state.segments.length} 段字幕 · ${els.aspect.value} · ${els.frameRate.value}fps`
-    : "等待 TTS 三件套";
+    ? `${state.segments.length} 段字幕 · ${els.aspect.value} · ${els.frameRate.value}fps · ${state.includeBgm && state.handoff?.bgm_path ? "四件套（含独立 BGM）" : "三件套"} · 文字特效${els.textEffectEnabled.checked ? "开启" : "关闭"}`
+    : "等待已确认 TTS 交接包";
+  for (const element of state.page.querySelectorAll("[data-money-printer-effect-setting]")) {
+    element.classList.toggle("is-disabled", !els.textEffectEnabled.checked);
+    for (const control of element.querySelectorAll("input, select")) {
+      control.disabled = !els.textEffectEnabled.checked;
+    }
+  }
 }
 
 function drawPreview() {
@@ -592,8 +725,8 @@ function drawPreview() {
     drawCover(ctx, video, width, height);
   }
   const segment = state.segments.find((item) => state.currentTime >= item.start && state.currentTime <= item.end);
-  if (segment) drawSubtitle(ctx, segment, width, height);
-  else if (!state.previewReady) drawCenteredText(ctx, hasConfirmedHandoff() ? "点击“自动匹配素材并预览”" : "等待 TTS 三件套", width, height);
+  if (segment && (els.textEffectEnabled.checked || els.bottomSubtitles.checked)) drawSubtitle(ctx, segment, width, height);
+  else if (!state.previewReady) drawCenteredText(ctx, hasConfirmedHandoff() ? "点击“自动匹配素材并预览”" : "等待已确认 TTS 交接包", width, height);
   syncPreviewClock();
 }
 
@@ -617,18 +750,20 @@ function drawSubtitle(ctx, segment, width, height) {
   ctx.save();
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  ctx.font = `800 ${fontSize}px "Microsoft YaHei", sans-serif`;
   ctx.lineJoin = "round";
   ctx.shadowColor = "rgba(0,0,0,.65)";
   ctx.shadowBlur = Math.max(8, fontSize * 0.16);
-  lines.forEach((line, index) => {
-    const yy = y + index * fontSize * 1.18;
-    ctx.lineWidth = Math.max(4, fontSize * 0.08);
-    ctx.strokeStyle = "rgba(8,10,14,.92)";
-    ctx.strokeText(line, width / 2, yy);
-    ctx.fillStyle = keywordMatch(line, segment.keywords) ? accent : primary;
-    ctx.fillText(line, width / 2, yy);
-  });
+  if (els.textEffectEnabled.checked) {
+    ctx.font = `800 ${fontSize}px "Microsoft YaHei", sans-serif`;
+    lines.forEach((line, index) => {
+      const yy = y + index * fontSize * 1.18;
+      ctx.lineWidth = Math.max(4, fontSize * 0.08);
+      ctx.strokeStyle = "rgba(8,10,14,.92)";
+      ctx.strokeText(line, width / 2, yy);
+      ctx.fillStyle = keywordMatch(line, segment.keywords) ? accent : primary;
+      ctx.fillText(line, width / 2, yy);
+    });
+  }
   if (els.bottomSubtitles.checked) {
     ctx.font = `700 ${Math.max(18, Math.round(fontSize * 0.42))}px "Microsoft YaHei", sans-serif`;
     ctx.fillStyle = "#ffffff";
@@ -796,8 +931,9 @@ function chooseTransition(segment, next, material) {
   return sameTheme ? "交叉淡化" : "滑动";
 }
 
-function automaticSearchTerm(text, payload = {}) {
-  const source = `${payload.title || ""} ${payload.seo_title || ""} ${text || ""}`.toLowerCase();
+export function automaticSearchTerm(text, payload = {}) {
+  const segmentSource = String(text || "").toLowerCase();
+  const titleSource = `${payload.title || ""} ${payload.seo_title || ""}`.toLowerCase();
   const map = [
     [/人工智能|ai|智能/u, "artificial intelligence technology"],
     [/英语|英文|单词/u, "english learning classroom"],
@@ -805,11 +941,14 @@ function automaticSearchTerm(text, payload = {}) {
     [/家长|孩子|老师|学校/u, "parent child school teacher"],
     [/金钱|财富|工资|赚钱/u, "money finance work"],
     [/工作|职场|公司|老板/u, "office work business"],
-    [/健康|运动|身体/u, "healthy lifestyle exercise"],
+    [/变强|强壮|力量/u, "athlete strength training gym"],
+    [/困难|难熬|吃力|挑战/u, "person overcoming difficult challenge"],
+    [/疲惫|累|虚弱|运动|锻炼|健身|身体/u, "tired person exercising workout"],
     [/旅行|城市|生活/u, "city daily life people"],
     [/情绪|焦虑|压力/u, "emotional stress daily life"],
   ];
-  const matched = map.find(([pattern]) => pattern.test(source));
+  const matched = map.find(([pattern]) => pattern.test(segmentSource))
+    || map.find(([pattern]) => pattern.test(titleSource));
   if (matched) return matched[1];
   const ascii = String(text || "").match(/[A-Za-z][A-Za-z0-9 -]{2,36}/g);
   if (ascii?.length) return ascii[0].trim().slice(0, 48);

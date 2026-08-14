@@ -7,6 +7,7 @@ const rootDir = path.dirname(fileURLToPath(import.meta.url));
 const dataDir = path.join(rootDir, ".data");
 const logPath = path.join(dataDir, "sync.log");
 const watchPidPath = path.join(dataDir, "sync-watch.pid");
+const syncLockPath = path.join(dataDir, "git-sync.lock");
 const isWindows = process.platform === "win32";
 const supportsRecursiveWatch = isWindows || process.platform === "darwin";
 
@@ -36,6 +37,7 @@ function runCommand(command, args, options = {}) {
     const child = spawn(command, args, {
       cwd: rootDir,
       windowsHide: true,
+      shell: Boolean(options.shell),
       stdio: ["ignore", "pipe", "pipe"],
       env: {
         ...process.env,
@@ -121,12 +123,59 @@ function writeWatchPid() {
   fs.writeFileSync(watchPidPath, String(process.pid), "utf8");
 }
 
-function clearWatchPid() {
+function clearWatchPid(force = false) {
   try {
-    if (readWatchPid() === process.pid) fs.unlinkSync(watchPidPath);
+    if (force || readWatchPid() === process.pid) fs.unlinkSync(watchPidPath);
   } catch {
     // Best effort cleanup only.
   }
+}
+
+function readSyncLock() {
+  try {
+    return JSON.parse(fs.readFileSync(syncLockPath, "utf8"));
+  } catch {
+    return null;
+  }
+}
+
+function releaseSyncLock() {
+  try {
+    const lock = readSyncLock();
+    if (!lock || Number(lock.pid) === process.pid) fs.unlinkSync(syncLockPath);
+  } catch {
+    // Best effort cleanup only.
+  }
+}
+
+function acquireSyncLock(result, quiet) {
+  ensureDataDir();
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      const fd = fs.openSync(syncLockPath, "wx");
+      fs.writeFileSync(fd, JSON.stringify({ pid: process.pid, startedAt: new Date().toISOString() }), "utf8");
+      fs.closeSync(fd);
+      return true;
+    } catch (error) {
+      if (error?.code !== "EEXIST") throw error;
+      const lock = readSyncLock();
+      if (lock?.pid && isProcessRunning(Number(lock.pid))) {
+        result.ok = false;
+        pushMessage(result, `另一个安全同步正在运行（PID：${lock.pid}），本次已停止。`, quiet);
+        return false;
+      }
+      try {
+        fs.unlinkSync(syncLockPath);
+      } catch {
+        result.ok = false;
+        pushMessage(result, "发现无法清理的同步锁，请关闭其他同步窗口后重试。", quiet);
+        return false;
+      }
+    }
+  }
+  result.ok = false;
+  pushMessage(result, "无法取得安全同步锁，本次已停止。", quiet);
+  return false;
 }
 
 function rebaseInProgress() {
@@ -271,6 +320,46 @@ async function hasStagedChanges() {
   return diff.code === 1;
 }
 
+async function remoteBranchExists(branch) {
+  const result = await git(["ls-remote", "--exit-code", "--heads", "origin", `refs/heads/${branch}`], {
+    timeoutMs: 120_000,
+  });
+  if (result.code === 0) return true;
+  if (result.code === 2) return false;
+  throw new Error(result.stderr || result.stdout || "无法检查远程分支");
+}
+
+async function restoreIndex(tree) {
+  if (!tree) return;
+  const restored = await git(["read-tree", "--reset", tree], { timeoutMs: 20_000 });
+  if (!restored.ok) writeLog(`恢复暂存区失败：${restored.stderr || restored.stdout}`);
+}
+
+async function runCheckGate(result, quiet, stage = "提交前") {
+  pushMessage(result, `${stage}正在运行离线测试闸门，请稍候...`, quiet);
+  const gate = isWindows
+    ? await runCommand(process.env.ComSpec || "C:\\Windows\\System32\\cmd.exe", ["/d", "/s", "/c", "npm.cmd run check:gate"], {
+        timeoutMs: 180_000,
+      })
+    : await runCommand("npm", ["run", "check:gate"], { timeoutMs: 180_000 });
+  if (!gate.ok) {
+    result.ok = false;
+    pushMessage(result, "测试闸门未通过，已阻止提交或上传。请把提示发给 Codex 处理。", quiet);
+    writeLog(`check:gate 失败 (exit ${gate.code}):\n${gate.stdout || ""}\n${gate.stderr || ""}`);
+    return false;
+  }
+  pushMessage(result, "测试闸门已通过。", quiet);
+  return true;
+}
+
+export function isProtectedPublishBranch(branch) {
+  return ["main", "master"].includes(String(branch || "").trim().toLowerCase());
+}
+
+export function gitTreesMatch(candidateTree, verifiedTree) {
+  return Boolean(candidateTree) && candidateTree === verifiedTree;
+}
+
 async function uploadChanges(result, quiet, commitMessage) {
   if (!(await isGitRepo())) {
     result.ok = false;
@@ -285,50 +374,95 @@ async function uploadChanges(result, quiet, commitMessage) {
   }
 
   const branch = await currentBranch();
-  const status = await workingTreeStatus();
-  if (status) {
-    const add = await git(["add", "-A"], { timeoutMs: 120_000 });
-    if (!add.ok) {
+  if (isProtectedPublishBranch(branch)) {
+    result.ok = false;
+    pushMessage(result, "正式分支禁止直接上传。请在 fix/dev 分支完成修复，再通过 GitHub PR 合并。", quiet);
+    return;
+  }
+
+  if (!acquireSyncLock(result, quiet)) return;
+  try {
+    const initialIndexTree = await gitText(["write-tree"], { allowFailure: true, timeoutMs: 20_000 });
+    const status = await workingTreeStatus();
+    if (status) {
+      const add = await git(["add", "-A"], { timeoutMs: 120_000 });
+      if (!add.ok) {
+        result.ok = false;
+        pushMessage(result, "整理待上传文件失败。", quiet);
+        writeLog(add.stderr || add.stdout);
+        return;
+      }
+
+      const candidateTree = await gitText(["write-tree"], { timeoutMs: 20_000 });
+      if (!(await runCheckGate(result, quiet))) {
+        await restoreIndex(initialIndexTree);
+        return;
+      }
+
+      const refreshStage = await git(["add", "-A"], { timeoutMs: 120_000 });
+      if (!refreshStage.ok) {
+        result.ok = false;
+        await restoreIndex(initialIndexTree);
+        pushMessage(result, "测试后重新核对文件失败，已停止提交。", quiet);
+        return;
+      }
+      const verifiedTree = await gitText(["write-tree"], { timeoutMs: 20_000 });
+      if (!gitTreesMatch(candidateTree, verifiedTree)) {
+        result.ok = false;
+        await restoreIndex(initialIndexTree);
+        pushMessage(result, "测试期间文件发生了变化，已停止提交。请等待修改完成后重新点击安全同步。", quiet);
+        return;
+      }
+
+      if (await hasStagedChanges()) {
+        const message = commitMessage || `安全同步 ${timestamp()}`;
+        const commit = await git(["commit", "-m", message], { timeoutMs: 120_000 });
+        if (!commit.ok) {
+          result.ok = false;
+          await restoreIndex(initialIndexTree);
+          pushMessage(result, "创建同步记录失败，请检查 Git 用户信息是否已配置。", quiet);
+          writeLog(commit.stderr || commit.stdout);
+          return;
+        }
+        pushMessage(result, `本机改动已完整提交：${message}`, quiet);
+      }
+    } else if (!(await runCheckGate(result, quiet, "上传前"))) {
+      return;
+    } else {
+      pushMessage(result, "本机没有未提交改动，将核对远程分支后上传已有提交。", quiet);
+    }
+
+    const hasRemoteBranch = await remoteBranchExists(branch);
+    if (hasRemoteBranch) {
+      const beforePull = await gitText(["rev-parse", "HEAD"], { allowFailure: true, timeoutMs: 20_000 });
+      const pull = await git(["pull", "--rebase", "origin", branch], { timeoutMs: 120_000 });
+      if (!pull.ok) {
+        result.ok = false;
+        pushMessage(result, "同步 GitHub 最新内容时遇到冲突，已停止，避免覆盖另一台电脑的改动。", quiet);
+        writeLog(pull.stderr || pull.stdout);
+        return;
+      }
+      const afterPull = await gitText(["rev-parse", "HEAD"], { allowFailure: true, timeoutMs: 20_000 });
+      if (beforePull && afterPull && beforePull !== afterPull && !(await runCheckGate(result, quiet, "合并远程改动后"))) {
+        return;
+      }
+    } else {
+      pushMessage(result, "远程尚无同名修复分支，将安全创建。", quiet);
+    }
+
+    const pushArgs = hasRemoteBranch ? ["push", "origin", branch] : ["push", "-u", "origin", branch];
+    const push = await git(pushArgs, { timeoutMs: 120_000 });
+    if (!push.ok) {
       result.ok = false;
-      pushMessage(result, "整理待上传文件失败。", quiet);
-      writeLog(add.stderr || add.stdout);
+      pushMessage(result, "上传到 GitHub 失败，请检查 GitHub 登录状态或网络连接。", quiet);
+      writeLog(push.stderr || push.stdout);
       return;
     }
 
-    if (await hasStagedChanges()) {
-      const message = commitMessage || `自动同步 ${timestamp()}`;
-      const commit = await git(["commit", "-m", message], {
-        timeoutMs: 120_000,
-      });
-      if (!commit.ok) {
-        result.ok = false;
-        pushMessage(result, "创建同步记录失败，请检查 Git 用户信息是否已配置。", quiet);
-        writeLog(commit.stderr || commit.stdout);
-        return;
-      }
-      pushMessage(result, `本机改动已提交：${message}`, quiet);
-    }
-  } else {
-    pushMessage(result, "本机没有需要提交的新改动。", quiet);
+    pushMessage(result, "修复分支已安全上传到 GitHub；正式版仍需通过 PR 合并。", quiet);
+  } finally {
+    releaseSyncLock();
   }
-
-  const pull = await git(["pull", "--rebase", "origin", branch], { timeoutMs: 120_000 });
-  if (!pull.ok) {
-    result.ok = false;
-    pushMessage(result, "同步 GitHub 最新内容时遇到冲突，已停止，避免覆盖另一台电脑的改动。", quiet);
-    writeLog(pull.stderr || pull.stdout);
-    return;
-  }
-
-  const push = await git(["push", "origin", branch], { timeoutMs: 120_000 });
-  if (!push.ok) {
-    result.ok = false;
-    pushMessage(result, "上传到 GitHub 失败，请检查 GitHub 登录状态或网络连接。", quiet);
-    writeLog(push.stderr || push.stdout);
-    return;
-  }
-
-  pushMessage(result, "已同步并上传到 GitHub。", quiet);
 }
 
 function shouldIgnoreWatchEvent(fileName) {
@@ -350,53 +484,24 @@ async function watchProject(result, options = {}) {
   }
 
   writeWatchPid();
-  pushMessage(result, `自动同步监控已启动，PID：${process.pid}`, quiet);
+  pushMessage(result, `改动提醒监控已启动，PID：${process.pid}。它不会拉取、提交或上传代码。`, quiet);
 
-  let busy = false;
-  let pending = false;
   let debounceTimer = null;
 
   const debounceMs = Number(options.debounceMs || DEFAULT_WATCH_DEBOUNCE_MS);
-  const pullIntervalMs = Number(options.pullIntervalMs || DEFAULT_PULL_INTERVAL_MS);
-
-  const runCycle = async (reason) => {
-    if (busy) {
-      pending = true;
-      return;
-    }
-
-    busy = true;
-    try {
-      const status = await workingTreeStatus();
-      if (status) {
-        const message = reason === "watch" ? `自动同步 ${timestamp()}` : "";
-        await uploadChanges(result, quiet, message);
-      } else if (reason === "interval") {
-        await pullLatest(result, quiet);
-      }
-    } catch (error) {
-      result.ok = false;
-      const message = error instanceof Error ? error.message : String(error);
-      pushMessage(result, `自动同步发生错误：${message}`, quiet);
-      writeLog(error instanceof Error && error.stack ? error.stack : message);
-    } finally {
-      busy = false;
-      if (pending) {
-        pending = false;
-        scheduleUpload();
-      }
-    }
-  };
 
   const scheduleUpload = () => {
     clearTimeout(debounceTimer);
     debounceTimer = setTimeout(() => {
-      void runCycle("watch");
+      void workingTreeStatus().then((status) => {
+        if (status) {
+          pushMessage(result, "检测到本地改动：后台自动提交和上传已停用，请完成后手动运行“同步项目.bat”。", quiet);
+        }
+      }).catch((error) => writeLog(error instanceof Error ? error.stack || error.message : String(error)));
     }, debounceMs);
   };
 
   try {
-    await pullLatest(result, quiet);
     fs.watch(rootDir, { recursive: supportsRecursiveWatch }, (_eventType, fileName) => {
       if (shouldIgnoreWatchEvent(fileName)) return;
       scheduleUpload();
@@ -409,12 +514,7 @@ async function watchProject(result, options = {}) {
     return;
   }
 
-  const interval = setInterval(() => {
-    void runCycle("interval");
-  }, pullIntervalMs);
-
   const stop = () => {
-    clearInterval(interval);
     clearTimeout(debounceTimer);
     clearWatchPid();
     process.exit(0);
@@ -430,6 +530,7 @@ async function watchProject(result, options = {}) {
 async function stopWatch(result, quiet) {
   const pid = readWatchPid();
   if (!isProcessRunning(pid)) {
+    clearWatchPid(true);
     result.skipped = true;
     pushMessage(result, "没有发现正在运行的自动同步监控。", quiet);
     return;
@@ -437,6 +538,7 @@ async function stopWatch(result, quiet) {
 
   try {
     process.kill(pid);
+    clearWatchPid(true);
     pushMessage(result, `已停止自动同步监控，PID：${pid}`, quiet);
   } catch (error) {
     result.ok = false;
@@ -447,7 +549,7 @@ async function stopWatch(result, quiet) {
 
 export async function runSync(options = {}) {
   const quiet = Boolean(options.quiet);
-  const mode = options.mode || "startup";
+  const mode = options.mode || "status";
   const result = { ok: true, changed: false, skipped: false, messages: [] };
 
   if (!(await isGitRepo())) {
@@ -462,8 +564,11 @@ export async function runSync(options = {}) {
     await watchProject(result, options);
   } else if (mode === "stop-watch") {
     await stopWatch(result, quiet);
-  } else {
+  } else if (mode === "pull") {
     await pullLatest(result, quiet);
+  } else {
+    result.skipped = true;
+    pushMessage(result, "未执行代码更新。安全更新请明确使用 pull，上传请使用 upload。", quiet);
   }
 
   return result;
@@ -480,8 +585,9 @@ function cliOptions() {
   const args = process.argv.slice(2);
   const messageIndex = args.findIndex((arg) => arg === "--message" || arg === "-m");
   const commitMessage = messageIndex >= 0 ? args[messageIndex + 1] : "";
-  let mode = "startup";
+  let mode = "status";
   if (args.includes("upload") || args.includes("--upload")) mode = "upload";
+  if (args.includes("pull") || args.includes("--pull")) mode = "pull";
   if (args.includes("watch") || args.includes("--watch")) mode = "watch";
   if (args.includes("stop-watch") || args.includes("--stop-watch")) mode = "stop-watch";
 

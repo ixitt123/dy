@@ -1,7 +1,7 @@
 // 统一设置中心
 import fs from "node:fs";
 import path from "node:path";
-import { DEFAULT_MODEL_MAPPING } from "../config/model-defaults.js";
+import { normalizeModelMapping } from "../config/model-defaults.js";
 
 export function createSettingsCenter(baseDir, settingsPath) {
   const settingsPathResolved = settingsPath || path.join(baseDir, "settings.json");
@@ -18,12 +18,12 @@ export function createSettingsCenter(baseDir, settingsPath) {
   function getModelMapping() {
     const settings = read();
     const mapping = settings.modelMap || settings.modelMapping || {};
-    return Object.keys(mapping).length > 0 ? { ...DEFAULT_MODEL_MAPPING, ...mapping } : DEFAULT_MODEL_MAPPING;
+    return normalizeModelMapping(mapping);
   }
 
   function setModelMapping(mapping) {
     const settings = read();
-    settings.modelMap = { ...DEFAULT_MODEL_MAPPING, ...(mapping || {}) };
+    settings.modelMap = normalizeModelMapping(mapping);
     settings.modelMapping = settings.modelMap;
     write(settings);
   }

@@ -2,7 +2,6 @@ import fs from "node:fs";
 import path from "node:path";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { runSync } from "./sync-project.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const urlPath = path.join(__dirname, "ui-server.url");
@@ -15,20 +14,14 @@ function openUrl(url) {
   }).unref();
 }
 
-function startSyncWatcher() {
-  spawn(process.execPath, ["sync-project.mjs", "watch", "--quiet"], {
-    cwd: __dirname,
-    detached: true,
-    stdio: "ignore",
-    windowsHide: true,
-  }).unref();
-}
-
 async function existingServerUrl() {
   try {
     const url = fs.readFileSync(urlPath, "utf8").trim();
     if (!url) return "";
-    const response = await fetch(`${url}/api/status`);
+    // The API requires the browser-only local session cookie. The launcher's
+    // liveness probe must use the public HTML entry instead, or every launch
+    // falsely looks offline and starts another server on the next port.
+    const response = await fetch(url);
     if (response.ok) return url;
   } catch {
     return "";
@@ -36,21 +29,13 @@ async function existingServerUrl() {
   return "";
 }
 
-try {
-  await runSync({ mode: "startup", quiet: true });
-} catch {
-  // A sync failure must not create a second backend process.
-}
-
-startSyncWatcher();
-
 const url = await existingServerUrl();
 if (url) {
   openUrl(url);
   process.exit(0);
 }
 
-spawn(process.execPath, ["ui-server.mjs", "--open"], {
+spawn(process.execPath, ["ui-server.mjs", "--open", "--no-auto-close"], {
   cwd: __dirname,
   detached: true,
   stdio: "ignore",

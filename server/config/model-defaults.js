@@ -1,13 +1,46 @@
 export const DEFAULT_VOLCENGINE_ARK_IMAGE_MODEL = "doubao-seedream-5-0-lite-260128";
+export const DEFAULT_DEEPSEEK_MODEL = "deepseek-v4-flash";
+
+export function normalizeDeepSeekModelName(value) {
+  const model = String(value || "").trim();
+  if (!model || model === "deepseek-chat" || model === "deepseek-reasoner") {
+    return DEFAULT_DEEPSEEK_MODEL;
+  }
+  return model;
+}
+
 export const DEFAULT_MODEL_MAPPING = {
-  analyze: { provider: "deepseek", model: "deepseek-chat" },
-  rewrite: { provider: "deepseek", model: "deepseek-chat" },
-  director: { provider: "deepseek", model: "deepseek-chat" },
-  storyboard: { provider: "deepseek", model: "deepseek-chat" },
-  image_prompt: { provider: "deepseek", model: "deepseek-chat" },
+  analyze: { provider: "deepseek", model: DEFAULT_DEEPSEEK_MODEL },
+  rewrite: { provider: "deepseek", model: DEFAULT_DEEPSEEK_MODEL },
+  director: { provider: "deepseek", model: DEFAULT_DEEPSEEK_MODEL },
+  storyboard: { provider: "deepseek", model: DEFAULT_DEEPSEEK_MODEL },
+  image_prompt: { provider: "deepseek", model: DEFAULT_DEEPSEEK_MODEL },
   image: { provider: "volcengine_ark", model: DEFAULT_VOLCENGINE_ARK_IMAGE_MODEL },
   tts: { provider: "ali-bailian", model: "cosyvoice-v2" },
 };
+
+export function normalizeModelMapping(mapping = {}) {
+  const source = mapping && typeof mapping === "object" ? mapping : {};
+  const normalized = Object.fromEntries(
+    Object.entries({ ...DEFAULT_MODEL_MAPPING, ...source }).map(([taskType, value]) => [
+      taskType,
+      value && typeof value === "object" ? { ...value } : value,
+    ]),
+  );
+
+  if (normalized.tts?.provider === "aliyun_bailian") {
+    normalized.tts.provider = "ali-bailian";
+  }
+  for (const value of Object.values(normalized)) {
+    if (value?.provider === "deepseek") {
+      value.model = normalizeDeepSeekModelName(value.model);
+    }
+  }
+  if (normalized.video?.provider === "kling") {
+    delete normalized.video;
+  }
+  return normalized;
+}
 export const SETTINGS_TASKS = {
   analyze: {
     label: "内容分析",

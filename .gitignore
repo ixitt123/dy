@@ -37,6 +37,8 @@ ui-server.url
 .agents/skills/*
 !.agents/skills/generative-illustration/
 !.agents/skills/generative-illustration/**
+!.agents/skills/douyin-safe-change/
+!.agents/skills/douyin-safe-change/**
 
 *.log
 *.tmp

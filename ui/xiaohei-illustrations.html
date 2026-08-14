@@ -45,8 +45,10 @@
               <summary>视频合成设置</summary>
               <div class="xiaohei-compose-grid">
                 <label class="field"><span>导出帧率</span><select id="xiaoheiFrameRate"><option value="30">30fps 标准</option><option value="60">60fps 流畅</option></select></label>
+                <label class="field"><span>成品播放速度</span><select id="xiaoheiPlaybackSpeed"><option value="1" selected>1.0× 原速</option><option value="1.1">1.1×</option><option value="1.2">1.2×</option><option value="1.3">1.3×</option></select><small>按所选倍速生成并下载 MP4</small></label>
                 <label class="field"><span>分镜画面</span><select id="xiaoheiImageFit"><option value="cover">铺满画面</option><option value="contain">完整显示，留黑边</option></select></label>
                 <label class="field"><span>TTS 音量</span><input id="xiaoheiTtsVolume" type="range" min="0" max="200" value="100" /><output id="xiaoheiTtsVolumeValue">100%</output></label>
+                <label class="xiaohei-check"><input id="xiaoheiIncludeBgm" type="checkbox" /><span>加入对应 BGM 音频</span></label>
                 <label class="field"><span>背景音乐</span><button id="chooseXiaoheiBgm" type="button">选择本地背景音乐</button><small id="xiaoheiBgmName">未选择背景音乐</small></label>
                 <input id="xiaoheiBgmFile" type="file" accept="audio/mpeg,audio/wav,audio/x-wav,audio/mp4,audio/x-m4a" hidden />
                 <label class="field"><span>背景音量</span><input id="xiaoheiBgmVolume" type="range" min="0" max="100" value="18" /><output id="xiaoheiBgmVolumeValue">18%</output></label>
@@ -104,6 +106,14 @@
           <div class="actions xiaohei-actions">
             <button id="planPrompts" type="button">根据 TTS 时间轴分析分镜配图</button>
             <button id="copyPrompts" type="button">复制全部提示词</button>
+            <button id="copyImageConstraint1" type="button">图片约束词1</button>
+            <button id="copyImageConstraint2" type="button">图片约束词2</button>
+            <span class="folder-toolbar">
+              <button id="createDesktopFolder" type="button">新建文件夹</button>
+              <select id="folderNameSelect" title="选择文件夹名称" data-no-choice-persist></select>
+              <button id="editFolderName" type="button" title="编辑名称" disabled>✏️</button>
+              <button id="deleteFolderName" type="button" title="删除名称" disabled>🗑️</button>
+            </span>
           </div>
 
           <section id="xiaoheiVideoPreview" class="panel xiaohei-video-preview">
@@ -143,7 +153,10 @@
           <section class="panel xiaohei-timeline-card">
             <div class="panel-head xiaohei-timeline-title">
               <h2>字幕时间轴</h2>
-              <button id="xiaoheiTimelineRefresh" type="button">同步时间轴</button>
+              <div class="xiaohei-timeline-actions">
+                <span id="xiaoheiTimelineDraftStatus" hidden>有未确定修改</span>
+                <button id="xiaoheiConfirmTimeline" type="button" disabled>确定视觉参数</button>
+              </div>
             </div>
             <div id="xiaoheiTimelineRuleStatus" class="xiaohei-rule-status" hidden></div>
             <div class="xiaohei-timeline-head">
@@ -234,6 +247,6 @@
     <button id="confirmAudio" type="button"></button>
   </div>
 
-  <script type="module" src="./modules/ian-xiaohei-app.js?v=2026071702"></script>
+  <script type="module" src="./modules/ian-xiaohei-app.js?v=2026072504"></script>
 </body>
 </html>

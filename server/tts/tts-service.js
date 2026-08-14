@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import { generateSeoTitlePackage } from "../core/title-generator.js";
 import { createTtsProvider } from "./providers/index.js";
 import { redactSecrets } from "./provider-adapter.js";
@@ -17,6 +18,34 @@ function safeJson(value, fallback = {}) {
   } catch {
     return fallback;
   }
+}
+
+function normalizeComparableText(value) {
+  return String(value || "").toLowerCase().replace(/[^\u4e00-\u9fa5a-z0-9]/g, "");
+}
+
+function textSimilarity(left, right) {
+  const a = normalizeComparableText(left);
+  const b = normalizeComparableText(right);
+  if (!a || !b) return 0;
+  if (a === b) return 1;
+  const bigrams = (value) => {
+    const output = [];
+    for (let index = 0; index < value.length - 1; index += 1) output.push(value.slice(index, index + 2));
+    return output.length ? output : [value];
+  };
+  const aPairs = bigrams(a);
+  const counts = new Map();
+  for (const pair of bigrams(b)) counts.set(pair, (counts.get(pair) || 0) + 1);
+  let overlap = 0;
+  for (const pair of aPairs) {
+    const count = counts.get(pair) || 0;
+    if (count > 0) {
+      overlap += 1;
+      counts.set(pair, count - 1);
+    }
+  }
+  return (2 * overlap) / (aPairs.length + bigrams(b).length);
 }
 
 function cleanTtsText(value) {
@@ -830,6 +859,16 @@ export function createTtsService({
       tts_prepared_text: String(metadata.tts_prepared_text || metadata.prepared_text || job.text || ""),
       recognized_text: String(metadata.recognized_text || ""),
       final_text: String(metadata.final_text || metadata.recognized_text || ""),
+      // 文案与字幕时间轴一致性校验：检测"新文案 + 旧字幕"污染
+      text_timeline_match_ratio: (() => {
+        const finalText = String(metadata.final_text || metadata.recognized_text || "");
+        const timeline = Array.isArray(metadata.sentence_timeline) && metadata.sentence_timeline.length
+          ? metadata.sentence_timeline
+          : Array.isArray(metadata.subtitle_timeline) ? metadata.subtitle_timeline : [];
+        if (!finalText || !timeline.length) return 1; // 无数据时不报警
+        const timelineText = timeline.map((row) => String(row?.text || "")).join("");
+        return textSimilarity(finalText, timelineText);
+      })(),
       alignment_status: String(metadata.alignment_status || ""),
       alignment_confirmed: metadata.alignment_status === "confirmed",
       alignment_confirmed_at: String(metadata.alignment_confirmed_at || ""),
@@ -839,6 +878,7 @@ export function createTtsService({
       alignment_max_attempts: Number(metadata.alignment_max_attempts || 0),
       alignment_failure_action: String(metadata.alignment_failure_action || ""),
       alignment_confirmation_mode: String(metadata.alignment_confirmation_mode || ""),
+      shared_sync_source: String(metadata.shared_sync_source || ""),
       alignment_fallback_reason: String(metadata.alignment_fallback_reason || ""),
       estimated_count: Number(metadata.estimated_count || 0),
       low_confidence_count: Number(metadata.low_confidence_count || 0),
@@ -1658,12 +1698,24 @@ export function createTtsService({
     const sourceRaw = String(input.audio_path || "").trim();
     if (!sourceRaw) return { error: "Missing generated audio path." };
     const sourcePath = path.resolve(sourceRaw);
+    const selectedVoiceAssetId = Number(input.voice_asset_id || 0);
+    const selectedVoicePreviewPath = selectedVoiceAssetId > 0
+      ? String(taskStore.getVoiceAsset(selectedVoiceAssetId)?.preview_path || "").trim()
+      : "";
+    const matchesSelectedVoicePreview = Boolean(selectedVoicePreviewPath)
+      && path.resolve(selectedVoicePreviewPath) === sourcePath;
+    const isManagedBgmPreview = String(input.source || "") === "minimax_music_bgm"
+      && String(input.voice_id || "") === "music:clean_education_bgm"
+      && sourcePath.toLowerCase().includes(`${path.sep}voices${path.sep}previews${path.sep}`)
+      && path.extname(sourcePath).toLowerCase() === ".mp3";
     const allowedRoots = [
       path.resolve(baseDir, "voices"),
       path.resolve(baseDir, "ui", "assets", "voice-previews"),
       path.resolve(outputDir),
     ];
-    if (!allowedRoots.some((root) => sourcePath !== root && sourcePath.startsWith(`${root}${path.sep}`))) {
+    if (!matchesSelectedVoicePreview
+      && !isManagedBgmPreview
+      && !allowedRoots.some((root) => sourcePath !== root && sourcePath.startsWith(`${root}${path.sep}`))) {
       return { error: "Generated audio path is not allowed." };
     }
     if (!fs.existsSync(sourcePath)) return { error: "Generated audio file does not exist." };
@@ -1677,7 +1729,40 @@ export function createTtsService({
     const targetPath = path.join(outputDir, `${fileBaseName}.${format}`);
     if (path.resolve(sourcePath) !== path.resolve(targetPath)) fs.copyFileSync(sourcePath, targetPath);
     const inputMetadata = input.metadata && typeof input.metadata === "object" ? input.metadata : {};
-    const probedDuration = probeAudioDurationSync(targetPath);
+    const isBackgroundMusic = String(inputMetadata.audio_role || "") === "background_music";
+    const requestedBgmDuration = isBackgroundMusic
+      ? Number(inputMetadata.requested_duration || 0)
+      : 0;
+    let probedDuration = probeAudioDurationSync(targetPath);
+    if (isBackgroundMusic && probedDuration > 0) {
+      if (!ffmpegPath || !fs.existsSync(ffmpegPath)) return { error: "无法处理 BGM：FFmpeg 不可用。" };
+      const processedDuration = requestedBgmDuration > 0
+        ? Math.min(probedDuration, requestedBgmDuration)
+        : probedDuration;
+      const requestedFadeOut = Number(inputMetadata.fade_out_seconds || 2.5);
+      const fadeOutSeconds = Math.min(Math.max(1, requestedFadeOut), Math.max(1, processedDuration - 0.05));
+      const fadeStart = Math.max(0, processedDuration - fadeOutSeconds);
+      const requestedVolume = Number(inputMetadata.background_volume || 0.28);
+      const backgroundVolume = Math.min(0.5, Math.max(0.1, requestedVolume));
+      const temporaryPath = path.join(outputDir, `${fileBaseName}.bgm-${randomUUID()}.${format}`);
+      const codecArgs = format === "wav" ? ["-c:a", "pcm_s16le"] : ["-c:a", "libmp3lame", "-q:a", "2"];
+      const processed = spawnSync(ffmpegPath, [
+        "-y", "-i", targetPath,
+        "-t", String(processedDuration),
+        "-af", `volume=${backgroundVolume},afade=t=out:st=${fadeStart}:d=${fadeOutSeconds}`,
+        ...codecArgs,
+        temporaryPath,
+      ], {
+        encoding: "utf8",
+        windowsHide: true,
+      });
+      if (processed.status !== 0 || !fs.existsSync(temporaryPath)) {
+        return { error: `无法处理 BGM：${String(processed.stderr || processed.error?.message || "FFmpeg 处理失败").trim()}` };
+      }
+      fs.copyFileSync(temporaryPath, targetPath);
+      fs.unlinkSync(temporaryPath);
+      probedDuration = probeAudioDurationSync(targetPath);
+    }
     const declaredDuration = Number(input.duration || inputMetadata.duration || 0)
       || (Number(inputMetadata.duration_ms || inputMetadata.music_duration_ms || inputMetadata.audio_length_ms || 0) / 1000)
       || 0;

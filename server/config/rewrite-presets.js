@@ -15,3 +15,14 @@ export const REWRITE_VERSION_DEFAULTS = {
   moments: { direction: "朋友圈文案", wordCount: "160字左右" },
   conversion: { direction: "成交转化", wordCount: "160字左右" },
 };
+
+// Kept separate from the general version list so ordinary rewrites retain their
+// existing output choices when the parent-conversion template is switched off.
+export const PARENT_CONVERSION_VERSION_DEFS = [
+  ["parentConsultation", "触动咨询版"],
+  ["parentAction", "行动号召版"],
+];
+export const PARENT_CONVERSION_VERSION_DEFAULTS = {
+  parentConsultation: { direction: "招生引流", wordCount: "120-180字", ctaMode: "consult" },
+  parentAction: { direction: "成交转化", wordCount: "120-180字", ctaMode: "action" },
+};

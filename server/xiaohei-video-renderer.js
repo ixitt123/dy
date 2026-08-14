@@ -3,10 +3,16 @@ import path from "node:path";
 import { spawn } from "node:child_process";
 
 export const XIAOHEI_TRANSITION_MODES = ["none", "fade", "slide", "zoom", "smart"];
+export const XIAOHEI_PLAYBACK_SPEEDS = [1, 1.1, 1.2, 1.3];
 
 export function normalizeXiaoheiTransitionMode(value) {
   const normalized = String(value || "smart").trim().toLowerCase();
   return XIAOHEI_TRANSITION_MODES.includes(normalized) ? normalized : "smart";
+}
+
+export function normalizeXiaoheiPlaybackSpeed(value) {
+  const speed = Number(value);
+  return XIAOHEI_PLAYBACK_SPEEDS.includes(speed) ? speed : 1;
 }
 
 export function xiaoheiVideoResolution(aspectRatio) {
@@ -15,8 +21,9 @@ export function xiaoheiVideoResolution(aspectRatio) {
   return { width: 1920, height: 1080 };
 }
 
-export function buildXiaoheiVideoFilter({ scenes, width, height, fps = 30, transitionMode = "smart", assPath, imageFit = "cover" }) {
+export function buildXiaoheiVideoFilter({ scenes, width, height, fps = 30, transitionMode = "smart", assPath, imageFit = "cover", playbackSpeed = 1 }) {
   const mode = normalizeXiaoheiTransitionMode(transitionMode);
+  const normalizedPlaybackSpeed = normalizeXiaoheiPlaybackSpeed(playbackSpeed);
   const transitionDuration = mode === "none" ? 0 : Math.min(0.42, ...scenes.map((scene) => Math.max(0.12, sceneDuration(scene) * 0.22)));
   const filters = [];
 
@@ -49,7 +56,7 @@ export function buildXiaoheiVideoFilter({ scenes, width, height, fps = 30, trans
     currentLabel = "vconcat";
   }
 
-  filters.push(`[${currentLabel}]ass='${escapeFilterPath(assPath)}'[vout]`);
+  filters.push(`[${currentLabel}]ass='${escapeFilterPath(assPath)}',setpts=PTS/${normalizedPlaybackSpeed.toFixed(1)}[vout]`);
   return { filter: filters.join(";"), transitionDuration };
 }
 
@@ -101,9 +108,10 @@ export async function renderXiaoheiVideo({ ffmpegPath, scenes, audioPath, backgr
   }
 
   const { width, height } = xiaoheiVideoResolution(aspectRatio);
+  const playbackSpeed = normalizeXiaoheiPlaybackSpeed(compose.playbackSpeed);
   const assPath = path.join(path.dirname(outputPath), "video-subtitles.ass");
   writeXiaoheiAssSubtitles({ outputPath: assPath, scenes, width, height, compose });
-  const built = buildXiaoheiVideoFilter({ scenes, width, height, fps, transitionMode, assPath, imageFit: compose.imageFit });
+  const built = buildXiaoheiVideoFilter({ scenes, width, height, fps, transitionMode, assPath, imageFit: compose.imageFit, playbackSpeed });
   let filter = built.filter;
   const transitionDuration = built.transitionDuration;
   const args = ["-y"];
@@ -119,10 +127,12 @@ export async function renderXiaoheiVideo({ ffmpegPath, scenes, audioPath, backgr
   if (backgroundAudioPath) {
     if (!fs.existsSync(backgroundAudioPath)) throw new Error("背景音乐文件不存在，请重新选择。");
     args.push("-stream_loop", "-1", "-i", backgroundAudioPath);
-    filter += `;[${ttsInputIndex}:a]volume=${ttsVolume.toFixed(3)}[tts];[${ttsInputIndex + 1}:a]volume=${bgmVolume.toFixed(3)}[bgm];[tts][bgm]amix=inputs=2:duration=first:dropout_transition=2[aout]`;
+    const duration = Math.max(1, scenes.reduce((sum, scene) => Math.max(sum, Number(scene.end_time || 0)), 0));
+    const fadeStart = Math.max(0, duration - 0.8).toFixed(3);
+    filter += `;[${ttsInputIndex}:a]volume=${ttsVolume.toFixed(3)}[tts];[${ttsInputIndex + 1}:a]volume=${bgmVolume.toFixed(3)},afade=t=in:st=0:d=0.5,afade=t=out:st=${fadeStart}:d=0.8[bgm];[tts][bgm]amix=inputs=2:duration=first:dropout_transition=2[amixed];[amixed]atempo=${playbackSpeed.toFixed(1)}[aout]`;
     audioMap = "[aout]";
-  } else if (ttsVolume !== 1) {
-    filter += `;[${ttsInputIndex}:a]volume=${ttsVolume.toFixed(3)}[aout]`;
+  } else if (ttsVolume !== 1 || playbackSpeed !== 1) {
+    filter += `;[${ttsInputIndex}:a]volume=${ttsVolume.toFixed(3)},atempo=${playbackSpeed.toFixed(1)}[aout]`;
     audioMap = "[aout]";
   }
   args.push(
@@ -141,7 +151,7 @@ export async function renderXiaoheiVideo({ ffmpegPath, scenes, audioPath, backgr
     outputPath,
   );
   await runFfmpeg(ffmpegPath, args);
-  return { outputPath, width, height, fps, transitionMode: normalizeXiaoheiTransitionMode(transitionMode) };
+  return { outputPath, width, height, fps, playbackSpeed, transitionMode: normalizeXiaoheiTransitionMode(transitionMode) };
 }
 
 function transitionForScene(mode, index) {

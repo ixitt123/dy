@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import { createPageLifecycle } from "./server/core/page-lifecycle.js";
+import { runtimeCommandMatches, runtimeProcessIsRunning } from "./server/core/runtime-process.js";
 
 function fakeClock() {
   let current = 0;
@@ -93,15 +94,74 @@ const runtime = fs.readFileSync(new URL("./ui/modules/legacy-runtime.js", import
 const server = fs.readFileSync(new URL("./ui-server.mjs", import.meta.url), "utf8");
 const workbench = fs.readFileSync(new URL("./ui/workbench.js", import.meta.url), "utf8");
 const launcher = fs.readFileSync(new URL("./launch-ui.mjs", import.meta.url), "utf8");
+const html = fs.readFileSync(new URL("./ui/index.html", import.meta.url), "utf8");
+const css = fs.readFileSync(new URL("./ui/app.css", import.meta.url), "utf8");
+assert.equal(
+  runtimeCommandMatches(
+    '"C:\\Program Files\\nodejs\\node.exe" "C:\\workspace\\ui-server.mjs" --open',
+    "C:\\workspace\\ui-server.mjs",
+  ),
+  true,
+  "The runtime lock must recognize the expected Node backend.",
+);
+assert.equal(
+  runtimeCommandMatches(
+    '"C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe" --type=renderer',
+    "C:\\workspace\\ui-server.mjs",
+  ),
+  false,
+  "A recycled PID owned by Edge must not block the backend launcher.",
+);
+assert.equal(
+  runtimeProcessIsRunning(16048, {
+    expectedEntryPath: "C:\\workspace\\ui-server.mjs",
+    platform: "win32",
+    signalProcess: () => {},
+    commandLineLookup: () => '"C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe" --type=renderer',
+  }),
+  false,
+  "An active recycled PID must be rejected when its command line belongs to another program.",
+);
+assert.equal(
+  runtimeProcessIsRunning(6832, {
+    expectedEntryPath: "C:\\workspace\\ui-server.mjs",
+    platform: "win32",
+    signalProcess: () => {},
+    commandLineLookup: () => '"C:\\Program Files\\nodejs\\node.exe" "C:\\workspace\\ui-server.mjs" --open',
+  }),
+  true,
+  "The active backend PID must retain the single-instance lock.",
+);
 assert.match(runtime, /pagehide[\s\S]*\/api\/page-close/u, "Page close and refresh must notify the lifecycle endpoint.");
 assert.match(server, /graceMs:\s*30_000/u, "Production lifecycle grace period must remain 30 seconds.");
 assert.match(runtime, /navigationType === "reload"[\s\S]*reason: pageExitReason/u, "Refresh and close must be reported separately when the browser exposes navigation intent.");
 assert.match(server, /lifecycle:\s*pageLifecycle\.status\(\)/u, "Status API must expose lifecycle state for verification.");
 assert.match(runtime, /UI_DRAFT_STORAGE_KEY[\s\S]*restoreUiDraftValues/u, "Text inputs and ordinary parameters must be restored after refresh.");
 assert.match(runtime, /api\.\?key\|secret\|token\|cookie\|password/u, "Sensitive credentials must never be stored in browser drafts.");
+assert.match(
+  runtime,
+  /function beginRewriteEditorLoad[\s\S]*invalidateRewriteAsyncOperations[\s\S]*async function openRewriteEditor[\s\S]*rewriteEditorLoadIsCurrent/u,
+  "Opening another rewrite task must invalidate slower editor loads from the previous task.",
+);
+assert.match(
+  runtime,
+  /async function generateRewrite[\s\S]*beginRewriteAsyncOperation\("generation", id\)[\s\S]*fetchJson\("\/api\/tasks\/rewrite"[\s\S]*rewriteOperationIsCurrent\(operation\)/u,
+  "A late rewrite response must not overwrite the task that is currently open.",
+);
+assert.match(
+  runtime,
+  /async function runRewriteInlineAnalysis[\s\S]*beginRewriteAsyncOperation\("analysis", id\)[\s\S]*rewriteOperationIsCurrent\(operation\)/u,
+  "A late analysis response must stay bound to the task that started it.",
+);
 assert.match(workbench, /short-video-workbench-page/u, "The active feature page must be restored after refresh.");
 assert.match(launcher, /const url = await existingServerUrl\(\)/u, "The launcher must always reuse an existing backend.");
+assert.match(launcher, /const response = await fetch\(url\);/u, "The launcher liveness probe must use the public HTML entry rather than the cookie-protected API.");
+assert.doesNotMatch(launcher, /fetch\(`\$\{url\}\/api\/status`\)/u, "The launcher must not treat the protected status API as an unauthenticated liveness probe.");
 assert.doesNotMatch(launcher, /syncChanged\s*\?\s*""\s*:\s*await existingServerUrl/u, "A repository sync must never bypass single-instance reuse.");
 assert.match(server, /fs\.openSync\(pidPath, "wx"\)/u, "The backend must use an exclusive single-instance lock.");
+assert.match(server, /runtimeProcessIsRunning\(pid,\s*\{\s*expectedEntryPath:\s*runtimeSourcePath\s*\}\)/u, "The backend lock must verify that an existing PID belongs to this runtime.");
+assert.doesNotMatch(html, /class="status-rail"|id="railCurrentTask"|id="railRecentOutput"|id="railErrors"/u, "The right status rail must stay removed from the main page.");
+assert.doesNotMatch(html, />任务线程<|>最近生成<|>错误提示<|>快捷操作</u, "Removed right rail blocks must not reappear in the main page.");
+assert.match(css, /\.workbench-body\s*\{[\s\S]*grid-template-columns:\s*minmax\(0,\s*1fr\);/u, "The workbench body must let the main workspace take the former rail width.");
 
 console.log("Page lifecycle: OK");
